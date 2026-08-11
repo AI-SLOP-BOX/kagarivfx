@@ -1,7 +1,6 @@
 use eframe::egui;
 use crate::AfterEffectsApp;
 use crate::core::timeline::{ProjectItem, ProjectItemType, Layer, LayerType};
-use crate::core::property::Animatable;
 
 pub fn draw(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
     ui.heading("Project");

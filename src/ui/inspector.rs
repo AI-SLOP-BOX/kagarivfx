@@ -30,23 +30,17 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
         .resizable(true)
         .default_width(280.0)
         .show(ctx, |ui| {
-            // ── AE Panel Tab Bar: Project Bin vs Effect Controls ──
-            let tab_id = egui::Id::new("left_panel_active_tab");
-            let mut active_tab: usize = ctx.data_mut(|d| d.get_temp(tab_id).unwrap_or(0));
-
             ui.horizontal(|ui| {
-                if ui.selectable_label(active_tab == 0, "Project").clicked() {
-                    active_tab = 0;
-                    ctx.data_mut(|d| d.insert_temp(tab_id, 0));
+                if ui.selectable_label(app.left_tab_idx == 0, "Project").clicked() {
+                    app.left_tab_idx = 0;
                 }
-                if ui.selectable_label(active_tab == 1, "Effect Controls").clicked() {
-                    active_tab = 1;
-                    ctx.data_mut(|d| d.insert_temp(tab_id, 1));
+                if ui.selectable_label(app.left_tab_idx == 1, "Effect Controls").clicked() {
+                    app.left_tab_idx = 1;
                 }
             });
             ui.separator();
 
-            if active_tab == 0 {
+            if app.left_tab_idx == 0 {
                 // ── Render AE Project Asset Bin Panel ──
                 crate::ui::project_panel::draw(app, ui);
                 return;
@@ -115,6 +109,40 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
             }
 
             ui.add_space(8.0);
+
+            // ── Multi-Layer Selection Batch Controls ──
+            if app.selected_layers.len() > 1 {
+                ui.horizontal(|ui| {
+                    ui.label(egui::RichText::new(format!("Multi-Selection: {} Layers", app.selected_layers.len())).strong().color(egui::Color32::from_rgb(120, 180, 255)));
+                });
+                ui.separator();
+                ui.label("Batch Operations:");
+                ui.horizontal(|ui| {
+                    if ui.button("Batch Easy Ease (F9)").clicked() {
+                        let comp = temp_project.active_composition_mut();
+                        for &i in &app.selected_layers {
+                            if i < comp.layers.len() {
+                                let layer = &mut comp.layers[i];
+                                if let Animatable::Animated(ref mut kfs) = layer.transform.position {
+                                    for kf in kfs { kf.interpolation = InterpolationType::Bezier { outgoing: BezierControlPoint { influence: 0.333, speed: 0.0 }, incoming: BezierControlPoint { influence: 0.333, speed: 0.0 }, custom_bezier: Some([0.4, 0.0, 0.2, 1.0]) }; }
+                                }
+                            }
+                        }
+                        project_changed = true;
+                    }
+                    if ui.button("Toggle Motion Blur").clicked() {
+                        let comp = temp_project.active_composition_mut();
+                        for &i in &app.selected_layers {
+                            if i < comp.layers.len() {
+                                comp.layers[i].motion_blur = !comp.layers[i].motion_blur;
+                            }
+                        }
+                        project_changed = true;
+                    }
+                });
+                ui.add_space(8.0);
+                ui.separator();
+            }
 
             if let Some(idx) = app.selected_layer_idx {
                 let comp = temp_project.active_composition_mut();
@@ -625,7 +653,8 @@ fn draw_expression_selector(ui: &mut egui::Ui, label: &str, expr_opt: &mut Optio
         };
 
         let before = expr_opt.clone();
-        egui::ComboBox::from_id_source(format!("expr_combo_{}", label))
+        let combo_id = ui.make_persistent_id(format!("ae_expr_combo_{}", label));
+        egui::ComboBox::from_id_source(combo_id)
             .selected_text(expr_text)
             .show_ui(ui, |ui| {
                 ui.selectable_value(expr_opt, None, "None");

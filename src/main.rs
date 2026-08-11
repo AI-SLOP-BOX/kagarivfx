@@ -106,6 +106,12 @@ pub struct AfterEffectsApp {
     pub export_rx: Option<std::sync::mpsc::Receiver<ExportEvent>>,
     pub tracker_rx: Option<std::sync::mpsc::Receiver<TrackerEvent>>,
 
+    // ── Explicit UI Panel & Audio States (Issue #2) ────────────
+    pub master_volume: f32,
+    pub left_tab_idx: usize,
+    pub right_tab_idx: usize,
+    pub viewport_mag_ratio: f32,
+
     // ── MVCC Frame Cache (#15) ─────────────────────────────────
     /// Versioned per-frame pixel cache. Stale entries auto-invalidate on project change.
     pub frame_cache: crate::core::frame_cache::FrameCache,
@@ -119,12 +125,7 @@ pub enum ViewportMode {
     Camera3D,
 }
 
-#[derive(Debug, Clone)]
-pub enum ExportEvent {
-    Progress(f32, String),
-    Finished(String),
-    Error(String),
-}
+pub use crate::core::ffmpeg_export::ExportEvent;
 
 #[derive(Debug, Clone)]
 pub enum TrackerEvent {
@@ -178,6 +179,10 @@ impl Default for AfterEffectsApp {
             is_exporting: false,
             export_rx: None,
             tracker_rx: None,
+            master_volume: 0.8,
+            left_tab_idx: 0,
+            right_tab_idx: 0,
+            viewport_mag_ratio: 1.0,
             // 256 frame entries max before GC kicks in
             frame_cache: crate::core::frame_cache::FrameCache::new(256),
             lazy_evaluator: crate::core::render_pipeline::LazyFrameEvaluator::new(),

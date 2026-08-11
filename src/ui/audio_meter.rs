@@ -13,8 +13,7 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context) {
                 let is_playing = app.is_playing;
                 let current_frame = app.current_frame;
 
-                let vol_id = egui::Id::new("master_volume_val");
-                let vol = ctx.data_mut(|d| *d.get_temp_mut_or_insert_with(vol_id, || 1.0f32));
+                let vol = app.master_volume;
 
                 // Calculate simulated peak levels based on playing state & frame phase
                 let (left_peak, right_peak) = if is_playing {
@@ -42,14 +41,10 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context) {
                 ui.add_space(8.0);
                 ui.separator();
 
-                // Master Volume Slider (Persisted via egui data storage)
-                let vol_id = egui::Id::new("master_volume_val");
-                let mut vol = ctx.data_mut(|d| *d.get_temp_mut_or_insert_with(vol_id, || 1.0f32));
+                // Master Volume Slider
                 ui.label(egui::RichText::new("Master").small().strong());
-                if ui.add(egui::Slider::new(&mut vol, 0.0..=1.5).show_value(false)).changed() {
-                    ctx.data_mut(|d| d.insert_temp(vol_id, vol));
-                }
-                ui.small(format!("{:.0}%", vol * 100.0));
+                ui.add(egui::Slider::new(&mut app.master_volume, 0.0..=1.5).show_value(false));
+                ui.small(format!("{:.0}%", app.master_volume * 100.0));
             });
         });
 }

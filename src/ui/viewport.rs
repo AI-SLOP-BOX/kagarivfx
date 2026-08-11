@@ -41,20 +41,14 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: u32) 
             ui.add_space(8.0);
 
             // AE Magnification Ratio Dropdown
-            let mag_id = egui::Id::new("ae_mag_ratio");
-            let mut mag_ratio = ctx.data_mut(|d| *d.get_temp_mut_or_insert_with(mag_id, || 0));
+            let mag_val = app.viewport_mag_ratio;
             egui::ComboBox::from_id_source("mag_combo")
-                .selected_text(match mag_ratio {
-                    0 => "Fit",
-                    1 => "100%",
-                    2 => "50%",
-                    _ => "25%",
-                })
+                .selected_text(if mag_val == 1.0 { "100%" } else if mag_val == 0.5 { "50%" } else if mag_val == 0.25 { "25%" } else { "Fit" })
                 .show_ui(ui, |ui| {
-                    if ui.selectable_value(&mut mag_ratio, 0, "Fit").clicked() { ctx.data_mut(|d| d.insert_temp(mag_id, mag_ratio)); }
-                    if ui.selectable_value(&mut mag_ratio, 1, "100%").clicked() { ctx.data_mut(|d| d.insert_temp(mag_id, mag_ratio)); }
-                    if ui.selectable_value(&mut mag_ratio, 2, "50%").clicked() { ctx.data_mut(|d| d.insert_temp(mag_id, mag_ratio)); }
-                    if ui.selectable_value(&mut mag_ratio, 3, "25%").clicked() { ctx.data_mut(|d| d.insert_temp(mag_id, mag_ratio)); }
+                    if ui.selectable_label(app.viewport_mag_ratio == 0.0, "Fit").clicked() { app.viewport_mag_ratio = 0.0; }
+                    if ui.selectable_label(app.viewport_mag_ratio == 1.0, "100%").clicked() { app.viewport_mag_ratio = 1.0; }
+                    if ui.selectable_label(app.viewport_mag_ratio == 0.5, "50%").clicked() { app.viewport_mag_ratio = 0.5; }
+                    if ui.selectable_label(app.viewport_mag_ratio == 0.25, "25%").clicked() { app.viewport_mag_ratio = 0.25; }
                 });
 
             // AE Camera View Selector
@@ -674,7 +668,65 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: u32) 
                     let comp_mut = app.history.current_mut().active_composition_mut();
                     if drag_idx < comp_mut.layers.len() {
                         let layer = &mut comp_mut.layers[drag_idx];
-                        layer.transform.position = Animatable::new_constant(new_pos);
+                        use crate::ui::toolbar::ActiveTool;
+                        match app.active_tool {
+                            ActiveTool::Rotation => {
+                                // Rotate layer based on horizontal drag
+                                let rot_delta = delta_x * 0.5;
+                                let current_r = layer.transform.rotation.evaluate(current_frame);
+                                match &mut layer.transform.rotation {
+                                    Animatable::Constant(ref mut r) => *r += rot_delta,
+                                    Animatable::Animated(ref mut kfs) => {
+                                        if let Some(kf) = kfs.iter_mut().find(|k| k.frame == current_frame) {
+                                            kf.value += rot_delta;
+                                        } else {
+                                            kfs.push(crate::core::keyframe::Keyframe::new(current_frame, current_r + rot_delta, crate::core::keyframe::InterpolationType::Linear));
+                                            kfs.sort_by_key(|k| k.frame);
+                                        }
+                                    }
+                                }
+                            }
+                            ActiveTool::AnchorPoint => {
+                                // Update anchor point
+                                let cur_ap = layer.transform.anchor_point.evaluate(current_frame);
+                                match &mut layer.transform.anchor_point {
+                                    Animatable::Constant(ref mut ap) => {
+                                        ap[0] += delta_x;
+                                        ap[1] += delta_y;
+                                    }
+                                    Animatable::Animated(ref mut kfs) => {
+                                        if let Some(kf) = kfs.iter_mut().find(|k| k.frame == current_frame) {
+                                            kf.value[0] += delta_x;
+                                            kf.value[1] += delta_y;
+                                        } else {
+                                            kfs.push(crate::core::keyframe::Keyframe::new(current_frame, [cur_ap[0] + delta_x, cur_ap[1] + delta_y], crate::core::keyframe::InterpolationType::Linear));
+                                            kfs.sort_by_key(|k| k.frame);
+                                        }
+                                    }
+                                }
+                            }
+                            _ => {
+                                // Position drag (Selection / Hand / Default) with Keyframe Preservation
+                                match &mut layer.transform.position {
+                                    Animatable::Constant(ref mut pos) => {
+                                        *pos = new_pos;
+                                    }
+                                    Animatable::Animated(ref mut keyframes) => {
+                                        let existing_idx = keyframes.iter().position(|kf| kf.frame == current_frame);
+                                        if let Some(idx) = existing_idx {
+                                            keyframes[idx].value = new_pos;
+                                        } else {
+                                            keyframes.push(crate::core::keyframe::Keyframe::new(
+                                                current_frame,
+                                                new_pos,
+                                                crate::core::keyframe::InterpolationType::Linear,
+                                            ));
+                                            keyframes.sort_by_key(|kf| kf.frame);
+                                        }
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             }

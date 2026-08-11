@@ -9,14 +9,11 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
         .resizable(true)
         .default_width(240.0)
         .show(ctx, |ui| {
-            let tab_id = egui::Id::new("ae_right_panel_tab");
-            let mut active_tab = ctx.data_mut(|d| *d.get_temp_mut_or_insert_with(tab_id, || 0));
             ui.horizontal(|ui| {
-                ui.selectable_value(&mut active_tab, 0, "Effects");
-                ui.selectable_value(&mut active_tab, 1, "Align");
-                ui.selectable_value(&mut active_tab, 2, "Info");
+                ui.selectable_value(&mut app.right_tab_idx, 0, "Effects");
+                ui.selectable_value(&mut app.right_tab_idx, 1, "Align");
+                ui.selectable_value(&mut app.right_tab_idx, 2, "Info");
             });
-            ctx.data_mut(|d| d.insert_temp(tab_id, active_tab));
             ui.separator();
 
             let mut project_changed = false;
@@ -26,7 +23,7 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
             // Clone current project to apply transactional state mutations
             let mut temp_project = app.history.current().clone();
 
-            if active_tab == 1 {
+            if app.right_tab_idx == 1 {
                 ui.heading("Align & Character");
                 ui.separator();
                 if let Some(idx) = app.selected_layer_idx {
@@ -113,7 +110,7 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                 } else {
                     ui.weak("Select a layer to use align & character formatting.");
                 }
-            } else if active_tab == 2 {
+            } else if app.right_tab_idx == 2 {
                 ui.heading("Info");
                 ui.separator();
                 if let Some(idx) = app.selected_layer_idx {
@@ -369,13 +366,28 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                 if idx < comp.layers.len() {
                     ui.label("Applied Effects:");
                     let layer = &mut comp.layers[idx];
-                    for effect in &mut layer.effects {
-                        ui.collapsing(&effect.name, |ui| {
+                    let mut effect_to_remove = None;
+                    let mut effect_to_swap = None;
+                    let effects_count = layer.effects.len();
+
+                    for (e_idx, effect) in layer.effects.iter_mut().enumerate() {
+                        ui.horizontal(|ui| {
+                            if ui.small_button("🗑").on_hover_text("Delete Effect").clicked() {
+                                effect_to_remove = Some(e_idx);
+                            }
+                            if e_idx > 0 && ui.small_button("▲").on_hover_text("Move Up").clicked() {
+                                effect_to_swap = Some((e_idx, e_idx - 1));
+                            }
+                            if e_idx + 1 < effects_count && ui.small_button("▼").on_hover_text("Move Down").clicked() {
+                                effect_to_swap = Some((e_idx, e_idx + 1));
+                            }
                             let val_before_enabled = effect.enabled;
                             ui.checkbox(&mut effect.enabled, "Enabled");
                             if val_before_enabled != effect.enabled {
                                 project_changed = true;
                             }
+                        });
+                        ui.collapsing(&effect.name, |ui| {
                             
                             match &mut effect.effect_type {
                                 EffectType::GaussianBlur { blur_radius } => {
@@ -684,7 +696,16 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                             }
                         });
                     }
+                    if let Some(r_idx) = effect_to_remove {
+                        layer.effects.remove(r_idx);
+                        project_changed = true;
+                    }
+                    if let Some((a, b)) = effect_to_swap {
+                        layer.effects.swap(a, b);
+                        project_changed = true;
+                    }
                 }
+            }
             }
             
             ui.separator();
@@ -745,11 +766,15 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                     }
                 }
             });
-            }
 
-            // Commit changes and set output state
+            // Transactional commit: mutate live project during dragging, push Undo snapshot when released
             if project_changed {
-                app.history.commit(temp_project);
+                let is_pointer_down = ui.input(|i| i.pointer.any_down());
+                if !is_pointer_down {
+                    app.history.commit(temp_project);
+                } else {
+                    *app.history.current_mut() = temp_project;
+                }
                 crate::core::frame_cache::bump_version();
             }
             if let Some(nf) = next_frame {

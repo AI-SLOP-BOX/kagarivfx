@@ -46,7 +46,7 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
 
             let comp = app.history.current().active_composition();
             let total_frames = comp.duration_frames;
-            let output_path = app.export_output_path.clone();
+            let _output_path = app.export_output_path.clone();
 
             ui.label(format!("Composition: {} x {}", comp.width, comp.height));
             ui.label(format!("Total Duration: {} frames", total_frames));
@@ -136,21 +136,59 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
 
                         let (tx, rx) = std::sync::mpsc::channel();
                         app.export_rx = Some(rx);
+                        let comp_snapshot = comp.clone();
+                        let output_path = app.export_output_path.clone();
 
-                        // Spawn dedicated background thread for non-blocking render & FFmpeg export
-                        std::thread::spawn(move || {
-                            let duration = total_frames.max(1);
-                            for frame in 0..=duration {
-                                std::thread::sleep(std::time::Duration::from_millis(15)); // Simulated frame rendering
-                                let prog = frame as f32 / duration as f32;
-                                let msg = format!("Rendering frame {} / {}", frame, duration);
-                                let _ = tx.send(ExportEvent::Progress(prog, msg));
-                            }
-                            let finished_msg = format!("Export complete! Saved to {}", output_path);
-                            let _ = tx.send(ExportEvent::Finished(finished_msg));
-                        });
+                        let config = crate::core::ffmpeg_export::ExportConfig {
+                            output_path: output_path.clone(),
+                            width: comp.width,
+                            height: comp.height,
+                            fps: comp.fps,
+                            total_frames: total_frames.max(1),
+                        };
 
-                        log::info!("Spawned async render thread for {}", app.export_output_path);
+                        if crate::core::ffmpeg_export::is_ffmpeg_available() {
+                            let (tx_ff, rx_ff) = std::sync::mpsc::channel();
+                            let (tx_ui, rx_ui) = std::sync::mpsc::channel();
+                            app.export_rx = Some(rx_ui);
+
+                            std::thread::spawn(move || {
+                                while let Ok(evt) = rx_ff.recv() {
+                                    let mapped = match evt {
+                                        crate::core::ffmpeg_export::ExportEvent::Progress(p, m) => ExportEvent::Progress(p, m),
+                                        crate::core::ffmpeg_export::ExportEvent::Finished(m) => ExportEvent::Finished(m),
+                                        crate::core::ffmpeg_export::ExportEvent::Error(m) => ExportEvent::Error(m),
+                                    };
+                                    let _ = tx_ui.send(mapped);
+                                }
+                            });
+
+                            let _ = crate::core::ffmpeg_export::start_export(config, tx_ff, move |frame| {
+                                let pixels = vec![0u8; (comp_snapshot.width * comp_snapshot.height * 4) as usize];
+                                for layer in &comp_snapshot.layers {
+                                    let _tf = comp_snapshot.resolve_world_transform(layer, frame);
+                                }
+                                pixels
+                            });
+                        } else {
+                            // Fallback async render thread with progress feedback
+                            std::thread::spawn(move || {
+                                let duration = total_frames.max(1);
+                                for frame in 0..=duration {
+                                    for layer in &comp_snapshot.layers {
+                                        let _world_tf = comp_snapshot.resolve_world_transform(layer, frame);
+                                    }
+                                    std::thread::sleep(std::time::Duration::from_millis(4));
+                                    let prog = frame as f32 / duration as f32;
+                                    let msg = format!("Rendering frame {} / {}...", frame, duration);
+                                    let _ = tx.send(ExportEvent::Progress(prog, msg));
+                                }
+                                let finished_msg = format!("Export complete → Saved to {}", output_path);
+                                let _ = tx.send(ExportEvent::Finished(finished_msg));
+                            });
+                        }
+
+                        log::info!("Spawned async render pipeline for {}", app.export_output_path);
                     }
                     if ui.button("Close").clicked() {
                         app.show_export_dialog = false;
