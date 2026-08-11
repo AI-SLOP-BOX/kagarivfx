@@ -67,13 +67,12 @@ impl TrackerEngine {
                 return;
             }
             let tracker = &layer.trackers[tracker_idx];
-            let mut last_pos = tracker.position.evaluate(start_frame);
-            current_positions.push((start_frame, last_pos));
+            let start_pos = tracker.position.evaluate(start_frame);
+            current_positions.push((start_frame, start_pos));
 
             for f in (start_frame + 1)..=end_frame {
                 if let Some(next_pos) = Self::track_next_frame(layer, fps, tracker_idx, f - 1) {
                     current_positions.push((f, next_pos));
-                    last_pos = next_pos;
                 }
             }
         }
