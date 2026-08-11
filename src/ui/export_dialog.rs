@@ -46,7 +46,6 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
 
             let comp = app.history.current().active_composition();
             let total_frames = comp.duration_frames;
-            let _output_path = app.export_output_path.clone();
 
             ui.label(format!("Composition: {} x {}", comp.width, comp.height));
             ui.label(format!("Total Duration: {} frames", total_frames));

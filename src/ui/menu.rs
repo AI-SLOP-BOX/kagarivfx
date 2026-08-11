@@ -8,6 +8,9 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
                     app.history = crate::core::history::ProjectHistory::new(
                         crate::core::timeline::Project::default(),
                     );
+                    app.selected_layer_idx = None;
+                    app.selected_layers.clear();
+                    crate::core::frame_cache::bump_version();
                     ui.close_menu();
                 }
                 ui.separator();
@@ -31,6 +34,8 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
                                 Ok(project) => {
                                     app.history = crate::core::history::ProjectHistory::new(project);
                                     app.selected_layer_idx = None;
+                                    app.selected_layers.clear();
+                                    crate::core::frame_cache::bump_version();
                                     log::info!("Native project loaded from {}", app.project_path);
                                 }
                                 Err(e) => log::error!("Failed to parse project: {}", e),

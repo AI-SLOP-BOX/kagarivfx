@@ -55,8 +55,19 @@ fn draw_vu_channel(ui: &mut egui::Ui, label: &str, peak: f32, width: f32, height
         let (rect, _) = ui.allocate_exact_size(egui::vec2(width, height), egui::Sense::hover());
         let painter = ui.painter();
 
-        // Dark background
-        painter.rect_filled(rect, 2.0, egui::Color32::from_rgb(18, 18, 22));
+        // 0dB Clip Warning Indicator Light
+        let clip_rect = egui::Rect::from_min_size(
+            egui::pos2(rect.left() + 2.0, rect.top() - 12.0),
+            egui::vec2(width - 4.0, 8.0),
+        );
+        let clip_color = if peak > 0.92 {
+            egui::Color32::from_rgb(255, 30, 30) // Bright Red Clip Warning
+        } else {
+            egui::Color32::from_rgb(50, 20, 20) // Dim Dark Red Idle
+        };
+        painter.rect_filled(clip_rect, 1.0, clip_color);
+        painter.rect_stroke(clip_rect, 1.0, egui::Stroke::new(1.0, egui::Color32::from_gray(60)));
+
         painter.rect_stroke(rect, 2.0, egui::Stroke::new(1.0, egui::Color32::from_gray(50)));
 
         let segments = 24;

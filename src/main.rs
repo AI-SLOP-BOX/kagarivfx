@@ -39,6 +39,8 @@ fn main() -> eframe::Result<()> {
                 app.wgpu_state = Some(wgpu_state.clone());
             }
 
+            crate::ui::icons::init_image_loaders(&cc.egui_ctx);
+
             Box::new(app) as Box<dyn eframe::App>
         }),
     )
@@ -206,7 +208,6 @@ impl AfterEffectsApp {
 
 impl eframe::App for AfterEffectsApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        crate::ui::icons::init_image_loaders(ctx);
         // Poll sync messages from TCP connection
         if let Some(rx_frame) = &self.rx_frame {
             while let Ok(frame) = rx_frame.try_recv() {
@@ -262,17 +263,22 @@ impl eframe::App for AfterEffectsApp {
                     self.history.redo();
                 }
 
-                // Delete / Backspace → Delete selected layer
+                // Delete / Backspace → Delete all selected layers (Multi-selection aware)
                 if (i.key_pressed(Key::Delete) || i.key_pressed(Key::Backspace)) && !shift {
-                    if let Some(idx) = self.selected_layer_idx {
+                    if !self.selected_layers.is_empty() {
                         let mut proj = self.history.current().clone();
                         let comp = proj.active_composition_mut();
-                        if idx < comp.layers.len() {
-                            comp.layers.remove(idx);
-                            self.selected_layer_idx = if comp.layers.is_empty() { None }
-                                else { Some(idx.saturating_sub(1)) };
-                            self.history.commit(proj);
+                        let mut indices: Vec<usize> = self.selected_layers.iter().copied().collect();
+                        indices.sort_unstable_by(|a, b| b.cmp(a));
+                        for idx in indices {
+                            if idx < comp.layers.len() {
+                                comp.layers.remove(idx);
+                            }
                         }
+                        self.selected_layers.clear();
+                        self.selected_layer_idx = if comp.layers.is_empty() { None } else { Some(0) };
+                        self.history.commit(proj);
+                        crate::core::frame_cache::bump_version();
                     }
                 }
 

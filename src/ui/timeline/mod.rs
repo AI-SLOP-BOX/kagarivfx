@@ -101,6 +101,15 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                 if ui.selectable_label(app.show_graph_editor, mode_btn_text).clicked() {
                     app.show_graph_editor = !app.show_graph_editor;
                 }
+
+                // ── AE Timeline Layer Filter ──
+                let filter_id = ui.make_persistent_id("ae_timeline_filter");
+                let mut filter_text = ui.ctx().data_mut(|d| d.get_temp_mut_or_insert_with(filter_id, String::new).clone());
+                ui.add_space(8.0);
+                ui.label("Filter:");
+                if ui.add(egui::TextEdit::singleline(&mut filter_text).hint_text("Search layers...").desired_width(110.0)).changed() {
+                    ui.ctx().data_mut(|d| d.insert_temp(filter_id, filter_text.clone()));
+                }
                 
                 ui.add_space(15.0);
                 if ui.button("+ Solid").clicked() {
@@ -270,7 +279,14 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                     let zoom_span = total_frames as f32 / app.timeline_zoom;
                     let start_frame = 0.0;
 
+                let filter_id = ui.make_persistent_id("ae_timeline_filter");
+                let filter_text: String = ui.ctx().data_mut(|d| d.get_temp(filter_id).unwrap_or_default());
+
                 for i in 0..comp.layers.len() {
+                    let layer_name = comp.layers[i].name.clone();
+                    if !filter_text.is_empty() && !layer_name.to_lowercase().contains(&filter_text.to_lowercase()) {
+                        continue;
+                    }
                     ui.horizontal(|ui| {
                         ui.allocate_ui(egui::vec2(480.0, 24.0), |ui| {
                             ui.horizontal(|ui| {
