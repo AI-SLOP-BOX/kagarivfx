@@ -713,6 +713,52 @@ pub fn draw_property_ui<T: Clone + crate::core::property::Interpolate + PartialE
                     }
                 }
             }
+            ui.menu_button("Ease", |ui| {
+                if ui.button("Easy Ease (F9)").clicked() {
+                    if let Animatable::Animated(ref mut kfs) = property {
+                        for kf in kfs {
+                            kf.interpolation = InterpolationType::Bezier {
+                                outgoing: BezierControlPoint { influence: 0.333, speed: 0.0 },
+                                incoming: BezierControlPoint { influence: 0.333, speed: 0.0 },
+                                custom_bezier: Some([0.333, 0.0, 0.333, 1.0]),
+                            };
+                        }
+                    }
+                    ui.close_menu();
+                }
+                if ui.button("Ease In").clicked() {
+                    if let Animatable::Animated(ref mut kfs) = property {
+                        for kf in kfs {
+                            kf.interpolation = InterpolationType::Bezier {
+                                outgoing: BezierControlPoint { influence: 0.1, speed: 0.0 },
+                                incoming: BezierControlPoint { influence: 0.75, speed: 0.0 },
+                                custom_bezier: Some([0.75, 0.0, 1.0, 1.0]),
+                            };
+                        }
+                    }
+                    ui.close_menu();
+                }
+                if ui.button("Ease Out").clicked() {
+                    if let Animatable::Animated(ref mut kfs) = property {
+                        for kf in kfs {
+                            kf.interpolation = InterpolationType::Bezier {
+                                outgoing: BezierControlPoint { influence: 0.75, speed: 0.0 },
+                                incoming: BezierControlPoint { influence: 0.1, speed: 0.0 },
+                                custom_bezier: Some([0.0, 0.0, 0.25, 1.0]),
+                            };
+                        }
+                    }
+                    ui.close_menu();
+                }
+                if ui.button("Linear").clicked() {
+                    if let Animatable::Animated(ref mut kfs) = property {
+                        for kf in kfs {
+                            kf.interpolation = InterpolationType::Linear;
+                        }
+                    }
+                    ui.close_menu();
+                }
+            });
         }
 
         let mut temp_val = property.evaluate(current_frame);

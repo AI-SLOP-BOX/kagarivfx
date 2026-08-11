@@ -57,10 +57,19 @@ fn draw_keyframe_tick(
     ];
     painter.add(egui::Shape::convex_polygon(pts, color, egui::Stroke::NONE));
 
-    let response = ui.allocate_rect(rect, egui::Sense::click());
+    let response = ui.allocate_rect(rect, egui::Sense::click_and_drag());
     if response.clicked() {
         *current_frame = kf_frame;
     }
+    let mut new_f = None;
+    if response.dragged() {
+        let delta = response.drag_delta().x;
+        let step = (delta / 8.0).round() as i32;
+        if step != 0 {
+            new_f = Some((kf_frame as i32 + step).max(0) as u32);
+        }
+    }
+    new_f
 }
 
 pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut u32, total_frames: u32) {
