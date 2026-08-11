@@ -469,6 +469,13 @@ impl Layer {
     }
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TimelineMarker {
+    pub frame: u32,
+    pub label: String,
+    pub color: [f32; 3],
+}
+
 // ─── Composition ───────────────────────────────────────────────────────────
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -484,6 +491,7 @@ pub struct Composition {
     pub motion_blur_shutter_angle: f32,
     pub background_color: [f32; 4],
     pub active_camera: Camera3D,
+    pub markers: Vec<TimelineMarker>,
 }
 
 impl Composition {
@@ -506,6 +514,7 @@ impl Composition {
             motion_blur_shutter_angle: 180.0,
             background_color: [0.05, 0.05, 0.08, 1.0],
             active_camera: Camera3D::default(),
+            markers: Vec::new(),
         }
     }
 

@@ -139,19 +139,32 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                     comp.add_layer(layer);
                     project_changed = true;
                 }
+
+                ui.add_space(8.0);
+                let add_marker_clicked = ui.button("🚩 Add Marker (M)").clicked() ||
+                    ui.input(|i| i.key_pressed(egui::Key::M));
+                if add_marker_clicked {
+                    let marker_idx = comp.markers.len() + 1;
+                    comp.markers.push(crate::core::timeline::TimelineMarker {
+                        frame: *current_frame,
+                        label: format!("Marker {}", marker_idx),
+                        color: [1.0, 0.6, 0.1],
+                    });
+                    project_changed = true;
+                }
             });
 
             ui.add_space(4.0);
 
-            // ── RAM Preview Bar (AE-style green cached-frame indicator) ──
+            // ── RAM Preview & Marker Ruler Bar ──
             {
                 use crate::core::frame_cache;
                 let cur_version = frame_cache::current_version();
-                let bar_height = 8.0;
+                let bar_height = 14.0;
                 let avail_w = ui.available_width();
-                let (bar_rect, _) = ui.allocate_exact_size(
+                let (bar_rect, bar_response) = ui.allocate_exact_size(
                     egui::vec2(avail_w, bar_height),
-                    egui::Sense::hover(),
+                    egui::Sense::click(),
                 );
 
                 // Dark background
@@ -169,7 +182,7 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                             let x = bar_rect.left() + f as f32 * frame_w;
                             let seg = egui::Rect::from_min_size(
                                 egui::pos2(x, bar_rect.top()),
-                                egui::vec2(frame_w.max(1.0), bar_height),
+                                egui::vec2(frame_w.max(1.0), bar_height * 0.5),
                             );
                             ui.painter().rect_filled(
                                 seg,
@@ -177,6 +190,29 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                                 egui::Color32::from_rgb(80, 210, 80),
                             );
                         }
+                    }
+
+                    // Render Composition Markers on the Ruler Bar
+                    for marker in &comp.markers {
+                        let mx = bar_rect.left() + (marker.frame as f32 / total_frames as f32) * bar_rect.width();
+                        let tri_pts = vec![
+                            egui::pos2(mx, bar_rect.top()),
+                            egui::pos2(mx + 5.0, bar_rect.bottom()),
+                            egui::pos2(mx - 5.0, bar_rect.bottom()),
+                        ];
+                        let marker_color = egui::Color32::from_rgb(
+                            (marker.color[0] * 255.0) as u8,
+                            (marker.color[1] * 255.0) as u8,
+                            (marker.color[2] * 255.0) as u8,
+                        );
+                        ui.painter().add(egui::Shape::convex_polygon(tri_pts, marker_color, egui::Stroke::new(1.0, egui::Color32::WHITE)));
+                    }
+                }
+
+                if bar_response.clicked() {
+                    if let Some(ptr) = bar_response.interact_pointer_pos() {
+                        let norm = ((ptr.x - bar_rect.left()) / bar_rect.width()).clamp(0.0, 1.0);
+                        *current_frame = (norm * total_frames as f32) as u32;
                     }
                 }
 
