@@ -363,6 +363,9 @@ impl eframe::App for AfterEffectsApp {
         // Draw Left Panel: Properties Inspector
         ui::inspector::draw(self, ctx, &mut current_frame);
 
+        // Draw Right Side Audio VU Meter Panel
+        ui::audio_meter::draw(self, ctx);
+
         // Draw Right Panel: Effects Library & External Links
         ui::effects_library::draw(self, ctx, &mut current_frame);
 

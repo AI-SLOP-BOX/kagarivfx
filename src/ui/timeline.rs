@@ -330,7 +330,7 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
 
                 for i in 0..comp.layers.len() {
                     ui.horizontal(|ui| {
-                        ui.allocate_ui(egui::vec2(340.0, 24.0), |ui| {
+                        ui.allocate_ui(egui::vec2(480.0, 24.0), |ui| {
                             ui.horizontal(|ui| {
                                 let is_expanded = app.expanded_layers.contains(&i);
                                 let arrow = if is_expanded { "▼" } else { "▶" };
@@ -389,6 +389,54 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                                     }
                                 }
                                 ui.style_mut().visuals.override_text_color = None;
+
+                                // ── Blend Mode Dropdown ──
+                                use crate::core::timeline::BlendMode;
+                                let bm_text = format!("{:?}", comp.layers[i].blend_mode);
+                                egui::ComboBox::from_id_source(format!("tl_blend_{}", i))
+                                    .selected_text(format!("🎨 {}", bm_text))
+                                    .show_ui(ui, |ui| {
+                                        for bm in [
+                                            BlendMode::Normal,
+                                            BlendMode::Multiply,
+                                            BlendMode::Screen,
+                                            BlendMode::Overlay,
+                                            BlendMode::Add,
+                                            BlendMode::Darken,
+                                            BlendMode::Lighten,
+                                        ] {
+                                            if ui.selectable_label(comp.layers[i].blend_mode == bm, format!("{:?}", bm)).clicked() {
+                                                comp.layers[i].blend_mode = bm;
+                                                project_changed = true;
+                                            }
+                                        }
+                                    });
+
+                                // ── Track Matte Dropdown ──
+                                use crate::core::timeline::TrackMatteMode;
+                                let tm_text = match comp.layers[i].track_matte {
+                                    TrackMatteMode::None => "None",
+                                    TrackMatteMode::AlphaMatte => "Alpha",
+                                    TrackMatteMode::AlphaMatteInverted => "Alpha Inv",
+                                    TrackMatteMode::LumaMatte => "Luma",
+                                    TrackMatteMode::LumaMatteInverted => "Luma Inv",
+                                };
+                                egui::ComboBox::from_id_source(format!("tl_matte_{}", i))
+                                    .selected_text(format!("✂️ {}", tm_text))
+                                    .show_ui(ui, |ui| {
+                                        for (mode, label) in [
+                                            (TrackMatteMode::None, "None"),
+                                            (TrackMatteMode::AlphaMatte, "Alpha Matte"),
+                                            (TrackMatteMode::AlphaMatteInverted, "Alpha Matte Inverted"),
+                                            (TrackMatteMode::LumaMatte, "Luma Matte"),
+                                            (TrackMatteMode::LumaMatteInverted, "Luma Matte Inverted"),
+                                        ] {
+                                            if ui.selectable_label(comp.layers[i].track_matte == mode, label).clicked() {
+                                                comp.layers[i].track_matte = mode;
+                                                project_changed = true;
+                                            }
+                                        }
+                                    });
 
                                 // ── Parenting Dropdown ──
                                 let parent_text = comp.layers[i].parent_id.as_deref().unwrap_or("None");
