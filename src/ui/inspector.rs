@@ -97,8 +97,6 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
             if let Some(idx) = app.selected_layer_idx {
                 let comp = temp_project.active_composition_mut();
                 if idx < comp.layers.len() {
-                    let fps = comp.fps;
-                    
                     // ── Safe Parent selector logic ──
                     let other_layers: Vec<(String, String)> = comp.layers.iter()
                         .enumerate()
@@ -606,7 +604,7 @@ pub fn draw_property_ui<T: Clone + crate::core::property::Interpolate + PartialE
     property: &mut Animatable<T>,
     draw_value_widget: impl FnOnce(&mut egui::Ui, &mut T),
 ) -> Option<u32> {
-    let mut next_frame = None;
+    let next_frame = None;
     ui.horizontal(|ui| {
         ui.label(label);
         

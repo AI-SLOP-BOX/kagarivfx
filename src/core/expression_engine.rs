@@ -7,7 +7,7 @@
 ///   - `thisComp.layer("Name").transform.position[0]`  (inter-layer reference)
 ///   - Any arbitrary Rhai script that returns a number or array.
 
-use rhai::{Engine, Scope, Dynamic, Array, EvalAltResult};
+use rhai::{Engine, Scope, Dynamic, Array};
 
 /// Build the shared Rhai engine with all AE-compatible functions registered.
 /// Creating the engine is expensive — do it once and cache it.
