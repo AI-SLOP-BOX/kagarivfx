@@ -197,6 +197,7 @@ impl AfterEffectsApp {
 
 impl eframe::App for AfterEffectsApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        crate::ui::icons::init_image_loaders(ctx);
         // Poll sync messages from TCP connection
         if let Some(rx_frame) = &self.rx_frame {
             while let Ok(frame) = rx_frame.try_recv() {

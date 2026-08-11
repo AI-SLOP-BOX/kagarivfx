@@ -255,7 +255,10 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                                 }
 
                                 let vis = comp.layers[i].visible;
-                                if ui.selectable_label(vis, "V").clicked() {
+                                let eye_svg = if vis { crate::ui::icons::SVG_EYE_OPEN } else { crate::ui::icons::SVG_EYE_CLOSED };
+                                let eye_btn = ui.button(egui::WidgetText::from("")).rect;
+                                crate::ui::icons::render_svg_bytes(ui, &format!("eye_{}", i), eye_svg, egui::vec2(14.0, 14.0), egui::Color32::WHITE);
+                                if ui.interact(eye_btn, ui.id().with(format!("eye_act_{}", i)), egui::Sense::click()).clicked() || ui.small_button(if vis { "V" } else { "v" }).clicked() {
                                     comp.layers[i].visible = !vis;
                                     project_changed = true;
                                 }
@@ -267,6 +270,8 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                                 }
 
                                 let lkd = comp.layers[i].locked;
+                                let lock_svg = if lkd { crate::ui::icons::SVG_LOCK } else { crate::ui::icons::SVG_UNLOCK };
+                                crate::ui::icons::render_svg_bytes(ui, &format!("lock_{}", i), lock_svg, egui::vec2(14.0, 14.0), egui::Color32::WHITE);
                                 if ui.selectable_label(lkd, "L").clicked() {
                                     comp.layers[i].locked = !lkd;
                                     project_changed = true;
