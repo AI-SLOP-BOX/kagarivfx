@@ -30,6 +30,28 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
         .resizable(true)
         .default_width(280.0)
         .show(ctx, |ui| {
+            // ── AE Panel Tab Bar: Project Bin vs Effect Controls ──
+            let tab_id = egui::Id::new("left_panel_active_tab");
+            let mut active_tab: usize = ctx.data_mut(|d| d.get_temp(tab_id).unwrap_or(0));
+
+            ui.horizontal(|ui| {
+                if ui.selectable_label(active_tab == 0, "Project").clicked() {
+                    active_tab = 0;
+                    ctx.data_mut(|d| d.insert_temp(tab_id, 0));
+                }
+                if ui.selectable_label(active_tab == 1, "Effect Controls").clicked() {
+                    active_tab = 1;
+                    ctx.data_mut(|d| d.insert_temp(tab_id, 1));
+                }
+            });
+            ui.separator();
+
+            if active_tab == 0 {
+                // ── Render AE Project Asset Bin Panel ──
+                crate::ui::project_panel::draw(app, ui);
+                return;
+            }
+
             ui.heading("Layer Properties");
             ui.separator();
 

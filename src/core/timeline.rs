@@ -552,19 +552,48 @@ impl Composition {
     }
 }
 
+// ─── Project Item & Asset Management ─────────────────────────────────────
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum ProjectItemType {
+    Composition { comp_idx: usize },
+    Image { path: String, width: u32, height: u32 },
+    Audio { path: String, duration_sec: f32 },
+    Solid { color: [f32; 4] },
+    Folder { name: String },
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProjectItem {
+    pub id: String,
+    pub name: String,
+    pub item_type: ProjectItemType,
+}
+
+impl ProjectItem {
+    pub fn new(id: impl Into<String>, name: impl Into<String>, item_type: ProjectItemType) -> Self {
+        Self {
+            id: id.into(),
+            name: name.into(),
+            item_type,
+        }
+    }
+}
+
 // ─── Project ───────────────────────────────────────────────────────────────
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Project {
     pub compositions: Vec<Composition>,
     pub active_composition_idx: usize,
+    pub assets: Vec<ProjectItem>,
 }
 
 impl Default for Project {
     fn default() -> Self {
         let mut comp = Composition::new(
-            "comp1".to_string(),
-            "Main Comp".to_string(),
+            "comp_main".to_string(),
+            "Main Comp 1".to_string(),
             1920,
             1080,
             30,
@@ -610,9 +639,18 @@ impl Default for Project {
         null_ctrl.label = LabelColor::Peach;
         comp.add_layer(null_ctrl);
 
+        let default_assets = vec![
+            ProjectItem::new("item_comp1", "Main Comp 1", ProjectItemType::Composition { comp_idx: 0 }),
+            ProjectItem::new("item_bg_solid", "Dark Solid Background", ProjectItemType::Solid { color: [0.08, 0.08, 0.12, 1.0] }),
+            ProjectItem::new("item_logo", "Logo_Vector.svg", ProjectItemType::Image { path: "assets/logo.svg".to_string(), width: 512, height: 512 }),
+            ProjectItem::new("item_audio", "Intro_BGM.wav", ProjectItemType::Audio { path: "assets/audio.wav".to_string(), duration_sec: 10.0 }),
+            ProjectItem::new("item_solids_folder", "Solids", ProjectItemType::Folder { name: "Solids".to_string() }),
+        ];
+
         Self {
             compositions: vec![comp],
             active_composition_idx: 0,
+            assets: default_assets,
         }
     }
 }

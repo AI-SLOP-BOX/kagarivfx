@@ -7,3 +7,4 @@ pub mod export_dialog;
 pub mod audio_meter;
 pub mod icons;
 pub mod toolbar;
+pub mod project_panel;

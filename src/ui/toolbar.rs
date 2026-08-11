@@ -22,7 +22,7 @@ pub fn draw(_app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
                 ui.style_mut().spacing.item_spacing.x = 2.0;
 
                 let tool_id = egui::Id::new("active_tool_selection");
-                let current_tool = ctx.data_mut(|d| *d.get_temp_mut_or_insert_with(tool_id, || ActiveTool::Selection));
+                let mut current_tool = ctx.data_mut(|d| *d.get_temp_mut_or_insert_with(tool_id, || app.active_tool));
 
                 let tools = [
                     (ActiveTool::Selection, "Select (V)"),
@@ -32,15 +32,18 @@ pub fn draw(_app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
                     (ActiveTool::AnchorPoint, "Anchor (Y)"),
                     (ActiveTool::Rectangle, "Shape (Q)"),
                     (ActiveTool::Pen, "Pen (G)"),
-                    (ActiveTool::Text, "Text (Cmd+T)"),
+                    (ActiveTool::Text, "Text (⌘T)"),
                 ];
 
                 for (tool, label) in tools {
                     let is_selected = current_tool == tool;
                     if ui.selectable_label(is_selected, label).clicked() {
+                        current_tool = tool;
+                        app.active_tool = tool;
                         ctx.data_mut(|d| d.insert_temp(tool_id, tool));
                     }
                 }
+                app.active_tool = current_tool;
 
                 ui.separator();
                 ui.add_space(8.0);
