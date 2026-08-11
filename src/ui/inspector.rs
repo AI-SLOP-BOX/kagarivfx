@@ -10,12 +10,18 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
     let mut tracker_completed = false;
     if let Some(ref rx) = app.tracker_rx {
         while let Ok(event) = rx.try_recv() {
-            if let crate::TrackerEvent::Finished { layer_idx, tracker_idx, keyframes } = event {
+            if let crate::TrackerEvent::Finished { ref layer_id, layer_idx, tracker_idx, keyframes } = event {
                 let comp_mut = app.history.current_mut().active_composition_mut();
-                if layer_idx < comp_mut.layers.len() && tracker_idx < comp_mut.layers[layer_idx].trackers.len() {
-                    comp_mut.layers[layer_idx].trackers[tracker_idx].position = Animatable::Animated(keyframes);
-                    crate::core::frame_cache::bump_version();
-                    log::info!("Async Motion Tracker analysis completed for layer {}, tracker {}", layer_idx, tracker_idx);
+                let layer_opt = comp_mut.layers.iter().position(|l| l.id == *layer_id)
+                    .or_else(|| if layer_idx < comp_mut.layers.len() { Some(layer_idx) } else { None });
+
+                if let Some(idx) = layer_opt {
+                    let layer = &mut comp_mut.layers[idx];
+                    if tracker_idx < layer.trackers.len() {
+                        layer.trackers[tracker_idx].position = Animatable::Animated(keyframes);
+                        crate::core::frame_cache::bump_version();
+                        log::info!("Async Motion Tracker analysis completed for layer {} ({}), tracker {}", layer.name, layer_id, tracker_idx);
+                    }
                 }
                 tracker_completed = true;
                 break;
@@ -582,9 +588,11 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                     std::thread::spawn(move || {
                         TrackerEngine::analyze_track(&mut comp_work, l_idx, tracker_idx, start_f, end_f);
                         if l_idx < comp_work.layers.len() && tracker_idx < comp_work.layers[l_idx].trackers.len() {
+                            let l_id = comp_work.layers[l_idx].id.clone();
                             if let Animatable::Animated(ref kfs) = comp_work.layers[l_idx].trackers[tracker_idx].position {
                                 let _ = tx.send(crate::TrackerEvent::Finished {
                                     layer_idx: l_idx,
+                                    layer_id: l_id,
                                     tracker_idx,
                                     keyframes: kfs.clone(),
                                 });

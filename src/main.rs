@@ -133,6 +133,7 @@ pub use crate::core::ffmpeg_export::ExportEvent;
 pub enum TrackerEvent {
     Progress(f32, String),
     Finished {
+        layer_id: String,
         layer_idx: usize,
         tracker_idx: usize,
         keyframes: Vec<crate::core::keyframe::Keyframe<[f32; 2]>>,

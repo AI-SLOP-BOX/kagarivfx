@@ -14,34 +14,37 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
                     ui.close_menu();
                 }
                 ui.separator();
-                if ui.button("Save Project (.aevfx.json)").clicked() {
-                    let project = app.history.current();
-                    match serde_json::to_string_pretty(project) {
-                        Ok(json) => {
-                            match std::fs::write(&app.project_path, &json) {
-                                Ok(_) => log::info!("Native project saved to {}", app.project_path),
-                                Err(e) => log::error!("Failed to save project: {}", e),
+                if ui.button("Save Project As...").clicked() {
+                    if let Some(path) = rfd::FileDialog::new()
+                        .add_filter("After Effects OSS Project", &["json", "aevfx"])
+                        .set_file_name("project.aevfx.json")
+                        .save_file()
+                    {
+                        let project = app.history.current();
+                        if let Ok(json) = serde_json::to_string_pretty(project) {
+                            if std::fs::write(&path, json).is_ok() {
+                                app.project_path = path.to_string_lossy().to_string();
+                                log::info!("Native project saved to {}", app.project_path);
                             }
                         }
-                        Err(e) => log::error!("Failed to serialize project: {}", e),
                     }
                     ui.close_menu();
                 }
-                if ui.button("Load Project (.aevfx.json)").clicked() {
-                    match std::fs::read_to_string(&app.project_path) {
-                        Ok(json) => {
-                            match serde_json::from_str::<crate::core::timeline::Project>(&json) {
-                                Ok(project) => {
-                                    app.history = crate::core::history::ProjectHistory::new(project);
-                                    app.selected_layer_idx = None;
-                                    app.selected_layers.clear();
-                                    crate::core::frame_cache::bump_version();
-                                    log::info!("Native project loaded from {}", app.project_path);
-                                }
-                                Err(e) => log::error!("Failed to parse project: {}", e),
+                if ui.button("Open Project...").clicked() {
+                    if let Some(path) = rfd::FileDialog::new()
+                        .add_filter("After Effects OSS Project", &["json", "aevfx"])
+                        .pick_file()
+                    {
+                        if let Ok(json) = std::fs::read_to_string(&path) {
+                            if let Ok(project) = serde_json::from_str::<crate::core::timeline::Project>(&json) {
+                                app.history = crate::core::history::ProjectHistory::new(project);
+                                app.selected_layer_idx = None;
+                                app.selected_layers.clear();
+                                app.project_path = path.to_string_lossy().to_string();
+                                crate::core::frame_cache::bump_version();
+                                log::info!("Native project loaded from {}", app.project_path);
                             }
                         }
-                        Err(e) => log::error!("Failed to read project file: {}", e),
                     }
                     ui.close_menu();
                 }

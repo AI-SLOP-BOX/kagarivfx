@@ -17,6 +17,8 @@ rhai = { version = "1.18", features = ["sync"] }
 rand = "0.8"
 # egui_extras for SVG icon rendering support
 egui_extras = { version = "0.27.2", features = ["svg"] }
+# rfd for native OS file dialogs (macOS / Windows / Linux)
+rfd = "0.14"
 
 [features]
 default = ["wgpu"]

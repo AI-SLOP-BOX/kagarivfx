@@ -39,7 +39,7 @@ fn draw_keyframe_tick(
     current_frame: &mut u32,
     kf_frame: u32,
     _interpolation: Option<crate::core::keyframe::InterpolationType>,
-) {
+) -> Option<u32> {
     let size = if is_sub_prop { 5.0 } else { 7.0 };
     let rect = egui::Rect::from_center_size(egui::pos2(x, y), egui::vec2(size, size));
     let color = if *current_frame == kf_frame {
@@ -264,7 +264,7 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                     }
                 }
 
-                // Label and Clear button
+                // Label, RAM Cache, and Global Layer Switches
                 ui.horizontal(|ui| {
                     let cached_count = (0..total_frames)
                         .filter(|&f| app.frame_cache.is_cached(f))
@@ -273,8 +273,24 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                         "RAM Preview: {}/{} frames cached (v{})",
                         cached_count, total_frames, cur_version
                     ));
-                    if ui.small_button("Clear").clicked() {
+                    if ui.small_button("Clear RAM").clicked() {
                         app.frame_cache.invalidate_all();
+                    }
+
+                    ui.separator();
+                    if ui.small_button("[V] Vis All").on_hover_text("Toggle All Layers Visibility").clicked() {
+                        let all_vis = comp.layers.iter().all(|l| l.visible);
+                        for l in &mut comp.layers { l.visible = !all_vis; }
+                        project_changed = true;
+                    }
+                    if ui.small_button("[L] Lock All").on_hover_text("Toggle All Layers Lock").clicked() {
+                        let all_lock = comp.layers.iter().all(|l| l.locked);
+                        for l in &mut comp.layers { l.locked = !all_lock; }
+                        project_changed = true;
+                    }
+                    if ui.small_button("[S] Reset Solo").on_hover_text("Clear All Layer Solos").clicked() {
+                        for l in &mut comp.layers { l.solo = false; }
+                        project_changed = true;
                     }
                 });
             }

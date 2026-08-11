@@ -43,17 +43,27 @@ pub fn draw(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
         }
 
         if ui.button("+ Import File...").clicked() {
-            let item_count = temp_project.assets.len() + 1;
-            temp_project.assets.push(ProjectItem::new(
-                format!("imported_{}", item_count),
-                format!("Asset_Footage_{}.png", item_count),
-                ProjectItemType::Image {
-                    path: format!("assets/footage_{}.png", item_count),
-                    width: 1920,
-                    height: 1080,
-                },
-            ));
-            project_changed = true;
+            if let Some(path) = rfd::FileDialog::new()
+                .add_filter("Media Footage", &["png", "jpg", "jpeg", "webp", "wav", "mp3", "mp4"])
+                .pick_file()
+            {
+                let file_name = path.file_name().unwrap_or_default().to_string_lossy().to_string();
+                let file_path = path.to_string_lossy().to_string();
+                let item_count = temp_project.assets.len() + 1;
+
+                let item_type = if file_name.ends_with(".wav") || file_name.ends_with(".mp3") {
+                    ProjectItemType::Audio { path: file_path, duration_sec: 10.0 }
+                } else {
+                    ProjectItemType::Image { path: file_path, width: 1920, height: 1080 }
+                };
+
+                temp_project.assets.push(ProjectItem::new(
+                    format!("imported_{}", item_count),
+                    file_name,
+                    item_type,
+                ));
+                project_changed = true;
+            }
         }
     });
 

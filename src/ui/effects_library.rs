@@ -372,7 +372,7 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
 
                     for (e_idx, effect) in layer.effects.iter_mut().enumerate() {
                         ui.horizontal(|ui| {
-                            if ui.small_button("🗑").on_hover_text("Delete Effect").clicked() {
+                            if ui.small_button("[X]").on_hover_text("Delete Effect").clicked() {
                                 effect_to_remove = Some(e_idx);
                             }
                             if e_idx > 0 && ui.small_button("▲").on_hover_text("Move Up").clicked() {
