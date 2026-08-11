@@ -508,6 +508,30 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: u32) 
                     ui.painter().line_segment([center, z_end], egui::Stroke::new(2.5, egui::Color32::from_rgb(60, 150, 255)));
                     ui.painter().text(egui::pos2(z_end.x - 8.0, z_end.y + 4.0), egui::Align2::RIGHT_TOP, "Z", egui::FontId::proportional(12.0), egui::Color32::from_rgb(60, 150, 255));
 
+                    // 8-Point Bounding Box Transform Handles
+                    let scale = s_layer.transform.scale.evaluate(current_frame);
+                    let hw = (scale[0].abs() / 100.0 * 100.0 * 0.5) * (draw_w / comp_w);
+                    let hh = (scale[1].abs() / 100.0 * 100.0 * 0.5) * (draw_h / comp_h);
+                    let bbox_corners = [
+                        egui::pos2(rx - hw, ry - hh), // Top-Left
+                        egui::pos2(rx, ry - hh),      // Top-Center
+                        egui::pos2(rx + hw, ry - hh), // Top-Right
+                        egui::pos2(rx + hw, ry),      // Mid-Right
+                        egui::pos2(rx + hw, ry + hh), // Bottom-Right
+                        egui::pos2(rx, ry + hh),      // Bottom-Center
+                        egui::pos2(rx - hw, ry + hh), // Bottom-Left
+                        egui::pos2(rx - hw, ry),      // Mid-Left
+                    ];
+
+                    let bbox_rect = egui::Rect::from_center_size(center, egui::vec2(hw * 2.0, hh * 2.0));
+                    ui.painter().rect_stroke(bbox_rect, 0.0, egui::Stroke::new(1.5, egui::Color32::from_rgb(0, 180, 255)));
+
+                    for hp in bbox_corners {
+                        let h_rect = egui::Rect::from_center_size(hp, egui::vec2(7.0, 7.0));
+                        ui.painter().rect_filled(h_rect, 1.0, egui::Color32::WHITE);
+                        ui.painter().rect_stroke(h_rect, 1.0, egui::Stroke::new(1.0, egui::Color32::from_rgb(0, 120, 255)));
+                    }
+
                     // Center Target Circle
                     ui.painter().circle_filled(center, 5.0, egui::Color32::from_rgb(255, 215, 0));
                     ui.painter().circle_stroke(center, 9.0, egui::Stroke::new(1.5, egui::Color32::WHITE));
