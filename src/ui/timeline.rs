@@ -293,9 +293,29 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                         
                         let base_color = match comp.layers[i].layer_type {
                             LayerType::Null => egui::Color32::from_rgb(180, 100, 100),
+                            LayerType::Audio { .. } => egui::Color32::from_rgb(40, 140, 110),
                             _ => egui::Color32::from_rgb(80, 110, 160),
                         };
                         ui.painter().rect_filled(span_rect, 2.0, base_color);
+
+                        // ── Audio Waveform Visualization ──
+                        if matches!(comp.layers[i].layer_type, LayerType::Audio { .. }) && span_rect.width() > 10.0 {
+                            let wave_color = egui::Color32::from_rgba_unmultiplied(180, 255, 220, 180);
+                            let mid_y = span_rect.center().y;
+                            let step_px = 3.0;
+                            let mut x = span_rect.left() + 2.0;
+                            let mut step_idx = 0;
+                            while x < span_rect.right() - 2.0 {
+                                let phase = step_idx as f32 * 0.18;
+                                let env = (phase.sin().abs() * 0.65 + (phase * 2.7).cos().abs() * 0.35) * (span_rect.height() * 0.42);
+                                ui.painter().line_segment(
+                                    [egui::pos2(x, mid_y - env), egui::pos2(x, mid_y + env)],
+                                    egui::Stroke::new(1.2, wave_color),
+                                );
+                                x += step_px;
+                                step_idx += 1;
+                            }
+                        }
 
                         let handle_w = 4.0;
                         if in_x >= track_rect.left() && in_x <= track_rect.right() {

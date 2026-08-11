@@ -79,7 +79,12 @@ impl FrameCache {
     /// Safe to call at any time — in-flight readers hold an `Arc` to pixel data.
     pub fn collect_garbage(&mut self) {
         let current = current_version();
-        self.entries.retain(|(_frame, ver), _| *ver == current);
+        self.collect_garbage_below(current);
+    }
+
+    /// Discard all cache entries whose version is strictly older than `target_version`.
+    pub fn collect_garbage_below(&mut self, target_version: u64) {
+        self.entries.retain(|(_frame, ver), _| *ver >= target_version);
     }
 
     /// Discard the entire cache (e.g. on resolution change).
@@ -137,27 +142,32 @@ mod tests {
     #[test]
     fn test_gc_removes_old_versions() {
         let mut cache = FrameCache::new(1024);
-        let pixels = vec![0u8; 4];
-        const FRAME: u32 = 1_000_002; // unique frame id to avoid cross-test contamination
+        let pixels = Arc::new(vec![0u8; 4]);
+        const FRAME: u32 = 1_000_002;
 
-        // Insert at current version
-        cache.insert(FRAME, 1, 1, pixels.clone());
-        assert_eq!(cache.current_version_len(), cache.entries.iter()
-            .filter(|((f, _), _)| *f == FRAME).count());
+        let old_ver = 1;
+        let cur_ver = 2;
 
-        // Bump so the previous entry is now "old"
-        bump_version();
-        // Insert a second entry at the new version
-        cache.insert(FRAME, 1, 1, pixels.clone());
-        // We have two versioned entries for this frame
-        let count_before = cache.entries.iter().filter(|((f, _), _)| *f == FRAME).count();
-        assert_eq!(count_before, 2, "before GC we should have two versioned entries for the frame");
+        // Manually insert an old version entry and a current version entry
+        cache.entries.insert((FRAME, old_ver), CacheEntry {
+            version: old_ver,
+            width: 1,
+            height: 1,
+            pixels: pixels.clone(),
+        });
+        cache.entries.insert((FRAME, cur_ver), CacheEntry {
+            version: cur_ver,
+            width: 1,
+            height: 1,
+            pixels: pixels.clone(),
+        });
 
-        cache.collect_garbage();
+        assert_eq!(cache.len(), 2, "should have 2 versioned entries before GC");
+        cache.collect_garbage_below(cur_ver);
 
-        // After GC: only the current-version entry survives
-        let count_after = cache.entries.iter().filter(|((f, _), _)| *f == FRAME).count();
-        assert_eq!(count_after, 1, "GC should leave only the current version entry");
-        assert!(cache.is_cached(FRAME));
+        // After GC: only entries at or above cur_ver remain
+        assert!(cache.entries.values().all(|e| e.version >= cur_ver), "all remaining entries must be >= cur_ver");
+        assert!(cache.entries.contains_key(&(FRAME, cur_ver)), "current version entry must survive GC");
+        assert!(!cache.entries.contains_key(&(FRAME, old_ver)), "old version entry must be removed by GC");
     }
 }
