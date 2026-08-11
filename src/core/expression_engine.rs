@@ -130,6 +130,7 @@ pub fn eval_v2(
 
 /// Pre-validate a script without evaluating (for real-time syntax checking in UI).
 /// Returns `Ok(())` if the script compiles, or an error message.
+#[allow(dead_code)]
 pub fn validate_script(engine: &Engine, script: &str) -> Result<(), String> {
     engine.compile(script)
         .map(|_| ())
