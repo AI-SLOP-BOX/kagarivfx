@@ -61,7 +61,7 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
                     ui.close_menu();
                 }
                 ui.separator();
-                if ui.button("🎬 Export Video (MP4)...").clicked() {
+                if ui.button("Export Video (MP4)...").clicked() {
                     app.show_export_dialog = true;
                     ui.close_menu();
                 }

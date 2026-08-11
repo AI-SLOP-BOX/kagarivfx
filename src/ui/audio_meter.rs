@@ -7,7 +7,7 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context) {
         .resizable(false)
         .show(ctx, |ui| {
             ui.vertical_centered(|ui| {
-                ui.heading("🔊 Audio");
+                ui.heading("MASTER VU");
                 ui.separator();
 
                 let is_playing = app.is_playing;

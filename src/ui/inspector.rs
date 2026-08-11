@@ -609,7 +609,7 @@ pub fn draw_property_ui<T: Clone + crate::core::property::Interpolate + PartialE
         ui.label(label);
         
         let has_keyframes = property.keyframes().is_some();
-        let stopwatch_btn = if has_keyframes { "⏱" } else { "⚪" };
+        let stopwatch_btn = if has_keyframes { "[K]" } else { "[+]" };
         if ui.button(stopwatch_btn).clicked() {
             if has_keyframes {
                 let current_val = property.evaluate(current_frame);

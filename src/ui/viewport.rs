@@ -278,8 +278,15 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: u32) 
             );
             ui.painter().rect_filled(hud, 4.0, egui::Color32::from_rgba_unmultiplied(15, 20, 35, 220));
             ui.painter().rect_stroke(hud, 4.0, egui::Stroke::new(1.0, egui::Color32::from_rgb(60, 100, 200)));
+            // 3D Camera HUD overlay
+            let hud = egui::Rect::from_min_size(
+                egui::pos2(rect.left() + 10.0, rect.bottom() - 38.0),
+                egui::vec2(250.0, 28.0),
+            );
+            ui.painter().rect_filled(hud, 4.0, egui::Color32::from_rgba_unmultiplied(15, 20, 35, 220));
+            ui.painter().rect_stroke(hud, 4.0, egui::Stroke::new(1.0, egui::Color32::from_rgb(60, 100, 200)));
             ui.painter().text(hud.center(), egui::Align2::CENTER_CENTER,
-                format!("📦 3D Camera | Yaw: {:.1}°  Pitch: {:.1}°  Z: {:.0}", yaw_deg, pitch_deg, zoom),
+                format!("[3D CAMERA] Yaw: {:.1}°  Pitch: {:.1}°  Z: {:.0}", yaw_deg, pitch_deg, zoom),
                 egui::FontId::proportional(11.0),
                 egui::Color32::from_rgb(140, 200, 255));
         }
@@ -355,7 +362,7 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: u32) 
                             ui.painter().text(
                                 img_rect.center(),
                                 egui::Align2::CENTER_CENTER,
-                                format!("🖼️ {}", filename),
+                                format!("IMG :: {}", filename),
                                 egui::FontId::proportional(12.0),
                                 egui::Color32::WHITE,
                             );
@@ -369,7 +376,7 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: u32) 
                             ui.painter().text(
                                 comp_rect.center(),
                                 egui::Align2::CENTER_CENTER,
-                                format!("🎬 PreComp: {}", comp_id),
+                                format!("COMP :: {}", comp_id),
                                 egui::FontId::proportional(12.0),
                                 egui::Color32::WHITE,
                             );
@@ -440,11 +447,11 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: u32) 
         }
 
         // ── HUD Overlay Badges ──
-        let backend_text = if rendered_gpu { "⚡ WGPU GPU Acceleration" } else { "🖥️ Software Canvas" };
+        let backend_text = if rendered_gpu { "[GPU] WGPU Acceleration" } else { "[CPU] Software Canvas" };
         let backend_color = if rendered_gpu { egui::Color32::from_rgb(40, 160, 100) } else { egui::Color32::from_rgb(180, 120, 40) };
         
         // Top Left Performance & FPS HUD Overlay
-        let fps_text = format!("📊 {:.0} FPS  |  Comp: {}x{} @ {}fps", 60.0, comp_w as u32, comp_h as u32, app.history.current().active_composition().fps);
+        let fps_text = format!("PERF: {:.0} FPS | Comp: {}x{} @ {}fps", 60.0, comp_w as u32, comp_h as u32, app.history.current().active_composition().fps);
         let fps_rect = egui::Rect::from_min_size(
             egui::pos2(origin_x + 10.0, origin_y + 10.0),
             egui::vec2(220.0, 24.0),
@@ -472,7 +479,7 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: u32) 
                 let rot = s_layer.transform.rotation.evaluate(current_frame);
                 
                 let status_str = format!(
-                    "🎯 Selected: Layer {} ({}) | Pos: ({:.0}, {:.0}) | Scale: {:.0}% | Rot: {:.1}°",
+                    "SELECTED: Layer {} ({}) | Pos: ({:.0}, {:.0}) | Scale: {:.0}% | Rot: {:.1}°",
                     s_idx + 1, s_layer.name, pos[0], pos[1], scale[0], rot
                 );
                 

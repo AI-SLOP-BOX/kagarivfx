@@ -63,21 +63,21 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                 let hours = mins / 60;
                 let tc_str = format!("{:02}:{:02}:{:02}:{:02}", hours, mins % 60, secs % 60, sub_f);
 
-                ui.label(egui::RichText::new(format!("⏱️ {}  |  Frame: {} / {}", tc_str, current_frame, total_frames)).strong().color(egui::Color32::from_rgb(100, 220, 255)));
+                ui.label(egui::RichText::new(format!("TC: {}  |  Frame: {} / {}", tc_str, current_frame, total_frames)).strong().color(egui::Color32::from_rgb(100, 220, 255)));
                 ui.add_space(8.0);
-                if ui.button("⏮ First").clicked() { *current_frame = 0; }
-                if ui.button("◀ Prev").clicked() { *current_frame = current_frame.saturating_sub(1); }
-                if ui.button(if app.is_playing { "⏸ Pause" } else { "▶ Play" }).clicked() {
+                if ui.button("|< First").clicked() { *current_frame = 0; }
+                if ui.button("< Prev").clicked() { *current_frame = current_frame.saturating_sub(1); }
+                if ui.button(if app.is_playing { "|| Pause" } else { "> Play" }).clicked() {
                     app.is_playing = !app.is_playing;
                 }
-                if ui.button("Next ▶").clicked() { *current_frame = (*current_frame + 1).min(total_frames); }
-                if ui.button("Last ⏭").clicked() { *current_frame = total_frames; }
+                if ui.button("Next >").clicked() { *current_frame = (*current_frame + 1).min(total_frames); }
+                if ui.button("Last >|").clicked() { *current_frame = total_frames; }
 
                 ui.separator();
                 ui.label("Zoom:");
                 ui.add(egui::Slider::new(&mut app.timeline_zoom, 0.1..=10.0));
-                ui.checkbox(&mut app.snap_to_keyframes, "🧲 Snap");
-                let mode_btn_text = if app.show_graph_editor { "📈 Graph Mode" } else { "📋 Tracks Mode" };
+                ui.checkbox(&mut app.snap_to_keyframes, "Snap");
+                let mode_btn_text = if app.show_graph_editor { "Graph Mode" } else { "Tracks Mode" };
                 if ui.selectable_label(app.show_graph_editor, mode_btn_text).clicked() {
                     app.show_graph_editor = !app.show_graph_editor;
                 }
@@ -141,7 +141,7 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                 }
 
                 ui.add_space(8.0);
-                let add_marker_clicked = ui.button("🚩 Add Marker (M)").clicked() ||
+                let add_marker_clicked = ui.button("+ Marker (M)").clicked() ||
                     ui.input(|i| i.key_pressed(egui::Key::M));
                 if add_marker_clicked {
                     let marker_idx = comp.markers.len() + 1;
@@ -222,10 +222,10 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                         .filter(|&f| app.frame_cache.is_cached(f))
                         .count();
                     ui.small(format!(
-                        "🟩 RAM Preview: {}/{} frames cached (v{})",
+                        "RAM Preview: {}/{} frames cached (v{})",
                         cached_count, total_frames, cur_version
                     ));
-                    if ui.small_button("🗑 Clear").clicked() {
+                    if ui.small_button("Clear").clicked() {
                         app.frame_cache.invalidate_all();
                     }
                 });
@@ -255,7 +255,7 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                                 }
 
                                 let vis = comp.layers[i].visible;
-                                if ui.selectable_label(vis, "👁").clicked() {
+                                if ui.selectable_label(vis, "V").clicked() {
                                     comp.layers[i].visible = !vis;
                                     project_changed = true;
                                 }
@@ -267,7 +267,7 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                                 }
 
                                 let lkd = comp.layers[i].locked;
-                                if ui.selectable_label(lkd, "🔒").clicked() {
+                                if ui.selectable_label(lkd, "L").clicked() {
                                     comp.layers[i].locked = !lkd;
                                     project_changed = true;
                                 }
@@ -306,7 +306,7 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                                 use crate::core::timeline::BlendMode;
                                 let bm_text = format!("{:?}", comp.layers[i].blend_mode);
                                 egui::ComboBox::from_id_source(format!("tl_blend_{}", i))
-                                    .selected_text(format!("🎨 {}", bm_text))
+                                    .selected_text(format!("Blend: {}", bm_text))
                                     .show_ui(ui, |ui| {
                                         for bm in [
                                             BlendMode::Normal,
@@ -334,7 +334,7 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                                     TrackMatteMode::LumaMatteInverted => "Luma Inv",
                                 };
                                 egui::ComboBox::from_id_source(format!("tl_matte_{}", i))
-                                    .selected_text(format!("✂️ {}", tm_text))
+                                    .selected_text(format!("Matte: {}", tm_text))
                                     .show_ui(ui, |ui| {
                                         for (mode, label) in [
                                             (TrackMatteMode::None, "None"),
@@ -353,7 +353,7 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                                 // ── Parenting Dropdown ──
                                 let parent_text = comp.layers[i].parent_id.as_deref().unwrap_or("None");
                                 egui::ComboBox::from_id_source(format!("tl_parent_{}", i))
-                                    .selected_text(format!("🔗 {}", parent_text))
+                                    .selected_text(format!("Parent: {}", parent_text))
                                     .show_ui(ui, |ui| {
                                         if ui.selectable_label(comp.layers[i].parent_id.is_none(), "None").clicked() {
                                             comp.layers[i].parent_id = None;
