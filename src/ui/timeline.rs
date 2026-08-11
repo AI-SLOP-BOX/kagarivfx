@@ -74,6 +74,7 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                 ui.separator();
                 ui.label("Zoom:");
                 ui.add(egui::Slider::new(&mut app.timeline_zoom, 0.1..=10.0));
+                ui.checkbox(&mut app.snap_to_keyframes, "🧲 Snap");
                 
                 ui.add_space(20.0);
                 if ui.button("+ Solid Layer").clicked() {
@@ -219,7 +220,7 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                                     project_changed = true;
                                 }
 
-                                let is_selected = app.selected_layer_idx == Some(i);
+                                let is_selected = app.selected_layers.contains(&i) || app.selected_layer_idx == Some(i);
                                 let label_rgb = comp.layers[i].label.to_rgb();
                                 let text_color = egui::Color32::from_rgb(
                                     (label_rgb[0] * 255.0) as u8,
@@ -228,8 +229,24 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                                 );
                                 
                                 ui.style_mut().visuals.override_text_color = Some(text_color);
-                                if ui.selectable_label(is_selected, &comp.layers[i].name).clicked() {
-                                    app.selected_layer_idx = Some(i);
+                                let click_resp = ui.selectable_label(is_selected, &comp.layers[i].name);
+                                if click_resp.clicked() {
+                                    let modifiers = ui.input(|inp| inp.modifiers);
+                                    if modifiers.shift || modifiers.command || modifiers.ctrl {
+                                        if app.selected_layers.contains(&i) {
+                                            app.selected_layers.remove(&i);
+                                            if app.selected_layer_idx == Some(i) {
+                                                app.selected_layer_idx = app.selected_layers.iter().next().copied();
+                                            }
+                                        } else {
+                                            app.selected_layers.insert(i);
+                                            app.selected_layer_idx = Some(i);
+                                        }
+                                    } else {
+                                        app.selected_layers.clear();
+                                        app.selected_layers.insert(i);
+                                        app.selected_layer_idx = Some(i);
+                                    }
                                 }
                                 ui.style_mut().visuals.override_text_color = None;
 

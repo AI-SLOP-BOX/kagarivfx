@@ -53,6 +53,7 @@ pub struct AfterEffectsApp {
 
     // UI state
     pub selected_layer_idx: Option<usize>,
+    pub selected_layers: std::collections::HashSet<usize>,
 
     // GPU Renderer State
     #[cfg(feature = "wgpu")]
@@ -75,6 +76,7 @@ pub struct AfterEffectsApp {
     pub show_guides: bool,
     pub show_handles: bool,
     pub show_comp_settings: bool,
+    pub snap_to_keyframes: bool,
     pub timeline_zoom: f32,
     pub timeline_scroll: f32,
 
@@ -138,6 +140,7 @@ impl Default for AfterEffectsApp {
             is_playing: false,
             current_frame: 0,
             selected_layer_idx: Some(1), // Select Text Layer by default
+            selected_layers: vec![1].into_iter().collect(),
             #[cfg(feature = "wgpu")]
             renderer: None,
             #[cfg(feature = "wgpu")]
@@ -153,6 +156,7 @@ impl Default for AfterEffectsApp {
             show_guides: true,
             show_handles: true,
             show_comp_settings: false,
+            snap_to_keyframes: true,
             timeline_zoom: 1.0,
             timeline_scroll: 0.0,
             viewport_mode: ViewportMode::Comp2D,
@@ -279,7 +283,7 @@ impl eframe::App for AfterEffectsApp {
 
                 // J → jump to previous keyframe of selected property
                 // K → jump to next keyframe of selected property
-                if (i.key_pressed(Key::J) || i.key_pressed(Key::K)) {
+                if i.key_pressed(Key::J) || i.key_pressed(Key::K) {
                     if let Some(idx) = self.selected_layer_idx {
                         let comp = self.history.current().active_composition();
                         if idx < comp.layers.len() {
@@ -323,6 +327,29 @@ impl eframe::App for AfterEffectsApp {
                                 }
                             }
                         }
+                    }
+                }
+
+                // Delete / Backspace → remove selected layers
+                if i.key_pressed(Key::Delete) || i.key_pressed(Key::Backspace) {
+                    let mut indices: Vec<usize> = self.selected_layers.iter().copied().collect();
+                    if indices.is_empty() {
+                        if let Some(s) = self.selected_layer_idx {
+                            indices.push(s);
+                        }
+                    }
+                    if !indices.is_empty() {
+                        indices.sort_unstable_by(|a, b| b.cmp(a)); // sort descending to remove safely
+                        self.modify_project(|project| {
+                            let comp = project.active_composition_mut();
+                            for idx in indices {
+                                if idx < comp.layers.len() {
+                                    comp.layers.remove(idx);
+                                }
+                            }
+                        });
+                        self.selected_layers.clear();
+                        self.selected_layer_idx = None;
                     }
                 }
             });
