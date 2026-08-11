@@ -44,7 +44,7 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
             // ── Camera Suite Panel ──
             {
                 let comp = temp_project.active_composition_mut();
-                ui.collapsing("🎥 Active Camera Settings", |ui| {
+                ui.collapsing("Active Camera Settings", |ui| {
                     let cam = &mut comp.active_camera;
                     ui.checkbox(&mut cam.active, "Camera Active");
                     
@@ -121,17 +121,17 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                         
                         ui.horizontal(|ui| {
                             let solo_before = layer.solo;
-                            ui.checkbox(&mut layer.solo, "Solo ⭐️");
+                            ui.checkbox(&mut layer.solo, "Solo");
                             if solo_before != layer.solo { project_changed = true; }
 
                             let mb_before = layer.motion_blur;
-                            ui.checkbox(&mut layer.motion_blur, "Motion Blur 🌀");
+                            ui.checkbox(&mut layer.motion_blur, "Motion Blur");
                             if mb_before != layer.motion_blur { project_changed = true; }
                         });
 
                         ui.horizontal(|ui| {
                             let is_3d_before = layer.is_3d;
-                            ui.checkbox(&mut layer.is_3d, "3D Layer 📦");
+                            ui.checkbox(&mut layer.is_3d, "3D Layer");
                             if is_3d_before != layer.is_3d { project_changed = true; }
                         });
 
@@ -218,7 +218,7 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                     // ── AE Motion Tracking Panel ──
                     ui.group(|ui| {
                         ui.horizontal(|ui| {
-                            ui.label(egui::RichText::new("🎯 Motion Tracker").strong());
+                            ui.label(egui::RichText::new("Motion Tracker").strong());
                             if ui.button("+ Add Track Point").clicked() {
                                 let id = format!("trackpoint_{}", layer.trackers.len());
                                 let name = format!("Track Point {}", layer.trackers.len() + 1);
@@ -238,7 +238,7 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                                     if app.tracker_rx.is_some() {
                                         ui.spinner();
                                         ui.small("Analyzing...");
-                                    } else if ui.button("Analyze Forward ▶").clicked() {
+                                    } else if ui.button("Analyze Forward >").clicked() {
                                         trigger_async_track = true;
                                     }
                                 });
@@ -276,7 +276,7 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                     // Transform Section (Conditional on 3D Layer status)
                     ui.group(|ui| {
                         if layer.is_3d {
-                            ui.label("Transform 3D 📦");
+                            ui.label("Transform 3D");
                             
                             let pos_before = layer.transform_3d.position.clone();
                             if let Some(nf) = draw_property_ui(*current_frame, ui, "Position (XYZ)", &mut layer.transform_3d.position, |ui, val| {
@@ -439,7 +439,7 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                     ui.add_space(8.0);
                     ui.group(|ui| {
                         ui.horizontal(|ui| {
-                            ui.label(egui::RichText::new("📈 Graph Editor").strong());
+                            ui.label(egui::RichText::new("Graph Editor").strong());
                             let prop_name = app.selected_property.clone().unwrap_or_else(|| "Position X".to_string());
                             egui::ComboBox::from_id_source("graph_prop_select")
                                 .selected_text(&prop_name)
@@ -551,13 +551,37 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
 fn draw_easy_ease_button<T: Clone>(ui: &mut egui::Ui, property: &mut Animatable<T>, project_changed: &mut bool) {
     ui.horizontal(|ui| {
         ui.add_space(20.0);
-        if ui.button("⚡ Easy Ease (F9)").clicked() {
+        if ui.button("Easy Ease (F9)").on_hover_text("Symmetrical Bezier Ease (F9)").clicked() {
             if let Animatable::Animated(ref mut keyframes) = property {
                 for kf in keyframes {
                     kf.interpolation = InterpolationType::Bezier {
                         outgoing: BezierControlPoint { influence: 0.333, speed: 0.0 },
                         incoming: BezierControlPoint { influence: 0.333, speed: 0.0 },
-                        custom_bezier: Some([0.4, 0.0, 0.2, 1.0]), // AE default ease curves
+                        custom_bezier: Some([0.4, 0.0, 0.2, 1.0]),
+                    };
+                }
+                *project_changed = true;
+            }
+        }
+        if ui.button("Ease In (Shift+F9)").on_hover_text("Decelerate into keyframe (Shift+F9)").clicked() {
+            if let Animatable::Animated(ref mut keyframes) = property {
+                for kf in keyframes {
+                    kf.interpolation = InterpolationType::Bezier {
+                        outgoing: BezierControlPoint { influence: 0.0, speed: 0.0 },
+                        incoming: BezierControlPoint { influence: 0.333, speed: 0.0 },
+                        custom_bezier: Some([0.0, 0.0, 0.2, 1.0]),
+                    };
+                }
+                *project_changed = true;
+            }
+        }
+        if ui.button("Ease Out (Ctrl+Shift+F9)").on_hover_text("Accelerate out of keyframe (Ctrl+Shift+F9)").clicked() {
+            if let Animatable::Animated(ref mut keyframes) = property {
+                for kf in keyframes {
+                    kf.interpolation = InterpolationType::Bezier {
+                        outgoing: BezierControlPoint { influence: 0.333, speed: 0.0 },
+                        incoming: BezierControlPoint { influence: 0.0, speed: 0.0 },
+                        custom_bezier: Some([0.4, 0.0, 1.0, 1.0]),
                     };
                 }
                 *project_changed = true;
@@ -602,13 +626,23 @@ pub fn draw_property_ui<T: Clone + crate::core::property::Interpolate + PartialE
     property: &mut Animatable<T>,
     draw_value_widget: impl FnOnce(&mut egui::Ui, &mut T),
 ) -> Option<u32> {
-    let next_frame = None;
+    let mut next_frame = None;
     ui.horizontal(|ui| {
         ui.label(label);
         
         let has_keyframes = property.keyframes().is_some();
+        if has_keyframes {
+            if ui.small_button("◀").on_hover_text("Jump to Previous Keyframe (J)").clicked() {
+                if let Some(kfs) = property.keyframes() {
+                    if let Some(target) = kfs.iter().rev().find(|k| k.frame < current_frame) {
+                        next_frame = Some(target.frame);
+                    }
+                }
+            }
+        }
+
         let stopwatch_btn = if has_keyframes { "[K]" } else { "[+]" };
-        if ui.button(stopwatch_btn).clicked() {
+        if ui.small_button(stopwatch_btn).on_hover_text(if has_keyframes { "Disable Keyframes" } else { "Enable Keyframes / Add Keyframe" }).clicked() {
             if has_keyframes {
                 let current_val = property.evaluate(current_frame);
                 *property = Animatable::Constant(current_val);
@@ -617,6 +651,16 @@ pub fn draw_property_ui<T: Clone + crate::core::property::Interpolate + PartialE
                 *property = Animatable::Animated(vec![
                     Keyframe::new(current_frame, current_val, InterpolationType::Linear)
                 ]);
+            }
+        }
+
+        if has_keyframes {
+            if ui.small_button("▶").on_hover_text("Jump to Next Keyframe (K)").clicked() {
+                if let Some(kfs) = property.keyframes() {
+                    if let Some(target) = kfs.iter().find(|k| k.frame > current_frame) {
+                        next_frame = Some(target.frame);
+                    }
+                }
             }
         }
 

@@ -92,7 +92,49 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
                 ui.checkbox(&mut app.show_grid, "Show Grid");
                 ui.checkbox(&mut app.show_guides, "Show Safe Zones");
                 ui.checkbox(&mut app.show_handles, "Show Handles");
+                ui.separator();
+                if ui.button("Reset Timeline Zoom (100%)").clicked() {
+                    app.timeline_zoom = 1.0;
+                    ui.close_menu();
+                }
+                if ui.button("Purge All RAM Cache").clicked() {
+                    app.frame_cache.invalidate_all();
+                    crate::core::frame_cache::bump_version();
+                    ui.close_menu();
+                }
+            });
+            ui.menu_button("Help", |ui| {
+                if ui.button("Keyboard Shortcuts Reference...").clicked() {
+                    let help_id = egui::Id::new("show_shortcuts_modal");
+                    ctx.data_mut(|d| d.insert_temp(help_id, true));
+                    ui.close_menu();
+                }
             });
         });
     });
+
+    let help_id = egui::Id::new("show_shortcuts_modal");
+    let mut show_help = ctx.data_mut(|d| *d.get_temp_mut_or_insert_with(help_id, || false));
+    if show_help {
+        egui::Window::new("⌨️ Keyboard Shortcuts Reference")
+            .open(&mut show_help)
+            .resizable(false)
+            .show(ctx, |ui| {
+                ui.heading("After Effects OSS - Shortcuts");
+                ui.separator();
+                egui::Grid::new("shortcuts_grid").striped(true).show(ui, |ui| {
+                    ui.label("Spacebar"); ui.label("Play / Pause RAM Preview"); ui.end_row();
+                    ui.label("V"); ui.label("Selection Tool"); ui.end_row();
+                    ui.label("H"); ui.label("Hand Tool (Pan)"); ui.end_row();
+                    ui.label("Z"); ui.label("Zoom Tool"); ui.end_row();
+                    ui.label("W"); ui.label("Rotation Tool"); ui.end_row();
+                    ui.label("Y"); ui.label("Anchor Point Tool"); ui.end_row();
+                    ui.label("Cmd + Z"); ui.label("Undo"); ui.end_row();
+                    ui.label("Cmd + Shift + Z"); ui.label("Redo"); ui.end_row();
+                    ui.label("J / K"); ui.label("Jump to Prev / Next Keyframe"); ui.end_row();
+                    ui.label("F9"); ui.label("Apply Easy Ease to Keyframes"); ui.end_row();
+                });
+            });
+        ctx.data_mut(|d| d.insert_temp(help_id, show_help));
+    }
 }

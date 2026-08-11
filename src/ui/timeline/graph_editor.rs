@@ -36,7 +36,7 @@ pub fn draw_graph_editor(
     painter.text(
         egui::pos2(graph_rect.left() + 10.0, graph_rect.top() + 10.0),
         egui::Align2::LEFT_TOP,
-        format!("📈 Graph Editor — {} :: {}", layer_name, prop_name),
+        format!("Graph Editor — {} :: {}", layer_name, prop_name),
         egui::FontId::proportional(13.0),
         egui::Color32::from_rgb(100, 220, 255),
     );

@@ -21,9 +21,19 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
             
             if let Some(idx) = app.selected_layer_idx {
                 ui.label("Add Effect to Selected Layer:");
+                let search_id = egui::Id::new("effect_search_query");
+                let mut search_query = ctx.data_mut(|d| d.get_temp_mut_or_insert_with(search_id, String::new).clone());
+                ui.horizontal(|ui| {
+                    ui.small("Search:");
+                    if ui.add(egui::TextEdit::singleline(&mut search_query).hint_text("Search effects...")).changed() {
+                        ctx.data_mut(|d| d.insert_temp(search_id, search_query.clone()));
+                    }
+                });
+                let q = search_query.to_lowercase();
+
                 ui.vertical(|ui| {
-                    if ui.button("+ Gaussian Blur").clicked() {
-                        let comp = app.history.current_mut().active_composition_mut();
+                    if (q.is_empty() || "gaussian blur".contains(&q)) && ui.button("+ Gaussian Blur").clicked() {
+                        let comp = temp_project.active_composition_mut();
                         if idx < comp.layers.len() {
                             let len = comp.layers[idx].effects.len();
                             comp.layers[idx].effects.push(Effect {
@@ -37,8 +47,8 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                             project_changed = true;
                         }
                     }
-                    if ui.button("+ Color Tint").clicked() {
-                        let comp = app.history.current_mut().active_composition_mut();
+                    if (q.is_empty() || "color tint".contains(&q)) && ui.button("+ Color Tint").clicked() {
+                        let comp = temp_project.active_composition_mut();
                         if idx < comp.layers.len() {
                             let len = comp.layers[idx].effects.len();
                             comp.layers[idx].effects.push(Effect {
@@ -53,8 +63,8 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                             project_changed = true;
                         }
                     }
-                    if ui.button("+ Drop Shadow").clicked() {
-                        let comp = app.history.current_mut().active_composition_mut();
+                    if (q.is_empty() || "drop shadow".contains(&q)) && ui.button("+ Drop Shadow").clicked() {
+                        let comp = temp_project.active_composition_mut();
                         if idx < comp.layers.len() {
                             let len = comp.layers[idx].effects.len();
                             comp.layers[idx].effects.push(Effect {
@@ -72,8 +82,8 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                             project_changed = true;
                         }
                     }
-                    if ui.button("+ Chromatic Aberration").clicked() {
-                        let comp = app.history.current_mut().active_composition_mut();
+                    if (q.is_empty() || "chromatic aberration".contains(&q)) && ui.button("+ Chromatic Aberration").clicked() {
+                        let comp = temp_project.active_composition_mut();
                         if idx < comp.layers.len() {
                             let len = comp.layers[idx].effects.len();
                             comp.layers[idx].effects.push(Effect {
@@ -89,8 +99,8 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                             project_changed = true;
                         }
                     }
-                    if ui.button("+ Vignette").clicked() {
-                        let comp = app.history.current_mut().active_composition_mut();
+                    if (q.is_empty() || "vignette".contains(&q)) && ui.button("+ Vignette").clicked() {
+                        let comp = temp_project.active_composition_mut();
                         if idx < comp.layers.len() {
                             let len = comp.layers[idx].effects.len();
                             comp.layers[idx].effects.push(Effect {
@@ -107,8 +117,8 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                             project_changed = true;
                         }
                     }
-                    if ui.button("+ Levels (Gamma/Crush)").clicked() {
-                        let comp = app.history.current_mut().active_composition_mut();
+                    if (q.is_empty() || "levels".contains(&q)) && ui.button("+ Levels (Gamma/Crush)").clicked() {
+                        let comp = temp_project.active_composition_mut();
                         if idx < comp.layers.len() {
                             let len = comp.layers[idx].effects.len();
                             comp.layers[idx].effects.push(Effect {
@@ -126,8 +136,8 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                             project_changed = true;
                         }
                     }
-                    if ui.button("+ Hue / Saturation").clicked() {
-                        let comp = app.history.current_mut().active_composition_mut();
+                    if (q.is_empty() || "hue / saturation".contains(&q)) && ui.button("+ Hue / Saturation").clicked() {
+                        let comp = temp_project.active_composition_mut();
                         if idx < comp.layers.len() {
                             let len = comp.layers[idx].effects.len();
                             comp.layers[idx].effects.push(Effect {
@@ -143,8 +153,8 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                             project_changed = true;
                         }
                     }
-                    if ui.button("+ Glow").clicked() {
-                        let comp = app.history.current_mut().active_composition_mut();
+                    if (q.is_empty() || "glow".contains(&q)) && ui.button("+ Glow").clicked() {
+                        let comp = temp_project.active_composition_mut();
                         if idx < comp.layers.len() {
                             let len = comp.layers[idx].effects.len();
                             comp.layers[idx].effects.push(Effect {
@@ -161,8 +171,8 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                             project_changed = true;
                         }
                     }
-                    if ui.button("+ Mesh Warp (Grid)").clicked() {
-                        let comp = app.history.current_mut().active_composition_mut();
+                    if (q.is_empty() || "mesh warp".contains(&q)) && ui.button("+ Mesh Warp (Grid)").clicked() {
+                        let comp = temp_project.active_composition_mut();
                         if idx < comp.layers.len() {
                             let len = comp.layers[idx].effects.len();
                             comp.layers[idx].effects.push(Effect {
@@ -179,8 +189,8 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                             project_changed = true;
                         }
                     }
-                    if ui.button("+ Cinematic 3D LUT").clicked() {
-                        let comp = app.history.current_mut().active_composition_mut();
+                    if (q.is_empty() || "lut".contains(&q)) && ui.button("+ Cinematic 3D LUT").clicked() {
+                        let comp = temp_project.active_composition_mut();
                         if idx < comp.layers.len() {
                             let len = comp.layers[idx].effects.len();
                             comp.layers[idx].effects.push(Effect {
@@ -195,8 +205,8 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                             project_changed = true;
                         }
                     }
-                    if ui.button("+ Log Space Converter").clicked() {
-                        let comp = app.history.current_mut().active_composition_mut();
+                    if (q.is_empty() || "log space converter".contains(&q)) && ui.button("+ Log Space Converter").clicked() {
+                        let comp = temp_project.active_composition_mut();
                         if idx < comp.layers.len() {
                             let len = comp.layers[idx].effects.len();
                             comp.layers[idx].effects.push(Effect {
@@ -210,8 +220,8 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                             project_changed = true;
                         }
                     }
-                    if ui.button("+ Physical Film Grain").clicked() {
-                        let comp = app.history.current_mut().active_composition_mut();
+                    if (q.is_empty() || "film grain".contains(&q)) && ui.button("+ Physical Film Grain").clicked() {
+                        let comp = temp_project.active_composition_mut();
                         if idx < comp.layers.len() {
                             let len = comp.layers[idx].effects.len();
                             comp.layers[idx].effects.push(Effect {
@@ -566,14 +576,13 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
             if let Some(app_name) = &app.connected_app {
                 ui.horizontal(|ui| {
                     ui.label("Status:");
-                    ui.colored_label(egui::Color32::from_rgb(50, 220, 50), format!("🟢 Connected to {}", app_name));
+                    ui.colored_label(egui::Color32::from_rgb(50, 220, 50), format!("[ONLINE] Connected to {}", app_name));
                 });
             } else {
                 ui.horizontal(|ui| {
                     ui.label("Status:");
-                    ui.colored_label(egui::Color32::from_rgb(220, 100, 100), "🔴 Disconnected");
+                    ui.colored_label(egui::Color32::from_rgb(220, 100, 100), "[OFFLINE] Listening on 127.0.0.1:9000");
                 });
-                ui.weak("Listening on 127.0.0.1:9000...");
             }
             ui.add_space(8.0);
             
@@ -584,7 +593,7 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
             });
             
             ui.horizontal(|ui| {
-                if ui.button("📥 Import OTIO").clicked() {
+                if ui.button("Import OTIO").clicked() {
                     if let Ok(json_str) = std::fs::read_to_string(&app.otio_path) {
                         if let Ok(otio_timeline) = crate::core::integration::OtioTimeline::from_json(&json_str) {
                             let new_comp = otio_timeline.to_composition();
@@ -605,7 +614,7 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                         log::error!("Failed to read OTIO file from path: {}", app.otio_path);
                     }
                 }
-                if ui.button("📤 Export OTIO").clicked() {
+                if ui.button("Export OTIO").clicked() {
                     let active_comp = temp_project.active_composition();
                     let otio_timeline = crate::core::integration::OtioTimeline::from_composition(active_comp);
                     if let Ok(json_str) = otio_timeline.to_json() {
@@ -621,6 +630,7 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
             // Commit changes and set output state
             if project_changed {
                 app.history.commit(temp_project);
+                crate::core::frame_cache::bump_version();
             }
             if let Some(nf) = next_frame {
                 *current_frame = nf;

@@ -35,7 +35,7 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
     }
 
     let mut open = app.show_export_dialog;
-    egui::Window::new("🎬 Export Composition Video")
+    egui::Window::new("Export Composition Video")
         .open(&mut open)
         .collapsible(false)
         .resizable(false)
@@ -48,10 +48,62 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
             let total_frames = comp.duration_frames;
             let output_path = app.export_output_path.clone();
 
-            ui.label(format!("Resolution: {} x {}", comp.width, comp.height));
+            ui.label(format!("Composition: {} x {}", comp.width, comp.height));
             ui.label(format!("Total Duration: {} frames", total_frames));
 
             ui.add_space(8.0);
+
+            let fmt_id = egui::Id::new("export_format_selection");
+            let mut format_idx = ctx.data_mut(|d| *d.get_temp_mut_or_insert_with(fmt_id, || 0));
+            ui.horizontal(|ui| {
+                ui.label("Format Preset:");
+                egui::ComboBox::from_id_source("export_fmt_combo")
+                    .selected_text(match format_idx {
+                        0 => "H.264 / MP4 (Standard)",
+                        1 => "Apple ProRes 422 HQ (MOV)",
+                        _ => "PNG Image Sequence",
+                    })
+                    .show_ui(ui, |ui| {
+                        if ui.selectable_value(&mut format_idx, 0, "H.264 / MP4 (Standard)").clicked() {
+                            ctx.data_mut(|d| d.insert_temp(fmt_id, format_idx));
+                        }
+                        if ui.selectable_value(&mut format_idx, 1, "Apple ProRes 422 HQ (MOV)").clicked() {
+                            ctx.data_mut(|d| d.insert_temp(fmt_id, format_idx));
+                        }
+                        if ui.selectable_value(&mut format_idx, 2, "PNG Image Sequence").clicked() {
+                            ctx.data_mut(|d| d.insert_temp(fmt_id, format_idx));
+                        }
+                    });
+            });
+
+            let scale_id = egui::Id::new("export_scale_selection");
+            let mut scale_idx = ctx.data_mut(|d| *d.get_temp_mut_or_insert_with(scale_id, || 0));
+            ui.horizontal(|ui| {
+                ui.label("Render Resolution Scale:");
+                egui::ComboBox::from_id_source("export_scale_combo")
+                    .selected_text(match scale_idx {
+                        0 => "100% Full Resolution",
+                        1 => "50% Half Resolution",
+                        _ => "25% Quarter Resolution",
+                    })
+                    .show_ui(ui, |ui| {
+                        if ui.selectable_value(&mut scale_idx, 0, "100% Full Resolution").clicked() {
+                            ctx.data_mut(|d| d.insert_temp(scale_id, scale_idx));
+                        }
+                        if ui.selectable_value(&mut scale_idx, 1, "50% Half Resolution").clicked() {
+                            ctx.data_mut(|d| d.insert_temp(scale_id, scale_idx));
+                        }
+                        if ui.selectable_value(&mut scale_idx, 2, "25% Quarter Resolution").clicked() {
+                            ctx.data_mut(|d| d.insert_temp(scale_id, scale_idx));
+                        }
+                    });
+            });
+
+            let audio_id = egui::Id::new("export_include_audio");
+            let mut include_audio = ctx.data_mut(|d| *d.get_temp_mut_or_insert_with(audio_id, || true));
+            ui.checkbox(&mut include_audio, "Include Audio Master Track");
+            ctx.data_mut(|d| d.insert_temp(audio_id, include_audio));
+
             ui.horizontal(|ui| {
                 ui.label("Target FPS:");
                 ui.add(egui::DragValue::new(&mut app.export_fps).clamp_range(1..=120));
@@ -77,7 +129,7 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
                     ui.add_space(4.0);
                 }
                 ui.horizontal(|ui| {
-                    if ui.button("🎬 Start Async Render").clicked() {
+                    if ui.button("Start Async Render").clicked() {
                         app.is_exporting = true;
                         app.export_progress = 0.0;
                         app.export_status = Some("Initializing async render worker thread...".to_string());

@@ -138,7 +138,7 @@ where
             match child.wait() {
                 Ok(status) if status.success() => {
                     let _ = tx.send(ExportEvent::Finished(format!(
-                        "✅ Export complete → {}",
+                        "Export complete → {}",
                         config.output_path
                     )));
                 }

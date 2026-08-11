@@ -25,7 +25,7 @@ pub fn draw(_app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
                 let current_tool = ctx.data_mut(|d| *d.get_temp_mut_or_insert_with(tool_id, || ActiveTool::Selection));
 
                 let tools = [
-                    (ActiveTool::Selection, "↖ Select (V)"),
+                    (ActiveTool::Selection, "Select (V)"),
                     (ActiveTool::Hand, "Hand (H)"),
                     (ActiveTool::Zoom, "Zoom (Z)"),
                     (ActiveTool::Rotation, "Rotate (W)"),

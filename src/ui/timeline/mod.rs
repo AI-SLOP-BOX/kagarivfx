@@ -123,6 +123,15 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                     comp.add_layer(layer);
                     project_changed = true;
                 }
+                if ui.button("+ Marker (M)").clicked() {
+                    let m_idx = comp.markers.len() + 1;
+                    comp.markers.push(crate::core::timeline::TimelineMarker {
+                        frame: *current_frame,
+                        label: format!("Marker {}", m_idx),
+                        color: [1.0, 0.6, 0.1],
+                    });
+                    project_changed = true;
+                }
                 if ui.button("+ Shape").clicked() {
                     let id = format!("layer_{}", comp.layers.len());
                     let name = format!("Shape {}", comp.layers.len());
@@ -295,6 +304,18 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                                 crate::ui::icons::render_svg_bytes(ui, &format!("lock_{}", i), lock_svg, egui::vec2(14.0, 14.0), egui::Color32::WHITE);
                                 if ui.selectable_label(lkd, "L").clicked() {
                                     comp.layers[i].locked = !lkd;
+                                    project_changed = true;
+                                }
+
+                                let mb = comp.layers[i].motion_blur;
+                                if ui.selectable_label(mb, "M").on_hover_text("Motion Blur Switch").clicked() {
+                                    comp.layers[i].motion_blur = !mb;
+                                    project_changed = true;
+                                }
+
+                                let is_3d = comp.layers[i].is_3d;
+                                if ui.selectable_label(is_3d, "3D").on_hover_text("3D Layer Switch").clicked() {
+                                    comp.layers[i].is_3d = !is_3d;
                                     project_changed = true;
                                 }
 
