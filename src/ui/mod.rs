@@ -6,3 +6,4 @@ pub mod viewport;
 pub mod export_dialog;
 pub mod audio_meter;
 pub mod icons;
+pub mod toolbar;

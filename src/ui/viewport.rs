@@ -51,53 +51,48 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: u32) 
                 .show(ctx, |ui| {
                     let mut temp_project = app.history.current().clone();
                     let comp = temp_project.active_composition_mut();
-                    let mut changed = false;
+                    let mut apply_requested = false;
 
                     egui::Grid::new("comp_settings_grid")
                         .num_columns(2)
                         .spacing([12.0, 8.0])
                         .show(ui, |ui| {
                             ui.label("Name:");
-                            let n = comp.name.clone();
                             ui.text_edit_singleline(&mut comp.name);
-                            if n != comp.name { changed = true; }
                             ui.end_row();
 
                             ui.label("Width:");
-                            let old = comp.width;
                             ui.add(egui::DragValue::new(&mut comp.width).clamp_range(1u32..=7680));
-                            if old != comp.width { changed = true; }
                             ui.end_row();
 
                             ui.label("Height:");
-                            let old = comp.height;
                             ui.add(egui::DragValue::new(&mut comp.height).clamp_range(1u32..=4320));
-                            if old != comp.height { changed = true; }
                             ui.end_row();
 
                             ui.label("FPS:");
-                            let old = comp.fps;
                             ui.add(egui::DragValue::new(&mut comp.fps).clamp_range(1u32..=240));
-                            if old != comp.fps { changed = true; }
                             ui.end_row();
 
                             ui.label("Duration (frames):");
-                            let old = comp.duration_frames;
                             ui.add(egui::DragValue::new(&mut comp.duration_frames).clamp_range(1u32..=108000));
-                            if old != comp.duration_frames { changed = true; }
                             ui.end_row();
                         });
 
                     ui.add_space(6.0);
                     ui.horizontal(|ui| {
-                        if ui.button("✅ Apply").clicked() || changed {
-                            app.history.commit(temp_project);
-                            crate::core::frame_cache::bump_version();
+                        if ui.button("✅ Apply").clicked() {
+                            apply_requested = true;
                         }
                         if ui.button("✖ Close").clicked() {
                             app.show_comp_settings = false;
                         }
                     });
+
+                    if apply_requested {
+                        app.history.commit(temp_project);
+                        crate::core::frame_cache::bump_version();
+                        app.show_comp_settings = false;
+                    }
                 });
         }
 
@@ -278,13 +273,6 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: u32) 
             );
             ui.painter().rect_filled(hud, 4.0, egui::Color32::from_rgba_unmultiplied(15, 20, 35, 220));
             ui.painter().rect_stroke(hud, 4.0, egui::Stroke::new(1.0, egui::Color32::from_rgb(60, 100, 200)));
-            // 3D Camera HUD overlay
-            let hud = egui::Rect::from_min_size(
-                egui::pos2(rect.left() + 10.0, rect.bottom() - 38.0),
-                egui::vec2(250.0, 28.0),
-            );
-            ui.painter().rect_filled(hud, 4.0, egui::Color32::from_rgba_unmultiplied(15, 20, 35, 220));
-            ui.painter().rect_stroke(hud, 4.0, egui::Stroke::new(1.0, egui::Color32::from_rgb(60, 100, 200)));
             ui.painter().text(hud.center(), egui::Align2::CENTER_CENTER,
                 format!("[3D CAMERA] Yaw: {:.1}°  Pitch: {:.1}°  Z: {:.0}", yaw_deg, pitch_deg, zoom),
                 egui::FontId::proportional(11.0),
@@ -451,7 +439,9 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: u32) 
         let backend_color = if rendered_gpu { egui::Color32::from_rgb(40, 160, 100) } else { egui::Color32::from_rgb(180, 120, 40) };
         
         // Top Left Performance & FPS HUD Overlay
-        let fps_text = format!("PERF: {:.0} FPS | Comp: {}x{} @ {}fps", 60.0, comp_w as u32, comp_h as u32, app.history.current().active_composition().fps);
+        let dt = ctx.input(|i| i.stable_dt.max(0.001));
+        let real_fps = (1.0 / dt).clamp(1.0, 240.0);
+        let fps_text = format!("PERF: {:.0} FPS | Comp: {}x{} @ {}fps", real_fps, comp_w as u32, comp_h as u32, app.history.current().active_composition().fps);
         let fps_rect = egui::Rect::from_min_size(
             egui::pos2(origin_x + 10.0, origin_y + 10.0),
             egui::vec2(220.0, 24.0),
@@ -596,6 +586,13 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: u32) 
                         let layer = &mut comp_mut.layers[drag_idx];
                         layer.transform.position = Animatable::new_constant(new_pos);
                     }
+                }
+            }
+
+            if viewport_response.drag_stopped() {
+                if app.viewport_drag_state.is_some() {
+                    app.viewport_drag_state = None;
+                    crate::core::frame_cache::bump_version();
                 }
             }
         }

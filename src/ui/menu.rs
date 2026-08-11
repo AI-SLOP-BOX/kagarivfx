@@ -71,19 +71,20 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
                 }
             });
             ui.menu_button("Edit", |ui| {
-                let undo_btn = egui::Button::new("Undo (元に戻す)").shortcut_text("Ctrl+Z");
+                let undo_btn = egui::Button::new("Undo (元に戻す)").shortcut_text("Cmd+Z");
                 if ui.add_enabled(app.history.can_undo(), undo_btn).clicked() {
                     app.history.undo();
                     ui.close_menu();
                 }
-                let redo_btn = egui::Button::new("Redo (やり直す)").shortcut_text("Ctrl+Y");
+                let redo_btn = egui::Button::new("Redo (やり直す)").shortcut_text("Cmd+Shift+Z");
                 if ui.add_enabled(app.history.can_redo(), redo_btn).clicked() {
                     app.history.redo();
                     ui.close_menu();
                 }
             });
             ui.menu_button("Composition", |ui| {
-                if ui.button("New Composition...").clicked() {
+                if ui.button("Composition Settings...").clicked() {
+                    app.show_comp_settings = true;
                     ui.close_menu();
                 }
             });

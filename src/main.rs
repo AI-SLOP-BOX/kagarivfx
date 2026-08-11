@@ -88,6 +88,9 @@ pub struct AfterEffectsApp {
     /// Last mouse pos for orbit drag delta tracking
     pub orbit_drag_start: Option<egui::Pos2>,
 
+    /// Active AE Tool (Selection, Hand, Zoom, Rotation, Anchor, Shape, Pen, Text)
+    pub active_tool: crate::ui::toolbar::ActiveTool,
+
     /// Viewport drag state: (layer_idx, start_pos, start_pointer_pos)
     pub viewport_drag_state: Option<(usize, [f32; 2], egui::Pos2)>,
     /// Which property is selected in inspector (for graph editor)
@@ -164,6 +167,7 @@ impl Default for AfterEffectsApp {
             viewport_mode: ViewportMode::Comp2D,
             camera_orbit: (30.0, 20.0, 800.0), // yaw, pitch, zoom
             orbit_drag_start: None,
+            active_tool: crate::ui::toolbar::ActiveTool::default(),
             viewport_drag_state: None,
             selected_property: None,
             show_export_dialog: false,
@@ -360,6 +364,9 @@ impl eframe::App for AfterEffectsApp {
 
         // Draw Menu Bar
         ui::menu::draw(self, ctx);
+
+        // Draw Main Tools Bar (AE Tool Palette)
+        ui::toolbar::draw(self, ctx);
 
         // Draw Left Panel: Properties Inspector
         ui::inspector::draw(self, ctx, &mut current_frame);

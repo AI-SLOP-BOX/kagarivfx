@@ -13,14 +13,17 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context) {
                 let is_playing = app.is_playing;
                 let current_frame = app.current_frame;
 
+                let vol_id = egui::Id::new("master_volume_val");
+                let vol = ctx.data_mut(|d| *d.get_temp_mut_or_insert_with(vol_id, || 1.0f32));
+
                 // Calculate simulated peak levels based on playing state & frame phase
                 let (left_peak, right_peak) = if is_playing {
                     let t = current_frame as f32 * 0.2;
-                    let l = (t.sin().abs() * 0.7 + (t * 2.3).cos().abs() * 0.3).clamp(0.05, 0.98);
-                    let r = ((t + 0.8).sin().abs() * 0.65 + ((t + 0.8) * 1.9).cos().abs() * 0.35).clamp(0.05, 0.95);
+                    let l = ((t.sin().abs() * 0.7 + (t * 2.3).cos().abs() * 0.3) * vol).clamp(0.05, 0.98);
+                    let r = (((t + 0.8).sin().abs() * 0.65 + ((t + 0.8) * 1.9).cos().abs() * 0.35) * vol).clamp(0.05, 0.95);
                     (l, r)
                 } else {
-                    (0.02, 0.02)
+                    (0.02 * vol, 0.02 * vol)
                 };
 
                 let meter_height = 220.0;
@@ -39,10 +42,13 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context) {
                 ui.add_space(8.0);
                 ui.separator();
 
-                // Master Volume Slider
+                // Master Volume Slider (Persisted via egui data storage)
+                let vol_id = egui::Id::new("master_volume_val");
+                let mut vol = ctx.data_mut(|d| *d.get_temp_mut_or_insert_with(vol_id, || 1.0f32));
                 ui.label(egui::RichText::new("Master").small().strong());
-                let mut vol = 1.0f32;
-                ui.add(egui::Slider::new(&mut vol, 0.0..=1.5).show_value(false));
+                if ui.add(egui::Slider::new(&mut vol, 0.0..=1.5).show_value(false)).changed() {
+                    ctx.data_mut(|d| d.insert_temp(vol_id, vol));
+                }
                 ui.small(format!("{:.0}%", vol * 100.0));
             });
         });

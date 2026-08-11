@@ -407,7 +407,6 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                             }
                             LayerType::Shape { shape_type, color } => {
                                 ui.label(format!("Shape: {:?}", shape_type));
-                                let c_before = *color;
                                 let mut c_arr = *color;
                                 ui.horizontal(|ui| {
                                     ui.label("Color:");
@@ -416,7 +415,6 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                                         project_changed = true;
                                     }
                                 });
-                                let _ = c_before;
                             }
                             LayerType::Null => {
                                 ui.label("Null Object (Controller)");

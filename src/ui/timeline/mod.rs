@@ -11,6 +11,26 @@ fn get_kfs<T: Clone>(prop: &Animatable<T>) -> Vec<(u32, crate::core::keyframe::I
         .unwrap_or_default()
 }
 
+fn maybe_snap_frame(frame: u32, snap: bool, comp: &crate::core::timeline::Composition) -> u32 {
+    if !snap {
+        return frame;
+    }
+    let threshold = 3i32;
+    for layer in &comp.layers {
+        for (kf_f, _) in get_kfs(&layer.transform.position)
+            .into_iter()
+            .chain(get_kfs(&layer.transform.scale))
+            .chain(get_kfs(&layer.transform.rotation))
+            .chain(get_kfs(&layer.transform.opacity))
+        {
+            if (frame as i32 - kf_f as i32).abs() <= threshold {
+                return kf_f;
+            }
+        }
+    }
+    frame
+}
+
 fn draw_keyframe_tick(
     ui: &mut egui::Ui,
     x: f32,
@@ -212,7 +232,8 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                 if bar_response.clicked() {
                     if let Some(ptr) = bar_response.interact_pointer_pos() {
                         let norm = ((ptr.x - bar_rect.left()) / bar_rect.width()).clamp(0.0, 1.0);
-                        *current_frame = (norm * total_frames as f32) as u32;
+                        let raw_f = (norm * total_frames as f32) as u32;
+                        *current_frame = maybe_snap_frame(raw_f, app.snap_to_keyframes, comp);
                     }
                 }
 
