@@ -95,9 +95,18 @@
 > 17. **🎵 オーディオリアルタイム波形描画 (`timeline.rs`)**:
 >    - `LayerType::Audio` レイヤーのタイムラインバー上にプロシージャル・オーディオ波形エンベロープを描画。
 >
-> **あなたに担当してほしいネクストタスク**:
-> 1. **ドッキングパネルシステム (`egui_dock`)**: `egui_dock` クレートを導入し、ユーザーがパネルを自由にドラッグ&ドロップで再配置できるようにする。
-> 2. **リアルタイムオーディオVUメーター (`ui/audio_meter.rs`)**: ピークレベルインジケーターとミュート/ソロ制御のビジュアルVUメーターを追加。
+> 18. **🔊 リアルタイムステレオ Audio VU メーターパネル (`src/ui/audio_meter.rs`)**:
+>    - 左/右独立チャンネル VU メーターバー（緑・黄・赤クリッピング表示）および Master Volume スライダーを統合。
+> 19. **🎨 タイムライン Blend Mode & Track Matte 直感コントロール (`src/ui/timeline/mod.rs`)**:
+>    - レイヤー行にブレンドモード ComboBox (`🎨 Normal`, `Multiply`, `Screen`, `Add`, `Darken` 等) および トラックマット ComboBox (`✂️ None`, `Alpha`, `Luma` 等) を追加。
+> 20. **🎯 8-Point 2D/3D トランスフォームバウンディングボックスギズモ (`src/ui/viewport.rs`)**:
+>    - ビューポート上の選択レイヤー周囲に 8 点のトランスフォーム・リサイズハンドル（青線 + 白点）と RGB 軸矢印ギズモをインタラクティブ描画。
+> 21. **📊 ビューポートリアルタイム Performance & FPS HUD (`src/ui/viewport.rs`)**:
+>    - ビューポート左上にリアルタイム FPS・解像度・フレーム時間を常時モニタリング表示。
+> 22. **🚩 タイムラインマーカーシステム (`src/core/timeline.rs`, `src/ui/timeline/mod.rs`)**:
+>    - ショートカットキー `M` またはボタンで即座にタイムラインマーカーを追加・ルーラー上にオレンジ色の三角形 (🔻) で描画。
+> 23. **📦 UIコンポーネントのクリーンなモジュール分割 (`src/ui/timeline/`)**:
+>    - `timeline.rs` (700+行) を `timeline/mod.rs` および `timeline/graph_editor.rs` へサブモジュール構造化。
 ```
 
 ---
