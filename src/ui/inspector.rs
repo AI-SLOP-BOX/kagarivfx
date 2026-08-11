@@ -243,6 +243,26 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                             if matte_before != layer.track_matte { project_changed = true; }
                         });
 
+                        // ── Motion Blur Advanced Parameters ──
+                        if layer.motion_blur {
+                            ui.horizontal(|ui| {
+                                ui.label("Shutter Angle:");
+                                let sa_id = ui.make_persistent_id(format!("ae_shutter_angle_{}", layer.id));
+                                let mut shutter_angle = ui.ctx().data_mut(|d| *d.get_temp_mut_or_insert_with(sa_id, || 180.0f32));
+                                if ui.add(egui::DragValue::new(&mut shutter_angle).speed(1.0).clamp_range(0.0..=720.0).suffix("°")).changed() {
+                                    ui.ctx().data_mut(|d| d.insert_temp(sa_id, shutter_angle));
+                                }
+
+                                ui.add_space(8.0);
+                                ui.label("Phase:");
+                                let sp_id = ui.make_persistent_id(format!("ae_shutter_phase_{}", layer.id));
+                                let mut shutter_phase = ui.ctx().data_mut(|d| *d.get_temp_mut_or_insert_with(sp_id, || -90.0f32));
+                                if ui.add(egui::DragValue::new(&mut shutter_phase).speed(1.0).clamp_range(-180.0..=180.0).suffix("°")).changed() {
+                                    ui.ctx().data_mut(|d| d.insert_temp(sp_id, shutter_phase));
+                                }
+                            });
+                        }
+
                         ui.horizontal(|ui| {
                             ui.label("Parent:");
                             let parent_before = layer.parent_id.clone();

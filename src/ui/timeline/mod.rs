@@ -413,6 +413,41 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                                         app.selected_layer_idx = Some(i);
                                     }
                                 }
+                                click_resp.context_menu(|ui| {
+                                    if ui.button("Duplicate Layer (Cmd+D)").clicked() {
+                                        let mut dup = comp.layers[i].clone();
+                                        dup.id = format!("{}_dup_{}", dup.id, comp.layers.len());
+                                        dup.name = format!("{} Copy", dup.name);
+                                        comp.layers.insert(i + 1, dup);
+                                        app.selected_layer_idx = Some(i + 1);
+                                        project_changed = true;
+                                        ui.close_menu();
+                                    }
+                                    if ui.button("Split Layer (Cmd+Shift+D)").clicked() {
+                                        let mut split_b = comp.layers[i].clone();
+                                        comp.layers[i].out_frame = *current_frame;
+                                        split_b.in_frame = *current_frame;
+                                        split_b.id = format!("{}_split_{}", split_b.id, comp.layers.len());
+                                        split_b.name = format!("{} Split", split_b.name);
+                                        comp.layers.insert(i + 1, split_b);
+                                        app.selected_layer_idx = Some(i + 1);
+                                        project_changed = true;
+                                        ui.close_menu();
+                                    }
+                                    if ui.button("Reset Transform").clicked() {
+                                        comp.layers[i].transform = crate::core::timeline::Transform2D::default();
+                                        project_changed = true;
+                                        ui.close_menu();
+                                    }
+                                    ui.separator();
+                                    if ui.button("Delete Layer").clicked() {
+                                        comp.layers.remove(i);
+                                        app.selected_layers.clear();
+                                        app.selected_layer_idx = if comp.layers.is_empty() { None } else { Some(0) };
+                                        project_changed = true;
+                                        ui.close_menu();
+                                    }
+                                });
                                 ui.style_mut().visuals.override_text_color = None;
 
                                 // ── Blend Mode Dropdown ──

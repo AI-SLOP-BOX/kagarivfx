@@ -91,7 +91,8 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
                 }
             });
             ui.menu_button("Composition", |ui| {
-                if ui.button("Composition Settings...").clicked() {
+                let btn = egui::Button::new("Composition Settings...").shortcut_text("Cmd+K");
+                if ui.add(btn).clicked() {
                     app.show_comp_settings = true;
                     ui.close_menu();
                 }

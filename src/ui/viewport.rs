@@ -89,6 +89,36 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: u32) 
                     }
                 });
 
+            ui.separator();
+            ui.add_space(4.0);
+
+            // ── Snapshot A/B Compare Controls ──
+            let snap_id = egui::Id::new("ae_viewport_snap_a");
+            let is_comparing_id = egui::Id::new("ae_viewport_comparing");
+            let wipe_id = egui::Id::new("ae_viewport_wipe_pos");
+
+            let mut has_snap = ctx.data_mut(|d| d.get_temp::<u32>(snap_id).is_some());
+            let mut is_comparing = ctx.data_mut(|d| *d.get_temp_mut_or_insert_with(is_comparing_id, || false));
+            let mut wipe_pos = ctx.data_mut(|d| *d.get_temp_mut_or_insert_with(wipe_id, || 0.5f32));
+
+            if ui.button(if has_snap { "📷 Retake Snap A" } else { "📷 Take Snap A" }).on_hover_text("Take snapshot of current frame (Shift+F5)").clicked() {
+                ctx.data_mut(|d| d.insert_temp(snap_id, current_frame));
+                has_snap = true;
+            }
+
+            if has_snap {
+                if ui.selectable_label(is_comparing, "👁 Compare Snap A").clicked() {
+                    is_comparing = !is_comparing;
+                    ctx.data_mut(|d| d.insert_temp(is_comparing_id, is_comparing));
+                }
+                if is_comparing {
+                    ui.label("Wipe:");
+                    if ui.add(egui::Slider::new(&mut wipe_pos, 0.0..=1.0).show_value(false)).changed() {
+                        ctx.data_mut(|d| d.insert_temp(wipe_id, wipe_pos));
+                    }
+                }
+            }
+
             // AE Render Quality / Downsample Resolution
             let res_id = egui::Id::new("ae_render_resolution");
             let mut res_ratio = ctx.data_mut(|d| *d.get_temp_mut_or_insert_with(res_id, || 0));
@@ -143,6 +173,33 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: u32) 
                         .show(ui, |ui| {
                             ui.label("Name:");
                             ui.text_edit_singleline(&mut comp.name);
+                            ui.end_row();
+
+                            ui.label("Preset:");
+                            egui::ComboBox::from_id_source("preset_res_combo")
+                                .selected_text("Resolution Presets")
+                                .show_ui(ui, |ui| {
+                                    if ui.button("1080p Full HD (1920x1080)").clicked() {
+                                        comp.width = 1920;
+                                        comp.height = 1080;
+                                    }
+                                    if ui.button("4K UHD (3840x2160)").clicked() {
+                                        comp.width = 3840;
+                                        comp.height = 2160;
+                                    }
+                                    if ui.button("720p HD (1280x720)").clicked() {
+                                        comp.width = 1280;
+                                        comp.height = 720;
+                                    }
+                                    if ui.button("Vertical 9:16 Shorts (1080x1920)").clicked() {
+                                        comp.width = 1080;
+                                        comp.height = 1920;
+                                    }
+                                    if ui.button("Square 1:1 (1080x1080)").clicked() {
+                                        comp.width = 1080;
+                                        comp.height = 1080;
+                                    }
+                                });
                             ui.end_row();
 
                             ui.label("Width:");

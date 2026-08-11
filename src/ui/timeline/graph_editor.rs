@@ -22,10 +22,6 @@ pub fn draw_graph_editor(
         egui::Sense::click_and_drag(),
     );
 
-    let painter = ui.painter();
-    painter.rect_filled(graph_rect, 4.0, egui::Color32::from_rgb(22, 22, 28));
-    painter.rect_stroke(graph_rect, 4.0, egui::Stroke::new(1.0, egui::Color32::from_gray(60)));
-
     let prop_name = app.selected_property.as_deref().unwrap_or("Position X");
     let layer_name = app
         .selected_layer_idx
@@ -33,13 +29,25 @@ pub fn draw_graph_editor(
         .map(|l| l.name.as_str())
         .unwrap_or("Layer 0");
 
-    painter.text(
-        egui::pos2(graph_rect.left() + 10.0, graph_rect.top() + 10.0),
-        egui::Align2::LEFT_TOP,
-        format!("Graph Editor — {} :: {}", layer_name, prop_name),
-        egui::FontId::proportional(13.0),
-        egui::Color32::from_rgb(100, 220, 255),
-    );
+    let is_speed_graph_id = egui::Id::new("ae_graph_editor_speed_mode");
+    let mut is_speed_graph = ui.ctx().data_mut(|d| *d.get_temp_mut_or_insert_with(is_speed_graph_id, || false));
+
+    ui.horizontal(|ui| {
+        ui.label(egui::RichText::new(format!("Graph Editor — {} :: {}", layer_name, prop_name)).strong().color(egui::Color32::from_rgb(100, 220, 255)));
+        ui.add_space(12.0);
+        if ui.selectable_label(!is_speed_graph, "Value Graph").clicked() {
+            is_speed_graph = false;
+            ui.ctx().data_mut(|d| d.insert_temp(is_speed_graph_id, false));
+        }
+        if ui.selectable_label(is_speed_graph, "Speed Graph (px/s)").clicked() {
+            is_speed_graph = true;
+            ui.ctx().data_mut(|d| d.insert_temp(is_speed_graph_id, true));
+        }
+    });
+
+    let painter = ui.painter();
+    painter.rect_filled(graph_rect, 4.0, egui::Color32::from_rgb(22, 22, 28));
+    painter.rect_stroke(graph_rect, 4.0, egui::Stroke::new(1.0, egui::Color32::from_gray(60)));
 
     // Draw Grid lines
     let grid_color = egui::Color32::from_rgba_unmultiplied(255, 255, 255, 20);
@@ -62,15 +70,26 @@ pub fn draw_graph_editor(
 
             for step in 0..=steps {
                 let frame = (step as f32 / steps as f32 * total_frames as f32) as u32;
-                let val = match prop_name {
-                    "Position X" => layer.transform.eval_position(frame, comp.fps)[0],
-                    "Position Y" => layer.transform.eval_position(frame, comp.fps)[1],
-                    "Scale X" => layer.transform.eval_scale(frame, comp.fps)[0],
-                    "Scale Y" => layer.transform.eval_scale(frame, comp.fps)[1],
-                    "Rotation" => layer.transform.eval_rotation(frame, comp.fps),
-                    "Opacity" => layer.transform.eval_opacity(frame, comp.fps),
-                    _ => layer.transform.eval_position(frame, comp.fps)[0],
+                let eval_at = |f: u32| -> f32 {
+                    match prop_name {
+                        "Position X" => layer.transform.eval_position(f, comp.fps)[0],
+                        "Position Y" => layer.transform.eval_position(f, comp.fps)[1],
+                        "Scale X" => layer.transform.eval_scale(f, comp.fps)[0],
+                        "Scale Y" => layer.transform.eval_scale(f, comp.fps)[1],
+                        "Rotation" => layer.transform.eval_rotation(f, comp.fps),
+                        "Opacity" => layer.transform.eval_opacity(f, comp.fps),
+                        _ => layer.transform.eval_position(f, comp.fps)[0],
+                    }
                 };
+
+                let val = if is_speed_graph {
+                    let next_val = eval_at(frame + 1);
+                    let cur_val = eval_at(frame);
+                    ((next_val - cur_val) * comp.fps as f32).abs()
+                } else {
+                    eval_at(frame)
+                };
+
                 min_val = min_val.min(val);
                 max_val = max_val.max(val);
                 samples.push((frame as f32, val));
@@ -94,9 +113,14 @@ pub fn draw_graph_editor(
                 pts.push(to_screen(*f, *v));
             }
             if pts.len() >= 2 {
+                let stroke_color = if is_speed_graph {
+                    egui::Color32::from_rgb(100, 230, 255)
+                } else {
+                    egui::Color32::from_rgb(255, 180, 50)
+                };
                 painter.add(egui::Shape::line(
                     pts,
-                    egui::Stroke::new(2.5, egui::Color32::from_rgb(255, 180, 50)),
+                    egui::Stroke::new(2.5, stroke_color),
                 ));
             }
 

@@ -264,6 +264,39 @@ impl eframe::App for AfterEffectsApp {
                     self.history.redo();
                 }
 
+                // Cmd+K → Composition Settings Dialog
+                if cmd && !shift && i.key_pressed(Key::K) {
+                    self.show_comp_settings = true;
+                }
+
+                // Cmd+D → Duplicate selected layer, Cmd+Shift+D → Split layer at current frame
+                if cmd && i.key_pressed(Key::D) {
+                    if let Some(idx) = self.selected_layer_idx {
+                        let mut proj = self.history.current().clone();
+                        let cf = self.current_frame;
+                        let comp = proj.active_composition_mut();
+                        if idx < comp.layers.len() {
+                            if !shift {
+                                let mut dup = comp.layers[idx].clone();
+                                dup.id = format!("{}_dup_{}", dup.id, comp.layers.len());
+                                dup.name = format!("{} Copy", dup.name);
+                                comp.layers.insert(idx + 1, dup);
+                                self.selected_layer_idx = Some(idx + 1);
+                            } else {
+                                let mut split_b = comp.layers[idx].clone();
+                                comp.layers[idx].out_frame = cf;
+                                split_b.in_frame = cf;
+                                split_b.id = format!("{}_split_{}", split_b.id, comp.layers.len());
+                                split_b.name = format!("{} Split", split_b.name);
+                                comp.layers.insert(idx + 1, split_b);
+                                self.selected_layer_idx = Some(idx + 1);
+                            }
+                            self.history.commit(proj);
+                            crate::core::frame_cache::bump_version();
+                        }
+                    }
+                }
+
                 // Delete / Backspace → Delete all selected layers (Multi-selection aware)
                 if (i.key_pressed(Key::Delete) || i.key_pressed(Key::Backspace)) && !shift {
                     if !self.selected_layers.is_empty() {
