@@ -109,6 +109,7 @@ pub enum LabelColor {
     Peach,
     Sea,
     Blue,
+    Purple,
 }
 
 impl LabelColor {
@@ -123,6 +124,7 @@ impl LabelColor {
             LabelColor::Peach     => [0.95, 0.70, 0.45],
             LabelColor::Sea       => [0.30, 0.70, 0.55],
             LabelColor::Blue      => [0.35, 0.55, 0.95],
+            LabelColor::Purple    => [0.70, 0.35, 0.90],
         }
     }
 }
@@ -410,6 +412,9 @@ pub struct Layer {
     
     // ── AE Blend Mode ──
     pub blend_mode: BlendMode,
+
+    pub is_adjustment_layer: bool,
+    pub is_guide_layer: bool,
 }
 
 impl Layer {
@@ -434,12 +439,21 @@ impl Layer {
             is_3d: false,
             transform_3d: Transform3D::default(),
             blend_mode: BlendMode::Normal,
+            is_adjustment_layer: false,
+            is_guide_layer: false,
         }
     }
 
     pub fn new_null(id: String, name: String, duration_frames: u32) -> Self {
         let mut l = Self::new(id, name, LayerType::Null, duration_frames);
         l.label = LabelColor::Red;
+        l
+    }
+
+    pub fn new_adjustment(id: String, name: String, duration_frames: u32) -> Self {
+        let mut l = Self::new(id, name, LayerType::Solid { color: [1.0, 1.0, 1.0, 0.0] }, duration_frames);
+        l.is_adjustment_layer = true;
+        l.label = LabelColor::Purple;
         l
     }
 

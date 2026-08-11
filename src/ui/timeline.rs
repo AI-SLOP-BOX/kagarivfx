@@ -75,9 +75,13 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                 ui.label("Zoom:");
                 ui.add(egui::Slider::new(&mut app.timeline_zoom, 0.1..=10.0));
                 ui.checkbox(&mut app.snap_to_keyframes, "🧲 Snap");
+                let mode_btn_text = if app.show_graph_editor { "📈 Graph Mode" } else { "📋 Tracks Mode" };
+                if ui.selectable_label(app.show_graph_editor, mode_btn_text).clicked() {
+                    app.show_graph_editor = !app.show_graph_editor;
+                }
                 
-                ui.add_space(20.0);
-                if ui.button("+ Solid Layer").clicked() {
+                ui.add_space(15.0);
+                if ui.button("+ Solid").clicked() {
                     let id = format!("layer_{}", comp.layers.len());
                     let name = format!("Solid {}", comp.layers.len());
                     let mut layer = Layer::new(id, name, LayerType::Solid { color: [0.3, 0.5, 0.7, 1.0] }, total_frames);
@@ -85,7 +89,7 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                     comp.add_layer(layer);
                     project_changed = true;
                 }
-                if ui.button("+ Text Layer").clicked() {
+                if ui.button("+ Text").clicked() {
                     let id = format!("layer_{}", comp.layers.len());
                     let name = format!("Text {}", comp.layers.len());
                     let mut layer = Layer::new(id, name, LayerType::Text {
@@ -97,7 +101,7 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                     comp.add_layer(layer);
                     project_changed = true;
                 }
-                if ui.button("+ Shape Layer").clicked() {
+                if ui.button("+ Shape").clicked() {
                     let id = format!("layer_{}", comp.layers.len());
                     let name = format!("Shape {}", comp.layers.len());
                     let mut layer = Layer::new(id, name, LayerType::Shape {
@@ -108,7 +112,7 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                     comp.add_layer(layer);
                     project_changed = true;
                 }
-                if ui.button("+ Audio Layer").clicked() {
+                if ui.button("+ Audio").clicked() {
                     let id = format!("layer_{}", comp.layers.len());
                     let name = format!("Audio {}", comp.layers.len());
                     let mut layer = Layer::new(id, name, LayerType::Audio {
@@ -119,10 +123,17 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                     comp.add_layer(layer);
                     project_changed = true;
                 }
-                if ui.button("+ Null Object").clicked() {
+                if ui.button("+ Null").clicked() {
                     let id = format!("layer_{}", comp.layers.len());
                     let name = format!("Null {}", comp.layers.len());
                     let layer = Layer::new_null(id, name, total_frames);
+                    comp.add_layer(layer);
+                    project_changed = true;
+                }
+                if ui.button("+ Adjustment Layer").clicked() {
+                    let id = format!("layer_{}", comp.layers.len());
+                    let name = format!("Adjustment Layer {}", comp.layers.len());
+                    let layer = Layer::new_adjustment(id, name, total_frames);
                     comp.add_layer(layer);
                     project_changed = true;
                 }
@@ -184,9 +195,138 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
 
             ui.add_space(4.0);
 
-            egui::ScrollArea::vertical().show(ui, |ui| {
-                let zoom_span = total_frames as f32 / app.timeline_zoom;
-                let start_frame = 0.0;
+            if app.show_graph_editor {
+                let avail_size = ui.available_size();
+                let (graph_rect, graph_response) = ui.allocate_exact_size(
+                    egui::vec2(avail_size.x, (avail_size.y - 10.0).max(180.0)),
+                    egui::Sense::click_and_drag(),
+                );
+
+                let painter = ui.painter();
+                painter.rect_filled(graph_rect, 4.0, egui::Color32::from_rgb(22, 22, 28));
+                painter.rect_stroke(graph_rect, 4.0, egui::Stroke::new(1.0, egui::Color32::from_gray(60)));
+
+                let prop_name = app.selected_property.as_deref().unwrap_or("Position X");
+                let layer_name = app.selected_layer_idx
+                    .and_then(|idx| comp.layers.get(idx))
+                    .map(|l| l.name.as_str())
+                    .unwrap_or("Layer 0");
+
+                painter.text(
+                    egui::pos2(graph_rect.left() + 10.0, graph_rect.top() + 10.0),
+                    egui::Align2::LEFT_TOP,
+                    format!("📈 Graph Editor — {} :: {}", layer_name, prop_name),
+                    egui::FontId::proportional(13.0),
+                    egui::Color32::from_rgb(100, 220, 255),
+                );
+
+                // Draw Grid lines
+                let grid_color = egui::Color32::from_rgba_unmultiplied(255, 255, 255, 20);
+                for f in (0..=total_frames).step_by(10.max((total_frames / 10) as usize)) {
+                    let gx = graph_rect.left() + (f as f32 / total_frames as f32) * graph_rect.width();
+                    painter.line_segment(
+                        [egui::pos2(gx, graph_rect.top()), egui::pos2(gx, graph_rect.bottom())],
+                        egui::Stroke::new(1.0, grid_color),
+                    );
+                }
+
+                // Sample property values over total_frames
+                if let Some(idx) = app.selected_layer_idx {
+                    if idx < comp.layers.len() {
+                        let layer = &comp.layers[idx];
+                        let mut samples: Vec<(f32, f32)> = Vec::new();
+                        let steps = 60;
+                        let mut min_val = f32::MAX;
+                        let mut max_val = f32::MIN;
+
+                        for step in 0..=steps {
+                            let frame = (step as f32 / steps as f32 * total_frames as f32) as u32;
+                            let val = match prop_name {
+                                "Position X" => layer.transform.eval_position(frame, comp.fps)[0],
+                                "Position Y" => layer.transform.eval_position(frame, comp.fps)[1],
+                                "Scale X" => layer.transform.eval_scale(frame, comp.fps)[0],
+                                "Scale Y" => layer.transform.eval_scale(frame, comp.fps)[1],
+                                "Rotation" => layer.transform.eval_rotation(frame, comp.fps),
+                                "Opacity" => layer.transform.eval_opacity(frame, comp.fps),
+                                _ => layer.transform.eval_position(frame, comp.fps)[0],
+                            };
+                            min_val = min_val.min(val);
+                            max_val = max_val.max(val);
+                            samples.push((frame as f32, val));
+                        }
+
+                        let val_range = (max_val - min_val).max(1.0);
+                        let pad_top = 35.0;
+                        let pad_bottom = 15.0;
+                        let draw_h = graph_rect.height() - pad_top - pad_bottom;
+
+                        let to_screen = |f: f32, v: f32| -> egui::Pos2 {
+                            let x = graph_rect.left() + (f / total_frames as f32) * graph_rect.width();
+                            let norm_y = (v - min_val) / val_range;
+                            let y = graph_rect.bottom() - pad_bottom - norm_y * draw_h;
+                            egui::pos2(x, y)
+                        };
+
+                        // Draw Curve
+                        let mut pts: Vec<egui::Pos2> = Vec::new();
+                        for (f, v) in &samples {
+                            pts.push(to_screen(*f, *v));
+                        }
+                        if pts.len() >= 2 {
+                            painter.add(egui::Shape::line(
+                                pts,
+                                egui::Stroke::new(2.5, egui::Color32::from_rgb(255, 180, 50)),
+                            ));
+                        }
+
+                        // Draw Keyframe Nodes
+                        let kfs: Vec<u32> = match prop_name {
+                            "Position X" | "Position Y" => get_kfs(&layer.transform.position).into_iter().map(|(f, _)| f).collect(),
+                            "Scale X" | "Scale Y" => get_kfs(&layer.transform.scale).into_iter().map(|(f, _)| f).collect(),
+                            "Rotation" => get_kfs(&layer.transform.rotation).into_iter().map(|(f, _)| f).collect(),
+                            "Opacity" => get_kfs(&layer.transform.opacity).into_iter().map(|(f, _)| f).collect(),
+                            _ => vec![],
+                        };
+
+                        for kf in kfs {
+                            let val = match prop_name {
+                                "Position X" => layer.transform.eval_position(kf, comp.fps)[0],
+                                "Position Y" => layer.transform.eval_position(kf, comp.fps)[1],
+                                "Scale X" => layer.transform.eval_scale(kf, comp.fps)[0],
+                                "Scale Y" => layer.transform.eval_scale(kf, comp.fps)[1],
+                                "Rotation" => layer.transform.eval_rotation(kf, comp.fps),
+                                "Opacity" => layer.transform.eval_opacity(kf, comp.fps),
+                                _ => 0.0,
+                            };
+                            let pos = to_screen(kf as f32, val);
+                            let diamond = vec![
+                                pos + egui::vec2(0.0, -6.0),
+                                pos + egui::vec2(6.0, 0.0),
+                                pos + egui::vec2(0.0, 6.0),
+                                pos + egui::vec2(-6.0, 0.0),
+                            ];
+                            painter.add(egui::Shape::convex_polygon(diamond, egui::Color32::from_rgb(255, 240, 100), egui::Stroke::new(1.0, egui::Color32::WHITE)));
+                        }
+                    }
+                }
+
+                // Playhead red line on graph
+                let playhead_x = graph_rect.left() + (*current_frame as f32 / total_frames as f32) * graph_rect.width();
+                painter.line_segment(
+                    [egui::pos2(playhead_x, graph_rect.top()), egui::pos2(playhead_x, graph_rect.bottom())],
+                    egui::Stroke::new(1.5, egui::Color32::RED),
+                );
+
+                if graph_response.dragged() || graph_response.clicked() {
+                    if let Some(ptr) = graph_response.interact_pointer_pos() {
+                        let norm = ((ptr.x - graph_rect.left()) / graph_rect.width()).clamp(0.0, 1.0);
+                        *current_frame = (norm * total_frames as f32) as u32;
+                    }
+                }
+            } else {
+                egui::ScrollArea::vertical().show(ui, |ui| {
+                    let zoom_span = total_frames as f32 / app.timeline_zoom;
+                    let start_frame = 0.0;
 
                 for i in 0..comp.layers.len() {
                     ui.horizontal(|ui| {
@@ -512,16 +652,18 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                             }
                         }
                     }
+                }
+            });
+            }
+
+            if project_changed {
+                let is_pointer_down = ui.input(|i| i.pointer.any_down());
+                if !is_pointer_down {
+                    app.history.commit(temp_project);
+                } else {
+                    *app.history.current_mut() = temp_project;
+                }
+                crate::core::frame_cache::bump_version();
             }
         });
-        if project_changed {
-            let is_pointer_down = ui.input(|i| i.pointer.any_down());
-            if !is_pointer_down {
-                app.history.commit(temp_project);
-            } else {
-                *app.history.current_mut() = temp_project;
-            }
-            crate::core::frame_cache::bump_version();
-        }
-    });
 }

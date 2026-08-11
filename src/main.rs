@@ -77,6 +77,7 @@ pub struct AfterEffectsApp {
     pub show_handles: bool,
     pub show_comp_settings: bool,
     pub snap_to_keyframes: bool,
+    pub show_graph_editor: bool,
     pub timeline_zoom: f32,
     pub timeline_scroll: f32,
 
@@ -157,6 +158,7 @@ impl Default for AfterEffectsApp {
             show_handles: true,
             show_comp_settings: false,
             snap_to_keyframes: true,
+            show_graph_editor: false,
             timeline_zoom: 1.0,
             timeline_scroll: 0.0,
             viewport_mode: ViewportMode::Comp2D,
