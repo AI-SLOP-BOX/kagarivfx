@@ -284,6 +284,31 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                                     }
                                 }
 
+                                // ── AE Layer Color Label Square Picker ──
+                                use crate::core::timeline::LabelColor;
+                                let label_rgb = comp.layers[i].label.to_rgb();
+                                let label_c32 = egui::Color32::from_rgb(
+                                    (label_rgb[0] * 255.0) as u8,
+                                    (label_rgb[1] * 255.0) as u8,
+                                    (label_rgb[2] * 255.0) as u8,
+                                );
+                                let (lbl_rect, lbl_resp) = ui.allocate_exact_size(egui::vec2(12.0, 12.0), egui::Sense::click());
+                                ui.painter().rect_filled(lbl_rect, 1.0, label_c32);
+                                lbl_resp.context_menu(|ui| {
+                                    ui.label("Label Color:");
+                                    for label in [
+                                        LabelColor::Red, LabelColor::Yellow, LabelColor::Aqua,
+                                        LabelColor::Pink, LabelColor::Lavender, LabelColor::Peach,
+                                        LabelColor::Sea, LabelColor::Blue, LabelColor::Purple
+                                    ] {
+                                        if ui.button(format!("{:?}", label)).clicked() {
+                                            comp.layers[i].label = label;
+                                            project_changed = true;
+                                            ui.close_menu();
+                                        }
+                                    }
+                                });
+
                                 let vis = comp.layers[i].visible;
                                 let eye_svg = if vis { crate::ui::icons::SVG_EYE_OPEN } else { crate::ui::icons::SVG_EYE_CLOSED };
                                 let eye_btn = ui.button(egui::WidgetText::from("")).rect;

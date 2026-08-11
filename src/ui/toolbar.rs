@@ -14,7 +14,7 @@ pub enum ActiveTool {
 }
 
 #[allow(dead_code)]
-pub fn draw(_app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
+pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
     egui::TopBottomPanel::top("ae_toolbar")
         .default_height(28.0)
         .show(ctx, |ui| {
