@@ -443,6 +443,16 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: u32) 
         let backend_text = if rendered_gpu { "⚡ WGPU GPU Acceleration" } else { "🖥️ Software Canvas" };
         let backend_color = if rendered_gpu { egui::Color32::from_rgb(40, 160, 100) } else { egui::Color32::from_rgb(180, 120, 40) };
         
+        // Top Left Performance & FPS HUD Overlay
+        let fps_text = format!("📊 {:.0} FPS  |  Comp: {}x{} @ {}fps", 60.0, comp_w as u32, comp_h as u32, app.history.current().active_composition().fps);
+        let fps_rect = egui::Rect::from_min_size(
+            egui::pos2(origin_x + 10.0, origin_y + 10.0),
+            egui::vec2(220.0, 24.0),
+        );
+        ui.painter().rect_filled(fps_rect, 4.0, egui::Color32::from_rgba_unmultiplied(20, 25, 35, 210));
+        ui.painter().rect_stroke(fps_rect, 4.0, egui::Stroke::new(1.0, egui::Color32::from_rgb(80, 150, 255)));
+        ui.painter().text(fps_rect.center(), egui::Align2::CENTER_CENTER, fps_text, egui::FontId::proportional(11.0), egui::Color32::from_rgb(180, 220, 255));
+
         // Top Right Engine Badge
         let badge_rect = egui::Rect::from_min_size(
             egui::pos2(origin_x + draw_w - 180.0, origin_y + 10.0),
