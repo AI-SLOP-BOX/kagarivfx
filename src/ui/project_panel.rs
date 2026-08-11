@@ -65,12 +65,22 @@ pub fn draw(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
                 project_changed = true;
             }
         }
+
+        if ui.button("+ New Folder").clicked() {
+            let folder_count = temp_project.assets.len() + 1;
+            temp_project.assets.push(ProjectItem::new(
+                format!("folder_{}", folder_count),
+                format!("Assets Folder {}", folder_count),
+                ProjectItemType::Folder { name: format!("Folder {}", folder_count) },
+            ));
+            project_changed = true;
+        }
     });
 
     ui.add_space(6.0);
     ui.separator();
 
-    // ── Project Items List (Assets & Compositions Bin) ──
+    // ── Project Items List (Assets & Compositions Bin Tree) ──
     let mut selected_asset_idx: Option<usize> = ui.ctx().data_mut(|d| d.get_temp(egui::Id::new("selected_project_asset")));
     let mut add_to_timeline_item: Option<ProjectItem> = None;
 
@@ -88,22 +98,30 @@ pub fn draw(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
                 ProjectItemType::Image { .. } => ("[IMG]", "Footage Image"),
                 ProjectItemType::Audio { .. } => ("[AUD]", "Audio File"),
                 ProjectItemType::Solid { .. } => ("[SOL]", "Solid Color"),
-                ProjectItemType::Folder { .. } => ("[DIR]", "Folder"),
+                ProjectItemType::Folder { .. } => ("[DIR]", "Folder Bin"),
             };
 
-            ui.horizontal(|ui| {
-                let response = ui.selectable_label(is_selected, format!("{} {}", icon_str, item.name));
-                if response.clicked() {
-                    selected_asset_idx = Some(i);
-                    ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("selected_project_asset"), Some(i)));
-                }
+            if let ProjectItemType::Folder { .. } = &item.item_type {
+                egui::CollapsingHeader::new(format!("[DIR] {}", item.name))
+                    .default_open(true)
+                    .show(ui, |ui| {
+                        ui.small("Drop assets into folder to categorize");
+                    });
+            } else {
+                ui.horizontal(|ui| {
+                    let response = ui.selectable_label(is_selected, format!("{} {}", icon_str, item.name));
+                    if response.clicked() {
+                        selected_asset_idx = Some(i);
+                        ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("selected_project_asset"), Some(i)));
+                    }
 
-                if response.double_clicked() {
-                    add_to_timeline_item = Some(item.clone());
-                }
+                    if response.double_clicked() {
+                        add_to_timeline_item = Some(item.clone());
+                    }
 
-                ui.weak(format!("({})", item_tag));
-            });
+                    ui.weak(format!("({})", item_tag));
+                });
+            }
         }
     });
 

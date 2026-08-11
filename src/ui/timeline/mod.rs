@@ -239,6 +239,31 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                         }
                     }
 
+                    // Render Work Area Bar (AE Work Area In/Out: B / N)
+                    let wa_in = app.work_area_in.unwrap_or(0);
+                    let wa_out = app.work_area_out.unwrap_or(total_frames.saturating_sub(1)).min(total_frames.saturating_sub(1));
+
+                    let wa_start_x = bar_rect.left() + (wa_in as f32 / total_frames as f32) * bar_rect.width();
+                    let wa_end_x = bar_rect.left() + (wa_out as f32 / total_frames as f32) * bar_rect.width();
+                    let wa_rect = egui::Rect::from_min_max(
+                        egui::pos2(wa_start_x, bar_rect.bottom() - 4.0),
+                        egui::pos2(wa_end_x, bar_rect.bottom()),
+                    );
+                    ui.painter().rect_filled(wa_rect, 1.0, egui::Color32::from_rgb(60, 150, 255));
+
+                    // Work Area In handle [B]
+                    ui.painter().rect_filled(
+                        egui::Rect::from_center_size(egui::pos2(wa_start_x, bar_rect.bottom() - 2.0), egui::vec2(6.0, 8.0)),
+                        1.0,
+                        egui::Color32::from_rgb(100, 200, 255),
+                    );
+                    // Work Area Out handle [N]
+                    ui.painter().rect_filled(
+                        egui::Rect::from_center_size(egui::pos2(wa_end_x, bar_rect.bottom() - 2.0), egui::vec2(6.0, 8.0)),
+                        1.0,
+                        egui::Color32::from_rgb(100, 200, 255),
+                    );
+
                     // Render Composition Markers on the Ruler Bar
                     for marker in &comp.markers {
                         let mx = bar_rect.left() + (marker.frame as f32 / total_frames as f32) * bar_rect.width();
@@ -290,6 +315,16 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                     }
                     if ui.small_button("[S] Reset Solo").on_hover_text("Clear All Layer Solos").clicked() {
                         for l in &mut comp.layers { l.solo = false; }
+                        project_changed = true;
+                    }
+                    if ui.small_button("[M] MB All").on_hover_text("Toggle All Layers Motion Blur").clicked() {
+                        let all_mb = comp.layers.iter().all(|l| l.motion_blur);
+                        for l in &mut comp.layers { l.motion_blur = !all_mb; }
+                        project_changed = true;
+                    }
+                    if ui.small_button("[3D] 3D All").on_hover_text("Toggle All Layers 3D Switch").clicked() {
+                        let all_3d = comp.layers.iter().all(|l| l.is_3d);
+                        for l in &mut comp.layers { l.is_3d = !all_3d; }
                         project_changed = true;
                     }
                 });

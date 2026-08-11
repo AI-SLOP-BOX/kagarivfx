@@ -101,13 +101,13 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: u32) 
             let mut is_comparing = ctx.data_mut(|d| *d.get_temp_mut_or_insert_with(is_comparing_id, || false));
             let mut wipe_pos = ctx.data_mut(|d| *d.get_temp_mut_or_insert_with(wipe_id, || 0.5f32));
 
-            if ui.button(if has_snap { "📷 Retake Snap A" } else { "📷 Take Snap A" }).on_hover_text("Take snapshot of current frame (Shift+F5)").clicked() {
+            if ui.button(if has_snap { "[Snap A] Retake" } else { "[Snap A] Take" }).on_hover_text("Take snapshot of current frame (Shift+F5)").clicked() {
                 ctx.data_mut(|d| d.insert_temp(snap_id, current_frame));
                 has_snap = true;
             }
 
             if has_snap {
-                if ui.selectable_label(is_comparing, "👁 Compare Snap A").clicked() {
+                if ui.selectable_label(is_comparing, "[Compare A]").clicked() {
                     is_comparing = !is_comparing;
                     ctx.data_mut(|d| d.insert_temp(is_comparing_id, is_comparing));
                 }

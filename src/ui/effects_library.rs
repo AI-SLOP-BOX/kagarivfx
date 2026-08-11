@@ -381,9 +381,9 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                             if e_idx + 1 < effects_count && ui.small_button("▼").on_hover_text("Move Down").clicked() {
                                 effect_to_swap = Some((e_idx, e_idx + 1));
                             }
-                            let val_before_enabled = effect.enabled;
-                            ui.checkbox(&mut effect.enabled, "Enabled");
-                            if val_before_enabled != effect.enabled {
+                            let fx_label = if effect.enabled { "[fx]" } else { "[fx off]" };
+                            if ui.selectable_label(effect.enabled, fx_label).on_hover_text("Toggle Effect Bypass (ON/OFF)").clicked() {
+                                effect.enabled = !effect.enabled;
                                 project_changed = true;
                             }
                         });

@@ -108,11 +108,12 @@ pub struct AfterEffectsApp {
     pub export_rx: Option<std::sync::mpsc::Receiver<ExportEvent>>,
     pub tracker_rx: Option<std::sync::mpsc::Receiver<TrackerEvent>>,
 
-    // ── Explicit UI Panel & Audio States (Issue #2) ────────────
     pub master_volume: f32,
     pub left_tab_idx: usize,
     pub right_tab_idx: usize,
     pub viewport_mag_ratio: f32,
+    pub work_area_in: Option<u32>,
+    pub work_area_out: Option<u32>,
 
     // ── MVCC Frame Cache (#15) ─────────────────────────────────
     /// Versioned per-frame pixel cache. Stale entries auto-invalidate on project change.
@@ -186,6 +187,8 @@ impl Default for AfterEffectsApp {
             left_tab_idx: 0,
             right_tab_idx: 0,
             viewport_mag_ratio: 1.0,
+            work_area_in: None,
+            work_area_out: None,
             // 256 frame entries max before GC kicks in
             frame_cache: crate::core::frame_cache::FrameCache::new(256),
             lazy_evaluator: crate::core::render_pipeline::LazyFrameEvaluator::new(),
@@ -224,9 +227,16 @@ impl eframe::App for AfterEffectsApp {
         let total_frames = self.history.current().active_composition().duration_frames;
         let mut current_frame = self.current_frame;
 
-        // Frame progression when playing
+        let wa_start = self.work_area_in.unwrap_or(0);
+        let wa_end = self.work_area_out.unwrap_or(total_frames.saturating_sub(1)).min(total_frames.saturating_sub(1));
+
+        // Frame progression when playing (constrained to Work Area)
         if self.is_playing {
-            current_frame = (current_frame + 1) % total_frames;
+            current_frame = if current_frame < wa_start || current_frame >= wa_end {
+                wa_start
+            } else {
+                current_frame + 1
+            };
             ctx.request_repaint();
         }
 
@@ -240,6 +250,15 @@ impl eframe::App for AfterEffectsApp {
                 // Space → Play / Pause
                 if i.key_pressed(Key::Space) {
                     self.is_playing = !self.is_playing;
+                }
+
+                // B → Set Work Area Start, N → Set Work Area End
+                let cmd = i.modifiers.command;
+                if i.key_pressed(Key::B) && !cmd {
+                    self.work_area_in = Some(current_frame);
+                }
+                if i.key_pressed(Key::N) && !cmd {
+                    self.work_area_out = Some(current_frame);
                 }
 
                 // Home → first frame, End → last frame
