@@ -19,6 +19,8 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                 ui.selectable_value(&mut app.right_tab_idx, 6, "Markers");
                 ui.selectable_value(&mut app.right_tab_idx, 7, "Audio");
                 ui.selectable_value(&mut app.right_tab_idx, 8, "Time");
+                ui.selectable_value(&mut app.right_tab_idx, 9, "Masks");
+                ui.selectable_value(&mut app.right_tab_idx, 10, "Expr");
             });
             ui.separator();
 
@@ -57,6 +59,16 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
 
             if app.right_tab_idx == 8 {
                 crate::ui::time_remap_panel::draw_time_remap_panel(app, ui);
+                return;
+            }
+
+            if app.right_tab_idx == 9 {
+                crate::ui::mask_panel::draw_mask_panel(app, ui);
+                return;
+            }
+
+            if app.right_tab_idx == 10 {
+                crate::ui::expression_panel::draw_expression_panel(app, ui);
                 return;
             }
 
