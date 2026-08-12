@@ -51,9 +51,14 @@ pub fn is_ffmpeg_available() -> bool {
 /// The function is called on the background thread, so the closure must be `Send + 'static`.
 ///
 /// Returns `Err(String)` immediately if FFmpeg is not found.
-pub fn start_export<F>(
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
+
+/// Start an asynchronous FFmpeg export job with an optional cancellation flag.
+pub fn start_export_cancelable<F>(
     config: ExportConfig,
     tx: Sender<ExportEvent>,
+    cancel_flag: Arc<AtomicBool>,
     render_frame_fn: F,
 ) -> Result<(), String>
 where
@@ -106,6 +111,13 @@ where
             let frame_bytes = (config.width * config.height * 4) as usize;
 
             for frame_idx in 0..config.total_frames {
+                if cancel_flag.load(Ordering::SeqCst) {
+                    log::info!("[FFmpegExport] export canceled by user — terminating process");
+                    let _ = child.kill();
+                    let _ = tx.send(ExportEvent::Error("Export canceled by user".to_string()));
+                    return;
+                }
+
                 // Render the frame to raw RGBA pixels
                 let pixels = render_frame_fn(frame_idx);
 
@@ -166,6 +178,17 @@ where
         .map_err(|e| format!("Failed to spawn export thread: {}", e))?;
 
     Ok(())
+}
+
+pub fn start_export<F>(
+    config: ExportConfig,
+    tx: Sender<ExportEvent>,
+    render_frame_fn: F,
+) -> Result<(), String>
+where
+    F: Fn(u32) -> Vec<u8> + Send + 'static,
+{
+    start_export_cancelable(config, tx, Arc::new(AtomicBool::new(false)), render_frame_fn)
 }
 
 #[cfg(test)]

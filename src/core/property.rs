@@ -11,33 +11,13 @@ impl Interpolate for f32 {
     }
 }
 
-impl Interpolate for [f32; 2] {
+impl<const N: usize> Interpolate for [f32; N] {
     fn interpolate(start: &Self, end: &Self, t: f32) -> Self {
-        [
-            start[0] + (end[0] - start[0]) * t,
-            start[1] + (end[1] - start[1]) * t,
-        ]
-    }
-}
-
-impl Interpolate for [f32; 3] {
-    fn interpolate(start: &Self, end: &Self, t: f32) -> Self {
-        [
-            start[0] + (end[0] - start[0]) * t,
-            start[1] + (end[1] - start[1]) * t,
-            start[2] + (end[2] - start[2]) * t,
-        ]
-    }
-}
-
-impl Interpolate for [f32; 4] {
-    fn interpolate(start: &Self, end: &Self, t: f32) -> Self {
-        [
-            start[0] + (end[0] - start[0]) * t,
-            start[1] + (end[1] - start[1]) * t,
-            start[2] + (end[2] - start[2]) * t,
-            start[3] + (end[3] - start[3]) * t,
-        ]
+        let mut out = [0.0f32; N];
+        for i in 0..N {
+            out[i] = start[i] + (end[i] - start[i]) * t;
+        }
+        out
     }
 }
 

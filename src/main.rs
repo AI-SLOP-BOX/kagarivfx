@@ -2,6 +2,7 @@ use eframe::egui;
 
 mod core;
 mod ui;
+pub mod app_state;
 
 use crate::core::timeline::Project;
 

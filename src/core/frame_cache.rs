@@ -4,12 +4,13 @@
 /// version increments. Reads always see a consistent snapshot; writes for the
 /// new version happen concurrently without invalidating in-progress reads.
 ///
-/// Includes strict RAM byte-memory limit guards (default 512 MB) to prevent
-/// OS Out-Of-Memory (OOM) crashes under 4K video preview.
+/// Includes strict RAM byte-memory limit guards (default 512 MB) & LRU eviction
+/// policy to prevent OS Out-Of-Memory (OOM) crashes under 4K/8K video preview.
 
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
+use std::time::Instant;
 
 /// A monotonically increasing version counter.
 static GLOBAL_CACHE_VERSION: AtomicU64 = AtomicU64::new(1);
@@ -24,8 +25,7 @@ pub fn current_version() -> u64 {
     GLOBAL_CACHE_VERSION.load(Ordering::SeqCst)
 }
 
-/// A single cached frame entry: the raw RGBA pixel bytes for one frame
-/// at one specific cache version.
+/// A single cached frame entry: raw RGBA pixel bytes for one frame at one version.
 #[derive(Clone)]
 pub struct CacheEntry {
     pub version: u64,
@@ -33,11 +33,11 @@ pub struct CacheEntry {
     pub height: u32,
     /// Raw RGBA8 bytes. Length = width * height * 4.
     pub pixels: Arc<Vec<u8>>,
+    /// LRU timestamp for eviction priority.
+    pub last_accessed_at: Instant,
 }
 
 /// The frame cache. Key is `(frame_index, cache_version)`.
-/// Old versions are retained until an explicit `collect_garbage` call,
-/// mirroring MVCC's multi-version concurrency pattern.
 pub struct FrameCache {
     entries: HashMap<(u32, u64), CacheEntry>,
     /// Maximum number of entries before GC triggers automatically.
@@ -58,18 +58,34 @@ impl FrameCache {
         }
     }
 
-    /// Try to retrieve a cached frame for the current global version.
-    pub fn get(&self, frame: u32) -> Option<&CacheEntry> {
+    /// Try to retrieve a cached frame for the current global version (updates LRU timestamp).
+    pub fn get(&mut self, frame: u32) -> Option<&CacheEntry> {
         let ver = current_version();
-        self.entries.get(&(frame, ver))
+        let key = (frame, ver);
+        if let Some(entry) = self.entries.get_mut(&key) {
+            entry.last_accessed_at = Instant::now();
+            return self.entries.get(&key);
+        }
+        None
+    }
+
+    /// Immutable check if frame is cached without updating LRU timestamp.
+    pub fn is_cached(&self, frame: u32) -> bool {
+        let ver = current_version();
+        self.entries.contains_key(&(frame, ver))
     }
 
     /// Store a rendered frame for the current global version.
     pub fn insert(&mut self, frame: u32, width: u32, height: u32, pixels: Vec<u8>) {
         let ver = current_version();
         let bytes_size = pixels.len();
-        self.current_memory_bytes += bytes_size;
 
+        // If replacing existing entry, subtract old size first
+        if let Some(old) = self.entries.remove(&(frame, ver)) {
+            self.current_memory_bytes = self.current_memory_bytes.saturating_sub(old.pixels.len());
+        }
+
+        self.current_memory_bytes += bytes_size;
         self.entries.insert(
             (frame, ver),
             CacheEntry {
@@ -77,25 +93,33 @@ impl FrameCache {
                 width,
                 height,
                 pixels: Arc::new(pixels),
+                last_accessed_at: Instant::now(),
             },
         );
 
-        // Auto-GC when entries or RAM usage exceed budget
+        // Trigger LRU garbage collection if budget exceeded
         if self.entries.len() > self.max_entries || self.current_memory_bytes > self.max_memory_bytes {
             self.collect_garbage();
         }
     }
 
-    /// Discard all cache entries whose version is older than the current global version.
+    /// Discard stale version entries and LRU evict unaccessed frames when memory budget is exceeded.
     pub fn collect_garbage(&mut self) {
         let current = current_version();
         self.collect_garbage_below(current);
 
-        // If memory is still above max_memory_bytes, purge oldest version entries
+        // LRU Eviction: Purge least-recently used entries until RAM usage <= max_memory_bytes / 2
         if self.current_memory_bytes > self.max_memory_bytes {
-            let mut keys: Vec<(u32, u64)> = self.entries.keys().cloned().collect();
-            keys.sort_by_key(|(_f, v)| *v);
-            for key in keys {
+            let mut keys_by_access: Vec<((u32, u64), Instant)> = self
+                .entries
+                .iter()
+                .map(|(k, v)| (*k, v.last_accessed_at))
+                .collect();
+
+            // Sort by last_accessed_at ascending (oldest first)
+            keys_by_access.sort_by_key(|(_k, accessed)| *accessed);
+
+            for (key, _accessed) in keys_by_access {
                 if self.current_memory_bytes <= self.max_memory_bytes / 2 {
                     break;
                 }
@@ -134,11 +158,6 @@ impl FrameCache {
     pub fn current_version_len(&self) -> usize {
         let ver = current_version();
         self.entries.keys().filter(|(_, v)| *v == ver).count()
-    }
-
-    /// Returns true if this frame is cached for the current version.
-    pub fn is_cached(&self, frame: u32) -> bool {
-        self.get(frame).is_some()
     }
 }
 
@@ -179,12 +198,14 @@ mod tests {
             width: 1,
             height: 1,
             pixels: pixels.clone(),
+            last_accessed_at: Instant::now(),
         });
         cache.entries.insert((FRAME, cur_ver), CacheEntry {
             version: cur_ver,
             width: 1,
             height: 1,
             pixels: pixels.clone(),
+            last_accessed_at: Instant::now(),
         });
 
         assert_eq!(cache.len(), 2, "should have 2 versioned entries before GC");
@@ -196,7 +217,7 @@ mod tests {
     }
 
     #[test]
-    fn test_memory_limit_purging() {
+    fn test_lru_memory_limit_purging() {
         let mut cache = FrameCache::new(1024);
         cache.max_memory_bytes = 100; // Small limit for testing
 
@@ -205,6 +226,6 @@ mod tests {
         cache.insert(2, 1, 1, pixels.clone());
         cache.insert(3, 1, 1, pixels.clone()); // Total 120 bytes > 100 max
 
-        assert!(cache.current_memory_bytes <= 100, "Memory limit should automatically purge old entries");
+        assert!(cache.current_memory_bytes <= 100, "LRU memory limit should automatically purge old entries");
     }
 }
