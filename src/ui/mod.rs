@@ -10,4 +10,6 @@ pub mod toolbar;
 pub mod project_panel;
 pub mod flowchart;
 pub mod character_panel;
+pub mod paragraph_panel;
+pub mod render_queue;
 pub mod graph_editor;

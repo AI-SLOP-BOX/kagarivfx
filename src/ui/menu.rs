@@ -96,6 +96,80 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
                     app.show_comp_settings = true;
                     ui.close_menu();
                 }
+                if ui.add(egui::Button::new("Add to Render Queue").shortcut_text("Cmd+M")).clicked() {
+                    app.show_export_dialog = true;
+                    ui.close_menu();
+                }
+            });
+            ui.menu_button("Layer", |ui| {
+                ui.menu_button("New", |ui| {
+                    if ui.add(egui::Button::new("Solid...").shortcut_text("Cmd+Y")).clicked() {
+                        let total_frames = app.history.current().active_composition().duration_frames;
+                        let comp_mut = app.history.current_mut().active_composition_mut();
+                        let id = format!("layer_{}", comp_mut.layers.len());
+                        let name = format!("Solid {}", comp_mut.layers.len());
+                        let layer = crate::core::timeline::Layer::new(id, name, crate::core::timeline::LayerType::Solid { color: [0.2, 0.5, 0.9, 1.0] }, total_frames);
+                        comp_mut.add_layer(layer);
+                        crate::core::frame_cache::bump_version();
+                        ui.close_menu();
+                    }
+                    if ui.add(egui::Button::new("Text").shortcut_text("Cmd+Alt+Shift+T")).clicked() {
+                        let total_frames = app.history.current().active_composition().duration_frames;
+                        let comp_mut = app.history.current_mut().active_composition_mut();
+                        let id = format!("layer_{}", comp_mut.layers.len());
+                        let name = format!("Text {}", comp_mut.layers.len());
+                        let layer = crate::core::timeline::Layer::new(id, name, crate::core::timeline::LayerType::Text { text: "Title Text".to_string(), font_size: 72, color: [1.0, 1.0, 1.0, 1.0] }, total_frames);
+                        comp_mut.add_layer(layer);
+                        crate::core::frame_cache::bump_version();
+                        ui.close_menu();
+                    }
+                    if ui.add(egui::Button::new("Null Object").shortcut_text("Cmd+Alt+Shift+Y")).clicked() {
+                        let total_frames = app.history.current().active_composition().duration_frames;
+                        let comp_mut = app.history.current_mut().active_composition_mut();
+                        let id = format!("layer_{}", comp_mut.layers.len());
+                        let name = format!("Null {}", comp_mut.layers.len());
+                        let layer = crate::core::timeline::Layer::new_null(id, name, total_frames);
+                        comp_mut.add_layer(layer);
+                        crate::core::frame_cache::bump_version();
+                        ui.close_menu();
+                    }
+                    if ui.add(egui::Button::new("Adjustment Layer").shortcut_text("Cmd+Alt+Y")).clicked() {
+                        let total_frames = app.history.current().active_composition().duration_frames;
+                        let comp_mut = app.history.current_mut().active_composition_mut();
+                        let id = format!("layer_{}", comp_mut.layers.len());
+                        let name = format!("Adjustment Layer {}", comp_mut.layers.len());
+                        let layer = crate::core::timeline::Layer::new_adjustment(id, name, total_frames);
+                        comp_mut.add_layer(layer);
+                        crate::core::frame_cache::bump_version();
+                        ui.close_menu();
+                    }
+                });
+                ui.separator();
+                if ui.add(egui::Button::new("Pre-Compose...").shortcut_text("Cmd+Shift+C")).clicked() {
+                    ui.close_menu();
+                }
+            });
+            ui.menu_button("Effect", |ui| {
+                ui.menu_button("Blur & Sharpen", |ui| {
+                    if ui.button("Gaussian Blur").clicked() { ui.close_menu(); }
+                });
+                ui.menu_button("Color Correction", |ui| {
+                    if ui.button("Color Tint").clicked() { ui.close_menu(); }
+                    if ui.button("Levels").clicked() { ui.close_menu(); }
+                    if ui.button("Hue/Saturation").clicked() { ui.close_menu(); }
+                });
+                ui.menu_button("Stylize", |ui| {
+                    if ui.button("Glow").clicked() { ui.close_menu(); }
+                    if ui.button("Vignette").clicked() { ui.close_menu(); }
+                });
+                ui.menu_button("Distort", |ui| {
+                    if ui.button("Mesh Warp").clicked() { ui.close_menu(); }
+                    if ui.button("Chromatic Aberration").clicked() { ui.close_menu(); }
+                });
+            });
+            ui.menu_button("Animation", |ui| {
+                if ui.add(egui::Button::new("Easy Ease").shortcut_text("F9")).clicked() { ui.close_menu(); }
+                if ui.button("Keyframe Assistant").clicked() { ui.close_menu(); }
             });
             ui.menu_button("View", |ui| {
                 ui.checkbox(&mut app.show_grid, "Show Grid");
