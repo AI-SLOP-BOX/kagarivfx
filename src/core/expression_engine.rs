@@ -24,6 +24,8 @@ pub fn build_engine() -> Engine {
     let mut engine = Engine::new();
     engine.set_max_expr_depths(64, 32);
     engine.set_max_operations(100_000);
+    engine.set_max_string_size(4096);
+    engine.set_max_array_size(1024);
 
     // --- wiggle(frequency: f32, amplitude: f32) -> f32 ---
     // Built-in pseudo-random noise matching AE's wiggle expression.

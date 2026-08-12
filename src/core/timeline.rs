@@ -785,17 +785,28 @@ impl Composition {
         }
     }
 
-    /// Calculate and cache all layer world transforms in O(N) linear topological order with cycle protection.
+    /// O(1) Layer ID to index lookup map generator.
+    pub fn build_layer_id_index_map(&self) -> std::collections::HashMap<&str, usize> {
+        let mut map = std::collections::HashMap::with_capacity(self.layers.len());
+        for (idx, layer) in self.layers.iter().enumerate() {
+            map.insert(layer.id.as_str(), idx);
+        }
+        map
+    }
+
+    /// Calculate and cache all layer world transforms in O(N) linear topological order with cycle protection and O(1) layer lookups.
     pub fn resolve_all_world_transforms_cached(
         &self,
         frame: u32,
     ) -> std::collections::HashMap<String, ([f32; 2], [f32; 2], f32, f32)> {
         let mut cache = std::collections::HashMap::with_capacity(self.layers.len());
         let mut visited = std::collections::HashSet::new();
+        let id_map = self.build_layer_id_index_map();
+
         for layer in &self.layers {
             if !cache.contains_key(&layer.id) {
                 visited.clear();
-                self.resolve_layer_transform_recursive(layer, frame, &mut cache, &mut visited);
+                self.resolve_layer_transform_recursive(layer, frame, &mut cache, &mut visited, &id_map);
             }
         }
         cache
@@ -807,6 +818,7 @@ impl Composition {
         frame: u32,
         cache: &mut std::collections::HashMap<String, ([f32; 2], [f32; 2], f32, f32)>,
         visited: &mut std::collections::HashSet<String>,
+        id_map: &std::collections::HashMap<&str, usize>,
     ) -> ([f32; 2], [f32; 2], f32, f32) {
         if let Some(cached) = cache.get(&layer.id) {
             return *cached;
@@ -824,8 +836,9 @@ impl Composition {
         }
 
         let res = if let Some(pid) = &layer.parent_id {
-            if let Some(parent) = self.layers.iter().find(|l| &l.id == pid) {
-                let (ppos, pscale, prot, popa) = self.resolve_layer_transform_recursive(parent, frame, cache, visited);
+            if let Some(&parent_idx) = id_map.get(pid.as_str()) {
+                let parent = &self.layers[parent_idx];
+                let (ppos, pscale, prot, popa) = self.resolve_layer_transform_recursive(parent, frame, cache, visited, id_map);
                 let rot_rad = prot.to_radians();
                 let (s, c) = (rot_rad.sin(), rot_rad.cos());
                 let world_x = pos[0] * pscale[0] / 100.0 * c - pos[1] * pscale[1] / 100.0 * s + ppos[0];

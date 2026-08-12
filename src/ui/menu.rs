@@ -21,10 +21,18 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
                         .save_file()
                     {
                         let project = app.history.current();
-                        if let Ok(json) = serde_json::to_string_pretty(project) {
-                            if std::fs::write(&path, json).is_ok() {
-                                app.project_path = path.to_string_lossy().to_string();
-                                log::info!("Native project saved to {}", app.project_path);
+                        match serde_json::to_string_pretty(project) {
+                            Ok(json) => match std::fs::write(&path, json) {
+                                Ok(_) => {
+                                    app.project_path = path.to_string_lossy().to_string();
+                                    app.toasts.info(format!("💾 Project saved: {}", path.file_name().unwrap_or_default().to_string_lossy()));
+                                }
+                                Err(err) => {
+                                    app.toasts.error(format!("❌ Failed to save project file: {}", err));
+                                }
+                            },
+                            Err(err) => {
+                                app.toasts.error(format!("❌ Failed to serialize project: {}", err));
                             }
                         }
                     }
@@ -35,14 +43,22 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
                         .add_filter("After Effects OSS Project", &["json", "aevfx"])
                         .pick_file()
                     {
-                        if let Ok(json) = std::fs::read_to_string(&path) {
-                            if let Ok(project) = serde_json::from_str::<crate::core::timeline::Project>(&json) {
-                                app.history = crate::core::history::ProjectHistory::new(project);
-                                app.selected_layer_idx = None;
-                                app.selected_layers.clear();
-                                app.project_path = path.to_string_lossy().to_string();
-                                crate::core::frame_cache::bump_version();
-                                log::info!("Native project loaded from {}", app.project_path);
+                        match std::fs::read_to_string(&path) {
+                            Ok(json) => match serde_json::from_str::<crate::core::timeline::Project>(&json) {
+                                Ok(project) => {
+                                    app.history = crate::core::history::ProjectHistory::new(project);
+                                    app.selected_layer_idx = None;
+                                    app.selected_layers.clear();
+                                    app.project_path = path.to_string_lossy().to_string();
+                                    crate::core::frame_cache::bump_version();
+                                    app.toasts.info(format!("📂 Project opened: {}", path.file_name().unwrap_or_default().to_string_lossy()));
+                                }
+                                Err(err) => {
+                                    app.toasts.error(format!("❌ Failed to parse project file: {}", err));
+                                }
+                            },
+                            Err(err) => {
+                                app.toasts.error(format!("❌ Could not read file: {}", err));
                             }
                         }
                     }
@@ -52,18 +68,35 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
                 if ui.button("Export OpenTimelineIO (.otio.json)").clicked() {
                     let comp = app.history.current().active_composition();
                     let otio = crate::core::integration::OtioTimeline::from_composition(comp);
-                    if let Ok(json) = serde_json::to_string_pretty(&otio) {
-                        let _ = std::fs::write(&app.otio_path, json);
-                        log::info!("Exported OTIO timeline to {}", app.otio_path);
+                    match serde_json::to_string_pretty(&otio) {
+                        Ok(json) => match std::fs::write(&app.otio_path, json) {
+                            Ok(_) => {
+                                app.toasts.info(format!("🎬 Exported OTIO: {}", app.otio_path));
+                            }
+                            Err(err) => {
+                                app.toasts.error(format!("❌ Failed to save OTIO file: {}", err));
+                            }
+                        },
+                        Err(err) => {
+                            app.toasts.error(format!("❌ Failed to serialize OTIO: {}", err));
+                        }
                     }
                     ui.close_menu();
                 }
                 if ui.button("Import OpenTimelineIO (.otio.json)").clicked() {
-                    if let Ok(json) = std::fs::read_to_string(&app.otio_path) {
-                        if let Ok(otio) = serde_json::from_str::<crate::core::integration::OtioTimeline>(&json) {
-                            let comp = otio.to_composition();
-                            app.modify_project(|p| p.compositions[0] = comp);
-                            log::info!("Imported OTIO timeline from {}", app.otio_path);
+                    match std::fs::read_to_string(&app.otio_path) {
+                        Ok(json) => match serde_json::from_str::<crate::core::integration::OtioTimeline>(&json) {
+                            Ok(otio) => {
+                                let comp = otio.to_composition();
+                                app.modify_project(|p| p.compositions[0] = comp);
+                                app.toasts.info(format!("🎬 Imported OTIO: {}", app.otio_path));
+                            }
+                            Err(err) => {
+                                app.toasts.error(format!("❌ Invalid OTIO format: {}", err));
+                            }
+                        },
+                        Err(err) => {
+                            app.toasts.error(format!("❌ Could not read OTIO file: {}", err));
                         }
                     }
                     ui.close_menu();

@@ -33,6 +33,20 @@ pub mod colors {
     pub const TEXT_ACCENT: Color32 = Color32::from_rgb(100, 200, 255);
 }
 
+/// 📐 Layout & Spacing Constants for Consistent AE Ergonomics
+pub mod layout {
+    pub const SIDEBAR_DEFAULT_WIDTH: f32 = 280.0;
+    pub const TOOLBAR_HEIGHT: f32 = 36.0;
+    pub const TIMELINE_LEFT_PANE_WIDTH: f32 = 280.0;
+    pub const BOTTOM_TIMELINE_HEIGHT: f32 = 320.0;
+    pub const STATUS_BAR_HEIGHT: f32 = 24.0;
+
+    pub const FONT_SIZE_SMALL: f32 = 10.0;
+    pub const FONT_SIZE_BODY: f32 = 12.0;
+    pub const FONT_SIZE_HEADING: f32 = 14.0;
+    pub const FONT_SIZE_TITLE: f32 = 16.0;
+}
+
 /// Apply global Adobe After Effects high-contrast pro dark theme to egui.
 pub fn configure_ae_theme(ctx: &egui::Context) {
     let mut visuals = egui::Visuals::dark();

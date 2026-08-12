@@ -25,6 +25,43 @@ pub fn current_version() -> u64 {
     GLOBAL_CACHE_VERSION.load(Ordering::SeqCst)
 }
 
+/// Thread-safe reusable buffer pool for RGBA pixel vectors.
+/// Eliminates heap allocation spikes and memory fragmentation during 4K/8K playback.
+pub struct PixelBufferPool {
+    pool: std::sync::Mutex<Vec<Vec<u8>>>,
+}
+
+impl PixelBufferPool {
+    pub fn new() -> Self {
+        Self {
+            pool: std::sync::Mutex::new(Vec::new()),
+        }
+    }
+
+    /// Acquire a buffer with capacity for `size_bytes`.
+    pub fn acquire(&self, size_bytes: usize) -> Vec<u8> {
+        let mut pool = self.pool.lock().unwrap_or_else(|e| e.into_inner());
+        if let Some(mut buf) = pool.pop() {
+            buf.clear();
+            if buf.capacity() < size_bytes {
+                buf.reserve(size_bytes - buf.capacity());
+            }
+            buf
+        } else {
+            Vec::with_capacity(size_bytes)
+        }
+    }
+
+    /// Recycle a vector back into the pool.
+    pub fn recycle(&self, mut buf: Vec<u8>) {
+        buf.clear();
+        let mut pool = self.pool.lock().unwrap_or_else(|e| e.into_inner());
+        if pool.len() < 64 {
+            pool.push(buf);
+        }
+    }
+}
+
 /// A single cached frame entry: raw RGBA pixel bytes for one frame at one version.
 #[derive(Clone)]
 pub struct CacheEntry {
@@ -228,5 +265,15 @@ mod tests {
         cache.insert(3, 1, 1, pixels.clone()); // Total 120 bytes > 100 max
 
         assert!(cache.current_memory_bytes <= 100, "LRU memory limit should automatically purge old entries");
+    }
+
+    #[test]
+    fn test_pixel_buffer_pool_recycling() {
+        let pool = PixelBufferPool::new();
+        let buf = pool.acquire(1024);
+        assert!(buf.capacity() >= 1024);
+        pool.recycle(buf);
+        let recycled = pool.acquire(512);
+        assert!(recycled.capacity() >= 1024, "Recycled buffer should retain its allocated capacity");
     }
 }
