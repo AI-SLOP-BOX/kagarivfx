@@ -74,24 +74,39 @@ pub fn draw_graph_editor(
             );
         }
 
-        // Render interactive keyframe anchor points & tangents
+        // Render interactive keyframe anchor points & tangent handles
+        let pointer_pos = ui.input(|i| i.pointer.hover_pos());
         let step = (points.len() / 4).max(1);
-        for (_idx, &pt) in points.iter().enumerate().step_by(step) {
+
+        for (idx, &pt) in points.iter().enumerate().step_by(step) {
             // Anchor point dot
-            ui.painter().circle_filled(pt, 3.5, egui::Color32::from_rgb(255, 230, 100));
+            ui.painter().circle_filled(pt, 4.0, egui::Color32::from_rgb(255, 230, 100));
 
             // Easing control handles
-            let h_out = egui::pos2(pt.x + 18.0, pt.y - 12.0);
-            let h_in = egui::pos2(pt.x - 18.0, pt.y + 12.0);
+            let h_out = egui::pos2(pt.x + 22.0, pt.y - 12.0);
+            let h_in = egui::pos2(pt.x - 22.0, pt.y + 12.0);
 
-            ui.painter().line_segment([pt, h_out], egui::Stroke::new(1.0, egui::Color32::from_rgb(100, 200, 255)));
-            ui.painter().line_segment([pt, h_in], egui::Stroke::new(1.0, egui::Color32::from_rgb(100, 200, 255)));
+            let is_h_out_hovered = pointer_pos.map_or(false, |pos| pos.distance(h_out) <= 8.0);
+            let is_h_in_hovered = pointer_pos.map_or(false, |pos| pos.distance(h_in) <= 8.0);
 
-            ui.painter().circle_filled(h_out, 3.0, egui::Color32::from_rgb(100, 220, 255));
-            ui.painter().circle_filled(h_in, 3.0, egui::Color32::from_rgb(100, 220, 255));
+            let stroke_color = if is_h_out_hovered || is_h_in_hovered {
+                egui::Color32::from_rgb(255, 120, 150)
+            } else {
+                egui::Color32::from_rgb(100, 200, 255)
+            };
 
-            if graph_response.dragged() {
+            ui.painter().line_segment([pt, h_out], egui::Stroke::new(1.2, stroke_color));
+            ui.painter().line_segment([pt, h_in], egui::Stroke::new(1.2, stroke_color));
+
+            let h_out_color = if is_h_out_hovered { egui::Color32::WHITE } else { egui::Color32::from_rgb(100, 220, 255) };
+            let h_in_color = if is_h_in_hovered { egui::Color32::WHITE } else { egui::Color32::from_rgb(100, 220, 255) };
+
+            ui.painter().circle_filled(h_out, 4.0, h_out_color);
+            ui.painter().circle_filled(h_in, 4.0, h_in_color);
+
+            if graph_response.dragged() && (is_h_out_hovered || is_h_in_hovered) {
                 *project_changed = true;
+                log::debug!("Bezier tangent handle dragged for keyframe sample {}", idx);
             }
         }
     });

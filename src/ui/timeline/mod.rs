@@ -81,6 +81,7 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
             ui.separator();
 
             let mut project_changed = false;
+            let mut pending_precomp_indices: Option<Vec<usize>> = None;
             let mut temp_project = app.history.current().clone();
             let comp = temp_project.active_composition_mut();
 
@@ -562,6 +563,17 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                                         project_changed = true;
                                         ui.close_menu();
                                     }
+                                    if ui.button("Pre-Compose Selected... (Cmd+Shift+C)").clicked() {
+                                        let selected_indices: Vec<usize> = if !app.selected_layers.is_empty() {
+                                            let mut s: Vec<usize> = app.selected_layers.iter().copied().collect();
+                                            s.sort();
+                                            s
+                                        } else {
+                                            vec![i]
+                                        };
+                                        pending_precomp_indices = Some(selected_indices);
+                                        ui.close_menu();
+                                    }
                                     if ui.button("Reset Transform").clicked() {
                                         comp.layers[i].transform = crate::core::timeline::Transform2D::default();
                                         project_changed = true;
@@ -894,6 +906,46 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
 
         if let Some((a, b)) = swap_request {
             temp_project.active_composition_mut().layers.swap(a, b);
+            project_changed = true;
+        }
+
+        if let Some(selected_indices) = pending_precomp_indices {
+            let comp_len = temp_project.compositions.len();
+            let (c_w, c_h, c_fps, c_dur) = {
+                let active = temp_project.active_composition();
+                (active.width, active.height, active.fps, active.duration_frames)
+            };
+            let precomp_id = format!("precomp_{}", comp_len);
+            let precomp_name = format!("Pre-comp {}", comp_len + 1);
+            let mut new_comp = crate::core::timeline::Composition::new(
+                precomp_id.clone(),
+                precomp_name.clone(),
+                c_w, c_h, c_fps, c_dur,
+            );
+
+            let active_comp = temp_project.active_composition_mut();
+            let mut extracted_layers = Vec::new();
+            for &idx in selected_indices.iter().rev() {
+                if idx < active_comp.layers.len() {
+                    extracted_layers.push(active_comp.layers.remove(idx));
+                }
+            }
+            extracted_layers.reverse();
+            new_comp.layers = extracted_layers;
+
+            let precomp_layer = crate::core::timeline::Layer::new(
+                format!("layer_{}", precomp_id),
+                precomp_name,
+                crate::core::timeline::LayerType::PreComp { comp_id: precomp_id },
+                c_dur,
+            );
+            let insert_pos = selected_indices.first().copied().unwrap_or(0).min(active_comp.layers.len());
+            active_comp.layers.insert(insert_pos, precomp_layer);
+            temp_project.compositions.push(new_comp);
+
+            app.selected_layers.clear();
+            app.selected_layers.insert(insert_pos);
+            app.selected_layer_idx = Some(insert_pos);
             project_changed = true;
         }
 

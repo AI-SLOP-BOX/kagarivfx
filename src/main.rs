@@ -293,6 +293,65 @@ impl eframe::App for AfterEffectsApp {
                     self.show_comp_settings = true;
                 }
 
+                // Cmd+Shift+C → Pre-Compose Selected Layers
+                if cmd && shift && i.key_pressed(Key::C) {
+                    let mut temp_project = self.history.current().clone();
+                    let selected_indices: Vec<usize> = if !self.selected_layers.is_empty() {
+                        let mut s: Vec<usize> = self.selected_layers.iter().copied().collect();
+                        s.sort();
+                        s
+                    } else if let Some(idx) = self.selected_layer_idx {
+                        vec![idx]
+                    } else {
+                        vec![]
+                    };
+
+                    if !selected_indices.is_empty() {
+                        let comp_len = temp_project.compositions.len();
+                        let (width, height, fps, duration_frames) = {
+                            let comp = temp_project.active_composition();
+                            (comp.width, comp.height, comp.fps, comp.duration_frames)
+                        };
+
+                        let precomp_id = format!("precomp_{}", comp_len);
+                        let precomp_name = format!("Pre-comp {}", comp_len + 1);
+                        let mut new_comp = crate::core::timeline::Composition::new(
+                            precomp_id.clone(),
+                            precomp_name.clone(),
+                            width,
+                            height,
+                            fps,
+                            duration_frames,
+                        );
+
+                        let comp_mut = temp_project.active_composition_mut();
+                        let mut extracted_layers = Vec::new();
+                        for &idx in selected_indices.iter().rev() {
+                            if idx < comp_mut.layers.len() {
+                                extracted_layers.push(comp_mut.layers.remove(idx));
+                            }
+                        }
+                        extracted_layers.reverse();
+                        new_comp.layers = extracted_layers;
+
+                        let precomp_layer = crate::core::timeline::Layer::new(
+                            format!("layer_{}", precomp_id),
+                            precomp_name,
+                            crate::core::timeline::LayerType::PreComp { comp_id: precomp_id },
+                            duration_frames,
+                        );
+                        let insert_pos = selected_indices.first().copied().unwrap_or(0).min(comp_mut.layers.len());
+                        comp_mut.layers.insert(insert_pos, precomp_layer);
+                        temp_project.compositions.push(new_comp);
+
+                        self.selected_layers.clear();
+                        self.selected_layers.insert(insert_pos);
+                        self.selected_layer_idx = Some(insert_pos);
+                        self.history.commit(temp_project);
+                        crate::core::frame_cache::bump_version();
+                    }
+                }
+
                 // Cmd+D → Duplicate selected layer, Cmd+Shift+D → Split layer at current frame
                 if cmd && i.key_pressed(Key::D) {
                     if let Some(idx) = self.selected_layer_idx {
