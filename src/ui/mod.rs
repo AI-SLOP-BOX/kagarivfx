@@ -29,4 +29,6 @@ pub mod metadata_panel;
 pub mod scripting_console;
 pub mod workspace_manager;
 pub mod color_management;
+pub mod flowchart_inspector;
+pub mod camera_views;
 pub mod graph_editor;
