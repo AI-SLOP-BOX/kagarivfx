@@ -111,7 +111,10 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                 let hours = mins / 60;
                 let tc_str = format!("{:02}:{:02}:{:02}:{:02}", hours, mins % 60, secs % 60, sub_f);
 
-                ui.label(egui::RichText::new(format!("TC: {}  |  Frame: {} / {}", tc_str, current_frame, total_frames)).strong().color(egui::Color32::from_rgb(100, 220, 255)));
+                ui.label(egui::RichText::new(format!("TC: {}", tc_str)).strong().color(egui::Color32::from_rgb(255, 234, 0)));
+                ui.add_space(4.0);
+                ui.add(egui::DragValue::new(current_frame).clamp_range(0..=total_frames).prefix("Frame: ").suffix(format!(" / {}", total_frames)))
+                    .on_hover_text("Click or Drag to set current frame timecode");
                 ui.add_space(8.0);
                 if ui.button("|< First").clicked() { *current_frame = 0; }
                 if ui.button("< Prev").clicked() { *current_frame = current_frame.saturating_sub(1); }
@@ -398,13 +401,19 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                 graph_editor::draw_graph_editor(app, ui, comp, current_frame, total_frames);
             } else {
                 ui.horizontal(|ui| {
-                    ui.allocate_ui(egui::vec2(500.0, 20.0), |ui| {
+                    ui.allocate_ui(egui::vec2(580.0, 20.0), |ui| {
                         ui.horizontal(|ui| {
                             ui.label(egui::RichText::new(" #").small().strong().color(egui::Color32::from_gray(160)));
                             ui.add_space(8.0);
-                            ui.label(egui::RichText::new("Source / Layer Name").small().strong().color(egui::Color32::from_gray(160)));
+                            ui.label(egui::RichText::new("Source Name").small().strong().color(egui::Color32::from_gray(160)));
+                            ui.add_space(60.0);
+                            ui.label(egui::RichText::new("Mode").small().strong().color(egui::Color32::from_gray(160)));
+                            ui.add_space(20.0);
+                            ui.label(egui::RichText::new("TrkMat").small().strong().color(egui::Color32::from_gray(160)));
+                            ui.add_space(15.0);
+                            ui.label(egui::RichText::new("Parent & Link").small().strong().color(egui::Color32::from_gray(160)));
                             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                                ui.label(egui::RichText::new("Switches (V | S | L | M | 3D)").small().strong().color(egui::Color32::from_gray(160)));
+                                ui.label(egui::RichText::new("Switches (V S L M 3D)").small().strong().color(egui::Color32::from_gray(160)));
                             });
                         });
                     });

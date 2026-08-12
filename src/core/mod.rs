@@ -12,6 +12,6 @@ pub mod timeline;
 pub mod tracker_engine;
 pub mod mask;
 pub mod color_science;
-pub mod software_renderer;
+pub mod content_aware_engine;
 
 
