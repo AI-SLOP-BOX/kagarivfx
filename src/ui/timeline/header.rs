@@ -43,13 +43,9 @@ pub fn draw_timeline_header(
         }
 
         // ── AE Timeline Layer Filter ──
-        let filter_id = ui.make_persistent_id("ae_timeline_filter");
-        let mut filter_text = ui.ctx().data_mut(|d| d.get_temp_mut_or_insert_with(filter_id, String::new).clone());
         ui.add_space(8.0);
-        ui.label("Filter:");
-        if ui.add(egui::TextEdit::singleline(&mut filter_text).hint_text("Search layers...").desired_width(110.0)).changed() {
-            ui.ctx().data_mut(|d| d.insert_temp(filter_id, filter_text.clone()));
-        }
+        ui.label(egui::RichText::new("Filter:").small().color(crate::ui::theme::colors::TEXT_SECONDARY));
+        ui.add(egui::TextEdit::singleline(&mut app.layer_filter_text).hint_text("Search layers...").desired_width(110.0));
         
         ui.add_space(15.0);
         if ui.button("+ Solid").clicked() {

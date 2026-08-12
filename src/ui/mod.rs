@@ -40,3 +40,4 @@ pub mod speed_graph_options;
 pub mod camera_light_options;
 pub mod layer_styles;
 pub mod graph_editor;
+pub mod theme;

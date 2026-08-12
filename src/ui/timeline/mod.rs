@@ -16,22 +16,18 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
         .default_height(280.0)
         .show(ctx, |ui| {
             let active_comp_name = app.history.current().active_composition().name.clone();
-            let bottom_dock_id = ui.make_persistent_id("ae_bottom_dock_tab");
-            let mut bottom_dock_tab = ui.ctx().data_mut(|d| *d.get_temp_mut_or_insert_with(bottom_dock_id, || 0));
 
             ui.horizontal(|ui| {
-                if ui.selectable_label(bottom_dock_tab == 0, format!("🎞 {}", active_comp_name)).clicked() {
-                    bottom_dock_tab = 0;
-                    ui.ctx().data_mut(|d| d.insert_temp(bottom_dock_id, 0));
+                if crate::ui::theme::draw_custom_tab(ui, app.bottom_dock_tab == 0, &format!("🎞 {}", active_comp_name)).clicked() {
+                    app.bottom_dock_tab = 0;
                 }
-                if ui.selectable_label(bottom_dock_tab == 1, "🚀 Render Queue").clicked() {
-                    bottom_dock_tab = 1;
-                    ui.ctx().data_mut(|d| d.insert_temp(bottom_dock_id, 1));
+                if crate::ui::theme::draw_custom_tab(ui, app.bottom_dock_tab == 1, "🚀 Render Queue").clicked() {
+                    app.bottom_dock_tab = 1;
                 }
             });
             ui.separator();
 
-            if bottom_dock_tab == 1 {
+            if app.bottom_dock_tab == 1 {
                 crate::ui::render_queue::draw_render_queue_panel(app, ui);
                 return;
             }
@@ -122,17 +118,18 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
             // ── Tracks Mode: Layer List & Keyframe Ruler Area ──
             let comp = temp_project.active_composition_mut();
 
+            // ── Responsive Width Calculation ──
+            let total_w = ui.available_width();
+            let left_pane_w = (total_w * 0.42).clamp(340.0, 640.0);
+
             // ── Work Area (In / Out) Handles Bar ──
             ui.horizontal(|ui| {
-                ui.allocate_ui(egui::vec2(500.0, 18.0), |ui| {
+                ui.allocate_ui(egui::vec2(left_pane_w, 18.0), |ui| {
                     ui.horizontal(|ui| {
                         ui.label(egui::RichText::new("Source Name | Mode | TrkMat | Parent & Link | Switches").small().strong().color(egui::Color32::from_gray(160)));
 
-                        let shy_master_id = egui::Id::new("ae_global_shy_master");
-                        let mut shy_active: bool = ui.ctx().data_mut(|d| *d.get_temp_mut_or_insert_with(shy_master_id, || false));
-                        if ui.selectable_label(shy_active, "Shy").on_hover_text("Hide / Show All Marked Shy Layers").clicked() {
-                            shy_active = !shy_active;
-                            ui.ctx().data_mut(|d| d.insert_temp(shy_master_id, shy_active));
+                        if ui.selectable_label(app.global_shy_active, "Shy").on_hover_text("Hide / Show All Marked Shy Layers").clicked() {
+                            app.global_shy_active = !app.global_shy_active;
                         }
 
                         let is_w_hovered = ui.rect_contains_pointer(ui.max_rect());
@@ -220,27 +217,21 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
             let start_frame = current_frame.saturating_sub(zoom_span / 2).min(total_frames.saturating_sub(zoom_span));
 
             egui::ScrollArea::vertical().max_height(200.0).show(ui, |ui| {
-                let filter_id = ui.make_persistent_id("ae_timeline_filter");
-                let filter_text: String = ui.ctx().data_mut(|d| d.get_temp(filter_id).unwrap_or_default());
-
-                let shy_master_id = egui::Id::new("ae_global_shy_master");
-                let shy_active: bool = ui.ctx().data_mut(|d| d.get_temp(shy_master_id).unwrap_or(false));
-                
                 let layers_len = comp.layers.len();
                 let parent_choices: Vec<(String, String)> = comp.layers.iter().map(|l| (l.id.clone(), l.name.clone())).collect();
                 let parent_choices_ref = &parent_choices;
                 for i in 0..layers_len {
                     // Safe index access (.get_mut(i))
                     if let Some(layer) = comp.layers.get_mut(i) {
-                        if shy_active && layer.is_shy {
+                        if app.global_shy_active && layer.is_shy {
                             continue;
                         }
-                        if !filter_text.is_empty() && !layer.name.to_lowercase().contains(&filter_text.to_lowercase()) {
+                        if !app.layer_filter_text.is_empty() && !layer.name.to_lowercase().contains(&app.layer_filter_text.to_lowercase()) {
                             continue;
                         }
 
                         ui.horizontal(|ui| {
-                            ui.allocate_ui(egui::vec2(500.0, 24.0), |ui| {
+                            ui.allocate_ui(egui::vec2(left_pane_w, 24.0), |ui| {
                                 ui.horizontal(|ui| {
                                     ui.label(egui::RichText::new(format!("{:02}", i + 1)).small().strong().color(egui::Color32::from_gray(140)));
                                     ui.add_space(2.0);
@@ -470,7 +461,7 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                                                 layer.parent_id = None;
                                                 project_changed = true;
                                             }
-                                            for (p_idx, (p_id, p_name)) in parent_choices.iter().enumerate() {
+                                            for (p_idx, (p_id, p_name)) in parent_choices_ref.iter().enumerate() {
                                                 if p_idx != i {
                                                     let is_p = layer.parent_id.as_deref() == Some(p_id);
                                                     if ui.selectable_label(is_p, p_name).clicked() {
@@ -526,48 +517,48 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                             let rot_kfs = get_kfs(&layer.transform.rotation);
                             let op_kfs = get_kfs(&layer.transform.opacity);
 
-                            draw_prop_row(ui, "  ⏱ Position", &pos_kfs, current_frame, start_frame, zoom_span);
-                            draw_prop_row(ui, "  ⏱ Scale", &scale_kfs, current_frame, start_frame, zoom_span);
-                            draw_prop_row(ui, "  ⏱ Rotation", &rot_kfs, current_frame, start_frame, zoom_span);
-                            draw_prop_row(ui, "  ⏱ Opacity", &op_kfs, current_frame, start_frame, zoom_span);
+                            draw_prop_row(ui, "  ⏱ Position", &pos_kfs, current_frame, start_frame, zoom_span, left_pane_w);
+                            draw_prop_row(ui, "  ⏱ Scale", &scale_kfs, current_frame, start_frame, zoom_span, left_pane_w);
+                            draw_prop_row(ui, "  ⏱ Rotation", &rot_kfs, current_frame, start_frame, zoom_span, left_pane_w);
+                            draw_prop_row(ui, "  ⏱ Opacity", &op_kfs, current_frame, start_frame, zoom_span, left_pane_w);
 
                             for effect in &layer.effects {
                                 match &effect.effect_type {
                                     crate::core::timeline::EffectType::GaussianBlur { blur_radius, .. } => {
-                                        draw_prop_row(ui, &format!("  [{}] Blur Radius", effect.name), &get_kfs(blur_radius), current_frame, start_frame, zoom_span);
+                                        draw_prop_row(ui, &format!("  [{}] Blur Radius", effect.name), &get_kfs(blur_radius), current_frame, start_frame, zoom_span, left_pane_w);
                                     }
                                     crate::core::timeline::EffectType::ColorTint { intensity, .. } => {
-                                        draw_prop_row(ui, &format!("  [{}] Tint Intensity", effect.name), &get_kfs(intensity), current_frame, start_frame, zoom_span);
+                                        draw_prop_row(ui, &format!("  [{}] Tint Intensity", effect.name), &get_kfs(intensity), current_frame, start_frame, zoom_span, left_pane_w);
                                     }
                                     crate::core::timeline::EffectType::DropShadow { distance, softness, .. } => {
-                                        draw_prop_row(ui, &format!("  [{}] Distance", effect.name), &get_kfs(distance), current_frame, start_frame, zoom_span);
-                                        draw_prop_row(ui, &format!("  [{}] Softness", effect.name), &get_kfs(softness), current_frame, start_frame, zoom_span);
+                                        draw_prop_row(ui, &format!("  [{}] Distance", effect.name), &get_kfs(distance), current_frame, start_frame, zoom_span, left_pane_w);
+                                        draw_prop_row(ui, &format!("  [{}] Softness", effect.name), &get_kfs(softness), current_frame, start_frame, zoom_span, left_pane_w);
                                     }
                                     crate::core::timeline::EffectType::HueSaturation { hue_shift, saturation, lightness } => {
-                                        draw_prop_row(ui, &format!("  [{}] Hue Shift", effect.name), &get_kfs(hue_shift), current_frame, start_frame, zoom_span);
-                                        draw_prop_row(ui, &format!("  [{}] Saturation", effect.name), &get_kfs(saturation), current_frame, start_frame, zoom_span);
-                                        draw_prop_row(ui, &format!("  [{}] Lightness", effect.name), &get_kfs(lightness), current_frame, start_frame, zoom_span);
+                                        draw_prop_row(ui, &format!("  [{}] Hue Shift", effect.name), &get_kfs(hue_shift), current_frame, start_frame, zoom_span, left_pane_w);
+                                        draw_prop_row(ui, &format!("  [{}] Saturation", effect.name), &get_kfs(saturation), current_frame, start_frame, zoom_span, left_pane_w);
+                                        draw_prop_row(ui, &format!("  [{}] Lightness", effect.name), &get_kfs(lightness), current_frame, start_frame, zoom_span, left_pane_w);
                                     }
                                     crate::core::timeline::EffectType::Glow { threshold, radius, intensity, color } => {
-                                        draw_prop_row(ui, &format!("  [{}] Threshold", effect.name), &get_kfs(threshold), current_frame, start_frame, zoom_span);
-                                        draw_prop_row(ui, &format!("  [{}] Radius", effect.name), &get_kfs(radius), current_frame, start_frame, zoom_span);
-                                        draw_prop_row(ui, &format!("  [{}] Intensity", effect.name), &get_kfs(intensity), current_frame, start_frame, zoom_span);
-                                        draw_prop_row(ui, &format!("  [{}] Color", effect.name), &get_kfs(color), current_frame, start_frame, zoom_span);
+                                        draw_prop_row(ui, &format!("  [{}] Threshold", effect.name), &get_kfs(threshold), current_frame, start_frame, zoom_span, left_pane_w);
+                                        draw_prop_row(ui, &format!("  [{}] Radius", effect.name), &get_kfs(radius), current_frame, start_frame, zoom_span, left_pane_w);
+                                        draw_prop_row(ui, &format!("  [{}] Intensity", effect.name), &get_kfs(intensity), current_frame, start_frame, zoom_span, left_pane_w);
+                                        draw_prop_row(ui, &format!("  [{}] Color", effect.name), &get_kfs(color), current_frame, start_frame, zoom_span, left_pane_w);
                                     }
                                     crate::core::timeline::EffectType::MotionBlur { shutter_angle, .. } => {
-                                        draw_prop_row(ui, &format!("  [{}] Shutter Angle", effect.name), &get_kfs(shutter_angle), current_frame, start_frame, zoom_span);
+                                        draw_prop_row(ui, &format!("  [{}] Shutter Angle", effect.name), &get_kfs(shutter_angle), current_frame, start_frame, zoom_span, left_pane_w);
                                     }
                                     crate::core::timeline::EffectType::MeshWarp { top_left, top_right, bottom_left, bottom_right } => {
-                                        draw_prop_row(ui, &format!("  [{}] Top Left", effect.name), &get_kfs(top_left), current_frame, start_frame, zoom_span);
-                                        draw_prop_row(ui, &format!("  [{}] Top Right", effect.name), &get_kfs(top_right), current_frame, start_frame, zoom_span);
-                                        draw_prop_row(ui, &format!("  [{}] Bottom Left", effect.name), &get_kfs(bottom_left), current_frame, start_frame, zoom_span);
-                                        draw_prop_row(ui, &format!("  [{}] Bottom Right", effect.name), &get_kfs(bottom_right), current_frame, start_frame, zoom_span);
+                                        draw_prop_row(ui, &format!("  [{}] Top Left", effect.name), &get_kfs(top_left), current_frame, start_frame, zoom_span, left_pane_w);
+                                        draw_prop_row(ui, &format!("  [{}] Top Right", effect.name), &get_kfs(top_right), current_frame, start_frame, zoom_span, left_pane_w);
+                                        draw_prop_row(ui, &format!("  [{}] Bottom Left", effect.name), &get_kfs(bottom_left), current_frame, start_frame, zoom_span, left_pane_w);
+                                        draw_prop_row(ui, &format!("  [{}] Bottom Right", effect.name), &get_kfs(bottom_right), current_frame, start_frame, zoom_span, left_pane_w);
                                     }
                                     crate::core::timeline::EffectType::ColorGradeLUT { intensity, .. } => {
-                                        draw_prop_row(ui, &format!("  [{}] LUT Intensity", effect.name), &get_kfs(intensity), current_frame, start_frame, zoom_span);
+                                        draw_prop_row(ui, &format!("  [{}] LUT Intensity", effect.name), &get_kfs(intensity), current_frame, start_frame, zoom_span, left_pane_w);
                                     }
                                     crate::core::timeline::EffectType::FilmGrain { intensity, .. } => {
-                                        draw_prop_row(ui, &format!("  [{}] Grain Intensity", effect.name), &get_kfs(intensity), current_frame, start_frame, zoom_span);
+                                        draw_prop_row(ui, &format!("  [{}] Grain Intensity", effect.name), &get_kfs(intensity), current_frame, start_frame, zoom_span, left_pane_w);
                                     }
                                     _ => {}
                                 }
@@ -580,21 +571,15 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
             // ── AE Timeline Bottom Controls Bar (Toggle Switches / Modes F4) ──
             ui.add_space(2.0);
             ui.horizontal(|ui| {
-                let show_switches_id = ui.make_persistent_id("ae_tl_show_switches");
-                let mut show_switches: bool = ui.ctx().data_mut(|d| *d.get_temp_mut_or_insert_with(show_switches_id, || true));
-
-                if ui.selectable_label(show_switches, "[◧] Switches").on_hover_text("Expand / Collapse Layer Switches Pane").clicked() {
-                    show_switches = true;
-                    ui.ctx().data_mut(|d| d.insert_temp(show_switches_id, true));
+                if ui.selectable_label(app.show_switches_pane, "[◧] Switches").on_hover_text("Expand / Collapse Layer Switches Pane").clicked() {
+                    app.show_switches_pane = true;
                 }
-                if ui.selectable_label(!show_switches, "[⇆] Modes").on_hover_text("Expand / Collapse Transfer Controls Pane (Blend Modes & Track Mattes)").clicked() {
-                    show_switches = false;
-                    ui.ctx().data_mut(|d| d.insert_temp(show_switches_id, false));
+                if ui.selectable_label(!app.show_switches_pane, "[⇆] Modes").on_hover_text("Expand / Collapse Transfer Controls Pane (Blend Modes & Track Mattes)").clicked() {
+                    app.show_switches_pane = false;
                 }
                 if ui.button("Toggle Switches / Modes (F4)").on_hover_text("Toggle between Layer Switches and Transfer Modes (Shortcut: F4)").clicked() ||
                    ui.input(|i| i.key_pressed(egui::Key::F4)) {
-                    show_switches = !show_switches;
-                    ui.ctx().data_mut(|d| d.insert_temp(show_switches_id, show_switches));
+                    app.show_switches_pane = !app.show_switches_pane;
                 }
                 ui.separator();
                 ui.small(egui::RichText::new("AE Standard Timeline 1:1 Parity Mode").color(egui::Color32::from_gray(140)));

@@ -39,6 +39,7 @@ fn main() -> eframe::Result<()> {
                 app.wgpu_state = Some(wgpu_state.clone());
             }
 
+            crate::ui::theme::configure_ae_theme(&cc.egui_ctx);
             crate::ui::icons::init_image_loaders(&cc.egui_ctx);
 
             Box::new(app) as Box<dyn eframe::App>
@@ -119,6 +120,13 @@ pub struct AfterEffectsApp {
     pub work_area_in: Option<u32>,
     pub work_area_out: Option<u32>,
 
+    // ── Structured UI Component State (Replaces fragile ctx.data_mut string keys) ──
+    pub layer_filter_text: String,
+    pub bottom_dock_tab: usize,
+    pub show_switches_pane: bool,
+    pub global_shy_active: bool,
+    pub effects_search_query: String,
+
     // ── MVCC Frame Cache (#15) ─────────────────────────────────
     /// Versioned per-frame pixel cache. Stale entries auto-invalidate on project change.
     pub frame_cache: crate::core::frame_cache::FrameCache,
@@ -196,6 +204,11 @@ impl Default for AfterEffectsApp {
             viewport_mag_ratio: 1.0,
             work_area_in: None,
             work_area_out: None,
+            layer_filter_text: String::new(),
+            bottom_dock_tab: 0,
+            show_switches_pane: true,
+            global_shy_active: false,
+            effects_search_query: String::new(),
             // 256 frame entries max before GC kicks in
             frame_cache: crate::core::frame_cache::FrameCache::new(256),
             lazy_evaluator: crate::core::render_pipeline::LazyFrameEvaluator::new(),

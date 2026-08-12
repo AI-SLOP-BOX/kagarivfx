@@ -8,18 +8,23 @@ pub fn draw_prop_row(
     current_frame: &mut u32,
     start_frame: u32,
     zoom_span: u32,
+    left_pane_w: f32,
 ) {
     ui.horizontal(|ui| {
-        ui.allocate_ui(egui::vec2(500.0, 18.0), |ui| {
-            ui.label(egui::RichText::new(label).small().color(egui::Color32::from_gray(170)));
+        ui.allocate_ui(egui::vec2(left_pane_w, 18.0), |ui| {
+            ui.label(egui::RichText::new(label).small().color(crate::ui::theme::colors::TEXT_SECONDARY));
         });
 
         let avail_w = ui.available_width();
         let (rect, response) = ui.allocate_exact_size(egui::vec2(avail_w, 18.0), egui::Sense::click_and_drag());
         ui.painter().line_segment(
             [rect.left_top(), rect.right_top()],
-            egui::Stroke::new(0.5, egui::Color32::from_gray(40)),
+            egui::Stroke::new(0.5, crate::ui::theme::colors::BORDER_SUBTLE),
         );
+
+        if response.hovered() {
+            ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
+        }
 
         if response.clicked() {
             if let Some(pos) = response.interact_pointer_pos() {

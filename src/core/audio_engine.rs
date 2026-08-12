@@ -16,6 +16,7 @@ pub struct AudioBuffer {
 }
 
 impl AudioBuffer {
+    #[allow(dead_code)]
     pub fn new_sine_preview(duration_sec: f32, sample_rate: u32, freq: f32) -> Self {
         let num_samples = (duration_sec * sample_rate as f32) as usize;
         let mut samples = Vec::with_capacity(num_samples * 2);
