@@ -259,11 +259,70 @@ impl eframe::App for AfterEffectsApp {
 
                 // B → Set Work Area Start, N → Set Work Area End
                 let cmd = i.modifiers.command;
+                let shift = i.modifiers.shift;
                 if i.key_pressed(Key::B) && !cmd {
                     self.work_area_in = Some(current_frame);
                 }
                 if i.key_pressed(Key::N) && !cmd {
                     self.work_area_out = Some(current_frame);
+                }
+
+                // J → Jump to previous keyframe, K → Jump to next keyframe (when Cmd is NOT pressed)
+                if !cmd && !shift {
+                    if i.key_pressed(Key::J) {
+                        if let Some(idx) = self.selected_layer_idx {
+                            let comp = self.history.current().active_composition();
+                            if idx < comp.layers.len() {
+                                let layer = &comp.layers[idx];
+                                let mut all_frames: Vec<u32> = Vec::new();
+                                for kf in layer.transform.position.keyframes().unwrap_or(&[]) { all_frames.push(kf.frame); }
+                                for kf in layer.transform.scale.keyframes().unwrap_or(&[]) { all_frames.push(kf.frame); }
+                                for kf in layer.transform.rotation.keyframes().unwrap_or(&[]) { all_frames.push(kf.frame); }
+                                for kf in layer.transform.opacity.keyframes().unwrap_or(&[]) { all_frames.push(kf.frame); }
+                                all_frames.sort_unstable();
+                                if let Some(&prev_f) = all_frames.iter().rev().find(|&&f| f < current_frame) {
+                                    current_frame = prev_f;
+                                }
+                            }
+                        }
+                    }
+                    if i.key_pressed(Key::K) {
+                        if let Some(idx) = self.selected_layer_idx {
+                            let comp = self.history.current().active_composition();
+                            if idx < comp.layers.len() {
+                                let layer = &comp.layers[idx];
+                                let mut all_frames: Vec<u32> = Vec::new();
+                                for kf in layer.transform.position.keyframes().unwrap_or(&[]) { all_frames.push(kf.frame); }
+                                for kf in layer.transform.scale.keyframes().unwrap_or(&[]) { all_frames.push(kf.frame); }
+                                for kf in layer.transform.rotation.keyframes().unwrap_or(&[]) { all_frames.push(kf.frame); }
+                                for kf in layer.transform.opacity.keyframes().unwrap_or(&[]) { all_frames.push(kf.frame); }
+                                all_frames.sort_unstable();
+                                if let Some(&next_f) = all_frames.iter().find(|&&f| f > current_frame) {
+                                    current_frame = next_f;
+                                }
+                            }
+                        }
+                    }
+                    if i.key_pressed(Key::F9) {
+                        if let Some(idx) = self.selected_layer_idx {
+                            let mut temp_proj = self.history.current().clone();
+                            let comp = temp_proj.active_composition_mut();
+                            if idx < comp.layers.len() {
+                                let layer = &mut comp.layers[idx];
+                                let ez = crate::core::keyframe::InterpolationType::Bezier {
+                                    outgoing: crate::core::keyframe::BezierControlPoint { influence: 0.333, speed: 0.0 },
+                                    incoming: crate::core::keyframe::BezierControlPoint { influence: 0.333, speed: 0.0 },
+                                    custom_bezier: Some([0.333, 0.0, 0.333, 1.0]),
+                                };
+                                if let crate::core::property::Animatable::Animated(ref mut kfs) = layer.transform.position { for kf in kfs { kf.interpolation = ez.clone(); } }
+                                if let crate::core::property::Animatable::Animated(ref mut kfs) = layer.transform.scale { for kf in kfs { kf.interpolation = ez.clone(); } }
+                                if let crate::core::property::Animatable::Animated(ref mut kfs) = layer.transform.rotation { for kf in kfs { kf.interpolation = ez.clone(); } }
+                                if let crate::core::property::Animatable::Animated(ref mut kfs) = layer.transform.opacity { for kf in kfs { kf.interpolation = ez.clone(); } }
+                                self.history.commit(temp_proj);
+                                crate::core::frame_cache::bump_version();
+                            }
+                        }
+                    }
                 }
 
                 // Home → first frame, End → last frame
@@ -279,8 +338,6 @@ impl eframe::App for AfterEffectsApp {
                 }
 
                 // Cmd+Z → Undo, Cmd+Shift+Z → Redo
-                let cmd = i.modifiers.command;
-                let shift = i.modifiers.shift;
                 if cmd && !shift && i.key_pressed(Key::Z) {
                     self.history.undo();
                 }

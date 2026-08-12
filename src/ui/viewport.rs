@@ -43,12 +43,14 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: u32) 
             // AE Magnification Ratio Dropdown
             let mag_val = app.viewport_mag_ratio;
             egui::ComboBox::from_id_source("mag_combo")
-                .selected_text(if mag_val == 1.0 { "100%" } else if mag_val == 0.5 { "50%" } else if mag_val == 0.25 { "25%" } else { "Fit" })
+                .selected_text(if mag_val == 4.0 { "400%" } else if mag_val == 2.0 { "200%" } else if mag_val == 1.0 { "100%" } else if mag_val == 0.5 { "50%" } else if mag_val == 0.25 { "25%" } else { "Fit" })
                 .show_ui(ui, |ui| {
                     if ui.selectable_label(app.viewport_mag_ratio == 0.0, "Fit").clicked() { app.viewport_mag_ratio = 0.0; }
-                    if ui.selectable_label(app.viewport_mag_ratio == 1.0, "100%").clicked() { app.viewport_mag_ratio = 1.0; }
-                    if ui.selectable_label(app.viewport_mag_ratio == 0.5, "50%").clicked() { app.viewport_mag_ratio = 0.5; }
                     if ui.selectable_label(app.viewport_mag_ratio == 0.25, "25%").clicked() { app.viewport_mag_ratio = 0.25; }
+                    if ui.selectable_label(app.viewport_mag_ratio == 0.5, "50%").clicked() { app.viewport_mag_ratio = 0.5; }
+                    if ui.selectable_label(app.viewport_mag_ratio == 1.0, "100%").clicked() { app.viewport_mag_ratio = 1.0; }
+                    if ui.selectable_label(app.viewport_mag_ratio == 2.0, "200%").clicked() { app.viewport_mag_ratio = 2.0; }
+                    if ui.selectable_label(app.viewport_mag_ratio == 4.0, "400%").clicked() { app.viewport_mag_ratio = 4.0; }
                 });
 
             // AE Camera View Selector
