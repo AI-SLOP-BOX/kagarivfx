@@ -755,15 +755,47 @@ impl Composition {
         (pos, scale, rot, opa)
     }
 
-    /// Calculate and cache all layer world transforms in O(N) linear topological order.
+    /// Set parent layer safely, returning false if a cycle would be introduced.
+    pub fn set_layer_parent(&mut self, layer_id: &str, parent_id: Option<String>) -> bool {
+        if let Some(ref pid) = parent_id {
+            if pid == layer_id {
+                return false;
+            }
+            let mut curr = pid.clone();
+            let mut visited = std::collections::HashSet::new();
+            visited.insert(layer_id.to_string());
+            while let Some(parent_layer) = self.layers.iter().find(|l| &l.id == &curr) {
+                if visited.contains(&parent_layer.id) {
+                    return false; // Cycle detected!
+                }
+                visited.insert(parent_layer.id.clone());
+                if let Some(ref next_pid) = parent_layer.parent_id {
+                    curr = next_pid.clone();
+                } else {
+                    break;
+                }
+            }
+        }
+
+        if let Some(layer) = self.layers.iter_mut().find(|l| l.id == layer_id) {
+            layer.parent_id = parent_id;
+            true
+        } else {
+            false
+        }
+    }
+
+    /// Calculate and cache all layer world transforms in O(N) linear topological order with cycle protection.
     pub fn resolve_all_world_transforms_cached(
         &self,
         frame: u32,
     ) -> std::collections::HashMap<String, ([f32; 2], [f32; 2], f32, f32)> {
         let mut cache = std::collections::HashMap::with_capacity(self.layers.len());
+        let mut visited = std::collections::HashSet::new();
         for layer in &self.layers {
             if !cache.contains_key(&layer.id) {
-                self.resolve_layer_transform_recursive(layer, frame, &mut cache);
+                visited.clear();
+                self.resolve_layer_transform_recursive(layer, frame, &mut cache, &mut visited);
             }
         }
         cache
@@ -774,6 +806,7 @@ impl Composition {
         layer: &Layer,
         frame: u32,
         cache: &mut std::collections::HashMap<String, ([f32; 2], [f32; 2], f32, f32)>,
+        visited: &mut std::collections::HashSet<String>,
     ) -> ([f32; 2], [f32; 2], f32, f32) {
         if let Some(cached) = cache.get(&layer.id) {
             return *cached;
@@ -785,9 +818,14 @@ impl Composition {
         let rot = layer.transform.eval_rotation(frame, fps);
         let opa = layer.transform.eval_opacity(frame, fps);
 
+        if !visited.insert(layer.id.clone()) {
+            // Cycle circuit breaker!
+            return (pos, scale, rot, opa);
+        }
+
         let res = if let Some(pid) = &layer.parent_id {
             if let Some(parent) = self.layers.iter().find(|l| &l.id == pid) {
-                let (ppos, pscale, prot, popa) = self.resolve_layer_transform_recursive(parent, frame, cache);
+                let (ppos, pscale, prot, popa) = self.resolve_layer_transform_recursive(parent, frame, cache, visited);
                 let rot_rad = prot.to_radians();
                 let (s, c) = (rot_rad.sin(), rot_rad.cos());
                 let world_x = pos[0] * pscale[0] / 100.0 * c - pos[1] * pscale[1] / 100.0 * s + ppos[0];
@@ -805,6 +843,7 @@ impl Composition {
             (pos, scale, rot, opa)
         };
 
+        visited.remove(&layer.id);
         cache.insert(layer.id.clone(), res);
         res
     }

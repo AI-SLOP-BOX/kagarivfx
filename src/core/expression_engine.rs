@@ -165,9 +165,9 @@ pub fn eval_v2(
                     return [x, y];
                 }
             }
-            // Scalar return — apply to both axes
+            // Scalar return — AE standard applies scalar offset to X axis only
             if let Ok(f) = val.as_float() {
-                return [base[0] + f as f32, base[1] + f as f32];
+                return [base[0] + f as f32, base[1]];
             }
             base
         }
@@ -175,6 +175,45 @@ pub fn eval_v2(
             log::warn!("[ExprEngine] eval_v2 error: {}", e);
             base
         }
+    }
+}
+
+/// Evaluate expression with detailed diagnostic feedback for UI toast notifications.
+pub fn eval_v2_with_diagnostics(
+    engine: &Engine,
+    script: &str,
+    base: [f32; 2],
+    frame: u32,
+    fps: u32,
+) -> ([f32; 2], Option<String>) {
+    let time = frame as f64 / fps.max(1) as f64;
+    let mut scope = Scope::new();
+    scope.push("time", time);
+    scope.push("frame", frame as i64);
+    scope.push("fps", fps as i64);
+    scope.push("comp_width", 1920.0f64);
+    scope.push("comp_height", 1080.0f64);
+    let base_arr: Array = vec![
+        Dynamic::from_float(base[0] as f64),
+        Dynamic::from_float(base[1] as f64),
+    ];
+    scope.push("value", base_arr);
+
+    match engine.eval_with_scope::<Dynamic>(&mut scope, script) {
+        Ok(val) => {
+            if let Ok(arr) = val.clone().into_array() {
+                if arr.len() >= 2 {
+                    let x = arr[0].as_float().unwrap_or(base[0] as f64) as f32;
+                    let y = arr[1].as_float().unwrap_or(base[1] as f64) as f32;
+                    return ([x, y], None);
+                }
+            }
+            if let Ok(f) = val.as_float() {
+                return ([base[0] + f as f32, base[1]], None);
+            }
+            (base, Some("Expression returned non-numeric type".into()))
+        }
+        Err(e) => (base, Some(format!("Script syntax/eval error: {}", e))),
     }
 }
 

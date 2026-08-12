@@ -51,9 +51,10 @@ pub fn generate_content_aware_fill_frame(
         }
     }
 
-    // Step 2: Expand mask if alpha_expansion > 0
-    if alpha_expansion > 0.5 {
-        let radius = alpha_expansion as i32;
+    // Step 2: Smooth Euclidean Distance Transform Expansion (Subpixel Exact)
+    if alpha_expansion > 0.1 {
+        let r2 = alpha_expansion * alpha_expansion;
+        let radius = alpha_expansion.ceil() as i32;
         let mut expanded_masked = is_masked.clone();
         for y in 0..h {
             for x in 0..w {
@@ -61,10 +62,11 @@ pub fn generate_content_aware_fill_frame(
                 if is_masked[idx] {
                     for dy in -radius..=radius {
                         for dx in -radius..=radius {
-                            let nx = x + dx;
-                            let ny = y + dy;
-                            if nx >= 0 && nx < w && ny >= 0 && ny < h {
-                                if dx * dx + dy * dy <= radius * radius {
+                            let dist_sq = (dx * dx + dy * dy) as f32;
+                            if dist_sq <= r2 {
+                                let nx = x + dx;
+                                let ny = y + dy;
+                                if nx >= 0 && nx < w && ny >= 0 && ny < h {
                                     let nidx = (ny * w + nx) as usize;
                                     expanded_masked[nidx] = true;
                                 }

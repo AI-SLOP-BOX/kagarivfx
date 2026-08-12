@@ -77,29 +77,29 @@ pub fn solve_bezier_eased_time(x: f32, x1: f32, y1: f32, x2: f32, y2: f32) -> f3
     let sample_curve_x = |t: f32| ((a * t + b) * t + c) * t;
     let sample_curve_derivative_x = |t: f32| (3.0 * a * t + 2.0 * b) * t + c;
 
-    // Newton-Raphson iteration
+    // Newton-Raphson iteration (12 steps, 1e-7 epsilon tolerance for sub-pixel accuracy)
     let mut t_guess = x;
-    for _ in 0..8 {
+    for _ in 0..12 {
         let x_guess = sample_curve_x(t_guess) - x;
-        if x_guess.abs() < 1e-6 {
+        if x_guess.abs() < 1e-7 {
             break;
         }
         let d = sample_curve_derivative_x(t_guess);
-        if d.abs() < 1e-6 {
+        if d.abs() < 1e-7 {
             break;
         }
         // Clamp to [0, 1] to prevent divergence on extreme easing curves (influence ~100%)
         t_guess = (t_guess - x_guess / d).clamp(0.0, 1.0);
     }
 
-    // Fallback to binary search if Newton-Raphson did not converge
-    if (sample_curve_x(t_guess) - x).abs() > 1e-4 {
+    // Fallback to high-precision binary search (24 steps) if Newton-Raphson did not converge
+    if (sample_curve_x(t_guess) - x).abs() > 1e-6 {
         let mut t_lower = 0.0;
         let mut t_upper = 1.0;
         t_guess = x;
-        for _ in 0..16 {
+        for _ in 0..24 {
             let x_guess = sample_curve_x(t_guess);
-            if (x_guess - x).abs() < 1e-5 {
+            if (x_guess - x).abs() < 1e-6 {
                 break;
             }
             if x < x_guess {

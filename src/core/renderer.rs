@@ -132,7 +132,7 @@ struct LayerUniform {
     corner_bottom_left: [f32; 2],
     corner_bottom_right: [f32; 2],
 
-    _padding_align: [f32; 4], // Align to 256 bytes
+    _padding_align: [[f32; 4]; 11], // Align to 512 bytes (multiple of 256 for WGPU dynamic uniform offsets)
 }
 
 #[allow(dead_code)]
@@ -702,7 +702,7 @@ impl WgpuRenderer {
                     corner_top_right: ep.corner_top_right,
                     corner_bottom_left: ep.corner_bottom_left,
                     corner_bottom_right: ep.corner_bottom_right,
-                    _padding_align: [0.0; 4],
+                    _padding_align: [[0.0; 4]; 11],
                 };
 
                 uniforms.push(layer_uniform);
@@ -757,5 +757,21 @@ impl WgpuRenderer {
     pub fn render_snapshot_frame(&mut self, comp: &Composition, frame: u32, exposure_ev: f32, lut_mode: u32) -> (&wgpu::TextureView, bool) {
         let recreated = self.render_internal(comp, frame, exposure_ev, lut_mode, true);
         (self.snapshot_view.as_ref().unwrap(), recreated)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_layer_uniform_memory_alignment() {
+        let size = std::mem::size_of::<LayerUniform>();
+        assert_eq!(
+            size % 256,
+            0,
+            "LayerUniform size ({} bytes) must be a multiple of 256 for WGPU dynamic uniform offset alignment",
+            size
+        );
     }
 }

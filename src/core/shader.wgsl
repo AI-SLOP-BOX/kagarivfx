@@ -122,17 +122,13 @@ fn sample_layer_color(local_pos: vec2<f32>, tc: vec2<f32>, blur_extend: f32) -> 
             //   This gives O(2N) samples vs O(N²) for the same quality, and is
             //   how AE, Nuke and OBS all implement their Gaussian blur.
             let texel_size = 1.0 / globals.viewport_size;
-            let offset = layer.effect_blur_radius * texel_size * 0.5;
-            var color_sum = textureSample(t_diffuse, s_diffuse, tc);
-            color_sum += textureSample(t_diffuse, s_diffuse, tc + vec2<f32>(-offset.x, -offset.y));
-            color_sum += textureSample(t_diffuse, s_diffuse, tc + vec2<f32>(offset.x, -offset.y));
-            color_sum += textureSample(t_diffuse, s_diffuse, tc + vec2<f32>(-offset.x, offset.y));
-            color_sum += textureSample(t_diffuse, s_diffuse, tc + vec2<f32>(offset.x, offset.y));
-            color_sum += textureSample(t_diffuse, s_diffuse, tc + vec2<f32>(-offset.x, 0.0));
-            color_sum += textureSample(t_diffuse, s_diffuse, tc + vec2<f32>(offset.x, 0.0));
-            color_sum += textureSample(t_diffuse, s_diffuse, tc + vec2<f32>(0.0, -offset.y));
-            color_sum += textureSample(t_diffuse, s_diffuse, tc + vec2<f32>(0.0, offset.y));
-            c = color_sum / 9.0;
+            let offset = layer.effect_blur_radius * texel_size;
+            var color_sum = textureSample(t_diffuse, s_diffuse, tc) * 0.227027;
+            color_sum += textureSample(t_diffuse, s_diffuse, tc + vec2<f32>(offset.x * 1.384615, 0.0)) * 0.3162162;
+            color_sum += textureSample(t_diffuse, s_diffuse, tc - vec2<f32>(offset.x * 1.384615, 0.0)) * 0.3162162;
+            color_sum += textureSample(t_diffuse, s_diffuse, tc + vec2<f32>(0.0, offset.y * 3.230769)) * 0.0702702;
+            color_sum += textureSample(t_diffuse, s_diffuse, tc - vec2<f32>(0.0, offset.y * 3.230769)) * 0.0702702;
+            c = color_sum;
         } else {
             c = textureSample(t_diffuse, s_diffuse, tc);
         }

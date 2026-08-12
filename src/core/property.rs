@@ -22,7 +22,7 @@ impl<const N: usize> Interpolate for [f32; N] {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-#[serde(tag = "type")]
+#[serde(tag = "type", content = "value")]
 pub enum Animatable<T> {
     Constant(T),
     Animated(Vec<Keyframe<T>>),

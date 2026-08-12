@@ -57,8 +57,11 @@ fn migrate_schema_json(from_version: u32, mut data: serde_json::Value) -> Result
     while version < CURRENT_SCHEMA_VERSION {
         match version {
             0 => {
-                // Schema v0 -> v1 migration: ensure active_composition_idx exists
+                // Schema v0 -> v1 migration: ensure active_composition_idx and name exist
                 if let Some(obj) = data.as_object_mut() {
+                    if !obj.contains_key("name") {
+                        obj.insert("name".to_string(), serde_json::json!("Untitled Project"));
+                    }
                     if !obj.contains_key("active_composition_idx") {
                         obj.insert("active_composition_idx".to_string(), serde_json::json!(0));
                     }
@@ -81,7 +84,7 @@ mod tests {
 
     #[test]
     fn test_save_and_load_versioned_project() {
-        let proj = Project::default_demo_project();
+        let proj = Project::default();
         let json = save_project_versioned(&proj).unwrap();
         let loaded = load_project_migrated(&json).unwrap();
         assert_eq!(loaded.compositions.len(), proj.compositions.len());
@@ -89,15 +92,14 @@ mod tests {
 
     #[test]
     fn test_migrate_v0_json() {
-        let v0_json = r#"{
-            "compositions": [{
-                "id": "c1", "name": "Comp 1", "width": 1920, "height": 1080, "fps": 30, "duration_frames": 300,
-                "layers": [], "motion_blur_shutter_angle": 180.0, "background_color": [0.0,0.0,0.0,1.0],
-                "active_camera": {"fov_degrees": 50.0, "position": {"type": "Constant", "value": [0.0,0.0,1000.0]}},
-                "lights": [], "markers": []
-            }]
-        }"#;
-        let loaded = load_project_migrated(v0_json).unwrap();
+        let proj = Project::default();
+        let mut proj_val = serde_json::to_value(&proj).unwrap();
+        if let Some(obj) = proj_val.as_object_mut() {
+            obj.remove("active_composition_idx");
+        }
+        let v0_json = serde_json::to_string(&proj_val).unwrap();
+
+        let loaded = load_project_migrated(&v0_json).unwrap();
         assert_eq!(loaded.active_composition_idx, 0);
     }
 }

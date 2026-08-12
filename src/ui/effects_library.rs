@@ -454,23 +454,25 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                     let effects_count = layer.effects.len();
 
                     for (e_idx, effect) in layer.effects.iter_mut().enumerate() {
-                        ui.horizontal(|ui| {
-                            if ui.small_button("[X]").on_hover_text("Delete Effect").clicked() {
-                                effect_to_remove = Some(e_idx);
-                            }
-                            if e_idx > 0 && ui.small_button("▲").on_hover_text("Move Up").clicked() {
-                                effect_to_swap = Some((e_idx, e_idx - 1));
-                            }
-                            if e_idx + 1 < effects_count && ui.small_button("▼").on_hover_text("Move Down").clicked() {
-                                effect_to_swap = Some((e_idx, e_idx + 1));
-                            }
-                            let fx_label = if effect.enabled { "[fx]" } else { "[fx off]" };
-                            if ui.selectable_label(effect.enabled, fx_label).on_hover_text("Toggle Effect Bypass (ON/OFF)").clicked() {
-                                effect.enabled = !effect.enabled;
-                                project_changed = true;
-                            }
-                        });
-                        ui.collapsing(&effect.name, |ui| {
+                        let fx_persistent_id = ui.make_persistent_id(format!("ae_fx_item_{}_{}", effect.id, e_idx));
+                        ui.push_id(fx_persistent_id, |ui| {
+                            ui.horizontal(|ui| {
+                                if ui.small_button("[X]").on_hover_text("Delete Effect").clicked() {
+                                    effect_to_remove = Some(e_idx);
+                                }
+                                if e_idx > 0 && ui.small_button("▲").on_hover_text("Move Up").clicked() {
+                                    effect_to_swap = Some((e_idx, e_idx - 1));
+                                }
+                                if e_idx + 1 < effects_count && ui.small_button("▼").on_hover_text("Move Down").clicked() {
+                                    effect_to_swap = Some((e_idx, e_idx + 1));
+                                }
+                                let fx_label = if effect.enabled { "[fx]" } else { "[fx off]" };
+                                if ui.selectable_label(effect.enabled, fx_label).on_hover_text("Toggle Effect Bypass (ON/OFF)").clicked() {
+                                    effect.enabled = !effect.enabled;
+                                    project_changed = true;
+                                }
+                            });
+                            ui.collapsing(&effect.name, |ui| {
                             
                             match &mut effect.effect_type {
                                 EffectType::GaussianBlur { blur_radius } => {
@@ -778,7 +780,8 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                                 }
                             }
                         });
-                    }
+                    });
+                }
                     if let Some(r_idx) = effect_to_remove {
                         layer.effects.remove(r_idx);
                         project_changed = true;
