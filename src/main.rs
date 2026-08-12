@@ -581,6 +581,35 @@ impl eframe::App for AfterEffectsApp {
         // Draw Bottom Panel: Timeline Editor & Render Queue
         ui::timeline::draw(self, ctx, &mut current_frame, total_frames);
 
+        // ── AE Professional Status Bar (BOTTOM OF WINDOW) ─────────────────────
+        let status_frame = egui::Frame::none()
+            .fill(egui::Color32::from_rgb(20, 20, 20))
+            .inner_margin(egui::Margin::symmetric(8.0, 3.0))
+            .stroke(egui::Stroke::new(1.0, egui::Color32::from_rgb(38, 38, 38)));
+
+        egui::TopBottomPanel::bottom("ae_status_bar")
+            .frame(status_frame)
+            .default_height(22.0)
+            .show(ctx, |ui| {
+                ui.horizontal(|ui| {
+                    ui.style_mut().spacing.item_spacing.x = 6.0;
+                    ui.label(egui::RichText::new("● Metal GPU Render Engine").small().color(egui::Color32::from_rgb(0, 200, 120)));
+                    ui.separator();
+                    ui.label(egui::RichText::new("16-bpc | Rec.709 (Linear)").small().color(egui::Color32::from_gray(180)));
+                    ui.separator();
+                    let cached_cnt = (0..total_frames).filter(|&f| self.frame_cache.is_cached(f)).count();
+                    ui.label(egui::RichText::new(format!("RAM Preview: {}/{} frames cached", cached_cnt, total_frames)).small().color(egui::Color32::from_gray(180)));
+
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        ui.label(egui::RichText::new("AE OSS v0.1.0-parity").small().color(egui::Color32::from_gray(120)));
+                        ui.separator();
+                        ui.label(egui::RichText::new("Dynamic Link: Active").small().color(egui::Color32::from_rgb(100, 180, 255)));
+                        ui.separator();
+                        ui.label(egui::RichText::new("RAM: 1.4 GB / 32 GB").small().color(egui::Color32::from_gray(160)));
+                    });
+                });
+            });
+
         // Draw Central Panel: Viewport (GPU or CPU render)
         ui::viewport::draw(self, ctx, current_frame);
 

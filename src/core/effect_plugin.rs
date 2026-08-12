@@ -76,6 +76,13 @@ pub struct EffectParams {
     pub huesat_sat: f32,
     pub huesat_light: f32,
 
+    // Glow / Bloom
+    pub glow_enabled: u32,
+    pub glow_threshold: f32,
+    pub glow_radius: f32,
+    pub glow_intensity: f32,
+    pub glow_color: [f32; 4],
+
     // Mesh Warp / Corner Pin
     pub meshwarp_enabled: u32,
     pub corner_top_left: [f32; 2],
@@ -123,6 +130,11 @@ impl Default for EffectParams {
             huesat_hue: 0.0,
             huesat_sat: 1.0,
             huesat_light: 1.0,
+            glow_enabled: 0,
+            glow_threshold: 0.7,
+            glow_radius: 10.0,
+            glow_intensity: 0.0,
+            glow_color: [1.0, 1.0, 1.0, 1.0],
             meshwarp_enabled: 0,
             corner_top_left: [0.0, 0.0],
             corner_top_right: [100.0, 0.0],
