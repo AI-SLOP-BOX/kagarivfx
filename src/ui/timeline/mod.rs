@@ -824,11 +824,12 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                     });
 
                     if app.expanded_layers.contains(&i) {
-                        let draw_prop_row = |ui: &mut egui::Ui, label: &str, kf_data: &[(u32, crate::core::keyframe::InterpolationType)], current_frame: &mut u32| {
+                        let draw_prop_row = |ui: &mut egui::Ui, label: &str, kf_data: &[(u32, crate::core::keyframe::InterpolationType)], current_frame: &mut u32, start_frame: f32, zoom_span: f32| {
                             ui.horizontal(|ui| {
                                 ui.allocate_ui(egui::vec2(220.0, 16.0), |ui| {
                                     ui.horizontal(|ui| {
-                                        ui.add_space(20.0);
+                                        ui.add_space(10.0);
+                                        ui.small("⏱");
                                         ui.weak(label);
                                     });
                                 });
@@ -843,15 +844,19 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                                 ui.painter().rect_filled(prop_rect, 1.0, egui::Color32::from_gray(30));
 
                                 for &(frame, interpolation) in kf_data {
-                                    let x = prop_rect.left() + (frame as f32 / total_frames as f32) * prop_rect.width();
-                                    draw_keyframe_tick(ui, x, prop_rect.center().y, true, current_frame, frame, Some(interpolation));
+                                    let x = prop_rect.left() + ((frame as f32 - start_frame) / zoom_span) * prop_rect.width();
+                                    if x >= prop_rect.left() && x <= prop_rect.right() {
+                                        draw_keyframe_tick(ui, x, prop_rect.center().y, true, current_frame, frame, Some(interpolation));
+                                    }
                                 }
 
-                                let playhead_x = prop_rect.left() + (*current_frame as f32 / total_frames as f32) * prop_rect.width();
-                                ui.painter().line_segment(
-                                    [egui::pos2(playhead_x, prop_rect.top()), egui::pos2(playhead_x, prop_rect.bottom())],
-                                    egui::Stroke::new(1.0, egui::Color32::RED),
-                                );
+                                let playhead_x = prop_rect.left() + ((*current_frame as f32 - start_frame) / zoom_span) * prop_rect.width();
+                                if playhead_x >= prop_rect.left() && playhead_x <= prop_rect.right() {
+                                    ui.painter().line_segment(
+                                        [egui::pos2(playhead_x, prop_rect.top()), egui::pos2(playhead_x, prop_rect.bottom())],
+                                        egui::Stroke::new(1.0, egui::Color32::RED),
+                                    );
+                                }
                             });
                         };
 
@@ -862,22 +867,22 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                         let rot_kfs = get_kfs(&layer.transform.rotation);
                         let op_kfs = get_kfs(&layer.transform.opacity);
 
-                        draw_prop_row(ui, "  Position", &pos_kfs, current_frame);
-                        draw_prop_row(ui, "  Scale", &scale_kfs, current_frame);
-                        draw_prop_row(ui, "  Rotation", &rot_kfs, current_frame);
-                        draw_prop_row(ui, "  Opacity", &op_kfs, current_frame);
+                        draw_prop_row(ui, "  Position", &pos_kfs, current_frame, start_frame, zoom_span);
+                        draw_prop_row(ui, "  Scale", &scale_kfs, current_frame, start_frame, zoom_span);
+                        draw_prop_row(ui, "  Rotation", &rot_kfs, current_frame, start_frame, zoom_span);
+                        draw_prop_row(ui, "  Opacity", &op_kfs, current_frame, start_frame, zoom_span);
 
                         for effect in &layer.effects {
                             match &effect.effect_type {
                                 EffectType::GaussianBlur { blur_radius } => {
                                     let blur_kfs = get_kfs(blur_radius);
-                                    draw_prop_row(ui, &format!("  [{}] Radius", effect.name), &blur_kfs, current_frame);
+                                    draw_prop_row(ui, &format!("  [{}] Radius", effect.name), &blur_kfs, current_frame, start_frame, zoom_span);
                                 }
                                 EffectType::ColorTint { color, intensity } => {
                                     let color_kfs = get_kfs(color);
                                     let intensity_kfs = get_kfs(intensity);
-                                    draw_prop_row(ui, &format!("  [{}] Color", effect.name), &color_kfs, current_frame);
-                                    draw_prop_row(ui, &format!("  [{}] Intensity", effect.name), &intensity_kfs, current_frame);
+                                    draw_prop_row(ui, &format!("  [{}] Color", effect.name), &color_kfs, current_frame, start_frame, zoom_span);
+                                    draw_prop_row(ui, &format!("  [{}] Intensity", effect.name), &intensity_kfs, current_frame, start_frame, zoom_span);
                                 }
                                 EffectType::DropShadow { color, opacity, direction, distance, softness } => {
                                     let color_kfs = get_kfs(color);
@@ -885,58 +890,58 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                                     let direction_kfs = get_kfs(direction);
                                     let distance_kfs = get_kfs(distance);
                                     let softness_kfs = get_kfs(softness);
-                                    draw_prop_row(ui, &format!("  [{}] Shadow Color", effect.name), &color_kfs, current_frame);
-                                    draw_prop_row(ui, &format!("  [{}] Opacity", effect.name), &opacity_kfs, current_frame);
-                                    draw_prop_row(ui, &format!("  [{}] Direction", effect.name), &direction_kfs, current_frame);
-                                    draw_prop_row(ui, &format!("  [{}] Distance", effect.name), &distance_kfs, current_frame);
-                                    draw_prop_row(ui, &format!("  [{}] Softness", effect.name), &softness_kfs, current_frame);
+                                    draw_prop_row(ui, &format!("  [{}] Shadow Color", effect.name), &color_kfs, current_frame, start_frame, zoom_span);
+                                    draw_prop_row(ui, &format!("  [{}] Opacity", effect.name), &opacity_kfs, current_frame, start_frame, zoom_span);
+                                    draw_prop_row(ui, &format!("  [{}] Direction", effect.name), &direction_kfs, current_frame, start_frame, zoom_span);
+                                    draw_prop_row(ui, &format!("  [{}] Distance", effect.name), &distance_kfs, current_frame, start_frame, zoom_span);
+                                    draw_prop_row(ui, &format!("  [{}] Softness", effect.name), &softness_kfs, current_frame, start_frame, zoom_span);
                                 }
                                 EffectType::ChromaticAberration { shift_r, shift_b, edge_falloff } => {
-                                    draw_prop_row(ui, &format!("  [{}] Red Shift", effect.name), &get_kfs(shift_r), current_frame);
-                                    draw_prop_row(ui, &format!("  [{}] Blue Shift", effect.name), &get_kfs(shift_b), current_frame);
-                                    draw_prop_row(ui, &format!("  [{}] Edge Falloff", effect.name), &get_kfs(edge_falloff), current_frame);
+                                    draw_prop_row(ui, &format!("  [{}] Red Shift", effect.name), &get_kfs(shift_r), current_frame, start_frame, zoom_span);
+                                    draw_prop_row(ui, &format!("  [{}] Blue Shift", effect.name), &get_kfs(shift_b), current_frame, start_frame, zoom_span);
+                                    draw_prop_row(ui, &format!("  [{}] Edge Falloff", effect.name), &get_kfs(edge_falloff), current_frame, start_frame, zoom_span);
                                 }
                                 EffectType::Vignette { intensity, roundness, feather, color } => {
-                                    draw_prop_row(ui, &format!("  [{}] Intensity", effect.name), &get_kfs(intensity), current_frame);
-                                    draw_prop_row(ui, &format!("  [{}] Roundness", effect.name), &get_kfs(roundness), current_frame);
-                                    draw_prop_row(ui, &format!("  [{}] Feather", effect.name), &get_kfs(feather), current_frame);
-                                    draw_prop_row(ui, &format!("  [{}] Color", effect.name), &get_kfs(color), current_frame);
+                                    draw_prop_row(ui, &format!("  [{}] Intensity", effect.name), &get_kfs(intensity), current_frame, start_frame, zoom_span);
+                                    draw_prop_row(ui, &format!("  [{}] Roundness", effect.name), &get_kfs(roundness), current_frame, start_frame, zoom_span);
+                                    draw_prop_row(ui, &format!("  [{}] Feather", effect.name), &get_kfs(feather), current_frame, start_frame, zoom_span);
+                                    draw_prop_row(ui, &format!("  [{}] Color", effect.name), &get_kfs(color), current_frame, start_frame, zoom_span);
                                 }
                                 EffectType::Levels { input_black, input_white, gamma, output_black, output_white } => {
-                                    draw_prop_row(ui, &format!("  [{}] Input Black", effect.name), &get_kfs(input_black), current_frame);
-                                    draw_prop_row(ui, &format!("  [{}] Input White", effect.name), &get_kfs(input_white), current_frame);
-                                    draw_prop_row(ui, &format!("  [{}] Gamma", effect.name), &get_kfs(gamma), current_frame);
-                                    draw_prop_row(ui, &format!("  [{}] Output Black", effect.name), &get_kfs(output_black), current_frame);
-                                    draw_prop_row(ui, &format!("  [{}] Output White", effect.name), &get_kfs(output_white), current_frame);
+                                    draw_prop_row(ui, &format!("  [{}] Input Black", effect.name), &get_kfs(input_black), current_frame, start_frame, zoom_span);
+                                    draw_prop_row(ui, &format!("  [{}] Input White", effect.name), &get_kfs(input_white), current_frame, start_frame, zoom_span);
+                                    draw_prop_row(ui, &format!("  [{}] Gamma", effect.name), &get_kfs(gamma), current_frame, start_frame, zoom_span);
+                                    draw_prop_row(ui, &format!("  [{}] Output Black", effect.name), &get_kfs(output_black), current_frame, start_frame, zoom_span);
+                                    draw_prop_row(ui, &format!("  [{}] Output White", effect.name), &get_kfs(output_white), current_frame, start_frame, zoom_span);
                                 }
                                 EffectType::HueSaturation { hue_shift, saturation, lightness } => {
-                                    draw_prop_row(ui, &format!("  [{}] Hue Shift", effect.name), &get_kfs(hue_shift), current_frame);
-                                    draw_prop_row(ui, &format!("  [{}] Saturation", effect.name), &get_kfs(saturation), current_frame);
-                                    draw_prop_row(ui, &format!("  [{}] Lightness", effect.name), &get_kfs(lightness), current_frame);
+                                    draw_prop_row(ui, &format!("  [{}] Hue Shift", effect.name), &get_kfs(hue_shift), current_frame, start_frame, zoom_span);
+                                    draw_prop_row(ui, &format!("  [{}] Saturation", effect.name), &get_kfs(saturation), current_frame, start_frame, zoom_span);
+                                    draw_prop_row(ui, &format!("  [{}] Lightness", effect.name), &get_kfs(lightness), current_frame, start_frame, zoom_span);
                                 }
                                 EffectType::Glow { threshold, radius, intensity, color } => {
-                                    draw_prop_row(ui, &format!("  [{}] Threshold", effect.name), &get_kfs(threshold), current_frame);
-                                    draw_prop_row(ui, &format!("  [{}] Radius", effect.name), &get_kfs(radius), current_frame);
-                                    draw_prop_row(ui, &format!("  [{}] Intensity", effect.name), &get_kfs(intensity), current_frame);
-                                    draw_prop_row(ui, &format!("  [{}] Color", effect.name), &get_kfs(color), current_frame);
+                                    draw_prop_row(ui, &format!("  [{}] Threshold", effect.name), &get_kfs(threshold), current_frame, start_frame, zoom_span);
+                                    draw_prop_row(ui, &format!("  [{}] Radius", effect.name), &get_kfs(radius), current_frame, start_frame, zoom_span);
+                                    draw_prop_row(ui, &format!("  [{}] Intensity", effect.name), &get_kfs(intensity), current_frame, start_frame, zoom_span);
+                                    draw_prop_row(ui, &format!("  [{}] Color", effect.name), &get_kfs(color), current_frame, start_frame, zoom_span);
                                 }
                                 EffectType::MotionBlur { shutter_angle, .. } => {
-                                    draw_prop_row(ui, &format!("  [{}] Shutter Angle", effect.name), &get_kfs(shutter_angle), current_frame);
+                                    draw_prop_row(ui, &format!("  [{}] Shutter Angle", effect.name), &get_kfs(shutter_angle), current_frame, start_frame, zoom_span);
                                 }
                                 EffectType::MeshWarp { top_left, top_right, bottom_left, bottom_right } => {
-                                    draw_prop_row(ui, &format!("  [{}] Top Left", effect.name), &get_kfs(top_left), current_frame);
-                                    draw_prop_row(ui, &format!("  [{}] Top Right", effect.name), &get_kfs(top_right), current_frame);
-                                    draw_prop_row(ui, &format!("  [{}] Bottom Left", effect.name), &get_kfs(bottom_left), current_frame);
-                                    draw_prop_row(ui, &format!("  [{}] Bottom Right", effect.name), &get_kfs(bottom_right), current_frame);
+                                    draw_prop_row(ui, &format!("  [{}] Top Left", effect.name), &get_kfs(top_left), current_frame, start_frame, zoom_span);
+                                    draw_prop_row(ui, &format!("  [{}] Top Right", effect.name), &get_kfs(top_right), current_frame, start_frame, zoom_span);
+                                    draw_prop_row(ui, &format!("  [{}] Bottom Left", effect.name), &get_kfs(bottom_left), current_frame, start_frame, zoom_span);
+                                    draw_prop_row(ui, &format!("  [{}] Bottom Right", effect.name), &get_kfs(bottom_right), current_frame, start_frame, zoom_span);
                                 }
                                 EffectType::ColorGradeLUT { intensity, .. } => {
-                                    draw_prop_row(ui, &format!("  [{}] LUT Intensity", effect.name), &get_kfs(intensity), current_frame);
+                                    draw_prop_row(ui, &format!("  [{}] LUT Intensity", effect.name), &get_kfs(intensity), current_frame, start_frame, zoom_span);
                                 }
                                 EffectType::ColorSpaceConvert { .. } => {
                                     // No animated properties for simple color space converter
                                 }
                                 EffectType::FilmGrain { intensity, .. } => {
-                                    draw_prop_row(ui, &format!("  [{}] Grain Intensity", effect.name), &get_kfs(intensity), current_frame);
+                                    draw_prop_row(ui, &format!("  [{}] Grain Intensity", effect.name), &get_kfs(intensity), current_frame, start_frame, zoom_span);
                                 }
                             }
                         }
