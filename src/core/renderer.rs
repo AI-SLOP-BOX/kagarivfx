@@ -110,7 +110,14 @@ struct LayerUniform {
     huesat_sat: f32,
     huesat_light: f32,
 
-    _padding_align: [f32; 1], // Align to 256 bytes (44 - 40 = 4 bytes remaining)
+    // Mesh Warp / Corner Pin
+    meshwarp_enabled: u32,
+    corner_top_left: [f32; 2],
+    corner_top_right: [f32; 2],
+    corner_bottom_left: [f32; 2],
+    corner_bottom_right: [f32; 2],
+
+    _padding_align: [f32; 4], // Align to 256 bytes
 }
 
 #[allow(dead_code)]
@@ -427,8 +434,22 @@ impl WgpuRenderer {
 
         let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
 
+        let snap_texture = self.device.create_texture(&wgpu::TextureDescriptor {
+            label: Some("Renderer Snapshot Target"),
+            size,
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: wgpu::TextureFormat::Rgba8UnormSrgb,
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
+            view_formats: &[],
+        });
+        let snap_view = snap_texture.create_view(&wgpu::TextureViewDescriptor::default());
+
         self.target_texture = Some(texture);
         self.target_view = Some(view);
+        self.snapshot_texture = Some(snap_texture);
+        self.snapshot_view = Some(snap_view);
         self.target_size = (width, height);
         true
     }
@@ -634,7 +655,12 @@ impl WgpuRenderer {
                     huesat_hue: ep.huesat_hue,
                     huesat_sat: ep.huesat_sat,
                     huesat_light: ep.huesat_light,
-                    _padding_align: [0.0; 1],
+                    meshwarp_enabled: ep.meshwarp_enabled,
+                    corner_top_left: ep.corner_top_left,
+                    corner_top_right: ep.corner_top_right,
+                    corner_bottom_left: ep.corner_bottom_left,
+                    corner_bottom_right: ep.corner_bottom_right,
+                    _padding_align: [0.0; 4],
                 };
 
 
@@ -673,5 +699,233 @@ impl WgpuRenderer {
         self.queue.submit(std::iter::once(encoder.finish()));
 
         (self.target_view.as_ref().unwrap(), recreated)
+    }
+
+    /// Renders the given composition at the specified frame to the snapshot target, returning the snapshot texture view.
+    pub fn render_snapshot_frame(&mut self, comp: &Composition, frame: u32, exposure_ev: f32, lut_mode: u32) -> (&wgpu::TextureView, bool) {
+        let (width, height) = (comp.width, comp.height);
+        let recreated = self.ensure_target_size(width, height);
+
+        // Update Globals Uniform
+        let globals = GlobalsUniform {
+            viewport_size: [width as f32, height as f32],
+            exposure_ev,
+            lut_mode,
+        };
+        self.queue
+            .write_buffer(&self.globals_buffer, 0, bytemuck::bytes_of(&globals));
+
+        // Create Command Encoder
+        let mut encoder = self
+            .device
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                label: Some("Snapshot Render Encoder"),
+            });
+
+        {
+            let target_view = self.snapshot_view.as_ref().unwrap();
+            let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some("Snapshot Render Pass"),
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                    view: target_view,
+                    resolve_target: None,
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(wgpu::Color {
+                            r: 0.05,
+                            g: 0.05,
+                            b: 0.08,
+                            a: 1.0,
+                        }),
+                        store: wgpu::StoreOp::Store,
+                    },
+                })],
+                depth_stencil_attachment: None,
+                timestamp_writes: None,
+                occlusion_query_set: None,
+            });
+
+            render_pass.set_pipeline(&self.render_pipeline);
+            render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
+            render_pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
+            render_pass.set_bind_group(0, &self.globals_bind_group, &[]);
+
+            let m_proj = [
+                [2.0 / width as f32, 0.0, 0.0, 0.0],
+                [0.0, -2.0 / height as f32, 0.0, 0.0],
+                [0.0, 0.0, 1.0, 0.0],
+                [-1.0, 1.0, 0.0, 1.0],
+            ];
+
+            let mut active_layers = Vec::new();
+            let mut uniforms = Vec::new();
+
+            for layer in &comp.layers {
+                if !layer.is_active(frame) {
+                    continue;
+                }
+
+                let pos = layer.transform.position.evaluate(frame);
+                let scale = layer.transform.scale.evaluate(frame);
+                let rotation = layer.transform.rotation.evaluate(frame);
+                let opacity = layer.transform.opacity.evaluate(frame);
+
+                let (layer_w, layer_h) = match &layer.layer_type {
+                    LayerType::Solid { .. } => (1.0, 1.0),
+                    LayerType::Image { .. } => (1.0, 1.0),
+                    LayerType::Text { font_size, .. } => (1.0, *font_size as f32 * 10.0),
+                    LayerType::Shape { .. } => (1.0, 1.0),
+                    LayerType::Null => (0.0, 0.0),
+                    LayerType::PreComp { .. } => (comp.width as f32, comp.height as f32),
+                    LayerType::Audio { .. } => (0.0, 0.0),
+                };
+
+                let anc = layer.transform.anchor_point.evaluate(frame);
+
+                let m_size = [
+                    [layer_w, 0.0, 0.0, 0.0],
+                    [0.0, layer_h, 0.0, 0.0],
+                    [0.0, 0.0, 1.0, 0.0],
+                    [layer_w * 0.5, layer_h * 0.5, 0.0, 1.0],
+                ];
+
+                let m_anc = [
+                    [1.0, 0.0, 0.0, 0.0],
+                    [0.0, 1.0, 0.0, 0.0],
+                    [0.0, 0.0, 1.0, 0.0],
+                    [-anc[0], -anc[1], 0.0, 1.0],
+                ];
+
+                let m_scale = [
+                    [scale[0] / 100.0, 0.0, 0.0, 0.0],
+                    [0.0, scale[1] / 100.0, 0.0, 0.0],
+                    [0.0, 0.0, 1.0, 0.0],
+                    [0.0, 0.0, 0.0, 1.0],
+                ];
+
+                let rad = rotation.to_radians();
+                let cos_r = rad.cos();
+                let sin_r = rad.sin();
+                let m_rot = [
+                    [cos_r, sin_r, 0.0, 0.0],
+                    [-sin_r, cos_r, 0.0, 0.0],
+                    [0.0, 0.0, 1.0, 0.0],
+                    [0.0, 0.0, 0.0, 1.0],
+                ];
+
+                let m_pos = [
+                    [1.0, 0.0, 0.0, 0.0],
+                    [0.0, 1.0, 0.0, 0.0],
+                    [0.0, 0.0, 1.0, 0.0],
+                    [pos[0], pos[1], 0.0, 1.0],
+                ];
+
+                let m_model = mat4_mul(
+                    m_pos,
+                    mat4_mul(m_rot, mat4_mul(m_scale, mat4_mul(m_anc, m_size))),
+                );
+
+                let transform_matrix = mat4_mul(m_proj, m_model);
+
+                let (layer_type, shape_type, color) = match &layer.layer_type {
+                    LayerType::Solid { color } => (0u32, 0u32, *color),
+                    LayerType::Image { .. } => (1u32, 0u32, [1.0, 1.0, 1.0, 1.0]),
+                    LayerType::Shape { shape_type, color } => {
+                        let st = match shape_type {
+                            ShapeType::Rectangle => 0u32,
+                            ShapeType::Ellipse => 1u32,
+                            ShapeType::Star => 2u32,
+                            ShapeType::Polygon => 3u32,
+                        };
+                        (2u32, st, *color)
+                    }
+                    LayerType::Text { color, .. } => (3u32, 0u32, *color),
+                    LayerType::Null => (4u32, 0u32, [0.0, 0.0, 0.0, 0.0]),
+                    LayerType::PreComp { .. } => (5u32, 0u32, [1.0, 1.0, 1.0, 1.0]),
+                    LayerType::Audio { .. } => (6u32, 0u32, [0.0, 0.0, 0.0, 0.0]),
+                };
+
+                let ep = evaluate_effects(&layer.effects, frame);
+
+                let layer_uniform = LayerUniform {
+                    transform_matrix,
+                    color,
+                    opacity,
+                    layer_type,
+                    shape_type,
+                    effect_tint_enabled: ep.tint_enabled,
+                    effect_tint_color: ep.tint_color,
+                    effect_tint_intensity: ep.tint_intensity,
+                    effect_blur_enabled: ep.blur_enabled,
+                    effect_blur_radius: ep.blur_radius,
+                    effect_shadow_enabled: ep.shadow_enabled,
+                    effect_shadow_color: ep.shadow_color,
+                    effect_shadow_opacity: ep.shadow_opacity,
+                    effect_shadow_direction: ep.shadow_direction,
+                    effect_shadow_distance: ep.shadow_distance,
+                    effect_shadow_softness: ep.shadow_softness,
+                    effect_ca_enabled: ep.chromatic_enabled,
+                    effect_ca_shift_r: ep.chromatic_shift_r,
+                    effect_ca_shift_b: ep.chromatic_shift_b,
+                    effect_ca_edge_falloff: ep.chromatic_edge_falloff,
+                    effect_vignette_enabled: ep.vignette_enabled,
+                    effect_vignette_intensity: ep.vignette_intensity,
+                    effect_vignette_roundness: ep.vignette_roundness,
+                    effect_vignette_feather: ep.vignette_feather,
+                    effect_vignette_color: ep.vignette_color,
+                    blend_mode: match layer.blend_mode {
+                        crate::core::timeline::BlendMode::Normal => 0,
+                        crate::core::timeline::BlendMode::Multiply => 1,
+                        crate::core::timeline::BlendMode::Screen => 2,
+                        crate::core::timeline::BlendMode::Overlay => 3,
+                        crate::core::timeline::BlendMode::Add => 4,
+                        crate::core::timeline::BlendMode::Darken => 5,
+                        crate::core::timeline::BlendMode::Lighten => 6,
+                    },
+                    levels_enabled: ep.levels_enabled,
+                    levels_in_black: ep.levels_in_black,
+                    levels_in_white: ep.levels_in_white,
+                    levels_gamma: ep.levels_gamma,
+                    levels_out_black: ep.levels_out_black,
+                    levels_out_white: ep.levels_out_white,
+                    huesat_enabled: ep.huesat_enabled,
+                    huesat_hue: ep.huesat_hue,
+                    huesat_sat: ep.huesat_sat,
+                    huesat_light: ep.huesat_light,
+                    meshwarp_enabled: ep.meshwarp_enabled,
+                    corner_top_left: ep.corner_top_left,
+                    corner_top_right: ep.corner_top_right,
+                    corner_bottom_left: ep.corner_bottom_left,
+                    corner_bottom_right: ep.corner_bottom_right,
+                    _padding_align: [0.0; 4],
+                };
+
+                uniforms.push(layer_uniform);
+                active_layers.push(layer);
+            }
+
+            if !uniforms.is_empty() {
+                let upload_len = uniforms.len().min(256);
+                self.queue.write_buffer(
+                    &self.layer_buffer,
+                    0,
+                    bytemuck::cast_slice(&uniforms[0..upload_len]),
+                );
+            }
+
+            for (i, _layer) in active_layers.iter().enumerate() {
+                if i >= 256 {
+                    break;
+                }
+
+                let dynamic_offset = (i * std::mem::size_of::<LayerUniform>()) as u32;
+                render_pass.set_bind_group(1, &self.layer_bind_group, &[dynamic_offset]);
+                render_pass.set_bind_group(2, &self.dummy_texture_bind_group, &[]);
+                render_pass.draw_indexed(0..(INDICES.len() as u32), 0, 0..1);
+            }
+        }
+
+        self.queue.submit(std::iter::once(encoder.finish()));
+
+        (self.snapshot_view.as_ref().unwrap(), recreated)
     }
 }

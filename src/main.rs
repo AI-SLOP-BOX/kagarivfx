@@ -65,6 +65,7 @@ pub struct AfterEffectsApp {
 
     // Cache for registered GPU texture in egui
     pub viewport_texture_id: Option<egui::TextureId>,
+    pub viewport_snapshot_texture_id: Option<egui::TextureId>,
 
     // Dynamic Link channels & states
     pub rx_frame: Option<std::sync::mpsc::Receiver<u32>>,
@@ -95,6 +96,8 @@ pub struct AfterEffectsApp {
 
     /// Viewport drag state: (layer_idx, start_pos, start_pointer_pos)
     pub viewport_drag_state: Option<(usize, [f32; 2], egui::Pos2)>,
+    /// Viewport vector mask vertex drag state: (layer_idx, mask_idx, vertex_idx, start_vertex_pos, start_pointer_pos)
+    pub viewport_mask_drag_state: Option<(usize, usize, usize, [f32; 2], egui::Pos2)>,
     /// Which property is selected in inspector (for graph editor)
     pub selected_property: Option<String>,
 
@@ -155,6 +158,7 @@ impl Default for AfterEffectsApp {
             #[cfg(feature = "wgpu")]
             wgpu_state: None,
             viewport_texture_id: None,
+            viewport_snapshot_texture_id: None,
             rx_frame: None,
             rx_connection: None,
             connected_app: None,
@@ -174,6 +178,7 @@ impl Default for AfterEffectsApp {
             orbit_drag_start: None,
             active_tool: crate::ui::toolbar::ActiveTool::default(),
             viewport_drag_state: None,
+            viewport_mask_drag_state: None,
             selected_property: None,
             show_export_dialog: false,
             export_status: None,

@@ -311,6 +311,14 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: u32) 
                 let lut_id = egui::Id::new("ae_colorspace_lut");
                 let lut_idx = ctx.data_mut(|d| *d.get_temp_mut_or_insert_with(lut_id, || 0usize));
 
+                let snap_id = egui::Id::new("ae_viewport_snap_a");
+                let is_comparing_id = egui::Id::new("ae_viewport_comparing");
+                let wipe_id = egui::Id::new("ae_viewport_wipe_pos");
+
+                let snap_frame_opt = ctx.data_mut(|d| d.get_temp::<u32>(snap_id));
+                let is_comparing = ctx.data_mut(|d| *d.get_temp_mut_or_insert_with(is_comparing_id, || false));
+                let wipe_pos = ctx.data_mut(|d| *d.get_temp_mut_or_insert_with(wipe_id, || 0.5f32));
+
                 let (texture_view, recreated) = renderer.render(comp, current_frame, exposure_ev, lut_idx as u32);
                 if app.viewport_texture_id.is_none() || recreated {
                     if let Some(old_id) = app.viewport_texture_id {
@@ -323,9 +331,54 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: u32) 
                     );
                     app.viewport_texture_id = Some(texture_id);
                 }
-                if let Some(texture_id) = app.viewport_texture_id {
-                    ui.put(draw_rect, egui::Image::new(egui::load::SizedTexture::new(texture_id, draw_rect.size())));
+
+                let mut snap_texture_id_val = None;
+                if is_comparing {
+                    if let Some(snap_frame) = snap_frame_opt {
+                        let (snap_view, snap_recreated) = renderer.render_snapshot_frame(comp, snap_frame, exposure_ev, lut_idx as u32);
+                        if app.viewport_snapshot_texture_id.is_none() || snap_recreated {
+                            if let Some(old_id) = app.viewport_snapshot_texture_id {
+                                wgpu_state.renderer.write().free_texture(&old_id);
+                            }
+                            let texture_id = wgpu_state.renderer.write().register_native_texture(
+                                &wgpu_state.device,
+                                snap_view,
+                                wgpu::FilterMode::Linear,
+                            );
+                            app.viewport_snapshot_texture_id = Some(texture_id);
+                        }
+                        snap_texture_id_val = app.viewport_snapshot_texture_id;
+                    }
+                }
+
+                if is_comparing && snap_texture_id_val.is_some() && app.viewport_texture_id.is_some() {
+                    let cur_tex = app.viewport_texture_id.unwrap();
+                    let snap_tex = snap_texture_id_val.unwrap();
+
+                    // Left Side: Current Frame
+                    let left_rect = egui::Rect::from_min_max(
+                        draw_rect.min,
+                        egui::pos2(draw_rect.min.x + draw_rect.width() * wipe_pos, draw_rect.max.y),
+                    );
+                    let left_img = egui::Image::new(egui::load::SizedTexture::new(cur_tex, left_rect.size()))
+                        .uv(egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(wipe_pos, 1.0)));
+                    ui.put(left_rect, left_img);
+
+                    // Right Side: Snapshot Frame (Compare)
+                    let right_rect = egui::Rect::from_min_max(
+                        egui::pos2(draw_rect.min.x + draw_rect.width() * wipe_pos, draw_rect.min.y),
+                        draw_rect.max,
+                    );
+                    let right_img = egui::Image::new(egui::load::SizedTexture::new(snap_tex, right_rect.size()))
+                        .uv(egui::Rect::from_min_max(egui::pos2(wipe_pos, 0.0), egui::pos2(1.0, 1.0)));
+                    ui.put(right_rect, right_img);
+
                     rendered_gpu = true;
+                } else {
+                    if let Some(texture_id) = app.viewport_texture_id {
+                        ui.put(draw_rect, egui::Image::new(egui::load::SizedTexture::new(texture_id, draw_rect.size())));
+                        rendered_gpu = true;
+                    }
                 }
             }
         }

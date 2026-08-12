@@ -75,6 +75,13 @@ pub struct EffectParams {
     pub huesat_hue: f32,
     pub huesat_sat: f32,
     pub huesat_light: f32,
+
+    // Mesh Warp / Corner Pin
+    pub meshwarp_enabled: u32,
+    pub corner_top_left: [f32; 2],
+    pub corner_top_right: [f32; 2],
+    pub corner_bottom_left: [f32; 2],
+    pub corner_bottom_right: [f32; 2],
 }
 
 impl Default for EffectParams {
@@ -116,6 +123,11 @@ impl Default for EffectParams {
             huesat_hue: 0.0,
             huesat_sat: 1.0,
             huesat_light: 1.0,
+            meshwarp_enabled: 0,
+            corner_top_left: [0.0, 0.0],
+            corner_top_right: [100.0, 0.0],
+            corner_bottom_left: [0.0, 100.0],
+            corner_bottom_right: [100.0, 100.0],
         }
     }
 }
@@ -237,7 +249,13 @@ impl RenderEffectPlugin for EnumEffectPlugin {
                 params.huesat_sat = 1.0 + (saturation.evaluate(frame) / 100.0);
                 params.huesat_light = 1.0 + (lightness.evaluate(frame) / 100.0);
             }
-            EffectType::MeshWarp { .. } => {}
+            EffectType::MeshWarp { top_left, top_right, bottom_left, bottom_right } => {
+                params.meshwarp_enabled = 1;
+                params.corner_top_left = top_left.evaluate(frame);
+                params.corner_top_right = top_right.evaluate(frame);
+                params.corner_bottom_left = bottom_left.evaluate(frame);
+                params.corner_bottom_right = bottom_right.evaluate(frame);
+            }
             _ => {}
         }
     }
