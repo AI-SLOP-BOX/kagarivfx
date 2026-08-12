@@ -33,6 +33,8 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                 ui.selectable_value(&mut app.right_tab_idx, 20, "Libraries");
                 ui.selectable_value(&mut app.right_tab_idx, 21, "Fonts");
                 ui.selectable_value(&mut app.right_tab_idx, 22, "Presets");
+                ui.selectable_value(&mut app.right_tab_idx, 23, "Mixer");
+                ui.selectable_value(&mut app.right_tab_idx, 24, "Velocity");
             });
             ui.separator();
 
@@ -141,6 +143,16 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
 
             if app.right_tab_idx == 22 {
                 crate::ui::render_presets::draw_render_presets(app, ui);
+                return;
+            }
+
+            if app.right_tab_idx == 23 {
+                crate::ui::audio_mixer::draw_audio_mixer(app, ui);
+                return;
+            }
+
+            if app.right_tab_idx == 24 {
+                crate::ui::speed_graph_options::draw_speed_graph_options(app, ui);
                 return;
             }
 

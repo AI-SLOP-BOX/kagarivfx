@@ -35,4 +35,6 @@ pub mod lumetri_color;
 pub mod cc_libraries;
 pub mod font_picker;
 pub mod render_presets;
+pub mod audio_mixer;
+pub mod speed_graph_options;
 pub mod graph_editor;
