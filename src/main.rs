@@ -311,10 +311,27 @@ impl eframe::App for AfterEffectsApp {
                             let comp = temp_proj.active_composition_mut();
                             if idx < comp.layers.len() {
                                 let layer = &mut comp.layers[idx];
-                                let ez = crate::core::keyframe::InterpolationType::Bezier {
-                                    outgoing: crate::core::keyframe::BezierControlPoint { influence: 0.333, speed: 0.0 },
-                                    incoming: crate::core::keyframe::BezierControlPoint { influence: 0.333, speed: 0.0 },
-                                    custom_bezier: Some([0.333, 0.0, 0.333, 1.0]),
+                                let ez = if shift {
+                                    // Easy Ease In (Shift+F9)
+                                    crate::core::keyframe::InterpolationType::Bezier {
+                                        outgoing: crate::core::keyframe::BezierControlPoint { influence: 0.0, speed: 0.0 },
+                                        incoming: crate::core::keyframe::BezierControlPoint { influence: 0.85, speed: 0.0 },
+                                        custom_bezier: Some([0.85, 0.0, 1.0, 1.0]),
+                                    }
+                                } else if cmd {
+                                    // Easy Ease Out (Cmd+Shift+F9 / Cmd+F9)
+                                    crate::core::keyframe::InterpolationType::Bezier {
+                                        outgoing: crate::core::keyframe::BezierControlPoint { influence: 0.85, speed: 0.0 },
+                                        incoming: crate::core::keyframe::BezierControlPoint { influence: 0.0, speed: 0.0 },
+                                        custom_bezier: Some([0.0, 0.0, 0.15, 1.0]),
+                                    }
+                                } else {
+                                    // Easy Ease (F9)
+                                    crate::core::keyframe::InterpolationType::Bezier {
+                                        outgoing: crate::core::keyframe::BezierControlPoint { influence: 0.333, speed: 0.0 },
+                                        incoming: crate::core::keyframe::BezierControlPoint { influence: 0.333, speed: 0.0 },
+                                        custom_bezier: Some([0.333, 0.0, 0.333, 1.0]),
+                                    }
                                 };
                                 if let crate::core::property::Animatable::Animated(ref mut kfs) = layer.transform.position { for kf in kfs { kf.interpolation = ez.clone(); } }
                                 if let crate::core::property::Animatable::Animated(ref mut kfs) = layer.transform.scale { for kf in kfs { kf.interpolation = ez.clone(); } }

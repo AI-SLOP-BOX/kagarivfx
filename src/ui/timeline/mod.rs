@@ -675,7 +675,11 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                                         }
                                     });
 
-                                // ── Parenting Dropdown ──
+                                // ── Parenting Pick Whip @ & Dropdown ──
+                                let pw_btn = ui.selectable_label(false, "@").on_hover_text("Parenting Pick Whip: Click or Drag to link layer parent");
+                                if pw_btn.clicked() {
+                                    log::info!("Parenting Pick Whip activated for layer {}", comp.layers[i].name);
+                                }
                                 let parent_text = comp.layers[i].parent_id.as_deref().unwrap_or("None");
                                 egui::ComboBox::from_id_source(format!("tl_parent_{}", i))
                                     .selected_text(format!("Parent: {}", parent_text))
