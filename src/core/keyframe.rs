@@ -119,3 +119,31 @@ pub fn solve_bezier_eased_time(x: f32, x1: f32, y1: f32, x2: f32, y2: f32) -> f3
 
     ((ay * t_guess + by) * t_guess + cy) * t_guess
 }
+
+/// Compute cubic Bezier control points (x1, y1, x2, y2) from AE keyframe speed and influence parameters.
+#[allow(dead_code)]
+pub fn compute_ae_bezier_control_points(
+    outgoing: &BezierControlPoint,
+    incoming: &BezierControlPoint,
+    delta_frame: f32,
+    delta_val: f32,
+    fps: f32,
+) -> [f32; 4] {
+    let dt = (delta_frame / fps.max(1.0)).max(0.001);
+    let x1 = outgoing.influence.clamp(0.0, 1.0);
+    let x2 = 1.0 - incoming.influence.clamp(0.0, 1.0);
+
+    let average_speed = delta_val / dt;
+    let y1 = if average_speed.abs() > 1e-6 {
+        (outgoing.speed * dt * x1) / delta_val
+    } else {
+        0.0
+    };
+    let y2 = if average_speed.abs() > 1e-6 {
+        1.0 - (incoming.speed * dt * (1.0 - x2)) / delta_val
+    } else {
+        1.0
+    };
+
+    [x1, y1.clamp(-2.0, 3.0), x2, y2.clamp(-2.0, 3.0)]
+}

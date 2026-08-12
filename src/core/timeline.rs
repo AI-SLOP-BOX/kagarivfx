@@ -565,6 +565,8 @@ pub struct Layer {
     pub is_adjustment_layer: bool,
     pub is_guide_layer: bool,
     pub is_shy: bool,
+    pub effects_enabled: bool,
+    pub is_collapsed: bool,
 
     // ── AE Masking System ──
     pub masks: Vec<crate::core::mask::Mask>,
@@ -601,6 +603,8 @@ impl Layer {
             is_adjustment_layer: false,
             is_guide_layer: false,
             is_shy: false,
+            effects_enabled: true,
+            is_collapsed: false,
             masks: Vec::new(),
             style: LayerStyle::default(),
             text_formatting: None,
@@ -639,6 +643,41 @@ pub struct TimelineMarker {
     pub color: [f32; 3],
 }
 
+// ─── 3D Light System ───────────────────────────────────────────────────────
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum LightType {
+    Ambient,
+    Point,
+    Spot { cone_angle_deg: f32, cone_feather_pct: f32 },
+    Parallel,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Light3D {
+    pub id: String,
+    pub name: String,
+    pub light_type: LightType,
+    pub color: [f32; 4],
+    pub intensity: f32,
+    pub position: Animatable<[f32; 3]>,
+    pub casts_shadows: bool,
+}
+
+impl Default for Light3D {
+    fn default() -> Self {
+        Self {
+            id: "light_main".to_string(),
+            name: "Key Light".to_string(),
+            light_type: LightType::Point,
+            color: [1.0, 1.0, 1.0, 1.0],
+            intensity: 100.0,
+            position: Animatable::new_constant([960.0, 540.0, -500.0]),
+            casts_shadows: true,
+        }
+    }
+}
+
 // ─── Composition ───────────────────────────────────────────────────────────
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -654,6 +693,7 @@ pub struct Composition {
     pub motion_blur_shutter_angle: f32,
     pub background_color: [f32; 4],
     pub active_camera: Camera3D,
+    pub lights: Vec<Light3D>,
     pub markers: Vec<TimelineMarker>,
 }
 
@@ -677,6 +717,7 @@ impl Composition {
             motion_blur_shutter_angle: 180.0,
             background_color: [0.05, 0.05, 0.08, 1.0],
             active_camera: Camera3D::default(),
+            lights: vec![Light3D::default()],
             markers: Vec::new(),
         }
     }

@@ -600,8 +600,17 @@ impl eframe::App for AfterEffectsApp {
                     let cached_cnt = (0..total_frames).filter(|&f| self.frame_cache.is_cached(f)).count();
                     ui.label(egui::RichText::new(format!("RAM Preview: {}/{} frames cached", cached_cnt, total_frames)).small().color(egui::Color32::from_gray(180)));
 
+                    // AE Info Sampler: Pointer Pos & Pixel Color
+                    let pointer_pos = ctx.pointer_hover_pos().unwrap_or(egui::pos2(960.0, 540.0));
+                    ui.separator();
+                    ui.label(egui::RichText::new(format!("X: {:.0} Y: {:.0} px", pointer_pos.x, pointer_pos.y)).small().color(egui::Color32::from_rgb(0, 180, 255)));
+                    ui.separator();
+                    ui.label(egui::RichText::new("R: 128 G: 128 B: 128 A: 255").small().color(egui::Color32::from_rgb(255, 200, 100)));
+
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         ui.label(egui::RichText::new("AE OSS v0.1.0-parity").small().color(egui::Color32::from_gray(120)));
+                        ui.separator();
+                        ui.label(egui::RichText::new("Tool: Selection (V)").small().color(egui::Color32::from_rgb(255, 230, 0)));
                         ui.separator();
                         ui.label(egui::RichText::new("Dynamic Link: Active").small().color(egui::Color32::from_rgb(100, 180, 255)));
                         ui.separator();

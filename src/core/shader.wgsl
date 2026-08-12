@@ -64,6 +64,9 @@ struct Layer {
     grain_intensity: f32,
     grain_size: f32,
 
+    // Track Matte System
+    track_matte_mode: u32,
+
     _padding_align: u32,
 };
 
@@ -350,6 +353,22 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
 
     // --- Layer Opacity ---
     final_color.a = final_color.a * (layer.opacity / 100.0);
+
+    // --- Track Matte Masking ---
+    if (layer.track_matte_mode > 0u) {
+        let matte_tex = textureSample(t_diffuse, s_diffuse, in.tex_coords);
+        var matte_alpha = 1.0;
+        if (layer.track_matte_mode == 1u) {
+            matte_alpha = matte_tex.a;
+        } else if (layer.track_matte_mode == 2u) {
+            matte_alpha = 1.0 - matte_tex.a;
+        } else if (layer.track_matte_mode == 3u) {
+            matte_alpha = dot(matte_tex.rgb, vec3<f32>(0.2126, 0.7152, 0.0722));
+        } else if (layer.track_matte_mode == 4u) {
+            matte_alpha = 1.0 - dot(matte_tex.rgb, vec3<f32>(0.2126, 0.7152, 0.0722));
+        }
+        final_color = vec4<f32>(final_color.rgb, final_color.a * matte_alpha);
+    }
 
     // --- AE Blend Mode Compositing ---
     // The GPU blend equation handles Normal (alpha-over) automatically.

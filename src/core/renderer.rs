@@ -122,6 +122,9 @@ struct LayerUniform {
     grain_intensity: f32,
     grain_size: f32,
 
+    // Track Matte System
+    track_matte_mode: u32,
+
     // Mesh Warp / Corner Pin
     meshwarp_enabled: u32,
     corner_top_left: [f32; 2],
@@ -681,6 +684,13 @@ impl WgpuRenderer {
                     grain_enabled: ep.grain_enabled,
                     grain_intensity: ep.grain_intensity,
                     grain_size: ep.grain_size,
+                    track_matte_mode: match layer.track_matte {
+                        crate::core::timeline::TrackMatteMode::None => 0,
+                        crate::core::timeline::TrackMatteMode::AlphaMatte => 1,
+                        crate::core::timeline::TrackMatteMode::AlphaMatteInverted => 2,
+                        crate::core::timeline::TrackMatteMode::LumaMatte => 3,
+                        crate::core::timeline::TrackMatteMode::LumaMatteInverted => 4,
+                    },
                     meshwarp_enabled: ep.meshwarp_enabled,
                     corner_top_left: ep.corner_top_left,
                     corner_top_right: ep.corner_top_right,

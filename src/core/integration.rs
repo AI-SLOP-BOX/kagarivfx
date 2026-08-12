@@ -356,11 +356,16 @@ mod tests {
         // Start server on a test port (e.g. 19001)
         start_sync_server(19001, frame_tx, conn_tx);
 
-        // Allow some time for binding
-        std::thread::sleep(std::time::Duration::from_millis(150));
-
-        // Connect client
-        let mut stream = TcpStream::connect("127.0.0.1:19001").unwrap();
+        // Connect client with retry loop
+        let mut stream = None;
+        for _ in 0..10 {
+            if let Ok(s) = TcpStream::connect("127.0.0.1:19001") {
+                stream = Some(s);
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(50));
+        }
+        let mut stream = stream.expect("Failed to connect to test TCP server");
         let mut reader = BufReader::new(stream.try_clone().unwrap());
 
         // Send Handshake Request

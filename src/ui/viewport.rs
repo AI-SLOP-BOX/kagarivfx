@@ -115,6 +115,23 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: u32) 
                 });
         }
 
+        // ── AE Viewport Composition Top Tabs & Breadcrumbs Bar ──
+        let active_comp_idx = app.history.current().active_composition_idx;
+        let comps_count = app.history.current().compositions.len();
+        ui.horizontal(|ui| {
+            for idx in 0..comps_count {
+                let is_active = idx == active_comp_idx;
+                let c_name = app.history.current().compositions[idx].name.clone();
+                let tab_text = format!("🎞 Composition: {} {}", c_name, if is_active { "x" } else { "" });
+                if ui.selectable_label(is_active, tab_text).clicked() {
+                    let mut p = app.history.current().clone();
+                    p.active_composition_idx = idx;
+                    app.history.commit(p);
+                }
+            }
+            ui.separator();
+            ui.small(egui::RichText::new("Composition Flow: Main Comp > Active Layer").color(egui::Color32::from_gray(140)));
+        });
         ui.separator();
 
         let size = ui.available_size();

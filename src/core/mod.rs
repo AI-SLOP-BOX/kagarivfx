@@ -14,5 +14,6 @@ pub mod mask;
 pub mod color_science;
 pub mod software_renderer;
 pub mod content_aware_engine;
+pub mod audio_engine;
 
 

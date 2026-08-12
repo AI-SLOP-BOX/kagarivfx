@@ -542,6 +542,24 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                                     project_changed = true;
                                 }
 
+                                let is_collapsed = comp.layers[i].is_collapsed;
+                                if ui.selectable_label(is_collapsed, "✸").on_hover_text("Collapse Transformations / Continuously Rasterize Switch").clicked() {
+                                    comp.layers[i].is_collapsed = !is_collapsed;
+                                    project_changed = true;
+                                }
+
+                                let fx_on = comp.layers[i].effects_enabled;
+                                if ui.selectable_label(fx_on, "fx").on_hover_text("Toggle All Layer Effects On/Off").clicked() {
+                                    comp.layers[i].effects_enabled = !fx_on;
+                                    project_changed = true;
+                                }
+
+                                let is_adj = comp.layers[i].is_adjustment_layer;
+                                if ui.selectable_label(is_adj, "◐").on_hover_text("Adjustment Layer Switch").clicked() {
+                                    comp.layers[i].is_adjustment_layer = !is_adj;
+                                    project_changed = true;
+                                }
+
                                 let mb = comp.layers[i].motion_blur;
                                 if ui.selectable_label(mb, "M").on_hover_text("Motion Blur Switch").clicked() {
                                     comp.layers[i].motion_blur = !mb;
