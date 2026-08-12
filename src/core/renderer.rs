@@ -94,7 +94,22 @@ struct LayerUniform {
     effect_vignette_feather: f32,
     effect_vignette_color: [f32; 4],
     blend_mode: u32,
-    _padding_align: [f32; 11], // Align to 256 bytes
+
+    // Levels Adjustment
+    levels_enabled: u32,
+    levels_in_black: f32,
+    levels_in_white: f32,
+    levels_gamma: f32,
+    levels_out_black: f32,
+    levels_out_white: f32,
+
+    // Hue / Saturation
+    huesat_enabled: u32,
+    huesat_hue: f32,
+    huesat_sat: f32,
+    huesat_light: f32,
+
+    _padding_align: [f32; 1], // Align to 256 bytes (44 - 40 = 4 bytes remaining)
 }
 
 #[allow(dead_code)]
@@ -601,7 +616,17 @@ impl WgpuRenderer {
                         crate::core::timeline::BlendMode::Darken => 5,
                         crate::core::timeline::BlendMode::Lighten => 6,
                     },
-                    _padding_align: [0.0; 11],
+                    levels_enabled: ep.levels_enabled,
+                    levels_in_black: ep.levels_in_black,
+                    levels_in_white: ep.levels_in_white,
+                    levels_gamma: ep.levels_gamma,
+                    levels_out_black: ep.levels_out_black,
+                    levels_out_white: ep.levels_out_white,
+                    huesat_enabled: ep.huesat_enabled,
+                    huesat_hue: ep.huesat_hue,
+                    huesat_sat: ep.huesat_sat,
+                    huesat_light: ep.huesat_light,
+                    _padding_align: [0.0; 1],
                 };
 
 

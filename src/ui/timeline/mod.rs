@@ -367,6 +367,8 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
 
             ui.add_space(2.0);
 
+            let mut swap_request: Option<(usize, usize)> = None;
+
             if app.show_graph_editor {
                 graph_editor::draw_graph_editor(app, ui, comp, current_frame, total_frames);
             } else {
@@ -376,17 +378,28 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
 
                 let filter_id = ui.make_persistent_id("ae_timeline_filter");
                 let filter_text: String = ui.ctx().data_mut(|d| d.get_temp(filter_id).unwrap_or_default());
-
                 for i in 0..comp.layers.len() {
                     let layer_name = comp.layers[i].name.clone();
                     if !filter_text.is_empty() && !layer_name.to_lowercase().contains(&filter_text.to_lowercase()) {
                         continue;
                     }
                     ui.horizontal(|ui| {
-                        ui.allocate_ui(egui::vec2(480.0, 24.0), |ui| {
+                        ui.allocate_ui(egui::vec2(500.0, 24.0), |ui| {
                             ui.horizontal(|ui| {
+                                // Layer Stacking Order Reorder Buttons
+                                if i > 0 {
+                                    if ui.small_button("^").on_hover_text("Move Layer Up in Render Stack").clicked() {
+                                        swap_request = Some((i, i - 1));
+                                    }
+                                }
+                                if i + 1 < comp.layers.len() {
+                                    if ui.small_button("v").on_hover_text("Move Layer Down in Render Stack").clicked() {
+                                        swap_request = Some((i, i + 1));
+                                    }
+                                }
+
                                 let is_expanded = app.expanded_layers.contains(&i);
-                                let arrow = if is_expanded { "▼" } else { "▶" };
+                                let arrow = if is_expanded { "v" } else { ">" };
                                 if ui.selectable_label(is_expanded, arrow).clicked() {
                                     if is_expanded {
                                         app.expanded_layers.remove(&i);
@@ -832,6 +845,11 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                     }
                 }
             });
+            }
+
+            if let Some((a, b)) = swap_request {
+                temp_project.active_composition_mut().layers.swap(a, b);
+                project_changed = true;
             }
 
             if project_changed {

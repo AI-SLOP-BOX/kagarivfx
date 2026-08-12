@@ -36,7 +36,21 @@ struct Layer {
     // AE Blend Mode: 0=Normal, 1=Multiply, 2=Screen, 3=Overlay, 4=Add, 5=Darken, 6=Lighten
     blend_mode: u32,
 
-    _padding_align: array<vec4<f32>, 2>,
+    // Levels Adjustment
+    levels_enabled: u32,
+    levels_in_black: f32,
+    levels_in_white: f32,
+    levels_gamma: f32,
+    levels_out_black: f32,
+    levels_out_white: f32,
+
+    // Hue / Saturation
+    huesat_enabled: u32,
+    huesat_hue: f32,
+    huesat_sat: f32,
+    huesat_light: f32,
+
+    _padding_align: u32,
 };
 
 @group(0) @binding(0) var<uniform> globals: Globals;
@@ -252,6 +266,29 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
         let vcolor = layer.effect_vignette_color;
         final_color = vec4<f32>(
             mix(final_color.rgb, vcolor.rgb, vignette_strength * vcolor.a),
+            final_color.a
+        );
+    }
+
+    // --- Levels Adjustment ---
+    if (layer.levels_enabled == 1u) {
+        let range = max(layer.levels_in_white - layer.levels_in_black, 0.001);
+        let val_normalized = clamp((final_color.rgb - vec3<f32>(layer.levels_in_black)) / range, vec3<f32>(0.0), vec3<f32>(1.0));
+        let gamma_power = 1.0 / max(layer.levels_gamma, 0.01);
+        let gamma_adjusted = pow(val_normalized, vec3<f32>(gamma_power));
+        final_color = vec4<f32>(
+            layer.levels_out_black + gamma_adjusted * (layer.levels_out_white - layer.levels_out_black),
+            final_color.a
+        );
+    }
+
+    // --- Hue / Saturation ---
+    if (layer.huesat_enabled == 1u) {
+        // Hue / Saturation adjustment using relative luminance weights
+        let luma = dot(final_color.rgb, vec3<f32>(0.2126, 0.7152, 0.0722));
+        let desat = mix(vec3<f32>(luma), final_color.rgb, layer.huesat_sat);
+        final_color = vec4<f32>(
+            clamp(desat * layer.huesat_light, vec3<f32>(0.0), vec3<f32>(1.0)),
             final_color.a
         );
     }

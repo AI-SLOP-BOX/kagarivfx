@@ -163,11 +163,12 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
                             });
 
                             let _ = crate::core::ffmpeg_export::start_export(config, tx_ff, move |frame| {
-                                let pixels = vec![0u8; (comp_snapshot.width * comp_snapshot.height * 4) as usize];
-                                for layer in &comp_snapshot.layers {
-                                    let _tf = comp_snapshot.resolve_world_transform(layer, frame);
-                                }
-                                pixels
+                                crate::core::software_renderer::render_frame_to_pixels(
+                                    &comp_snapshot,
+                                    frame,
+                                    comp_snapshot.width,
+                                    comp_snapshot.height,
+                                )
                             });
                         } else {
                             // Fallback async render thread with progress feedback

@@ -154,6 +154,29 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: u32) 
                     if ui.selectable_value(&mut chan_idx, 3, "Blue").clicked() { ctx.data_mut(|d| d.insert_temp(chan_id, chan_idx)); }
                     if ui.selectable_value(&mut chan_idx, 4, "Alpha").clicked() { ctx.data_mut(|d| d.insert_temp(chan_id, chan_idx)); }
                 });
+
+            // Viewport Color Management (Exposure EV & LUT)
+            ui.separator();
+            let exp_id = egui::Id::new("ae_exposure_ev");
+            let mut exposure_ev = ctx.data_mut(|d| *d.get_temp_mut_or_insert_with(exp_id, || 0.0f32));
+            ui.label("Exp:");
+            if ui.add(egui::DragValue::new(&mut exposure_ev).speed(0.1).clamp_range(-5.0..=5.0).suffix(" EV")).changed() {
+                ctx.data_mut(|d| d.insert_temp(exp_id, exposure_ev));
+            }
+
+            let lut_id = egui::Id::new("ae_colorspace_lut");
+            let mut lut_idx = ctx.data_mut(|d| *d.get_temp_mut_or_insert_with(lut_id, || 0usize));
+            egui::ComboBox::from_id_source("lut_combo")
+                .selected_text(match lut_idx {
+                    0 => "Rec.709",
+                    1 => "Linear sRGB",
+                    _ => "ACEScg",
+                })
+                .show_ui(ui, |ui| {
+                    if ui.selectable_value(&mut lut_idx, 0, "Rec.709").clicked() { ctx.data_mut(|d| d.insert_temp(lut_id, lut_idx)); }
+                    if ui.selectable_value(&mut lut_idx, 1, "Linear sRGB").clicked() { ctx.data_mut(|d| d.insert_temp(lut_id, lut_idx)); }
+                    if ui.selectable_value(&mut lut_idx, 2, "ACEScg").clicked() { ctx.data_mut(|d| d.insert_temp(lut_id, lut_idx)); }
+                });
         });
 
         // ── Comp Settings Modal ──────────────────────────────────────────────
@@ -469,16 +492,38 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: u32) 
 
                     match &l.layer_type {
                         LayerType::Solid { .. } | LayerType::Shape { .. } => {
-                            let w = (scale[0] / 100.0) * 100.0 * (draw_w / comp_w);
-                            let h = (scale[1] / 100.0) * 100.0 * (draw_h / comp_h);
-                            let rad = rotation.to_radians();
-                            let cos_r = rad.cos();
-                            let sin_r = rad.sin();
-                            let local = [(-w*0.5,-h*0.5),(w*0.5,-h*0.5),(w*0.5,h*0.5),(-w*0.5,h*0.5)];
-                            let center = egui::pos2(rx, ry);
-                            let pts: Vec<egui::Pos2> = local.iter().map(|(px,py)| {
-                                egui::pos2(center.x + px*cos_r - py*sin_r, center.y + px*sin_r + py*cos_r)
-                            }).collect();
+                            // Check if a mask should clip this layer geometry
+                            let mut pts_to_draw = None;
+                            for mask in &l.masks {
+                                if mask.enabled && mask.mode != crate::core::mask::MaskMode::None {
+                                    let points = mask.path.to_polygon(current_frame, 16);
+                                    if points.len() >= 3 {
+                                        let draw_points: Vec<egui::Pos2> = points.iter().map(|pt| {
+                                            let mx = origin_x + (pt[0] / comp_w) * draw_w;
+                                            let my = origin_y + (pt[1] / comp_h) * draw_h;
+                                            egui::pos2(mx, my)
+                                        }).collect();
+                                        pts_to_draw = Some(draw_points);
+                                        break;
+                                    }
+                                }
+                            }
+
+                            let pts = if let Some(dpts) = pts_to_draw {
+                                dpts
+                            } else {
+                                let w = (scale[0] / 100.0) * 100.0 * (draw_w / comp_w);
+                                let h = (scale[1] / 100.0) * 100.0 * (draw_h / comp_h);
+                                let rad = rotation.to_radians();
+                                let cos_r = rad.cos();
+                                let sin_r = rad.sin();
+                                let local = [(-w*0.5,-h*0.5),(w*0.5,-h*0.5),(w*0.5,h*0.5),(-w*0.5,h*0.5)];
+                                let center = egui::pos2(rx, ry);
+                                local.iter().map(|(px,py)| {
+                                    egui::pos2(center.x + px*cos_r - py*sin_r, center.y + px*sin_r + py*cos_r)
+                                }).collect()
+                            };
+
                             ui.painter().add(egui::Shape::convex_polygon(pts, layer_color, egui::Stroke::NONE));
                         }
                         LayerType::Image { path } => {
@@ -553,9 +598,20 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: u32) 
 
                             // Draw vertices if active layer
                             if is_selected_layer {
-                                for pt in &draw_points {
-                                    ui.painter().circle_filled(*pt, 3.0, egui::Color32::WHITE);
-                                    ui.painter().circle_stroke(*pt, 3.0, egui::Stroke::new(1.0, egui::Color32::from_rgb(255, 100, 0)));
+                                for (v_idx, pt) in draw_points.iter().enumerate() {
+                                    let v_rect = egui::Rect::from_center_size(*pt, egui::vec2(8.0, 8.0));
+                                    let is_hovered = ui.rect_contains_pointer(v_rect);
+                                    let handle_color = if is_hovered { egui::Color32::YELLOW } else { egui::Color32::WHITE };
+                                    ui.painter().rect_filled(v_rect, 1.0, handle_color);
+                                    ui.painter().rect_stroke(v_rect, 1.0, egui::Stroke::new(1.2, egui::Color32::from_rgb(255, 100, 0)));
+
+                                    ui.painter().text(
+                                        egui::pos2(pt.x + 8.0, pt.y - 8.0),
+                                        egui::Align2::LEFT_BOTTOM,
+                                        format!("V{}", v_idx + 1),
+                                        egui::FontId::proportional(10.0),
+                                        egui::Color32::from_rgb(255, 200, 100),
+                                    );
                                 }
                             }
                         }

@@ -61,6 +61,20 @@ pub struct EffectParams {
     pub grain_enabled: u32,
     pub grain_intensity: f32,
     pub grain_size: f32,
+
+    // Levels Adjustment
+    pub levels_enabled: u32,
+    pub levels_in_black: f32,
+    pub levels_in_white: f32,
+    pub levels_gamma: f32,
+    pub levels_out_black: f32,
+    pub levels_out_white: f32,
+
+    // Hue / Saturation / Lightness
+    pub huesat_enabled: u32,
+    pub huesat_hue: f32,
+    pub huesat_sat: f32,
+    pub huesat_light: f32,
 }
 
 impl Default for EffectParams {
@@ -92,6 +106,16 @@ impl Default for EffectParams {
             grain_enabled: 0,
             grain_intensity: 0.0,
             grain_size: 1.5,
+            levels_enabled: 0,
+            levels_in_black: 0.0,
+            levels_in_white: 1.0,
+            levels_gamma: 1.0,
+            levels_out_black: 0.0,
+            levels_out_white: 1.0,
+            huesat_enabled: 0,
+            huesat_hue: 0.0,
+            huesat_sat: 1.0,
+            huesat_light: 1.0,
         }
     }
 }
@@ -197,6 +221,21 @@ impl RenderEffectPlugin for EnumEffectPlugin {
                 params.grain_enabled = 1;
                 params.grain_intensity = intensity.evaluate(frame) / 100.0;
                 params.grain_size = *grain_size;
+            }
+            EffectType::Levels { input_black, input_white, gamma, output_black, output_white } => {
+                params.levels_enabled = 1;
+                params.levels_in_black = input_black.evaluate(frame);
+                params.levels_in_white = input_white.evaluate(frame);
+                params.levels_gamma = gamma.evaluate(frame);
+                params.levels_out_black = output_black.evaluate(frame);
+                params.levels_out_white = output_white.evaluate(frame);
+            }
+            EffectType::HueSaturation { hue_shift, saturation, lightness } => {
+                params.huesat_enabled = 1;
+                // Map percentages or values to HSL shift ratios
+                params.huesat_hue = hue_shift.evaluate(frame);
+                params.huesat_sat = 1.0 + (saturation.evaluate(frame) / 100.0);
+                params.huesat_light = 1.0 + (lightness.evaluate(frame) / 100.0);
             }
             EffectType::MeshWarp { .. } => {}
             _ => {}
