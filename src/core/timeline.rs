@@ -473,6 +473,66 @@ pub struct Effect {
     pub enabled: bool,
 }
 
+// ─── Layer Style ───────────────────────────────────────────────────────────
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct DropShadowStyle {
+    pub enabled: bool,
+    pub blend_mode: BlendMode,
+    pub opacity: f32,
+    pub angle: f32,
+    pub distance: f32,
+    pub size: f32,
+    pub color: [f32; 4],
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct OuterGlowStyle {
+    pub enabled: bool,
+    pub opacity: f32,
+    pub spread: f32,
+    pub size: f32,
+    pub color: [f32; 4],
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct StrokeStyle {
+    pub enabled: bool,
+    pub size: f32,
+    pub position: u32,
+    pub color: [f32; 4],
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct LayerStyle {
+    pub drop_shadow: DropShadowStyle,
+    pub outer_glow: OuterGlowStyle,
+    pub stroke: StrokeStyle,
+}
+
+// ─── Text Formatting ───────────────────────────────────────────────────────
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TextFormatting {
+    pub font_family: String,
+    pub tracking: f32,
+    pub leading: f32,
+    pub stroke_color: Option<[f32; 4]>,
+    pub stroke_width: f32,
+}
+
+impl Default for TextFormatting {
+    fn default() -> Self {
+        Self {
+            font_family: "Inter".to_string(),
+            tracking: 0.0,
+            leading: 1.2,
+            stroke_color: None,
+            stroke_width: 1.0,
+        }
+    }
+}
+
 // ─── Layer ─────────────────────────────────────────────────────────────────
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -508,6 +568,12 @@ pub struct Layer {
 
     // ── AE Masking System ──
     pub masks: Vec<crate::core::mask::Mask>,
+
+    // ── AE Layer Style System ──
+    pub style: LayerStyle,
+
+    // ── Text Formatting System ──
+    pub text_formatting: Option<TextFormatting>,
 }
 
 impl Layer {
@@ -536,6 +602,7 @@ impl Layer {
             is_guide_layer: false,
             is_shy: false,
             masks: Vec::new(),
+            style: LayerStyle::default(),
         }
     }
 
@@ -710,6 +777,47 @@ impl Composition {
         }
 
         m4_mul(proj_3d, m4_mul(pos_matrix, m4_mul(rot_matrix, scale_matrix)))
+    }
+
+    /// Evenly distribute selected layers spatially along horizontal (X) or vertical (Y) axes.
+    pub fn distribute_selected_layers(&mut self, selected_indices: &[usize], horizontal: bool, frame: u32) {
+        if selected_indices.len() < 3 {
+            return;
+        }
+        let fps = self.fps;
+
+        let mut layers_info: Vec<(usize, f32)> = selected_indices
+            .iter()
+            .copied()
+            .filter(|&idx| idx < self.layers.len())
+            .map(|idx| {
+                let pos = self.layers[idx].transform.eval_position(frame, fps);
+                let coord = if horizontal { pos[0] } else { pos[1] };
+                (idx, coord)
+            })
+            .collect();
+
+        if layers_info.len() < 3 {
+            return;
+        }
+
+        layers_info.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal));
+
+        let min_pos = layers_info.first().unwrap().1;
+        let max_pos = layers_info.last().unwrap().1;
+        let count = layers_info.len();
+        let step = (max_pos - min_pos) / (count - 1) as f32;
+
+        for (i, &(layer_idx, _)) in layers_info.iter().enumerate() {
+            let target_coord = min_pos + step * i as f32;
+            let current_pos = self.layers[layer_idx].transform.eval_position(frame, fps);
+            let new_pos = if horizontal {
+                [target_coord, current_pos[1]]
+            } else {
+                [current_pos[0], target_coord]
+            };
+            self.layers[layer_idx].transform.position = crate::core::property::Animatable::new_constant(new_pos);
+        }
     }
 }
 

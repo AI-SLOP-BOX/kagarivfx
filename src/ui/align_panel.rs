@@ -73,11 +73,20 @@ pub fn draw_align_panel(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
             ui.separator();
             ui.label("Distribute Layers:");
             ui.horizontal(|ui| {
+                let mut sel_vec: Vec<usize> = app.selected_layers.iter().copied().collect();
+                if let Some(i) = app.selected_layer_idx {
+                    if !sel_vec.contains(&i) {
+                        sel_vec.push(i);
+                    }
+                }
+
                 if ui.button("⤚ Distribute H").on_hover_text("Distribute Horizontal Centers").clicked() {
-                    log::info!("Distributed selected layers horizontally");
+                    comp_mut.distribute_selected_layers(&sel_vec, true, current_frame);
+                    project_changed = true;
                 }
                 if ui.button("⤛ Distribute V").on_hover_text("Distribute Vertical Centers").clicked() {
-                    log::info!("Distributed selected layers vertically");
+                    comp_mut.distribute_selected_layers(&sel_vec, false, current_frame);
+                    project_changed = true;
                 }
             });
         } else {

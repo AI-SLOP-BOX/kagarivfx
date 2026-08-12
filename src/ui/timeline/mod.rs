@@ -957,6 +957,29 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                     }
                 }
             });
+
+            // ── AE Timeline Bottom Controls Bar (Toggle Switches / Modes F4) ──
+            ui.add_space(2.0);
+            ui.horizontal(|ui| {
+                let show_switches_id = ui.make_persistent_id("ae_tl_show_switches");
+                let mut show_switches: bool = ui.ctx().data_mut(|d| *d.get_temp_mut_or_insert_with(show_switches_id, || true));
+
+                if ui.selectable_label(show_switches, "[◧] Switches").on_hover_text("Expand / Collapse Layer Switches Pane").clicked() {
+                    show_switches = true;
+                    ui.ctx().data_mut(|d| d.insert_temp(show_switches_id, true));
+                }
+                if ui.selectable_label(!show_switches, "[⇆] Modes").on_hover_text("Expand / Collapse Transfer Controls Pane (Blend Modes & Track Mattes)").clicked() {
+                    show_switches = false;
+                    ui.ctx().data_mut(|d| d.insert_temp(show_switches_id, false));
+                }
+                if ui.button("Toggle Switches / Modes (F4)").on_hover_text("Toggle between Layer Switches and Transfer Modes (Shortcut: F4)").clicked() ||
+                   ui.input(|i| i.key_pressed(egui::Key::F4)) {
+                    show_switches = !show_switches;
+                    ui.ctx().data_mut(|d| d.insert_temp(show_switches_id, show_switches));
+                }
+                ui.separator();
+                ui.small(egui::RichText::new("AE Standard Timeline 1:1 Parity Mode").color(egui::Color32::from_gray(140)));
+            });
             }
 
         if let Some((a, b)) = swap_request {
