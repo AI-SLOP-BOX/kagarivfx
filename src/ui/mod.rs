@@ -37,4 +37,6 @@ pub mod font_picker;
 pub mod render_presets;
 pub mod audio_mixer;
 pub mod speed_graph_options;
+pub mod camera_light_options;
+pub mod layer_styles;
 pub mod graph_editor;

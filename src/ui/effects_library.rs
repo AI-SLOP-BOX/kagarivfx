@@ -35,6 +35,8 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                 ui.selectable_value(&mut app.right_tab_idx, 22, "Presets");
                 ui.selectable_value(&mut app.right_tab_idx, 23, "Mixer");
                 ui.selectable_value(&mut app.right_tab_idx, 24, "Velocity");
+                ui.selectable_value(&mut app.right_tab_idx, 25, "3D Options");
+                ui.selectable_value(&mut app.right_tab_idx, 26, "Styles");
             });
             ui.separator();
 
@@ -153,6 +155,16 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
 
             if app.right_tab_idx == 24 {
                 crate::ui::speed_graph_options::draw_speed_graph_options(app, ui);
+                return;
+            }
+
+            if app.right_tab_idx == 25 {
+                crate::ui::camera_light_options::draw_camera_light_options(app, ui);
+                return;
+            }
+
+            if app.right_tab_idx == 26 {
+                crate::ui::layer_styles::draw_layer_styles(app, ui);
                 return;
             }
 
