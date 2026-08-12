@@ -11,6 +11,15 @@ use rhai::{Engine, Scope, Dynamic, Array};
 
 /// Build the shared Rhai engine with all AE-compatible functions registered.
 /// Creating the engine is expensive — do it once and cache it.
+/// 64-bit Permuted Congruential Generator (PCG32) hash to produce uniform f64 in [0.0, 1.0).
+pub fn pcg32_hash(mut state: u64) -> f64 {
+    state = state.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+    let xorshifted = (((state >> 18) ^ state) >> 27) as u32;
+    let rot = (state >> 59) as u32;
+    let val = (xorshifted >> rot) | (xorshifted << ((!rot).wrapping_add(1) & 31));
+    val as f64 / 4294967296.0
+}
+
 pub fn build_engine() -> Engine {
     let mut engine = Engine::new();
     engine.set_max_expr_depths(64, 32);
@@ -53,18 +62,21 @@ pub fn build_engine() -> Engine {
         v_min + ease_out_s * (v_max - v_min)
     });
 
-    // --- AE-compatible Random functions ---
+    // --- AE-compatible Random functions (PCG32 Deterministic Generator) ---
     engine.register_fn("random", |min: f64, max: f64| -> f64 {
-        let seed = (min * 1000.0 + max * 1337.0).sin().abs();
-        min + seed * (max - min)
+        let seed = (min.to_bits() ^ max.to_bits().rotate_left(16)) as u64;
+        let r = pcg32_hash(seed);
+        min + r * (max - min)
     });
 
     engine.register_fn("gaussRandom", |min: f64, max: f64| -> f64 {
         let mean = (min + max) * 0.5;
-        let std_dev = (max - min) * 0.16666; // 3-sigma bounds
-        let u1 = (min * 777.0).sin().abs().clamp(0.0001, 0.9999);
-        let u2 = (max * 999.0).cos().abs().clamp(0.0001, 0.9999);
-        let z0 = (-2.0 * u1.ln()).sqrt() * (2.0 * std::f64::consts::PI * u2).cos();
+        let std_dev = (max - min) * 0.16666;
+        let seed1 = (min.to_bits() ^ 0xa09e667f3bcc9091) as u64;
+        let seed2 = (max.to_bits() ^ 0x517cc1b727220a95) as u64;
+        let u1 = pcg32_hash(seed1).clamp(0.0001, 0.9999);
+        let u2 = pcg32_hash(seed2).clamp(0.0001, 0.9999);
+        let z0 = f64::sqrt(-2.0 * u1.ln()) * (std::f64::consts::TAU * u2).cos();
         (mean + z0 * std_dev).clamp(min, max)
     });
 

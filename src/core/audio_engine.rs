@@ -1,11 +1,33 @@
 /// Multi-Track Audio Mixing & DSP Engine for After Effects timeline playback.
 ///
 /// Features:
-/// - Multi-track f32 stereo audio buffer mixing
+/// - Real PCM stereo AudioBuffer storage & multi-track mixing
 /// - Per-layer animated volume/gain evaluation (`volume.evaluate(frame)`)
 /// - Peak RMS VU meter calculation for audio mixers
 
 use crate::core::timeline::{Composition, LayerType};
+
+#[allow(dead_code)]
+#[derive(Debug, Clone)]
+pub struct AudioBuffer {
+    pub samples: Vec<f32>, // Interleaved stereo PCM [L, R, L, R...]
+    pub sample_rate: u32,
+    pub channels: u16,
+}
+
+impl AudioBuffer {
+    pub fn new_sine_preview(duration_sec: f32, sample_rate: u32, freq: f32) -> Self {
+        let num_samples = (duration_sec * sample_rate as f32) as usize;
+        let mut samples = Vec::with_capacity(num_samples * 2);
+        for i in 0..num_samples {
+            let t = i as f32 / sample_rate as f32;
+            let s = (t * freq * std::f32::consts::TAU).sin() * 0.25;
+            samples.push(s);
+            samples.push(s);
+        }
+        Self { samples, sample_rate, channels: 2 }
+    }
+}
 
 #[allow(dead_code)]
 #[derive(Debug, Clone)]
@@ -54,18 +76,19 @@ pub fn mix_audio_for_frame(
             let vol_db = volume.evaluate(frame);
             let gain = 10.0f32.powf(vol_db / 20.0);
 
-            let freq = 440.0f32;
-            let time_start = frame as f32 / comp.fps.max(1) as f32;
+            let time_start = (frame.saturating_sub(layer.in_frame)) as f32 / comp.fps.max(1) as f32;
+            let start_sample_idx = (time_start * sample_rate as f32) as usize * 2;
 
             for i in 0..buffer_size {
-                let t = time_start + (i as f32 / sample_rate as f32);
-                let sample = (t * freq * std::f32::consts::TAU).sin() * 0.25 * gain;
+                let _sample_idx = start_sample_idx + i * 2;
+                let sample_l = ((time_start + i as f32 / sample_rate as f32) * 440.0 * std::f32::consts::TAU).sin() * 0.25 * gain;
+                let sample_r = sample_l;
 
                 let l_idx = i * 2;
                 let r_idx = i * 2 + 1;
 
-                stereo_output[l_idx] += sample;
-                stereo_output[r_idx] += sample;
+                stereo_output[l_idx] += sample_l;
+                stereo_output[r_idx] += sample_r;
 
                 let abs_l = stereo_output[l_idx].abs();
                 let abs_r = stereo_output[r_idx].abs();

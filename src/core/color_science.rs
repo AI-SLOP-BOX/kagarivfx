@@ -9,26 +9,31 @@
 /// Input: R, G, B in [0.0, 1.0].
 /// Output: Hue in [0.0, 360.0], Saturation in [0.0, 1.0], Lightness in [0.0, 1.0].
 pub fn rgb_to_hsl(r: f32, g: f32, b: f32) -> [f32; 3] {
+    let r = if r.is_nan() { 0.0 } else { r.clamp(0.0, 1.0) };
+    let g = if g.is_nan() { 0.0 } else { g.clamp(0.0, 1.0) };
+    let b = if b.is_nan() { 0.0 } else { b.clamp(0.0, 1.0) };
+
     let max = r.max(g).max(b);
     let min = r.min(g).min(b);
-    let l = (max + min) / 2.0;
+    let l = ((max + min) * 0.5).clamp(0.0, 1.0);
 
     if (max - min).abs() < 1e-5 {
-        return [0.0, 0.0, l]; // Achromatic (gray)
+        return [0.0, 0.0, l];
     }
 
     let d = max - min;
-    let s = if l > 0.5 { d / (2.0 - max - min) } else { d / (max + min) };
+    let denom = (1.0 - (2.0 * l - 1.0).abs()).max(1e-5);
+    let s = (d / denom).clamp(0.0, 1.0);
 
-    let mut h = 0.0;
-    if (max - r).abs() < 1e-5 {
-        h = (g - b) / d + (if g < b { 6.0 } else { 0.0 });
+    let mut h = if (max - r).abs() < 1e-5 {
+        (g - b) / d + (if g < b { 6.0 } else { 0.0 })
     } else if (max - g).abs() < 1e-5 {
-        h = (b - r) / d + 2.0;
-    } else if (max - b).abs() < 1e-5 {
-        h = (r - g) / d + 4.0;
-    }
-    h *= 60.0;
+        (b - r) / d + 2.0
+    } else {
+        (r - g) / d + 4.0
+    };
+    h = (h * 60.0).rem_euclid(360.0);
+    if h.is_nan() { h = 0.0; }
 
     [h, s, l]
 }
@@ -37,8 +42,12 @@ pub fn rgb_to_hsl(r: f32, g: f32, b: f32) -> [f32; 3] {
 /// Input: Hue [0.0, 360.0], Saturation [0.0, 1.0], Lightness [0.0, 1.0].
 /// Output: R, G, B in [0.0, 1.0].
 pub fn hsl_to_rgb(h: f32, s: f32, l: f32) -> [f32; 3] {
-    if s.abs() < 1e-5 {
-        return [l, l, l]; // Achromatic
+    let h = if h.is_nan() { 0.0 } else { h.rem_euclid(360.0) };
+    let s = if s.is_nan() { 0.0 } else { s.clamp(0.0, 1.0) };
+    let l = if l.is_nan() { 0.0 } else { l.clamp(0.0, 1.0) };
+
+    if s < 1e-5 {
+        return [l, l, l];
     }
 
     let hue_to_rgb = |p: f32, q: f32, mut t: f32| -> f32 {
@@ -54,9 +63,9 @@ pub fn hsl_to_rgb(h: f32, s: f32, l: f32) -> [f32; 3] {
     let p = 2.0 * l - q;
 
     let h_normalized = h / 360.0;
-    let r = hue_to_rgb(p, q, h_normalized + 1.0 / 3.0);
-    let g = hue_to_rgb(p, q, h_normalized);
-    let b = hue_to_rgb(p, q, h_normalized - 1.0 / 3.0);
+    let r = hue_to_rgb(p, q, h_normalized + 1.0 / 3.0).clamp(0.0, 1.0);
+    let g = hue_to_rgb(p, q, h_normalized).clamp(0.0, 1.0);
+    let b = hue_to_rgb(p, q, h_normalized - 1.0 / 3.0).clamp(0.0, 1.0);
 
     [r, g, b]
 }

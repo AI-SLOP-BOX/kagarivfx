@@ -18,14 +18,13 @@ pub fn draw(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
     let query = search_query.to_lowercase();
     ui.add_space(4.0);
 
-    let mut project_changed = false;
-    let mut temp_project = app.history.current().clone();
+    // Read current state without cloning upfront
+    let current_project = app.history.current();
 
     // ── AE Top Asset Thumbnail & Meta Box ──
     let selected_asset_idx: Option<usize> = ui.ctx().data_mut(|d| d.get_temp(egui::Id::new("selected_project_asset")));
     if let Some(idx) = selected_asset_idx {
-        if idx < temp_project.assets.len() {
-            let item = &temp_project.assets[idx];
+        if let Some(item) = current_project.assets.get(idx) {
             ui.group(|ui| {
                 ui.horizontal(|ui| {
                     // Render miniature preview square box
@@ -39,8 +38,7 @@ pub fn draw(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
                         ui.label(egui::RichText::new(&item.name).strong().size(13.0));
                         match &item.item_type {
                             ProjectItemType::Composition { comp_idx } => {
-                                if *comp_idx < temp_project.compositions.len() {
-                                    let c = &temp_project.compositions[*comp_idx];
+                                if let Some(c) = current_project.compositions.get(*comp_idx) {
                                     ui.small(format!("{} x {} (1.00) | {:.2} fps | {}", c.width, c.height, c.fps, c.name));
                                 }
                             }
@@ -64,24 +62,13 @@ pub fn draw(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
         }
     }
 
+    let mut add_comp_requested = false;
+    let mut import_file_requested: Option<std::path::PathBuf> = None;
+    let mut add_folder_requested = false;
+
     ui.horizontal(|ui| {
         if ui.button("+ New Comp").on_hover_text("Create New Composition").clicked() {
-            let comp_len = temp_project.compositions.len() + 1;
-            let new_comp = crate::core::timeline::Composition::new(
-                format!("comp_{}", comp_len),
-                format!("Comp {}", comp_len),
-                1920,
-                1080,
-                30,
-                300,
-            );
-            temp_project.compositions.push(new_comp);
-            temp_project.assets.push(ProjectItem::new(
-                format!("item_comp_{}", comp_len),
-                format!("Comp {}", comp_len),
-                ProjectItemType::Composition { comp_idx: temp_project.compositions.len() - 1 },
-            ));
-            project_changed = true;
+            add_comp_requested = true;
         }
 
         if ui.button("+ Import File...").clicked() {
@@ -89,33 +76,12 @@ pub fn draw(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
                 .add_filter("Media Footage", &["png", "jpg", "jpeg", "webp", "wav", "mp3", "mp4"])
                 .pick_file()
             {
-                let file_name = path.file_name().unwrap_or_default().to_string_lossy().to_string();
-                let file_path = path.to_string_lossy().to_string();
-                let item_count = temp_project.assets.len() + 1;
-
-                let item_type = if file_name.ends_with(".wav") || file_name.ends_with(".mp3") {
-                    ProjectItemType::Audio { path: file_path, duration_sec: 10.0 }
-                } else {
-                    ProjectItemType::Image { path: file_path, width: 1920, height: 1080 }
-                };
-
-                temp_project.assets.push(ProjectItem::new(
-                    format!("imported_{}", item_count),
-                    file_name,
-                    item_type,
-                ));
-                project_changed = true;
+                import_file_requested = Some(path);
             }
         }
 
         if ui.button("+ New Folder").clicked() {
-            let folder_count = temp_project.assets.len() + 1;
-            temp_project.assets.push(ProjectItem::new(
-                format!("folder_{}", folder_count),
-                format!("Assets Folder {}", folder_count),
-                ProjectItemType::Folder { name: format!("Folder {}", folder_count) },
-            ));
-            project_changed = true;
+            add_folder_requested = true;
         }
     });
 
@@ -123,13 +89,11 @@ pub fn draw(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
     ui.separator();
 
     // ── Project Items List (Assets & Compositions Bin Tree) ──
-    let mut selected_asset_idx: Option<usize> = ui.ctx().data_mut(|d| d.get_temp(egui::Id::new("selected_project_asset")));
+    let mut selected_idx_update: Option<Option<usize>> = None;
     let mut add_to_timeline_item: Option<ProjectItem> = None;
 
     egui::ScrollArea::vertical().max_height(280.0).show(ui, |ui| {
-        let assets_len = temp_project.assets.len();
-        for i in 0..assets_len {
-            let item = &temp_project.assets[i];
+        for (i, item) in current_project.assets.iter().enumerate() {
             if !query.is_empty() && !item.name.to_lowercase().contains(&query) {
                 continue;
             }
@@ -153,8 +117,7 @@ pub fn draw(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
                 ui.horizontal(|ui| {
                     let response = ui.selectable_label(is_selected, format!("{} {}", icon_str, item.name));
                     if response.clicked() {
-                        selected_asset_idx = Some(i);
-                        ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("selected_project_asset"), Some(i)));
+                        selected_idx_update = Some(Some(i));
                     }
 
                     if response.double_clicked() {
@@ -167,19 +130,21 @@ pub fn draw(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
         }
     });
 
+    if let Some(update) = selected_idx_update {
+        ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("selected_project_asset"), update));
+    }
+
     ui.add_space(8.0);
     ui.separator();
 
     // ── Selected Asset Metadata Preview Header ──
     if let Some(idx) = selected_asset_idx {
-        if idx < temp_project.assets.len() {
-            let item = &temp_project.assets[idx];
+        if let Some(item) = current_project.assets.get(idx) {
             ui.group(|ui| {
                 ui.label(egui::RichText::new(&item.name).strong());
                 match &item.item_type {
                     ProjectItemType::Composition { comp_idx } => {
-                        if *comp_idx < temp_project.compositions.len() {
-                            let c = &temp_project.compositions[*comp_idx];
+                        if let Some(c) = current_project.compositions.get(*comp_idx) {
                             ui.small(format!("Resolution: {} x {} px", c.width, c.height));
                             ui.small(format!("Frame Rate: {} fps", c.fps));
                             ui.small(format!("Duration: {} frames", c.duration_frames));
@@ -209,35 +174,81 @@ pub fn draw(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
         }
     }
 
-    // Double clicked or clicked "Add to Active Comp"
-    if let Some(item) = add_to_timeline_item {
-        let comp = temp_project.active_composition_mut();
-        let len = comp.layers.len() + 1;
-        let new_layer = match item.item_type {
-            ProjectItemType::Image { path, .. } => Layer::new(
-                format!("layer_asset_{}", len),
-                item.name,
-                LayerType::Image { path },
-                comp.duration_frames,
-            ),
-            ProjectItemType::Solid { color } => Layer::new(
-                format!("layer_solid_{}", len),
-                item.name,
-                LayerType::Solid { color },
-                comp.duration_frames,
-            ),
-            _ => Layer::new(
-                format!("layer_gen_{}", len),
-                item.name,
-                LayerType::Solid { color: [0.5, 0.5, 0.5, 1.0] },
-                comp.duration_frames,
-            ),
-        };
-        comp.add_layer(new_layer);
-        project_changed = true;
-    }
+    // Lazy mutation: Clone project ONLY on action trigger!
+    if add_comp_requested || import_file_requested.is_some() || add_folder_requested || add_to_timeline_item.is_some() {
+        let mut temp_project = app.history.current().clone();
 
-    if project_changed {
+        if add_comp_requested {
+            let comp_len = temp_project.compositions.len() + 1;
+            let new_comp = crate::core::timeline::Composition::new(
+                format!("comp_{}", comp_len),
+                format!("Comp {}", comp_len),
+                1920,
+                1080,
+                30,
+                300,
+            );
+            temp_project.compositions.push(new_comp);
+            temp_project.assets.push(ProjectItem::new(
+                format!("item_comp_{}", comp_len),
+                format!("Comp {}", comp_len),
+                ProjectItemType::Composition { comp_idx: temp_project.compositions.len() - 1 },
+            ));
+        }
+
+        if let Some(path) = import_file_requested {
+            let file_name = path.file_name().unwrap_or_default().to_string_lossy().to_string();
+            let file_path = path.to_string_lossy().to_string();
+            let item_count = temp_project.assets.len() + 1;
+
+            let item_type = if file_name.ends_with(".wav") || file_name.ends_with(".mp3") {
+                ProjectItemType::Audio { path: file_path, duration_sec: 10.0 }
+            } else {
+                ProjectItemType::Image { path: file_path, width: 1920, height: 1080 }
+            };
+
+            temp_project.assets.push(ProjectItem::new(
+                format!("imported_{}", item_count),
+                file_name,
+                item_type,
+            ));
+        }
+
+        if add_folder_requested {
+            let folder_count = temp_project.assets.len() + 1;
+            temp_project.assets.push(ProjectItem::new(
+                format!("folder_{}", folder_count),
+                format!("Assets Folder {}", folder_count),
+                ProjectItemType::Folder { name: format!("Folder {}", folder_count) },
+            ));
+        }
+
+        if let Some(item) = add_to_timeline_item {
+            let comp = temp_project.active_composition_mut();
+            let len = comp.layers.len() + 1;
+            let new_layer = match item.item_type {
+                ProjectItemType::Image { path, .. } => Layer::new(
+                    format!("layer_asset_{}", len),
+                    item.name,
+                    LayerType::Image { path },
+                    comp.duration_frames,
+                ),
+                ProjectItemType::Solid { color } => Layer::new(
+                    format!("layer_solid_{}", len),
+                    item.name,
+                    LayerType::Solid { color },
+                    comp.duration_frames,
+                ),
+                _ => Layer::new(
+                    format!("layer_gen_{}", len),
+                    item.name,
+                    LayerType::Solid { color: [0.5, 0.5, 0.5, 1.0] },
+                    comp.duration_frames,
+                ),
+            };
+            comp.add_layer(new_layer);
+        }
+
         app.history.commit(temp_project);
         crate::core::frame_cache::bump_version();
     }

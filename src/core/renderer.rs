@@ -492,9 +492,15 @@ impl WgpuRenderer {
 
         {
             let target_view = if target_snapshot {
-                self.snapshot_view.as_ref().unwrap()
+                match &self.snapshot_view {
+                    Some(view) => view,
+                    None => return false,
+                }
             } else {
-                self.target_view.as_ref().unwrap()
+                match &self.target_view {
+                    Some(view) => view,
+                    None => return false,
+                }
             };
 
             let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
