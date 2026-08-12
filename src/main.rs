@@ -79,6 +79,7 @@ pub struct AfterEffectsApp {
     pub show_guides: bool,
     pub show_handles: bool,
     pub show_comp_settings: bool,
+    pub show_shortcuts_dialog: bool,
     pub snap_to_keyframes: bool,
     pub show_graph_editor: bool,
     pub timeline_zoom: f32,
@@ -169,6 +170,7 @@ impl Default for AfterEffectsApp {
             show_guides: true,
             show_handles: true,
             show_comp_settings: false,
+            show_shortcuts_dialog: false,
             snap_to_keyframes: true,
             show_graph_editor: false,
             timeline_zoom: 1.0,
@@ -573,6 +575,9 @@ impl eframe::App for AfterEffectsApp {
 
         // Draw Composition Settings Modal Dialog
         ui::comp_settings_dialog::draw_comp_settings_dialog(self, ctx);
+
+        // Draw Keyboard Shortcuts Reference Window
+        ui::shortcuts_dialog::draw_shortcuts_dialog(self, ctx);
 
         self.current_frame = current_frame;
     }
