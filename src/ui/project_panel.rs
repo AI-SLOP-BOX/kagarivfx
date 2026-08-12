@@ -18,12 +18,54 @@ pub fn draw(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
     let query = search_query.to_lowercase();
     ui.add_space(4.0);
 
-    // ── Action Buttons: New Comp / Import Asset ──
     let mut project_changed = false;
     let mut temp_project = app.history.current().clone();
 
+    // ── AE Top Asset Thumbnail & Meta Box ──
+    let selected_asset_idx: Option<usize> = ui.ctx().data_mut(|d| d.get_temp(egui::Id::new("selected_project_asset")));
+    if let Some(idx) = selected_asset_idx {
+        if idx < temp_project.assets.len() {
+            let item = &temp_project.assets[idx];
+            ui.group(|ui| {
+                ui.horizontal(|ui| {
+                    // Render miniature preview square box
+                    let (thumb_rect, _) = ui.allocate_exact_size(egui::vec2(44.0, 32.0), egui::Sense::hover());
+                    ui.painter().rect_filled(thumb_rect, 2.0, egui::Color32::from_gray(30));
+                    ui.painter().rect_stroke(thumb_rect, 2.0, egui::Stroke::new(1.0, egui::Color32::from_gray(70)));
+                    let center = thumb_rect.center();
+                    ui.painter().text(center, egui::Align2::CENTER_CENTER, "🎞", egui::FontId::monospace(14.0), egui::Color32::from_rgb(0, 180, 255));
+
+                    ui.vertical(|ui| {
+                        ui.label(egui::RichText::new(&item.name).strong().size(13.0));
+                        match &item.item_type {
+                            ProjectItemType::Composition { comp_idx } => {
+                                if *comp_idx < temp_project.compositions.len() {
+                                    let c = &temp_project.compositions[*comp_idx];
+                                    ui.small(format!("{} x {} (1.00) | {:.2} fps | {}", c.width, c.height, c.fps, c.name));
+                                }
+                            }
+                            ProjectItemType::Image { width, height, .. } => {
+                                ui.small(format!("{} x {} px | RGB 8-bpc", width, height));
+                            }
+                            ProjectItemType::Audio { duration_sec, .. } => {
+                                ui.small(format!("44.1 kHz / 16-bit / Stereo | {:.1}s", duration_sec));
+                            }
+                            ProjectItemType::Solid { .. } => {
+                                ui.small("Solid Color Layer Footage");
+                            }
+                            ProjectItemType::Folder { .. } => {
+                                ui.small("Folder Directory Bin");
+                            }
+                        }
+                    });
+                });
+            });
+            ui.add_space(4.0);
+        }
+    }
+
     ui.horizontal(|ui| {
-        if ui.button("+ New Comp").clicked() {
+        if ui.button("+ New Comp").on_hover_text("Create New Composition").clicked() {
             let comp_len = temp_project.compositions.len() + 1;
             let new_comp = crate::core::timeline::Composition::new(
                 format!("comp_{}", comp_len),
