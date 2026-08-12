@@ -29,6 +29,8 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                 ui.selectable_value(&mut app.right_tab_idx, 16, "Color");
                 ui.selectable_value(&mut app.right_tab_idx, 17, "Flowchart");
                 ui.selectable_value(&mut app.right_tab_idx, 18, "3D Views");
+                ui.selectable_value(&mut app.right_tab_idx, 19, "Lumetri");
+                ui.selectable_value(&mut app.right_tab_idx, 20, "Libraries");
             });
             ui.separator();
 
@@ -117,6 +119,16 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
 
             if app.right_tab_idx == 18 {
                 crate::ui::camera_views::draw_camera_views(app, ui);
+                return;
+            }
+
+            if app.right_tab_idx == 19 {
+                crate::ui::lumetri_color::draw_lumetri_color(app, ui);
+                return;
+            }
+
+            if app.right_tab_idx == 20 {
+                crate::ui::cc_libraries::draw_cc_libraries(app, ui);
                 return;
             }
 
