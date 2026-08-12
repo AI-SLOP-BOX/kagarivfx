@@ -96,6 +96,8 @@ pub fn eval_f32(
     scope.push("frame", frame as i64);
     scope.push("fps", fps as i64);
     scope.push("value", base as f64);
+    scope.push("comp_width", 1920.0f64);
+    scope.push("comp_height", 1080.0f64);
 
     match engine.eval_with_scope::<Dynamic>(&mut scope, script) {
         Ok(val) => {
@@ -132,6 +134,8 @@ pub fn eval_v2(
     scope.push("time", time);
     scope.push("frame", frame as i64);
     scope.push("fps", fps as i64);
+    scope.push("comp_width", 1920.0f64);
+    scope.push("comp_height", 1080.0f64);
     // Expose base value as a Rhai array for scripts like `value + wiggle(...)`
     let base_arr: Array = vec![
         Dynamic::from_float(base[0] as f64),

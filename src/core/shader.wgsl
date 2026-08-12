@@ -52,6 +52,18 @@ struct Layer {
     huesat_sat: f32,
     huesat_light: f32,
 
+    // Glow / Bloom
+    glow_enabled: u32,
+    glow_threshold: f32,
+    glow_radius: f32,
+    glow_intensity: f32,
+    glow_color: vec4<f32>,
+
+    // Film Grain
+    grain_enabled: u32,
+    grain_intensity: f32,
+    grain_size: f32,
+
     _padding_align: u32,
 };
 
@@ -313,6 +325,27 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
             clamp(desat * layer.huesat_light, vec3<f32>(0.0), vec3<f32>(1.0)),
             final_color.a
         );
+    }
+
+    // --- Glow / Bloom ---
+    if (layer.glow_enabled == 1u) {
+        let luma = dot(final_color.rgb, vec3<f32>(0.2126, 0.7152, 0.0722));
+        if (luma >= layer.glow_threshold) {
+            let highlight = (luma - layer.glow_threshold) / max(1.0 - layer.glow_threshold, 0.001);
+            let bloom_rgb = layer.glow_color.rgb * highlight * layer.glow_intensity;
+            final_color = vec4<f32>(final_color.rgb + bloom_rgb, final_color.a);
+        }
+    }
+
+    // --- Physical Film Grain Noise ---
+    if (layer.grain_enabled == 1u) {
+        let grain_uv = in.tex_coords * globals.viewport_size / max(layer.grain_size, 0.1);
+        let n = fract(sin(dot(grain_uv, vec2<f32>(12.9898, 78.233))) * 43758.5453);
+        let grain_noise = (n - 0.5) * layer.grain_intensity;
+        let luma = dot(final_color.rgb, vec3<f32>(0.2126, 0.7152, 0.0722));
+        let luma_weight = 1.0 - abs(luma - 0.5) * 2.0;
+        let final_grain = grain_noise * luma_weight;
+        final_color = vec4<f32>(clamp(final_color.rgb + vec3<f32>(final_grain), vec3<f32>(0.0), vec3<f32>(1.0)), final_color.a);
     }
 
     // --- Layer Opacity ---

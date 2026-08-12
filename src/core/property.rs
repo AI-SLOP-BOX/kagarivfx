@@ -100,10 +100,14 @@ impl<T: Clone> Animatable<T> {
 
 impl<T: Interpolate> Animatable<T> {
     pub fn evaluate(&self, frame: u32) -> T {
-        self.value_at(frame)
+        self.value_at_f32(frame as f32)
     }
 
     pub fn value_at(&self, frame: u32) -> T {
+        self.value_at_f32(frame as f32)
+    }
+
+    pub fn value_at_f32(&self, frame: f32) -> T {
         match self {
             Animatable::Constant(value) => value.clone(),
             Animatable::Animated(keyframes) => {
@@ -111,17 +115,17 @@ impl<T: Interpolate> Animatable<T> {
                     panic!("Animatable has no keyframes");
                 }
 
-                if frame <= keyframes[0].frame {
+                if frame <= keyframes[0].frame as f32 {
                     return keyframes[0].value.clone();
                 }
 
                 let last_idx = keyframes.len() - 1;
-                if frame >= keyframes[last_idx].frame {
+                if frame >= keyframes[last_idx].frame as f32 {
                     return keyframes[last_idx].value.clone();
                 }
 
                 // Fast O(log N) binary search for the active keyframe interval
-                let next_idx = keyframes.partition_point(|kf| kf.frame <= frame);
+                let next_idx = keyframes.partition_point(|kf| kf.frame as f32 <= frame);
                 let start_idx = next_idx.saturating_sub(1);
                 let start_kf = &keyframes[start_idx];
                 let end_kf = &keyframes[(start_idx + 1).min(last_idx)];
@@ -130,8 +134,8 @@ impl<T: Interpolate> Animatable<T> {
                 if total_frames <= 0.001 {
                     return start_kf.value.clone();
                 }
-                let current_offset = (frame - start_kf.frame) as f32;
-                let t = current_offset / total_frames;
+                let current_offset = frame - start_kf.frame as f32;
+                let t = (current_offset / total_frames).clamp(0.0, 1.0);
 
                 match &start_kf.interpolation {
                     InterpolationType::Hold => start_kf.value.clone(),

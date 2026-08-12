@@ -110,6 +110,18 @@ struct LayerUniform {
     huesat_sat: f32,
     huesat_light: f32,
 
+    // Glow / Bloom
+    glow_enabled: u32,
+    glow_threshold: f32,
+    glow_radius: f32,
+    glow_intensity: f32,
+    glow_color: [f32; 4],
+
+    // Physical Film Grain
+    grain_enabled: u32,
+    grain_intensity: f32,
+    grain_size: f32,
+
     // Mesh Warp / Corner Pin
     meshwarp_enabled: u32,
     corner_top_left: [f32; 2],
@@ -661,6 +673,14 @@ impl WgpuRenderer {
                     huesat_hue: ep.huesat_hue,
                     huesat_sat: ep.huesat_sat,
                     huesat_light: ep.huesat_light,
+                    glow_enabled: ep.glow_enabled,
+                    glow_threshold: ep.glow_threshold,
+                    glow_radius: ep.glow_radius,
+                    glow_intensity: ep.glow_intensity,
+                    glow_color: ep.glow_color,
+                    grain_enabled: ep.grain_enabled,
+                    grain_intensity: ep.grain_intensity,
+                    grain_size: ep.grain_size,
                     meshwarp_enabled: ep.meshwarp_enabled,
                     corner_top_left: ep.corner_top_left,
                     corner_top_right: ep.corner_top_right,

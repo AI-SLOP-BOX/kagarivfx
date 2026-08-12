@@ -357,7 +357,7 @@ mod tests {
         start_sync_server(19001, frame_tx, conn_tx);
 
         // Allow some time for binding
-        std::thread::sleep(std::time::Duration::from_millis(50));
+        std::thread::sleep(std::time::Duration::from_millis(150));
 
         // Connect client
         let mut stream = TcpStream::connect("127.0.0.1:19001").unwrap();

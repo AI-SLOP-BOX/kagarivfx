@@ -261,6 +261,13 @@ impl RenderEffectPlugin for EnumEffectPlugin {
                 params.huesat_sat = 1.0 + (saturation.evaluate(frame) / 100.0);
                 params.huesat_light = 1.0 + (lightness.evaluate(frame) / 100.0);
             }
+            EffectType::Glow { threshold, radius, intensity, color } => {
+                params.glow_enabled = 1;
+                params.glow_threshold = threshold.evaluate(frame) / 100.0;
+                params.glow_radius = radius.evaluate(frame);
+                params.glow_intensity = intensity.evaluate(frame) / 100.0;
+                params.glow_color = color.evaluate(frame);
+            }
             EffectType::MeshWarp { top_left, top_right, bottom_left, bottom_right } => {
                 params.meshwarp_enabled = 1;
                 params.corner_top_left = top_left.evaluate(frame);
