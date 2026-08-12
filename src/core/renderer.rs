@@ -135,6 +135,10 @@ pub struct WgpuRenderer {
     pub target_texture: Option<wgpu::Texture>,
     pub target_view: Option<wgpu::TextureView>,
     pub target_size: (u32, u32),
+
+    // Snapshot target offscreen texture
+    pub snapshot_texture: Option<wgpu::Texture>,
+    pub snapshot_view: Option<wgpu::TextureView>,
 }
 
 impl WgpuRenderer {
@@ -392,6 +396,8 @@ impl WgpuRenderer {
             target_texture: None,
             target_view: None,
             target_size: (0, 0),
+            snapshot_texture: None,
+            snapshot_view: None,
         }
     }
 

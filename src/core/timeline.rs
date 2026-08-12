@@ -415,6 +415,7 @@ pub struct Layer {
 
     pub is_adjustment_layer: bool,
     pub is_guide_layer: bool,
+    pub is_shy: bool,
 
     // ── AE Masking System ──
     pub masks: Vec<crate::core::mask::Mask>,
@@ -444,6 +445,7 @@ impl Layer {
             blend_mode: BlendMode::Normal,
             is_adjustment_layer: false,
             is_guide_layer: false,
+            is_shy: false,
             masks: Vec::new(),
         }
     }

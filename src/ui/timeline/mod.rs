@@ -327,6 +327,12 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                         for l in &mut comp.layers { l.is_3d = !all_3d; }
                         project_changed = true;
                     }
+                    let shy_master_id = egui::Id::new("ae_global_shy_master");
+                    let mut shy_active = ui.ctx().data_mut(|d| *d.get_temp_mut_or_insert_with(shy_master_id, || false));
+                    if ui.selectable_label(shy_active, "[Shy]").on_hover_text("Toggle Global Shy Master Switch to Hide Marked Shy Layers").clicked() {
+                        shy_active = !shy_active;
+                        ui.ctx().data_mut(|d| d.insert_temp(shy_master_id, shy_active));
+                    }
                 });
             }
 
@@ -376,9 +382,42 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                     let zoom_span = total_frames as f32 / app.timeline_zoom;
                     let start_frame = 0.0;
 
+                // AE Keyboard Shortcuts for In/Out Trimming (Alt+[, Alt+], [, ])
+                if let Some(sel_idx) = app.selected_layer_idx {
+                    if sel_idx < comp.layers.len() {
+                        let alt_down = ui.input(|i| i.modifiers.alt);
+                        if ui.input(|i| i.key_pressed(egui::Key::OpenBracket)) {
+                            if alt_down {
+                                comp.layers[sel_idx].in_frame = *current_frame;
+                            } else {
+                                let dur = comp.layers[sel_idx].out_frame.saturating_sub(comp.layers[sel_idx].in_frame);
+                                comp.layers[sel_idx].in_frame = *current_frame;
+                                comp.layers[sel_idx].out_frame = *current_frame + dur;
+                            }
+                            project_changed = true;
+                        }
+                        if ui.input(|i| i.key_pressed(egui::Key::CloseBracket)) {
+                            if alt_down {
+                                comp.layers[sel_idx].out_frame = *current_frame;
+                            } else {
+                                let dur = comp.layers[sel_idx].out_frame.saturating_sub(comp.layers[sel_idx].in_frame);
+                                comp.layers[sel_idx].out_frame = *current_frame;
+                                comp.layers[sel_idx].in_frame = current_frame.saturating_sub(dur);
+                            }
+                            project_changed = true;
+                        }
+                    }
+                }
+
                 let filter_id = ui.make_persistent_id("ae_timeline_filter");
                 let filter_text: String = ui.ctx().data_mut(|d| d.get_temp(filter_id).unwrap_or_default());
+
+                let shy_master_id = egui::Id::new("ae_global_shy_master");
+                let shy_active: bool = ui.ctx().data_mut(|d| d.get_temp(shy_master_id).unwrap_or(false));
                 for i in 0..comp.layers.len() {
+                    if shy_active && comp.layers[i].is_shy {
+                        continue;
+                    }
                     let layer_name = comp.layers[i].name.clone();
                     if !filter_text.is_empty() && !layer_name.to_lowercase().contains(&filter_text.to_lowercase()) {
                         continue;
@@ -465,6 +504,12 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                                 let is_3d = comp.layers[i].is_3d;
                                 if ui.selectable_label(is_3d, "3D").on_hover_text("3D Layer Switch").clicked() {
                                     comp.layers[i].is_3d = !is_3d;
+                                    project_changed = true;
+                                }
+
+                                let is_shy = comp.layers[i].is_shy;
+                                if ui.selectable_label(is_shy, "Shy").on_hover_text("Shy Layer Switch").clicked() {
+                                    comp.layers[i].is_shy = !is_shy;
                                     project_changed = true;
                                 }
 

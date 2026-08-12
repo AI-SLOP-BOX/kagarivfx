@@ -3,7 +3,7 @@ use crate::core::mask::point_in_polygon;
 
 /// Professional CPU-based rasterizer to composite active composition layers
 /// into a flat RGBA8 pixel buffer for preview rendering or FFmpeg export.
-pub fn render_frame_to_pixels(comp: &Composition, frame: u32, width: u32, height: u32) -> Vec<u8> {
+pub fn render_frame_to_pixels(comp: &Composition, frame: u32, width: u32, height: u32, exposure_ev: f32, lut_mode: u32) -> Vec<u8> {
     let size = (width * height * 4) as usize;
     // Base composition background: Dark gray
     let mut buffer = vec![0u8; size];
@@ -152,6 +152,35 @@ pub fn render_frame_to_pixels(comp: &Composition, frame: u32, width: u32, height
                 }
             }
         }
+    }
+
+    // Apply exposure EV shift and LUT color mapping (if non-zero)
+    let mult = 2.0f32.powf(exposure_ev);
+    for p in (0..size).step_by(4) {
+        let mut r = buffer[p] as f32 / 255.0 * mult;
+        let mut g = buffer[p + 1] as f32 / 255.0 * mult;
+        let mut b = buffer[p + 2] as f32 / 255.0 * mult;
+
+        if lut_mode == 1 {
+            // Linear sRGB conversion (2.2 Gamma linearize)
+            r = r.powf(2.2);
+            g = g.powf(2.2);
+            b = b.powf(2.2);
+        } else if lut_mode == 2 {
+            // ACEScg filmic tone mapping curve
+            let a = 2.51;
+            let b_val = 0.03;
+            let c = 2.43;
+            let d = 0.59;
+            let e = 0.14;
+            r = (r * (a * r + b_val)) / (r * (c * r + d) + e);
+            g = (g * (a * g + b_val)) / (g * (c * g + d) + e);
+            b = (b * (a * b + b_val)) / (b * (c * b + d) + e);
+        }
+
+        buffer[p] = (r.clamp(0.0, 1.0) * 255.0) as u8;
+        buffer[p + 1] = (g.clamp(0.0, 1.0) * 255.0) as u8;
+        buffer[p + 2] = (b.clamp(0.0, 1.0) * 255.0) as u8;
     }
 
     buffer

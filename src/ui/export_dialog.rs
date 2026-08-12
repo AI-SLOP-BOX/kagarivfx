@@ -168,6 +168,8 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
                                     frame,
                                     comp_snapshot.width,
                                     comp_snapshot.height,
+                                    0.0,
+                                    0,
                                 )
                             });
                         } else {

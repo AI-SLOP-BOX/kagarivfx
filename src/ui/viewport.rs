@@ -177,6 +177,22 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: u32) 
                     if ui.selectable_value(&mut lut_idx, 1, "Linear sRGB").clicked() { ctx.data_mut(|d| d.insert_temp(lut_id, lut_idx)); }
                     if ui.selectable_value(&mut lut_idx, 2, "ACEScg").clicked() { ctx.data_mut(|d| d.insert_temp(lut_id, lut_idx)); }
                 });
+
+            // Resolution Scale Selector (Full, Half, Quarter)
+            ui.separator();
+            let res_scale_id = egui::Id::new("ae_preview_res_scale");
+            let mut res_scale_idx = ctx.data_mut(|d| *d.get_temp_mut_or_insert_with(res_scale_id, || 0usize));
+            egui::ComboBox::from_id_source("res_scale_combo")
+                .selected_text(match res_scale_idx {
+                    0 => "Full (1/1)",
+                    1 => "Half (1/2)",
+                    _ => "Quarter (1/4)",
+                })
+                .show_ui(ui, |ui| {
+                    if ui.selectable_value(&mut res_scale_idx, 0, "Full (1/1)").clicked() { ctx.data_mut(|d| d.insert_temp(res_scale_id, res_scale_idx)); }
+                    if ui.selectable_value(&mut res_scale_idx, 1, "Half (1/2)").clicked() { ctx.data_mut(|d| d.insert_temp(res_scale_id, res_scale_idx)); }
+                    if ui.selectable_value(&mut res_scale_idx, 2, "Quarter (1/4)").clicked() { ctx.data_mut(|d| d.insert_temp(res_scale_id, res_scale_idx)); }
+                });
         });
 
         // ── Comp Settings Modal ──────────────────────────────────────────────
