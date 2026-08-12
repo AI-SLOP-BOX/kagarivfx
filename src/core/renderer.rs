@@ -58,7 +58,8 @@ const INDICES: &[u16] = &[0, 1, 2, 0, 2, 3];
 #[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
 struct GlobalsUniform {
     viewport_size: [f32; 2],
-    _padding: [f32; 2],
+    exposure_ev: f32,
+    lut_mode: u32,
 }
 
 #[repr(C)]
@@ -427,14 +428,15 @@ impl WgpuRenderer {
     }
 
     /// Renders the given composition at the specified frame, returning the texture view.
-    pub fn render(&mut self, comp: &Composition, frame: u32) -> (&wgpu::TextureView, bool) {
+    pub fn render(&mut self, comp: &Composition, frame: u32, exposure_ev: f32, lut_mode: u32) -> (&wgpu::TextureView, bool) {
         let (width, height) = (comp.width, comp.height);
         let recreated = self.ensure_target_size(width, height);
 
         // Update Globals Uniform
         let globals = GlobalsUniform {
             viewport_size: [width as f32, height as f32],
-            _padding: [0.0, 0.0],
+            exposure_ev,
+            lut_mode,
         };
         self.queue
             .write_buffer(&self.globals_buffer, 0, bytemuck::bytes_of(&globals));

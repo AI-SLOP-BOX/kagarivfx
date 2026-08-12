@@ -290,8 +290,12 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: u32) 
         #[cfg(feature = "wgpu")]
         if let Some(renderer) = &mut app.renderer {
             if let Some(wgpu_state) = &app.wgpu_state {
-                let comp_ref = app.history.current().active_composition();
-                let (texture_view, recreated) = renderer.render(comp_ref, current_frame);
+                let exp_id = egui::Id::new("ae_exposure_ev");
+                let exposure_ev = ctx.data_mut(|d| *d.get_temp_mut_or_insert_with(exp_id, || 0.0f32));
+                let lut_id = egui::Id::new("ae_colorspace_lut");
+                let lut_idx = ctx.data_mut(|d| *d.get_temp_mut_or_insert_with(lut_id, || 0usize));
+
+                let (texture_view, recreated) = renderer.render(comp, current_frame, exposure_ev, lut_idx as u32);
                 if app.viewport_texture_id.is_none() || recreated {
                     if let Some(old_id) = app.viewport_texture_id {
                         wgpu_state.renderer.write().free_texture(&old_id);

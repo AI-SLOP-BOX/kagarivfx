@@ -847,10 +847,10 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
             });
             }
 
-            if let Some((a, b)) = swap_request {
-                temp_project.active_composition_mut().layers.swap(a, b);
-                project_changed = true;
-            }
+        if let Some((a, b)) = swap_request {
+            temp_project.active_composition_mut().layers.swap(a, b);
+            project_changed = true;
+        }
 
             if project_changed {
                 let is_pointer_down = ui.input(|i| i.pointer.any_down());

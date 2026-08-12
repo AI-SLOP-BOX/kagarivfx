@@ -1,5 +1,7 @@
 struct Globals {
     viewport_size: vec2<f32>,
+    exposure_ev: f32,
+    lut_mode: u32,
 };
 
 struct Layer {
@@ -328,6 +330,24 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
         final_color = vec4<f32>(pow(final_color.rgb, vec3<f32>(0.67)), final_color.a);
     }
     // blend_mode == 0u: Normal — no modification needed, GPU alpha blend handles it.
+
+    // --- Viewport Exposure Adjustment ---
+    final_color = vec4<f32>(final_color.rgb * pow(2.0, globals.exposure_ev), final_color.a);
+
+    // --- Viewport LUT Color Management ---
+    if (globals.lut_mode == 1u) {
+        // Linear sRGB conversion (Approximated 2.2 Gamma linearize)
+        final_color = vec4<f32>(pow(final_color.rgb, vec3<f32>(2.2)), final_color.a);
+    } else if (globals.lut_mode == 2u) {
+        // ACEScg Approximated filmic tone map curve
+        let a = 2.51;
+        let b = 0.03;
+        let c = 2.43;
+        let d = 0.59;
+        let e = 0.14;
+        let aces = clamp((final_color.rgb * (a * final_color.rgb + vec3<f32>(b))) / (final_color.rgb * (c * final_color.rgb + vec3<f32>(d)) + vec3<f32>(e)), vec3<f32>(0.0), vec3<f32>(1.0));
+        final_color = vec4<f32>(aces, final_color.a);
+    }
 
     if (final_color.a <= 0.001) {
         discard;
