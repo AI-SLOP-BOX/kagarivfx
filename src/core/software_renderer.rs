@@ -35,16 +35,25 @@ pub fn render_frame_to_pixels(comp: &Composition, frame: u32, width: u32, height
             continue;
         }
 
-        // Standard bounding box size calculations
-        let w = (scale[0].abs() / 100.0) * 128.0;
-        let h = (scale[1].abs() / 100.0) * 128.0;
+        let (base_w, base_h) = match &layer.layer_type {
+            LayerType::Solid { .. } | LayerType::PreComp { .. } => (comp.width as f32, comp.height as f32),
+            LayerType::Text { font_size, text, .. } => (
+                (text.len().max(1) as f32 * *font_size as f32 * 0.6).max(*font_size as f32),
+                *font_size as f32 * 1.2,
+            ),
+            LayerType::Shape { .. } | LayerType::Image { .. } => (comp.width as f32 * 0.5, comp.height as f32 * 0.5),
+            _ => continue, // Null or audio layers don't output visual pixels
+        };
+
+        let w = (scale[0].abs() / 100.0) * base_w;
+        let h = (scale[1].abs() / 100.0) * base_h;
 
         let base_color = match &layer.layer_type {
             LayerType::Solid { color } | LayerType::Text { color, .. } => *color,
             LayerType::Shape { color, .. } => *color,
             LayerType::Image { .. } => [0.2, 0.6, 0.9, 1.0], // fallback image color
             LayerType::PreComp { .. } => [0.8, 0.3, 0.8, 1.0], // fallback precomp color
-            _ => continue, // Null or audio layers don't output visual pixels
+            _ => continue,
         };
 
         // Extract layer transform matrix metrics for pixel boundaries

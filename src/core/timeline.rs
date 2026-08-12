@@ -218,35 +218,124 @@ impl Default for Transform2D {
     }
 }
 
+/// Helper to map an extended frame number according to keyframe loop settings (LoopOut / PingPong).
+pub fn remap_frame_for_loop(frame: u32, first_kf: u32, last_kf: u32, is_pingpong: bool) -> u32 {
+    if first_kf >= last_kf || frame <= last_kf {
+        return frame;
+    }
+    let span = last_kf - first_kf;
+    let offset = frame - first_kf;
+    let cycle_idx = offset / span;
+    let rem = offset % span;
+
+    if is_pingpong && (cycle_idx % 2 == 1) {
+        last_kf - rem
+    } else {
+        first_kf + rem
+    }
+}
+
 impl Transform2D {
     pub fn eval_position(&self, frame: u32, fps: u32) -> [f32; 2] {
-        let base = self.position.evaluate(frame);
+        let eval_frame = match &self.position_expression {
+            Some(Expression::LoopOut) => {
+                if let Some(kfs) = self.position.keyframes() {
+                    if !kfs.is_empty() {
+                        remap_frame_for_loop(frame, kfs[0].frame, kfs.last().unwrap().frame, false)
+                    } else { frame }
+                } else { frame }
+            }
+            Some(Expression::PingPong) => {
+                if let Some(kfs) = self.position.keyframes() {
+                    if !kfs.is_empty() {
+                        remap_frame_for_loop(frame, kfs[0].frame, kfs.last().unwrap().frame, true)
+                    } else { frame }
+                } else { frame }
+            }
+            _ => frame,
+        };
+
+        let base = self.position.evaluate(eval_frame);
         match &self.position_expression {
-            Some(expr) => expr.evaluate_v2(base, frame, fps),
+            Some(expr) => expr.evaluate_v2(base, eval_frame, fps),
             None => base,
         }
     }
 
     pub fn eval_rotation(&self, frame: u32, fps: u32) -> f32 {
-        let base = self.rotation.evaluate(frame);
+        let eval_frame = match &self.rotation_expression {
+            Some(Expression::LoopOut) => {
+                if let Some(kfs) = self.rotation.keyframes() {
+                    if !kfs.is_empty() {
+                        remap_frame_for_loop(frame, kfs[0].frame, kfs.last().unwrap().frame, false)
+                    } else { frame }
+                } else { frame }
+            }
+            Some(Expression::PingPong) => {
+                if let Some(kfs) = self.rotation.keyframes() {
+                    if !kfs.is_empty() {
+                        remap_frame_for_loop(frame, kfs[0].frame, kfs.last().unwrap().frame, true)
+                    } else { frame }
+                } else { frame }
+            }
+            _ => frame,
+        };
+
+        let base = self.rotation.evaluate(eval_frame);
         match &self.rotation_expression {
-            Some(expr) => expr.evaluate_f32(base, frame, fps),
+            Some(expr) => expr.evaluate_f32(base, eval_frame, fps),
             None => base,
         }
     }
 
     pub fn eval_scale(&self, frame: u32, fps: u32) -> [f32; 2] {
-        let base = self.scale.evaluate(frame);
+        let eval_frame = match &self.scale_expression {
+            Some(Expression::LoopOut) => {
+                if let Some(kfs) = self.scale.keyframes() {
+                    if !kfs.is_empty() {
+                        remap_frame_for_loop(frame, kfs[0].frame, kfs.last().unwrap().frame, false)
+                    } else { frame }
+                } else { frame }
+            }
+            Some(Expression::PingPong) => {
+                if let Some(kfs) = self.scale.keyframes() {
+                    if !kfs.is_empty() {
+                        remap_frame_for_loop(frame, kfs[0].frame, kfs.last().unwrap().frame, true)
+                    } else { frame }
+                } else { frame }
+            }
+            _ => frame,
+        };
+
+        let base = self.scale.evaluate(eval_frame);
         match &self.scale_expression {
-            Some(expr) => expr.evaluate_v2(base, frame, fps),
+            Some(expr) => expr.evaluate_v2(base, eval_frame, fps),
             None => base,
         }
     }
 
     pub fn eval_opacity(&self, frame: u32, fps: u32) -> f32 {
-        let base = self.opacity.evaluate(frame);
+        let eval_frame = match &self.opacity_expression {
+            Some(Expression::LoopOut) => {
+                if let Some(kfs) = self.opacity.keyframes() {
+                    if !kfs.is_empty() {
+                        remap_frame_for_loop(frame, kfs[0].frame, kfs.last().unwrap().frame, false)
+                    } else { frame }
+                } else { frame }
+            }
+            Some(Expression::PingPong) => {
+                if let Some(kfs) = self.opacity.keyframes() {
+                    if !kfs.is_empty() {
+                        remap_frame_for_loop(frame, kfs[0].frame, kfs.last().unwrap().frame, true)
+                    } else { frame }
+                } else { frame }
+            }
+            _ => frame,
+        };
+
+        let base = self.opacity.evaluate(eval_frame);
         match &self.opacity_expression {
-            Some(expr) => expr.evaluate_f32(base, frame, fps),
+            Some(expr) => expr.evaluate_f32(base, eval_frame, fps),
             None => base,
         }
     }
@@ -556,6 +645,72 @@ impl Composition {
         }
         (pos, scale, rot, opa)
     }
+
+    pub fn resolve_world_transform_3d(
+        &self,
+        layer: &Layer,
+        frame: u32,
+    ) -> [[f32; 4]; 4] {
+        let pos3d = layer.transform_3d.position.evaluate(frame);
+        let rot3d = layer.transform_3d.rotation.evaluate(frame);
+        let scale3d = layer.transform_3d.scale.evaluate(frame);
+
+        // Perspective Projection Matrix for Camera
+        let fov_rad = self.active_camera.fov_degrees.to_radians();
+        let aspect = self.width as f32 / self.height.max(1) as f32;
+        let near = 0.1f32;
+        let far = 10000.0f32;
+        let f = 1.0 / (fov_rad * 0.5).tan();
+
+        let proj_3d = [
+            [f / aspect, 0.0, 0.0, 0.0],
+            [0.0, -f, 0.0, 0.0],
+            [0.0, 0.0, far / (far - near), 1.0],
+            [0.0, 0.0, -(far * near) / (far - near), 0.0],
+        ];
+
+        let rad_x = rot3d[0].to_radians();
+        let rad_y = rot3d[1].to_radians();
+        let rad_z = rot3d[2].to_radians();
+
+        let cx = rad_x.cos(); let sx = rad_x.sin();
+        let cy = rad_y.cos(); let sy = rad_y.sin();
+        let cz = rad_z.cos(); let sz = rad_z.sin();
+
+        // Euler rotation matrix Z * Y * X
+        let rot_matrix = [
+            [cy * cz, cy * sz, -sy, 0.0],
+            [sx * sy * cz - cx * sz, sx * sy * sz + cx * cz, sx * cy, 0.0],
+            [cx * sy * cz + sx * sz, cx * sy * sz - sx * cz, cx * cy, 0.0],
+            [0.0, 0.0, 0.0, 1.0],
+        ];
+
+        let scale_matrix = [
+            [scale3d[0] / 100.0, 0.0, 0.0, 0.0],
+            [0.0, scale3d[1] / 100.0, 0.0, 0.0],
+            [0.0, 0.0, scale3d[2] / 100.0, 0.0],
+            [0.0, 0.0, 0.0, 1.0],
+        ];
+
+        let pos_matrix = [
+            [1.0, 0.0, 0.0, 0.0],
+            [0.0, 1.0, 0.0, 0.0],
+            [0.0, 0.0, 1.0, 0.0],
+            [pos3d[0] / (self.width as f32 * 0.5), pos3d[1] / (self.height as f32 * 0.5), pos3d[2] / 1000.0, 1.0],
+        ];
+
+        fn m4_mul(a: [[f32; 4]; 4], b: [[f32; 4]; 4]) -> [[f32; 4]; 4] {
+            let mut out = [[0.0; 4]; 4];
+            for r in 0..4 {
+                for c in 0..4 {
+                    out[r][c] = a[r][0] * b[0][c] + a[r][1] * b[1][c] + a[r][2] * b[2][c] + a[r][3] * b[3][c];
+                }
+            }
+            out
+        }
+
+        m4_mul(proj_3d, m4_mul(pos_matrix, m4_mul(rot_matrix, scale_matrix)))
+    }
 }
 
 // ─── Project Item & Asset Management ─────────────────────────────────────
@@ -668,5 +823,32 @@ impl Project {
 
     pub fn active_composition_mut(&mut self) -> &mut Composition {
         &mut self.compositions[self.active_composition_idx]
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_remap_frame_for_loop_cycle() {
+        // Keyframe interval: 0 to 30 (span = 30)
+        // Frame 15 -> 15
+        assert_eq!(remap_frame_for_loop(15, 0, 30, false), 15);
+        // Frame 30 -> 30
+        assert_eq!(remap_frame_for_loop(30, 0, 30, false), 30);
+        // Frame 45 -> (45-0)%30 = 15
+        assert_eq!(remap_frame_for_loop(45, 0, 30, false), 15);
+    }
+
+    #[test]
+    fn test_remap_frame_for_loop_pingpong() {
+        // Keyframe interval: 0 to 30 (span = 30)
+        // Cycle 0 (0..30): frame 15 -> 15
+        assert_eq!(remap_frame_for_loop(15, 0, 30, true), 15);
+        // Cycle 1 (30..60, odd cycle = reverse): frame 45 -> 30 - 15 = 15
+        assert_eq!(remap_frame_for_loop(45, 0, 30, true), 15);
+        // Cycle 2 (60..90, even cycle = forward): frame 75 -> 0 + 15 = 15
+        assert_eq!(remap_frame_for_loop(75, 0, 30, true), 15);
     }
 }

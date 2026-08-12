@@ -132,6 +132,26 @@ fn sample_layer_color(local_pos: vec2<f32>, tc: vec2<f32>, blur_extend: f32) -> 
             let dist = length(local_pos);
             let alpha = 1.0 - smoothstep(0.48 - blur_extend, 0.5 + blur_extend, dist);
             c = vec4<f32>(layer.color.rgb, layer.color.a * alpha);
+        } else if (layer.shape_type == 2u) {
+            // Procedural 5-Point Star SDF
+            let p = local_pos * 2.0;
+            let r = length(p);
+            let angle = atan2(p.y, p.x);
+            let n = 5.0;
+            let angle_mod = abs(fract((angle / 6.2831853) * n + 0.5) - 0.5) * (6.2831853 / n);
+            let d_star = r * cos(angle_mod - 0.314159) - 0.45;
+            let alpha = 1.0 - smoothstep(-0.04 - blur_extend, 0.04 + blur_extend, d_star);
+            c = vec4<f32>(layer.color.rgb, layer.color.a * alpha);
+        } else if (layer.shape_type == 3u) {
+            // Procedural Regular Hexagon (6-Point Polygon) SDF
+            let p = local_pos * 2.0;
+            let r = length(p);
+            let angle = atan2(p.y, p.x);
+            let n = 6.0;
+            let angle_mod = abs(fract((angle / 6.2831853) * n + 0.5) - 0.5) * (6.2831853 / n);
+            let d_poly = r * cos(angle_mod) - 0.45;
+            let alpha = 1.0 - smoothstep(-0.04 - blur_extend, 0.04 + blur_extend, d_poly);
+            c = vec4<f32>(layer.color.rgb, layer.color.a * alpha);
         } else {
             c = layer.color;
         }

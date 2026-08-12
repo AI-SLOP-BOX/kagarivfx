@@ -120,35 +120,35 @@ impl<T: Interpolate> Animatable<T> {
                     return keyframes[last_idx].value.clone();
                 }
 
-                for i in 0..last_idx {
-                    let start_kf = &keyframes[i];
-                    let end_kf = &keyframes[i + 1];
+                // Fast O(log N) binary search for the active keyframe interval
+                let next_idx = keyframes.partition_point(|kf| kf.frame <= frame);
+                let start_idx = next_idx.saturating_sub(1);
+                let start_kf = &keyframes[start_idx];
+                let end_kf = &keyframes[(start_idx + 1).min(last_idx)];
 
-                    if frame >= start_kf.frame && frame < end_kf.frame {
-                        let total_frames = (end_kf.frame - start_kf.frame) as f32;
-                        let current_offset = (frame - start_kf.frame) as f32;
-                        let t = current_offset / total_frames;
+                let total_frames = (end_kf.frame - start_kf.frame) as f32;
+                if total_frames <= 0.001 {
+                    return start_kf.value.clone();
+                }
+                let current_offset = (frame - start_kf.frame) as f32;
+                let t = current_offset / total_frames;
 
-                        return match &start_kf.interpolation {
-                            InterpolationType::Hold => start_kf.value.clone(),
-                            InterpolationType::Linear => {
-                                T::interpolate(&start_kf.value, &end_kf.value, t)
-                            }
-                            InterpolationType::Bezier { custom_bezier, .. } => {
-                                let eased_t = if let Some(coords) = custom_bezier {
-                                    solve_bezier_eased_time(
-                                        t, coords[0], coords[1], coords[2], coords[3],
-                                    )
-                                } else {
-                                    solve_bezier_eased_time(t, 0.25, 0.1, 0.25, 1.0)
-                                };
-                                T::interpolate(&start_kf.value, &end_kf.value, eased_t)
-                            }
+                match &start_kf.interpolation {
+                    InterpolationType::Hold => start_kf.value.clone(),
+                    InterpolationType::Linear => {
+                        T::interpolate(&start_kf.value, &end_kf.value, t)
+                    }
+                    InterpolationType::Bezier { custom_bezier, .. } => {
+                        let eased_t = if let Some(coords) = custom_bezier {
+                            solve_bezier_eased_time(
+                                t, coords[0], coords[1], coords[2], coords[3],
+                            )
+                        } else {
+                            solve_bezier_eased_time(t, 0.25, 0.1, 0.25, 1.0)
                         };
+                        T::interpolate(&start_kf.value, &end_kf.value, eased_t)
                     }
                 }
-
-                keyframes[0].value.clone()
             }
         }
     }

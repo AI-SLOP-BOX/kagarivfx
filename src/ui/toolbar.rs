@@ -69,31 +69,49 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
 
                 ui.add_space(8.0);
                 ui.separator();
-                ui.add_space(8.0);
+                ui.add_space(4.0);
 
-                // Workspace Layout Selectors (AE Workspaces)
+                // AE Snapping Toggle
+                let snap_id = egui::Id::new("ae_snapping_enabled");
+                let mut snapping = ctx.data_mut(|d| *d.get_temp_mut_or_insert_with(snap_id, || true));
+                if ui.checkbox(&mut snapping, "Snapping").on_hover_text("Enable Layer & Keyframe Snapping").changed() {
+                    ctx.data_mut(|d| d.insert_temp(snap_id, snapping));
+                }
+
+                ui.add_space(4.0);
+                ui.separator();
+                ui.add_space(4.0);
+
+                // AE Workspace Layout Switcher Pill Buttons
                 ui.label(egui::RichText::new("Workspace:").small().color(egui::Color32::from_gray(160)));
-                let ws_default = app.left_tab_idx == 0 && app.right_tab_idx == 0;
-                if ui.selectable_label(ws_default, "Default").clicked() {
-                    app.left_tab_idx = 0;
-                    app.right_tab_idx = 0;
-                }
-                let ws_color = app.left_tab_idx == 1;
-                if ui.selectable_label(ws_color, "Color & FX").clicked() {
-                    app.left_tab_idx = 1;
-                    app.right_tab_idx = 0;
-                }
-                let ws_mg = app.right_tab_idx == 1;
-                if ui.selectable_label(ws_mg, "Motion Graphics").clicked() {
-                    app.right_tab_idx = 1;
+                for (name, l_idx, r_idx) in [
+                    ("Default", 0, 0),
+                    ("Learn", 0, 4),
+                    ("Assembly", 0, 2),
+                    ("Editing", 0, 1),
+                    ("Color", 1, 19),
+                    ("Effects", 1, 0),
+                    ("Audio", 0, 7),
+                    ("Libraries", 0, 20),
+                ] {
+                    let is_active = app.left_tab_idx == l_idx && app.right_tab_idx == r_idx;
+                    if ui.selectable_label(is_active, name).clicked() {
+                        app.left_tab_idx = l_idx;
+                        app.right_tab_idx = r_idx;
+                    }
                 }
 
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    if ui.button(egui::RichText::new("⚡ Render Queue (Cmd+M)").strong().color(egui::Color32::from_rgb(255, 200, 80)))
+                    if ui.button(egui::RichText::new("🚀 Render Queue (Cmd+M)").strong().color(egui::Color32::from_rgb(255, 200, 80)))
                         .clicked()
                     {
                         app.show_export_dialog = true;
                     }
+                    ui.add_space(8.0);
+                    let search_id = egui::Id::new("ae_toolbar_search_query");
+                    let mut search_query = ctx.data_mut(|d| d.get_temp_mut_or_insert_with(search_id, || "".to_string()).clone());
+                    ui.add_sized([120.0, 18.0], egui::TextEdit::singleline(&mut search_query).hint_text("Search Effects..."));
+                    ctx.data_mut(|d| d.insert_temp(search_id, search_query));
                 });
             });
         });

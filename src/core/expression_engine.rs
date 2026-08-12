@@ -30,8 +30,42 @@ pub fn build_engine() -> Engine {
     engine.register_fn("abs", |x: f64| -> f64 { x.abs() });
     engine.register_fn("clamp", |v: f64, lo: f64, hi: f64| -> f64 { v.clamp(lo, hi) });
     engine.register_fn("linear", |t: f64, t_min: f64, t_max: f64, v_min: f64, v_max: f64| -> f64 {
-        let s = ((t - t_min) / (t_max - t_min)).clamp(0.0, 1.0);
+        let s = if (t_max - t_min).abs() < 1e-6 { 0.0 } else { ((t - t_min) / (t_max - t_min)).clamp(0.0, 1.0) };
         v_min + s * (v_max - v_min)
+    });
+
+    // --- AE-compatible Easing functions ---
+    engine.register_fn("ease", |t: f64, t_min: f64, t_max: f64, v_min: f64, v_max: f64| -> f64 {
+        let s = if (t_max - t_min).abs() < 1e-6 { 0.0 } else { ((t - t_min) / (t_max - t_min)).clamp(0.0, 1.0) };
+        let smooth_s = s * s * (3.0 - 2.0 * s); // Hermite smoothstep
+        v_min + smooth_s * (v_max - v_min)
+    });
+
+    engine.register_fn("easeIn", |t: f64, t_min: f64, t_max: f64, v_min: f64, v_max: f64| -> f64 {
+        let s = if (t_max - t_min).abs() < 1e-6 { 0.0 } else { ((t - t_min) / (t_max - t_min)).clamp(0.0, 1.0) };
+        let ease_in_s = s * s; // Quadratic acceleration
+        v_min + ease_in_s * (v_max - v_min)
+    });
+
+    engine.register_fn("easeOut", |t: f64, t_min: f64, t_max: f64, v_min: f64, v_max: f64| -> f64 {
+        let s = if (t_max - t_min).abs() < 1e-6 { 0.0 } else { ((t - t_min) / (t_max - t_min)).clamp(0.0, 1.0) };
+        let ease_out_s = 1.0 - (1.0 - s) * (1.0 - s); // Quadratic deceleration
+        v_min + ease_out_s * (v_max - v_min)
+    });
+
+    // --- AE-compatible Random functions ---
+    engine.register_fn("random", |min: f64, max: f64| -> f64 {
+        let seed = (min * 1000.0 + max * 1337.0).sin().abs();
+        min + seed * (max - min)
+    });
+
+    engine.register_fn("gaussRandom", |min: f64, max: f64| -> f64 {
+        let mean = (min + max) * 0.5;
+        let std_dev = (max - min) * 0.16666; // 3-sigma bounds
+        let u1 = (min * 777.0).sin().abs().clamp(0.0001, 0.9999);
+        let u2 = (max * 999.0).cos().abs().clamp(0.0001, 0.9999);
+        let z0 = (-2.0 * u1.ln()).sqrt() * (2.0 * std::f64::consts::PI * u2).cos();
+        (mean + z0 * std_dev).clamp(min, max)
     });
 
     // --- Array constructors ---
@@ -170,5 +204,18 @@ mod tests {
         let engine = build_engine();
         let r = validate_script(&engine, "this is not valid rhai;;;;;");
         assert!(r.is_err(), "Should have failed validation");
+    }
+
+    #[test]
+    fn test_ease_expression() {
+        let engine = build_engine();
+        let mid = eval_f32(&engine, "ease(0.5, 0.0, 1.0, 0.0, 100.0)", 0.0, 0, 30);
+        assert!((mid - 50.0).abs() < 0.01, "Expected 50 at midpoint, got {}", mid);
+
+        let ease_in = eval_f32(&engine, "easeIn(0.5, 0.0, 1.0, 0.0, 100.0)", 0.0, 0, 30);
+        assert!((ease_in - 25.0).abs() < 0.01, "Expected 25 for easeIn at midpoint, got {}", ease_in);
+
+        let ease_out = eval_f32(&engine, "easeOut(0.5, 0.0, 1.0, 0.0, 100.0)", 0.0, 0, 30);
+        assert!((ease_out - 75.0).abs() < 0.01, "Expected 75 for easeOut at midpoint, got {}", ease_out);
     }
 }

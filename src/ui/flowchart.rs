@@ -2,6 +2,7 @@ use eframe::egui;
 use crate::AfterEffectsApp;
 use crate::core::timeline::{Composition, LayerType};
 
+#[allow(dead_code)]
 pub fn draw_flowchart_view(
     app: &mut AfterEffectsApp,
     ui: &mut egui::Ui,

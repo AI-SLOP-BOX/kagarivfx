@@ -690,6 +690,25 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: u32) 
                     // Center Target Circle
                     ui.painter().circle_filled(center, 5.0, egui::Color32::from_rgb(255, 215, 0));
                     ui.painter().circle_stroke(center, 9.0, egui::Stroke::new(1.5, egui::Color32::WHITE));
+
+                    // AE 3D Axis Gizmo (Red X, Green Y, Blue Z)
+                    if s_layer.is_3d {
+                        // Red X-Axis Arrow
+                        let x_end = center + egui::vec2(45.0, 0.0);
+                        ui.painter().line_segment([center, x_end], egui::Stroke::new(2.5, egui::Color32::from_rgb(255, 60, 60)));
+                        ui.painter().text(x_end + egui::vec2(6.0, -6.0), egui::Align2::LEFT_CENTER, "X", egui::FontId::proportional(11.0), egui::Color32::from_rgb(255, 60, 60));
+
+                        // Green Y-Axis Arrow
+                        let y_end = center + egui::vec2(0.0, 45.0);
+                        ui.painter().line_segment([center, y_end], egui::Stroke::new(2.5, egui::Color32::from_rgb(60, 220, 60)));
+                        ui.painter().text(y_end + egui::vec2(6.0, 6.0), egui::Align2::LEFT_CENTER, "Y", egui::FontId::proportional(11.0), egui::Color32::from_rgb(60, 220, 60));
+
+                        // Blue Z-Axis Ring / Vector
+                        let z_end = center + egui::vec2(-30.0, -30.0);
+                        ui.painter().line_segment([center, z_end], egui::Stroke::new(2.5, egui::Color32::from_rgb(60, 140, 255)));
+                        ui.painter().circle_stroke(center, 30.0, egui::Stroke::new(1.5, egui::Color32::from_rgb(60, 140, 255)));
+                        ui.painter().text(z_end + egui::vec2(-6.0, -6.0), egui::Align2::RIGHT_CENTER, "Z", egui::FontId::proportional(11.0), egui::Color32::from_rgb(60, 140, 255));
+                    }
                 }
             }
         }

@@ -69,12 +69,31 @@ impl MaskVertex {
     }
 }
 
+// ─── Cubic Bezier Helper ───────────────────────────────────────────────────
+
+/// Compute a point on a 2D cubic Bezier curve at parameter t in [0, 1].
+pub fn eval_cubic_bezier(p0: [f32; 2], c0: [f32; 2], c1: [f32; 2], p1: [f32; 2], t: f32) -> [f32; 2] {
+    let u = 1.0 - t;
+    let u2 = u * u;
+    let u3 = u2 * u;
+    let t2 = t * t;
+    let t3 = t2 * t;
+
+    let x = u3 * p0[0] + 3.0 * u2 * t * c0[0] + 3.0 * u * t2 * c1[0] + t3 * p1[0];
+    let y = u3 * p0[1] + 3.0 * u2 * t * c0[1] + 3.0 * u * t2 * c1[1] + t3 * p1[1];
+    [x, y]
+}
+
 // ─── Mask Path ─────────────────────────────────────────────────────────────
 
 /// An animatable Bezier mask path — a list of vertices that can be keyframed.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MaskPath {
     pub vertices: Animatable<Vec<[f32; 2]>>,
+    /// Optional incoming/outgoing tangent handles per vertex for cubic Bezier curves.
+    /// Format per vertex: ([in_x, in_y], [out_x, out_y]) relative to position.
+    #[serde(default)]
+    pub tangents: Option<Vec<([f32; 2], [f32; 2])>>,
     pub is_closed: bool,
 }
 
@@ -88,27 +107,37 @@ impl MaskPath {
         ];
         Self {
             vertices: Animatable::new_constant(verts),
+            tangents: None,
             is_closed: true,
         }
     }
 
     pub fn new_ellipse(cx: f32, cy: f32, rx: f32, ry: f32) -> Self {
-        // Approximate circle with 4 cubic bezier segments
-        // Control point distance k ≈ 0.5523 * radius
+        // Approximate circle/ellipse with 4 cubic bezier segments
+        // Control point distance k ≈ 0.55228475 * radius
+        let kx = rx * 0.55228475;
+        let ky = ry * 0.55228475;
         let verts = vec![
             [cx, cy - ry],        // top
             [cx + rx, cy],        // right
             [cx, cy + ry],        // bottom
             [cx - rx, cy],        // left
         ];
+        let tangents = vec![
+            ([-kx, 0.0], [kx, 0.0]),   // top: in left, out right
+            ([0.0, -ky], [0.0, ky]),   // right: in up, out down
+            ([kx, 0.0], [-kx, 0.0]),   // bottom: in right, out left
+            ([0.0, ky], [0.0, -ky]),   // left: in down, out up
+        ];
         Self {
             vertices: Animatable::new_constant(verts),
+            tangents: Some(tangents),
             is_closed: true,
         }
     }
 
     /// Sample the path as a series of screen-space points for CPU rendering.
-    /// Returns a flat list of [x, y] pairs.
+    /// Returns a flat list of [x, y] pairs. Uses cubic Bezier curves when tangents exist.
     pub fn to_polygon(&self, frame: u32, segments_per_edge: u32) -> Vec<[f32; 2]> {
         let verts = match &self.vertices {
             Animatable::Constant(v) => v.clone(),
@@ -147,12 +176,31 @@ impl MaskPath {
 
         for i in 0..end {
             let p0 = verts[i];
-            let p1 = verts[(i + 1) % n];
+            let next_i = (i + 1) % n;
+            let p1 = verts[next_i];
+
+            let bezier_control_points = if let Some(tangs) = &self.tangents {
+                if tangs.len() == n {
+                    let out_t0 = tangs[i].1;
+                    let in_t1 = tangs[next_i].0;
+                    let c0 = [p0[0] + out_t0[0], p0[1] + out_t0[1]];
+                    let c1 = [p1[0] + in_t1[0], p1[1] + in_t1[1]];
+                    Some((c0, c1))
+                } else {
+                    None
+                }
+            } else {
+                None
+            };
+
             for s in 0..segments_per_edge {
                 let t = s as f32 / segments_per_edge as f32;
-                let x = p0[0] + (p1[0] - p0[0]) * t;
-                let y = p0[1] + (p1[1] - p0[1]) * t;
-                result.push([x, y]);
+                let pt = if let Some((c0, c1)) = bezier_control_points {
+                    eval_cubic_bezier(p0, c0, c1, p1, t)
+                } else {
+                    [p0[0] + (p1[0] - p0[0]) * t, p0[1] + (p1[1] - p0[1]) * t]
+                };
+                result.push(pt);
             }
         }
 
@@ -264,5 +312,23 @@ mod tests {
         assert_eq!(mask.mode, MaskMode::Add);
         assert!(mask.enabled);
         assert!(!mask.inverted);
+    }
+
+    #[test]
+    fn test_eval_cubic_bezier() {
+        let p0 = [0.0, 0.0];
+        let c0 = [0.0, 50.0];
+        let c1 = [100.0, 50.0];
+        let p1 = [100.0, 100.0];
+        let mid = eval_cubic_bezier(p0, c0, c1, p1, 0.5);
+        assert_eq!(mid, [50.0, 50.0]);
+    }
+
+    #[test]
+    fn test_mask_ellipse_bezier_sampling() {
+        let path = MaskPath::new_ellipse(100.0, 100.0, 50.0, 50.0);
+        assert!(path.tangents.is_some(), "ellipse mask should have tangent handles");
+        let poly = path.to_polygon(0, 8);
+        assert_eq!(poly.len(), 4 * 8 + 1, "sampled polygon should contain curve segments");
     }
 }
