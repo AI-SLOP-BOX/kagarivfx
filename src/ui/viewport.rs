@@ -885,37 +885,92 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: u32) 
             );
         }
 
-        // ── Interactive Layer Drag ─────────────────────────────────
+        // ── Interactive Layer & Mask Drag ──────────────────────────
         if let Some(pointer_pos) = viewport_response.interact_pointer_pos() {
             let comp_px = (pointer_pos.x - origin_x) / draw_w * comp_w;
             let comp_py = (pointer_pos.y - origin_y) / draw_h * comp_h;
 
             if viewport_response.drag_started() {
                 let comp_state = app.history.current().active_composition();
-                let mut hit_idx: Option<usize> = None;
-                for (i, layer) in comp_state.layers.iter().enumerate().rev() {
-                    let l: &Layer = layer;
-                    if !l.is_active(current_frame) || l.locked { continue; }
-                    let pos = l.transform.position.evaluate(current_frame);
-                    let scale = l.transform.scale.evaluate(current_frame);
-                    let hw = scale[0].abs() * 0.6;
-                    let hh = scale[1].abs() * 0.6;
-                    if (comp_px - pos[0]).abs() <= hw && (comp_py - pos[1]).abs() <= hh {
-                        hit_idx = Some(i);
-                        break;
+                let mut mask_hit: Option<(usize, usize, usize)> = None;
+
+                // 1. Check if clicking on selected layer's mask vertices
+                if let Some(sel_li) = app.selected_layer_idx {
+                    if sel_li < comp_state.layers.len() {
+                        let l = &comp_state.layers[sel_li];
+                        for (mi, mask) in l.masks.iter().enumerate() {
+                            if mask.enabled {
+                                let verts = mask.path.to_polygon(current_frame, 16);
+                                for (vi, vertex_pt) in verts.iter().enumerate() {
+                                    let vx = vertex_pt[0];
+                                    let vy = vertex_pt[1];
+                                    
+                                    // Calculate viewport screen position
+                                    let screen_x = origin_x + (vx / comp_w) * draw_w;
+                                    let screen_y = origin_y + (vy / comp_h) * draw_h;
+                                    let dist = ((pointer_pos.x - screen_x).powi(2) + (pointer_pos.y - screen_y).powi(2)).sqrt();
+                                    if dist <= 12.0 {
+                                        mask_hit = Some((sel_li, mi, vi));
+                                        break;
+                                    }
+                                }
+                            }
+                            if mask_hit.is_some() { break; }
+                        }
                     }
                 }
-                if let Some(idx) = hit_idx {
-                    let pos_now = comp_state.layers[idx].transform.position.evaluate(current_frame);
-                    app.viewport_drag_state = Some((idx, pos_now, pointer_pos));
-                    app.selected_layer_idx = Some(idx);
-                } else {
+
+                if let Some((l_idx, m_idx, v_idx)) = mask_hit {
+                    let verts = comp_state.layers[l_idx].masks[m_idx].path.to_polygon(current_frame, 16);
+                    let start_vertex_pos = if v_idx < verts.len() { verts[v_idx] } else { [0.0, 0.0] };
+                    app.viewport_mask_drag_state = Some((l_idx, m_idx, v_idx, start_vertex_pos, pointer_pos));
                     app.viewport_drag_state = None;
+                } else {
+                    app.viewport_mask_drag_state = None;
+
+                    // 2. Fallback to Layer translation/rotation drag
+                    let mut hit_idx: Option<usize> = None;
+                    for (i, layer) in comp_state.layers.iter().enumerate().rev() {
+                        let l: &Layer = layer;
+                        if !l.is_active(current_frame) || l.locked { continue; }
+                        let pos = l.transform.position.evaluate(current_frame);
+                        let scale = l.transform.scale.evaluate(current_frame);
+                        let hw = scale[0].abs() * 0.6;
+                        let hh = scale[1].abs() * 0.6;
+                        if (comp_px - pos[0]).abs() <= hw && (comp_py - pos[1]).abs() <= hh {
+                            hit_idx = Some(i);
+                            break;
+                        }
+                    }
+                    if let Some(idx) = hit_idx {
+                        let pos_now = comp_state.layers[idx].transform.position.evaluate(current_frame);
+                        app.viewport_drag_state = Some((idx, pos_now, pointer_pos));
+                        app.selected_layer_idx = Some(idx);
+                    } else {
+                        app.viewport_drag_state = None;
+                    }
                 }
             }
 
             if viewport_response.dragged() {
-                if let Some((drag_idx, start_pos, start_ptr)) = app.viewport_drag_state {
+                if let Some((l_idx, m_idx, v_idx, start_vertex_pos, start_ptr)) = app.viewport_mask_drag_state {
+                    let delta_x = (pointer_pos.x - start_ptr.x) / draw_w * comp_w;
+                    let delta_y = (pointer_pos.y - start_ptr.y) / draw_h * comp_h;
+                    
+                    let comp_mut = app.history.current_mut().active_composition_mut();
+                    if l_idx < comp_mut.layers.len() {
+                        let layer = &mut comp_mut.layers[l_idx];
+                        if m_idx < layer.masks.len() {
+                            let mask = &mut layer.masks[m_idx];
+                            let mut verts = mask.path.to_polygon(current_frame, 16);
+                            if v_idx < verts.len() {
+                                verts[v_idx][0] = start_vertex_pos[0] + delta_x;
+                                verts[v_idx][1] = start_vertex_pos[1] + delta_y;
+                                mask.path.vertices = crate::core::property::Animatable::Constant(verts);
+                            }
+                        }
+                    }
+                } else if let Some((drag_idx, start_pos, start_ptr)) = app.viewport_drag_state {
                     let delta_x = (pointer_pos.x - start_ptr.x) / draw_w * comp_w;
                     let delta_y = (pointer_pos.y - start_ptr.y) / draw_h * comp_h;
                     let new_pos = [start_pos[0] + delta_x, start_pos[1] + delta_y];
@@ -926,7 +981,6 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: u32) 
                         use crate::ui::toolbar::ActiveTool;
                         match app.active_tool {
                             ActiveTool::Rotation => {
-                                // Rotate layer based on horizontal drag
                                 let rot_delta = delta_x * 0.5;
                                 let current_r = layer.transform.rotation.evaluate(current_frame);
                                 match &mut layer.transform.rotation {
@@ -942,7 +996,6 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: u32) 
                                 }
                             }
                             ActiveTool::AnchorPoint => {
-                                // Update anchor point
                                 let cur_ap = layer.transform.anchor_point.evaluate(current_frame);
                                 match &mut layer.transform.anchor_point {
                                     Animatable::Constant(ref mut ap) => {
@@ -961,7 +1014,6 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: u32) 
                                 }
                             }
                             _ => {
-                                // Position drag (Selection / Hand / Default) with Keyframe Preservation
                                 match &mut layer.transform.position {
                                     Animatable::Constant(ref mut pos) => {
                                         *pos = new_pos;
@@ -987,8 +1039,16 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: u32) 
             }
 
             if viewport_response.drag_stopped() {
+                let mut changed = false;
                 if app.viewport_drag_state.is_some() {
                     app.viewport_drag_state = None;
+                    changed = true;
+                }
+                if app.viewport_mask_drag_state.is_some() {
+                    app.viewport_mask_drag_state = None;
+                    changed = true;
+                }
+                if changed {
                     crate::core::frame_cache::bump_version();
                 }
             }

@@ -86,4 +86,69 @@ impl TrackerEngine {
 
         tracker.position = Animatable::Animated(keyframes);
     }
+
+    /// Bake and apply motion tracker keyframe data to a target layer's position or rotation.
+    #[allow(dead_code)]
+    pub fn apply_tracker_to_target(
+        comp: &mut Composition,
+        source_layer_idx: usize,
+        tracker_idx: usize,
+        target_layer_idx: usize,
+        apply_position: bool,
+        apply_rotation: bool,
+    ) {
+        if source_layer_idx >= comp.layers.len() || target_layer_idx >= comp.layers.len() {
+            return;
+        }
+
+        let tracker_kfs = match comp.layers[source_layer_idx].trackers.get(tracker_idx) {
+            Some(t) => match &t.position {
+                Animatable::Animated(kfs) => kfs.clone(),
+                Animatable::Constant(pos) => vec![Keyframe::new(0, *pos, InterpolationType::Linear)],
+            },
+            None => return,
+        };
+
+        if apply_position {
+            comp.layers[target_layer_idx].transform.position = Animatable::Animated(tracker_kfs.clone());
+        }
+
+        if apply_rotation && tracker_kfs.len() > 1 {
+            let mut rot_kfs = Vec::new();
+            for i in 0..(tracker_kfs.len() - 1) {
+                let p1 = tracker_kfs[i].value;
+                let p2 = tracker_kfs[i + 1].value;
+                let angle_rad = (p2[1] - p1[1]).atan2(p2[0] - p1[0]);
+                let angle_deg = angle_rad.to_degrees();
+                rot_kfs.push(Keyframe::new(tracker_kfs[i].frame, angle_deg, InterpolationType::Linear));
+            }
+            comp.layers[target_layer_idx].transform.rotation = Animatable::Animated(rot_kfs);
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::core::timeline::{Composition, Layer, LayerType, TrackerPoint};
+
+    #[test]
+    fn test_tracker_apply_to_target() {
+        let mut comp = Composition::new("comp_1".to_string(), "TestComp".to_string(), 1920, 1080, 30, 100);
+        let mut src_layer = Layer::new("src".to_string(), "Source".to_string(), LayerType::Null, 100);
+        let mut tp = TrackerPoint::new("tp_1".to_string(), "Point1".to_string(), [100.0, 100.0]);
+        tp.position = Animatable::Animated(vec![
+            Keyframe::new(0, [100.0, 100.0], InterpolationType::Linear),
+            Keyframe::new(10, [200.0, 150.0], InterpolationType::Linear),
+        ]);
+        src_layer.trackers.push(tp);
+        comp.layers.push(src_layer);
+
+        let target_layer = Layer::new("target".to_string(), "Target".to_string(), LayerType::Null, 100);
+        comp.layers.push(target_layer);
+
+        TrackerEngine::apply_tracker_to_target(&mut comp, 0, 0, 1, true, true);
+        assert_eq!(comp.layers[1].transform.position.evaluate(0), [100.0, 100.0]);
+        assert_eq!(comp.layers[1].transform.position.evaluate(10), [200.0, 150.0]);
+    }
 }
