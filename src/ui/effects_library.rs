@@ -25,6 +25,8 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                 ui.selectable_value(&mut app.right_tab_idx, 12, "Fill");
                 ui.selectable_value(&mut app.right_tab_idx, 13, "Metadata");
                 ui.selectable_value(&mut app.right_tab_idx, 14, "Scripting");
+                ui.selectable_value(&mut app.right_tab_idx, 15, "Workspaces");
+                ui.selectable_value(&mut app.right_tab_idx, 16, "Color");
             });
             ui.separator();
 
@@ -93,6 +95,16 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
 
             if app.right_tab_idx == 14 {
                 crate::ui::scripting_console::draw_scripting_console(app, ui);
+                return;
+            }
+
+            if app.right_tab_idx == 15 {
+                crate::ui::workspace_manager::draw_workspace_manager(app, ui);
+                return;
+            }
+
+            if app.right_tab_idx == 16 {
+                crate::ui::color_management::draw_color_management(app, ui);
                 return;
             }
 

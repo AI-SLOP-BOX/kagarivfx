@@ -27,4 +27,6 @@ pub mod essential_graphics;
 pub mod content_aware_fill;
 pub mod metadata_panel;
 pub mod scripting_console;
+pub mod workspace_manager;
+pub mod color_management;
 pub mod graph_editor;
