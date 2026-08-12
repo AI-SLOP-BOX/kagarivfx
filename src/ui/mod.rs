@@ -25,4 +25,6 @@ pub mod mask_panel;
 pub mod expression_panel;
 pub mod essential_graphics;
 pub mod content_aware_fill;
+pub mod metadata_panel;
+pub mod scripting_console;
 pub mod graph_editor;

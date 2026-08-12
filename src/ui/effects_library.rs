@@ -23,6 +23,8 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                 ui.selectable_value(&mut app.right_tab_idx, 10, "Expr");
                 ui.selectable_value(&mut app.right_tab_idx, 11, "Essential");
                 ui.selectable_value(&mut app.right_tab_idx, 12, "Fill");
+                ui.selectable_value(&mut app.right_tab_idx, 13, "Metadata");
+                ui.selectable_value(&mut app.right_tab_idx, 14, "Scripting");
             });
             ui.separator();
 
@@ -81,6 +83,16 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
 
             if app.right_tab_idx == 12 {
                 crate::ui::content_aware_fill::draw_content_aware_fill(app, ui);
+                return;
+            }
+
+            if app.right_tab_idx == 13 {
+                crate::ui::metadata_panel::draw_metadata_panel(app, ui);
+                return;
+            }
+
+            if app.right_tab_idx == 14 {
+                crate::ui::scripting_console::draw_scripting_console(app, ui);
                 return;
             }
 
