@@ -379,6 +379,22 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
             if app.show_graph_editor {
                 graph_editor::draw_graph_editor(app, ui, comp, current_frame, total_frames);
             } else {
+                ui.horizontal(|ui| {
+                    ui.allocate_ui(egui::vec2(500.0, 20.0), |ui| {
+                        ui.horizontal(|ui| {
+                            ui.label(egui::RichText::new(" #").small().strong().color(egui::Color32::from_gray(160)));
+                            ui.add_space(8.0);
+                            ui.label(egui::RichText::new("Source / Layer Name").small().strong().color(egui::Color32::from_gray(160)));
+                            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                                ui.label(egui::RichText::new("Switches (V | S | L | M | 3D)").small().strong().color(egui::Color32::from_gray(160)));
+                            });
+                        });
+                    });
+                    ui.separator();
+                    ui.label(egui::RichText::new("Timeline Tracks & Keyframe Splines").small().strong().color(egui::Color32::from_gray(160)));
+                });
+                ui.separator();
+
                 egui::ScrollArea::vertical().show(ui, |ui| {
                     let zoom_span = total_frames as f32 / app.timeline_zoom;
                     let start_frame = 0.0;
@@ -426,6 +442,9 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                     ui.horizontal(|ui| {
                         ui.allocate_ui(egui::vec2(500.0, 24.0), |ui| {
                             ui.horizontal(|ui| {
+                                ui.label(egui::RichText::new(format!("{:02}", i + 1)).small().strong().color(egui::Color32::from_gray(140)));
+                                ui.add_space(2.0);
+
                                 // Layer Stacking Order Reorder Buttons
                                 if i > 0 {
                                     if ui.small_button("^").on_hover_text("Move Layer Up in Render Stack").clicked() {
