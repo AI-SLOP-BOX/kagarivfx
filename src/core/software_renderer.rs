@@ -135,8 +135,15 @@ pub fn render_frame_to_pixels(comp: &Composition, frame: u32, width: u32, height
                     let (blended_r, blended_g, blended_b) = match layer.blend_mode {
                         BlendMode::Multiply => (src_r * dst_r, src_g * dst_g, src_b * dst_b),
                         BlendMode::Screen => (1.0 - (1.0 - src_r) * (1.0 - dst_r), 1.0 - (1.0 - src_g) * (1.0 - dst_g), 1.0 - (1.0 - src_b) * (1.0 - dst_b)),
+                        BlendMode::Overlay => (
+                            if dst_r < 0.5 { 2.0 * src_r * dst_r } else { 1.0 - 2.0 * (1.0 - src_r) * (1.0 - dst_r) },
+                            if dst_g < 0.5 { 2.0 * src_g * dst_g } else { 1.0 - 2.0 * (1.0 - src_g) * (1.0 - dst_g) },
+                            if dst_b < 0.5 { 2.0 * src_b * dst_b } else { 1.0 - 2.0 * (1.0 - src_b) * (1.0 - dst_b) },
+                        ),
                         BlendMode::Add => ((src_r + dst_r).min(1.0), (src_g + dst_g).min(1.0), (src_b + dst_b).min(1.0)),
-                        _ => (src_r, src_g, src_b), // Normal (Alpha blended automatically below)
+                        BlendMode::Darken => (src_r.min(dst_r), src_g.min(dst_g), src_b.min(dst_b)),
+                        BlendMode::Lighten => (src_r.max(dst_r), src_g.max(dst_g), src_b.max(dst_b)),
+                        BlendMode::Normal => (src_r, src_g, src_b),
                     };
 
                     // Alpha blending formula: Standard Source-Over
@@ -211,4 +218,21 @@ fn distance_to_polygon(px: f32, py: f32, verts: &[[f32; 2]]) -> f32 {
         min_dist = min_dist.min(d);
     }
     min_dist
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::core::timeline::{Composition, Layer, LayerType, BlendMode};
+
+    #[test]
+    fn test_software_render_frame_to_pixels() {
+        let mut comp = Composition::new("c1".to_string(), "Comp".to_string(), 100, 100, 30, 30);
+        let mut layer = Layer::new("l1".to_string(), "Solid".to_string(), LayerType::Solid { color: [1.0, 0.0, 0.0, 1.0] }, 30);
+        layer.blend_mode = BlendMode::Multiply;
+        comp.layers.push(layer);
+
+        let pixels = render_frame_to_pixels(&comp, 0, 100, 100, 0.0, 0);
+        assert_eq!(pixels.len(), 100 * 100 * 4);
+    }
 }
