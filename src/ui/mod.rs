@@ -33,4 +33,6 @@ pub mod flowchart_inspector;
 pub mod camera_views;
 pub mod lumetri_color;
 pub mod cc_libraries;
+pub mod font_picker;
+pub mod render_presets;
 pub mod graph_editor;

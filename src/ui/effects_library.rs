@@ -31,6 +31,8 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                 ui.selectable_value(&mut app.right_tab_idx, 18, "3D Views");
                 ui.selectable_value(&mut app.right_tab_idx, 19, "Lumetri");
                 ui.selectable_value(&mut app.right_tab_idx, 20, "Libraries");
+                ui.selectable_value(&mut app.right_tab_idx, 21, "Fonts");
+                ui.selectable_value(&mut app.right_tab_idx, 22, "Presets");
             });
             ui.separator();
 
@@ -129,6 +131,16 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
 
             if app.right_tab_idx == 20 {
                 crate::ui::cc_libraries::draw_cc_libraries(app, ui);
+                return;
+            }
+
+            if app.right_tab_idx == 21 {
+                crate::ui::font_picker::draw_font_picker(app, ui);
+                return;
+            }
+
+            if app.right_tab_idx == 22 {
+                crate::ui::render_presets::draw_render_presets(app, ui);
                 return;
             }
 
