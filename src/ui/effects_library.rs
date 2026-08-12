@@ -21,6 +21,8 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                 ui.selectable_value(&mut app.right_tab_idx, 8, "Time");
                 ui.selectable_value(&mut app.right_tab_idx, 9, "Masks");
                 ui.selectable_value(&mut app.right_tab_idx, 10, "Expr");
+                ui.selectable_value(&mut app.right_tab_idx, 11, "Essential");
+                ui.selectable_value(&mut app.right_tab_idx, 12, "Fill");
             });
             ui.separator();
 
@@ -69,6 +71,16 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
 
             if app.right_tab_idx == 10 {
                 crate::ui::expression_panel::draw_expression_panel(app, ui);
+                return;
+            }
+
+            if app.right_tab_idx == 11 {
+                crate::ui::essential_graphics::draw_essential_graphics(app, ui);
+                return;
+            }
+
+            if app.right_tab_idx == 12 {
+                crate::ui::content_aware_fill::draw_content_aware_fill(app, ui);
                 return;
             }
 

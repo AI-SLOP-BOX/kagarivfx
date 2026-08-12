@@ -23,4 +23,6 @@ pub mod audio_panel;
 pub mod time_remap_panel;
 pub mod mask_panel;
 pub mod expression_panel;
+pub mod essential_graphics;
+pub mod content_aware_fill;
 pub mod graph_editor;
