@@ -5,6 +5,7 @@
 
 use crate::core::mask::point_in_polygon;
 
+#[allow(dead_code)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FillMethod {
     Object,
@@ -13,6 +14,7 @@ pub enum FillMethod {
 }
 
 /// Synthesize a Content-Aware Fill RGBA8 pixel buffer for the masked area of a frame.
+#[allow(dead_code)]
 pub fn generate_content_aware_fill_frame(
     src_pixels: &[u8],
     width: u32,

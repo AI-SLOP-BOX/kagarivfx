@@ -603,6 +603,7 @@ impl Layer {
             is_shy: false,
             masks: Vec::new(),
             style: LayerStyle::default(),
+            text_formatting: None,
         }
     }
 

@@ -1005,6 +1005,30 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: u32) 
                     if ui.selectable_value(&mut chan_idx, 3, "Blue").clicked() { ctx.data_mut(|d| d.insert_temp(chan_id, chan_idx)); }
                     if ui.selectable_value(&mut chan_idx, 4, "Alpha").clicked() { ctx.data_mut(|d| d.insert_temp(chan_id, chan_idx)); }
                 });
+
+            ui.separator();
+            // AE Snapshot & Fast Previews
+            if ui.button("📷").on_hover_text("Take Snapshot (Cmd+F5)").clicked() {
+                log::info!("Viewport snapshot taken");
+            }
+            if ui.button("👁").on_hover_text("Show Snapshot (F5)").clicked() {}
+
+            ui.separator();
+            let fast_preview_id = egui::Id::new("ae_fast_preview_mode");
+            let mut fast_preview = ctx.data_mut(|d| *d.get_temp_mut_or_insert_with(fast_preview_id, || 0));
+            egui::ComboBox::from_id_source("fast_preview_combo")
+                .selected_text(match fast_preview {
+                    0 => "Off (Final Quality)",
+                    1 => "Adaptive Resolution",
+                    2 => "Fast Draft",
+                    _ => "Wireframe",
+                })
+                .show_ui(ui, |ui| {
+                    if ui.selectable_value(&mut fast_preview, 0, "Off (Final Quality)").clicked() { ctx.data_mut(|d| d.insert_temp(fast_preview_id, fast_preview)); }
+                    if ui.selectable_value(&mut fast_preview, 1, "Adaptive Resolution").clicked() { ctx.data_mut(|d| d.insert_temp(fast_preview_id, fast_preview)); }
+                    if ui.selectable_value(&mut fast_preview, 2, "Fast Draft").clicked() { ctx.data_mut(|d| d.insert_temp(fast_preview_id, fast_preview)); }
+                    if ui.selectable_value(&mut fast_preview, 3, "Wireframe").clicked() { ctx.data_mut(|d| d.insert_temp(fast_preview_id, fast_preview)); }
+                });
         });
     });
 }
