@@ -571,6 +571,9 @@ impl eframe::App for AfterEffectsApp {
         // Draw Export Video Modal Dialog
         ui::export_dialog::draw(self, ctx);
 
+        // Draw Composition Settings Modal Dialog
+        ui::comp_settings_dialog::draw_comp_settings_dialog(self, ctx);
+
         self.current_frame = current_frame;
     }
 }

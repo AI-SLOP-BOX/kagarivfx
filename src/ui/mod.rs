@@ -15,4 +15,6 @@ pub mod tracker_panel;
 pub mod render_queue;
 pub mod transport_panel;
 pub mod paint_panel;
+pub mod comp_settings_dialog;
+pub mod align_panel;
 pub mod graph_editor;

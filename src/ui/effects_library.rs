@@ -1,6 +1,6 @@
 use eframe::egui;
 use crate::AfterEffectsApp;
-use crate::core::timeline::{Effect, EffectType, LayerType, ColorConversionMode};
+use crate::core::timeline::{Effect, EffectType, ColorConversionMode};
 use crate::core::property::Animatable;
 use crate::ui::inspector::draw_property_ui;
 
@@ -43,93 +43,11 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
             }
 
             if app.right_tab_idx == 1 {
-                ui.heading("Align & Character");
-                ui.separator();
-                if let Some(idx) = app.selected_layer_idx {
-                    let comp = temp_project.active_composition_mut();
-                    if idx < comp.layers.len() {
-                        let comp_w = comp.width as f32;
-                        let comp_h = comp.height as f32;
-                        ui.label("Align Layer to Comp:");
-                        ui.horizontal(|ui| {
-                            if ui.button("Left").on_hover_text("Align Left Edge").clicked() {
-                                let layer = &mut comp.layers[idx];
-                                let mut pos = layer.transform.position.evaluate(*current_frame);
-                                pos[0] = 50.0;
-                                layer.transform.position = Animatable::new_constant(pos);
-                                project_changed = true;
-                            }
-                            if ui.button("Center X").on_hover_text("Center Horizontally").clicked() {
-                                let layer = &mut comp.layers[idx];
-                                let mut pos = layer.transform.position.evaluate(*current_frame);
-                                pos[0] = comp_w / 2.0;
-                                layer.transform.position = Animatable::new_constant(pos);
-                                project_changed = true;
-                            }
-                            if ui.button("Right").on_hover_text("Align Right Edge").clicked() {
-                                let layer = &mut comp.layers[idx];
-                                let mut pos = layer.transform.position.evaluate(*current_frame);
-                                pos[0] = comp_w - 50.0;
-                                layer.transform.position = Animatable::new_constant(pos);
-                                project_changed = true;
-                            }
-                        });
-                        ui.horizontal(|ui| {
-                            if ui.button("Top").on_hover_text("Align Top Edge").clicked() {
-                                let layer = &mut comp.layers[idx];
-                                let mut pos = layer.transform.position.evaluate(*current_frame);
-                                pos[1] = 50.0;
-                                layer.transform.position = Animatable::new_constant(pos);
-                                project_changed = true;
-                            }
-                            if ui.button("Center Y").on_hover_text("Center Vertically").clicked() {
-                                let layer = &mut comp.layers[idx];
-                                let mut pos = layer.transform.position.evaluate(*current_frame);
-                                pos[1] = comp_h / 2.0;
-                                layer.transform.position = Animatable::new_constant(pos);
-                                project_changed = true;
-                            }
-                            if ui.button("Bottom").on_hover_text("Align Bottom Edge").clicked() {
-                                let layer = &mut comp.layers[idx];
-                                let mut pos = layer.transform.position.evaluate(*current_frame);
-                                pos[1] = comp_h - 50.0;
-                                layer.transform.position = Animatable::new_constant(pos);
-                                project_changed = true;
-                            }
-                        });
+                crate::ui::align_panel::draw_align_panel(app, ui);
+                return;
+            }
 
-                        ui.separator();
-                        if let LayerType::Text { ref mut text, ref mut font_size, ref mut color } = comp.layers[idx].layer_type {
-                            ui.label("Character Format:");
-                            ui.horizontal(|ui| {
-                                ui.label("Text:");
-                                if ui.text_edit_singleline(text).changed() { project_changed = true; }
-                            });
-                            ui.horizontal(|ui| {
-                                ui.label("Size:");
-                                if ui.add(egui::DragValue::new(font_size).clamp_range(8..=200).suffix(" px")).changed() {
-                                    project_changed = true;
-                                }
-                            });
-                            ui.horizontal(|ui| {
-                                ui.label("Fill Color:");
-                                let mut c32 = egui::Color32::from_rgba_premultiplied(
-                                    (color[0] * 255.0) as u8, (color[1] * 255.0) as u8, (color[2] * 255.0) as u8, (color[3] * 255.0) as u8
-                                );
-                                if ui.color_edit_button_srgba(&mut c32).changed() {
-                                    color[0] = c32.r() as f32 / 255.0;
-                                    color[1] = c32.g() as f32 / 255.0;
-                                    color[2] = c32.b() as f32 / 255.0;
-                                    color[3] = c32.a() as f32 / 255.0;
-                                    project_changed = true;
-                                }
-                            });
-                        }
-                    }
-                } else {
-                    ui.weak("Select a layer to use align & character formatting.");
-                }
-            } else if app.right_tab_idx == 2 {
+            if app.right_tab_idx == 2 {
                 ui.heading("Info");
                 ui.separator();
                 if let Some(idx) = app.selected_layer_idx {
