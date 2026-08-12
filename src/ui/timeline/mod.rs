@@ -330,7 +330,42 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                 });
             }
 
-            ui.add_space(4.0);
+            // ── Timeline Minimap Navigator Bar ──
+            ui.horizontal(|ui| {
+                ui.small(egui::RichText::new("NAV:").color(egui::Color32::from_rgb(140, 180, 255)));
+                let (map_rect, map_response) = ui.allocate_exact_size(
+                    egui::vec2(ui.available_width() - 10.0, 14.0),
+                    egui::Sense::click_and_drag(),
+                );
+                let painter = ui.painter();
+                painter.rect_filled(map_rect, 2.0, egui::Color32::from_rgb(20, 24, 32));
+                painter.rect_stroke(map_rect, 2.0, egui::Stroke::new(1.0, egui::Color32::from_gray(60)));
+
+                let wa_in = app.work_area_in.unwrap_or(0);
+                let wa_out = app.work_area_out.unwrap_or(total_frames.saturating_sub(1)).min(total_frames.saturating_sub(1));
+                let wa_x0 = map_rect.left() + (wa_in as f32 / total_frames as f32) * map_rect.width();
+                let wa_x1 = map_rect.left() + (wa_out as f32 / total_frames as f32) * map_rect.width();
+                let wa_rect = egui::Rect::from_min_max(
+                    egui::pos2(wa_x0, map_rect.top()),
+                    egui::pos2(wa_x1, map_rect.bottom()),
+                );
+                painter.rect_filled(wa_rect, 1.0, egui::Color32::from_rgba_unmultiplied(60, 150, 255, 60));
+
+                let ph_x = map_rect.left() + (*current_frame as f32 / total_frames as f32) * map_rect.width();
+                painter.line_segment(
+                    [egui::pos2(ph_x, map_rect.top()), egui::pos2(ph_x, map_rect.bottom())],
+                    egui::Stroke::new(2.0, egui::Color32::RED),
+                );
+
+                if map_response.clicked() || map_response.dragged() {
+                    if let Some(ptr) = map_response.interact_pointer_pos() {
+                        let norm = ((ptr.x - map_rect.left()) / map_rect.width()).clamp(0.0, 1.0);
+                        *current_frame = (norm * total_frames as f32) as u32;
+                    }
+                }
+            });
+
+            ui.add_space(2.0);
 
             if app.show_graph_editor {
                 graph_editor::draw_graph_editor(app, ui, comp, current_frame, total_frames);

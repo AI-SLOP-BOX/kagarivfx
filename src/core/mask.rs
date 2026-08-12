@@ -39,6 +39,7 @@ impl Default for MaskMode {
 
 /// A single vertex in a Bezier mask path.
 /// Positions are in composition pixel coordinates (0,0 = top-left).
+#[allow(dead_code)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MaskVertex {
     /// Anchor point (the vertex position)
@@ -49,6 +50,7 @@ pub struct MaskVertex {
     pub tangent_in: [f32; 2],
 }
 
+#[allow(dead_code)]
 impl MaskVertex {
     pub fn new(x: f32, y: f32) -> Self {
         Self {
@@ -108,7 +110,33 @@ impl MaskPath {
     /// Sample the path as a series of screen-space points for CPU rendering.
     /// Returns a flat list of [x, y] pairs.
     pub fn to_polygon(&self, frame: u32, segments_per_edge: u32) -> Vec<[f32; 2]> {
-        let verts = self.vertices.evaluate(frame);
+        let verts = match &self.vertices {
+            Animatable::Constant(v) => v.clone(),
+            Animatable::Animated(kfs) => {
+                if kfs.is_empty() {
+                    Vec::new()
+                } else if kfs.len() == 1 || frame <= kfs[0].frame {
+                    kfs[0].value.clone()
+                } else if frame >= kfs.last().unwrap().frame {
+                    kfs.last().unwrap().value.clone()
+                } else {
+                    let mut prev = &kfs[0];
+                    let mut next = &kfs[0];
+                    for kf in kfs {
+                        if kf.frame <= frame { prev = kf; }
+                        if kf.frame >= frame { next = kf; break; }
+                    }
+                    if prev.frame == next.frame {
+                        prev.value.clone()
+                    } else {
+                        let t = (frame - prev.frame) as f32 / (next.frame - prev.frame) as f32;
+                        prev.value.iter().zip(next.value.iter()).map(|(&p0, &p1)| {
+                            [p0[0] + (p1[0] - p0[0]) * t, p0[1] + (p1[1] - p0[1]) * t]
+                        }).collect()
+                    }
+                }
+            }
+        };
         if verts.len() < 2 {
             return verts;
         }
@@ -192,6 +220,7 @@ impl Mask {
 
 /// Ray-casting point-in-polygon test.
 /// Returns true if (px, py) is inside the polygon defined by `verts`.
+#[allow(dead_code)]
 pub fn point_in_polygon(px: f32, py: f32, verts: &[[f32; 2]]) -> bool {
     let n = verts.len();
     if n < 3 { return false; }

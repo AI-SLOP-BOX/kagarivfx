@@ -427,7 +427,7 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: u32) 
             // Check if there are solo layers
             let has_solo = comp.layers.iter().any(|l: &Layer| l.is_active(current_frame) && l.solo);
 
-            for layer in &comp.layers {
+            for (li, layer) in comp.layers.iter().enumerate() {
                 let l: &Layer = layer;
                 if l.is_active(current_frame) {
                     // Respect solo state: if any layer is soloed, skip non-soloed active layers
@@ -520,6 +520,45 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: u32) 
                             );
                         }
                         _ => {} // Null & Audio layers do not render visual canvas boxes
+                    }
+
+                    // ── Render Active Vector Masks Overlay ──
+                    for mask in &l.masks {
+                        if !mask.enabled {
+                            continue;
+                        }
+                        let points = mask.path.to_polygon(current_frame, 12);
+                        if points.len() >= 2 {
+                            let mut draw_points = Vec::with_capacity(points.len());
+                            for pt in &points {
+                                let mx = origin_x + (pt[0] / comp_w) * draw_w;
+                                let my = origin_y + (pt[1] / comp_h) * draw_h;
+                                draw_points.push(egui::pos2(mx, my));
+                            }
+
+                            // Draw mask path line
+                            let is_selected_layer = Some(li) == app.selected_layer_idx;
+                            let line_color = if is_selected_layer {
+                                egui::Color32::from_rgb(255, 180, 50) // Golden yellow for selected layer mask
+                            } else {
+                                egui::Color32::from_rgba_unmultiplied(255, 180, 50, 100)
+                            };
+
+                            for w in draw_points.windows(2) {
+                                ui.painter().line_segment([w[0], w[1]], egui::Stroke::new(1.2, line_color));
+                            }
+                            if mask.path.is_closed {
+                                ui.painter().line_segment([draw_points[draw_points.len() - 1], draw_points[0]], egui::Stroke::new(1.2, line_color));
+                            }
+
+                            // Draw vertices if active layer
+                            if is_selected_layer {
+                                for pt in &draw_points {
+                                    ui.painter().circle_filled(*pt, 3.0, egui::Color32::WHITE);
+                                    ui.painter().circle_stroke(*pt, 3.0, egui::Stroke::new(1.0, egui::Color32::from_rgb(255, 100, 0)));
+                                }
+                            }
+                        }
                     }
 
                     // Render BlendMode badge if non-normal
@@ -685,6 +724,36 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: u32) 
                     ui.painter().circle_stroke(center, 9.0, egui::Stroke::new(1.5, egui::Color32::WHITE));
                 }
             }
+        }
+
+        // ── Snapshot A/B Interactive Split Wipe Line Overlay ──
+        let is_comparing_id = egui::Id::new("ae_snapshot_is_comparing");
+        let is_comparing = ctx.data_mut(|d| *d.get_temp_mut_or_insert_with(is_comparing_id, || false));
+        if is_comparing {
+            let wipe_id = egui::Id::new("ae_snapshot_wipe_pos");
+            let wipe_pos = ctx.data_mut(|d| *d.get_temp_mut_or_insert_with(wipe_id, || 0.5f32));
+            let wipe_x = origin_x + wipe_pos * draw_w;
+
+            ui.painter().line_segment(
+                [egui::pos2(wipe_x, origin_y), egui::pos2(wipe_x, origin_y + draw_h)],
+                egui::Stroke::new(2.5, egui::Color32::from_rgb(100, 220, 255)),
+            );
+            ui.painter().circle_filled(egui::pos2(wipe_x, origin_y + draw_h * 0.5), 10.0, egui::Color32::from_rgb(100, 220, 255));
+            ui.painter().circle_stroke(egui::pos2(wipe_x, origin_y + draw_h * 0.5), 10.0, egui::Stroke::new(1.5, egui::Color32::WHITE));
+            ui.painter().text(
+                egui::pos2(wipe_x - 15.0, origin_y + 15.0),
+                egui::Align2::RIGHT_TOP,
+                "[Snap A]",
+                egui::FontId::proportional(11.0),
+                egui::Color32::from_rgb(100, 220, 255),
+            );
+            ui.painter().text(
+                egui::pos2(wipe_x + 15.0, origin_y + 15.0),
+                egui::Align2::LEFT_TOP,
+                "[Live Frame]",
+                egui::FontId::proportional(11.0),
+                egui::Color32::from_rgb(255, 200, 100),
+            );
         }
 
         // ── Interactive Layer Drag ─────────────────────────────────

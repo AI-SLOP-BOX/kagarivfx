@@ -40,15 +40,36 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                 if ui.selectable_label(app.left_tab_idx == 0, "Project").clicked() {
                     app.left_tab_idx = 0;
                 }
-                if ui.selectable_label(app.left_tab_idx == 1, "Effect Controls").clicked() {
+                if ui.selectable_label(app.left_tab_idx == 1, "Inspector").clicked() {
                     app.left_tab_idx = 1;
+                }
+                if ui.selectable_label(app.left_tab_idx == 2, "Character").clicked() {
+                    app.left_tab_idx = 2;
+                }
+                if ui.selectable_label(app.left_tab_idx == 3, "Flowchart").clicked() {
+                    app.left_tab_idx = 3;
                 }
             });
             ui.separator();
 
             if app.left_tab_idx == 0 {
-                // ── Render AE Project Asset Bin Panel ──
                 crate::ui::project_panel::draw(app, ui);
+                return;
+            }
+
+            if app.left_tab_idx == 2 {
+                let mut temp_proj = app.history.current().clone();
+                let changed = crate::ui::character_panel::draw_character_panel(app, ui, temp_proj.active_composition_mut(), *current_frame);
+                if changed {
+                    app.history.commit(temp_proj);
+                    crate::core::frame_cache::bump_version();
+                }
+                return;
+            }
+
+            if app.left_tab_idx == 3 {
+                let comp = app.history.current().active_composition().clone();
+                crate::ui::flowchart::draw_flowchart_view(app, ui, &comp);
                 return;
             }
 
@@ -511,80 +532,100 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                         }
                     });
 
+                    // ── Masks Control Section ──
+                    ui.add_space(6.0);
+                    ui.group(|ui| {
+                        ui.collapsing("🎭 Masks", |ui| {
+                            ui.horizontal(|ui| {
+                                if ui.button("+ Add Rect Mask").clicked() {
+                                    let mask_idx = layer.masks.len() + 1;
+                                    let new_mask = crate::core::mask::Mask::new_rect(
+                                        format!("mask_rect_{}", mask_idx),
+                                        format!("Mask Rect {}", mask_idx),
+                                        200.0, 200.0, 300.0, 200.0,
+                                    );
+                                    layer.masks.push(new_mask);
+                                    project_changed = true;
+                                }
+                                if ui.button("+ Add Oval Mask").clicked() {
+                                    let mask_idx = layer.masks.len() + 1;
+                                    let new_mask = crate::core::mask::Mask::new_ellipse(
+                                        format!("mask_oval_{}", mask_idx),
+                                        format!("Mask Oval {}", mask_idx),
+                                        400.0, 400.0, 150.0, 100.0,
+                                    );
+                                    layer.masks.push(new_mask);
+                                    project_changed = true;
+                                }
+                            });
+
+                            if layer.masks.is_empty() {
+                                ui.weak("No masks applied to this layer");
+                            } else {
+                                let mut mask_to_remove = None;
+                                for (m_idx, mask) in layer.masks.iter_mut().enumerate() {
+                                    ui.separator();
+                                    ui.horizontal(|ui| {
+                                        ui.checkbox(&mut mask.enabled, "");
+                                        ui.text_edit_singleline(&mut mask.name);
+                                        
+                                        // Invert toggle
+                                        let inv_before = mask.inverted;
+                                        ui.checkbox(&mut mask.inverted, "Invert 🔄");
+                                        if inv_before != mask.inverted { project_changed = true; }
+
+                                        if ui.small_button("🗑").clicked() {
+                                            mask_to_remove = Some(m_idx);
+                                        }
+                                    });
+
+                                    ui.horizontal(|ui| {
+                                        ui.label("Mode:");
+                                        let mode_before = mask.mode;
+                                        egui::ComboBox::from_id_source(format!("mask_mode_{}", mask.id))
+                                            .selected_text(format!("{:?}", mask.mode))
+                                            .show_ui(ui, |ui| {
+                                                use crate::core::mask::MaskMode;
+                                                for mode in [MaskMode::Add, MaskMode::Subtract, MaskMode::Intersect, MaskMode::None] {
+                                                    ui.selectable_value(&mut mask.mode, mode, format!("{:?}", mode));
+                                                }
+                                            });
+                                        if mode_before != mask.mode { project_changed = true; }
+                                    });
+
+                                    // Feather slider
+                                    let feather_before = mask.feather.clone();
+                                    if let Some(nf) = draw_property_ui(*current_frame, ui, "  Feather", &mut mask.feather, |ui, val| {
+                                        ui.add(egui::Slider::new(val, 0.0..=250.0).suffix(" px"));
+                                    }) { next_frame = Some(nf); }
+                                    if feather_before != mask.feather { project_changed = true; }
+
+                                    // Opacity slider
+                                    let op_before = mask.opacity.clone();
+                                    if let Some(nf) = draw_property_ui(*current_frame, ui, "  Opacity", &mut mask.opacity, |ui, val| {
+                                        ui.add(egui::Slider::new(val, 0.0..=100.0).suffix("%"));
+                                    }) { next_frame = Some(nf); }
+                                    if op_before != mask.opacity { project_changed = true; }
+
+                                    // Expansion slider
+                                    let exp_before = mask.expansion.clone();
+                                    if let Some(nf) = draw_property_ui(*current_frame, ui, "  Expansion", &mut mask.expansion, |ui, val| {
+                                        ui.add(egui::Slider::new(val, -100.0..=100.0).suffix(" px"));
+                                    }) { next_frame = Some(nf); }
+                                    if exp_before != mask.expansion { project_changed = true; }
+                                }
+
+                                if let Some(m_idx) = mask_to_remove {
+                                    layer.masks.remove(m_idx);
+                                    project_changed = true;
+                                }
+                            }
+                        });
+                    });
+
                     // ── Keyframe Graph Editor ──
                     ui.add_space(8.0);
-                    ui.group(|ui| {
-                        ui.horizontal(|ui| {
-                            ui.label(egui::RichText::new("Graph Editor").strong());
-                            let prop_name = app.selected_property.clone().unwrap_or_else(|| "Position X".to_string());
-                            egui::ComboBox::from_id_source("graph_prop_select")
-                                .selected_text(&prop_name)
-                                .show_ui(ui, |ui| {
-                                    for p in ["Position X", "Position Y", "Scale X", "Scale Y", "Rotation", "Opacity"] {
-                                        if ui.selectable_label(prop_name == p, p).clicked() {
-                                            app.selected_property = Some(p.to_string());
-                                        }
-                                    }
-                                });
-                        });
-
-                        let graph_prop = app.selected_property.clone().unwrap_or_else(|| "Position X".to_string());
-                        let total_f = comp.duration_frames.max(1);
-
-                        let mut samples = Vec::with_capacity(total_f as usize + 1);
-                        for f in 0..=total_f {
-                            let val = match graph_prop.as_str() {
-                                "Position X" => layer.transform.position.evaluate(f)[0],
-                                "Position Y" => layer.transform.position.evaluate(f)[1],
-                                "Scale X" => layer.transform.scale.evaluate(f)[0],
-                                "Scale Y" => layer.transform.scale.evaluate(f)[1],
-                                "Rotation" => layer.transform.rotation.evaluate(f),
-                                "Opacity" => layer.transform.opacity.evaluate(f),
-                                _ => layer.transform.position.evaluate(f)[0],
-                            };
-                            samples.push((f, val));
-                        }
-
-                        let (rect, graph_response) = ui.allocate_exact_size(egui::vec2(ui.available_width(), 70.0), egui::Sense::click_and_drag());
-                        ui.painter().rect_filled(rect, 4.0, egui::Color32::from_gray(25));
-                        ui.painter().rect_stroke(rect, 4.0, egui::Stroke::new(1.0, egui::Color32::from_gray(50)));
-                        
-                        let min_val = samples.iter().map(|(_, v)| *v).fold(f32::INFINITY, f32::min);
-                        let max_val = samples.iter().map(|(_, v)| *v).fold(f32::NEG_INFINITY, f32::max);
-                        let val_range = (max_val - min_val).max(0.001);
-
-                        let points: Vec<egui::Pos2> = samples.iter().map(|&(f, v)| {
-                            let x = rect.left() + (f as f32 / total_f as f32) * rect.width();
-                            let y = rect.bottom() - 4.0 - ((v - min_val) / val_range) * (rect.height() - 8.0);
-                            egui::pos2(x, y)
-                        }).collect();
-
-                        // Draw continuous graph curve
-                        for window in points.windows(2) {
-                            ui.painter().line_segment([window[0], window[1]], egui::Stroke::new(2.0, egui::Color32::from_rgb(255, 180, 50)));
-                        }
-
-                        // Render Bezier Handles & Keyframe Dots
-                        let step = (points.len() / 4).max(1);
-                        for (_idx, &pt) in points.iter().enumerate().step_by(step) {
-                            // Keyframe point
-                            ui.painter().circle_filled(pt, 3.5, egui::Color32::from_rgb(255, 230, 100));
-
-                            // Interactive Bezier Control Handles (Outgoing & Incoming tangents)
-                            let h_out = egui::pos2(pt.x + 18.0, pt.y - 12.0);
-                            let h_in = egui::pos2(pt.x - 18.0, pt.y + 12.0);
-
-                            ui.painter().line_segment([pt, h_out], egui::Stroke::new(1.0, egui::Color32::from_rgb(100, 200, 255)));
-                            ui.painter().line_segment([pt, h_in], egui::Stroke::new(1.0, egui::Color32::from_rgb(100, 200, 255)));
-
-                            ui.painter().circle_filled(h_out, 3.0, egui::Color32::from_rgb(100, 220, 255));
-                            ui.painter().circle_filled(h_in, 3.0, egui::Color32::from_rgb(100, 220, 255));
-
-                            if graph_response.dragged() {
-                                project_changed = true;
-                            }
-                        }
-                    });
+                    crate::ui::graph_editor::draw_graph_editor(app, ui, comp.duration_frames, layer, &mut project_changed);
                 }
                 
                 // Transactional commit: mutate live project during dragging, push Undo snapshot when released
