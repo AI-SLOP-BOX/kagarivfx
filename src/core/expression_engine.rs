@@ -179,6 +179,7 @@ pub fn eval_v2(
 }
 
 /// Evaluate expression with detailed diagnostic feedback for UI toast notifications.
+#[allow(dead_code)]
 pub fn eval_v2_with_diagnostics(
     engine: &Engine,
     script: &str,

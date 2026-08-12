@@ -108,8 +108,9 @@ impl FrameCache {
         let current = current_version();
         self.collect_garbage_below(current);
 
-        // LRU Eviction: Purge least-recently used entries until RAM usage <= max_memory_bytes / 2
+        // Hysteresis LRU Eviction: Purge least-recently used entries down to 75% max_memory_bytes
         if self.current_memory_bytes > self.max_memory_bytes {
+            let target_memory = (self.max_memory_bytes as f64 * 0.75) as usize;
             let mut keys_by_access: Vec<((u32, u64), Instant)> = self
                 .entries
                 .iter()
@@ -120,7 +121,7 @@ impl FrameCache {
             keys_by_access.sort_by_key(|(_k, accessed)| *accessed);
 
             for (key, _accessed) in keys_by_access {
-                if self.current_memory_bytes <= self.max_memory_bytes / 2 {
+                if self.current_memory_bytes <= target_memory {
                     break;
                 }
                 if let Some(removed) = self.entries.remove(&key) {

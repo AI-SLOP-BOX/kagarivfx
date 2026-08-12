@@ -1112,4 +1112,17 @@ mod tests {
         assert_eq!(cached.len(), 2);
         assert_eq!(cached.get("c1").unwrap().0, [150.0, 150.0]);
     }
+
+    #[test]
+    fn test_parent_cycle_prevention() {
+        let mut comp = Composition::new("c1".into(), "Comp".into(), 1920, 1080, 30, 300);
+        let l1 = Layer::new("l1".into(), "L1".into(), LayerType::Null, 300);
+        let l2 = Layer::new("l2".into(), "L2".into(), LayerType::Null, 300);
+
+        comp.add_layer(l1);
+        comp.add_layer(l2);
+
+        assert!(comp.set_layer_parent("l2", Some("l1".into())));
+        assert!(!comp.set_layer_parent("l1", Some("l2".into())), "Cycle parent assignment must be rejected");
+    }
 }

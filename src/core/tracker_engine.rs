@@ -54,6 +54,18 @@ impl TrackerEngine {
         start_frame: u32,
         end_frame: u32,
     ) {
+        Self::analyze_track_cancellable(comp, layer_idx, tracker_idx, start_frame, end_frame, None);
+    }
+
+    /// Run tracking analysis over a range of frames with optional cancellation flag.
+    pub fn analyze_track_cancellable(
+        comp: &mut Composition,
+        layer_idx: usize,
+        tracker_idx: usize,
+        start_frame: u32,
+        end_frame: u32,
+        cancel_flag: Option<std::sync::Arc<std::sync::atomic::AtomicBool>>,
+    ) {
         if layer_idx >= comp.layers.len() {
             return;
         }
@@ -71,6 +83,12 @@ impl TrackerEngine {
             current_positions.push((start_frame, start_pos));
 
             for f in (start_frame + 1)..=end_frame {
+                if let Some(ref flag) = cancel_flag {
+                    if flag.load(std::sync::atomic::Ordering::Relaxed) {
+                        log::info!("Motion tracking canceled via thread lifecycle guard");
+                        return;
+                    }
+                }
                 if let Some(next_pos) = Self::track_next_frame(layer, fps, tracker_idx, f - 1) {
                     current_positions.push((f, next_pos));
                 }
@@ -151,4 +169,85 @@ mod tests {
         assert_eq!(comp.layers[1].transform.position.evaluate(0), [100.0, 100.0]);
         assert_eq!(comp.layers[1].transform.position.evaluate(10), [200.0, 150.0]);
     }
+
+    #[test]
+    fn test_sad_template_matching() {
+        // Create 10x10 target image with a white 2x2 dot at (5, 5)
+        let mut target_img = vec![0u8; 10 * 10 * 4];
+        for y in 5..=6 {
+            for x in 5..=6 {
+                let idx = (y * 10 + x) * 4;
+                target_img[idx] = 255;
+                target_img[idx + 1] = 255;
+                target_img[idx + 2] = 255;
+                target_img[idx + 3] = 255;
+            }
+        }
+
+        // Reference patch 2x2 white dot
+        let mut ref_patch = vec![255u8; 2 * 2 * 4];
+
+        let matched = compute_sad_match(&ref_patch, 2, 2, &target_img, 10, 10, 3, 3, 4);
+        assert_eq!(matched, [5.0, 5.0], "SAD template matching should find the feature at (5, 5)");
+    }
+}
+
+/// Compute real Sum of Absolute Differences (SAD) template matching between reference RGBA buffer and target RGBA buffer.
+#[allow(dead_code)]
+pub fn compute_sad_match(
+    ref_patch: &[u8],
+    patch_w: usize,
+    patch_h: usize,
+    target_img: &[u8],
+    img_w: usize,
+    img_h: usize,
+    search_center_x: i32,
+    search_center_y: i32,
+    search_radius: i32,
+) -> [f32; 2] {
+    let mut min_sad = f32::MAX;
+    let mut best_x = search_center_x as f32;
+    let mut best_y = search_center_y as f32;
+
+    let half_pw = (patch_w / 2) as i32;
+    let half_ph = (patch_h / 2) as i32;
+
+    for dy in -search_radius..=search_radius {
+        for dx in -search_radius..=search_radius {
+            let cx = search_center_x + dx;
+            let cy = search_center_y + dy;
+
+            if cx - half_pw < 0 || cx + half_pw >= img_w as i32 || cy - half_ph < 0 || cy + half_ph >= img_h as i32 {
+                continue;
+            }
+
+            let mut sad = 0.0f32;
+            for py in 0..patch_h {
+                for px in 0..patch_w {
+                    let rx = px;
+                    let ry = py;
+                    let ref_idx = (ry * patch_w + rx) * 4;
+
+                    let tx = (cx - half_pw) as usize + px;
+                    let ty = (cy - half_ph) as usize + py;
+                    let tgt_idx = (ty * img_w + tx) * 4;
+
+                    if ref_idx + 3 < ref_patch.len() && tgt_idx + 3 < target_img.len() {
+                        let diff_r = (ref_patch[ref_idx] as f32 - target_img[tgt_idx] as f32).abs();
+                        let diff_g = (ref_patch[ref_idx + 1] as f32 - target_img[tgt_idx + 1] as f32).abs();
+                        let diff_b = (ref_patch[ref_idx + 2] as f32 - target_img[tgt_idx + 2] as f32).abs();
+                        sad += diff_r + diff_g + diff_b;
+                    }
+                }
+            }
+
+            if sad < min_sad {
+                min_sad = sad;
+                best_x = cx as f32;
+                best_y = cy as f32;
+            }
+        }
+    }
+
+    [best_x, best_y]
 }

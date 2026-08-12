@@ -623,11 +623,17 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                 }
                 // ── Deferred async tracker spawn (after comp borrow ends) ──
                 if let Some((l_idx, tracker_idx, start_f, end_f)) = pending_tracker {
+                    if let Some(old_flag) = app.tracker_cancel_flag.take() {
+                        old_flag.store(true, std::sync::atomic::Ordering::SeqCst);
+                    }
+                    let cancel_flag = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+                    app.tracker_cancel_flag = Some(cancel_flag.clone());
+
                     let mut comp_work = app.history.current().active_composition().clone();
                     let (tx, rx) = std::sync::mpsc::channel::<crate::TrackerEvent>();
                     app.tracker_rx = Some(rx);
                     std::thread::spawn(move || {
-                        TrackerEngine::analyze_track(&mut comp_work, l_idx, tracker_idx, start_f, end_f);
+                        TrackerEngine::analyze_track_cancellable(&mut comp_work, l_idx, tracker_idx, start_f, end_f, Some(cancel_flag));
                         if l_idx < comp_work.layers.len() && tracker_idx < comp_work.layers[l_idx].trackers.len() {
                             let l_id = comp_work.layers[l_idx].id.clone();
                             if let Animatable::Animated(ref kfs) = comp_work.layers[l_idx].trackers[tracker_idx].position {

@@ -112,7 +112,9 @@ pub struct AfterEffectsApp {
     pub export_output_path: String,
     pub is_exporting: bool,
     pub export_rx: Option<std::sync::mpsc::Receiver<ExportEvent>>,
+    pub export_cancel_flag: Option<std::sync::Arc<std::sync::atomic::AtomicBool>>,
     pub tracker_rx: Option<std::sync::mpsc::Receiver<TrackerEvent>>,
+    pub tracker_cancel_flag: Option<std::sync::Arc<std::sync::atomic::AtomicBool>>,
 
     pub master_volume: f32,
     pub left_tab_idx: usize,
@@ -201,7 +203,9 @@ impl Default for AfterEffectsApp {
             export_output_path: "output.mp4".to_string(),
             is_exporting: false,
             export_rx: None,
+            export_cancel_flag: None,
             tracker_rx: None,
+            tracker_cancel_flag: None,
             master_volume: 0.8,
             left_tab_idx: 0,
             right_tab_idx: 0,
@@ -654,5 +658,15 @@ impl eframe::App for AfterEffectsApp {
         self.toasts.draw(ctx);
 
         self.current_frame = current_frame;
+    }
+
+    fn on_exit(&mut self, _gl: Option<&eframe::glow::Context>) {
+        if let Some(ref flag) = self.export_cancel_flag {
+            flag.store(true, std::sync::atomic::Ordering::SeqCst);
+        }
+        if let Some(ref flag) = self.tracker_cancel_flag {
+            flag.store(true, std::sync::atomic::Ordering::SeqCst);
+        }
+        log::info!("Cleaned up background thread lifecycle flags on exit");
     }
 }

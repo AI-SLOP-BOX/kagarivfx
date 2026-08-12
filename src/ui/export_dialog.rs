@@ -148,6 +148,12 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
                             total_frames: total_frames.max(1),
                         };
 
+                        if let Some(old_flag) = app.export_cancel_flag.take() {
+                            old_flag.store(true, std::sync::atomic::Ordering::SeqCst);
+                        }
+                        let cancel_flag = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+                        app.export_cancel_flag = Some(cancel_flag.clone());
+
                         if crate::core::ffmpeg_export::is_ffmpeg_available() {
                             let (tx_ff, rx_ff) = std::sync::mpsc::channel();
                             let (tx_ui, rx_ui) = std::sync::mpsc::channel();
@@ -175,10 +181,15 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
                                 )
                             });
                         } else {
-                            // Fallback async render thread with progress feedback
+                            // Fallback async render thread with progress feedback & cancellation support
+                            let thread_cancel = cancel_flag.clone();
                             std::thread::spawn(move || {
                                 let duration = total_frames.max(1);
                                 for frame in 0..=duration {
+                                    if thread_cancel.load(std::sync::atomic::Ordering::Relaxed) {
+                                        log::info!("Export worker thread canceled cleanly");
+                                        return;
+                                    }
                                     for layer in &comp_snapshot.layers {
                                         let _world_tf = comp_snapshot.resolve_world_transform(layer, frame);
                                     }

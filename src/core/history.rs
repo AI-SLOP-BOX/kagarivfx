@@ -6,6 +6,8 @@ pub struct ProjectHistory {
     // History stack of Project snapshots
     stack: Vec<Project>,
     current_idx: usize,
+    /// Maximum number of undo states retained in memory (default 50).
+    max_history_entries: usize,
 }
 
 impl ProjectHistory {
@@ -13,6 +15,7 @@ impl ProjectHistory {
         Self {
             stack: vec![initial],
             current_idx: 0,
+            max_history_entries: 50,
         }
     }
 
@@ -23,6 +26,12 @@ impl ProjectHistory {
         self.stack.truncate(self.current_idx + 1);
         self.stack.push(project);
         self.current_idx += 1;
+
+        if self.stack.len() > self.max_history_entries {
+            self.stack.remove(0);
+            self.current_idx = self.current_idx.saturating_sub(1);
+        }
+
         // Cascade: any project change must invalidate all cached rendered frames.
         frame_cache::bump_version();
         log::debug!("Committed project history. Stack size: {}", self.stack.len());
@@ -49,7 +58,6 @@ impl ProjectHistory {
     }
 
     /// Undo to the previous state.
-    /// Automatically bumps the frame cache version so the preview reflects the restored state.
     pub fn undo(&mut self) -> Option<&Project> {
         if self.can_undo() {
             self.current_idx -= 1;
@@ -63,7 +71,6 @@ impl ProjectHistory {
     }
 
     /// Redo to the next state.
-    /// Automatically bumps the frame cache version so the preview reflects the restored state.
     pub fn redo(&mut self) -> Option<&Project> {
         if self.can_redo() {
             self.current_idx += 1;
