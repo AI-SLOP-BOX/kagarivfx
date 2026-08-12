@@ -19,4 +19,6 @@ pub mod comp_settings_dialog;
 pub mod align_panel;
 pub mod shortcuts_dialog;
 pub mod marker_panel;
+pub mod audio_panel;
+pub mod time_remap_panel;
 pub mod graph_editor;
