@@ -755,6 +755,60 @@ impl Composition {
         (pos, scale, rot, opa)
     }
 
+    /// Calculate and cache all layer world transforms in O(N) linear topological order.
+    pub fn resolve_all_world_transforms_cached(
+        &self,
+        frame: u32,
+    ) -> std::collections::HashMap<String, ([f32; 2], [f32; 2], f32, f32)> {
+        let mut cache = std::collections::HashMap::with_capacity(self.layers.len());
+        for layer in &self.layers {
+            if !cache.contains_key(&layer.id) {
+                self.resolve_layer_transform_recursive(layer, frame, &mut cache);
+            }
+        }
+        cache
+    }
+
+    fn resolve_layer_transform_recursive(
+        &self,
+        layer: &Layer,
+        frame: u32,
+        cache: &mut std::collections::HashMap<String, ([f32; 2], [f32; 2], f32, f32)>,
+    ) -> ([f32; 2], [f32; 2], f32, f32) {
+        if let Some(cached) = cache.get(&layer.id) {
+            return *cached;
+        }
+
+        let fps = self.fps;
+        let pos = layer.transform.eval_position(frame, fps);
+        let scale = layer.transform.eval_scale(frame, fps);
+        let rot = layer.transform.eval_rotation(frame, fps);
+        let opa = layer.transform.eval_opacity(frame, fps);
+
+        let res = if let Some(pid) = &layer.parent_id {
+            if let Some(parent) = self.layers.iter().find(|l| &l.id == pid) {
+                let (ppos, pscale, prot, popa) = self.resolve_layer_transform_recursive(parent, frame, cache);
+                let rot_rad = prot.to_radians();
+                let (s, c) = (rot_rad.sin(), rot_rad.cos());
+                let world_x = pos[0] * pscale[0] / 100.0 * c - pos[1] * pscale[1] / 100.0 * s + ppos[0];
+                let world_y = pos[0] * pscale[0] / 100.0 * s + pos[1] * pscale[1] / 100.0 * c + ppos[1];
+                (
+                    [world_x, world_y],
+                    [scale[0] * pscale[0] / 100.0, scale[1] * pscale[1] / 100.0],
+                    rot + prot,
+                    opa * popa / 100.0,
+                )
+            } else {
+                (pos, scale, rot, opa)
+            }
+        } else {
+            (pos, scale, rot, opa)
+        };
+
+        cache.insert(layer.id.clone(), res);
+        res
+    }
+
     pub fn resolve_world_transform_3d(
         &self,
         layer: &Layer,
@@ -1000,5 +1054,23 @@ mod tests {
         assert_eq!(remap_frame_for_loop(45, 0, 30, true), 15);
         // Cycle 2 (60..90, even cycle = forward): frame 75 -> 0 + 15 = 15
         assert_eq!(remap_frame_for_loop(75, 0, 30, true), 15);
+    }
+
+    #[test]
+    fn test_resolve_all_world_transforms_cached() {
+        let mut comp = Composition::new("c1".into(), "Comp".into(), 1920, 1080, 30, 300);
+        let mut parent = Layer::new("p1".into(), "Parent".into(), LayerType::Null, 300);
+        parent.transform.position = Animatable::new_constant([100.0, 100.0]);
+
+        let mut child = Layer::new("c1".into(), "Child".into(), LayerType::Null, 300);
+        child.parent_id = Some("p1".into());
+        child.transform.position = Animatable::new_constant([50.0, 50.0]);
+
+        comp.add_layer(parent);
+        comp.add_layer(child);
+
+        let cached = comp.resolve_all_world_transforms_cached(0);
+        assert_eq!(cached.len(), 2);
+        assert_eq!(cached.get("c1").unwrap().0, [150.0, 150.0]);
     }
 }

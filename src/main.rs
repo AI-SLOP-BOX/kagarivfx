@@ -127,6 +127,9 @@ pub struct AfterEffectsApp {
     pub global_shy_active: bool,
     pub effects_search_query: String,
 
+    // ── Toast Notification System (#8) ──
+    pub toasts: crate::ui::notification::ToastManager,
+
     // ── MVCC Frame Cache (#15) ─────────────────────────────────
     /// Versioned per-frame pixel cache. Stale entries auto-invalidate on project change.
     pub frame_cache: crate::core::frame_cache::FrameCache,
@@ -209,6 +212,7 @@ impl Default for AfterEffectsApp {
             show_switches_pane: true,
             global_shy_active: false,
             effects_search_query: String::new(),
+            toasts: crate::ui::notification::ToastManager::new(),
             // 256 frame entries max before GC kicks in
             frame_cache: crate::core::frame_cache::FrameCache::new(256),
             lazy_evaluator: crate::core::render_pipeline::LazyFrameEvaluator::new(),
@@ -257,12 +261,13 @@ impl eframe::App for AfterEffectsApp {
             } else {
                 current_frame + 1
             };
-            ctx.request_repaint();
+            let fps = self.history.current().active_composition().fps.max(1);
+            ctx.request_repaint_after(std::time::Duration::from_secs_f32(1.0 / fps as f32));
         }
 
         // ── AE Keyboard Shortcuts ──────────────────────────────────────
         // Only fire when no text input widget has keyboard focus.
-        let no_text_focus = !ctx.memory(|m| m.focused().is_some());
+        let no_text_focus = !crate::ui::focus::is_text_input_focused(ctx);
         if no_text_focus {
             ctx.input(|i| {
                 use egui::Key;
@@ -643,6 +648,9 @@ impl eframe::App for AfterEffectsApp {
 
         // Draw Keyboard Shortcuts Reference Window
         ui::shortcuts_dialog::draw_shortcuts_dialog(self, ctx);
+
+        // Render Toast Notifications Overlay (#8)
+        self.toasts.draw(ctx);
 
         self.current_frame = current_frame;
     }

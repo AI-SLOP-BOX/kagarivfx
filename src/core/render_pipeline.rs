@@ -1,23 +1,24 @@
 #![allow(dead_code)]
-/// Vulkan/DirectX12-inspired lazy evaluation render pipeline.
+/// Vulkan/DirectX12-inspired lazy evaluation render pipeline with atomic cancellation tokens.
 ///
 /// The UI thread never blocks on GPU work. Instead, it enqueues `RenderCommand`
 /// messages. A background `RenderWorker` thread drains the queue, performs GPU
-/// rendering (via the existing WgpuRenderer), and writes results to FrameCache.
-/// The viewport reads from FrameCache — if a frame is cached it's instant;
-/// if not, the worker delivers it asynchronously while the UI stays responsive.
+/// rendering, and writes results to FrameCache.
+/// Includes atomic `CancellationToken` checks so stale seek/scrub tasks abort
+/// immediately before wasting CPU/GPU cycles.
 
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::mpsc::{self, Receiver, Sender};
+use std::sync::Arc;
 use std::thread;
-use std::sync::{Arc, Mutex};
 
 /// Commands the UI thread sends to the render worker.
 #[derive(Debug, Clone)]
 pub enum RenderCommand {
-    /// Render a specific frame at the current cache version.
-    RenderFrame { frame: u32 },
+    /// Render a specific frame at a specific cache version.
+    RenderFrame { frame: u32, version: u64 },
     /// Render a contiguous range of frames (background pre-fetch).
-    PrefetchRange { start: u32, end: u32 },
+    PrefetchRange { start: u32, end: u32, version: u64 },
     /// Invalidate the in-flight queue (e.g., project changed).
     Flush,
     /// Shut down the worker thread cleanly.
@@ -37,8 +38,8 @@ pub enum RenderResult {
 pub struct RenderPipeline {
     cmd_tx: Sender<RenderCommand>,
     result_rx: Receiver<RenderResult>,
-    /// Sequence number for pending commands; used to detect stale results.
-    pending: Arc<Mutex<u32>>,
+    /// Atomic cancellation token sequence. Incremented on Flush/Scrub to abort stale tasks.
+    cancellation_token: Arc<AtomicU64>,
 }
 
 impl RenderPipeline {
@@ -49,6 +50,8 @@ impl RenderPipeline {
     {
         let (cmd_tx, cmd_rx) = mpsc::channel::<RenderCommand>();
         let (result_tx, result_rx) = mpsc::channel::<RenderResult>();
+        let cancellation_token = Arc::new(AtomicU64::new(1));
+        let worker_token = Arc::clone(&cancellation_token);
 
         thread::Builder::new()
             .name("render_worker".to_string())
@@ -66,10 +69,15 @@ impl RenderPipeline {
                         }
                         RenderCommand::Flush => {
                             log::debug!("[RenderWorker] flush — draining queue");
-                            // Drain remaining commands immediately
                             while cmd_rx.try_recv().is_ok() {}
                         }
-                        _ => {
+                        RenderCommand::RenderFrame { version, .. }
+                        | RenderCommand::PrefetchRange { version, .. } => {
+                            let cur_token = worker_token.load(Ordering::SeqCst);
+                            if *version < cur_token {
+                                log::debug!("[RenderWorker] aborting stale render command (ver {})", version);
+                                continue;
+                            }
                             render_fn(cmd, &result_tx);
                         }
                     }
@@ -80,27 +88,27 @@ impl RenderPipeline {
         Self {
             cmd_tx,
             result_rx,
-            pending: Arc::new(Mutex::new(0)),
+            cancellation_token,
         }
     }
 
     /// Request an asynchronous render of `frame`.
-    /// Returns immediately — the UI can continue drawing cached frames.
-    pub fn request_frame(&self, frame: u32) {
-        let _ = self.cmd_tx.send(RenderCommand::RenderFrame { frame });
+    pub fn request_frame(&self, frame: u32, version: u64) {
+        let _ = self.cmd_tx.send(RenderCommand::RenderFrame { frame, version });
     }
 
-    /// Pre-fetch a range of frames in the background (e.g. during playback).
-    pub fn prefetch_range(&self, start: u32, end: u32) {
-        let _ = self.cmd_tx.send(RenderCommand::PrefetchRange { start, end });
+    /// Pre-fetch a range of frames in the background.
+    pub fn prefetch_range(&self, start: u32, end: u32, version: u64) {
+        let _ = self.cmd_tx.send(RenderCommand::PrefetchRange { start, end, version });
     }
 
-    /// Flush all pending commands (call after a project state change).
+    /// Flush all pending commands and bump cancellation token.
     pub fn flush(&self) {
+        self.cancellation_token.fetch_add(1, Ordering::SeqCst);
         let _ = self.cmd_tx.send(RenderCommand::Flush);
     }
 
-    /// Poll for completed frames without blocking. Call once per UI frame.
+    /// Poll for completed frames without blocking.
     pub fn poll_results(&self) -> Vec<RenderResult> {
         let mut results = Vec::new();
         while let Ok(r) = self.result_rx.try_recv() {
@@ -121,11 +129,7 @@ impl Drop for RenderPipeline {
     }
 }
 
-/// A lightweight "lazy" evaluator that decides whether a frame needs rendering
-/// based on the current FrameCache state. Implements the demand-driven
-/// scheduling strategy from Vulkan's lazy resource evaluation.
 pub struct LazyFrameEvaluator {
-    /// Frames that have been requested but not yet delivered.
     in_flight: std::collections::HashSet<u32>,
 }
 
@@ -136,21 +140,18 @@ impl LazyFrameEvaluator {
         }
     }
 
-    /// Should we request a render for this frame right now?
-    /// Returns `true` only if the frame isn't cached and isn't already in-flight.
     pub fn needs_render(&mut self, frame: u32, cache: &crate::core::frame_cache::FrameCache) -> bool {
         if cache.is_cached(frame) {
             self.in_flight.remove(&frame);
             return false;
         }
         if self.in_flight.contains(&frame) {
-            return false; // Already requested, wait for the worker
+            return false;
         }
         self.in_flight.insert(frame);
         true
     }
 
-    /// Mark a frame as delivered (remove from in-flight set).
     pub fn mark_delivered(&mut self, frame: u32) {
         self.in_flight.remove(&frame);
     }

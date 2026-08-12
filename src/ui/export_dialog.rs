@@ -13,14 +13,16 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
                 }
                 ExportEvent::Finished(msg) => {
                     app.export_progress = 1.0;
-                    app.export_status = Some(msg);
+                    app.export_status = Some(msg.clone());
                     app.is_exporting = false;
                     finished_export = true;
+                    app.toasts.info(format!("🎬 Export Complete: {}", msg));
                 }
                 ExportEvent::Error(msg) => {
                     app.export_status = Some(format!("Error: {}", msg));
                     app.is_exporting = false;
                     finished_export = true;
+                    app.toasts.error(format!("❌ Export Failed: {}", msg));
                 }
             }
         }

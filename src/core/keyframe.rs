@@ -147,3 +147,28 @@ pub fn compute_ae_bezier_control_points(
 
     [x1, y1.clamp(-2.0, 3.0), x2, y2.clamp(-2.0, 3.0)]
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_solve_bezier_eased_time_precision() {
+        let t0 = solve_bezier_eased_time(0.0, 0.25, 0.1, 0.25, 1.0);
+        let t1 = solve_bezier_eased_time(1.0, 0.25, 0.1, 0.25, 1.0);
+        let t_mid = solve_bezier_eased_time(0.5, 0.25, 0.1, 0.25, 1.0);
+
+        assert!((t0 - 0.0).abs() < 1e-5);
+        assert!((t1 - 1.0).abs() < 1e-5);
+        assert!(t_mid > 0.0 && t_mid < 1.0);
+    }
+
+    #[test]
+    fn test_compute_ae_bezier_control_points() {
+        let outgoing = BezierControlPoint { influence: 0.33, speed: 100.0 };
+        let incoming = BezierControlPoint { influence: 0.33, speed: 0.0 };
+        let pts = compute_ae_bezier_control_points(&outgoing, &incoming, 30.0, 100.0, 30.0);
+        assert!(pts[0] >= 0.0 && pts[0] <= 1.0);
+        assert!(pts[2] >= 0.0 && pts[2] <= 1.0);
+    }
+}
