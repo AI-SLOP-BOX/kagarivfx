@@ -13,6 +13,7 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                 ui.selectable_value(&mut app.right_tab_idx, 0, "Effects");
                 ui.selectable_value(&mut app.right_tab_idx, 1, "Align");
                 ui.selectable_value(&mut app.right_tab_idx, 2, "Info");
+                ui.selectable_value(&mut app.right_tab_idx, 3, "Tracker");
             });
             ui.separator();
 
@@ -22,6 +23,11 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
 
             // Clone current project to apply transactional state mutations
             let mut temp_project = app.history.current().clone();
+
+            if app.right_tab_idx == 3 {
+                crate::ui::tracker_panel::draw_tracker_panel(app, ui, *current_frame);
+                return;
+            }
 
             if app.right_tab_idx == 1 {
                 ui.heading("Align & Character");
