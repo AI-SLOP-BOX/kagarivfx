@@ -77,8 +77,26 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
         .resizable(true)
         .default_height(280.0)
         .show(ctx, |ui| {
-            ui.heading("Timeline & Tracks");
+            let active_comp_name = app.history.current().active_composition().name.clone();
+            let bottom_dock_id = ui.make_persistent_id("ae_bottom_dock_tab");
+            let mut bottom_dock_tab = ui.ctx().data_mut(|d| *d.get_temp_mut_or_insert_with(bottom_dock_id, || 0));
+
+            ui.horizontal(|ui| {
+                if ui.selectable_label(bottom_dock_tab == 0, format!("🎞 {}", active_comp_name)).clicked() {
+                    bottom_dock_tab = 0;
+                    ui.ctx().data_mut(|d| d.insert_temp(bottom_dock_id, 0));
+                }
+                if ui.selectable_label(bottom_dock_tab == 1, "🚀 Render Queue").clicked() {
+                    bottom_dock_tab = 1;
+                    ui.ctx().data_mut(|d| d.insert_temp(bottom_dock_id, 1));
+                }
+            });
             ui.separator();
+
+            if bottom_dock_tab == 1 {
+                crate::ui::render_queue::draw_render_queue_panel(app, ui);
+                return;
+            }
 
             let mut project_changed = false;
             let mut pending_precomp_indices: Option<Vec<usize>> = None;

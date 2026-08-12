@@ -9,34 +9,37 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
         .resizable(true)
         .default_width(240.0)
         .show(ctx, |ui| {
-            ui.horizontal(|ui| {
-                ui.selectable_value(&mut app.right_tab_idx, 0, "Effects");
-                ui.selectable_value(&mut app.right_tab_idx, 1, "Align");
-                ui.selectable_value(&mut app.right_tab_idx, 2, "Info");
-                ui.selectable_value(&mut app.right_tab_idx, 3, "Tracker");
-                ui.selectable_value(&mut app.right_tab_idx, 4, "Preview");
-                ui.selectable_value(&mut app.right_tab_idx, 5, "Paint");
-                ui.selectable_value(&mut app.right_tab_idx, 6, "Markers");
-                ui.selectable_value(&mut app.right_tab_idx, 7, "Audio");
-                ui.selectable_value(&mut app.right_tab_idx, 8, "Time");
-                ui.selectable_value(&mut app.right_tab_idx, 9, "Masks");
-                ui.selectable_value(&mut app.right_tab_idx, 10, "Expr");
-                ui.selectable_value(&mut app.right_tab_idx, 11, "Essential");
-                ui.selectable_value(&mut app.right_tab_idx, 12, "Fill");
-                ui.selectable_value(&mut app.right_tab_idx, 13, "Metadata");
-                ui.selectable_value(&mut app.right_tab_idx, 14, "Scripting");
-                ui.selectable_value(&mut app.right_tab_idx, 15, "Workspaces");
-                ui.selectable_value(&mut app.right_tab_idx, 16, "Color");
-                ui.selectable_value(&mut app.right_tab_idx, 17, "Flowchart");
-                ui.selectable_value(&mut app.right_tab_idx, 18, "3D Views");
-                ui.selectable_value(&mut app.right_tab_idx, 19, "Lumetri");
-                ui.selectable_value(&mut app.right_tab_idx, 20, "Libraries");
-                ui.selectable_value(&mut app.right_tab_idx, 21, "Fonts");
-                ui.selectable_value(&mut app.right_tab_idx, 22, "Presets");
-                ui.selectable_value(&mut app.right_tab_idx, 23, "Mixer");
-                ui.selectable_value(&mut app.right_tab_idx, 24, "Velocity");
-                ui.selectable_value(&mut app.right_tab_idx, 25, "3D Options");
-                ui.selectable_value(&mut app.right_tab_idx, 26, "Styles");
+            egui::ScrollArea::horizontal().show(ui, |ui| {
+                ui.horizontal(|ui| {
+                    ui.selectable_value(&mut app.right_tab_idx, 0, "Effects & Presets");
+                    ui.selectable_value(&mut app.right_tab_idx, 4, "Preview");
+                    ui.selectable_value(&mut app.right_tab_idx, 2, "Info");
+                    ui.selectable_value(&mut app.right_tab_idx, 7, "Audio");
+                    ui.selectable_value(&mut app.right_tab_idx, 23, "Mixer");
+                    ui.selectable_value(&mut app.right_tab_idx, 1, "Align");
+                    ui.selectable_value(&mut app.right_tab_idx, 3, "Tracker");
+                    ui.selectable_value(&mut app.right_tab_idx, 5, "Paint");
+                    ui.selectable_value(&mut app.right_tab_idx, 21, "Fonts");
+                    ui.selectable_value(&mut app.right_tab_idx, 27, "Character");
+                    ui.selectable_value(&mut app.right_tab_idx, 28, "Paragraph");
+                    ui.selectable_value(&mut app.right_tab_idx, 26, "Layer Styles");
+                    ui.selectable_value(&mut app.right_tab_idx, 19, "Lumetri Color");
+                    ui.selectable_value(&mut app.right_tab_idx, 20, "Libraries");
+                    ui.selectable_value(&mut app.right_tab_idx, 18, "3D Views");
+                    ui.selectable_value(&mut app.right_tab_idx, 25, "3D Options");
+                    ui.selectable_value(&mut app.right_tab_idx, 11, "Essential Graphics");
+                    ui.selectable_value(&mut app.right_tab_idx, 12, "Content-Aware Fill");
+                    ui.selectable_value(&mut app.right_tab_idx, 9, "Masks");
+                    ui.selectable_value(&mut app.right_tab_idx, 10, "Expressions");
+                    ui.selectable_value(&mut app.right_tab_idx, 16, "Color (OCIO)");
+                    ui.selectable_value(&mut app.right_tab_idx, 13, "Metadata");
+                    ui.selectable_value(&mut app.right_tab_idx, 14, "Scripting Console");
+                    ui.selectable_value(&mut app.right_tab_idx, 15, "Workspaces");
+                    ui.selectable_value(&mut app.right_tab_idx, 22, "Render Presets");
+                    ui.selectable_value(&mut app.right_tab_idx, 24, "Velocity");
+                    ui.selectable_value(&mut app.right_tab_idx, 8, "Time");
+                    ui.selectable_value(&mut app.right_tab_idx, 6, "Markers");
+                });
             });
             ui.separator();
 
@@ -165,6 +168,21 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
 
             if app.right_tab_idx == 26 {
                 crate::ui::layer_styles::draw_layer_styles(app, ui);
+                return;
+            }
+
+            if app.right_tab_idx == 27 {
+                let mut temp_proj = app.history.current().clone();
+                let changed = crate::ui::character_panel::draw_character_panel(app, ui, temp_proj.active_composition_mut(), *current_frame);
+                if changed {
+                    app.history.commit(temp_proj);
+                    crate::core::frame_cache::bump_version();
+                }
+                return;
+            }
+
+            if app.right_tab_idx == 28 {
+                crate::ui::paragraph_panel::draw_paragraph_panel(app, ui);
                 return;
             }
 

@@ -38,11 +38,8 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
         .show(ctx, |ui| {
             ui.horizontal(|ui| {
                 if ui.selectable_label(app.left_tab_idx == 0, "Project").clicked() { app.left_tab_idx = 0; }
-                if ui.selectable_label(app.left_tab_idx == 1, "Inspector").clicked() { app.left_tab_idx = 1; }
-                if ui.selectable_label(app.left_tab_idx == 2, "Character").clicked() { app.left_tab_idx = 2; }
-                if ui.selectable_label(app.left_tab_idx == 3, "Paragraph").clicked() { app.left_tab_idx = 3; }
-                if ui.selectable_label(app.left_tab_idx == 4, "Flowchart").clicked() { app.left_tab_idx = 4; }
-                if ui.selectable_label(app.left_tab_idx == 5, "Render Queue").clicked() { app.left_tab_idx = 5; }
+                if ui.selectable_label(app.left_tab_idx == 1, "Effect Controls").clicked() { app.left_tab_idx = 1; }
+                if ui.selectable_label(app.left_tab_idx == 2, "Flowchart").clicked() { app.left_tab_idx = 2; }
             });
             ui.separator();
 
@@ -52,28 +49,7 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
             }
 
             if app.left_tab_idx == 2 {
-                let mut temp_proj = app.history.current().clone();
-                let changed = crate::ui::character_panel::draw_character_panel(app, ui, temp_proj.active_composition_mut(), *current_frame);
-                if changed {
-                    app.history.commit(temp_proj);
-                    crate::core::frame_cache::bump_version();
-                }
-                return;
-            }
-
-            if app.left_tab_idx == 3 {
-                crate::ui::paragraph_panel::draw_paragraph_panel(app, ui);
-                return;
-            }
-
-            if app.left_tab_idx == 4 {
-                let comp = app.history.current().active_composition().clone();
-                crate::ui::flowchart::draw_flowchart_view(app, ui, &comp);
-                return;
-            }
-
-            if app.left_tab_idx == 5 {
-                crate::ui::render_queue::draw_render_queue_panel(app, ui);
+                crate::ui::flowchart_inspector::draw_flowchart_inspector(app, ui);
                 return;
             }
 
