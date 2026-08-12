@@ -953,10 +953,8 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: u32) 
 
             ui.separator();
             // AE Camera View Selector
-            let cam_view_id = egui::Id::new("ae_cam_view_select");
-            let mut cam_view = ctx.data_mut(|d| *d.get_temp_mut_or_insert_with(cam_view_id, || 0));
             egui::ComboBox::from_id_source("cam_view_combo_bottom")
-                .selected_text(match cam_view {
+                .selected_text(match app.viewport_cam_view {
                     0 => "Active Camera",
                     1 => "Front",
                     2 => "Left",
@@ -964,51 +962,43 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: u32) 
                     _ => "Custom View 1",
                 })
                 .show_ui(ui, |ui| {
-                    if ui.selectable_value(&mut cam_view, 0, "Active Camera").clicked() {
+                    if ui.selectable_value(&mut app.viewport_cam_view, 0, "Active Camera").clicked() {
                         app.viewport_mode = ViewportMode::Comp2D;
-                        ctx.data_mut(|d| d.insert_temp(cam_view_id, cam_view));
                     }
-                    if ui.selectable_value(&mut cam_view, 1, "Front").clicked() {
+                    if ui.selectable_value(&mut app.viewport_cam_view, 1, "Front").clicked() {
                         app.viewport_mode = ViewportMode::Camera3D;
                         app.camera_orbit = (0.0, 0.0, 1000.0);
-                        ctx.data_mut(|d| d.insert_temp(cam_view_id, cam_view));
                     }
-                    if ui.selectable_value(&mut cam_view, 2, "Left").clicked() {
+                    if ui.selectable_value(&mut app.viewport_cam_view, 2, "Left").clicked() {
                         app.viewport_mode = ViewportMode::Camera3D;
                         app.camera_orbit = (-90.0, 0.0, 1000.0);
-                        ctx.data_mut(|d| d.insert_temp(cam_view_id, cam_view));
                     }
-                    if ui.selectable_value(&mut cam_view, 3, "Top").clicked() {
+                    if ui.selectable_value(&mut app.viewport_cam_view, 3, "Top").clicked() {
                         app.viewport_mode = ViewportMode::Camera3D;
                         app.camera_orbit = (0.0, -89.0, 1000.0);
-                        ctx.data_mut(|d| d.insert_temp(cam_view_id, cam_view));
                     }
                 });
 
             ui.separator();
             // AE Render Quality / Downsample Resolution
-            let res_id = egui::Id::new("ae_render_resolution");
-            let mut res_ratio = ctx.data_mut(|d| *d.get_temp_mut_or_insert_with(res_id, || 0));
             egui::ComboBox::from_id_source("res_combo_bottom")
-                .selected_text(match res_ratio {
+                .selected_text(match app.viewport_render_resolution {
                     0 => "Full",
                     1 => "Half",
                     2 => "Third",
                     _ => "Quarter",
                 })
                 .show_ui(ui, |ui| {
-                    if ui.selectable_value(&mut res_ratio, 0, "Full").clicked() { ctx.data_mut(|d| d.insert_temp(res_id, res_ratio)); }
-                    if ui.selectable_value(&mut res_ratio, 1, "Half").clicked() { ctx.data_mut(|d| d.insert_temp(res_id, res_ratio)); }
-                    if ui.selectable_value(&mut res_ratio, 2, "Third").clicked() { ctx.data_mut(|d| d.insert_temp(res_id, res_ratio)); }
-                    if ui.selectable_value(&mut res_ratio, 3, "Quarter").clicked() { ctx.data_mut(|d| d.insert_temp(res_id, res_ratio)); }
+                    ui.selectable_value(&mut app.viewport_render_resolution, 0, "Full");
+                    ui.selectable_value(&mut app.viewport_render_resolution, 1, "Half");
+                    ui.selectable_value(&mut app.viewport_render_resolution, 2, "Third");
+                    ui.selectable_value(&mut app.viewport_render_resolution, 3, "Quarter");
                 });
 
             ui.separator();
             // AE Color Channels
-            let chan_id = egui::Id::new("ae_color_channel");
-            let mut chan_idx = ctx.data_mut(|d| *d.get_temp_mut_or_insert_with(chan_id, || 0));
             egui::ComboBox::from_id_source("chan_combo_bottom")
-                .selected_text(match chan_idx {
+                .selected_text(match app.viewport_color_channel {
                     0 => "RGB Color",
                     1 => "Red",
                     2 => "Green",
@@ -1016,11 +1006,11 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: u32) 
                     _ => "Alpha",
                 })
                 .show_ui(ui, |ui| {
-                    if ui.selectable_value(&mut chan_idx, 0, "RGB Color").clicked() { ctx.data_mut(|d| d.insert_temp(chan_id, chan_idx)); }
-                    if ui.selectable_value(&mut chan_idx, 1, "Red").clicked() { ctx.data_mut(|d| d.insert_temp(chan_id, chan_idx)); }
-                    if ui.selectable_value(&mut chan_idx, 2, "Green").clicked() { ctx.data_mut(|d| d.insert_temp(chan_id, chan_idx)); }
-                    if ui.selectable_value(&mut chan_idx, 3, "Blue").clicked() { ctx.data_mut(|d| d.insert_temp(chan_id, chan_idx)); }
-                    if ui.selectable_value(&mut chan_idx, 4, "Alpha").clicked() { ctx.data_mut(|d| d.insert_temp(chan_id, chan_idx)); }
+                    ui.selectable_value(&mut app.viewport_color_channel, 0, "RGB Color");
+                    ui.selectable_value(&mut app.viewport_color_channel, 1, "Red");
+                    ui.selectable_value(&mut app.viewport_color_channel, 2, "Green");
+                    ui.selectable_value(&mut app.viewport_color_channel, 3, "Blue");
+                    ui.selectable_value(&mut app.viewport_color_channel, 4, "Alpha");
                 });
 
             ui.separator();
@@ -1031,20 +1021,18 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: u32) 
             if ui.button("👁").on_hover_text("Show Snapshot (F5)").clicked() {}
 
             ui.separator();
-            let fast_preview_id = egui::Id::new("ae_fast_preview_mode");
-            let mut fast_preview = ctx.data_mut(|d| *d.get_temp_mut_or_insert_with(fast_preview_id, || 0));
             egui::ComboBox::from_id_source("fast_preview_combo")
-                .selected_text(match fast_preview {
+                .selected_text(match app.viewport_fast_preview {
                     0 => "Off (Final Quality)",
                     1 => "Adaptive Resolution",
                     2 => "Fast Draft",
                     _ => "Wireframe",
                 })
                 .show_ui(ui, |ui| {
-                    if ui.selectable_value(&mut fast_preview, 0, "Off (Final Quality)").clicked() { ctx.data_mut(|d| d.insert_temp(fast_preview_id, fast_preview)); }
-                    if ui.selectable_value(&mut fast_preview, 1, "Adaptive Resolution").clicked() { ctx.data_mut(|d| d.insert_temp(fast_preview_id, fast_preview)); }
-                    if ui.selectable_value(&mut fast_preview, 2, "Fast Draft").clicked() { ctx.data_mut(|d| d.insert_temp(fast_preview_id, fast_preview)); }
-                    if ui.selectable_value(&mut fast_preview, 3, "Wireframe").clicked() { ctx.data_mut(|d| d.insert_temp(fast_preview_id, fast_preview)); }
+                    ui.selectable_value(&mut app.viewport_fast_preview, 0, "Off (Final Quality)");
+                    ui.selectable_value(&mut app.viewport_fast_preview, 1, "Adaptive Resolution");
+                    ui.selectable_value(&mut app.viewport_fast_preview, 2, "Fast Draft");
+                    ui.selectable_value(&mut app.viewport_fast_preview, 3, "Wireframe");
                 });
         });
     });

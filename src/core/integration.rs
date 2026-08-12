@@ -227,7 +227,12 @@ pub fn start_sync_server(
                 Err(_) => continue,
             };
 
-            let mut reader = BufReader::new(stream.try_clone().unwrap());
+            let stream_clone = match stream.try_clone() {
+                Ok(s) => s,
+                Err(_) => continue,
+            };
+            let _ = stream.set_read_timeout(Some(std::time::Duration::from_secs(10)));
+            let mut reader = BufReader::new(stream_clone);
             let mut writer = stream;
 
             let mut line = String::new();

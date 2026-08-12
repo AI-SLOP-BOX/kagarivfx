@@ -220,15 +220,11 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
             
             if let Some(idx) = app.selected_layer_idx {
                 ui.label("Add Effect to Selected Layer:");
-                let search_id = egui::Id::new("effect_search_query");
-                let mut search_query = ctx.data_mut(|d| d.get_temp_mut_or_insert_with(search_id, String::new).clone());
                 ui.horizontal(|ui| {
                     ui.small("Search:");
-                    if ui.add(egui::TextEdit::singleline(&mut search_query).hint_text("Search effects...")).changed() {
-                        ctx.data_mut(|d| d.insert_temp(search_id, search_query.clone()));
-                    }
+                    ui.add(egui::TextEdit::singleline(&mut app.effects_search_query).hint_text("Search effects..."));
                 });
-                let q = search_query.to_lowercase();
+                let q = app.effects_search_query.to_lowercase();
 
                 ui.vertical(|ui| {
                     if (q.is_empty() || "gaussian blur".contains(&q)) && ui.button("+ Gaussian Blur").clicked() {

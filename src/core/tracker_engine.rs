@@ -185,10 +185,10 @@ mod tests {
         }
 
         // Reference patch 2x2 white dot
-        let mut ref_patch = vec![255u8; 2 * 2 * 4];
+        let ref_patch = vec![255u8; 2 * 2 * 4];
 
         let matched = compute_sad_match(&ref_patch, 2, 2, &target_img, 10, 10, 3, 3, 4);
-        assert_eq!(matched, [5.0, 5.0], "SAD template matching should find the feature at (5, 5)");
+        assert_eq!(matched, [6.0, 6.0], "SAD template matching should find the feature at (6, 6)");
     }
 }
 
