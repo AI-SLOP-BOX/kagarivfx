@@ -1,51 +1,56 @@
 use eframe::egui;
 use crate::AfterEffectsApp;
 
+pub fn draw_content(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
+    ui.vertical_centered(|ui| {
+        ui.heading("MASTER VU");
+        ui.separator();
+
+        let is_playing = app.is_playing;
+        let current_frame = app.current_frame;
+
+        let vol = app.master_volume;
+
+        // Calculate simulated peak levels based on playing state & frame phase
+        let (left_peak, right_peak) = if is_playing {
+            let t = current_frame as f32 * 0.2;
+            let l = ((t.sin().abs() * 0.7 + (t * 2.3).cos().abs() * 0.3) * vol).clamp(0.05, 0.98);
+            let r = (((t + 0.8).sin().abs() * 0.65 + ((t + 0.8) * 1.9).cos().abs() * 0.35) * vol).clamp(0.05, 0.95);
+            (l, r)
+        } else {
+            (0.02 * vol, 0.02 * vol)
+        };
+
+        let meter_height = 200.0;
+        let meter_width = 16.0;
+
+        ui.add_space(4.0);
+
+        ui.horizontal(|ui| {
+            // Left Channel VU Bar
+            draw_vu_channel(ui, "L", left_peak, meter_width, meter_height);
+            ui.add_space(4.0);
+            // Right Channel VU Bar
+            draw_vu_channel(ui, "R", right_peak, meter_width, meter_height);
+        });
+
+        ui.add_space(8.0);
+        ui.separator();
+
+        // Master Volume Slider
+        ui.label(egui::RichText::new("Master").small().strong());
+        ui.add(egui::Slider::new(&mut app.master_volume, 0.0..=1.5).show_value(false));
+        ui.small(format!("{:.0}%", app.master_volume * 100.0));
+    });
+}
+
+#[allow(dead_code)]
 pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context) {
     egui::SidePanel::right("audio_meter_panel")
         .default_width(85.0)
         .resizable(false)
         .show(ctx, |ui| {
-            ui.vertical_centered(|ui| {
-                ui.heading("MASTER VU");
-                ui.separator();
-
-                let is_playing = app.is_playing;
-                let current_frame = app.current_frame;
-
-                let vol = app.master_volume;
-
-                // Calculate simulated peak levels based on playing state & frame phase
-                let (left_peak, right_peak) = if is_playing {
-                    let t = current_frame as f32 * 0.2;
-                    let l = ((t.sin().abs() * 0.7 + (t * 2.3).cos().abs() * 0.3) * vol).clamp(0.05, 0.98);
-                    let r = (((t + 0.8).sin().abs() * 0.65 + ((t + 0.8) * 1.9).cos().abs() * 0.35) * vol).clamp(0.05, 0.95);
-                    (l, r)
-                } else {
-                    (0.02 * vol, 0.02 * vol)
-                };
-
-                let meter_height = 220.0;
-                let meter_width = 16.0;
-
-                ui.add_space(4.0);
-
-                ui.horizontal(|ui| {
-                    // Left Channel VU Bar
-                    draw_vu_channel(ui, "L", left_peak, meter_width, meter_height);
-                    ui.add_space(4.0);
-                    // Right Channel VU Bar
-                    draw_vu_channel(ui, "R", right_peak, meter_width, meter_height);
-                });
-
-                ui.add_space(8.0);
-                ui.separator();
-
-                // Master Volume Slider
-                ui.label(egui::RichText::new("Master").small().strong());
-                ui.add(egui::Slider::new(&mut app.master_volume, 0.0..=1.5).show_value(false));
-                ui.small(format!("{:.0}%", app.master_volume * 100.0));
-            });
+            draw_content(app, ui);
         });
 }
 

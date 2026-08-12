@@ -72,6 +72,8 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
             }
 
             if app.right_tab_idx == 7 {
+                crate::ui::audio_meter::draw_content(app, ui);
+                ui.add_space(8.0);
                 crate::ui::audio_panel::draw_audio_panel(app, ui);
                 return;
             }

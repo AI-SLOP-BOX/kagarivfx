@@ -572,16 +572,13 @@ impl eframe::App for AfterEffectsApp {
         // Draw Main Tools Bar (AE Tool Palette)
         ui::toolbar::draw(self, ctx);
 
-        // Draw Left Panel: Properties Inspector
+        // Draw Left Panel: Project Bin & Properties Inspector
         ui::inspector::draw(self, ctx, &mut current_frame);
 
-        // Draw Right Side Audio VU Meter Panel
-        ui::audio_meter::draw(self, ctx);
-
-        // Draw Right Panel: Effects Library & External Links
+        // Draw Right Panel: Effects & Presets, Info, Audio VU Meter, Character, Paragraph, Align, Tracker
         ui::effects_library::draw(self, ctx, &mut current_frame);
 
-        // Draw Bottom Panel: Timeline Editor
+        // Draw Bottom Panel: Timeline Editor & Render Queue
         ui::timeline::draw(self, ctx, &mut current_frame, total_frames);
 
         // Draw Central Panel: Viewport (GPU or CPU render)

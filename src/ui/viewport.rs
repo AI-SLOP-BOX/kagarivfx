@@ -6,7 +6,7 @@ use eframe::egui;
 
 pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: u32) {
     egui::CentralPanel::default().show(ctx, |ui| {
-        // ── AE Composition Viewport Tab Bar ─────────────────────────────────────────
+        // ── AE Composition Viewport Tab Bar (TOP) ──────────────────────────────────
         let active_comp_name = app.history.current().active_composition().name.clone();
         ui.horizontal(|ui| {
             let tab_frame = egui::Frame::none()
@@ -24,7 +24,6 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: u32) 
             });
 
             ui.add_space(8.0);
-            // Mode Toggle
             let mode_2d = app.viewport_mode == ViewportMode::Comp2D;
             if ui.selectable_label(mode_2d, "2D").clicked() {
                 app.viewport_mode = ViewportMode::Comp2D;
@@ -32,167 +31,8 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: u32) 
             if ui.selectable_label(!mode_2d, "3D Camera").clicked() {
                 app.viewport_mode = ViewportMode::Camera3D;
             }
-            ui.add_space(8.0);
-            ui.checkbox(&mut app.show_grid, "Grid");
-            ui.checkbox(&mut app.show_guides, "Safe");
-            ui.checkbox(&mut app.show_handles, "Handles");
-
-            // AE Magnification Ratio Dropdown
-            let mag_val = app.viewport_mag_ratio;
-            egui::ComboBox::from_id_source("mag_combo")
-                .selected_text(if mag_val == 4.0 { "400%" } else if mag_val == 2.0 { "200%" } else if mag_val == 1.0 { "100%" } else if mag_val == 0.5 { "50%" } else if mag_val == 0.25 { "25%" } else { "Fit" })
-                .show_ui(ui, |ui| {
-                    if ui.selectable_label(app.viewport_mag_ratio == 0.0, "Fit").clicked() { app.viewport_mag_ratio = 0.0; }
-                    if ui.selectable_label(app.viewport_mag_ratio == 0.25, "25%").clicked() { app.viewport_mag_ratio = 0.25; }
-                    if ui.selectable_label(app.viewport_mag_ratio == 0.5, "50%").clicked() { app.viewport_mag_ratio = 0.5; }
-                    if ui.selectable_label(app.viewport_mag_ratio == 1.0, "100%").clicked() { app.viewport_mag_ratio = 1.0; }
-                    if ui.selectable_label(app.viewport_mag_ratio == 2.0, "200%").clicked() { app.viewport_mag_ratio = 2.0; }
-                    if ui.selectable_label(app.viewport_mag_ratio == 4.0, "400%").clicked() { app.viewport_mag_ratio = 4.0; }
-                });
-
-            // AE Camera View Selector
-            let cam_view_id = egui::Id::new("ae_cam_view_select");
-            let mut cam_view = ctx.data_mut(|d| *d.get_temp_mut_or_insert_with(cam_view_id, || 0));
-            egui::ComboBox::from_id_source("cam_view_combo")
-                .selected_text(match cam_view {
-                    0 => "Active Camera",
-                    1 => "Front",
-                    2 => "Left",
-                    3 => "Top",
-                    _ => "Custom View 1",
-                })
-                .show_ui(ui, |ui| {
-                    if ui.selectable_value(&mut cam_view, 0, "Active Camera").clicked() {
-                        app.viewport_mode = ViewportMode::Comp2D;
-                        ctx.data_mut(|d| d.insert_temp(cam_view_id, cam_view));
-                    }
-                    if ui.selectable_value(&mut cam_view, 1, "Front").clicked() {
-                        app.viewport_mode = ViewportMode::Camera3D;
-                        app.camera_orbit = (0.0, 0.0, 1000.0);
-                        ctx.data_mut(|d| d.insert_temp(cam_view_id, cam_view));
-                    }
-                    if ui.selectable_value(&mut cam_view, 2, "Left").clicked() {
-                        app.viewport_mode = ViewportMode::Camera3D;
-                        app.camera_orbit = (-90.0, 0.0, 1000.0);
-                        ctx.data_mut(|d| d.insert_temp(cam_view_id, cam_view));
-                    }
-                    if ui.selectable_value(&mut cam_view, 3, "Top").clicked() {
-                        app.viewport_mode = ViewportMode::Camera3D;
-                        app.camera_orbit = (0.0, -89.0, 1000.0);
-                        ctx.data_mut(|d| d.insert_temp(cam_view_id, cam_view));
-                    }
-                    if ui.selectable_value(&mut cam_view, 4, "Custom View 1").clicked() {
-                        app.viewport_mode = ViewportMode::Camera3D;
-                        app.camera_orbit = (30.0, 20.0, 1200.0);
-                        ctx.data_mut(|d| d.insert_temp(cam_view_id, cam_view));
-                    }
-                });
-
-            ui.separator();
-            ui.add_space(4.0);
-
-            // ── Snapshot A/B Compare Controls ──
-            let snap_id = egui::Id::new("ae_viewport_snap_a");
-            let is_comparing_id = egui::Id::new("ae_viewport_comparing");
-            let wipe_id = egui::Id::new("ae_viewport_wipe_pos");
-
-            let mut has_snap = ctx.data_mut(|d| d.get_temp::<u32>(snap_id).is_some());
-            let mut is_comparing = ctx.data_mut(|d| *d.get_temp_mut_or_insert_with(is_comparing_id, || false));
-            let mut wipe_pos = ctx.data_mut(|d| *d.get_temp_mut_or_insert_with(wipe_id, || 0.5f32));
-
-            if ui.button(if has_snap { "[Snap A] Retake" } else { "[Snap A] Take" }).on_hover_text("Take snapshot of current frame (Shift+F5)").clicked() {
-                ctx.data_mut(|d| d.insert_temp(snap_id, current_frame));
-                has_snap = true;
-            }
-
-            if has_snap {
-                if ui.selectable_label(is_comparing, "[Compare A]").clicked() {
-                    is_comparing = !is_comparing;
-                    ctx.data_mut(|d| d.insert_temp(is_comparing_id, is_comparing));
-                }
-                if is_comparing {
-                    ui.label("Wipe:");
-                    if ui.add(egui::Slider::new(&mut wipe_pos, 0.0..=1.0).show_value(false)).changed() {
-                        ctx.data_mut(|d| d.insert_temp(wipe_id, wipe_pos));
-                    }
-                }
-            }
-
-            // AE Render Quality / Downsample Resolution
-            let res_id = egui::Id::new("ae_render_resolution");
-            let mut res_ratio = ctx.data_mut(|d| *d.get_temp_mut_or_insert_with(res_id, || 0));
-            egui::ComboBox::from_id_source("res_combo")
-                .selected_text(match res_ratio {
-                    0 => "Full",
-                    1 => "Half",
-                    2 => "Third",
-                    _ => "Quarter",
-                })
-                .show_ui(ui, |ui| {
-                    if ui.selectable_value(&mut res_ratio, 0, "Full").clicked() { ctx.data_mut(|d| d.insert_temp(res_id, res_ratio)); }
-                    if ui.selectable_value(&mut res_ratio, 1, "Half").clicked() { ctx.data_mut(|d| d.insert_temp(res_id, res_ratio)); }
-                    if ui.selectable_value(&mut res_ratio, 2, "Third").clicked() { ctx.data_mut(|d| d.insert_temp(res_id, res_ratio)); }
-                    if ui.selectable_value(&mut res_ratio, 3, "Quarter").clicked() { ctx.data_mut(|d| d.insert_temp(res_id, res_ratio)); }
-                });
-
-            // AE Color Channels
-            let chan_id = egui::Id::new("ae_color_channel");
-            let mut chan_idx = ctx.data_mut(|d| *d.get_temp_mut_or_insert_with(chan_id, || 0));
-            egui::ComboBox::from_id_source("chan_combo")
-                .selected_text(match chan_idx {
-                    0 => "RGB Color",
-                    1 => "Red",
-                    2 => "Green",
-                    3 => "Blue",
-                    _ => "Alpha",
-                })
-                .show_ui(ui, |ui| {
-                    if ui.selectable_value(&mut chan_idx, 0, "RGB Color").clicked() { ctx.data_mut(|d| d.insert_temp(chan_id, chan_idx)); }
-                    if ui.selectable_value(&mut chan_idx, 1, "Red").clicked() { ctx.data_mut(|d| d.insert_temp(chan_id, chan_idx)); }
-                    if ui.selectable_value(&mut chan_idx, 2, "Green").clicked() { ctx.data_mut(|d| d.insert_temp(chan_id, chan_idx)); }
-                    if ui.selectable_value(&mut chan_idx, 3, "Blue").clicked() { ctx.data_mut(|d| d.insert_temp(chan_id, chan_idx)); }
-                    if ui.selectable_value(&mut chan_idx, 4, "Alpha").clicked() { ctx.data_mut(|d| d.insert_temp(chan_id, chan_idx)); }
-                });
-
-            // Viewport Color Management (Exposure EV & LUT)
-            ui.separator();
-            let exp_id = egui::Id::new("ae_exposure_ev");
-            let mut exposure_ev = ctx.data_mut(|d| *d.get_temp_mut_or_insert_with(exp_id, || 0.0f32));
-            ui.label("Exp:");
-            if ui.add(egui::DragValue::new(&mut exposure_ev).speed(0.1).clamp_range(-5.0..=5.0).suffix(" EV")).changed() {
-                ctx.data_mut(|d| d.insert_temp(exp_id, exposure_ev));
-            }
-
-            let lut_id = egui::Id::new("ae_colorspace_lut");
-            let mut lut_idx = ctx.data_mut(|d| *d.get_temp_mut_or_insert_with(lut_id, || 0usize));
-            egui::ComboBox::from_id_source("lut_combo")
-                .selected_text(match lut_idx {
-                    0 => "Rec.709",
-                    1 => "Linear sRGB",
-                    _ => "ACEScg",
-                })
-                .show_ui(ui, |ui| {
-                    if ui.selectable_value(&mut lut_idx, 0, "Rec.709").clicked() { ctx.data_mut(|d| d.insert_temp(lut_id, lut_idx)); }
-                    if ui.selectable_value(&mut lut_idx, 1, "Linear sRGB").clicked() { ctx.data_mut(|d| d.insert_temp(lut_id, lut_idx)); }
-                    if ui.selectable_value(&mut lut_idx, 2, "ACEScg").clicked() { ctx.data_mut(|d| d.insert_temp(lut_id, lut_idx)); }
-                });
-
-            // Resolution Scale Selector (Full, Half, Quarter)
-            ui.separator();
-            let res_scale_id = egui::Id::new("ae_preview_res_scale");
-            let mut res_scale_idx = ctx.data_mut(|d| *d.get_temp_mut_or_insert_with(res_scale_id, || 0usize));
-            egui::ComboBox::from_id_source("res_scale_combo")
-                .selected_text(match res_scale_idx {
-                    0 => "Full (1/1)",
-                    1 => "Half (1/2)",
-                    _ => "Quarter (1/4)",
-                })
-                .show_ui(ui, |ui| {
-                    if ui.selectable_value(&mut res_scale_idx, 0, "Full (1/1)").clicked() { ctx.data_mut(|d| d.insert_temp(res_scale_id, res_scale_idx)); }
-                    if ui.selectable_value(&mut res_scale_idx, 1, "Half (1/2)").clicked() { ctx.data_mut(|d| d.insert_temp(res_scale_id, res_scale_idx)); }
-                    if ui.selectable_value(&mut res_scale_idx, 2, "Quarter (1/4)").clicked() { ctx.data_mut(|d| d.insert_temp(res_scale_id, res_scale_idx)); }
-                });
         });
+        ui.separator();
 
         // ── Comp Settings Modal ──────────────────────────────────────────────
         if app.show_comp_settings {
@@ -1052,5 +892,100 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: u32) 
                 }
             }
         }
+
+        // ── AE Viewport Controls Toolbar (BOTTOM OF CANVAS) ──────────────────────────
+        ui.separator();
+        ui.horizontal(|ui| {
+            ui.style_mut().spacing.item_spacing.x = 4.0;
+            // AE Magnification Ratio Dropdown
+            let mag_val = app.viewport_mag_ratio;
+            egui::ComboBox::from_id_source("mag_combo_bottom")
+                .selected_text(if mag_val == 4.0 { "400%" } else if mag_val == 2.0 { "200%" } else if mag_val == 1.0 { "100%" } else if mag_val == 0.5 { "50%" } else if mag_val == 0.25 { "25%" } else { "Fit" })
+                .show_ui(ui, |ui| {
+                    if ui.selectable_label(app.viewport_mag_ratio == 0.0, "Fit").clicked() { app.viewport_mag_ratio = 0.0; }
+                    if ui.selectable_label(app.viewport_mag_ratio == 0.25, "25%").clicked() { app.viewport_mag_ratio = 0.25; }
+                    if ui.selectable_label(app.viewport_mag_ratio == 0.5, "50%").clicked() { app.viewport_mag_ratio = 0.5; }
+                    if ui.selectable_label(app.viewport_mag_ratio == 1.0, "100%").clicked() { app.viewport_mag_ratio = 1.0; }
+                    if ui.selectable_label(app.viewport_mag_ratio == 2.0, "200%").clicked() { app.viewport_mag_ratio = 2.0; }
+                    if ui.selectable_label(app.viewport_mag_ratio == 4.0, "400%").clicked() { app.viewport_mag_ratio = 4.0; }
+                });
+
+            ui.separator();
+            ui.checkbox(&mut app.show_grid, "Grid");
+            ui.checkbox(&mut app.show_guides, "Safe");
+            ui.checkbox(&mut app.show_handles, "Handles");
+
+            ui.separator();
+            // AE Camera View Selector
+            let cam_view_id = egui::Id::new("ae_cam_view_select");
+            let mut cam_view = ctx.data_mut(|d| *d.get_temp_mut_or_insert_with(cam_view_id, || 0));
+            egui::ComboBox::from_id_source("cam_view_combo_bottom")
+                .selected_text(match cam_view {
+                    0 => "Active Camera",
+                    1 => "Front",
+                    2 => "Left",
+                    3 => "Top",
+                    _ => "Custom View 1",
+                })
+                .show_ui(ui, |ui| {
+                    if ui.selectable_value(&mut cam_view, 0, "Active Camera").clicked() {
+                        app.viewport_mode = ViewportMode::Comp2D;
+                        ctx.data_mut(|d| d.insert_temp(cam_view_id, cam_view));
+                    }
+                    if ui.selectable_value(&mut cam_view, 1, "Front").clicked() {
+                        app.viewport_mode = ViewportMode::Camera3D;
+                        app.camera_orbit = (0.0, 0.0, 1000.0);
+                        ctx.data_mut(|d| d.insert_temp(cam_view_id, cam_view));
+                    }
+                    if ui.selectable_value(&mut cam_view, 2, "Left").clicked() {
+                        app.viewport_mode = ViewportMode::Camera3D;
+                        app.camera_orbit = (-90.0, 0.0, 1000.0);
+                        ctx.data_mut(|d| d.insert_temp(cam_view_id, cam_view));
+                    }
+                    if ui.selectable_value(&mut cam_view, 3, "Top").clicked() {
+                        app.viewport_mode = ViewportMode::Camera3D;
+                        app.camera_orbit = (0.0, -89.0, 1000.0);
+                        ctx.data_mut(|d| d.insert_temp(cam_view_id, cam_view));
+                    }
+                });
+
+            ui.separator();
+            // AE Render Quality / Downsample Resolution
+            let res_id = egui::Id::new("ae_render_resolution");
+            let mut res_ratio = ctx.data_mut(|d| *d.get_temp_mut_or_insert_with(res_id, || 0));
+            egui::ComboBox::from_id_source("res_combo_bottom")
+                .selected_text(match res_ratio {
+                    0 => "Full",
+                    1 => "Half",
+                    2 => "Third",
+                    _ => "Quarter",
+                })
+                .show_ui(ui, |ui| {
+                    if ui.selectable_value(&mut res_ratio, 0, "Full").clicked() { ctx.data_mut(|d| d.insert_temp(res_id, res_ratio)); }
+                    if ui.selectable_value(&mut res_ratio, 1, "Half").clicked() { ctx.data_mut(|d| d.insert_temp(res_id, res_ratio)); }
+                    if ui.selectable_value(&mut res_ratio, 2, "Third").clicked() { ctx.data_mut(|d| d.insert_temp(res_id, res_ratio)); }
+                    if ui.selectable_value(&mut res_ratio, 3, "Quarter").clicked() { ctx.data_mut(|d| d.insert_temp(res_id, res_ratio)); }
+                });
+
+            ui.separator();
+            // AE Color Channels
+            let chan_id = egui::Id::new("ae_color_channel");
+            let mut chan_idx = ctx.data_mut(|d| *d.get_temp_mut_or_insert_with(chan_id, || 0));
+            egui::ComboBox::from_id_source("chan_combo_bottom")
+                .selected_text(match chan_idx {
+                    0 => "RGB Color",
+                    1 => "Red",
+                    2 => "Green",
+                    3 => "Blue",
+                    _ => "Alpha",
+                })
+                .show_ui(ui, |ui| {
+                    if ui.selectable_value(&mut chan_idx, 0, "RGB Color").clicked() { ctx.data_mut(|d| d.insert_temp(chan_id, chan_idx)); }
+                    if ui.selectable_value(&mut chan_idx, 1, "Red").clicked() { ctx.data_mut(|d| d.insert_temp(chan_id, chan_idx)); }
+                    if ui.selectable_value(&mut chan_idx, 2, "Green").clicked() { ctx.data_mut(|d| d.insert_temp(chan_id, chan_idx)); }
+                    if ui.selectable_value(&mut chan_idx, 3, "Blue").clicked() { ctx.data_mut(|d| d.insert_temp(chan_id, chan_idx)); }
+                    if ui.selectable_value(&mut chan_idx, 4, "Alpha").clicked() { ctx.data_mut(|d| d.insert_temp(chan_id, chan_idx)); }
+                });
+        });
     });
 }
