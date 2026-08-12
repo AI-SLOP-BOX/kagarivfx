@@ -195,7 +195,7 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                         ui.horizontal(|ui| {
                             ui.label("Blend Mode:");
                             let blend_before = layer.blend_mode;
-                            egui::ComboBox::from_id_source("blend_mode_combo")
+                            egui::ComboBox::from_id_source(format!("blend_mode_combo_{}", layer.id))
                                 .selected_text(format!("{:?}", layer.blend_mode))
                                 .show_ui(ui, |ui| {
                                     for mode in [
@@ -211,7 +211,7 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                         ui.horizontal(|ui| {
                             ui.label("Label:");
                             let label_before = layer.label;
-                            egui::ComboBox::from_id_source("label_color_combo")
+                            egui::ComboBox::from_id_source(format!("label_color_combo_{}", layer.id))
                                 .selected_text(format!("{:?}", layer.label))
                                 .show_ui(ui, |ui| {
                                     for color in [
@@ -228,7 +228,7 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                         ui.horizontal(|ui| {
                             ui.label("Track Matte:");
                             let matte_before = layer.track_matte;
-                            egui::ComboBox::from_id_source("track_matte_combo")
+                            egui::ComboBox::from_id_source(format!("track_matte_combo_{}", layer.id))
                                 .selected_text(format!("{:?}", layer.track_matte))
                                 .show_ui(ui, |ui| {
                                     for mode in [
@@ -277,7 +277,7 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                                 "None".to_string()
                             };
 
-                            egui::ComboBox::from_id_source("parent_select_combo")
+                            egui::ComboBox::from_id_source(format!("parent_select_combo_{}", layer.id))
                                 .selected_text(parent_name)
                                 .show_ui(ui, |ui| {
                                     ui.selectable_value(&mut layer.parent_id, None, "None");

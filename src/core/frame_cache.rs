@@ -27,10 +27,12 @@ pub fn current_version() -> u64 {
 
 /// Thread-safe reusable buffer pool for RGBA pixel vectors.
 /// Eliminates heap allocation spikes and memory fragmentation during 4K/8K playback.
+#[allow(dead_code)]
 pub struct PixelBufferPool {
     pool: std::sync::Mutex<Vec<Vec<u8>>>,
 }
 
+#[allow(dead_code)]
 impl PixelBufferPool {
     pub fn new() -> Self {
         Self {
