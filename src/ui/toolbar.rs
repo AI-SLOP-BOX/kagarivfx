@@ -6,11 +6,17 @@ pub enum ActiveTool {
     Selection,
     Hand,
     Zoom,
+    Camera3D,
     Rotation,
     AnchorPoint,
     Rectangle,
     Pen,
     Text,
+    Brush,
+    CloneStamp,
+    Eraser,
+    RotoBrush,
+    PuppetPin,
 }
 
 #[allow(dead_code)]
@@ -31,11 +37,17 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
                     (ActiveTool::Selection, "↖ Select (V)"),
                     (ActiveTool::Hand, "✋ Hand (H)"),
                     (ActiveTool::Zoom, "🔍 Zoom (Z)"),
+                    (ActiveTool::Camera3D, "📷 Camera (C)"),
                     (ActiveTool::Rotation, "🔄 Rotate (W)"),
                     (ActiveTool::AnchorPoint, "🎯 Anchor (Y)"),
                     (ActiveTool::Rectangle, "▭ Shape (Q)"),
                     (ActiveTool::Pen, "✒ Pen (G)"),
                     (ActiveTool::Text, "T Text (⌘T)"),
+                    (ActiveTool::Brush, "🖌 Brush"),
+                    (ActiveTool::CloneStamp, "🔀 Stamp"),
+                    (ActiveTool::Eraser, "🧹 Eraser"),
+                    (ActiveTool::RotoBrush, "✂ Roto"),
+                    (ActiveTool::PuppetPin, "📌 Puppet"),
                 ];
 
                 for (tool, label) in tools {
@@ -78,7 +90,6 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
 
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     if ui.button(egui::RichText::new("⚡ Render Queue (Cmd+M)").strong().color(egui::Color32::from_rgb(255, 200, 80)))
-                        .on_hover_text("Export Composition via FFmpeg Encoder")
                         .clicked()
                     {
                         app.show_export_dialog = true;

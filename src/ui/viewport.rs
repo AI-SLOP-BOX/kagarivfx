@@ -6,13 +6,24 @@ use eframe::egui;
 
 pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: u32) {
     egui::CentralPanel::default().show(ctx, |ui| {
-        // ── Viewport Toolbar ────────────────────────────────────────────────
+        // ── AE Composition Viewport Tab Bar ─────────────────────────────────────────
+        let active_comp_name = app.history.current().active_composition().name.clone();
         ui.horizontal(|ui| {
-            ui.heading("Viewport");
-            ui.add_space(8.0);
-            ui.separator();
-            ui.add_space(8.0);
+            let tab_frame = egui::Frame::none()
+                .fill(egui::Color32::from_rgb(34, 38, 46))
+                .inner_margin(egui::Margin::symmetric(10.0, 4.0))
+                .stroke(egui::Stroke::new(1.0, egui::Color32::from_rgb(55, 65, 80)));
+            
+            tab_frame.show(ui, |ui| {
+                ui.horizontal(|ui| {
+                    ui.label(egui::RichText::new(format!("Composition: {}", active_comp_name)).strong().color(egui::Color32::WHITE));
+                    if ui.small_button("×").clicked() {
+                        log::info!("Composition tab active");
+                    }
+                });
+            });
 
+            ui.add_space(8.0);
             // Mode Toggle
             let mode_2d = app.viewport_mode == ViewportMode::Comp2D;
             if ui.selectable_label(mode_2d, "2D").clicked() {
@@ -22,23 +33,9 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: u32) 
                 app.viewport_mode = ViewportMode::Camera3D;
             }
             ui.add_space(8.0);
-            ui.separator();
-            ui.add_space(8.0);
-
             ui.checkbox(&mut app.show_grid, "Grid");
             ui.checkbox(&mut app.show_guides, "Safe");
             ui.checkbox(&mut app.show_handles, "Handles");
-            ui.add_space(8.0);
-
-            if ui.button("Comp Settings").clicked() {
-                app.show_comp_settings = !app.show_comp_settings;
-            }
-            ui.add_space(8.0);
-            ui.separator();
-            ui.add_space(8.0);
-            ui.add_space(8.0);
-            ui.separator();
-            ui.add_space(8.0);
 
             // AE Magnification Ratio Dropdown
             let mag_val = app.viewport_mag_ratio;
