@@ -13,4 +13,6 @@ pub mod character_panel;
 pub mod paragraph_panel;
 pub mod tracker_panel;
 pub mod render_queue;
+pub mod transport_panel;
+pub mod paint_panel;
 pub mod graph_editor;

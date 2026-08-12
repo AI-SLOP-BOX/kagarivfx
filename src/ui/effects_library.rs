@@ -14,6 +14,8 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                 ui.selectable_value(&mut app.right_tab_idx, 1, "Align");
                 ui.selectable_value(&mut app.right_tab_idx, 2, "Info");
                 ui.selectable_value(&mut app.right_tab_idx, 3, "Tracker");
+                ui.selectable_value(&mut app.right_tab_idx, 4, "Preview");
+                ui.selectable_value(&mut app.right_tab_idx, 5, "Paint");
             });
             ui.separator();
 
@@ -26,6 +28,17 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
 
             if app.right_tab_idx == 3 {
                 crate::ui::tracker_panel::draw_tracker_panel(app, ui, *current_frame);
+                return;
+            }
+
+            if app.right_tab_idx == 4 {
+                let total_frames = temp_project.active_composition().duration_frames;
+                crate::ui::transport_panel::draw_transport_panel(app, ui, current_frame, total_frames);
+                return;
+            }
+
+            if app.right_tab_idx == 5 {
+                crate::ui::paint_panel::draw_paint_panel(app, ui);
                 return;
             }
 
