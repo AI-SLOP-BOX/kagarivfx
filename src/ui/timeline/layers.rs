@@ -9,7 +9,9 @@ pub fn draw_prop_row(
     start_frame: u32,
     zoom_span: u32,
     left_pane_w: f32,
-) {
+) -> Option<u32> {
+    let mut requested_frame = None;
+
     ui.horizontal(|ui| {
         ui.allocate_ui(egui::vec2(left_pane_w, 18.0), |ui| {
             ui.label(egui::RichText::new(label).small().color(crate::ui::theme::colors::TEXT_SECONDARY));
@@ -29,7 +31,9 @@ pub fn draw_prop_row(
         if response.clicked() {
             if let Some(pos) = response.interact_pointer_pos() {
                 let norm = ((pos.x - rect.left()) / rect.width()).clamp(0.0, 1.0);
-                *current_frame = start_frame + (norm * zoom_span as f32).round() as u32;
+                let target_f = start_frame + (norm * zoom_span as f32).round() as u32;
+                *current_frame = target_f;
+                requested_frame = Some(target_f);
             }
         }
 
@@ -38,8 +42,12 @@ pub fn draw_prop_row(
                 let norm = (kf_frame - start_frame) as f32 / zoom_span as f32;
                 let kf_x = rect.left() + norm * rect.width();
                 let kf_y = rect.center().y;
-                draw_keyframe_tick(ui, kf_x, kf_y, true, current_frame, kf_frame, Some(interpolation));
+                if let Some(nf) = draw_keyframe_tick(ui, kf_x, kf_y, true, current_frame, kf_frame, Some(interpolation)) {
+                    requested_frame = Some(nf);
+                }
             }
         }
     });
+
+    requested_frame
 }

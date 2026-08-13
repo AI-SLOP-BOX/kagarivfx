@@ -102,6 +102,10 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                         }
                         project_changed = true;
                     }
+                    if ui.button("📋 Copy Expression Ref").clicked() {
+                        ui.output_mut(|o| o.copied_text = "thisComp.layer(thisLayer).transform.position".to_string());
+                        app.toasts.info("Copied expression reference to clipboard!");
+                    }
                 });
                 ui.add_space(8.0);
                 ui.separator();

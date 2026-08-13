@@ -1,97 +1,86 @@
-# After Effects OSS — Team Architecture & Engineering Guidelines
+# AE-OSS Architecture & Code Hardening Guidelines
 
-## 1. Architectural Principles & Vision
-This codebase follows a **Unidirectional Data Flow & Core-UI Separation** pattern designed for high-performance VFX software and team collaboration.
-
-```
-       ┌────────────────────────────────────────────────────────┐
-       │                 Core Domain Engine                     │
-       │  (Composition, Layer, Animatable<T>, Keyframe, Cache)  │
-       └───────────────────────────▲────────────────────────────┘
-                                   │ Immutable Read / Mutable Command
-       ┌───────────────────────────┴────────────────────────────┐
-       │             Unidirectional State Manager               │
-       │       (app_state.rs: Playback, Selection, Export)      │
-       └───────────────────────────▲────────────────────────────┘
-                                   │ State Subscriptions
-       ┌───────────────────────────┴────────────────────────────┐
-       │                Modular UI View Panels                  │
-       │   (37 Specialized Panels in src/ui/: timeline, etc)   │
-       └────────────────────────────────────────────────────────┘
-```
+This document outlines mandatory architectural conventions for team collaboration and codebase hardening.
 
 ---
 
-## 2. Team Collaboration & File Modularization Rules
+## 1. Single Responsibility & File Size Caps
 
-### Rule 2.1: Small, Single-Responsibility UI Submodules
-- **Never add monolithic multi-thousand line files.**
-- Each UI panel must reside in its own specialized submodule under `src/ui/` (e.g., `src/ui/character_panel.rs`, `src/ui/tracker_panel.rs`, `src/ui/timeline/`).
-- If a panel exceeds 500 lines, it **must** be broken down into sub-components (e.g., `timeline/header.rs`, `timeline/tracks.rs`, `timeline/graph_editor.rs`).
+### Rule 1.1: 500-Line Soft Cap per File
+- No single source file should exceed **500 lines**.
+- When a panel or module grows beyond 500 lines, sub-features MUST be extracted into sub-modules (e.g. `inspector_camera.rs`, `effects_controls.rs`).
 
-### Rule 2.2: Zero Git Conflict Protocol
-- Developers working on feature PRs must only touch the specific panel module for their domain.
-- Core engine changes in `src/core/` must be verified via pure unit tests in `cargo test` prior to submitting a Pull Request.
+### Rule 1.2: Component Extraction
+- UI panels are composed of modular subcomponents taking explicit slice references or domain structs (`&mut Layer`, `&mut Mask`), not global God Objects.
 
 ---
 
-## 3. State Management & Ownership Guidelines
+## 2. UI / Logic Separation & Domain Struct Encapsulation
 
-### Rule 3.1: Strict Domain Sub-State Structs (`src/app_state.rs`)
-- **No God Objects**: Never add arbitrary flat fields to `AfterEffectsApp`.
-- All application state must be placed in one of the domain sub-structs:
-  - `PlaybackDomainState`: Frame counter, play/pause transport, work area bounds.
-  - `SelectionDomainState`: Active layer index, multi-selection set, active property path.
-  - `UiTabsDomainState`: Dock tabs, search filters, view ratios.
-  - `ExportDomainState`: Non-blocking render channels, progress, export presets.
+### Rule 2.1: Domain Sub-State Structs
+- Application state is partitioned into domain-specific structs (e.g., `PlaybackState`, `SelectionState`, `TimelineHeaderState`).
+- Components receive only the minimal state references required for rendering.
 
-### Rule 3.2: Transactional In-Place Mutation & Lazy Commit Pattern
-- UI panels read and mutate project state in-place using `app.history.current_mut()`.
-- **Zero per-frame cloning**: Never clone the `Project` or `Composition` inside frame draw loops.
-- History snapshots (`app.history.commit(...)`) are pushed **lazily** only on pointer release (`!is_pointer_down`) after actual property mutations.
+### Rule 2.2: Pure Functions for Business Logic
+- Keyframe evaluation, spatial transformation, and pixel compositing must be implemented as pure, testable functions in `src/core/`.
 
 ---
 
-## 4. UI vs. Core Business Logic Separation & Testing Strategy
+## 3. Repaint & Idle Power Management
 
-### Rule 4.1: UI Functions are Pure Views
-- Functions in `src/ui/` must take references (e.g. `&mut egui::Ui`, `&Composition`, `&mut SelectionDomainState`) and render controls.
-- **Zero business logic in UI closures**: All calculations (keyframe evaluation, matrix transforms, expression parsing, color space conversions) must delegate to `src/core/`.
-
-### Rule 4.2: 100% Automated Unit Test Requirement for Core Modules
-- Every file in `src/core/` **must** include a `#[cfg(test)] mod tests` suite.
-- Core tests must execute in under 1.0 second (`cargo test`) to ensure continuous integration (CI) speed.
+### Rule 3.1: Throttled Repaints
+- `ctx.request_repaint()` or `ctx.request_repaint_after(...)` MUST NOT be called unconditionally during idle state.
+- Repaints are requested ONLY when:
+  1. Playback is active (`is_playing == true`).
+  2. Background exports or dynamic links are running.
+  3. Interactive user dragging / scrubbing occurs.
 
 ---
 
-## 5. Non-Blocking Async Threading & Panic Safety
+## 4. Algorithmic Efficiency & Temporal Locality
 
-### Rule 5.1: Non-Blocking Message Passing
-- Background threads (FFmpeg renderers, tracker engines, Dynamic Link servers) communicate with the UI thread strictly via `std::sync::mpsc` channels polled with `.try_recv()`.
-- **Never call `.recv()` or block the UI thread on a Mutex/Channel lock.**
+### Rule 4.1: $O(1)$ Keyframe Locality
+- Keyframe sampling across scrubbed timelines must utilize index-cached lookup (`evaluate_with_hint`) rather than $O(N)$ linear scans.
+
+### Rule 4.2: Zero Per-Frame Heap Allocation
+- Hot rendering loops must reuse pre-allocated memory buffers (`PixelBufferPool`).
+
+---
+
+## 5. Non-Blocking Threading & Panic Isolation
+
+### Rule 5.1: Non-Blocking Channels
+- Background threads communicate with the UI thread strictly via `std::sync::mpsc` channels polled with `.try_recv()`.
+- Never call `.recv()` or block the UI thread on a Mutex/Channel lock.
 
 ### Rule 5.2: Panic Isolation
-- All background thread closures must wrap execution in `std::panic::catch_unwind(std::panic::AssertUnwindSafe(...))`.
-- Cancellation is coordinated via atomic flags (`Arc<AtomicBool>`).
+- All background thread closures wrap execution in `std::panic::catch_unwind(std::panic::AssertUnwindSafe(...))`.
 
 ---
 
 ## 6. Cross-Platform Shortcuts & Internationalization (i18n)
 
 ### Rule 6.1: OS-Aware Modifier Keys
-- Always use `format_shortcut(key, cmd, shift, alt)` from `crate::ui::shortcuts` when displaying keybindings.
-- Automatically resolves `Cmd` on macOS and `Ctrl` on Windows/Linux.
+- Always use `format_shortcut(key, cmd, shift, alt)` from `crate::ui::shortcuts`.
 
 ### Rule 6.2: Text Focus Protection
-- Global shortcuts must query `crate::ui::focus::is_text_input_focused(ctx)` to prevent key leaks when typing into text boxes or dialog fields.
+- Global shortcuts query `crate::ui::focus::is_text_input_focused(ctx)` before execution.
 
 ---
 
 ## 7. Zero-Unwrap Protocol & Defensive Error Handling
 
 ### Rule 7.1: Zero `.unwrap()` / `.expect()` in Production Code
-- Calling `.unwrap()` or `.expect()` on runtime option/result values in production domain code (`src/core/` and `src/ui/`) is strictly prohibited.
-- Use pattern matching (`if let Some(...)`, `match`), defensive fallback values (`.unwrap_or_default()`), or `Result<T, String>` propagation.
+- Calling `.unwrap()` or `.expect()` in `src/core/` and `src/ui/` is prohibited.
+- Use pattern matching (`if let Some(...)`), defensive fallbacks (`.unwrap_or(...)`), or `Result` propagation.
 
-### Rule 7.2: Graceful Fault Recovery
-- If invalid user JSON project state or corrupted assets are encountered during runtime playback, the app must log a warning via `log::warn!` or trigger a user notification toast rather than panicking.
+---
+
+## 8. Borrow Checker Safety & Data-Driven Component Catalog
+
+### Rule 8.1: Scope Isolation for Mutability (`history.current_mut()`)
+- When modifying project state via `app.history.current_mut()`, restrict mutable borrow lifetimes to isolated block scopes `{ ... }` or copy primitive values/IDs beforehand.
+- Avoid holding `current_mut()` references while calling methods on other `app` fields to eliminate double-borrow collisions.
+
+### Rule 8.2: Data-Driven Preset Registries
+- UI element lists (such as effect presets, plugin panels, tool selections) must be declared as static data registries (`EffectPreset` array) and rendered dynamically via iterator loops.
