@@ -4,6 +4,8 @@
 /// to fill masked pixel areas smoothly without $O(R^2)$ performance stutter.
 
 use std::collections::VecDeque;
+use rayon::prelude::*;
+use rayon::slice::ParallelSliceMut;
 use crate::core::mask::point_in_polygon;
 
 #[allow(dead_code)]

@@ -64,9 +64,15 @@ pub fn build_engine() -> Engine {
         v_min + ease_out_s * (v_max - v_min)
     });
 
-    // --- AE-compatible Random functions (PCG32 Deterministic Generator) ---
+    // --- AE-compatible Random functions (PCG32 Deterministic Generator with time-variation) ---
     engine.register_fn("random", |min: f64, max: f64| -> f64 {
         let seed = (min.to_bits() ^ max.to_bits().rotate_left(16)) as u64;
+        let r = pcg32_hash(seed);
+        min + r * (max - min)
+    });
+
+    engine.register_fn("random", |time: f64, min: f64, max: f64| -> f64 {
+        let seed = (time.to_bits() ^ min.to_bits() ^ max.to_bits().rotate_left(16)) as u64;
         let r = pcg32_hash(seed);
         min + r * (max - min)
     });
@@ -76,6 +82,18 @@ pub fn build_engine() -> Engine {
         let std_dev = (max - min) * 0.16666;
         let seed1 = (min.to_bits() ^ 0xa09e667f3bcc9091) as u64;
         let seed2 = (max.to_bits() ^ 0x517cc1b727220a95) as u64;
+        let u1 = pcg32_hash(seed1).clamp(0.0001, 0.9999);
+        let u2 = pcg32_hash(seed2).clamp(0.0001, 0.9999);
+        let z0 = f64::sqrt(-2.0 * u1.ln()) * (std::f64::consts::TAU * u2).cos();
+        (mean + z0 * std_dev).clamp(min, max)
+    });
+
+    engine.register_fn("gaussRandom", |time: f64, min: f64, max: f64| -> f64 {
+        let mean = (min + max) * 0.5;
+        let std_dev = (max - min) * 0.16666;
+        let t_bits = time.to_bits();
+        let seed1 = (min.to_bits() ^ t_bits ^ 0xa09e667f3bcc9091) as u64;
+        let seed2 = (max.to_bits() ^ t_bits.rotate_left(32) ^ 0x517cc1b727220a95) as u64;
         let u1 = pcg32_hash(seed1).clamp(0.0001, 0.9999);
         let u2 = pcg32_hash(seed2).clamp(0.0001, 0.9999);
         let z0 = f64::sqrt(-2.0 * u1.ln()) * (std::f64::consts::TAU * u2).cos();

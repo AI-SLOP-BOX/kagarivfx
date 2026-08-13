@@ -1,5 +1,6 @@
 use crate::core::timeline::{Composition, LayerType, BlendMode};
 use crate::core::mask::point_in_polygon;
+use rayon::prelude::*;
 
 /// Professional CPU-based rasterizer to composite active composition layers
 /// into a flat RGBA8 pixel buffer for preview rendering or FFmpeg export.
@@ -170,12 +171,12 @@ pub fn render_frame_to_pixels(comp: &Composition, frame: u32, width: u32, height
         }
     }
 
-    // Apply exposure EV shift and LUT color mapping (if non-zero)
+    // Apply exposure EV shift and LUT color mapping in parallel across CPU cores
     let mult = 2.0f32.powf(exposure_ev);
-    for p in (0..size).step_by(4) {
-        let mut r = buffer[p] as f32 / 255.0 * mult;
-        let mut g = buffer[p + 1] as f32 / 255.0 * mult;
-        let mut b = buffer[p + 2] as f32 / 255.0 * mult;
+    buffer.par_chunks_exact_mut(4).for_each(|p| {
+        let mut r = p[0] as f32 / 255.0 * mult;
+        let mut g = p[1] as f32 / 255.0 * mult;
+        let mut b = p[2] as f32 / 255.0 * mult;
 
         if lut_mode == 1 {
             // Linear sRGB conversion (2.2 Gamma linearize)
@@ -194,10 +195,10 @@ pub fn render_frame_to_pixels(comp: &Composition, frame: u32, width: u32, height
             b = (b * (a * b + b_val)) / (b * (c * b + d) + e);
         }
 
-        buffer[p] = (r.clamp(0.0, 1.0) * 255.0) as u8;
-        buffer[p + 1] = (g.clamp(0.0, 1.0) * 255.0) as u8;
-        buffer[p + 2] = (b.clamp(0.0, 1.0) * 255.0) as u8;
-    }
+        p[0] = (r.clamp(0.0, 1.0) * 255.0) as u8;
+        p[1] = (g.clamp(0.0, 1.0) * 255.0) as u8;
+        p[2] = (b.clamp(0.0, 1.0) * 255.0) as u8;
+    });
 
     buffer
 }

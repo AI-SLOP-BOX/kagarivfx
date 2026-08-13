@@ -224,6 +224,9 @@ pub fn remap_frame_for_loop(frame: u32, first_kf: u32, last_kf: u32, is_pingpong
         return frame;
     }
     let span = last_kf - first_kf;
+    if span == 0 {
+        return first_kf;
+    }
     let offset = frame - first_kf;
     let cycle_idx = offset / span;
     let rem = offset % span;

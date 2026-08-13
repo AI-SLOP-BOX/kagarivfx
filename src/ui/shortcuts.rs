@@ -1,6 +1,26 @@
 use eframe::egui::{self, Key};
 use crate::AfterEffectsApp;
 
+/// Return platform-native command modifier label ("Cmd" on macOS, "Ctrl" on Windows/Linux)
+pub fn cmd_name() -> &'static str {
+    if cfg!(target_os = "macos") { "Cmd" } else { "Ctrl" }
+}
+
+/// Return platform-native option modifier label ("Option" on macOS, "Alt" on Windows/Linux)
+pub fn option_name() -> &'static str {
+    if cfg!(target_os = "macos") { "Option" } else { "Alt" }
+}
+
+/// Format a keyboard shortcut string dynamically based on host OS target platform.
+pub fn format_shortcut(key: &str, cmd: bool, shift: bool, alt: bool) -> String {
+    let mut parts = Vec::new();
+    if cmd { parts.push(cmd_name()); }
+    if alt { parts.push(option_name()); }
+    if shift { parts.push("Shift"); }
+    parts.push(key);
+    parts.join("+")
+}
+
 /// Centralized Keyboard Shortcut Manager for After Effects OSS.
 /// Encapsulates global keybindings: Spacebar playback, frame stepping, keyframe navigation (J/K),
 /// Easy Ease (F9), Undo/Redo, Pre-compose (Cmd+Shift+C), Duplicate/Split (Cmd+D / Cmd+Shift+D),
@@ -254,4 +274,16 @@ pub fn handle_global_shortcuts(
         if i.key_pressed(Key::T) && !cmd { app.selected_property = Some("Opacity".to_string()); }
         if i.key_pressed(Key::R) && !cmd { app.selected_property = Some("Rotation".to_string()); }
     });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_format_shortcut_cross_platform() {
+        let sc = format_shortcut("Z", true, true, false);
+        assert!(sc.contains("Z"));
+        assert!(sc.contains("Shift"));
+    }
 }
