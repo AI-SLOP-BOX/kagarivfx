@@ -136,9 +136,10 @@ impl MaskPath {
         }
     }
 
-    /// Sample the path as a series of screen-space points for CPU rendering.
-    /// Returns a flat list of [x, y] pairs. Uses cubic Bezier curves when tangents exist.
-    pub fn to_polygon(&self, frame: u32, segments_per_edge: u32) -> Vec<[f32; 2]> {
+    /// Sample the path as a series of screen-space points for CPU rendering into a caller-provided output vector.
+    /// Reuses existing vector allocations to eliminate heap allocation pressure during interactive scrubbing.
+    pub fn to_polygon_into(&self, frame: u32, segments_per_edge: u32, out_vec: &mut Vec<[f32; 2]>) {
+        out_vec.clear();
         let verts = match &self.vertices {
             Animatable::Constant(v) => v.clone(),
             Animatable::Animated(kfs) => {
@@ -171,12 +172,14 @@ impl MaskPath {
             }
         };
         if verts.len() < 2 {
-            return verts;
+            out_vec.extend(verts);
+            return;
         }
 
-        let mut result = Vec::with_capacity(verts.len() * segments_per_edge as usize);
         let n = verts.len();
         let end = if self.is_closed { n } else { n - 1 };
+
+        out_vec.reserve(end * segments_per_edge as usize + 1);
 
         for i in 0..end {
             let p0 = verts[i];
@@ -204,16 +207,22 @@ impl MaskPath {
                 } else {
                     [p0[0] + (p1[0] - p0[0]) * t, p0[1] + (p1[1] - p0[1]) * t]
                 };
-                result.push(pt);
+                out_vec.push(pt);
             }
         }
 
         if self.is_closed {
-            if let Some(&first) = result.first() {
-                result.push(first);
+            if let Some(&first) = out_vec.first() {
+                out_vec.push(first);
             }
         }
+    }
 
+    /// Sample the path as a series of screen-space points for CPU rendering.
+    /// Returns a flat list of [x, y] pairs. Uses cubic Bezier curves when tangents exist.
+    pub fn to_polygon(&self, frame: u32, segments_per_edge: u32) -> Vec<[f32; 2]> {
+        let mut result = Vec::new();
+        self.to_polygon_into(frame, segments_per_edge, &mut result);
         result
     }
 }

@@ -245,4 +245,27 @@ mod tests {
         let pixels = render_frame_to_pixels(&comp, 0, 100, 100, 0.0, 0);
         assert_eq!(pixels.len(), 100 * 100 * 4);
     }
+
+    #[test]
+    fn test_visual_headless_pixel_comparison() {
+        let mut comp = Composition::new("c1".to_string(), "Comp".to_string(), 10, 10, 30, 30);
+        let layer = Layer::new("l1".to_string(), "Solid".to_string(), LayerType::Solid { color: [0.5, 0.5, 0.5, 1.0] }, 30);
+        comp.layers.push(layer);
+
+        let p1 = render_frame_to_pixels(&comp, 0, 10, 10, 0.0, 0);
+        let p2 = render_frame_to_pixels(&comp, 0, 10, 10, 0.0, 0);
+
+        let mut mse = 0.0f32;
+        for i in 0..p1.len() {
+            let diff = (p1[i] as f32 - p2[i] as f32) / 255.0;
+            mse += diff * diff;
+        }
+        mse /= p1.len() as f32;
+
+        assert!(
+            mse < 1e-5,
+            "Visual regression test failed! Pixel MSE ({}) exceeds threshold 1e-5",
+            mse
+        );
+    }
 }

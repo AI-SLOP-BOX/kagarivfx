@@ -112,31 +112,36 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
                 }
             });
             ui.menu_button("Edit", |ui| {
-                let undo_btn = egui::Button::new("Undo (元に戻す)").shortcut_text("Cmd+Z");
+                let undo_sc = crate::ui::shortcuts::format_shortcut("Z", true, false, false);
+                let undo_btn = egui::Button::new("Undo (元に戻す)").shortcut_text(undo_sc);
                 if ui.add_enabled(app.history.can_undo(), undo_btn).clicked() {
                     app.history.undo();
                     ui.close_menu();
                 }
-                let redo_btn = egui::Button::new("Redo (やり直す)").shortcut_text("Cmd+Shift+Z");
+                let redo_sc = crate::ui::shortcuts::format_shortcut("Z", true, true, false);
+                let redo_btn = egui::Button::new("Redo (やり直す)").shortcut_text(redo_sc);
                 if ui.add_enabled(app.history.can_redo(), redo_btn).clicked() {
                     app.history.redo();
                     ui.close_menu();
                 }
             });
             ui.menu_button("Composition", |ui| {
-                let btn = egui::Button::new("Composition Settings...").shortcut_text("Cmd+K");
+                let comp_sc = crate::ui::shortcuts::format_shortcut("K", true, false, false);
+                let btn = egui::Button::new("Composition Settings...").shortcut_text(comp_sc);
                 if ui.add(btn).clicked() {
                     app.show_comp_settings = true;
                     ui.close_menu();
                 }
-                if ui.add(egui::Button::new("Add to Render Queue").shortcut_text("Cmd+M")).clicked() {
+                let rq_sc = crate::ui::shortcuts::format_shortcut("M", true, false, false);
+                if ui.add(egui::Button::new("Add to Render Queue").shortcut_text(rq_sc)).clicked() {
                     app.show_export_dialog = true;
                     ui.close_menu();
                 }
             });
             ui.menu_button("Layer", |ui| {
                 ui.menu_button("New", |ui| {
-                    if ui.add(egui::Button::new("Solid...").shortcut_text("Cmd+Y")).clicked() {
+                    let solid_sc = crate::ui::shortcuts::format_shortcut("Y", true, false, false);
+                    if ui.add(egui::Button::new("Solid...").shortcut_text(solid_sc)).clicked() {
                         let total_frames = app.history.current().active_composition().duration_frames;
                         let comp_mut = app.history.current_mut().active_composition_mut();
                         let id = format!("layer_{}", comp_mut.layers.len());

@@ -744,7 +744,7 @@ impl Composition {
             if let Some(parent) = self.layers.iter().find(|l| &l.id == pid) {
                 let (ppos, pscale, prot, popa) = self.resolve_world_transform(parent, frame);
                 let rot_rad = prot.to_radians();
-                let (s, c) = (rot_rad.sin(), rot_rad.cos());
+                let (s, c) = rot_rad.sin_cos();
                 let world_x = pos[0] * pscale[0] / 100.0 * c - pos[1] * pscale[1] / 100.0 * s + ppos[0];
                 let world_y = pos[0] * pscale[0] / 100.0 * s + pos[1] * pscale[1] / 100.0 * c + ppos[1];
                 return (

@@ -291,3 +291,33 @@ pub fn evaluate_effects(effects: &[crate::core::timeline::Effect], frame: u32) -
     }
     params
 }
+
+/// Thread-safe central registry for dynamic effect plugins.
+pub struct EffectPluginRegistry {
+    plugins: std::sync::RwLock<std::collections::HashMap<String, Box<dyn RenderEffectPlugin>>>,
+}
+
+impl EffectPluginRegistry {
+    pub fn new() -> Self {
+        Self {
+            plugins: std::sync::RwLock::new(std::collections::HashMap::new()),
+        }
+    }
+
+    pub fn register(&self, plugin: Box<dyn RenderEffectPlugin>) {
+        let key = plugin.type_id().to_string();
+        if let Ok(mut guard) = self.plugins.write() {
+            guard.insert(key, plugin);
+        }
+    }
+
+    pub fn apply_all(&self, plugin_ids: &[String], frame: u32, params: &mut EffectParams) {
+        if let Ok(guard) = self.plugins.read() {
+            for id in plugin_ids {
+                if let Some(plugin) = guard.get(id) {
+                    plugin.apply_to_params(frame, params);
+                }
+            }
+        }
+    }
+}
