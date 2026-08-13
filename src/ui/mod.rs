@@ -43,3 +43,4 @@ pub mod graph_editor;
 pub mod theme;
 pub mod notification;
 pub mod focus;
+pub mod shortcuts;

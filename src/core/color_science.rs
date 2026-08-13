@@ -102,6 +102,117 @@ pub fn shift_hsl(rgb: [f32; 3], hue_shift: f32, sat_mult: f32, light_mult: f32) 
     hsl_to_rgb(h, s, l)
 }
 
+/// 3D LUT Color Grade Table with Tetrahedral Interpolation from NextVFX Engine.
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+pub struct Lut3D {
+    pub size: usize,
+    pub data: Vec<f32>, // Flat RGB array of length size * size * size * 3
+}
+
+impl Lut3D {
+    /// Create a flat identity 3D LUT of dimension `size`.
+    pub fn identity(size: usize) -> Self {
+        let mut data = Vec::with_capacity(size * size * size * 3);
+        let s = (size - 1) as f32;
+        for r in 0..size {
+            for g in 0..size {
+                for b in 0..size {
+                    data.push(r as f32 / s);
+                    data.push(g as f32 / s);
+                    data.push(b as f32 / s);
+                }
+            }
+        }
+        Self { size, data }
+    }
+
+    /// Tetrahedral 3D LUT interpolation algorithm from NextVFX.
+    /// Performs exact tetrahedral simplex subdivision to avoid color banding.
+    pub fn apply(&self, r: f32, g: f32, b: f32) -> (f32, f32, f32) {
+        if self.size == 0 || self.data.is_empty() {
+            return (r, g, b);
+        }
+        let s = (self.size - 1) as f32;
+        let fr = (r * s).clamp(0.0, s - 0.001);
+        let fg = (g * s).clamp(0.0, s - 0.001);
+        let fb = (b * s).clamp(0.0, s - 0.001);
+
+        let ir = fr as usize;
+        let ig = fg as usize;
+        let ib = fb as usize;
+
+        let dr = fr - ir as f32;
+        let dg = fg - ig as f32;
+        let db = fb - ib as f32;
+
+        let get = |x: usize, y: usize, z: usize| {
+            let idx = (x * self.size * self.size + y * self.size + z) * 3;
+            if idx + 2 < self.data.len() {
+                (self.data[idx], self.data[idx + 1], self.data[idx + 2])
+            } else {
+                (r, g, b)
+            }
+        };
+
+        let c000 = get(ir, ig, ib);
+        let c111 = get(ir + 1, ig + 1, ib + 1);
+
+        if dr > dg {
+            if dg > db { // R > G > B
+                let c100 = get(ir + 1, ig, ib);
+                let c110 = get(ir + 1, ig + 1, ib);
+                (
+                    c000.0 + (c100.0 - c000.0) * dr + (c110.0 - c100.0) * dg + (c111.0 - c110.0) * db,
+                    c000.1 + (c100.1 - c000.1) * dr + (c110.1 - c100.1) * dg + (c111.1 - c110.1) * db,
+                    c000.2 + (c100.2 - c000.2) * dr + (c110.2 - c100.2) * dg + (c111.2 - c110.2) * db,
+                )
+            } else if dr > db { // R > B > G
+                let c100 = get(ir + 1, ig, ib);
+                let c101 = get(ir + 1, ig, ib + 1);
+                (
+                    c000.0 + (c100.0 - c000.0) * dr + (c101.0 - c100.0) * db + (c111.0 - c101.0) * dg,
+                    c000.1 + (c100.1 - c000.1) * dr + (c101.1 - c100.1) * db + (c111.1 - c101.1) * dg,
+                    c000.2 + (c100.2 - c000.2) * dr + (c101.2 - c100.2) * db + (c111.2 - c101.2) * dg,
+                )
+            } else { // B > R > G
+                let c001 = get(ir, ig, ib + 1);
+                let c101 = get(ir + 1, ig, ib + 1);
+                (
+                    c000.0 + (c001.0 - c000.0) * db + (c101.0 - c001.0) * dr + (c111.0 - c101.0) * dg,
+                    c000.1 + (c001.1 - c000.1) * db + (c101.1 - c001.1) * dr + (c111.1 - c101.1) * dg,
+                    c000.2 + (c001.2 - c000.2) * db + (c101.2 - c001.2) * dr + (c111.2 - c101.2) * dg,
+                )
+            }
+        } else {
+            if db > dg { // B > G > R
+                let c001 = get(ir, ig, ib + 1);
+                let c011 = get(ir, ig + 1, ib + 1);
+                (
+                    c000.0 + (c001.0 - c000.0) * db + (c011.0 - c001.0) * dg + (c111.0 - c011.0) * dr,
+                    c000.1 + (c001.1 - c000.1) * db + (c011.1 - c001.1) * dg + (c111.1 - c011.1) * dr,
+                    c000.2 + (c001.2 - c000.2) * db + (c011.2 - c001.2) * dg + (c111.2 - c011.2) * dr,
+                )
+            } else if db > dr { // G > B > R
+                let c010 = get(ir, ig + 1, ib);
+                let c011 = get(ir, ig + 1, ib + 1);
+                (
+                    c000.0 + (c010.0 - c000.0) * dg + (c011.0 - c010.0) * db + (c111.0 - c011.0) * dr,
+                    c000.1 + (c010.1 - c000.1) * dg + (c011.1 - c010.1) * db + (c111.1 - c011.1) * dr,
+                    c000.2 + (c010.2 - c000.2) * dg + (c011.2 - c010.2) * db + (c111.2 - c011.2) * dr,
+                )
+            } else { // G > R > B
+                let c010 = get(ir, ig + 1, ib);
+                let c110 = get(ir + 1, ig + 1, ib);
+                (
+                    c000.0 + (c010.0 - c000.0) * dg + (c110.0 - c010.0) * dr + (c111.0 - c110.0) * db,
+                    c000.1 + (c010.1 - c000.1) * dg + (c110.1 - c010.1) * dr + (c111.1 - c110.1) * db,
+                    c000.2 + (c010.2 - c000.2) * dg + (c110.2 - c010.2) * dr + (c111.2 - c110.2) * db,
+                )
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -122,5 +233,14 @@ mod tests {
         // High contrast mapping
         let output = apply_levels(0.5, 0.2, 0.8, 1.0, 0.0, 1.0);
         assert!((output - 0.5).abs() < 1e-4);
+    }
+
+    #[test]
+    fn test_lut3d_tetrahedral_identity() {
+        let lut = Lut3D::identity(17);
+        let mapped = lut.apply(0.5, 0.25, 0.75);
+        assert!((mapped.0 - 0.5).abs() < 1e-3);
+        assert!((mapped.1 - 0.25).abs() < 1e-3);
+        assert!((mapped.2 - 0.75).abs() < 1e-3);
     }
 }
