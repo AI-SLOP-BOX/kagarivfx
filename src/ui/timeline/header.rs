@@ -1,10 +1,17 @@
 use eframe::egui;
-use crate::AfterEffectsApp;
 use crate::core::timeline::{Composition, Layer, LayerType, ShapeType};
 use crate::core::property::Animatable;
 
+pub struct TimelineHeaderState<'a> {
+    pub is_playing: &'a mut bool,
+    pub timeline_zoom: &'a mut f32,
+    pub snap_to_keyframes: &'a mut bool,
+    pub show_graph_editor: &'a mut bool,
+    pub layer_filter_text: &'a mut String,
+}
+
 pub fn draw_timeline_header(
-    app: &mut AfterEffectsApp,
+    state: &mut TimelineHeaderState,
     ui: &mut egui::Ui,
     comp: &mut Composition,
     current_frame: &mut u32,
@@ -27,25 +34,25 @@ pub fn draw_timeline_header(
         ui.add_space(8.0);
         if ui.button("|< First").clicked() { *current_frame = 0; }
         if ui.button("< Prev").clicked() { *current_frame = current_frame.saturating_sub(1); }
-        if ui.button(if app.is_playing { "|| Pause" } else { "> Play" }).clicked() {
-            app.is_playing = !app.is_playing;
+        if ui.button(if *state.is_playing { "|| Pause" } else { "> Play" }).clicked() {
+            *state.is_playing = !*state.is_playing;
         }
         if ui.button("Next >").clicked() { *current_frame = (*current_frame + 1).min(total_frames); }
         if ui.button("Last >|").clicked() { *current_frame = total_frames; }
 
         ui.separator();
         ui.label("Zoom:");
-        ui.add(egui::Slider::new(&mut app.timeline_zoom, 0.1..=10.0));
-        ui.checkbox(&mut app.snap_to_keyframes, "Snap");
-        let mode_btn_text = if app.show_graph_editor { "Graph Mode" } else { "Tracks Mode" };
-        if ui.selectable_label(app.show_graph_editor, mode_btn_text).clicked() {
-            app.show_graph_editor = !app.show_graph_editor;
+        ui.add(egui::Slider::new(state.timeline_zoom, 0.1..=10.0));
+        ui.checkbox(state.snap_to_keyframes, "Snap");
+        let mode_btn_text = if *state.show_graph_editor { "Graph Mode" } else { "Tracks Mode" };
+        if ui.selectable_label(*state.show_graph_editor, mode_btn_text).clicked() {
+            *state.show_graph_editor = !*state.show_graph_editor;
         }
 
         // ── AE Timeline Layer Filter ──
         ui.add_space(8.0);
         ui.label(egui::RichText::new("Filter:").small().color(crate::ui::theme::colors::TEXT_SECONDARY));
-        ui.add(egui::TextEdit::singleline(&mut app.layer_filter_text).hint_text("Search layers...").desired_width(110.0));
+        ui.add(egui::TextEdit::singleline(state.layer_filter_text).hint_text("Search layers...").desired_width(110.0));
         
         ui.add_space(15.0);
         if ui.button("+ Solid").clicked() {

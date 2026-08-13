@@ -1,5 +1,4 @@
 use eframe::egui;
-use crate::AfterEffectsApp;
 use crate::core::timeline::Composition;
 use crate::core::property::Animatable;
 
@@ -10,7 +9,8 @@ fn get_kfs<T: Clone>(prop: &Animatable<T>) -> Vec<(u32, crate::core::keyframe::I
 }
 
 pub fn draw_graph_editor(
-    app: &mut AfterEffectsApp,
+    selected_property: Option<&str>,
+    selected_layer_idx: Option<usize>,
     ui: &mut egui::Ui,
     comp: &Composition,
     current_frame: &mut u32,
@@ -22,9 +22,8 @@ pub fn draw_graph_editor(
         egui::Sense::click_and_drag(),
     );
 
-    let prop_name = app.selected_property.as_deref().unwrap_or("Position X");
-    let layer_name = app
-        .selected_layer_idx
+    let prop_name = selected_property.unwrap_or("Position X");
+    let layer_name = selected_layer_idx
         .and_then(|idx| comp.layers.get(idx))
         .map(|l| l.name.as_str())
         .unwrap_or("Layer 0");
@@ -60,7 +59,7 @@ pub fn draw_graph_editor(
     }
 
     // Sample property values over total_frames
-    if let Some(idx) = app.selected_layer_idx {
+    if let Some(idx) = selected_layer_idx {
         if idx < comp.layers.len() {
             let layer = &comp.layers[idx];
             let mut samples: Vec<(f32, f32)> = Vec::new();

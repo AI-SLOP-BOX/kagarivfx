@@ -36,12 +36,19 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
             let mut pending_precomp_indices: Option<Vec<usize>> = None;
             let mut swap_request: Option<(usize, usize)> = None;
 
-            // ── Top Header Controls Bar ──
-            // If user adds layer via header buttons, clone project lazily!
-            let mut temp_project = app.history.current().clone();
+            let mut header_state = header::TimelineHeaderState {
+                is_playing: &mut app.is_playing,
+                timeline_zoom: &mut app.timeline_zoom,
+                snap_to_keyframes: &mut app.snap_to_keyframes,
+                show_graph_editor: &mut app.show_graph_editor,
+                layer_filter_text: &mut app.layer_filter_text,
+            };
+
+            // Access live project mutably without per-frame cloning
+            let temp_project = app.history.current_mut();
             {
                 let comp_mut = temp_project.active_composition_mut();
-                if draw_timeline_header(app, ui, comp_mut, current_frame, total_frames) {
+                if draw_timeline_header(&mut header_state, ui, comp_mut, current_frame, total_frames) {
                     project_changed = true;
                 }
             }
@@ -107,7 +114,7 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                 if let Some(selected_idx) = app.selected_layer_idx {
                     let duration_f = temp_project.active_composition().duration_frames;
                     if let Some(layer) = temp_project.active_composition_mut().layers.get_mut(selected_idx) {
-                        crate::ui::graph_editor::draw_graph_editor(app, ui, duration_f, layer, &mut project_changed);
+                        crate::ui::graph_editor::draw_graph_editor(&mut app.selected_property, ui, duration_f, layer, &mut project_changed);
                     }
                 } else {
                     ui.label("Select a layer to edit keyframe curves in Graph Editor");
@@ -633,12 +640,6 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
             }
 
             if project_changed {
-                let is_pointer_down = ui.input(|i| i.pointer.any_down());
-                if !is_pointer_down {
-                    app.history.commit(temp_project);
-                } else {
-                    *app.history.current_mut() = temp_project;
-                }
                 crate::core::frame_cache::bump_version();
             }
         });

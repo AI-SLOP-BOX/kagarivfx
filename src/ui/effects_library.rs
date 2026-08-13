@@ -47,8 +47,8 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
             let mut next_frame = None;
             let mut current_frame_reset = None;
 
-            // Clone current project to apply transactional state mutations
-            let mut temp_project = app.history.current().clone();
+            // Access live project mutably without per-frame cloning
+            let temp_project = app.history.current_mut();
 
             if app.right_tab_idx == 3 {
                 crate::ui::tracker_panel::draw_tracker_panel(app, ui, *current_frame);
@@ -849,13 +849,12 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                 }
             });
 
-            // Transactional commit: mutate live project during dragging, push Undo snapshot when released
+            // Transactional commit: lazy snapshot push on mouse release (zero clones while idle or dragging)
             if project_changed {
                 let is_pointer_down = ui.input(|i| i.pointer.any_down());
                 if !is_pointer_down {
-                    app.history.commit(temp_project);
-                } else {
-                    *app.history.current_mut() = temp_project;
+                    let snapshot = app.history.current().clone();
+                    app.history.commit(snapshot);
                 }
                 crate::core::frame_cache::bump_version();
             }

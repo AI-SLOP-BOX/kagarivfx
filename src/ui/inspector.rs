@@ -61,8 +61,9 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
             // Deferred tracker spawn: populated inside group closure, consumed after comp borrow ends.
             let mut pending_tracker: Option<(usize, usize, u32, u32)> = None; // (layer_idx, tracker_idx, start, end)
 
-            // Clone current project to apply transactional state mutations
-            let mut temp_project = app.history.current().clone();
+            let mut selected_prop = app.selected_property.clone();
+            // Access live project mutably without per-frame cloning
+            let temp_project = app.history.current_mut();
             
             // ── Camera Suite Panel ──
             {
@@ -605,16 +606,15 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
 
                     // ── Keyframe Graph Editor ──
                     ui.add_space(8.0);
-                    crate::ui::graph_editor::draw_graph_editor(app, ui, comp.duration_frames, layer, &mut project_changed);
+                    crate::ui::graph_editor::draw_graph_editor(&mut selected_prop, ui, comp.duration_frames, layer, &mut project_changed);
                 }
                 
-                // Transactional commit: mutate live project during dragging, push Undo snapshot when released
+                // Transactional commit: lazy snapshot push on mouse release (zero clones while idle or dragging)
                 if project_changed {
                     let is_pointer_down = ui.input(|i| i.pointer.any_down());
                     if !is_pointer_down {
-                        app.history.commit(temp_project);
-                    } else {
-                        *app.history.current_mut() = temp_project;
+                        let snapshot = app.history.current().clone();
+                        app.history.commit(snapshot);
                     }
                     crate::core::frame_cache::bump_version();
                 }

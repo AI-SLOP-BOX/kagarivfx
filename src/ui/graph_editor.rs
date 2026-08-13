@@ -1,5 +1,4 @@
 use eframe::egui;
-use crate::AfterEffectsApp;
 use crate::core::timeline::Layer;
 
 /// A reusable module for rendering the After Effects keyframe Graph Editor.
@@ -8,7 +7,7 @@ use crate::core::timeline::Layer;
 /// points and Bezier tangent handles.
 #[allow(dead_code)]
 pub fn draw_graph_editor(
-    app: &mut AfterEffectsApp,
+    selected_property: &mut Option<String>,
     ui: &mut egui::Ui,
     duration_frames: u32,
     layer: &mut Layer,
@@ -17,19 +16,19 @@ pub fn draw_graph_editor(
     ui.group(|ui| {
         ui.horizontal(|ui| {
             ui.label(egui::RichText::new("📈 Graph Editor").strong());
-            let prop_name = app.selected_property.clone().unwrap_or_else(|| "Position X".to_string());
+            let prop_name = selected_property.clone().unwrap_or_else(|| "Position X".to_string());
             egui::ComboBox::from_id_source("graph_prop_select_module")
                 .selected_text(&prop_name)
                 .show_ui(ui, |ui| {
                     for p in ["Position X", "Position Y", "Scale X", "Scale Y", "Rotation", "Opacity"] {
                         if ui.selectable_label(prop_name == p, p).clicked() {
-                            app.selected_property = Some(p.to_string());
+                            *selected_property = Some(p.to_string());
                         }
                     }
                 });
         });
 
-        let graph_prop = app.selected_property.clone().unwrap_or_else(|| "Position X".to_string());
+        let graph_prop = selected_property.clone().unwrap_or_else(|| "Position X".to_string());
         let total_f = duration_frames.max(1);
 
         // Sample values along timeline duration for drawing curve
