@@ -51,32 +51,40 @@ pub fn generate_content_aware_fill_frame(
         }
     }
 
-    // Step 2: Smooth Euclidean Distance Transform Expansion (Subpixel Exact)
-    if alpha_expansion > 0.1 {
-        let r2 = alpha_expansion * alpha_expansion;
-        let radius = alpha_expansion.ceil() as i32;
-        let mut expanded_masked = is_masked.clone();
-        for y in 0..h {
+    // Step 2: Continuous Subpixel Euclidean Distance Transform Mask Expansion
+    if alpha_expansion > 0.5 {
+        let radius_sq = (alpha_expansion * alpha_expansion) as f32;
+        let r_ceil = alpha_expansion.ceil() as i32;
+
+        let original_masked = is_masked.clone();
+
+        // Parallelize mask expansion per row
+        is_masked.as_mut_slice().par_chunks_mut(w as usize).enumerate().for_each(|(y_idx, row)| {
+            let y = y_idx as i32;
             for x in 0..w {
-                let idx = (y * w + x) as usize;
-                if is_masked[idx] {
-                    for dy in -radius..=radius {
-                        for dx in -radius..=radius {
-                            let dist_sq = (dx * dx + dy * dy) as f32;
-                            if dist_sq <= r2 {
+                let idx = x as usize;
+                if !original_masked[y_idx * w as usize + idx] {
+                    'search: for dy in -r_ceil..=r_ceil {
+                        let ny = y + dy;
+                        if ny >= 0 && ny < h {
+                            let dy_sq = (dy * dy) as f32;
+                            for dx in -r_ceil..=r_ceil {
                                 let nx = x + dx;
-                                let ny = y + dy;
-                                if nx >= 0 && nx < w && ny >= 0 && ny < h {
-                                    let nidx = (ny * w + nx) as usize;
-                                    expanded_masked[nidx] = true;
+                                if nx >= 0 && nx < w {
+                                    if (dx * dx) as f32 + dy_sq <= radius_sq {
+                                        let nidx = (ny * w + nx) as usize;
+                                        if original_masked[nidx] {
+                                            row[idx] = true;
+                                            break 'search;
+                                        }
+                                    }
                                 }
                             }
                         }
                     }
                 }
             }
-        }
-        is_masked = expanded_masked;
+        });
     }
 
     // Step 3: Fast Marching BFS Wavefront Inpainting (O(N) Complexity)

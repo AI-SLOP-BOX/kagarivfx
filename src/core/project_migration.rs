@@ -17,26 +17,27 @@ pub struct VersionedProjectFile {
 /// Load a project JSON string safely, executing schema migrations if needed.
 #[allow(dead_code)]
 pub fn load_project_migrated(json_str: &str) -> Result<Project, String> {
-    // Attempt direct deserialization first
-    if let Ok(proj) = serde_json::from_str::<Project>(json_str) {
-        return Ok(proj);
-    }
-
-    // Try parsing as VersionedProjectFile wrapper
-    if let Ok(wrapper) = serde_json::from_str::<VersionedProjectFile>(json_str) {
+    let mut proj: Project = if let Ok(proj) = serde_json::from_str::<Project>(json_str) {
+        proj
+    } else if let Ok(wrapper) = serde_json::from_str::<VersionedProjectFile>(json_str) {
         let migrated_val = migrate_schema_json(wrapper.schema_version, wrapper.project_data)?;
-        return serde_json::from_value::<Project>(migrated_val)
-            .map_err(|e| format!("Failed to parse project after migration: {}", e));
+        serde_json::from_value::<Project>(migrated_val)
+            .map_err(|e| format!("Failed to parse project after migration: {}", e))?
+    } else {
+        let val: serde_json::Value = serde_json::from_str(json_str)
+            .map_err(|e| format!("Invalid JSON project file: {}", e))?;
+        let schema_ver = val.get("schema_version").and_then(|v| v.as_u64()).unwrap_or(0) as u32;
+        let migrated = migrate_schema_json(schema_ver, val)?;
+        serde_json::from_value::<Project>(migrated)
+            .map_err(|e| format!("Schema migration error: {}", e))?
+    };
+
+    // Sanitize any broken or circular parent-child layer links from deserialization
+    for comp in &mut proj.compositions {
+        comp.sanitize_parent_cycles();
     }
 
-    // Fallback attempt: try value-level migration from raw JSON
-    let val: serde_json::Value = serde_json::from_str(json_str)
-        .map_err(|e| format!("Invalid JSON project file: {}", e))?;
-
-    let schema_ver = val.get("schema_version").and_then(|v| v.as_u64()).unwrap_or(0) as u32;
-    let migrated = migrate_schema_json(schema_ver, val)?;
-    serde_json::from_value::<Project>(migrated)
-        .map_err(|e| format!("Schema migration error: {}", e))
+    Ok(proj)
 }
 
 /// Serialize a Project to versioned JSON string.

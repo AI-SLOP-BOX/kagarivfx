@@ -87,7 +87,18 @@ impl<T: Interpolate> Animatable<T> {
         self.value_at_f32(frame as f32)
     }
 
+    pub fn evaluate_with_hint(&self, frame: u32, hint: &mut usize) -> T {
+        self.value_at_f32_with_hint(frame as f32, hint)
+    }
+
     pub fn value_at_f32(&self, frame: f32) -> T {
+        let mut dummy = 0;
+        self.value_at_f32_with_hint(frame, &mut dummy)
+    }
+
+    /// Evaluate property at frame with O(1) temporal locality hint caching.
+    /// In sequential playback and timeline scrubbing, checking the cached interval index avoids O(log N) binary searches.
+    pub fn value_at_f32_with_hint(&self, frame: f32, hint: &mut usize) -> T {
         match self {
             Animatable::Constant(value) => value.clone(),
             Animatable::Animated(keyframes) => {
@@ -95,20 +106,38 @@ impl<T: Interpolate> Animatable<T> {
                     panic!("Animatable has no keyframes");
                 }
 
+                let last_kf_idx = keyframes.len() - 1;
                 if frame <= keyframes[0].frame as f32 {
+                    *hint = 0;
                     return keyframes[0].value.clone();
                 }
-
-                let last_idx = keyframes.len() - 1;
-                if frame >= keyframes[last_idx].frame as f32 {
-                    return keyframes[last_idx].value.clone();
+                if frame >= keyframes[last_kf_idx].frame as f32 {
+                    *hint = last_kf_idx;
+                    return keyframes[last_kf_idx].value.clone();
                 }
 
-                // Fast O(log N) binary search for the active keyframe interval
-                let next_idx = keyframes.partition_point(|kf| kf.frame as f32 <= frame);
-                let start_idx = next_idx.saturating_sub(1);
+                // Check O(1) temporal locality hint first (for sequential playback/scrubbing)
+                let start_idx = if *hint < last_kf_idx
+                    && frame >= keyframes[*hint].frame as f32
+                    && frame < keyframes[(*hint + 1).min(last_kf_idx)].frame as f32
+                {
+                    *hint
+                } else if *hint + 1 < last_kf_idx
+                    && frame >= keyframes[*hint + 1].frame as f32
+                    && frame < keyframes[(*hint + 2).min(last_kf_idx)].frame as f32
+                {
+                    *hint += 1;
+                    *hint
+                } else {
+                    // Fallback to O(log N) binary search on cache miss/seek
+                    let next_idx = keyframes.partition_point(|kf| kf.frame as f32 <= frame);
+                    let idx = next_idx.saturating_sub(1);
+                    *hint = idx;
+                    idx
+                };
+
                 let start_kf = &keyframes[start_idx];
-                let end_kf = &keyframes[(start_idx + 1).min(last_idx)];
+                let end_kf = &keyframes[(start_idx + 1).min(last_kf_idx)];
 
                 let total_frames = (end_kf.frame - start_kf.frame) as f32;
                 if total_frames <= 0.001 {
@@ -135,5 +164,33 @@ impl<T: Interpolate> Animatable<T> {
                 }
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_evaluate_with_hint_sequential() {
+        let kfs = vec![
+            Keyframe::new(0, 0.0f32, InterpolationType::Linear),
+            Keyframe::new(10, 100.0f32, InterpolationType::Linear),
+            Keyframe::new(20, 200.0f32, InterpolationType::Linear),
+        ];
+        let anim = Animatable::new_animated(kfs);
+        let mut hint = 0;
+
+        assert_eq!(anim.evaluate_with_hint(0, &mut hint), 0.0);
+        assert_eq!(hint, 0);
+
+        assert_eq!(anim.evaluate_with_hint(5, &mut hint), 50.0);
+        assert_eq!(hint, 0);
+
+        assert_eq!(anim.evaluate_with_hint(15, &mut hint), 150.0);
+        assert_eq!(hint, 1);
+
+        assert_eq!(anim.evaluate_with_hint(20, &mut hint), 200.0);
+        assert_eq!(hint, 2);
     }
 }

@@ -760,6 +760,17 @@ impl WgpuRenderer {
     }
 }
 
+/// Helper to align dynamic uniform buffer byte offsets against WGPU hardware limits.
+/// Dynamically adapts to device.limits().min_uniform_buffer_offset_alignment (e.g. 64B, 256B, 512B).
+#[allow(dead_code)]
+pub fn align_uniform_buffer_offset(offset: u64, alignment: u32) -> u64 {
+    let align = alignment as u64;
+    if align == 0 {
+        return offset;
+    }
+    (offset + align - 1) & !(align - 1)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -773,5 +784,8 @@ mod tests {
             "LayerUniform size ({} bytes) must be a multiple of 256 for WGPU dynamic uniform offset alignment",
             size
         );
+        for align in [64, 256, 512] {
+            assert_eq!(align_uniform_buffer_offset(size as u64, align) % align as u64, 0);
+        }
     }
 }

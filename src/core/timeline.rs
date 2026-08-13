@@ -785,6 +785,44 @@ impl Composition {
         }
     }
 
+    /// Validate and sanitize parent-child links across all layers on deserialization or project load.
+    /// Breaks any invalid circular parent dependencies to guarantee panic-free rendering.
+    pub fn sanitize_parent_cycles(&mut self) -> usize {
+        let id_map = self.build_layer_id_index_map();
+        let mut visited = std::collections::HashSet::new();
+        let mut to_clear = Vec::new();
+
+        for i in 0..self.layers.len() {
+            let layer_id = self.layers[i].id.clone();
+            if let Some(ref pid) = self.layers[i].parent_id {
+                visited.clear();
+                visited.insert(layer_id.clone());
+
+                let mut curr = pid.clone();
+
+                while let Some(&idx) = id_map.get(curr.as_str()) {
+                    let parent_layer = &self.layers[idx];
+                    if !visited.insert(parent_layer.id.clone()) {
+                        to_clear.push(i);
+                        break;
+                    }
+                    if let Some(ref next_pid) = parent_layer.parent_id {
+                        curr = next_pid.clone();
+                    } else {
+                        break;
+                    }
+                }
+            }
+        }
+
+        let broken_count = to_clear.len();
+        for idx in to_clear {
+            log::warn!("Broken circular parent reference detected on layer idx {}. Clearing parent_id.", idx);
+            self.layers[idx].parent_id = None;
+        }
+        broken_count
+    }
+
     /// O(1) Layer ID to index lookup map generator.
     pub fn build_layer_id_index_map(&self) -> std::collections::HashMap<&str, usize> {
         let mut map = std::collections::HashMap::with_capacity(self.layers.len());

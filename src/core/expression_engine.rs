@@ -17,7 +17,7 @@ pub fn pcg32_hash(mut state: u64) -> f64 {
     let xorshifted = (((state >> 18) ^ state) >> 27) as u32;
     let rot = (state >> 59) as u32;
     let val = (xorshifted >> rot) | (xorshifted << ((!rot).wrapping_add(1) & 31));
-    val as f64 / 4294967296.0
+    return val as f64 / 4294967296.0;
 }
 
 pub fn build_engine() -> Engine {
