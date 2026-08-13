@@ -1,5 +1,6 @@
 pub mod menu;
 pub mod inspector;
+pub mod inspector_camera;
 pub mod effects_library;
 pub mod timeline;
 pub mod viewport;
