@@ -84,3 +84,14 @@ This codebase follows a **Unidirectional Data Flow & Core-UI Separation** patter
 
 ### Rule 6.2: Text Focus Protection
 - Global shortcuts must query `crate::ui::focus::is_text_input_focused(ctx)` to prevent key leaks when typing into text boxes or dialog fields.
+
+---
+
+## 7. Zero-Unwrap Protocol & Defensive Error Handling
+
+### Rule 7.1: Zero `.unwrap()` / `.expect()` in Production Code
+- Calling `.unwrap()` or `.expect()` on runtime option/result values in production domain code (`src/core/` and `src/ui/`) is strictly prohibited.
+- Use pattern matching (`if let Some(...)`, `match`), defensive fallback values (`.unwrap_or_default()`), or `Result<T, String>` propagation.
+
+### Rule 7.2: Graceful Fault Recovery
+- If invalid user JSON project state or corrupted assets are encountered during runtime playback, the app must log a warning via `log::warn!` or trigger a user notification toast rather than panicking.
