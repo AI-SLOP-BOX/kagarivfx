@@ -28,6 +28,34 @@ impl AudioBuffer {
         }
         Self { samples, sample_rate, channels: 2 }
     }
+
+    /// Resample PCM audio samples to match destination sample rate (e.g. 44.1kHz -> 48kHz).
+    pub fn resample(&self, target_sample_rate: u32) -> Self {
+        if self.sample_rate == target_sample_rate || self.sample_rate == 0 || self.samples.is_empty() {
+            return self.clone();
+        }
+
+        let ratio = self.sample_rate as f64 / target_sample_rate as f64;
+        let num_frames = (self.samples.len() / 2) as f64;
+        let new_frames = (num_frames / ratio) as usize;
+        let mut out = Vec::with_capacity(new_frames * 2);
+
+        for i in 0..new_frames {
+            let src_idx = (i as f64 * ratio) as usize * 2;
+            if src_idx + 1 < self.samples.len() {
+                out.push(self.samples[src_idx]);
+                out.push(self.samples[src_idx + 1]);
+            } else {
+                out.push(0.0);
+                out.push(0.0);
+            }
+        }
+        Self {
+            samples: out,
+            sample_rate: target_sample_rate,
+            channels: self.channels,
+        }
+    }
 }
 
 #[allow(dead_code)]
