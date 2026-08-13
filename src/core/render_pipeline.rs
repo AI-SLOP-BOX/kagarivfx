@@ -78,7 +78,12 @@ impl RenderPipeline {
                                 log::debug!("[RenderWorker] aborting stale render command (ver {})", version);
                                 continue;
                             }
-                            render_fn(cmd, &result_tx);
+                            let res = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                                render_fn(cmd, &result_tx);
+                            }));
+                            if let Err(e) = res {
+                                log::error!("[RenderWorker] Caught panic during render task execution: {:?}", e);
+                            }
                         }
                     }
                 }

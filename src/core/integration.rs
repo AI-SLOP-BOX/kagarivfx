@@ -244,6 +244,10 @@ pub fn start_sync_server(
                         break;
                     }
                     Ok(_) => {
+                        if line.len() > 65_536 {
+                            log::warn!("TCP line limit exceeded ({} bytes). Closing connection to prevent memory exhaustion.", line.len());
+                            break;
+                        }
                         let trimmed = line.trim();
                         if trimmed.is_empty() {
                             continue;

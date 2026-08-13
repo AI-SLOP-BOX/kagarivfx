@@ -1,4 +1,3 @@
-pub mod graph_editor;
 pub mod utils;
 pub mod header;
 pub mod layers;

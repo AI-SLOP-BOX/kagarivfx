@@ -51,6 +51,23 @@ pub fn save_project_versioned(proj: &Project) -> Result<String, String> {
     serde_json::to_string_pretty(&wrapper).map_err(|e| e.to_string())
 }
 
+/// Save a project file atomically using temporary file creation and OS atomic replacement.
+/// Guards against 0-byte file corruption during disk full or process interruption.
+#[allow(dead_code)]
+pub fn save_project_atomic<P: AsRef<std::path::Path>>(proj: &Project, path: P) -> Result<(), String> {
+    let json_str = save_project_versioned(proj)?;
+    let target_path = path.as_ref();
+    let tmp_path = target_path.with_extension("json.tmp");
+
+    std::fs::write(&tmp_path, json_str.as_bytes())
+        .map_err(|e| format!("Failed to write temporary project file: {}", e))?;
+
+    std::fs::rename(&tmp_path, target_path)
+        .map_err(|e| format!("Failed to atomically replace project file: {}", e))?;
+
+    Ok(())
+}
+
 /// Migrate JSON schema from `from_version` to `CURRENT_SCHEMA_VERSION`.
 fn migrate_schema_json(from_version: u32, mut data: serde_json::Value) -> Result<serde_json::Value, String> {
     let mut version = from_version;
