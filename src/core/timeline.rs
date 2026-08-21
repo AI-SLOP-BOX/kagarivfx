@@ -437,9 +437,12 @@ impl Transform2D {
 
     pub fn eval_position(&self, frame: u32, fps: u32) -> [f32; 2] {
         let eval_frame = if let Some(kfs) = self.position.keyframes() {
-            if !kfs.is_empty() {
-                Self::remap_loop_frame(frame, &self.position_expression, kfs[0].frame, kfs.last().unwrap().frame)
-            } else { frame }
+            match (kfs.first(), kfs.last()) {
+                (Some(first), Some(last)) => {
+                    Self::remap_loop_frame(frame, &self.position_expression, first.frame, last.frame)
+                }
+                _ => frame,
+            }
         } else { frame };
         let base = self.position.evaluate(eval_frame);
         match &self.position_expression {
@@ -458,9 +461,9 @@ impl Transform2D {
         let mut vals = LoopVals::default();
         // Sample the animatable at one cycle past the last keyframe for each loop mode
         let mut compute = |kfs: &[crate::core::keyframe::Keyframe<[f32; 2]>], sample: &dyn Fn(u32) -> [f32; 2]| {
-            if kfs.len() >= 2 {
-                let first = kfs[0].frame;
-                let last = kfs.last().unwrap().frame;
+            if let (Some(first), Some(last)) = (kfs.first(), kfs.last()) {
+                let first = first.frame;
+                let last = last.frame;
                 let out_c = sample(remap_frame_for_loop(frame, first, last, false));
                 let out_p = sample(remap_frame_for_loop(frame, first, last, true));
                 vals.out_cycle = out_c[0];
@@ -488,9 +491,9 @@ impl Transform2D {
                     _ => (self.opacity.keyframes(), &|f| self.opacity.evaluate(f)),
                 };
                 if let Some(kfs) = kfs {
-                    if kfs.len() >= 2 {
-                        let first = kfs[0].frame;
-                        let last = kfs.last().unwrap().frame;
+                    if let (Some(first), Some(last)) = (kfs.first(), kfs.last()) {
+                        let first = first.frame;
+                        let last = last.frame;
                         let v2 = |f: u32| [anim(f), anim(f)];
                         vals.out_cycle = v2(remap_frame_for_loop(frame, first, last, false))[0];
                         vals.out_pingpong = v2(remap_frame_for_loop(frame, first, last, true))[0];
@@ -505,9 +508,12 @@ impl Transform2D {
 
     pub fn eval_rotation(&self, frame: u32, fps: u32) -> f32 {
         let eval_frame = if let Some(kfs) = self.rotation.keyframes() {
-            if !kfs.is_empty() {
-                Self::remap_loop_frame(frame, &self.rotation_expression, kfs[0].frame, kfs.last().unwrap().frame)
-            } else { frame }
+            match (kfs.first(), kfs.last()) {
+                (Some(first), Some(last)) => {
+                    Self::remap_loop_frame(frame, &self.rotation_expression, first.frame, last.frame)
+                }
+                _ => frame,
+            }
         } else { frame };
         let base = self.rotation.evaluate(eval_frame);
         match &self.rotation_expression {
@@ -522,9 +528,12 @@ impl Transform2D {
 
     pub fn eval_scale(&self, frame: u32, fps: u32) -> [f32; 2] {
         let eval_frame = if let Some(kfs) = self.scale.keyframes() {
-            if !kfs.is_empty() {
-                Self::remap_loop_frame(frame, &self.scale_expression, kfs[0].frame, kfs.last().unwrap().frame)
-            } else { frame }
+            match (kfs.first(), kfs.last()) {
+                (Some(first), Some(last)) => {
+                    Self::remap_loop_frame(frame, &self.scale_expression, first.frame, last.frame)
+                }
+                _ => frame,
+            }
         } else { frame };
         let base = self.scale.evaluate(eval_frame);
         match &self.scale_expression {
@@ -539,9 +548,12 @@ impl Transform2D {
 
     pub fn eval_opacity(&self, frame: u32, fps: u32) -> f32 {
         let eval_frame = if let Some(kfs) = self.opacity.keyframes() {
-            if !kfs.is_empty() {
-                Self::remap_loop_frame(frame, &self.opacity_expression, kfs[0].frame, kfs.last().unwrap().frame)
-            } else { frame }
+            match (kfs.first(), kfs.last()) {
+                (Some(first), Some(last)) => {
+                    Self::remap_loop_frame(frame, &self.opacity_expression, first.frame, last.frame)
+                }
+                _ => frame,
+            }
         } else { frame };
         let base = self.opacity.evaluate(eval_frame);
         match &self.opacity_expression {
@@ -1457,8 +1469,9 @@ impl Composition {
 
         layers_info.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal));
 
-        let min_pos = layers_info.first().unwrap().1;
-        let max_pos = layers_info.last().unwrap().1;
+        let (Some(min_pos), Some(max_pos)) = (layers_info.first().map(|e| e.1), layers_info.last().map(|e| e.1)) else {
+            return;
+        };
         let count = layers_info.len();
 
         // Guard: if all layers are at the same coordinate, distribution is a no-op
