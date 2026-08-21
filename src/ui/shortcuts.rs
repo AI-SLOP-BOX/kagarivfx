@@ -386,6 +386,16 @@ pub fn handle_global_shortcuts(
             crate::core::frame_cache::bump_version();
         }
 
+        // ── Escape: clear keyframe selection, then layer selection ──
+        if allow_single_key && i.key_pressed(Key::Escape) {
+            if !app.selected_keyframes.is_empty() {
+                app.selected_keyframes.clear();
+            } else {
+                app.selected_layers.clear();
+                app.selected_layer_idx = None;
+            }
+        }
+
         // Cmd+Z → Undo, Cmd+Shift+Z → Redo
         if cmd && !shift && i.key_pressed(Key::Z) {
             app.history.undo();
