@@ -225,6 +225,43 @@ pub fn handle_global_shortcuts(
             crate::core::frame_cache::bump_version();
         }
 
+        // ── Batch-move selected keyframes with , / . (comma/period) ──
+        // Comma shifts all selected keyframes 1 frame left, period right (Shift = 10).
+        if allow_single_key && (i.key_pressed(Key::Comma) || i.key_pressed(Key::Period)) {
+            let delta: i32 = if i.key_pressed(Key::Comma) { -1 } else { 1 };
+            let delta = if i.modifiers.shift { delta * 10 } else { delta };
+            if !app.selected_keyframes.is_empty() {
+                // Group by layer so we can borrow layers one at a time
+                use std::collections::HashMap;
+                let mut by_layer: HashMap<usize, Vec<(String, u32)>> = HashMap::new();
+                for (li, pk, f) in app.selected_keyframes.iter() {
+                    by_layer.entry(*li).or_default().push((pk.clone(), *f));
+                }
+                let project = app.history.current_mut();
+                for (li, kfs) in by_layer {
+                    let Some(comp) = project.active_composition_mut().layers.get_mut(li) else { continue };
+                    let t = &mut comp.transform;
+                    for (pk, old_f) in kfs {
+                        let new_f = ((old_f as i32) + delta).max(0) as u32;
+                        match pk.as_str() {
+                            "position" => move_kf_in(&mut t.position, old_f, new_f),
+                            "scale" => move_kf_in(&mut t.scale, old_f, new_f),
+                            "rotation" => move_kf_in(&mut t.rotation, old_f, new_f),
+                            "opacity" => move_kf_in(&mut t.opacity, old_f, new_f),
+                            _ => {}
+                        }
+                    }
+                }
+                // Remap selection to the moved frames
+                app.selected_keyframes = app
+                    .selected_keyframes
+                    .iter()
+                    .map(|(li, pk, f)| (*li, pk.clone(), ((*f as i32) + delta).max(0) as u32))
+                    .collect();
+                crate::core::frame_cache::bump_version();
+            }
+        }
+
         // Cmd+Z → Undo, Cmd+Shift+Z → Redo
         if cmd && !shift && i.key_pressed(Key::Z) {
             app.history.undo();
@@ -454,5 +491,19 @@ mod tests {
         let sc = format_shortcut("Z", true, true, false);
         assert!(sc.contains("Z"));
         assert!(sc.contains("Shift"));
+    }
+}
+
+/// Moves a keyframe within an animatable track (used by batch keyframe nudging).
+fn move_kf_in<T: Clone + crate::core::property::Interpolate>(
+    anim: &mut crate::core::property::Animatable<T>,
+    old_frame: u32,
+    new_frame: u32,
+) {
+    if let Some(kfs) = anim.keyframes_mut() {
+        if let Some(kf) = kfs.iter_mut().find(|k| k.frame == old_frame) {
+            kf.frame = new_frame;
+            kfs.sort_by_key(|k| k.frame);
+        }
     }
 }
