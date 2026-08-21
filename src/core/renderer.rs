@@ -229,8 +229,9 @@ struct TextRasterParams {
     stroke_width: f32,
 }
 
-type TextTextureCache =
-    std::collections::HashMap<(String, String, u32), (wgpu::Texture, std::sync::Arc<wgpu::BindGroup>)>;
+type RenderKey = (u64, u32, u32, u32, (u32, u32));
+type TextTextureKey = (String, String, u32, [u32; 4], u32);
+type TextTextureCache = std::collections::HashMap<TextTextureKey, (wgpu::Texture, std::sync::Arc<wgpu::BindGroup>)>;
 
 #[allow(dead_code)]
 pub struct WgpuRenderer {
@@ -258,6 +259,17 @@ pub struct WgpuRenderer {
     // Snapshot target offscreen texture
     pub snapshot_texture: Option<wgpu::Texture>,
     pub snapshot_view: Option<wgpu::TextureView>,
+
+    // Dirty-checking: skip re-render when inputs are unchanged.
+    // Keyed by (version, frame, exposure bits, lut, target size) per target type.
+    last_main_key: Option<RenderKey>,
+    last_snapshot_key: Option<RenderKey>,
+
+    /// Optional cap on preview render width (px). When set, large compositions
+    /// are rendered at a downscaled resolution — the viewport samples the
+    /// texture at display size anyway, so this is visually near-free and can
+    /// cut fill-rate by 4-16x on 4K comps.
+    preview_max_width: Option<u32>,
 
     // GPU text rendering: cache of CPU-rasterized text textures keyed by (layer_id, text, font_size)
     text_texture_cache: std::cell::RefCell<TextTextureCache>,
@@ -521,6 +533,9 @@ impl WgpuRenderer {
             snapshot_texture: None,
             snapshot_view: None,
             text_texture_cache: std::cell::RefCell::new(std::collections::HashMap::new()),
+            last_main_key: None,
+            last_snapshot_key: None,
+            preview_max_width: None,
         }
     }
 
@@ -536,7 +551,14 @@ impl WgpuRenderer {
         let (text, font_size, color, font_family, tracking, leading, align) =
             (params.text.as_str(), params.font_size, params.color, params.font_family.as_str(), params.tracking, params.leading, params.align);
         let (stroke_color, stroke_width) = (params.stroke_color, params.stroke_width);
-        let key = (layer_id.to_string(), text.to_string(), font_size);
+        // Floats hashed via bit patterns (f32 is not Hash)
+        let key = (
+            layer_id.to_string(),
+            text.to_string(),
+            font_size,
+            [stroke_color[0].to_bits(), stroke_color[1].to_bits(), stroke_color[2].to_bits(), stroke_color[3].to_bits()],
+            stroke_width.to_bits(),
+        );
         if let Some(bind_group) = self.text_texture_cache.borrow().get(&key).map(|(_, bg)| bg.clone()) {
             // Cached: recompute dims from text layout for matrix sizing
             let (w, h) = crate::core::font_rasterizer::with_font_rasterizer(|r| {
@@ -653,11 +675,38 @@ impl WgpuRenderer {
 
     /// Internal core rendering implementation for both primary preview and snapshot target views.
     fn render_internal(&mut self, comp: &Composition, frame: u32, exposure_ev: f32, lut_mode: u32, target_snapshot: bool) -> bool {
+        // Dirty-checking: the viewport calls render() at display refresh rate even
+        // when nothing changed. Skip the full encode/upload/draw pass when the
+        // project version, frame, exposure, LUT, and target size are unchanged.
+        // Effective preview resolution: downscale large comps to the viewport cap.
+        let (eff_w, eff_h) = match self.preview_max_width {
+            Some(cap) if comp.width > cap => {
+                let s = cap as f32 / comp.width as f32;
+                (
+                    cap.max(1),
+                    ((comp.height as f32 * s) as u32).max(1),
+                )
+            }
+            _ => (comp.width, comp.height),
+        };
+
+        let render_key: RenderKey = (
+            crate::core::frame_cache::current_version(),
+            frame,
+            exposure_ev.to_bits(),
+            lut_mode,
+            (eff_w, eff_h),
+        );
+        let last_key = if target_snapshot { &self.last_snapshot_key } else { &self.last_main_key };
+        if *last_key == Some(render_key) {
+            return false; // nothing changed — reuse the existing target texture
+        }
+
         // Clamp to both our sanity limit and the device's texture limit —
         // oversized textures would trip wgpu validation and abort the process.
         let max_dim = self.device.limits().max_texture_dimension_2d.min(crate::core::software_renderer::MAX_RENDER_DIMENSION);
-        let width = comp.width.clamp(1, max_dim);
-        let height = comp.height.clamp(1, max_dim);
+        let width = eff_w.clamp(1, max_dim);
+        let height = eff_h.clamp(1, max_dim);
         let recreated = self.ensure_target_size(width, height);
 
         // Update Globals Uniform
@@ -1004,7 +1053,24 @@ impl WgpuRenderer {
         }
 
         self.queue.submit(std::iter::once(encoder.finish()));
+
+        // Remember inputs so redundant renders can be skipped
+        if target_snapshot {
+            self.last_snapshot_key = Some(render_key);
+        } else {
+            self.last_main_key = Some(render_key);
+        }
         recreated
+    }
+
+    /// Caps preview render width (px). `None` renders at composition resolution.
+    pub fn set_preview_max_width(&mut self, cap: Option<u32>) {
+        if self.preview_max_width != cap {
+            self.preview_max_width = cap;
+            // Resolution change must invalidate the dirty-check keys
+            self.last_main_key = None;
+            self.last_snapshot_key = None;
+        }
     }
 
     /// Renders the given composition at the specified frame, returning the texture view.

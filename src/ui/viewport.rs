@@ -96,6 +96,10 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: u32) 
                 let is_comparing = ctx.data_mut(|d| *d.get_temp_mut_or_insert_with(is_comparing_id, || false));
                 let wipe_pos = ctx.data_mut(|d| *d.get_temp_mut_or_insert_with(wipe_id, || 0.5f32));
 
+                // Render at display resolution: a 4K comp shown in an 800px
+                // viewport renders at ~800px wide (4-16x less fill rate).
+                let preview_px = ((draw_w * ctx.pixels_per_point()).ceil() as u32).clamp(64, 4096);
+                renderer.set_preview_max_width(Some(preview_px));
                 let (texture_view, recreated) = renderer.render(comp, current_frame, exposure_ev, lut_idx as u32);
                 if app.viewport_texture_id.is_none() || recreated {
                     if let Some(old_id) = app.viewport_texture_id {
