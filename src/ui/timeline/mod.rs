@@ -342,6 +342,46 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                                     ui.label(egui::RichText::new(format!("{:02}", i + 1)).small().strong().color(egui::Color32::from_gray(140)));
                                     ui.add_space(2.0);
 
+                                    // ── Label color chip: click cycles through AE label colors ──
+                                    {
+                                        let rgb = layer.label.to_rgb();
+                                        let chip_color = egui::Color32::from_rgb(
+                                            (rgb[0] * 255.0) as u8,
+                                            (rgb[1] * 255.0) as u8,
+                                            (rgb[2] * 255.0) as u8,
+                                        );
+                                        let (chip_rect, chip_resp) = ui.allocate_exact_size(
+                                            egui::vec2(10.0, 14.0),
+                                            egui::Sense::click(),
+                                        );
+                                        ui.painter().rect_filled(chip_rect, 2.0, chip_color);
+                                        let row_selected = app.selected_layers.contains(&i) || app.selected_layer_idx == Some(i);
+                                        if row_selected {
+                                            ui.painter().rect_stroke(chip_rect, 2.0, egui::Stroke::new(1.0, egui::Color32::WHITE));
+                                        }
+                                        if chip_resp.clicked() {
+                                            let next = match layer.label {
+                                                crate::core::timeline::LabelColor::None => crate::core::timeline::LabelColor::Red,
+                                                crate::core::timeline::LabelColor::Red => crate::core::timeline::LabelColor::Yellow,
+                                                crate::core::timeline::LabelColor::Yellow => crate::core::timeline::LabelColor::Aqua,
+                                                crate::core::timeline::LabelColor::Aqua => crate::core::timeline::LabelColor::Pink,
+                                                crate::core::timeline::LabelColor::Pink => crate::core::timeline::LabelColor::Lavender,
+                                                crate::core::timeline::LabelColor::Lavender => crate::core::timeline::LabelColor::Peach,
+                                                crate::core::timeline::LabelColor::Peach => crate::core::timeline::LabelColor::Sea,
+                                                crate::core::timeline::LabelColor::Sea => crate::core::timeline::LabelColor::Blue,
+                                                crate::core::timeline::LabelColor::Blue => crate::core::timeline::LabelColor::Purple,
+                                                crate::core::timeline::LabelColor::Purple => crate::core::timeline::LabelColor::None,
+                                            };
+                                            // Direct mutation: layer is already &mut from the row loop
+                                            layer.label = next;
+                                            project_changed = true;
+                                        }
+                                        if chip_resp.hovered() {
+                                            ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
+                                        }
+                                    }
+                                    ui.add_space(2.0);
+
                                     // Layer Stacking Order Reorder Buttons
                                     if i > 0
                                         && ui.small_button("^").on_hover_text("Move Layer Up in Render Stack").clicked() {
