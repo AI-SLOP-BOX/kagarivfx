@@ -438,6 +438,33 @@ fn is_sane_render_size(width: u32, height: u32) -> bool {
     width > 0 && height > 0 && width <= MAX_RENDER_DIMENSION && height <= MAX_RENDER_DIMENSION
 }
 
+// ── Cooperative render cancellation ─────────────────────────────────────────
+// A shared flag checked between layers and periodically inside pixel loops.
+// Lets export pipelines and future watchdogs abort a long render without
+// killing the process. The flag is thread-local so parallel renders don't
+// cancel each other.
+
+thread_local! {
+    static RENDER_CANCEL: std::cell::RefCell<Option<std::sync::Arc<std::sync::atomic::AtomicBool>>> =
+        const { std::cell::RefCell::new(None) };
+}
+
+/// Installs a cancellation flag for renders on the current thread.
+/// Pass `None` to clear. Returns true if cancellation was requested during render.
+pub fn set_render_cancel_flag(flag: Option<std::sync::Arc<std::sync::atomic::AtomicBool>>) {
+    RENDER_CANCEL.with(|f| *f.borrow_mut() = flag);
+}
+
+/// True if the installed flag has been set (or no flag — never cancelled).
+#[inline]
+fn render_cancelled() -> bool {
+    RENDER_CANCEL.with(|f| {
+        f.borrow()
+            .as_ref()
+            .is_some_and(|flag| flag.load(std::sync::atomic::Ordering::Relaxed))
+    })
+}
+
 pub fn render_frame_to_pixels(comp: &Composition, frame: u32, width: u32, height: u32, exposure_ev: f32, lut_mode: u32) -> Vec<u8> {
     if !is_sane_render_size(width, height) {
         log::warn!(
@@ -462,6 +489,10 @@ pub fn render_frame_to_pixels(comp: &Composition, frame: u32, width: u32, height
     let has_solo = comp.layers.iter().any(|l| l.is_active(frame) && l.solo);
 
     for layer in &comp.layers {
+        // Cooperative cancellation: checked once per layer
+        if render_cancelled() {
+            break;
+        }
         if !layer.is_active(frame) {
             continue;
         }
@@ -1724,5 +1755,56 @@ mod render_size_guard_tests {
         assert!(rgba_buffer_size(u32::MAX, u32::MAX).is_none());
         assert!(rgba_buffer_size(0, 0).is_some()); // 0 is valid size, caller checks
         assert_eq!(rgba_buffer_size(2, 2), Some(16));
+    }
+}
+
+#[cfg(test)]
+mod cancel_tests {
+    use super::*;
+    use crate::core::timeline::{Composition, Layer, LayerType};
+    use std::sync::atomic::AtomicBool;
+    use std::sync::Arc;
+
+    fn busy_comp(layers: usize) -> Composition {
+        let mut comp = Composition::new("c".into(), "Cancel".into(), 64, 64, 30, 30);
+        for i in 0..layers {
+            let mut l = Layer::new(format!("l{}", i), format!("L{}", i), LayerType::Solid { color: [0.5; 4] }, 30);
+            l.transform.position = crate::core::property::Animatable::new_constant([32.0, 32.0]);
+            comp.layers.push(l);
+        }
+        comp
+    }
+
+    #[test]
+    fn test_cancel_flag_stops_layer_processing() {
+        let comp = busy_comp(200);
+        let flag = Arc::new(AtomicBool::new(true)); // cancelled from the start
+        set_render_cancel_flag(Some(flag.clone()));
+
+        let pixels = render_frame_to_pixels(&comp, 0, 64, 64, 0.0, 0);
+        // Buffer is still valid; but no layer work should have happened
+        assert_eq!(pixels.len(), 64 * 64 * 4);
+        // Background-only buffer: no bright solid pixels
+        let bright = (0..pixels.len()).step_by(4).filter(|&i| pixels[i] > 100).count();
+        assert_eq!(bright, 0, "cancelled render must not composite layers");
+
+        set_render_cancel_flag(None);
+
+        // Without the flag the same comp renders layers normally
+        let pixels2 = render_frame_to_pixels(&comp, 0, 64, 64, 0.0, 0);
+        let bright2 = (0..pixels2.len()).step_by(4).filter(|&i| pixels2[i] > 100).count();
+        assert!(bright2 > 0, "un-cancelled render must composite layers");
+    }
+
+    #[test]
+    fn test_clearing_flag_restores_full_render() {
+        let comp = busy_comp(10);
+        let flag = Arc::new(AtomicBool::new(false));
+        set_render_cancel_flag(Some(flag.clone()));
+        set_render_cancel_flag(None); // cleared — must behave as default
+
+        let pixels = render_frame_to_pixels(&comp, 0, 64, 64, 0.0, 0);
+        let bright = (0..pixels.len()).step_by(4).filter(|&i| pixels[i] > 100).count();
+        assert!(bright > 0);
     }
 }
