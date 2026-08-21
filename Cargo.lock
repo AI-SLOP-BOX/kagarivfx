@@ -111,6 +111,7 @@ dependencies = [
  "env_logger",
  "image 0.25.10",
  "log",
+ "naga",
  "png 0.17.16",
  "rand",
  "rayon",
