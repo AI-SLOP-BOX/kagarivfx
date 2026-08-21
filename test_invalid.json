@@ -1,0 +1,1125 @@
+{
+  "compositions": [
+    {
+      "id": "comp1",
+      "name": "CycleTest",
+      "width": 64,
+      "height": 64,
+      "fps": 30,
+      "duration_frames": 30,
+      "layers": [
+        {
+          "id": "bg",
+          "name": "BG",
+          "layer_type": {
+            "Solid": {
+              "color": [
+                0.2,
+                0.2,
+                0.2,
+                0.2
+              ]
+            }
+          },
+          "in_frame": 0,
+          "out_frame": 30,
+          "transform": {
+            "anchor_point": {
+              "type": "Constant",
+              "value": [
+                0.0,
+                0.0
+              ]
+            },
+            "position": {
+              "type": "Constant",
+              "value": [
+                32.0,
+                32.0
+              ]
+            },
+            "scale": {
+              "type": "Constant",
+              "value": [
+                100.0,
+                100.0
+              ]
+            },
+            "rotation": {
+              "type": "Constant",
+              "value": 0.0
+            },
+            "opacity": {
+              "type": "Constant",
+              "value": 100.0
+            },
+            "position_expression": null,
+            "rotation_expression": null,
+            "scale_expression": null,
+            "opacity_expression": null
+          },
+          "effects": [],
+          "visible": true,
+          "locked": false,
+          "parent_id": null,
+          "track_matte": "None",
+          "solo": false,
+          "motion_blur": false,
+          "label": "Red",
+          "time_remap": null,
+          "trackers": [],
+          "is_3d": false,
+          "transform_3d": {
+            "position": {
+              "type": "Constant",
+              "value": [
+                0.0,
+                0.0,
+                0.0
+              ]
+            },
+            "rotation": {
+              "type": "Constant",
+              "value": [
+                0.0,
+                0.0,
+                0.0
+              ]
+            },
+            "scale": {
+              "type": "Constant",
+              "value": [
+                100.0,
+                100.0,
+                100.0
+              ]
+            }
+          },
+          "blend_mode": "Normal",
+          "is_adjustment_layer": false,
+          "is_guide_layer": false,
+          "is_shy": false,
+          "effects_enabled": true,
+          "is_collapsed": false,
+          "masks": [],
+          "style": {
+            "drop_shadow": {
+              "enabled": false,
+              "blend_mode": "Normal",
+              "opacity": 0.0,
+              "angle": 0.0,
+              "distance": 0.0,
+              "size": 0.0,
+              "color": [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ]
+            },
+            "outer_glow": {
+              "enabled": false,
+              "opacity": 0.0,
+              "spread": 0.0,
+              "size": 0.0,
+              "color": [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ]
+            },
+            "stroke": {
+              "enabled": false,
+              "size": 0.0,
+              "position": 0,
+              "color": [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ]
+            }
+          },
+          "text_formatting": null,
+          "text_animator": null,
+          "preserve_transparency": false,
+          "trim_paths": null,
+          "shape_repeater": null,
+          "constraints": {
+            "horizontal": "Left",
+            "vertical": "Top"
+          }
+        },
+        {
+          "id": "pc1",
+          "name": "Nested",
+          "layer_type": {
+            "PreComp": {
+              "comp_id": "B"
+            }
+          },
+          "in_frame": 0,
+          "out_frame": 30,
+          "transform": {
+            "anchor_point": {
+              "type": "Constant",
+              "value": [
+                0.0,
+                0.0
+              ]
+            },
+            "position": {
+              "type": "Constant",
+              "value": [
+                32.0,
+                32.0
+              ]
+            },
+            "scale": {
+              "type": "Constant",
+              "value": [
+                100.0,
+                100.0
+              ]
+            },
+            "rotation": {
+              "type": "Constant",
+              "value": 0.0
+            },
+            "opacity": {
+              "type": "Constant",
+              "value": 100.0
+            },
+            "position_expression": null,
+            "rotation_expression": null,
+            "scale_expression": null,
+            "opacity_expression": null
+          },
+          "effects": [],
+          "visible": true,
+          "locked": false,
+          "parent_id": null,
+          "track_matte": "None",
+          "solo": false,
+          "motion_blur": false,
+          "label": "Red",
+          "time_remap": null,
+          "trackers": [],
+          "is_3d": false,
+          "transform_3d": {
+            "position": {
+              "type": "Constant",
+              "value": [
+                0.0,
+                0.0,
+                0.0
+              ]
+            },
+            "rotation": {
+              "type": "Constant",
+              "value": [
+                0.0,
+                0.0,
+                0.0
+              ]
+            },
+            "scale": {
+              "type": "Constant",
+              "value": [
+                100.0,
+                100.0,
+                100.0
+              ]
+            }
+          },
+          "blend_mode": "Normal",
+          "is_adjustment_layer": false,
+          "is_guide_layer": false,
+          "is_shy": false,
+          "effects_enabled": true,
+          "is_collapsed": false,
+          "masks": [],
+          "style": {
+            "drop_shadow": {
+              "enabled": false,
+              "blend_mode": "Normal",
+              "opacity": 0.0,
+              "angle": 0.0,
+              "distance": 0.0,
+              "size": 0.0,
+              "color": [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ]
+            },
+            "outer_glow": {
+              "enabled": false,
+              "opacity": 0.0,
+              "spread": 0.0,
+              "size": 0.0,
+              "color": [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ]
+            },
+            "stroke": {
+              "enabled": false,
+              "size": 0.0,
+              "position": 0,
+              "color": [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ]
+            }
+          },
+          "text_formatting": null,
+          "text_animator": null,
+          "preserve_transparency": false,
+          "trim_paths": null,
+          "shape_repeater": null,
+          "constraints": {
+            "horizontal": "Left",
+            "vertical": "Top"
+          }
+        },
+        {
+          "id": "miss",
+          "name": "MissingRef",
+          "layer_type": {
+            "PreComp": {
+              "comp_id": "GHOST"
+            }
+          },
+          "in_frame": 0,
+          "out_frame": 30,
+          "transform": {
+            "anchor_point": {
+              "type": "Constant",
+              "value": [
+                0.0,
+                0.0
+              ]
+            },
+            "position": {
+              "type": "Constant",
+              "value": [
+                0.0,
+                0.0
+              ]
+            },
+            "scale": {
+              "type": "Constant",
+              "value": [
+                100.0,
+                100.0
+              ]
+            },
+            "rotation": {
+              "type": "Constant",
+              "value": 0.0
+            },
+            "opacity": {
+              "type": "Constant",
+              "value": 100.0
+            },
+            "position_expression": null,
+            "rotation_expression": null,
+            "scale_expression": null,
+            "opacity_expression": null
+          },
+          "effects": [],
+          "visible": true,
+          "locked": false,
+          "parent_id": null,
+          "track_matte": "None",
+          "solo": false,
+          "motion_blur": false,
+          "label": "Red",
+          "time_remap": null,
+          "trackers": [],
+          "is_3d": false,
+          "transform_3d": {
+            "position": {
+              "type": "Constant",
+              "value": [
+                0.0,
+                0.0,
+                0.0
+              ]
+            },
+            "rotation": {
+              "type": "Constant",
+              "value": [
+                0.0,
+                0.0,
+                0.0
+              ]
+            },
+            "scale": {
+              "type": "Constant",
+              "value": [
+                100.0,
+                100.0,
+                100.0
+              ]
+            }
+          },
+          "blend_mode": "Normal",
+          "is_adjustment_layer": false,
+          "is_guide_layer": false,
+          "is_shy": false,
+          "effects_enabled": true,
+          "is_collapsed": false,
+          "masks": [],
+          "style": {
+            "drop_shadow": {
+              "enabled": false,
+              "blend_mode": "Normal",
+              "opacity": 0.0,
+              "angle": 0.0,
+              "distance": 0.0,
+              "size": 0.0,
+              "color": [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ]
+            },
+            "outer_glow": {
+              "enabled": false,
+              "opacity": 0.0,
+              "spread": 0.0,
+              "size": 0.0,
+              "color": [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ]
+            },
+            "stroke": {
+              "enabled": false,
+              "size": 0.0,
+              "position": 0,
+              "color": [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ]
+            }
+          },
+          "text_formatting": null,
+          "text_animator": null,
+          "preserve_transparency": false,
+          "trim_paths": null,
+          "shape_repeater": null,
+          "constraints": {
+            "horizontal": "Left",
+            "vertical": "Top"
+          }
+        },
+        {
+          "id": "bad",
+          "name": "BadScale",
+          "layer_type": {
+            "Solid": {
+              "color": [
+                1.0,
+                1.0,
+                1.0,
+                1.0
+              ]
+            }
+          },
+          "in_frame": 0,
+          "out_frame": 30,
+          "transform": {
+            "anchor_point": {
+              "type": "Constant",
+              "value": [
+                0.0,
+                0.0
+              ]
+            },
+            "position": {
+              "type": "Constant",
+              "value": [
+                0.0,
+                0.0
+              ]
+            },
+            "scale": {
+              "type": "Constant",
+              "value": [
+                1000000000.0,
+                1000000000.0
+              ]
+            },
+            "rotation": {
+              "type": "Constant",
+              "value": 0.0
+            },
+            "opacity": {
+              "type": "Constant",
+              "value": 100.0
+            },
+            "position_expression": null,
+            "rotation_expression": null,
+            "scale_expression": null,
+            "opacity_expression": null
+          },
+          "effects": [],
+          "visible": true,
+          "locked": false,
+          "parent_id": null,
+          "track_matte": "None",
+          "solo": false,
+          "motion_blur": false,
+          "label": "Red",
+          "time_remap": null,
+          "trackers": [],
+          "is_3d": false,
+          "transform_3d": {
+            "position": {
+              "type": "Constant",
+              "value": [
+                0.0,
+                0.0,
+                0.0
+              ]
+            },
+            "rotation": {
+              "type": "Constant",
+              "value": [
+                0.0,
+                0.0,
+                0.0
+              ]
+            },
+            "scale": {
+              "type": "Constant",
+              "value": [
+                100.0,
+                100.0,
+                100.0
+              ]
+            }
+          },
+          "blend_mode": "Normal",
+          "is_adjustment_layer": false,
+          "is_guide_layer": false,
+          "is_shy": false,
+          "effects_enabled": true,
+          "is_collapsed": false,
+          "masks": [],
+          "style": {
+            "drop_shadow": {
+              "enabled": false,
+              "blend_mode": "Normal",
+              "opacity": 0.0,
+              "angle": 0.0,
+              "distance": 0.0,
+              "size": 0.0,
+              "color": [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ]
+            },
+            "outer_glow": {
+              "enabled": false,
+              "opacity": 0.0,
+              "spread": 0.0,
+              "size": 0.0,
+              "color": [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ]
+            },
+            "stroke": {
+              "enabled": false,
+              "size": 0.0,
+              "position": 0,
+              "color": [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ]
+            }
+          },
+          "text_formatting": null,
+          "text_animator": null,
+          "preserve_transparency": false,
+          "trim_paths": null,
+          "shape_repeater": null,
+          "constraints": {
+            "horizontal": "Left",
+            "vertical": "Top"
+          }
+        },
+        {
+          "id": "pa",
+          "name": "ParentA",
+          "layer_type": "Null",
+          "in_frame": 0,
+          "out_frame": 30,
+          "transform": {
+            "anchor_point": {
+              "type": "Constant",
+              "value": [
+                0.0,
+                0.0
+              ]
+            },
+            "position": {
+              "type": "Constant",
+              "value": [
+                0.0,
+                0.0
+              ]
+            },
+            "scale": {
+              "type": "Constant",
+              "value": [
+                100.0,
+                100.0
+              ]
+            },
+            "rotation": {
+              "type": "Constant",
+              "value": 0.0
+            },
+            "opacity": {
+              "type": "Constant",
+              "value": 100.0
+            },
+            "position_expression": null,
+            "rotation_expression": null,
+            "scale_expression": null,
+            "opacity_expression": null
+          },
+          "effects": [],
+          "visible": true,
+          "locked": false,
+          "parent_id": "pb",
+          "track_matte": "None",
+          "solo": false,
+          "motion_blur": false,
+          "label": "Red",
+          "time_remap": null,
+          "trackers": [],
+          "is_3d": false,
+          "transform_3d": {
+            "position": {
+              "type": "Constant",
+              "value": [
+                0.0,
+                0.0,
+                0.0
+              ]
+            },
+            "rotation": {
+              "type": "Constant",
+              "value": [
+                0.0,
+                0.0,
+                0.0
+              ]
+            },
+            "scale": {
+              "type": "Constant",
+              "value": [
+                100.0,
+                100.0,
+                100.0
+              ]
+            }
+          },
+          "blend_mode": "Normal",
+          "is_adjustment_layer": false,
+          "is_guide_layer": false,
+          "is_shy": false,
+          "effects_enabled": true,
+          "is_collapsed": false,
+          "masks": [],
+          "style": {
+            "drop_shadow": {
+              "enabled": false,
+              "blend_mode": "Normal",
+              "opacity": 0.0,
+              "angle": 0.0,
+              "distance": 0.0,
+              "size": 0.0,
+              "color": [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ]
+            },
+            "outer_glow": {
+              "enabled": false,
+              "opacity": 0.0,
+              "spread": 0.0,
+              "size": 0.0,
+              "color": [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ]
+            },
+            "stroke": {
+              "enabled": false,
+              "size": 0.0,
+              "position": 0,
+              "color": [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ]
+            }
+          },
+          "text_formatting": null,
+          "text_animator": null,
+          "preserve_transparency": false,
+          "trim_paths": null,
+          "shape_repeater": null,
+          "constraints": {
+            "horizontal": "Left",
+            "vertical": "Top"
+          }
+        },
+        {
+          "id": "pb",
+          "name": "ParentB",
+          "layer_type": "Null",
+          "in_frame": 0,
+          "out_frame": 30,
+          "transform": {
+            "anchor_point": {
+              "type": "Constant",
+              "value": [
+                0.0,
+                0.0
+              ]
+            },
+            "position": {
+              "type": "Constant",
+              "value": [
+                0.0,
+                0.0
+              ]
+            },
+            "scale": {
+              "type": "Constant",
+              "value": [
+                100.0,
+                100.0
+              ]
+            },
+            "rotation": {
+              "type": "Constant",
+              "value": 0.0
+            },
+            "opacity": {
+              "type": "Constant",
+              "value": 100.0
+            },
+            "position_expression": null,
+            "rotation_expression": null,
+            "scale_expression": null,
+            "opacity_expression": null
+          },
+          "effects": [],
+          "visible": true,
+          "locked": false,
+          "parent_id": "pa",
+          "track_matte": "None",
+          "solo": false,
+          "motion_blur": false,
+          "label": "Red",
+          "time_remap": null,
+          "trackers": [],
+          "is_3d": false,
+          "transform_3d": {
+            "position": {
+              "type": "Constant",
+              "value": [
+                0.0,
+                0.0,
+                0.0
+              ]
+            },
+            "rotation": {
+              "type": "Constant",
+              "value": [
+                0.0,
+                0.0,
+                0.0
+              ]
+            },
+            "scale": {
+              "type": "Constant",
+              "value": [
+                100.0,
+                100.0,
+                100.0
+              ]
+            }
+          },
+          "blend_mode": "Normal",
+          "is_adjustment_layer": false,
+          "is_guide_layer": false,
+          "is_shy": false,
+          "effects_enabled": true,
+          "is_collapsed": false,
+          "masks": [],
+          "style": {
+            "drop_shadow": {
+              "enabled": false,
+              "blend_mode": "Normal",
+              "opacity": 0.0,
+              "angle": 0.0,
+              "distance": 0.0,
+              "size": 0.0,
+              "color": [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ]
+            },
+            "outer_glow": {
+              "enabled": false,
+              "opacity": 0.0,
+              "spread": 0.0,
+              "size": 0.0,
+              "color": [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ]
+            },
+            "stroke": {
+              "enabled": false,
+              "size": 0.0,
+              "position": 0,
+              "color": [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ]
+            }
+          },
+          "text_formatting": null,
+          "text_animator": null,
+          "preserve_transparency": false,
+          "trim_paths": null,
+          "shape_repeater": null,
+          "constraints": {
+            "horizontal": "Left",
+            "vertical": "Top"
+          }
+        }
+      ],
+      "motion_blur_shutter_angle": 180.0,
+      "background_color": [
+        0.05,
+        0.05,
+        0.08,
+        1.0
+      ],
+      "active_camera": {
+        "name": "Active Camera",
+        "active": true,
+        "fov_degrees": 50.0,
+        "focus_distance": 1000.0,
+        "aperture": 2.8,
+        "transform": {
+          "position": {
+            "type": "Constant",
+            "value": [
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          "rotation": {
+            "type": "Constant",
+            "value": [
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          "scale": {
+            "type": "Constant",
+            "value": [
+              100.0,
+              100.0,
+              100.0
+            ]
+          }
+        }
+      },
+      "lights": [
+        {
+          "id": "light_main",
+          "name": "Key Light",
+          "light_type": "Point",
+          "color": [
+            1.0,
+            1.0,
+            1.0,
+            1.0
+          ],
+          "intensity": 100.0,
+          "position": {
+            "type": "Constant",
+            "value": [
+              960.0,
+              540.0,
+              -500.0
+            ]
+          },
+          "casts_shadows": true
+        }
+      ],
+      "markers": [],
+      "sub_compositions": [
+        {
+          "id": "B",
+          "name": "SubB",
+          "width": 64,
+          "height": 64,
+          "fps": 30,
+          "duration_frames": 30,
+          "layers": [
+            {
+              "id": "pcb",
+              "name": "BackToRoot",
+              "layer_type": {
+                "PreComp": {
+                  "comp_id": "comp1"
+                }
+              },
+              "in_frame": 0,
+              "out_frame": 30,
+              "transform": {
+                "anchor_point": {
+                  "type": "Constant",
+                  "value": [
+                    0.0,
+                    0.0
+                  ]
+                },
+                "position": {
+                  "type": "Constant",
+                  "value": [
+                    0.0,
+                    0.0
+                  ]
+                },
+                "scale": {
+                  "type": "Constant",
+                  "value": [
+                    100.0,
+                    100.0
+                  ]
+                },
+                "rotation": {
+                  "type": "Constant",
+                  "value": 0.0
+                },
+                "opacity": {
+                  "type": "Constant",
+                  "value": 100.0
+                },
+                "position_expression": null,
+                "rotation_expression": null,
+                "scale_expression": null,
+                "opacity_expression": null
+              },
+              "effects": [],
+              "visible": true,
+              "locked": false,
+              "parent_id": null,
+              "track_matte": "None",
+              "solo": false,
+              "motion_blur": false,
+              "label": "Red",
+              "time_remap": null,
+              "trackers": [],
+              "is_3d": false,
+              "transform_3d": {
+                "position": {
+                  "type": "Constant",
+                  "value": [
+                    0.0,
+                    0.0,
+                    0.0
+                  ]
+                },
+                "rotation": {
+                  "type": "Constant",
+                  "value": [
+                    0.0,
+                    0.0,
+                    0.0
+                  ]
+                },
+                "scale": {
+                  "type": "Constant",
+                  "value": [
+                    100.0,
+                    100.0,
+                    100.0
+                  ]
+                }
+              },
+              "blend_mode": "Normal",
+              "is_adjustment_layer": false,
+              "is_guide_layer": false,
+              "is_shy": false,
+              "effects_enabled": true,
+              "is_collapsed": false,
+              "masks": [],
+              "style": {
+                "drop_shadow": {
+                  "enabled": false,
+                  "blend_mode": "Normal",
+                  "opacity": 0.0,
+                  "angle": 0.0,
+                  "distance": 0.0,
+                  "size": 0.0,
+                  "color": [
+                    0.0,
+                    0.0,
+                    0.0,
+                    0.0
+                  ]
+                },
+                "outer_glow": {
+                  "enabled": false,
+                  "opacity": 0.0,
+                  "spread": 0.0,
+                  "size": 0.0,
+                  "color": [
+                    0.0,
+                    0.0,
+                    0.0,
+                    0.0
+                  ]
+                },
+                "stroke": {
+                  "enabled": false,
+                  "size": 0.0,
+                  "position": 0,
+                  "color": [
+                    0.0,
+                    0.0,
+                    0.0,
+                    0.0
+                  ]
+                }
+              },
+              "text_formatting": null,
+              "text_animator": null,
+              "preserve_transparency": false,
+              "trim_paths": null,
+              "shape_repeater": null,
+              "constraints": {
+                "horizontal": "Left",
+                "vertical": "Top"
+              }
+            }
+          ],
+          "motion_blur_shutter_angle": 180.0,
+          "background_color": [
+            0.05,
+            0.05,
+            0.08,
+            1.0
+          ],
+          "active_camera": {
+            "name": "Active Camera",
+            "active": true,
+            "fov_degrees": 50.0,
+            "focus_distance": 1000.0,
+            "aperture": 2.8,
+            "transform": {
+              "position": {
+                "type": "Constant",
+                "value": [
+                  0.0,
+                  0.0,
+                  0.0
+                ]
+              },
+              "rotation": {
+                "type": "Constant",
+                "value": [
+                  0.0,
+                  0.0,
+                  0.0
+                ]
+              },
+              "scale": {
+                "type": "Constant",
+                "value": [
+                  100.0,
+                  100.0,
+                  100.0
+                ]
+              }
+            }
+          },
+          "lights": [
+            {
+              "id": "light_main",
+              "name": "Key Light",
+              "light_type": "Point",
+              "color": [
+                1.0,
+                1.0,
+                1.0,
+                1.0
+              ],
+              "intensity": 100.0,
+              "position": {
+                "type": "Constant",
+                "value": [
+                  960.0,
+                  540.0,
+                  -500.0
+                ]
+              },
+              "casts_shadows": true
+            }
+          ],
+          "markers": [],
+          "sub_compositions": []
+        }
+      ]
+    }
+  ],
+  "active_composition_idx": 0,
+  "assets": []
+}

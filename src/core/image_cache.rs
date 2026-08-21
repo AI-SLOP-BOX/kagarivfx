@@ -42,8 +42,24 @@ impl ImageCache {
         self.cache.get(path)
     }
 
+    /// Maximum pixels per image (16384 x 16384): guards against decompression bombs
+    /// and runaway allocations from corrupted or malicious image files.
+    pub const MAX_IMAGE_PIXELS: u64 = 16384 * 16384;
+
     /// Decode an image file to RGBA pixels.
     fn decode_image_file(path: &str) -> Option<CachedImage> {
+        // Check declared dimensions BEFORE decoding to avoid huge allocations
+        let reader = image::ImageReader::open(path).ok()?;
+        let (declared_w, declared_h) = reader.into_dimensions().ok()?;
+        let total = declared_w as u64 * declared_h as u64;
+        if total == 0 || total > Self::MAX_IMAGE_PIXELS {
+            log::warn!(
+                "[ImageCache] Rejecting image {} with dimensions {}x{} ({} px > limit)",
+                path, declared_w, declared_h, total
+            );
+            return None;
+        }
+
         let img = image::open(path).ok()?;
         let rgba = img.to_rgba8();
         let (width, height) = rgba.dimensions();
@@ -89,5 +105,30 @@ mod tests {
     fn test_load_nonexistent_image() {
         let mut c = ImageCache::new();
         assert!(c.load_image("/nonexistent/path/image.png").is_none());
+    }
+}
+
+#[cfg(test)]
+mod robustness_tests {
+    use super::*;
+
+    #[test]
+    fn test_missing_and_invalid_files_return_none() {
+        let mut cache = ImageCache::new();
+        // Missing file
+        assert!(cache.load_image("/nonexistent/path/img.png").is_none());
+        // Directory instead of file
+        assert!(cache.load_image("/tmp").is_none());
+        // Corrupted image payload with valid extension
+        let bad = std::env::temp_dir().join("aevfx_bad_image.png");
+        std::fs::write(&bad, b"not a real png at all").unwrap();
+        assert!(cache.load_image(bad.to_str().unwrap()).is_none());
+        let _ = std::fs::remove_file(&bad);
+    }
+
+    #[test]
+    fn test_dimension_limit_constant_is_sane() {
+        assert!(ImageCache::MAX_IMAGE_PIXELS >= 1920 * 1080, "must allow HD");
+        assert!(ImageCache::MAX_IMAGE_PIXELS <= 16384 * 16384 * 4, "must cap memory");
     }
 }
