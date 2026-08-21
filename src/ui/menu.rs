@@ -21,18 +21,15 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
                         .save_file()
                     {
                         let project = app.history.current();
-                        match serde_json::to_string_pretty(project) {
-                            Ok(json) => match std::fs::write(&path, json) {
-                                Ok(_) => {
-                                    app.project_path = path.to_string_lossy().to_string();
-                                    app.toasts.info(format!("💾 Project saved: {}", path.file_name().unwrap_or_default().to_string_lossy()));
-                                }
-                                Err(err) => {
-                                    app.toasts.error(format!("❌ Failed to save project file: {}", err));
-                                }
-                            },
+                        match crate::core::project_migration::save_project_atomic(project, &path) {
+                            Ok(_) => {
+                                app.project_path = path.to_string_lossy().to_string();
+                                // Clean save → recovery snapshots no longer needed
+                                let _ = app.autosave.save_now(project);
+                                app.toasts.info(format!("💾 Project saved: {}", path.file_name().unwrap_or_default().to_string_lossy()));
+                            }
                             Err(err) => {
-                                app.toasts.error(format!("❌ Failed to serialize project: {}", err));
+                                app.toasts.error(format!("❌ Failed to save project file: {}", err));
                             }
                         }
                     }
@@ -44,7 +41,7 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
                         .pick_file()
                     {
                         match std::fs::read_to_string(&path) {
-                            Ok(json) => match serde_json::from_str::<crate::core::timeline::Project>(&json) {
+                            Ok(json) => match crate::core::project_migration::load_project_migrated(&json) {
                                 Ok(project) => {
                                     app.history = crate::core::history::ProjectHistory::new(project);
                                     app.selected_layer_idx = None;

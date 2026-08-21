@@ -141,3 +141,52 @@ fn fuzz_deeply_nested_json_arrays() {
         let _: Result<Project, _> = serde_json::from_str(&payload);
     }
 }
+
+#[test]
+fn rendering_is_deterministic_same_input_same_bytes() {
+    // Determinism is a hard requirement: caching, undo, and export all assume
+    // that the same project + frame always produces byte-identical output.
+    let mut comp = Composition::new("c".into(), "Determinism".into(), 64, 64, 30, 30);
+    let mut l = Layer::new("s".into(), "Solid".into(), LayerType::Solid { color: [0.7, 0.2, 0.4, 1.0] }, 30);
+    l.transform.position = Animatable::new_animated(vec![
+        aftereffects_oss::core::keyframe::Keyframe::new(0, [20.0, 32.0], aftereffects_oss::core::keyframe::InterpolationType::Bezier {
+            outgoing: aftereffects_oss::core::keyframe::BezierControlPoint::default(),
+            incoming: aftereffects_oss::core::keyframe::BezierControlPoint::default(),
+            custom_bezier: Some([0.25, 0.1, 0.25, 1.0]),
+        }),
+        aftereffects_oss::core::keyframe::Keyframe::new(29, [44.0, 32.0], aftereffects_oss::core::keyframe::InterpolationType::Bezier {
+            outgoing: aftereffects_oss::core::keyframe::BezierControlPoint::default(),
+            incoming: aftereffects_oss::core::keyframe::BezierControlPoint::default(),
+            custom_bezier: Some([0.25, 0.1, 0.25, 1.0]),
+        }),
+    ]);
+    comp.layers.push(l);
+
+    for frame in [0u32, 7, 15, 28] {
+        let a = render_frame_to_pixels(&comp, frame, 64, 64, 0.0, 0);
+        let b = render_frame_to_pixels(&comp, frame, 64, 64, 0.0, 0);
+        let c = render_frame_to_pixels(&comp, frame, 64, 64, 0.0, 0);
+        assert_eq!(a, b, "frame {} must be deterministic", frame);
+        assert_eq!(b, c, "frame {} must be deterministic (3rd run)", frame);
+    }
+}
+
+#[test]
+fn roundtrip_project_json_preserves_render() {
+    // Save → load → render must produce identical pixels (serialization fidelity)
+    use aftereffects_oss::core::project_migration::{save_project_versioned, load_project_migrated};
+    let mut comp = Composition::new("c".into(), "Roundtrip".into(), 48, 48, 30, 30);
+    let mut l = Layer::new("s".into(), "Shape".into(), LayerType::Solid { color: [0.3, 0.9, 0.5, 1.0] }, 30);
+    l.transform.rotation = Animatable::new_constant(33.0);
+    l.transform.position = Animatable::new_constant([24.0, 24.0]);
+    comp.layers.push(l);
+    let project = Project { compositions: vec![comp], active_composition_idx: 0, assets: Vec::new() };
+
+    let before = render_frame_to_pixels(&project.compositions[0], 0, 48, 48, 0.0, 0);
+
+    let json = save_project_versioned(&project).expect("serialize");
+    let loaded = load_project_migrated(&json).expect("deserialize");
+    let after = render_frame_to_pixels(&loaded.compositions[0], 0, 48, 48, 0.0, 0);
+
+    assert_eq!(before, after, "render must survive a save/load roundtrip byte-for-byte");
+}

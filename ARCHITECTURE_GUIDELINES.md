@@ -84,3 +84,49 @@ This document outlines mandatory architectural conventions for team collaboratio
 
 ### Rule 8.2: Data-Driven Preset Registries
 - UI element lists (such as effect presets, plugin panels, tool selections) must be declared as static data registries (`EffectPreset` array) and rendered dynamically via iterator loops.
+
+---
+
+# 堅牢性アーキテクチャ (Robustness Architecture)
+
+AE完全版を目指す上で、機能追加はすべて以下の堅牢性基盤の上に構築する。
+
+## 多層防御（Defense in Depth）
+
+```
+入力境界
+  ├─ プロジェクトJSON: スキーマバージョン + マイグレーション + 循環サニタイズ
+  │    (project_migration.rs — save_project_atomic / load_project_migrated が正規パス)
+  ├─ 画像: デコード前寸法検査 (16384²上限) → デコード爆弾対策
+  └─ 式: Rhaiサンドボックス (max_operations / 深い再帰拒否 / 危険シンボル無効化)
+
+処理境界
+  ├─ レンダー寸法: MAX_RENDER_DIMENSION=16384 (事前割り当て拒否)
+  ├─ バッファ計算: rgba_buffer_size = checked_mul (オーバーフロー→None)
+  ├─ 循環参照: 親子チェーン32段制限, PreComp ネスト16段制限
+  └─ NaN/Inf: 境界ボックス abs() ガード + as u32 飽和変換
+
+メモリ境界
+  ├─ フレームキャッシュ: 512MB LRU (単調カウンターで決定論的除去)
+  ├─ Undo履歴: 50エントリ + 128MBバイト予算 (サイズ見積もりトリミング)
+  └─ オートセーブ: 回転5スロット, アトミック書き込み, 破損スキップ復元
+
+検証
+  ├─ aevfx validate: 循環グラフ検出(DFS), 参照完全性, 寸法/レイヤー数, NaN値
+  └─ CI: clippy -D warnings + 全テスト + CLIスモークテスト
+```
+
+## 不変条件（Invariants）
+
+1. **決定論**: 同一プロジェクト+同一フレーム → バイト一致出力（キャッシュ・Undo・エクスポートの前提）
+2. **パニック禁止**: いかなる入力でもレンダラーはパニックしない（fuzz_matrix/mutation_fuzz/stressで保証）
+3. **前方互換**: 保存したプロジェクトは将来のバージョンで必ずロードできる（schema_version移行）
+4. **有界メモリ**: すべてのキャッシュ・履歴には明示的なバイト予算がある
+
+## 新機能追加時のチェックリスト
+
+- [ ] 新しい`Animatable`評価はNaN入力でも有限値を返すか？
+- [ ] 新しいネスト構造は循環ガードを持つか？
+- [ ] 新しいキャッシュはバイト予算とLRU除去を持つか？
+- [ ] 新しいユーザー入力はバリデーターにチェックを追加したか？
+- [ ] ラウンドトリップテスト（保存→読込→同出力）を書いたか？

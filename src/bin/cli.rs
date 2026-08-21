@@ -140,7 +140,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 fn load_project(path: &str) -> Result<Project, Box<dyn std::error::Error>> {
     let json = std::fs::read_to_string(path)
         .map_err(|e| format!("Failed to read project file '{}': {}", path, e))?;
-    let project: Project = serde_json::from_str(&json)
+    // Schema-migrated load: handles versioned wrappers and legacy files,
+    // and sanitizes broken parent-child links on the way in.
+    let project = aftereffects_oss::core::project_migration::load_project_migrated(&json)
         .map_err(|e| format!("Failed to parse project JSON: {}", e))?;
     Ok(project)
 }
