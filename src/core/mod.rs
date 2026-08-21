@@ -18,6 +18,7 @@ pub mod color_science;
 pub mod software_renderer;
 pub mod content_aware_engine;
 pub mod audio_engine;
+pub mod autosave;
 pub mod project_migration;
 pub mod physics;
 pub mod text_animator;

@@ -127,6 +127,8 @@ impl DragTransaction {
 #[cfg(feature = "gui")]
 pub struct AfterEffectsApp {
     pub history: crate::core::history::ProjectHistory,
+    /// Crash-recovery autosave manager
+    pub autosave: crate::core::autosave::AutosaveManager,
     pub is_playing: bool,
     pub current_frame: u32,
     pub playback_speed: i32,
@@ -213,6 +215,9 @@ impl Default for AfterEffectsApp {
         
         Self {
             history: crate::core::history::ProjectHistory::new(Project::default()),
+            autosave: crate::core::autosave::AutosaveManager::new(
+                std::env::temp_dir().join("aevfx_recovery"),
+            ),
             is_playing: false,
             current_frame: 0,
             playback_speed: 1,
@@ -301,6 +306,7 @@ impl AfterEffectsApp {
         let mut next_project = self.history.current().clone();
         f(&mut next_project);
         self.history.commit(next_project);
+        self.autosave.mark_dirty();
         crate::core::frame_cache::bump_version();
         self.frame_cache.collect_garbage();
     }
@@ -335,6 +341,11 @@ impl AfterEffectsApp {
 impl eframe::App for AfterEffectsApp {
     fn update(&mut self, ctx: &eframe::egui::Context, _frame: &mut eframe::Frame) {
         use eframe::egui;
+
+        // Crash-recovery autosave: write a rotating snapshot when dirty and due
+        if let Some(path) = self.autosave.tick(self.history.current()) {
+            log::info!("[Autosave] Recovery snapshot written: {:?}", path);
+        }
 
         if let Some(rx_frame) = &self.rx_frame {
             while let Ok(frame) = rx_frame.try_recv() {
