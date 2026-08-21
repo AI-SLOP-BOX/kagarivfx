@@ -339,8 +339,13 @@ mod memory_bound_tests {
                 "memory must stay near budget, got {}",
                 cache.current_memory_bytes
             );
-            // Hot frame must survive eviction
-            assert!(cache.is_cached(0), "LRU-hot frame must not be evicted");
+            // Hot frame must survive eviction.
+            // NOTE: check across all versions because parallel tests share the
+            // global version counter and may bump it while this test runs.
+            assert!(
+                cache.entries.keys().any(|(f, _)| *f == 0),
+                "LRU-hot frame must not be evicted"
+            );
         });
     }
 
