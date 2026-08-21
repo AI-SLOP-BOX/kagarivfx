@@ -1292,6 +1292,55 @@ fn distance_to_polygon(px: f32, py: f32, verts: &[[f32; 2]]) -> f32 {
     min_dist
 }
 
+
+/// Renders a frame with a hard deadline. If rendering exceeds `deadline`, the
+/// cooperative cancel flag trips and the function returns early with
+/// `timed_out = true` and whatever was composited so far.
+///
+/// This is the watchdog primitive for hang protection: wrap risky renders so a
+/// pathological composition degrades to an incomplete frame instead of freezing
+/// the export pipeline or UI thread forever.
+pub fn render_frame_with_deadline(
+    comp: &Composition,
+    frame: u32,
+    width: u32,
+    height: u32,
+    exposure_ev: f32,
+    lut_mode: u32,
+    deadline: std::time::Duration,
+) -> (Vec<u8>, bool) {
+    use std::sync::atomic::{AtomicBool, Ordering};
+    use std::sync::Arc;
+    use std::time::Instant;
+
+    let flag = Arc::new(AtomicBool::new(false));
+    set_render_cancel_flag(Some(flag.clone()));
+
+    // Watchdog timer: flips the flag when the deadline expires.
+    let timer_flag = flag.clone();
+    let timer = std::thread::spawn(move || {
+        let start = Instant::now();
+        while start.elapsed() < deadline {
+            if timer_flag.load(Ordering::Relaxed) {
+                return; // already cancelled by other means
+            }
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+        timer_flag.store(true, Ordering::Relaxed);
+    });
+
+    let pixels = render_frame_to_pixels(comp, frame, width, height, exposure_ev, lut_mode);
+    let timed_out = flag.load(Ordering::Relaxed);
+
+    set_render_cancel_flag(None);
+
+    // Stop the watchdog promptly: flipping the flag makes its loop exit.
+    flag.store(true, Ordering::Relaxed);
+    let _ = timer.join();
+
+    (pixels, timed_out)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1806,5 +1855,59 @@ mod cancel_tests {
         let pixels = render_frame_to_pixels(&comp, 0, 64, 64, 0.0, 0);
         let bright = (0..pixels.len()).step_by(4).filter(|&i| pixels[i] > 100).count();
         assert!(bright > 0);
+    }
+}
+
+#[cfg(test)]
+mod watchdog_tests {
+    use super::*;
+    use crate::core::timeline::{Composition, Layer, LayerType};
+
+    fn comp(layers: usize) -> Composition {
+        let mut c = Composition::new("c".into(), "Watchdog".into(), 64, 64, 30, 30);
+        for i in 0..layers {
+            let mut l = Layer::new(format!("l{}", i), format!("L{}", i), LayerType::Solid { color: [0.6; 4] }, 30);
+            l.transform.position = crate::core::property::Animatable::new_constant([32.0, 32.0]);
+            c.layers.push(l);
+        }
+        c
+    }
+
+    #[test]
+    fn test_fast_render_completes_without_timeout() {
+        let (pixels, timed_out) = render_frame_with_deadline(&comp(5), 0, 64, 64, 0.0, 0, std::time::Duration::from_secs(5));
+        assert!(!timed_out);
+        assert_eq!(pixels.len(), 64 * 64 * 4);
+        // Layers must actually be composited
+        let bright = (0..pixels.len()).step_by(4).filter(|&i| pixels[i] > 100).count();
+        assert!(bright > 0);
+    }
+
+    #[test]
+    fn test_deadline_aborts_render_early() {
+        // Generous layer count; deadline so short the render cannot finish
+        let start = std::time::Instant::now();
+        let (pixels, timed_out) = render_frame_with_deadline(
+            &comp(2000), 0, 256, 256, 0.0, 0,
+            std::time::Duration::from_millis(5),
+        );
+        let elapsed = start.elapsed();
+        assert!(timed_out, "render must report timeout");
+        assert!(
+            elapsed < std::time::Duration::from_millis(2000),
+            "watchdog must return promptly, took {:?}",
+            elapsed
+        );
+        // Partial buffer is still a valid allocation
+        assert_eq!(pixels.len(), 256 * 256 * 4);
+    }
+
+    #[test]
+    fn test_watchdog_does_not_leak_cancel_state() {
+        // After a timed-out render, normal renders must work again
+        let _ = render_frame_with_deadline(&comp(500), 0, 128, 128, 0.0, 0, std::time::Duration::from_millis(1));
+        let pixels = render_frame_to_pixels(&comp(3), 0, 64, 64, 0.0, 0);
+        let bright = (0..pixels.len()).step_by(4).filter(|&i| pixels[i] > 100).count();
+        assert!(bright > 0, "cancel state must not leak into subsequent renders");
     }
 }
