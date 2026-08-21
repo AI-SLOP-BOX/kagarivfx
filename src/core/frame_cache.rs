@@ -77,8 +77,17 @@ pub struct CacheEntry {
     pub height: u32,
     /// Raw RGBA8 bytes. Length = width * height * 4.
     pub pixels: Arc<Vec<u8>>,
-    /// LRU timestamp for eviction priority.
-    pub last_accessed_at: Instant,
+    /// Monotonic access counter for eviction priority (higher = more recent).
+    /// A counter is used instead of Instant because wall-clock resolution can tie
+    /// entries inserted within the same instant, making LRU order non-deterministic.
+    pub lru_stamp: u64,
+}
+
+/// Global monotonic counter for LRU stamps.
+static LRU_CLOCK: AtomicU64 = AtomicU64::new(1);
+
+fn lru_tick() -> u64 {
+    LRU_CLOCK.fetch_add(1, Ordering::Relaxed)
 }
 
 /// The frame cache. Key is `(frame_index, cache_version)`.
@@ -107,7 +116,7 @@ impl FrameCache {
         let ver = current_version();
         let key = (frame, ver);
         if let Some(entry) = self.entries.get_mut(&key) {
-            entry.last_accessed_at = Instant::now();
+            entry.lru_stamp = lru_tick();
             // Return immutable ref — safe because we only mutated a non-key field
             return self.entries.get(&key);
         }
@@ -143,7 +152,7 @@ impl FrameCache {
                 width,
                 height,
                 pixels: Arc::new(pixels),
-                last_accessed_at: Instant::now(),
+                lru_stamp: lru_tick(),
             },
         );
 
@@ -161,13 +170,13 @@ impl FrameCache {
         // Hysteresis LRU Eviction: Purge least-recently used entries down to 75% max_memory_bytes
         if self.current_memory_bytes > self.max_memory_bytes {
             let target_memory = (self.max_memory_bytes as f64 * 0.75) as usize;
-            let mut keys_by_access: Vec<((u32, u64), Instant)> = self
+            let mut keys_by_access: Vec<((u32, u64), u64)> = self
                 .entries
                 .iter()
-                .map(|(k, v)| (*k, v.last_accessed_at))
+                .map(|(k, v)| (*k, v.lru_stamp))
                 .collect();
 
-            // Sort by last_accessed_at ascending (oldest first)
+            // Sort by LRU stamp ascending (oldest first)
             keys_by_access.sort_by_key(|(_k, accessed)| *accessed);
 
             for (key, _accessed) in keys_by_access {
@@ -254,14 +263,14 @@ mod tests {
             width: 1,
             height: 1,
             pixels: pixels.clone(),
-            last_accessed_at: Instant::now(),
+            lru_stamp: lru_tick(),
         });
         cache.entries.insert((FRAME, cur_ver), CacheEntry {
             version: cur_ver,
             width: 1,
             height: 1,
             pixels: pixels.clone(),
-            last_accessed_at: Instant::now(),
+            lru_stamp: lru_tick(),
         });
 
         assert_eq!(cache.len(), 2, "should have 2 versioned entries before GC");
@@ -293,5 +302,63 @@ mod tests {
         pool.recycle(buf);
         let recycled = pool.acquire(512);
         assert!(recycled.capacity() >= 1024, "Recycled buffer should retain its allocated capacity");
+    }
+}
+
+#[cfg(test)]
+mod memory_bound_tests {
+    use super::*;
+    use std::sync::atomic::{AtomicU64, Ordering};
+
+    /// Isolated version bump for tests: uses a test-local counter so we don't
+    /// disturb the global version used by other caches.
+    
+
+    fn with_isolated_version<F: FnOnce()>(f: F) {
+        let saved = GLOBAL_CACHE_VERSION.load(Ordering::SeqCst);
+        f();
+        GLOBAL_CACHE_VERSION.store(saved, Ordering::SeqCst);
+    }
+
+    #[test]
+    fn test_memory_budget_enforced_by_lru_eviction() {
+        with_isolated_version(|| {
+            bump_version(); // isolate from other tests' cached frames
+            let mut cache = FrameCache::new(1000);
+            // 10 frames x 100KB = ~1MB budget
+            cache.max_memory_bytes = 1_000_000;
+
+            let frame_bytes = 250 * 100; // 100KB per frame
+            for i in 0..20u32 {
+                cache.insert(i, 500, 50, vec![0u8; frame_bytes]);
+                // Keep touching frame 0 so it stays MRU-hot
+                let _ = cache.get(0);
+            }
+
+            assert!(
+                cache.current_memory_bytes <= cache.max_memory_bytes + frame_bytes,
+                "memory must stay near budget, got {}",
+                cache.current_memory_bytes
+            );
+            // Hot frame must survive eviction
+            assert!(cache.is_cached(0), "LRU-hot frame must not be evicted");
+        });
+    }
+
+    #[test]
+    fn test_stale_versions_are_discarded() {
+        with_isolated_version(|| {
+            let mut cache = FrameCache::new(100);
+            cache.max_memory_bytes = usize::MAX;
+
+            bump_version();
+            cache.insert(5, 32, 32, vec![0u8; 4096]);
+            assert!(cache.is_cached(5));
+
+            // Project change → version bump → old entries unreachable
+            bump_version();
+            cache.collect_garbage();
+            assert_eq!(cache.cached_count(), 0, "stale entries must be discarded");
+        });
     }
 }
