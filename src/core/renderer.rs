@@ -653,7 +653,11 @@ impl WgpuRenderer {
 
     /// Internal core rendering implementation for both primary preview and snapshot target views.
     fn render_internal(&mut self, comp: &Composition, frame: u32, exposure_ev: f32, lut_mode: u32, target_snapshot: bool) -> bool {
-        let (width, height) = (comp.width, comp.height);
+        // Clamp to both our sanity limit and the device's texture limit —
+        // oversized textures would trip wgpu validation and abort the process.
+        let max_dim = self.device.limits().max_texture_dimension_2d.min(crate::core::software_renderer::MAX_RENDER_DIMENSION);
+        let width = comp.width.clamp(1, max_dim);
+        let height = comp.height.clamp(1, max_dim);
         let recreated = self.ensure_target_size(width, height);
 
         // Update Globals Uniform
@@ -1006,13 +1010,46 @@ impl WgpuRenderer {
     /// Renders the given composition at the specified frame, returning the texture view.
     pub fn render(&mut self, comp: &Composition, frame: u32, exposure_ev: f32, lut_mode: u32) -> (&wgpu::TextureView, bool) {
         let recreated = self.render_internal(comp, frame, exposure_ev, lut_mode, false);
-        (self.target_view.as_ref().unwrap(), recreated)
+        if self.target_view.is_none() {
+            log::error!("[WgpuRenderer] render(): target view missing; using fallback view");
+            self.dummy_view_or_create(false);
+        }
+        (
+            self.target_view.as_ref().expect("fallback view just created"),
+            recreated,
+        )
     }
 
     /// Renders the given composition at the specified frame to the snapshot target, returning the snapshot texture view.
     pub fn render_snapshot_frame(&mut self, comp: &Composition, frame: u32, exposure_ev: f32, lut_mode: u32) -> (&wgpu::TextureView, bool) {
         let recreated = self.render_internal(comp, frame, exposure_ev, lut_mode, true);
-        (self.snapshot_view.as_ref().unwrap(), recreated)
+        if self.snapshot_view.is_none() {
+            log::error!("[WgpuRenderer] render_snapshot_frame(): snapshot view missing; using fallback view");
+            self.dummy_view_or_create(true);
+        }
+        (
+            self.snapshot_view.as_ref().expect("fallback view just created"),
+            recreated,
+        )
+    }
+
+    /// Last-resort 1x1 fallback view so a missing target can never panic the UI thread.
+    fn dummy_view_or_create(&mut self, snapshot: bool) -> &wgpu::TextureView {
+        let slot = if snapshot { &mut self.snapshot_view } else { &mut self.target_view };
+        if slot.is_none() {
+            let texture = self.device.create_texture(&wgpu::TextureDescriptor {
+                label: Some("Fallback 1x1 Target"),
+                size: wgpu::Extent3d { width: 1, height: 1, depth_or_array_layers: 1 },
+                mip_level_count: 1,
+                sample_count: 1,
+                dimension: wgpu::TextureDimension::D2,
+                format: wgpu::TextureFormat::Rgba8UnormSrgb,
+                usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
+                view_formats: &[],
+            });
+            *slot = Some(texture.create_view(&wgpu::TextureViewDescriptor::default()));
+        }
+        slot.as_ref().unwrap()
     }
 }
 
