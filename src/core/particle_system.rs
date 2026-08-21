@@ -105,6 +105,7 @@ pub struct Particle {
 }
 
 /// Particle system simulation.
+#[derive(Clone)]
 pub struct ParticleSystem {
     pub emitter: ParticleEmitter,
     pub particles: Vec<Particle>,

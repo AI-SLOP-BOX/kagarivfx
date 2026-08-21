@@ -438,6 +438,10 @@ fn is_sane_render_size(width: u32, height: u32) -> bool {
     width > 0 && height > 0 && width <= MAX_RENDER_DIMENSION && height <= MAX_RENDER_DIMENSION
 }
 
+/// Memoized particle simulation: (version, layer id, frame, emitter fingerprint, state).
+type ParticleSimCacheEntry =
+    (u64, String, u32, [u32; 12], crate::core::particle_system::ParticleSystem);
+
 // ── Cooperative render cancellation ─────────────────────────────────────────
 // A shared flag checked between layers and periodically inside pixel loops.
 // Lets export pipelines and future watchdogs abort a long render without
@@ -631,13 +635,51 @@ pub fn render_frame_to_pixels(comp: &Composition, frame: u32, width: u32, height
             em.color_start[3] *= l_opacity;
             em.color_end[3] *= l_opacity;
 
-            let mut ps = crate::core::particle_system::ParticleSystem::new(em);
-            let dt = 1.0 / comp.fps.max(1) as f32;
-            // Cap simulation length for performance on very long compositions
-            let sim_frames = effective_frame.min(2000);
-            for _ in 0..=sim_frames {
-                ps.update(dt, pos[0], pos[1]);
+            // Simulation is deterministic from frame 0, so memoize the simulated
+            // state per (version, frame, emitter) — playback then costs O(1) per
+            // particle layer instead of O(frame).
+            thread_local! {
+                static PARTICLE_SIM_CACHE: std::cell::RefCell<Option<ParticleSimCacheEntry>> =
+                    const { std::cell::RefCell::new(None) };
             }
+
+            let em_bits: [u32; 12] = [
+                em.rate.to_bits(), em.lifetime.to_bits(), em.speed.to_bits(),
+                em.spread_degrees.to_bits(), em.gravity[0].to_bits(), em.gravity[1].to_bits(),
+                em.color_start[0].to_bits(), em.color_end[3].to_bits(),
+                em.emitter_size[0].to_bits(), em.emitter_size[1].to_bits(),
+                em.max_particles, (em.shape as u32),
+            ];
+            let sim_key = (
+                crate::core::frame_cache::current_version(),
+                layer.id.clone(),
+                effective_frame.min(2000),
+                em_bits,
+            );
+            let dt = 1.0 / comp.fps.max(1) as f32;
+
+            let cached = PARTICLE_SIM_CACHE.with(|cache| {
+                cache.borrow().as_ref().and_then(|(v, id, f, bits, ps)| {
+                    (*v == sim_key.0 && *id == sim_key.1 && *f == sim_key.2 && *bits == sim_key.3)
+                        .then(|| ps.clone())
+                })
+            });
+
+            let ps = match cached {
+                Some(ps) => ps,
+                None => {
+                    let mut ps = crate::core::particle_system::ParticleSystem::new(em);
+                    // Cap simulation length for performance on very long compositions
+                    let sim_frames = effective_frame.min(2000);
+                    for _ in 0..=sim_frames {
+                        ps.update(dt, pos[0], pos[1]);
+                    }
+                    PARTICLE_SIM_CACHE.with(|cache| {
+                        *cache.borrow_mut() = Some((sim_key.0, sim_key.1.clone(), sim_key.2, sim_key.3, ps.clone()));
+                    });
+                    ps
+                }
+            };
             ps.render(&mut buffer, width, height, effective_frame as f32 * dt);
 
             // Apply the layer's CPU effect stack to the full frame
