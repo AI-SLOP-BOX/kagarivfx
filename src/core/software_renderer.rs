@@ -100,10 +100,14 @@ fn render_precomp_layers_inner(_comp: &Composition, precomp_comp: &Composition, 
         let bounds_x = w * 0.5;
         let bounds_y = h * 0.5;
 
-        let min_x = (cx - bounds_x - 2.0).max(0.0) as u32;
-        let max_x = (cx + bounds_x + 2.0).min(width as f32) as u32;
-        let min_y = (cy - bounds_y - 2.0).max(0.0) as u32;
-        let max_y = (cy + bounds_y + 2.0).min(height as f32) as u32;
+        // NaN-safe, sign-safe bounding box (`as u32` saturates NaN/inf; abs() guards
+        // against negative scale flipping the bounds)
+        let ext_x = (bounds_x.abs() + 2.0) * 1.5;
+        let ext_y = (bounds_y.abs() + 2.0) * 1.5;
+        let min_x = ((cx - ext_x).max(0.0) as u32).min(width);
+        let max_x = ((cx + ext_x).max(0.0) as u32).min(width);
+        let min_y = ((cy - ext_y).max(0.0) as u32).min(height);
+        let max_y = ((cy + ext_y).max(0.0) as u32).min(height);
         let bw = max_x.saturating_sub(min_x);
         let bh = max_y.saturating_sub(min_y);
         if bw == 0 || bh == 0 { continue; }
@@ -626,15 +630,17 @@ pub fn render_frame_to_pixels(comp: &Composition, frame: u32, width: u32, height
         // A simple inverse transform to check pixel coverage
         let bounds_x = w * 0.5;
         let bounds_y = h * 0.5;
+        // abs(): negative scale flips w/h sign — must not invert the bounding box
+        let ext = bounds_x.max(bounds_y).abs() * 1.5;
 
-        // Render loop over the target bounding box
-        let min_x = (cx - bounds_x.max(bounds_y) * 1.5).max(0.0) as u32;
-        let max_x = (cx + bounds_x.max(bounds_y) * 1.5).min(width as f32) as u32;
-        let min_y = (cy - bounds_x.max(bounds_y) * 1.5).max(0.0) as u32;
-        let max_y = (cy + bounds_x.max(bounds_y) * 1.5).min(height as f32) as u32;
+        // Render loop over the target bounding box (NaN-safe: `as u32` saturates NaN/inf)
+        let min_x = ((cx - ext).max(0.0) as u32).min(width);
+        let max_x = ((cx + ext).max(0.0) as u32).min(width);
+        let min_y = ((cy - ext).max(0.0) as u32).min(height);
+        let max_y = ((cy + ext).max(0.0) as u32).min(height);
 
-        let bw = (max_x - min_x).max(1);
-        let bh = (max_y - min_y).max(1);
+        let bw = max_x.saturating_sub(min_x).max(1);
+        let bh = max_y.saturating_sub(min_y).max(1);
 
         // Phase 1: rasterize the layer into a local buffer.
         let mut layer_buf = vec![0u8; (bw * bh * 4) as usize];
