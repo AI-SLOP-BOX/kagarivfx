@@ -123,11 +123,9 @@ pub fn layout_text(
     }
 
     let total_width = all_lines.iter().map(|l| l.width).fold(0.0f32, f32::max);
-    let total_height = if all_lines.is_empty() {
-        0.0
-    } else {
-        all_lines.last().unwrap().y_offset + line_height
-    };
+    let total_height = all_lines
+        .last()
+        .map_or(0.0, |l| l.y_offset + line_height);
 
     TextLayout {
         lines: all_lines,
