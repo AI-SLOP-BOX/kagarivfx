@@ -808,6 +808,24 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
             if let Some((a, b)) = swap_request {
                 if a < temp_project.active_composition().layers.len() && b < temp_project.active_composition().layers.len() {
                     temp_project.active_composition_mut().layers.swap(a, b);
+                    // Selection must follow the swapped rows, otherwise a drag leaves
+                    // the selection pointing at the wrong layer.
+                    let remap = |idx: usize| -> usize {
+                        if idx == a { b } else if idx == b { a } else { idx }
+                    };
+                    app.selected_layers = app
+                        .selected_layers
+                        .iter()
+                        .map(|i| remap(*i))
+                        .collect();
+                    if let Some(sel) = app.selected_layer_idx {
+                        app.selected_layer_idx = Some(remap(sel));
+                    }
+                    app.expanded_layers = app
+                        .expanded_layers
+                        .iter()
+                        .map(|i| remap(*i))
+                        .collect();
                     project_changed = true;
                 }
             }
