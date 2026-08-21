@@ -290,6 +290,79 @@ pub fn handle_global_shortcuts(
                 crate::core::frame_cache::bump_version();
         }
 
+        // ── Cmd+C / Cmd+V: copy & paste selected keyframes ──
+        // Clipboard entries: (prop_key, frame_offset_from_anchor, serialized keyframe)
+        if cmd && !shift && i.key_pressed(Key::C) && !app.selected_keyframes.is_empty() {
+            let anchor = *current_frame;
+            let mut clip: Vec<(String, i32, serde_json::Value)> = Vec::new();
+            let mut selection: Vec<(usize, String, u32)> =
+                app.selected_keyframes.iter().cloned().collect();
+            selection.sort_by_key(|(_, _, f)| *f);
+
+            let project = app.history.current();
+            for (li, pk, frame) in selection {
+                let Some(comp) = project.active_composition().layers.get(li) else { continue };
+                let t = &comp.transform;
+                // Serialize per-arm: value types differ across properties
+                let kf_json = match pk.as_str() {
+                    "position" => t.position.keyframes()
+                        .and_then(|k| k.iter().find(|k| k.frame == frame))
+                        .and_then(|k| serde_json::to_value(k).ok()),
+                    "scale" => t.scale.keyframes()
+                        .and_then(|k| k.iter().find(|k| k.frame == frame))
+                        .and_then(|k| serde_json::to_value(k).ok()),
+                    "rotation" => t.rotation.keyframes()
+                        .and_then(|k| k.iter().find(|k| k.frame == frame))
+                        .and_then(|k| serde_json::to_value(k).ok()),
+                    "opacity" => t.opacity.keyframes()
+                        .and_then(|k| k.iter().find(|k| k.frame == frame))
+                        .and_then(|k| serde_json::to_value(k).ok()),
+                    _ => None,
+                };
+                if let Some(v) = kf_json {
+                    let offset = frame as i32 - anchor as i32;
+                    clip.push((pk.clone(), offset, v));
+                }
+            }
+            if !clip.is_empty() {
+                app.kf_clipboard = clip;
+                app.kf_clipboard_anchor = anchor;
+            }
+        }
+        if cmd && !shift && i.key_pressed(Key::V) && !app.kf_clipboard.is_empty() {
+            let paste_origin = *current_frame;
+            let target_layer_idx = app.selected_layer_idx.unwrap_or(0);
+            let project = app.history.current_mut();
+            let Some(layer) = project.active_composition_mut().layers.get_mut(target_layer_idx) else { return };
+            let t = &mut layer.transform;
+
+            macro_rules! paste_into {
+                ($anim:expr, $ty:ty, $value_json:expr) => {{
+                    if let Ok(mut kf) = serde_json::from_value::<crate::core::keyframe::Keyframe<$ty>>($value_json.clone()) {
+                        kf.frame = ((kf.frame as i64 + paste_origin as i64
+                            - app.kf_clipboard_anchor as i64)
+                            .max(0)) as u32;
+                        if let Some(kfs) = $anim.keyframes_mut() {
+                            kfs.retain(|k| k.frame != kf.frame);
+                            kfs.push(kf);
+                            kfs.sort_by_key(|k| k.frame);
+                        }
+                    }
+                }};
+            }
+
+            for (pk, _offset, value_json) in &app.kf_clipboard {
+                match pk.as_str() {
+                    "position" => paste_into!(t.position, [f32; 2], value_json),
+                    "scale" => paste_into!(t.scale, [f32; 2], value_json),
+                    "rotation" => paste_into!(t.rotation, f32, value_json),
+                    "opacity" => paste_into!(t.opacity, f32, value_json),
+                    _ => {}
+                }
+            }
+            crate::core::frame_cache::bump_version();
+        }
+
         // Cmd+Z → Undo, Cmd+Shift+Z → Redo
         if cmd && !shift && i.key_pressed(Key::Z) {
             app.history.undo();

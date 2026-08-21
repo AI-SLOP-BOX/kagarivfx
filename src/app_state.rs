@@ -170,6 +170,11 @@ pub struct AfterEffectsApp {
     /// True if the previous frame had playback active — used to detect playback
     /// start and kick off the RAM preview pre-pass.
     pub was_playing_last_frame: bool,
+    /// Internal clipboard for copied keyframes: (prop_key, offset-from-anchor frame, value+interpolation JSON).
+    /// Values are stored as serde_json::Value to stay type-erased across tracks.
+    pub kf_clipboard: Vec<(String, i32, serde_json::Value)>,
+    /// Frame the clipboard anchor was at when copied (paste preserves relative spacing).
+    pub kf_clipboard_anchor: u32,
     /// Incremental RAM preview pre-pass state: next frame to pre-render.
     pub ram_prepass_cursor: u32,
     /// Last frame (inclusive) of the current pre-pass.
@@ -277,6 +282,8 @@ impl Default for AfterEffectsApp {
             viewport_texture_id: None,
             ram_texture_ids: Vec::new(),
             was_playing_last_frame: false,
+            kf_clipboard: Vec::new(),
+            kf_clipboard_anchor: 0,
             ram_prepass_cursor: u32::MAX,
             ram_prepass_end: u32::MAX,
             viewport_snapshot_texture_id: None,
