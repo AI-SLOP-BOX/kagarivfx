@@ -484,6 +484,23 @@ impl eframe::App for AfterEffectsApp {
                     ui.separator();
                     let cached_cnt = (0..total_frames).filter(|&f| self.frame_cache.is_cached(f)).count();
                     ui.label(egui::RichText::new(format!("RAM Preview: {}/{} frames cached", cached_cnt, total_frames)).small().color(egui::Color32::from_gray(180)));
+                    ui.separator();
+                    // Selection summary: layers + keyframes
+                    let kf_count = self.selected_keyframes.len();
+                    let layer_count = self.selected_layers.len();
+                    if kf_count > 0 {
+                        ui.label(
+                            egui::RichText::new(format!("{} keyframes selected (, . move | Del delete | Cmd+C/V)", kf_count))
+                                .small()
+                                .color(egui::Color32::from_rgb(255, 200, 80)),
+                        );
+                    } else if layer_count > 0 {
+                        ui.label(
+                            egui::RichText::new(format!("{} layer{} selected", layer_count, if layer_count > 1 { "s" } else { "" }))
+                                .small()
+                                .color(egui::Color32::from_rgb(0, 180, 255)),
+                        );
+                    }
                     let pointer_pos = ctx.pointer_hover_pos().unwrap_or(egui::pos2(960.0, 540.0));
                     ui.separator();
                     ui.label(egui::RichText::new(format!("X: {:.0} Y: {:.0} px", pointer_pos.x, pointer_pos.y)).small().color(egui::Color32::from_rgb(0, 180, 255)));
