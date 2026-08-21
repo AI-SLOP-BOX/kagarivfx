@@ -48,20 +48,33 @@ pub fn apply_directional_blur(pixels: &mut [u8], width: u32, height: u32, angle_
     let dy = -rad.cos();
 
     let temp = pixels.to_vec();
-    let samples = (length as usize).max(1);
+    // Oversample along the blur axis and apply Gaussian weights so the streak
+    // fades smoothly instead of showing hard banding edges.
+    let samples = ((length * 2.0) as usize).max(4).next_power_of_two();
+
+    // Gaussian weights over [-3, 3], normalized.
+    let sigma = (samples as f32 * 0.5 / 3.0).max(1.0);
+    let mut weights = vec![0f32; samples];
+    let mut w_sum = 0f32;
+    for (s, w) in weights.iter_mut().enumerate() {
+        let t = (s as f32 - (samples as f32 - 1.0) * 0.5) / sigma;
+        *w = (-t * t * 0.5).exp();
+        w_sum += *w;
+    }
+    for w in weights.iter_mut() { *w /= w_sum; }
 
     for y in 0..height {
         for x in 0..width {
             let mut acc = [0f32; 4];
-            for s in 0..samples {
+            for (s, &wt) in weights.iter().enumerate() {
                 let offset = (s as f32) - (samples as f32 * 0.5);
-                let sx = (x as f32 + dx * offset).clamp(0.0, width as f32 - 1.0) as u32;
-                let sy = (y as f32 + dy * offset).clamp(0.0, height as f32 - 1.0) as u32;
+                let sx = (x as f32 + dx * offset).round().clamp(0.0, width as f32 - 1.0) as u32;
+                let sy = (y as f32 + dy * offset).round().clamp(0.0, height as f32 - 1.0) as u32;
                 let idx = ((sy * width + sx) * 4) as usize;
-                for c in 0..4 { acc[c] += temp[idx + c] as f32; }
+                for c in 0..4 { acc[c] += temp[idx + c] as f32 * wt; }
             }
             let out_idx = ((y * width + x) * 4) as usize;
-            for c in 0..4 { pixels[out_idx + c] = (acc[c] / samples as f32).round() as u8; }
+            for c in 0..4 { pixels[out_idx + c] = acc[c].round().clamp(0.0, 255.0) as u8; }
         }
     }
 }
@@ -73,7 +86,18 @@ pub fn apply_radial_blur(pixels: &mut [u8], width: u32, height: u32, amount: f32
     let cy = height as f32 * 0.5;
     let temp = pixels.to_vec();
 
-    let steps = 8;
+    // More steps + Gaussian weighting reduce visible angular banding.
+    let steps = 16;
+    let mut weights = [0f32; 16];
+    let sigma = (steps as f32 * 0.5 / 3.0).max(1.0);
+    let mut w_sum = 0f32;
+    for (s, w) in weights.iter_mut().enumerate() {
+        let t = (s as f32 - (steps as f32 - 1.0) * 0.5) / sigma;
+        *w = (-t * t * 0.5).exp();
+        w_sum += *w;
+    }
+    for w in weights.iter_mut() { *w /= w_sum; }
+
     for y in 0..height {
         for x in 0..width {
             let mut acc = [0f32; 4];
@@ -82,16 +106,16 @@ pub fn apply_radial_blur(pixels: &mut [u8], width: u32, height: u32, amount: f32
             let base_angle = ry.atan2(rx);
             let dist = (rx * rx + ry * ry).sqrt();
 
-            for s in 0..steps {
+            for (s, &wt) in weights.iter().enumerate() {
                 let t = (s as f32 / steps as f32 - 0.5) * amount * 0.05;
                 let a = base_angle + t;
                 let sx = (cx + a.cos() * dist).clamp(0.0, width as f32 - 1.0) as u32;
                 let sy = (cy + a.sin() * dist).clamp(0.0, height as f32 - 1.0) as u32;
                 let idx = ((sy * width + sx) * 4) as usize;
-                for c in 0..4 { acc[c] += temp[idx + c] as f32; }
+                for c in 0..4 { acc[c] += temp[idx + c] as f32 * wt; }
             }
             let out_idx = ((y * width + x) * 4) as usize;
-            for c in 0..4 { pixels[out_idx + c] = (acc[c] / steps as f32).round() as u8; }
+            for c in 0..4 { pixels[out_idx + c] = acc[c].round().clamp(0.0, 255.0) as u8; }
         }
     }
 }
@@ -171,7 +195,9 @@ pub fn apply_drop_shadow(pixels: &mut [u8], width: u32, height: u32, distance: f
         }
     }
 
-    apply_fast_box_blur(&mut shadow_buf, width, height, softness);
+    // True Gaussian blur on the shadow alpha gives soft, smooth edges
+    // (a single box blur produces visible hard banding rings).
+    apply_gaussian_blur(&mut shadow_buf, width, height, softness);
 
     // Composite original over shadow
     for i in (0..pixels.len()).step_by(4) {
@@ -651,5 +677,142 @@ mod glow_tests {
             "soft threshold should avoid hard banding, max step was {}",
             max_delta
         );
+    }
+}
+
+#[cfg(test)]
+mod shadow_tests {
+    use super::*;
+
+    fn solid_square(w: u32, h: u32, x0: usize, x1: usize, y0: usize, y1: usize) -> Vec<u8> {
+        let mut px = vec![0u8; (w * h * 4) as usize];
+        for y in y0..y1 {
+            for x in x0..x1 {
+                let idx = ((y * w as usize + x) * 4) as usize;
+                px[idx] = 255;
+                px[idx + 1] = 255;
+                px[idx + 2] = 255;
+                px[idx + 3] = 255;
+            }
+        }
+        px
+    }
+
+    #[test]
+    fn test_drop_shadow_places_shadow_beyond_shape() {
+        // Square on the left half; shadow offset to the right must appear
+        // in the empty right region.
+        let w = 64u32;
+        let h = 64u32;
+        let mut px = solid_square(w, h, 8, 24, 24, 40);
+        apply_drop_shadow(&mut px, w, h, 16.0, 90.0, 4, [0, 0, 0, 255]);
+        let right = ((32 * w + 30) * 4) as usize;
+        assert!(px[right + 3] > 0, "shadow alpha must extend past shape edge");
+        assert_eq!(px[right], 0, "shadow must be black");
+    }
+
+    #[test]
+    fn test_drop_shadow_soft_edges_are_smooth() {
+        // With Gaussian softness, the shadow falloff across the edge must be
+        // monotone and gradual (no hard box-blur steps).
+        let w = 96u32;
+        let h = 64u32;
+        let mut px = solid_square(w, h, 8, 24, 24, 40);
+        apply_drop_shadow(&mut px, w, h, 20.0, 90.0, 10, [0, 0, 0, 255]);
+        // Sample a horizontal run of shadow-only pixels right of the shape.
+        // The profile must rise then fall smoothly (no hard box-blur steps).
+        let row = 32usize;
+        let vals: Vec<i32> = (28..90)
+            .map(|x| px[((row * w as usize + x) * 4 + 3)] as i32)
+            .collect();
+        let peak = vals.iter().enumerate().max_by_key(|(_, v)| **v).unwrap().0;
+        assert!(peak > 0 && peak < vals.len() - 1, "shadow must have an interior peak");
+        let mut prev = i32::MAX;
+        for (i, &v) in vals.iter().enumerate().skip(peak) {
+            assert!(
+                v <= prev.saturating_add(1),
+                "shadow falloff must be monotone at x={}: {} -> {}",
+                peak + i, prev, v
+            );
+            prev = v;
+        }
+    }
+
+    #[test]
+    fn test_drop_shadow_preserves_foreground() {
+        let w = 32u32;
+        let h = 32u32;
+        let mut px = solid_square(w, h, 12, 20, 12, 20);
+        apply_drop_shadow(&mut px, w, h, 5.0, 45.0, 3, [0, 0, 0, 200]);
+        // Foreground center stays fully opaque white
+        let c = ((16 * w + 16) * 4) as usize;
+        assert_eq!(px[c], 255);
+        assert_eq!(px[c + 1], 255);
+        assert_eq!(px[c + 2], 255);
+        assert_eq!(px[c + 3], 255);
+    }
+}
+
+#[cfg(test)]
+mod directional_radial_tests {
+    use super::*;
+
+    #[test]
+    fn test_directional_blur_spreads_along_angle_only() {
+        // A single bright pixel smears along the direction vector; the
+        // perpendicular neighbor must stay dark.
+        let w = 64u32;
+        let h = 64u32;
+        let mut px = vec![0u8; (w * h * 4) as usize];
+        let c = ((32 * w + 32) * 4) as usize;
+        px[c] = 255;
+        px[c + 1] = 255;
+        px[c + 2] = 255;
+        px[c + 3] = 255;
+        apply_directional_blur(&mut px, w, h, 90.0, 20.0);
+        // 90deg => horizontal smear
+        let right = ((32 * w + 38) * 4) as usize;
+        let below = ((36 * w + 32) * 4) as usize;
+        assert!(px[right] > 0, "energy must spread horizontally");
+        assert!(px[below] < 10, "perpendicular axis must stay dark, got {}", px[below]);
+    }
+
+    #[test]
+    fn test_directional_blur_zero_length_is_noop() {
+        let mut px = vec![128u8; 16 * 16 * 4];
+        let orig = px.clone();
+        apply_directional_blur(&mut px, 16, 16, 45.0, 0.0);
+        assert_eq!(px, orig);
+    }
+
+    #[test]
+    fn test_radial_blur_smears_angularly() {
+        // An off-center bright pixel spreads angularly around center.
+        let w = 64u32;
+        let h = 64u32;
+        let mut px = vec![0u8; (w * h * 4) as usize];
+        let p = ((32 * w + 44) * 4) as usize;
+        px[p] = 255;
+        px[p + 1] = 255;
+        px[p + 2] = 255;
+        px[p + 3] = 255;
+        apply_radial_blur(&mut px, w, h, 100.0);
+        // Energy must spread to multiple pixels around the original radius
+        let nonzero = px.chunks_exact(4).filter(|p| p[0] > 0).count();
+        assert!(nonzero > 1, "radial blur must spread angularly, got {} lit pixels", nonzero);
+        let peak = px.chunks_exact(4).map(|p| p[0]).max().unwrap();
+        assert!(peak < 255, "peak must drop as energy spreads, got {}", peak);
+    }
+
+    #[test]
+    fn test_radial_blur_uniform_image_is_stable() {
+        // A uniform image has no angular structure: blur must be a no-op.
+        let w = 33u32;
+        let h = 33u32;
+        let mut px = vec![200u8; (w * h * 4) as usize];
+        for i in (3..px.len()).step_by(4) { px[i] = 255; }
+        let orig = px.clone();
+        apply_radial_blur(&mut px, w, h, 50.0);
+        assert_eq!(px, orig);
     }
 }

@@ -26,10 +26,10 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
                                 app.project_path = path.to_string_lossy().to_string();
                                 // Clean save → recovery snapshots no longer needed
                                 let _ = app.autosave.save_now(project);
-                                app.toasts.info(format!("💾 Project saved: {}", path.file_name().unwrap_or_default().to_string_lossy()));
+                                app.toasts.info(format!("Project saved: {}", path.file_name().unwrap_or_default().to_string_lossy()));
                             }
                             Err(err) => {
-                                app.toasts.error(format!("❌ Failed to save project file: {}", err));
+                                app.toasts.error(format!("Failed to save project file: {}", err));
                             }
                         }
                     }
@@ -48,14 +48,14 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
                                     app.selected_layers.clear();
                                     app.project_path = path.to_string_lossy().to_string();
                                     crate::core::frame_cache::bump_version();
-                                    app.toasts.info(format!("📂 Project opened: {}", path.file_name().unwrap_or_default().to_string_lossy()));
+                                    app.toasts.info(format!("Project opened: {}", path.file_name().unwrap_or_default().to_string_lossy()));
                                 }
                                 Err(err) => {
-                                    app.toasts.error(format!("❌ Failed to parse project file: {}", err));
+                                    app.toasts.error(format!("Failed to parse project file: {}", err));
                                 }
                             },
                             Err(err) => {
-                                app.toasts.error(format!("❌ Could not read file: {}", err));
+                                app.toasts.error(format!("Could not read file: {}", err));
                             }
                         }
                     }
@@ -68,14 +68,14 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
                     match serde_json::to_string_pretty(&otio) {
                         Ok(json) => match std::fs::write(&app.otio_path, json) {
                             Ok(_) => {
-                                app.toasts.info(format!("🎬 Exported OTIO: {}", app.otio_path));
+                                app.toasts.info(format!("Exported OTIO: {}", app.otio_path));
                             }
                             Err(err) => {
-                                app.toasts.error(format!("❌ Failed to save OTIO file: {}", err));
+                                app.toasts.error(format!("Failed to save OTIO file: {}", err));
                             }
                         },
                         Err(err) => {
-                            app.toasts.error(format!("❌ Failed to serialize OTIO: {}", err));
+                            app.toasts.error(format!("Failed to serialize OTIO: {}", err));
                         }
                     }
                     ui.close_menu();
@@ -86,14 +86,14 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
                             Ok(otio) => {
                                 let comp = otio.to_composition();
                                 app.modify_project(|p| p.compositions[0] = comp);
-                                app.toasts.info(format!("🎬 Imported OTIO: {}", app.otio_path));
+                                app.toasts.info(format!("Imported OTIO: {}", app.otio_path));
                             }
                             Err(err) => {
-                                app.toasts.error(format!("❌ Invalid OTIO format: {}", err));
+                                app.toasts.error(format!("Invalid OTIO format: {}", err));
                             }
                         },
                         Err(err) => {
-                            app.toasts.error(format!("❌ Could not read OTIO file: {}", err));
+                            app.toasts.error(format!("Could not read OTIO file: {}", err));
                         }
                     }
                     ui.close_menu();
@@ -247,22 +247,22 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
                     ui.close_menu();
                 }
                 ui.menu_button("Workspaces", |ui| {
-                    if ui.button("🖥 Standard").clicked() {
+                    if ui.button("Standard").clicked() {
                         app.right_tab_idx = 0;
                         app.show_graph_editor = false;
                         ui.close_menu();
                     }
-                    if ui.button("📈 Motion Graphics").clicked() {
+                    if ui.button("Motion Graphics").clicked() {
                         app.right_tab_idx = 0;
                         app.show_graph_editor = true;
                         ui.close_menu();
                     }
-                    if ui.button("🎛 VFX & Color").clicked() {
+                    if ui.button("VFX & Color").clicked() {
                         app.right_tab_idx = 30; // Effect Controls
                         app.show_graph_editor = false;
                         ui.close_menu();
                     }
-                    if ui.button("🎵 Audio Editing").clicked() {
+                    if ui.button("Audio Editing").clicked() {
                         app.right_tab_idx = 7; // Audio Panel
                         app.show_graph_editor = false;
                         ui.close_menu();
@@ -282,7 +282,7 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
     let help_id = egui::Id::new("show_shortcuts_modal");
     let mut show_help = ctx.data_mut(|d| *d.get_temp_mut_or_insert_with(help_id, || false));
     if show_help {
-        egui::Window::new("⌨️ Keyboard Shortcuts Reference")
+        egui::Window::new("Keyboard Shortcuts Reference")
             .open(&mut show_help)
             .resizable(false)
             .show(ctx, |ui| {

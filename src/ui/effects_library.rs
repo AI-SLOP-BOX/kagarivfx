@@ -8,7 +8,7 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
         .show(ctx, |ui| {
             egui::ScrollArea::horizontal().show(ui, |ui| {
                 ui.horizontal(|ui| {
-                    ui.selectable_value(&mut app.right_tab_idx, 30, "🎛 Effect Controls");
+                    ui.selectable_value(&mut app.right_tab_idx, 30, "Effect Controls");
                     ui.selectable_value(&mut app.right_tab_idx, 0, "Effects & Presets");
                     ui.selectable_value(&mut app.right_tab_idx, 4, "Preview");
                     ui.selectable_value(&mut app.right_tab_idx, 2, "Info");
@@ -60,7 +60,7 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
             }
 
             if app.right_tab_idx == 30 {
-                ui.heading("🎛 Effect Controls");
+                ui.heading("Effect Controls");
                 ui.separator();
                 let comp = temp_project.active_composition_mut();
                 if let Some(idx) = app.selected_layer_idx {
@@ -243,13 +243,13 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
             if let Some(idx) = app.selected_layer_idx {
                 ui.label("Add Effect to Selected Layer:");
                 ui.group(|ui| {
-                    ui.label(egui::RichText::new("✨ AI Motion VFX Auto-Generator").strong().color(egui::Color32::from_rgb(0, 200, 255)));
+                    ui.label(egui::RichText::new("AI Motion VFX Auto-Generator").strong().color(egui::Color32::from_rgb(0, 200, 255)));
                     ui.small("Enter prompt to auto-build VFX graph:");
                     ui.horizontal(|ui| {
                         ui.add(egui::TextEdit::singleline(&mut app.effects_search_query).hint_text("e.g. Cyberpunk Neon Glow"));
                     });
                     ui.horizontal(|ui| {
-                        if ui.button("⚡ Cyberpunk").clicked() {
+                        if ui.button("Cyberpunk").clicked() {
                             let comp = temp_project.active_composition_mut();
                             if idx < comp.layers.len() {
                                 let len = comp.layers[idx].effects.len();
@@ -267,7 +267,7 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                                 project_changed = true;
                             }
                         }
-                        if ui.button("🔥 Motion Burn").clicked() {
+                        if ui.button("Motion Burn").clicked() {
                             let comp = temp_project.active_composition_mut();
                             if idx < comp.layers.len() {
                                 let len = comp.layers[idx].effects.len();
