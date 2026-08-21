@@ -106,8 +106,19 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cli = Cli::parse();
 
     match cli.command {
-        Commands::Render { project, comp, output, format, from, to, width, height, exposure, lut, threads } => {
-            cmd_render(&project, comp.as_deref(), &output, &format, from, to, width, height, exposure, lut, threads)?;
+        Commands::Render { project, comp, output, format, from, to, width, height, exposure, lut, threads: _ } => {
+            cmd_render(RenderArgs {
+                project_path: project,
+                comp_ref: comp,
+                output,
+                format,
+                from,
+                to,
+                width,
+                height,
+                exposure,
+                lut,
+            })?;
         }
         Commands::Effects => {
             cmd_effects();
@@ -154,61 +165,80 @@ fn find_comp<'a>(project: &'a Project, comp_ref: Option<&str>) -> Result<&'a Com
     }
 }
 
-fn cmd_render(
-    project_path: &str, comp_ref: Option<&str>, output: &str, format: &str,
-    from: u32, to: Option<u32>, width: Option<u32>, height: Option<u32>,
-    exposure: f32, lut: u32, threads: usize,
-) -> Result<(), Box<dyn std::error::Error>> {
-    let project = load_project(project_path)?;
-    let comp = find_comp(&project, comp_ref)?;
+/// Bundled render parameters shared by all export backends.
+struct RenderSpec<'a> {
+    output: &'a str,
+    from: u32,
+    to: u32,
+    w: u32,
+    h: u32,
+    exposure: f32,
+    lut: u32,
+}
 
-    let render_w = width.unwrap_or(comp.width);
-    let render_h = height.unwrap_or(comp.height);
-    let end_frame = to.unwrap_or(comp.duration_frames.saturating_sub(1));
+struct RenderArgs {
+    project_path: String,
+    comp_ref: Option<String>,
+    output: String,
+    format: String,
+    from: u32,
+    to: Option<u32>,
+    width: Option<u32>,
+    height: Option<u32>,
+    exposure: f32,
+    lut: u32,
+}
+
+fn cmd_render(args: RenderArgs) -> Result<(), Box<dyn std::error::Error>> {
+    let project = load_project(&args.project_path)?;
+    let comp = find_comp(&project, args.comp_ref.as_deref())?;
+
+    let spec = RenderSpec {
+        output: &args.output,
+        from: args.from,
+        to: args.to.unwrap_or(comp.duration_frames.saturating_sub(1)),
+        w: args.width.unwrap_or(comp.width),
+        h: args.height.unwrap_or(comp.height),
+        exposure: args.exposure,
+        lut: args.lut,
+    };
+    let format = args.format.as_str();
 
     eprintln!("Rendering composition: {}", comp.name);
-    eprintln!("  Size: {}x{}", render_w, render_h);
-    eprintln!("  Frames: {}..={} ({} frames)", from, end_frame, end_frame.saturating_sub(from) + 1);
+    eprintln!("  Size: {}x{}", spec.w, spec.h);
+    eprintln!("  Frames: {}..={} ({} frames)", spec.from, spec.to, spec.to.saturating_sub(spec.from) + 1);
     eprintln!("  Format: {}", format);
 
     if format == "mp4" {
-        render_to_mp4(&project, comp, output, from, end_frame, render_w, render_h, exposure, lut, threads)?;
+        render_to_mp4(comp, &spec)?;
     } else if format == "gif" {
-        render_to_gif(&project, comp, output, from, end_frame, render_w, render_h, exposure, lut, threads)?;
+        render_to_gif(comp, &spec)?;
     } else {
-        render_to_png_sequence(&project, comp, output, from, end_frame, render_w, render_h, exposure, lut, threads)?;
+        render_to_png_sequence(comp, &spec)?;
     }
 
     Ok(())
 }
 
-fn render_to_png_sequence(
-    _project: &Project, comp: &Composition, output_dir: &str,
-    from: u32, to: u32, w: u32, h: u32,
-    exposure: f32, lut: u32, _threads: usize,
-) -> Result<(), Box<dyn std::error::Error>> {
-    std::fs::create_dir_all(output_dir)?;
+fn render_to_png_sequence(comp: &Composition, spec: &RenderSpec) -> Result<(), Box<dyn std::error::Error>> {
+    std::fs::create_dir_all(spec.output)?;
 
-    let total = to.saturating_sub(from) + 1;
-    for frame in from..=to {
-        let pixels = render_frame_to_pixels(comp, frame, w, h, exposure, lut);
-        let path = format!("{}/frame_{:05}.png", output_dir, frame);
-        write_png(&path, &pixels, w, h)?;
+    let total = spec.to.saturating_sub(spec.from) + 1;
+    for frame in spec.from..=spec.to {
+        let pixels = render_frame_to_pixels(comp, frame, spec.w, spec.h, spec.exposure, spec.lut);
+        let path = format!("{}/frame_{:05}.png", spec.output, frame);
+        write_png(&path, &pixels, spec.w, spec.h)?;
 
-        let progress = frame.saturating_sub(from) + 1;
+        let progress = frame.saturating_sub(spec.from) + 1;
         if progress % 10 == 0 || progress == total {
             eprint!("\r  Rendered {}/{} frames", progress, total);
         }
     }
-    eprintln!("\n  Done! Output: {}/", output_dir);
+    eprintln!("\n  Done! Output: {}/", spec.output);
     Ok(())
 }
 
-fn render_to_mp4(
-    _project: &Project, comp: &Composition, output_path: &str,
-    from: u32, to: u32, w: u32, h: u32,
-    exposure: f32, lut: u32, _threads: usize,
-) -> Result<(), Box<dyn std::error::Error>> {
+fn render_to_mp4(comp: &Composition, spec: &RenderSpec) -> Result<(), Box<dyn std::error::Error>> {
     use aftereffects_oss::core::ffmpeg_export::{is_ffmpeg_available, ExportConfig, start_export_cancelable};
     use std::sync::{Arc, atomic::AtomicBool};
 
@@ -221,13 +251,14 @@ fn render_to_mp4(
     let (tx, rx) = std::sync::mpsc::channel();
 
     let config = ExportConfig {
-        output_path: output_path.to_string(),
-        width: w,
-        height: h,
+        output_path: spec.output.to_string(),
+        width: spec.w,
+        height: spec.h,
         fps: comp.fps,
-        total_frames: to.saturating_sub(from) + 1,
+        total_frames: spec.to.saturating_sub(spec.from) + 1,
     };
 
+    let (from, _to, w, h, exposure, lut) = (spec.from, spec.to, spec.w, spec.h, spec.exposure, spec.lut);
     let comp_clone = comp.clone();
     let start_export = move || {
         let _ = start_export_cancelable(config, tx, cancel_clone, move |frame_idx| {
@@ -238,7 +269,6 @@ fn render_to_mp4(
 
     std::thread::spawn(start_export);
 
-    let _total = to.saturating_sub(from) + 1;
     while let Ok(event) = rx.recv() {
         match event {
             aftereffects_oss::ExportEvent::Progress(frac, msg) => {
@@ -258,11 +288,7 @@ fn render_to_mp4(
     Ok(())
 }
 
-fn render_to_gif(
-    _project: &Project, comp: &Composition, output_path: &str,
-    from: u32, to: u32, w: u32, h: u32,
-    exposure: f32, lut: u32, _threads: usize,
-) -> Result<(), Box<dyn std::error::Error>> {
+fn render_to_gif(comp: &Composition, spec: &RenderSpec) -> Result<(), Box<dyn std::error::Error>> {
     use aftereffects_oss::core::ffmpeg_export::{is_ffmpeg_available, ExportConfig, start_gif_export};
     use std::sync::{Arc, atomic::AtomicBool};
 
@@ -275,13 +301,14 @@ fn render_to_gif(
     let (tx, rx) = std::sync::mpsc::channel();
 
     let config = ExportConfig {
-        output_path: output_path.to_string(),
-        width: w,
-        height: h,
+        output_path: spec.output.to_string(),
+        width: spec.w,
+        height: spec.h,
         fps: comp.fps,
-        total_frames: to.saturating_sub(from) + 1,
+        total_frames: spec.to.saturating_sub(spec.from) + 1,
     };
 
+    let (from, w, h, exposure, lut) = (spec.from, spec.w, spec.h, spec.exposure, spec.lut);
     let comp_clone = comp.clone();
     let start_export = move || {
         let _ = start_gif_export(config, tx, cancel_clone, move |frame_idx| {
@@ -474,7 +501,6 @@ fn cmd_validate(project_path: &str) -> Result<(), Box<dyn std::error::Error>> {
             visiting: &mut Vec<String>,
             visited: &mut HashSet<String>,
             reported: &mut HashSet<String>,
-            comp_names: &HashMap<&str, String>,
             errors: &mut Vec<String>,
         ) {
             if reported.contains(node) {
@@ -492,20 +518,18 @@ fn cmd_validate(project_path: &str) -> Result<(), Box<dyn std::error::Error>> {
             visiting.push(node.to_string());
             if let Some(refs) = edges.get(node) {
                 for r in refs.clone() {
-                    dfs(r, edges, visiting, visited, reported, comp_names, errors);
+                    dfs(r, edges, visiting, visited, reported, errors);
                 }
             }
             visiting.pop();
             visited.insert(node.to_string());
         }
-        let comp_names: HashMap<&str, String> =
-            all_comps.iter().map(|(k, v)| (*k, v.name.clone())).collect();
         let keys: Vec<&str> = edges.keys().copied().collect();
         let mut visiting = Vec::new();
         let mut visited = HashSet::new();
         let mut reported = HashSet::new();
         for k in keys {
-            dfs(k, &edges, &mut visiting, &mut visited, &mut reported, &comp_names, &mut errors);
+            dfs(k, &edges, &mut visiting, &mut visited, &mut reported, &mut errors);
         }
 
     }
