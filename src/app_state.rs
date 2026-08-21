@@ -168,6 +168,10 @@ pub struct AfterEffectsApp {
     pub snap_to_keyframes: bool,
     pub show_graph_editor: bool,
     pub timeline_zoom: f32,
+    /// Left edge (frame) of the visible timeline window. Stays fixed while
+    /// scrubbing so the ruler does not slide under the cursor; only re-centers
+    /// when the playhead leaves the visible range or via navigation keys.
+    pub timeline_view_start: u32,
     pub timeline_scroll: f32,
     pub viewport_mode: ViewportMode,
     pub camera_orbit: (f32, f32, f32),
@@ -257,6 +261,7 @@ impl Default for AfterEffectsApp {
             snap_to_keyframes: true,
             show_graph_editor: false,
             timeline_zoom: 1.0,
+            timeline_view_start: 0,
             timeline_scroll: 0.0,
             viewport_mode: ViewportMode::Comp2D,
             camera_orbit: (30.0, 20.0, 800.0),

@@ -194,7 +194,15 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                 ui.painter().rect_filled(ruler_rect, 0.0, egui::Color32::from_gray(35));
 
                 let zoom_span = (total_frames as f32 / app.timeline_zoom.max(0.01)).max(10.0) as u32;
-                let start_frame = current_frame.saturating_sub(zoom_span / 2).min(total_frames.saturating_sub(zoom_span));
+                // Keep the visible window fixed while scrubbing; only re-center when
+                // the playhead moves out of view (playback, J/L/Home/End jumps).
+                if *current_frame < app.timeline_view_start
+                    || *current_frame >= app.timeline_view_start.saturating_add(zoom_span)
+                {
+                    app.timeline_view_start =
+                        current_frame.saturating_sub(zoom_span / 2).min(total_frames.saturating_sub(zoom_span));
+                }
+                let start_frame = app.timeline_view_start;
 
                 // Work area highlighted bar
                 let wa_in = app.work_area_in.unwrap_or(0);
