@@ -297,17 +297,23 @@ pub fn handle_global_shortcuts(
                 if let Some(comp) = project.active_composition().layers.get(idx) {
                     let t = &comp.transform;
                     app.selected_keyframes.clear();
-                    for (pk, kfs) in [
-                        ("position", t.position.keyframes()),
-                        ("scale", t.scale.keyframes()),
-                        ("rotation", t.rotation.keyframes()),
-                        ("opacity", t.opacity.keyframes()),
-                    ] {
-                        if let Some(kfs) = kfs {
-                            for kf in kfs {
-                                app.selected_keyframes.insert((idx, pk.to_string(), kf.frame));
-                            }
+                    let mut add = |pk: &str, frames: Vec<u32>| {
+                        for f in frames {
+                            app.selected_keyframes.insert((idx, pk.to_string(), f));
                         }
+                    };
+                    // Per-type iteration (Vec2 and scalar tracks differ)
+                    if let Some(kfs) = t.position.keyframes() {
+                        add("position", kfs.iter().map(|k| k.frame).collect());
+                    }
+                    if let Some(kfs) = t.scale.keyframes() {
+                        add("scale", kfs.iter().map(|k| k.frame).collect());
+                    }
+                    if let Some(kfs) = t.rotation.keyframes() {
+                        add("rotation", kfs.iter().map(|k| k.frame).collect());
+                    }
+                    if let Some(kfs) = t.opacity.keyframes() {
+                        add("opacity", kfs.iter().map(|k| k.frame).collect());
                     }
                 }
             }

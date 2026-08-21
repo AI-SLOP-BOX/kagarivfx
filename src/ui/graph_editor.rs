@@ -66,6 +66,43 @@ pub fn draw_graph_editor(
             }
 
             ui.add_space(4.0);
+            if ui.button("⇄ Reverse Keys").on_hover_text("Reverse keyframe order in time (values stay, timing flips)").clicked() {
+                use crate::core::property::Animatable;
+                let reverse_v2 = |anim: &mut Animatable<[f32; 2]>| {
+                    if let Some(kfs) = anim.keyframes_mut() {
+                        if kfs.len() >= 2 {
+                            let first = kfs.first().unwrap().frame;
+                            let last = kfs.last().unwrap().frame;
+                            for kf in kfs.iter_mut() {
+                                kf.frame = last - (kf.frame - first);
+                            }
+                            kfs.sort_by_key(|k| k.frame);
+                        }
+                    }
+                };
+                let reverse_f32 = |anim: &mut Animatable<f32>| {
+                    if let Some(kfs) = anim.keyframes_mut() {
+                        if kfs.len() >= 2 {
+                            let first = kfs.first().unwrap().frame;
+                            let last = kfs.last().unwrap().frame;
+                            for kf in kfs.iter_mut() {
+                                kf.frame = last - (kf.frame - first);
+                            }
+                            kfs.sort_by_key(|k| k.frame);
+                        }
+                    }
+                };
+                match selected_property.clone().unwrap_or_else(|| "Position X".to_string()).as_str() {
+                    "Position X" | "Position Y" => reverse_v2(&mut layer.transform.position),
+                    "Scale X" | "Scale Y" => reverse_v2(&mut layer.transform.scale),
+                    "Rotation" => reverse_f32(&mut layer.transform.rotation),
+                    "Opacity" => reverse_f32(&mut layer.transform.opacity),
+                    _ => {}
+                }
+                *project_changed = true;
+            }
+
+            ui.add_space(4.0);
             if ui.button("⚡ Mirror Ease").on_hover_text("Symmetrically mirror Ease In / Ease Out handles").clicked() {
                 use crate::core::property::Animatable;
                 use crate::core::keyframe::InterpolationType;
