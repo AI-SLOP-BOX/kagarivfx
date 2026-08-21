@@ -395,8 +395,32 @@ fn register_comp_types(engine: &mut Engine) {
         .register_fn("layer", |c: &mut CompSnapshot, name: &str| c.layer(name));
 }
 
+thread_local! {
+    // Single-slot memo: building a snapshot is O(layers); expression layers each
+    // need one per frame, which is O(n^2) across a comp without this cache.
+    // Keyed by (project version, frame, comp identity) — any edit bumps the
+    // global version, so staleness is impossible.
+    static SNAPSHOT_CACHE: std::cell::RefCell<Option<(u64, u32, usize, CompSnapshot)>> =
+        const { std::cell::RefCell::new(None) };
+}
+
 /// Builds a composition snapshot of all layer transforms at the given frame.
 pub fn build_comp_snapshot(comp: &crate::core::timeline::Composition, frame: u32) -> CompSnapshot {
+    let ver = crate::core::frame_cache::current_version();
+    let comp_id = comp as *const _ as usize;
+    if let Some(snap) = SNAPSHOT_CACHE.with(|c| {
+        c.borrow().as_ref().and_then(|(v, f, cid, snap)| {
+            (*v == ver && *f == frame && *cid == comp_id).then(|| snap.clone())
+        })
+    }) {
+        return snap;
+    }
+    let snapshot = build_comp_snapshot_uncached(comp, frame);
+    SNAPSHOT_CACHE.with(|c| *c.borrow_mut() = Some((ver, frame, comp_id, snapshot.clone())));
+    snapshot
+}
+
+fn build_comp_snapshot_uncached(comp: &crate::core::timeline::Composition, frame: u32) -> CompSnapshot {
     let fps = comp.fps;
     let mut layers = std::collections::HashMap::new();
     for l in &comp.layers {
