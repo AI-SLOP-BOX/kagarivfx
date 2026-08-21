@@ -15,9 +15,36 @@ pub fn render_sub_comp(_comp: &Composition, sub_comp_id: &str, _frame: u32, _wid
     None
 }
 
+/// Maximum pre-comp nesting depth before we bail out (cycle / pathological nesting guard).
+pub const MAX_PRECOMP_DEPTH: u32 = 16;
+
+thread_local! {
+    static PRECOMP_DEPTH: std::cell::Cell<u32> = const { std::cell::Cell::new(0) };
+}
+
 /// Render a pre-comp by recursively rendering its layers into a pixel buffer.
 /// This is the core of pre-comp nesting support.
 pub fn render_precomp_layers(_comp: &Composition, precomp_comp: &Composition, frame: u32, width: u32, height: u32) -> Vec<u8> {
+    // Guard against cyclic or pathologically deep pre-comp nesting
+    let overflow = PRECOMP_DEPTH.with(|d| {
+        let cur = d.get();
+        if cur >= MAX_PRECOMP_DEPTH {
+            true
+        } else {
+            d.set(cur + 1);
+            false
+        }
+    });
+    if overflow {
+        log::warn!("[Renderer] Pre-comp nesting depth limit exceeded; skipping nested render");
+        return Vec::new();
+    }
+    let result = render_precomp_layers_inner(_comp, precomp_comp, frame, width, height);
+    PRECOMP_DEPTH.with(|d| d.set(d.get().saturating_sub(1)));
+    result
+}
+
+fn render_precomp_layers_inner(_comp: &Composition, precomp_comp: &Composition, frame: u32, width: u32, height: u32) -> Vec<u8> {
     let size = rgba_buffer_size(width, height).unwrap_or(0);
     if size == 0 { return Vec::new(); }
 
