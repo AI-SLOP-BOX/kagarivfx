@@ -428,7 +428,24 @@ fn rasterize_shape_sdf(
 /// effect pipeline (`core::cpu_effects`), and finally the result is composited
 /// over the frame using the layer's blend mode. This keeps spatial effects
 /// (blur, twirl, bulge, wipe, ...) correct instead of flattening them away.
+/// Maximum render dimension per axis (16384 x 16384). Prevents runaway
+/// allocations from corrupted project files or hostile CLI arguments — a
+/// 100000x100000 request would otherwise attempt a ~40 GB allocation and abort.
+pub const MAX_RENDER_DIMENSION: u32 = 16384;
+
+#[inline]
+fn is_sane_render_size(width: u32, height: u32) -> bool {
+    width > 0 && height > 0 && width <= MAX_RENDER_DIMENSION && height <= MAX_RENDER_DIMENSION
+}
+
 pub fn render_frame_to_pixels(comp: &Composition, frame: u32, width: u32, height: u32, exposure_ev: f32, lut_mode: u32) -> Vec<u8> {
+    if !is_sane_render_size(width, height) {
+        log::warn!(
+            "[Renderer] Rejecting render with dimensions {}x{} (max {})",
+            width, height, MAX_RENDER_DIMENSION
+        );
+        return Vec::new();
+    }
     let size = rgba_buffer_size(width, height).unwrap_or(0);
     if size == 0 {
         return Vec::new();
@@ -1669,5 +1686,43 @@ mod tests {
         let pixels = render_frame_to_pixels(&comp, 0, 64, 64, 0.0, 0);
         let center = (32 * 64 + 32) * 4;
         assert!(pixels[center + 1] > 200, "Center of rectangle should be green");
+    }
+}
+
+#[cfg(test)]
+mod render_size_guard_tests {
+    use super::*;
+    use crate::core::timeline::{Composition, Layer, LayerType};
+
+    fn tiny_comp() -> Composition {
+        let mut comp = Composition::new("c".into(), "Guard".into(), 32, 32, 30, 30);
+        let l = Layer::new("l".into(), "S".into(), LayerType::Solid { color: [1.0; 4] }, 30);
+        comp.layers.push(l);
+        comp
+    }
+
+    #[test]
+    fn test_zero_and_huge_dimensions_return_empty() {
+        let comp = tiny_comp();
+        // Zero dimensions
+        assert!(render_frame_to_pixels(&comp, 0, 0, 32, 0.0, 0).is_empty());
+        assert!(render_frame_to_pixels(&comp, 0, 32, 0, 0.0, 0).is_empty());
+        // Huge dimensions (would be ~40 GB) must be rejected without allocating
+        assert!(render_frame_to_pixels(&comp, 0, 100_000, 100_000, 0.0, 0).is_empty());
+        assert!(render_frame_to_pixels(&comp, 0, u32::MAX, u32::MAX, 0.0, 0).is_empty());
+    }
+
+    #[test]
+    fn test_max_dimension_still_renders_small() {
+        let comp = tiny_comp();
+        let pixels = render_frame_to_pixels(&comp, 0, 16, 16, 0.0, 0);
+        assert_eq!(pixels.len(), 16 * 16 * 4);
+    }
+
+    #[test]
+    fn test_rgba_buffer_size_overflow_safe() {
+        assert!(rgba_buffer_size(u32::MAX, u32::MAX).is_none());
+        assert!(rgba_buffer_size(0, 0).is_some()); // 0 is valid size, caller checks
+        assert_eq!(rgba_buffer_size(2, 2), Some(16));
     }
 }

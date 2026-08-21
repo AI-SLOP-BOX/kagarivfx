@@ -431,6 +431,24 @@ fn cmd_validate(project_path: &str) -> Result<(), Box<dyn std::error::Error>> {
         if comp.width == 0 || comp.height == 0 {
             errors.push(format!("Composition '{}': invalid dimensions {}x{}", comp.name, comp.width, comp.height));
         }
+        if comp.width > aftereffects_oss::core::software_renderer::MAX_RENDER_DIMENSION
+            || comp.height > aftereffects_oss::core::software_renderer::MAX_RENDER_DIMENSION
+        {
+            errors.push(format!(
+                "Composition '{}': dimensions {}x{} exceed render limit {}",
+                comp.name,
+                comp.width,
+                comp.height,
+                aftereffects_oss::core::software_renderer::MAX_RENDER_DIMENSION
+            ));
+        }
+        if comp.layers.len() > 10_000 {
+            warnings.push(format!(
+                "Composition '{}': very high layer count ({}), rendering may be slow",
+                comp.name,
+                comp.layers.len()
+            ));
+        }
         if comp.fps == 0 {
             errors.push(format!("Composition '{}': FPS is 0", comp.name));
         }
