@@ -231,7 +231,7 @@ struct TextRasterParams {
 
 type RenderKey = (u64, u32, u32, u32, (u32, u32));
 type TextTextureKey = (String, String, u32, [u32; 4], u32);
-type TextTextureCache = std::collections::HashMap<TextTextureKey, (wgpu::Texture, std::sync::Arc<wgpu::BindGroup>)>;
+type TextTextureCache = std::collections::HashMap<TextTextureKey, (wgpu::Texture, std::sync::Arc<wgpu::BindGroup>, u32, u32)>;
 
 #[allow(dead_code)]
 pub struct WgpuRenderer {
@@ -559,15 +559,14 @@ impl WgpuRenderer {
             [stroke_color[0].to_bits(), stroke_color[1].to_bits(), stroke_color[2].to_bits(), stroke_color[3].to_bits()],
             stroke_width.to_bits(),
         );
-        if let Some(bind_group) = self.text_texture_cache.borrow().get(&key).map(|(_, bg)| bg.clone()) {
-            // Cached: recompute dims from text layout for matrix sizing
-            let (w, h) = crate::core::font_rasterizer::with_font_rasterizer(|r| {
-                let family = r.resolve_family(font_family);
-                r.rasterize_text_formatted(&family, text, font_size as f32, color, tracking, leading, 0.0,
-                    crate::core::text_layout::TextAlign::Left)
-                    .map(|(w, h, _)| (w, h))
-                    .unwrap_or((1, 1))
-            });
+        // Cached: return stored dimensions — no CPU rasterization on hits
+        if let Some(bind_group) = self
+            .text_texture_cache
+            .borrow()
+            .get(&key)
+            .map(|(_, bg, w, h)| (bg.clone(), *w, *h))
+        {
+            let (bind_group, w, h) = bind_group;
             return Some((w, h, bind_group));
         }
 
@@ -626,7 +625,9 @@ impl WgpuRenderer {
             label: Some("text_texture_bind_group"),
         });
         let bind_group = std::sync::Arc::new(bind_group);
-        self.text_texture_cache.borrow_mut().insert(key, (texture, bind_group.clone()));
+        self.text_texture_cache
+            .borrow_mut()
+            .insert(key, (texture, bind_group.clone(), tw, th));
         Some((tw, th, bind_group))
     }
 
