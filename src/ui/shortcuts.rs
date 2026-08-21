@@ -135,6 +135,44 @@ pub fn handle_global_shortcuts(
             }
         }
 
+        // ── AE-style keyframe navigation & transport ──
+        // J → previous keyframe of selected layer, L → next keyframe, K → stop playback.
+        // Collects keyframe times across all transform properties of the selected layer.
+        if allow_single_key && i.key_pressed(Key::K) {
+            app.is_playing = false;
+        }
+        if allow_single_key && (i.key_pressed(Key::J) || i.key_pressed(Key::L)) {
+            let going_next = i.key_pressed(Key::L);
+            if let Some(idx) = app.selected_layer_idx {
+                let comp = app.history.current().active_composition();
+                if let Some(layer) = comp.layers.get(idx) {
+                    let t = &layer.transform;
+                    let mut kf_frames: Vec<u32> = Vec::new();
+                    for prop in [&t.position, &t.scale] {
+                        if let Some(kfs) = prop.keyframes() {
+                            kf_frames.extend(kfs.iter().map(|k| k.frame));
+                        }
+                    }
+                    for prop in [&t.rotation, &t.opacity] {
+                        if let Some(kfs) = prop.keyframes() {
+                            kf_frames.extend(kfs.iter().map(|k| k.frame));
+                        }
+                    }
+                    kf_frames.sort_unstable();
+                    kf_frames.dedup();
+                    let cur = *current_frame;
+                    let target = if going_next {
+                        kf_frames.iter().find(|&&f| f > cur).copied()
+                    } else {
+                        kf_frames.iter().rev().find(|&&f| f < cur).copied()
+                    };
+                    if let Some(f) = target {
+                        *current_frame = f;
+                    }
+                }
+            }
+        }
+
         // Home → first frame, End → last frame (single-key)
         if allow_single_key && i.key_pressed(Key::Home) { *current_frame = 0; }
         if allow_single_key && i.key_pressed(Key::End)  { *current_frame = total_frames.saturating_sub(1); }
