@@ -98,9 +98,32 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: u32) 
 
                 // Render at display resolution: a 4K comp shown in an 800px
                 // viewport renders at ~800px wide (4-16x less fill rate).
-                let preview_px = ((draw_w * ctx.pixels_per_point()).ceil() as u32).clamp(64, 4096);
+                // While playing, the adaptive factor further reduces resolution when
+                // frames exceed the playback budget (AE-style auto quality drop).
+                let display_px = (draw_w * ctx.pixels_per_point()).ceil();
+                let preview_px = ((display_px * app.adaptive_preview_factor) as u32).clamp(64, 4096);
                 renderer.set_preview_max_width(Some(preview_px));
+
+                let render_started = std::time::Instant::now();
                 let (texture_view, recreated) = renderer.render(comp, current_frame, exposure_ev, lut_idx as u32);
+                let render_ms = render_started.elapsed().as_secs_f32() * 1000.0;
+                app.preview_render_ema_ms = if app.preview_render_ema_ms <= 0.0 {
+                    render_ms
+                } else {
+                    app.preview_render_ema_ms * 0.9 + render_ms * 0.1
+                };
+
+                // Adapt quality only during playback; idle renders restore full quality
+                if app.is_playing {
+                    let budget_ms = 1000.0 / comp.fps.max(1) as f32 * 0.8;
+                    if app.preview_render_ema_ms > budget_ms {
+                        app.adaptive_preview_factor = (app.adaptive_preview_factor * 0.8).max(0.125);
+                    } else if app.preview_render_ema_ms < budget_ms * 0.5 {
+                        app.adaptive_preview_factor = (app.adaptive_preview_factor * 1.15).min(1.0);
+                    }
+                } else {
+                    app.adaptive_preview_factor = app.adaptive_preview_factor.max(0.9); // drift back to full
+                }
                 if app.viewport_texture_id.is_none() || recreated {
                     if let Some(old_id) = app.viewport_texture_id {
                         wgpu_state.renderer.write().free_texture(&old_id);

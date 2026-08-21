@@ -8,6 +8,13 @@ use crate::core::timeline::Project;
 #[derive(Debug, Clone)]
 pub struct PlaybackDomainState {
     pub is_playing: bool,
+    /// Adaptive preview quality: multiplier (0.125..=1.0) applied to the viewport
+    /// render width while playing. When frames take longer than the playback
+    /// budget, the factor drops so playback stays smooth; it recovers when fast.
+    /// This mirrors AE's automatic resolution reduction during RAM preview.
+    pub adaptive_preview_factor: f32,
+    /// Exponential moving average of GPU render time in milliseconds.
+    pub preview_render_ema_ms: f32,
     pub current_frame: u32,
     pub master_volume: f32,
     pub work_area_in: Option<u32>,
@@ -18,6 +25,8 @@ impl Default for PlaybackDomainState {
     fn default() -> Self {
         Self {
             is_playing: false,
+            adaptive_preview_factor: 1.0,
+            preview_render_ema_ms: 0.0,
             current_frame: 0,
             master_volume: 1.0,
             work_area_in: None,
@@ -136,6 +145,13 @@ pub struct AfterEffectsApp {
     /// Human-readable timestamp of the recovery snapshot (for the dialog)
     pub recovery_snapshot_time: Option<String>,
     pub is_playing: bool,
+    /// Adaptive preview quality: multiplier (0.125..=1.0) applied to the viewport
+    /// render width while playing. When frames take longer than the playback
+    /// budget, the factor drops so playback stays smooth; it recovers when fast.
+    /// This mirrors AE's automatic resolution reduction during RAM preview.
+    pub adaptive_preview_factor: f32,
+    /// Exponential moving average of GPU render time in milliseconds.
+    pub preview_render_ema_ms: f32,
     pub current_frame: u32,
     pub playback_speed: i32,
     pub u_key_last_press: Option<f64>,
@@ -234,6 +250,8 @@ impl Default for AfterEffectsApp {
             recovery_checked: false,
             recovery_snapshot_time: None,
             is_playing: false,
+            adaptive_preview_factor: 1.0,
+            preview_render_ema_ms: 0.0,
             current_frame: 0,
             playback_speed: 1,
             u_key_last_press: None,
