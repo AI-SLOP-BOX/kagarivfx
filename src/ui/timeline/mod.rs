@@ -7,7 +7,7 @@ use crate::AfterEffectsApp;
 use crate::core::timeline::{BlendMode, LabelColor, LayerType, TrackMatteMode};
 use utils::{get_kfs, maybe_snap_frame};
 use header::draw_timeline_header;
-use layers::draw_prop_row;
+use layers::{draw_prop_row, draw_prop_row_ext};
 
 pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut u32, total_frames: u32) {
     egui::TopBottomPanel::bottom("timeline_panel")
@@ -792,16 +792,51 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                             let op_kfs = get_kfs(&layer.transform.opacity);
 
                             {
-                                let t = &mut layer.transform;
-                                let moved = &mut project_changed;
-                                draw_prop_row(ui, "  ⏱ Position", &pos_kfs, current_frame, start_frame, zoom_span, left_pane_w,
-                                    Some(&mut |old_f, new_f| { move_kf(&mut t.position, old_f, new_f); *moved = true; }));
-                                draw_prop_row(ui, "  ⏱ Scale", &scale_kfs, current_frame, start_frame, zoom_span, left_pane_w,
-                                    Some(&mut |old_f, new_f| { move_kf(&mut t.scale, old_f, new_f); *moved = true; }));
-                                draw_prop_row(ui, "  ⏱ Rotation", &rot_kfs, current_frame, start_frame, zoom_span, left_pane_w,
-                                    Some(&mut |old_f, new_f| { move_kf(&mut t.rotation, old_f, new_f); *moved = true; }));
-                                draw_prop_row(ui, "  ⏱ Opacity", &op_kfs, current_frame, start_frame, zoom_span, left_pane_w,
-                                    Some(&mut |old_f, new_f| { move_kf(&mut t.opacity, old_f, new_f); *moved = true; }));
+                                // Keyframes selected for this layer: (prop_key, frame)
+                                let prop_sel: std::collections::HashSet<(String, u32)> = app
+                                    .selected_keyframes
+                                    .iter()
+                                    .filter(|(li, _, _)| *li == i)
+                                    .map(|(_, pk, f)| (pk.clone(), *f))
+                                    .collect();
+
+                                // Collect selection toggles first; apply to app after the
+                                // row borrows end (app and layer cannot borrow together).
+                                let mut select_requests: Vec<(&'static str, u32, bool, bool)> = Vec::new();
+
+                                {
+                                    let t = &mut layer.transform;
+                                    let moved = &mut project_changed;
+                                    draw_prop_row_ext(ui, "  ⏱ Position", &pos_kfs, current_frame, start_frame, zoom_span, left_pane_w,
+                                        &prop_sel, "position",
+                                        Some(&mut |old_f, new_f| { move_kf(&mut t.position, old_f, new_f); *moved = true; }),
+                                        Some(&mut |pk, f, shift, cmd| select_requests.push((pk, f, shift, cmd))));
+                                    draw_prop_row_ext(ui, "  ⏱ Scale", &scale_kfs, current_frame, start_frame, zoom_span, left_pane_w,
+                                        &prop_sel, "scale",
+                                        Some(&mut |old_f, new_f| { move_kf(&mut t.scale, old_f, new_f); *moved = true; }),
+                                        Some(&mut |pk, f, shift, cmd| select_requests.push((pk, f, shift, cmd))));
+                                    draw_prop_row_ext(ui, "  ⏱ Rotation", &rot_kfs, current_frame, start_frame, zoom_span, left_pane_w,
+                                        &prop_sel, "rotation",
+                                        Some(&mut |old_f, new_f| { move_kf(&mut t.rotation, old_f, new_f); *moved = true; }),
+                                        Some(&mut |pk, f, shift, cmd| select_requests.push((pk, f, shift, cmd))));
+                                    draw_prop_row_ext(ui, "  ⏱ Opacity", &op_kfs, current_frame, start_frame, zoom_span, left_pane_w,
+                                        &prop_sel, "opacity",
+                                        Some(&mut |old_f, new_f| { move_kf(&mut t.opacity, old_f, new_f); *moved = true; }),
+                                        Some(&mut |pk, f, shift, cmd| select_requests.push((pk, f, shift, cmd))));
+                                }
+
+                                for (pk, f, shift, cmd) in select_requests {
+                                    let entry = (i, pk.to_string(), f);
+                                    if shift || cmd {
+                                        if !app.selected_keyframes.remove(&entry) {
+                                            app.selected_keyframes.insert(entry);
+                                        }
+                                    } else {
+                                        app.selected_keyframes.clear();
+                                        app.selected_keyframes.insert(entry);
+                                    }
+                                    project_changed = false; // selection alone is not a project edit
+                                }
                             }
 
                             for effect in &layer.effects {

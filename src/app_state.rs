@@ -157,6 +157,8 @@ pub struct AfterEffectsApp {
     pub u_key_last_press: Option<f64>,
     pub selected_layer_idx: Option<usize>,
     pub selected_layers: std::collections::HashSet<usize>,
+    /// Selected keyframes: (layer_idx, property key, frame).
+    pub selected_keyframes: std::collections::HashSet<(usize, String, u32)>,
     pub drag_tx: Option<DragTransaction>,
     #[cfg(feature = "wgpu")]
     pub renderer: Option<crate::core::renderer::WgpuRenderer>,
@@ -266,6 +268,7 @@ impl Default for AfterEffectsApp {
             u_key_last_press: None,
             selected_layer_idx: Some(1),
             selected_layers: vec![1].into_iter().collect(),
+            selected_keyframes: std::collections::HashSet::new(),
             drag_tx: None,
             #[cfg(feature = "wgpu")]
             renderer: None,

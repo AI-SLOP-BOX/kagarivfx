@@ -103,6 +103,43 @@ fn vs_main(model: VertexInput) -> VertexOutput {
     return out;
 }
 
+// Helper: SDF-based alpha coverage for Shape layers (layer_type == 2u).
+// Shared between the layer fill and the drop-shadow mask so all four
+// shape types (rect / ellipse / star / polygon) cast correct shadows.
+fn shape_sdf_alpha(local_pos_in: vec2<f32>, blur_extend: f32) -> f32 {
+    var alpha = 0.0;
+    if (layer.shape_type == 0u) {
+        let d_x = abs(local_pos_in.x) - 0.5;
+        let d_y = abs(local_pos_in.y) - 0.5;
+        let d = max(d_x, d_y);
+        alpha = 1.0 - smoothstep(-0.02 - blur_extend, 0.02 + blur_extend, d);
+    } else if (layer.shape_type == 1u) {
+        let dist = length(local_pos_in);
+        alpha = 1.0 - smoothstep(0.48 - blur_extend, 0.5 + blur_extend, dist);
+    } else if (layer.shape_type == 2u) {
+        // Procedural N-Point Star SDF
+        let p = local_pos_in * 2.0;
+        let r = length(p);
+        let angle = atan2(p.y, p.x);
+        let n = max(layer.shape_params.x, 3.0);
+        let angle_mod = abs(fract((angle / 6.2831853) * n + 0.5) - 0.5) * (6.2831853 / n);
+        let d_star = r * cos(angle_mod - 0.314159) - 0.45;
+        alpha = 1.0 - smoothstep(-0.04 - blur_extend, 0.04 + blur_extend, d_star);
+    } else if (layer.shape_type == 3u) {
+        // Procedural Regular N-Gon Polygon SDF
+        let p = local_pos_in * 2.0;
+        let r = length(p);
+        let angle = atan2(p.y, p.x);
+        let n = max(layer.shape_params.x, 3.0);
+        let angle_mod = abs(fract((angle / 6.2831853) * n + 0.5) - 0.5) * (6.2831853 / n);
+        let d_poly = r * cos(angle_mod) - 0.45;
+        alpha = 1.0 - smoothstep(-0.04 - blur_extend, 0.04 + blur_extend, d_poly);
+    } else {
+        alpha = 1.0;
+    }
+    return alpha;
+}
+
 // Helper: sample layer color at a given local_pos and tex_coords
 fn sample_layer_color(local_pos_in: vec2<f32>, tc_in: vec2<f32>, blur_extend: f32) -> vec4<f32> {
     // Mesh Warp / Corner Pin: bilinear corner-offset displacement field.
@@ -167,39 +204,8 @@ fn sample_layer_color(local_pos_in: vec2<f32>, tc_in: vec2<f32>, blur_extend: f3
             c = textureSample(t_diffuse, s_diffuse, tc);
         }
     } else if (layer.layer_type == 2u) {
-        if (layer.shape_type == 0u) {
-            let d_x = abs(local_pos.x) - 0.5;
-            let d_y = abs(local_pos.y) - 0.5;
-            let d = max(d_x, d_y);
-            let alpha = 1.0 - smoothstep(-0.02 - blur_extend, 0.0 + blur_extend, d);
-            c = vec4<f32>(layer.color.rgb, layer.color.a * alpha);
-        } else if (layer.shape_type == 1u) {
-            let dist = length(local_pos);
-            let alpha = 1.0 - smoothstep(0.48 - blur_extend, 0.5 + blur_extend, dist);
-            c = vec4<f32>(layer.color.rgb, layer.color.a * alpha);
-        } else if (layer.shape_type == 2u) {
-            // Procedural N-Point Star SDF (points from shape_params.x, default 5)
-            let p = local_pos * 2.0;
-            let r = length(p);
-            let angle = atan2(p.y, p.x);
-            let n = max(layer.shape_params.x, 3.0);
-            let angle_mod = abs(fract((angle / 6.2831853) * n + 0.5) - 0.5) * (6.2831853 / n);
-            let d_star = r * cos(angle_mod - 0.314159) - 0.45;
-            let alpha = 1.0 - smoothstep(-0.04 - blur_extend, 0.04 + blur_extend, d_star);
-            c = vec4<f32>(layer.color.rgb, layer.color.a * alpha);
-        } else if (layer.shape_type == 3u) {
-            // Procedural Regular N-Gon Polygon SDF (sides from shape_params.x, default 6)
-            let p = local_pos * 2.0;
-            let r = length(p);
-            let angle = atan2(p.y, p.x);
-            let n = max(layer.shape_params.x, 3.0);
-            let angle_mod = abs(fract((angle / 6.2831853) * n + 0.5) - 0.5) * (6.2831853 / n);
-            let d_poly = r * cos(angle_mod) - 0.45;
-            let alpha = 1.0 - smoothstep(-0.04 - blur_extend, 0.04 + blur_extend, d_poly);
-            c = vec4<f32>(layer.color.rgb, layer.color.a * alpha);
-        } else {
-            c = layer.color;
-        }
+        let alpha = shape_sdf_alpha(local_pos, blur_extend);
+        c = vec4<f32>(layer.color.rgb, layer.color.a * alpha);
     } else if (layer.layer_type == 3u) {
         c = layer.color;
     } else if (layer.layer_type == 8u) {
@@ -294,15 +300,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
                 shadow_alpha = textureSample(t_diffuse, s_diffuse, shadow_tex_coords).a;
             }
         } else if (layer.layer_type == 2u) {
-            if (layer.shape_type == 0u) {
-                let d_x = abs(shadow_local_pos.x) - 0.5;
-                let d_y = abs(shadow_local_pos.y) - 0.5;
-                let d = max(d_x, d_y);
-                shadow_alpha = 1.0 - smoothstep(-0.02 - shadow_blur_extend, 0.0 + shadow_blur_extend, d);
-            } else {
-                let dist = length(shadow_local_pos);
-                shadow_alpha = 1.0 - smoothstep(0.48 - shadow_blur_extend, 0.5 + shadow_blur_extend, dist);
-            }
+            shadow_alpha = shape_sdf_alpha(shadow_local_pos, shadow_blur_extend);
         } else if (layer.layer_type == 3u) {
             let d_x = abs(shadow_local_pos.x) - 0.5;
             let d_y = abs(shadow_local_pos.y) - 0.5;
