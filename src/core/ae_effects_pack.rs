@@ -125,7 +125,7 @@ pub fn apply_glow(pixels: &mut [u8], width: u32, height: u32, threshold: f32, ra
     // the harsh banding edge a hard binary threshold produces.
     let soft_width = (radius.max(2) as f32 * 8.0).min(64.0);
     for i in (0..num_bytes).step_by(4) {
-        let luma = (pixels[i] as f32 * 0.299 + pixels[i + 1] as f32 * 0.587 + pixels[i + 2] as f32 * 0.114);
+        let luma = pixels[i] as f32 * 0.299 + pixels[i + 1] as f32 * 0.587 + pixels[i + 2] as f32 * 0.114;
         let t = ((luma - threshold * 255.0) / soft_width + 0.5).clamp(0.0, 1.0);
         // Smoothstep the transition for a filmic rolloff
         let w = t * t * (3.0 - 2.0 * t);
