@@ -265,6 +265,14 @@ pub struct WgpuRenderer {
     last_main_key: Option<RenderKey>,
     last_snapshot_key: Option<RenderKey>,
 
+    // ── RAM preview ring ──
+    // Pre-rendered frames for smooth playback, produced by render_ram_preview.
+    // Invalidated wholesale when the project version changes.
+    ram_ring: Vec<(u32, Option<(wgpu::Texture, wgpu::TextureView)>)>,
+    ram_ring_version: u64,
+    /// Index into ram_ring used while rendering a pre-pass frame.
+    ram_render_idx: usize,
+
     /// Optional cap on preview render width (px). When set, large compositions
     /// are rendered at a downscaled resolution — the viewport samples the
     /// texture at display size anyway, so this is visually near-free and can
@@ -535,6 +543,9 @@ impl WgpuRenderer {
             text_texture_cache: std::cell::RefCell::new(std::collections::HashMap::new()),
             last_main_key: None,
             last_snapshot_key: None,
+            ram_ring: Vec::new(),
+            ram_ring_version: 0,
+            ram_render_idx: usize::MAX,
             preview_max_width: None,
         }
     }
@@ -699,7 +710,8 @@ impl WgpuRenderer {
             (eff_w, eff_h),
         );
         let last_key = if target_snapshot { &self.last_snapshot_key } else { &self.last_main_key };
-        if *last_key == Some(render_key) {
+        let ram_mode = self.ram_render_idx != usize::MAX;
+        if !ram_mode && *last_key == Some(render_key) {
             return false; // nothing changed — reuse the existing target texture
         }
 
@@ -1055,13 +1067,95 @@ impl WgpuRenderer {
 
         self.queue.submit(std::iter::once(encoder.finish()));
 
-        // Remember inputs so redundant renders can be skipped
-        if target_snapshot {
-            self.last_snapshot_key = Some(render_key);
-        } else {
-            self.last_main_key = Some(render_key);
+        // Remember inputs so redundant renders can be skipped.
+        // RAM pre-pass frames never touch the live-view keys.
+        if !ram_mode {
+            if target_snapshot {
+                self.last_snapshot_key = Some(render_key);
+            } else {
+                self.last_main_key = Some(render_key);
+            }
         }
         recreated
+    }
+
+    /// Pre-renders `from..=to` into the RAM preview ring so playback can display
+    /// cached textures without re-rendering each frame. Frames are rendered as
+    /// fast as the GPU allows (not realtime), which is what makes RAM preview
+    /// smoother than live rendering on heavy compositions.
+    pub fn render_ram_preview(
+        &mut self,
+        comp: &Composition,
+        from: u32,
+        to: u32,
+        exposure_ev: f32,
+        lut_mode: u32,
+    ) {
+        let ver = crate::core::frame_cache::current_version();
+        if self.ram_ring_version != ver {
+            self.ram_ring.clear();
+            self.ram_ring_version = ver;
+        }
+        let count = (to.saturating_sub(from) + 1) as usize;
+        if self.ram_ring.len() != count {
+            self.ram_ring.clear();
+            for _ in 0..count {
+                self.ram_ring.push((u32::MAX, None));
+            }
+        }
+
+        // Match the live-view resolution logic (preview cap + device limits)
+        let max_dim = self.device.limits().max_texture_dimension_2d
+            .min(crate::core::software_renderer::MAX_RENDER_DIMENSION);
+        let (eff_w, eff_h) = match self.preview_max_width {
+            Some(cap) if comp.width > cap => {
+                let s = cap as f32 / comp.width as f32;
+                (cap.max(1), ((comp.height as f32 * s) as u32).max(1))
+            }
+            _ => (comp.width, comp.height),
+        };
+        let width = eff_w.clamp(1, max_dim);
+        let height = eff_h.clamp(1, max_dim);
+
+        for (i, frame) in (from..=to).enumerate() {
+            if self.ram_ring[i].1.is_none() {
+                let size = wgpu::Extent3d { width, height, depth_or_array_layers: 1 };
+                let texture = self.device.create_texture(&wgpu::TextureDescriptor {
+                    label: Some("RAM Preview Slot"),
+                    size,
+                    mip_level_count: 1,
+                    sample_count: 1,
+                    dimension: wgpu::TextureDimension::D2,
+                    format: wgpu::TextureFormat::Rgba8UnormSrgb,
+                    usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
+                    view_formats: &[],
+                });
+                let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
+                self.ram_ring[i] = (frame, Some((texture, view)));
+            } else {
+                self.ram_ring[i].0 = frame;
+            }
+            self.ram_render_idx = i;
+            self.render_internal(comp, frame, exposure_ev, lut_mode, false);
+        }
+        self.ram_render_idx = usize::MAX;
+    }
+
+    /// Texture view for a pre-rendered frame, if present and still valid.
+    pub fn ram_frame_view(&self, frame: u32) -> Option<&wgpu::TextureView> {
+        if self.ram_ring_version != crate::core::frame_cache::current_version() {
+            return None;
+        }
+        self.ram_ring
+            .iter()
+            .find(|(f, t)| *f == frame && t.is_some())
+            .and_then(|(_, t)| t.as_ref().map(|(_, v)| v))
+    }
+
+    /// Drops all cached RAM preview frames (e.g. when playback stops).
+    pub fn clear_ram_preview(&mut self) {
+        self.ram_ring.clear();
+        self.ram_ring_version = 0;
     }
 
     /// Caps preview render width (px). `None` renders at composition resolution.

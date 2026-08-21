@@ -163,6 +163,11 @@ pub struct AfterEffectsApp {
     #[cfg(feature = "wgpu")]
     pub wgpu_state: Option<eframe::egui_wgpu::RenderState>,
     pub viewport_texture_id: Option<eframe::egui::TextureId>,
+    /// RAM preview: (frame -> egui texture id) entries for pre-rendered frames.
+    pub ram_texture_ids: Vec<(u32, eframe::egui::TextureId)>,
+    /// True if the previous frame had playback active — used to detect playback
+    /// start and kick off the RAM preview pre-pass.
+    pub was_playing_last_frame: bool,
     pub viewport_snapshot_texture_id: Option<eframe::egui::TextureId>,
     pub rx_frame: Option<std::sync::mpsc::Receiver<u32>>,
     pub rx_connection: Option<std::sync::mpsc::Receiver<Option<String>>>,
@@ -263,6 +268,8 @@ impl Default for AfterEffectsApp {
             #[cfg(feature = "wgpu")]
             wgpu_state: None,
             viewport_texture_id: None,
+            ram_texture_ids: Vec::new(),
+            was_playing_last_frame: false,
             viewport_snapshot_texture_id: None,
             rx_frame: None,
             rx_connection: None,

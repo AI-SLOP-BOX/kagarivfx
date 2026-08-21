@@ -104,8 +104,66 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: u32) 
                 let preview_px = ((display_px * app.adaptive_preview_factor) as u32).clamp(64, 4096);
                 renderer.set_preview_max_width(Some(preview_px));
 
+                // ── RAM preview: pre-render the work area when playback starts ──
+                if app.is_playing && !app.was_playing_last_frame {
+                    let wa_in = app.work_area_in.unwrap_or(0);
+                    let wa_out = app
+                        .work_area_out
+                        .unwrap_or(comp.duration_frames)
+                        .min(comp.duration_frames.saturating_sub(1));
+                    // Cap the pre-pass so huge timelines don't freeze the UI for minutes
+                    let to = wa_in + (wa_out - wa_in).min(300);
+                    renderer.render_ram_preview(comp, wa_in, to.max(wa_in), exposure_ev, lut_idx as u32);
+                    // Register egui texture ids for all ring slots
+                    app.ram_texture_ids.clear();
+                    for f in wa_in..=to.max(wa_in) {
+                        if let Some(view) = renderer.ram_frame_view(f) {
+                            let id = wgpu_state.renderer.write().register_native_texture(
+                                &wgpu_state.device,
+                                view,
+                                wgpu::FilterMode::Linear,
+                            );
+                            app.ram_texture_ids.push((f, id));
+                        }
+                    }
+                }
+                if !app.is_playing && app.was_playing_last_frame {
+                    // Playback stopped: free ring textures and egui ids
+                    for (_, id) in app.ram_texture_ids.drain(..) {
+                        wgpu_state.renderer.write().free_texture(&id);
+                    }
+                    renderer.clear_ram_preview();
+                }
+                app.was_playing_last_frame = app.is_playing;
+
+                // During playback, prefer a cached RAM frame over a live render
+                let ram_id = if app.is_playing {
+                    app.ram_texture_ids
+                        .iter()
+                        .find(|(f, _)| *f == current_frame)
+                        .map(|(_, id)| *id)
+                } else {
+                    None
+                };
+
                 let render_started = std::time::Instant::now();
-                let (texture_view, recreated) = renderer.render(comp, current_frame, exposure_ev, lut_idx as u32);
+                if let Some(id) = ram_id {
+                    // Cached frame: swap the displayed texture, no GPU re-render
+                    if app.viewport_texture_id != Some(id) {
+                        if let Some(old_id) = app.viewport_texture_id {
+                            wgpu_state.renderer.write().free_texture(&old_id);
+                        }
+                        app.viewport_texture_id = Some(id);
+                    }
+                    rendered_gpu = true;
+                }
+                let (texture_view, recreated) = if ram_id.is_some() {
+                    // Skip live rendering entirely this frame
+                    (None, false)
+                } else {
+                    let (view, rec) = renderer.render(comp, current_frame, exposure_ev, lut_idx as u32);
+                    (Some(view), rec)
+                };
                 let render_ms = render_started.elapsed().as_secs_f32() * 1000.0;
                 app.preview_render_ema_ms = if app.preview_render_ema_ms <= 0.0 {
                     render_ms
@@ -124,16 +182,18 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: u32) 
                 } else {
                     app.adaptive_preview_factor = app.adaptive_preview_factor.max(0.9); // drift back to full
                 }
-                if app.viewport_texture_id.is_none() || recreated {
-                    if let Some(old_id) = app.viewport_texture_id {
-                        wgpu_state.renderer.write().free_texture(&old_id);
+                if let Some(view) = texture_view {
+                    if app.viewport_texture_id.is_none() || recreated {
+                        if let Some(old_id) = app.viewport_texture_id {
+                            wgpu_state.renderer.write().free_texture(&old_id);
+                        }
+                        let texture_id = wgpu_state.renderer.write().register_native_texture(
+                            &wgpu_state.device,
+                            view,
+                            wgpu::FilterMode::Linear,
+                        );
+                        app.viewport_texture_id = Some(texture_id);
                     }
-                    let texture_id = wgpu_state.renderer.write().register_native_texture(
-                        &wgpu_state.device,
-                        texture_view,
-                        wgpu::FilterMode::Linear,
-                    );
-                    app.viewport_texture_id = Some(texture_id);
                 }
 
                 let mut snap_texture_id_val = None;
