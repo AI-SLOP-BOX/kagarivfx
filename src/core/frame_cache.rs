@@ -9,7 +9,6 @@
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
-use std::time::Instant;
 
 /// A monotonically increasing version counter.
 static GLOBAL_CACHE_VERSION: AtomicU64 = AtomicU64::new(1);
