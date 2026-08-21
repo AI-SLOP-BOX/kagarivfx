@@ -59,5 +59,6 @@ pub mod viewport_minimap;
 pub mod align_hud;
 pub mod camera_dof_hud;
 pub mod precompose_dialog;
+pub mod recovery_dialog;
 
 

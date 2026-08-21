@@ -309,4 +309,5 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
 
     // 📦 Pre-Compose Dialog (Cmd+Shift+C)
     crate::ui::precompose_dialog::draw_precompose_dialog(app, ctx);
+    crate::ui::recovery_dialog::draw_recovery_dialog(app, ctx);
 }

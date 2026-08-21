@@ -148,11 +148,9 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: u32) 
                     ui.put(right_rect, right_img);
 
                     rendered_gpu = true;
-                } else {
-                    if let Some(texture_id) = app.viewport_texture_id {
-                        ui.put(draw_rect, egui::Image::new(egui::load::SizedTexture::new(texture_id, draw_rect.size())));
-                        rendered_gpu = true;
-                    }
+                } else if let Some(texture_id) = app.viewport_texture_id {
+                    ui.put(draw_rect, egui::Image::new(egui::load::SizedTexture::new(texture_id, draw_rect.size())));
+                    rendered_gpu = true;
                 }
             }
         }

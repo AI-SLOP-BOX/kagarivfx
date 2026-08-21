@@ -129,6 +129,12 @@ pub struct AfterEffectsApp {
     pub history: crate::core::history::ProjectHistory,
     /// Crash-recovery autosave manager
     pub autosave: crate::core::autosave::AutosaveManager,
+    /// Show the crash-recovery restore prompt at startup
+    pub show_recovery_dialog: bool,
+    /// Ensures the startup recovery check runs only once
+    pub recovery_checked: bool,
+    /// Human-readable timestamp of the recovery snapshot (for the dialog)
+    pub recovery_snapshot_time: Option<String>,
     pub is_playing: bool,
     pub current_frame: u32,
     pub playback_speed: i32,
@@ -218,6 +224,9 @@ impl Default for AfterEffectsApp {
             autosave: crate::core::autosave::AutosaveManager::new(
                 std::env::temp_dir().join("aevfx_recovery"),
             ),
+            show_recovery_dialog: false,
+            recovery_checked: false,
+            recovery_snapshot_time: None,
             is_playing: false,
             current_frame: 0,
             playback_speed: 1,
@@ -341,6 +350,23 @@ impl AfterEffectsApp {
 impl eframe::App for AfterEffectsApp {
     fn update(&mut self, ctx: &eframe::egui::Context, _frame: &mut eframe::Frame) {
         use eframe::egui;
+
+        // One-time startup check for crash recovery snapshots
+        if !self.recovery_checked {
+            self.recovery_checked = true;
+            if self.autosave.has_recovery() {
+                self.recovery_snapshot_time = std::fs::metadata(
+                    std::env::temp_dir().join("aevfx_recovery").join("recovery_0.json"),
+                )
+                .ok()
+                .and_then(|m| m.modified().ok())
+                .map(|t| {
+                    let secs = t.duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
+                    format!("#{}", secs)
+                });
+                self.show_recovery_dialog = true;
+            }
+        }
 
         // Crash-recovery autosave: write a rotating snapshot when dirty and due
         if let Some(path) = self.autosave.tick(self.history.current()) {
