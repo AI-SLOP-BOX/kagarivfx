@@ -266,33 +266,38 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                 // 🔍 Timeline Zoom Shortcuts (= / -), anchored on the playhead so the
                 // frame under it stays visually in place while zooming.
                 {
-                    let mut zoom_at = |new_zoom: f32| {
-                        let old_span = (total_frames as f32 / app.timeline_zoom.max(0.01)).max(10.0) as u32;
+                    // Returns the new window start that keeps the playhead stationary.
+                    let view_start = app.timeline_view_start;
+                    let anchored_start = |old_zoom: f32, new_zoom: f32| -> u32 {
+                        let old_span = (total_frames as f32 / old_zoom.max(0.01)).max(10.0) as u32;
                         let new_span = (total_frames as f32 / new_zoom.max(0.01)).max(10.0) as u32;
                         // The playhead's offset from the window's left edge scales with
                         // the span ratio, keeping the playhead stationary on screen.
-                        let head_offset = current_frame.saturating_sub(app.timeline_view_start);
+                        let head_offset = current_frame.saturating_sub(view_start);
                         let new_head_offset = ((head_offset as f32) * (new_span as f32 / old_span.max(1) as f32)) as u32;
-                        app.timeline_view_start = current_frame
+                        current_frame
                             .saturating_sub(new_head_offset)
-                            .min(total_frames.saturating_sub(new_span));
+                            .min(total_frames.saturating_sub(new_span))
                     };
-                    if ui.input(|i| i.key_pressed(egui::Key::Equals)) {
-                        zoom_at((app.timeline_zoom * 1.25).min(20.0));
-                        app.timeline_zoom = (app.timeline_zoom * 1.25).min(20.0);
+                    if ui.input(|i| i.key_pressed(egui::Key::Equals)) && app.timeline_zoom < 20.0 {
+                        let new_zoom = (app.timeline_zoom * 1.25).min(20.0);
+                        app.timeline_view_start = anchored_start(app.timeline_zoom, new_zoom);
+                        app.timeline_zoom = new_zoom;
                     }
-                    if ui.input(|i| i.key_pressed(egui::Key::Minus)) {
-                        zoom_at((app.timeline_zoom / 1.25).max(0.1));
-                        app.timeline_zoom = (app.timeline_zoom / 1.25).max(0.1);
+                    if ui.input(|i| i.key_pressed(egui::Key::Minus)) && app.timeline_zoom > 0.1 {
+                        let new_zoom = (app.timeline_zoom / 1.25).max(0.1);
+                        app.timeline_view_start = anchored_start(app.timeline_zoom, new_zoom);
+                        app.timeline_zoom = new_zoom;
                     }
                     // Cmd/Ctrl + scroll wheel over the ruler: zoom anchored at the pointer
                     if ruler_response.hovered() && ui.input(|i| i.modifiers.command) {
                         let scroll = ui.input(|i| i.raw_scroll_delta.y);
                         if scroll != 0.0 {
-                            let factor = if scroll > 0.0 { 1.15 } else { 1.0 / 1.15 };
-                            let new_zoom = (app.timeline_zoom * factor).clamp(0.1, 20.0);
-                            zoom_at(new_zoom);
-                            app.timeline_zoom = new_zoom;
+                            let new_zoom = (app.timeline_zoom * (if scroll > 0.0 { 1.15 } else { 1.0 / 1.15 })).clamp(0.1, 20.0);
+                            if new_zoom != app.timeline_zoom {
+                                app.timeline_view_start = anchored_start(app.timeline_zoom, new_zoom);
+                                app.timeline_zoom = new_zoom;
+                            }
                         }
                     }
                 }
