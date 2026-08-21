@@ -3,12 +3,14 @@ use serde::{Deserialize, Serialize};
 
 pub trait Interpolate: Clone {
     fn interpolate(start: &Self, end: &Self, t: f32) -> Self;
+    fn default_interpolate() -> Self;
 }
 
 impl Interpolate for f32 {
     fn interpolate(start: &Self, end: &Self, t: f32) -> Self {
         start + (end - start) * t
     }
+    fn default_interpolate() -> Self { 0.0 }
 }
 
 impl<const N: usize> Interpolate for [f32; N] {
@@ -19,6 +21,7 @@ impl<const N: usize> Interpolate for [f32; N] {
         }
         out
     }
+    fn default_interpolate() -> Self { [0.0; N] }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -103,7 +106,8 @@ impl<T: Interpolate> Animatable<T> {
             Animatable::Constant(value) => value.clone(),
             Animatable::Animated(keyframes) => {
                 if keyframes.is_empty() {
-                    panic!("Animatable has no keyframes");
+                    log::error!("Animated keyframes is empty, returning default");
+                    return T::default_interpolate();
                 }
 
                 let last_kf_idx = keyframes.len() - 1;

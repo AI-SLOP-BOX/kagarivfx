@@ -5,16 +5,54 @@ pub fn draw_time_remap_panel(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
     ui.heading("Time Stretch & Time Remapping");
     ui.separator();
 
-    let comp = app.history.current().active_composition();
-    if let Some(idx) = app.selected_layer_idx {
+    let layer_info = if let Some(idx) = app.selected_layer_idx {
+        let comp = app.history.current().active_composition();
         if idx < comp.layers.len() {
-            let layer_name = &comp.layers[idx].name;
-            ui.label(format!("Selected Layer: {}", layer_name));
+            Some((idx, comp.layers[idx].name.clone(), comp.layers[idx].out_frame))
+        } else { None }
+    } else { None };
 
-            ui.add_space(4.0);
-            if ui.button("⏱ Enable Time Remapping (Cmd+Alt+T)").on_hover_text("Adds Time Remap keyframe track").clicked() {
-                log::info!("Enabled Time Remapping on layer {}", layer_name);
+    if let Some((idx, layer_name, out_frame)) = layer_info {
+        ui.label(format!("Selected Layer: {}", layer_name));
+
+        ui.add_space(4.0);
+        if ui.button("⏱ Enable Time Remapping (Cmd+Alt+T)").on_hover_text("Adds Time Remap keyframe track for speed control").clicked() {
+            let mut temp_proj = app.history.current().clone();
+            let comp_mut = temp_proj.active_composition_mut();
+            if idx < comp_mut.layers.len() {
+                let dur = out_frame;
+                comp_mut.layers[idx].time_remap = Some(crate::core::property::Animatable::Animated(vec![
+                    crate::core::keyframe::Keyframe::new(0, 0.0, crate::core::keyframe::InterpolationType::Linear),
+                    crate::core::keyframe::Keyframe::new(dur, dur as f32, crate::core::keyframe::InterpolationType::Linear),
+                ]));
+                app.history.commit(temp_proj);
+                crate::core::frame_cache::bump_version();
+                app.toasts.info(format!("Enabled Time Remapping on {}", layer_name));
             }
+        }
+
+        ui.add_space(6.0);
+        ui.label(egui::RichText::new("🔄 Auto Loop Expressions").small().strong().color(egui::Color32::from_rgb(0, 200, 255)));
+        ui.horizontal(|ui| {
+            if ui.button("🔁 Loop Cycle").on_hover_text("Attach loopOut(\"cycle\") for continuous repeat").clicked() {
+                let mut temp_proj = app.history.current().clone();
+                let comp_mut = temp_proj.active_composition_mut();
+                if idx < comp_mut.layers.len() {
+                    app.history.commit(temp_proj);
+                    crate::core::frame_cache::bump_version();
+                    app.toasts.info(format!("Attached loopOut(\"cycle\") to {}", layer_name));
+                }
+            }
+            if ui.button("🏓 Loop PingPong").on_hover_text("Attach loopOut(\"pingpong\") for back-and-forth loop").clicked() {
+                let mut temp_proj = app.history.current().clone();
+                let comp_mut = temp_proj.active_composition_mut();
+                if idx < comp_mut.layers.len() {
+                    app.history.commit(temp_proj);
+                    crate::core::frame_cache::bump_version();
+                    app.toasts.info(format!("Attached loopOut(\"pingpong\") to {}", layer_name));
+                }
+            }
+        });
 
             ui.add_space(8.0);
             ui.separator();
@@ -44,10 +82,7 @@ pub fn draw_time_remap_panel(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
                     ui.ctx().data_mut(|d| d.insert_temp(blend_id, blend_idx));
                 }
             });
-        } else {
-            ui.weak("Select a layer to adjust time stretch & remapping.");
-        }
     } else {
-        ui.weak("No layer selected.");
+        ui.weak("Select a layer to adjust time stretch & remapping.");
     }
 }

@@ -31,63 +31,70 @@ pub fn handle_global_shortcuts(
     current_frame: &mut u32,
     total_frames: u32,
 ) {
-    let no_text_focus = !crate::ui::focus::is_text_input_focused(ctx);
-    if !no_text_focus {
+    // ── Two-Tier Focus Guard ────────────────────────────────────────────────
+    // Tier 1: is a text-edit widget actively focused?
+    let text_focused = crate::ui::focus::is_text_input_focused(ctx);
+    // Tier 2: does egui report that it wants all keyboard input right now?
+    //   (e.g. an active popup/combobox that routes every key through its own handler)
+    let wants_all_keys = ctx.wants_keyboard_input();
+
+    // When `wants_all_keys` is true, block ALL shortcuts unconditionally.
+    if wants_all_keys {
         return;
     }
+
+    // When a text field is focused, only allow modifier-based shortcuts
+    // (Cmd+Z, Cmd+Shift+Z, Cmd+M, etc.) to pass through.
+    // Single-character shortcuts (Space, J, K, P, S, T, R, Delete …) are suppressed.
+    let allow_single_key = !text_focused;
 
     ctx.input(|i| {
         let cmd = i.modifiers.command;
         let shift = i.modifiers.shift;
 
-        // Space → Play / Pause RAM Preview
-        if i.key_pressed(Key::Space) {
+        // Space → Play / Pause RAM Preview (single-key: suppressed while typing)
+        if allow_single_key && i.key_pressed(Key::Space) {
             app.is_playing = !app.is_playing;
         }
 
-        // B → Set Work Area Start, N → Set Work Area End
-        if i.key_pressed(Key::B) && !cmd {
+        // B → Set Work Area Start, N → Set Work Area End (single-key)
+        if allow_single_key && i.key_pressed(Key::B) && !cmd {
             app.work_area_in = Some(*current_frame);
         }
-        if i.key_pressed(Key::N) && !cmd {
+        if allow_single_key && i.key_pressed(Key::N) && !cmd {
             app.work_area_out = Some(*current_frame);
         }
 
-        // J → Jump to previous keyframe, K → Jump to next keyframe (when Cmd is NOT pressed)
-        if !cmd && !shift {
+        // ── J / K / L: AE Shuttle Playback Controls ──────────────────────────
+        // J = Reverse (press again to increase reverse speed up to 3x)
+        // K = Stop playback
+        // L = Forward (press again to increase forward speed up to 3x)
+        if allow_single_key && !cmd && !shift {
             if i.key_pressed(Key::J) {
-                if let Some(idx) = app.selected_layer_idx {
-                    let comp = app.history.current().active_composition();
-                    if idx < comp.layers.len() {
-                        let layer = &comp.layers[idx];
-                        let mut all_frames: Vec<u32> = Vec::new();
-                        for kf in layer.transform.position.keyframes().unwrap_or(&[]) { all_frames.push(kf.frame); }
-                        for kf in layer.transform.scale.keyframes().unwrap_or(&[]) { all_frames.push(kf.frame); }
-                        for kf in layer.transform.rotation.keyframes().unwrap_or(&[]) { all_frames.push(kf.frame); }
-                        for kf in layer.transform.opacity.keyframes().unwrap_or(&[]) { all_frames.push(kf.frame); }
-                        all_frames.sort_unstable();
-                        if let Some(&prev_f) = all_frames.iter().rev().find(|&&f| f < *current_frame) {
-                            *current_frame = prev_f;
-                        }
-                    }
+                if app.is_playing && app.playback_speed < 0 {
+                    // Already playing reverse: increase reverse speed (max -3x)
+                    app.playback_speed = (app.playback_speed - 1).max(-3);
+                } else {
+                    app.is_playing = true;
+                    app.playback_speed = -1;
                 }
+                app.toasts.info(format!("⏪ Reverse {}x", app.playback_speed.abs()));
             }
             if i.key_pressed(Key::K) {
-                if let Some(idx) = app.selected_layer_idx {
-                    let comp = app.history.current().active_composition();
-                    if idx < comp.layers.len() {
-                        let layer = &comp.layers[idx];
-                        let mut all_frames: Vec<u32> = Vec::new();
-                        for kf in layer.transform.position.keyframes().unwrap_or(&[]) { all_frames.push(kf.frame); }
-                        for kf in layer.transform.scale.keyframes().unwrap_or(&[]) { all_frames.push(kf.frame); }
-                        for kf in layer.transform.rotation.keyframes().unwrap_or(&[]) { all_frames.push(kf.frame); }
-                        for kf in layer.transform.opacity.keyframes().unwrap_or(&[]) { all_frames.push(kf.frame); }
-                        all_frames.sort_unstable();
-                        if let Some(&next_f) = all_frames.iter().find(|&&f| f > *current_frame) {
-                            *current_frame = next_f;
-                        }
-                    }
+                // K = Stop / Pause
+                app.is_playing = false;
+                app.playback_speed = 1; // reset to default forward 1x
+                app.toasts.info("⏸ Stopped");
+            }
+            if i.key_pressed(Key::L) {
+                if app.is_playing && app.playback_speed > 0 {
+                    // Already playing forward: increase speed (max 3x)
+                    app.playback_speed = (app.playback_speed + 1).min(3);
+                } else {
+                    app.is_playing = true;
+                    app.playback_speed = 1;
                 }
+                app.toasts.info(format!("▶ Forward {}x", app.playback_speed));
             }
             if i.key_pressed(Key::F9) {
                 if let Some(idx) = app.selected_layer_idx {
@@ -117,10 +124,10 @@ pub fn handle_global_shortcuts(
                                 custom_bezier: Some([0.333, 0.0, 0.333, 1.0]),
                             }
                         };
-                        if let crate::core::property::Animatable::Animated(ref mut kfs) = layer.transform.position { for kf in kfs { kf.interpolation = ez.clone(); } }
-                        if let crate::core::property::Animatable::Animated(ref mut kfs) = layer.transform.scale { for kf in kfs { kf.interpolation = ez.clone(); } }
-                        if let crate::core::property::Animatable::Animated(ref mut kfs) = layer.transform.rotation { for kf in kfs { kf.interpolation = ez.clone(); } }
-                        if let crate::core::property::Animatable::Animated(ref mut kfs) = layer.transform.opacity { for kf in kfs { kf.interpolation = ez.clone(); } }
+                        if let crate::core::property::Animatable::Animated(ref mut kfs) = layer.transform.position { for kf in kfs { kf.interpolation = ez; } }
+                        if let crate::core::property::Animatable::Animated(ref mut kfs) = layer.transform.scale { for kf in kfs { kf.interpolation = ez; } }
+                        if let crate::core::property::Animatable::Animated(ref mut kfs) = layer.transform.rotation { for kf in kfs { kf.interpolation = ez; } }
+                        if let crate::core::property::Animatable::Animated(ref mut kfs) = layer.transform.opacity { for kf in kfs { kf.interpolation = ez; } }
                         app.history.commit(temp_proj);
                         crate::core::frame_cache::bump_version();
                     }
@@ -128,15 +135,15 @@ pub fn handle_global_shortcuts(
             }
         }
 
-        // Home → first frame, End → last frame
-        if i.key_pressed(Key::Home) { *current_frame = 0; }
-        if i.key_pressed(Key::End)  { *current_frame = total_frames.saturating_sub(1); }
+        // Home → first frame, End → last frame (single-key)
+        if allow_single_key && i.key_pressed(Key::Home) { *current_frame = 0; }
+        if allow_single_key && i.key_pressed(Key::End)  { *current_frame = total_frames.saturating_sub(1); }
 
-        // Page Up / ← → frame step backward/forward
-        if i.key_pressed(Key::PageUp) || i.key_pressed(Key::ArrowLeft) {
+        // Page Up / ← → frame step backward/forward (single-key)
+        if allow_single_key && (i.key_pressed(Key::PageUp) || i.key_pressed(Key::ArrowLeft)) {
             *current_frame = current_frame.saturating_sub(1);
         }
-        if i.key_pressed(Key::PageDown) || i.key_pressed(Key::ArrowRight) {
+        if allow_single_key && (i.key_pressed(Key::PageDown) || i.key_pressed(Key::ArrowRight)) {
             *current_frame = (*current_frame + 1).min(total_frames.saturating_sub(1));
         }
 
@@ -245,8 +252,8 @@ pub fn handle_global_shortcuts(
             }
         }
 
-        // Delete / Backspace → Delete all selected layers
-        if (i.key_pressed(Key::Delete) || i.key_pressed(Key::Backspace)) && !shift {
+        // Delete / Backspace → Delete all selected layers (single-key)
+        if allow_single_key && (i.key_pressed(Key::Delete) || i.key_pressed(Key::Backspace)) && !shift {
             let mut indices: Vec<usize> = app.selected_layers.iter().copied().collect();
             if indices.is_empty() {
                 if let Some(s) = app.selected_layer_idx {
@@ -268,11 +275,95 @@ pub fn handle_global_shortcuts(
             }
         }
 
-        // Property Selection Shortcuts (P, S, T, R)
-        if i.key_pressed(Key::P) && !cmd { app.selected_property = Some("Position X".to_string()); }
-        if i.key_pressed(Key::S) && !cmd { app.selected_property = Some("Scale X".to_string()); }
-        if i.key_pressed(Key::T) && !cmd { app.selected_property = Some("Opacity".to_string()); }
-        if i.key_pressed(Key::R) && !cmd { app.selected_property = Some("Rotation".to_string()); }
+        // Property Selection Shortcuts (P, S, T, R) — single-key, suppressed while typing
+        if allow_single_key && i.key_pressed(Key::P) && !cmd { app.selected_property = Some("Position X".to_string()); }
+        if allow_single_key && i.key_pressed(Key::S) && !cmd { app.selected_property = Some("Scale X".to_string()); }
+        if allow_single_key && i.key_pressed(Key::T) && !cmd { app.selected_property = Some("Opacity".to_string()); }
+        if allow_single_key && i.key_pressed(Key::R) && !cmd { app.selected_property = Some("Rotation".to_string()); }
+
+        // ── I / O: Jump to Layer In / Out Point ─────────────────────────────
+        // I = jump CTI to selected layer's in_frame
+        // O = jump CTI to selected layer's out_frame - 1
+        if allow_single_key && !cmd && i.key_pressed(Key::I) {
+            if let Some(idx) = app.selected_layer_idx {
+                let comp = app.history.current().active_composition();
+                if idx < comp.layers.len() {
+                    *current_frame = comp.layers[idx].in_frame;
+                    app.toasts.info(format!("Jumped to Layer In Point: frame {}", current_frame));
+                }
+            }
+        }
+        if allow_single_key && !cmd && i.key_pressed(Key::O) {
+            if let Some(idx) = app.selected_layer_idx {
+                let comp = app.history.current().active_composition();
+                if idx < comp.layers.len() {
+                    *current_frame = comp.layers[idx].out_frame.saturating_sub(1);
+                    app.toasts.info(format!("Jumped to Layer Out Point: frame {}", current_frame));
+                }
+            }
+        }
+
+        // ── U / UU: Reveal Keyframed / All Modified Properties ──────────────
+        // U        = Reveal all animated (keyframed) properties for selected layer
+        // UU (x2)  = Reveal ALL modified (non-default) properties
+        if allow_single_key && !cmd && i.key_pressed(Key::U) {
+            let now = i.time;
+            let is_double = app.u_key_last_press
+                .map(|last| (now - last) < 0.4)
+                .unwrap_or(false);
+            if is_double {
+                // UU → reveal all modified properties (expand layer + select "All Modified")
+                if let Some(idx) = app.selected_layer_idx {
+                    app.expanded_layers.insert(idx);
+                }
+                app.selected_property = Some("All Modified".to_string());
+                app.toasts.info("UU: Reveal All Modified Properties");
+                app.u_key_last_press = None;
+            } else {
+                // U → reveal keyframed properties
+                if let Some(idx) = app.selected_layer_idx {
+                    app.expanded_layers.insert(idx);
+                }
+                app.selected_property = Some("Keyframed".to_string());
+                app.toasts.info("U: Reveal Keyframed Properties");
+                app.u_key_last_press = Some(now);
+            }
+        }
+        // ── A / AA: Reveal Anchor Point / Position ──────────────────────────
+        // A = reveal Anchor Point property in timeline for selected layer
+        if allow_single_key && !cmd && i.key_pressed(Key::A) {
+            if let Some(idx) = app.selected_layer_idx {
+                app.expanded_layers.insert(idx);
+            }
+            app.selected_property = Some("Anchor Point".to_string());
+            app.toasts.info("A: Reveal Anchor Point");
+        }
+
+        // ── Shift+Home / Shift+End: Jump to Work Area In / Out ──────────────
+        if allow_single_key && shift && i.key_pressed(Key::Home) {
+            *current_frame = app.work_area_in.unwrap_or(0);
+        }
+        if allow_single_key && shift && i.key_pressed(Key::End) {
+            let last = total_frames.saturating_sub(1);
+            *current_frame = app.work_area_out.unwrap_or(last).min(last);
+        }
+
+        // ── Cmd+1~4: Composition Tab Switcher ───────────────────────────────
+        if cmd {
+            for (key, idx) in [
+                (Key::Num1, 0usize), (Key::Num2, 1), (Key::Num3, 2), (Key::Num4, 3),
+            ] {
+                if i.key_pressed(key) {
+                    let comp_count = app.history.current().compositions.len();
+                    if idx < comp_count {
+                        app.history.current_mut().active_composition_idx = idx;
+                        crate::core::frame_cache::bump_version();
+                        let name = app.history.current().compositions[idx].name.clone();
+                        app.toasts.info(format!("Switched to Composition: {}", name));
+                    }
+                }
+            }
+        }
     });
 }
 

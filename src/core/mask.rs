@@ -6,16 +6,18 @@
 ///
 /// Data model follows AE's mask architecture:
 ///   Layer → Vec<Mask> → MaskPath → Vec<MaskVertex>
-
 use serde::{Deserialize, Serialize};
 use crate::core::property::Animatable;
+use crate::core::keyframe::{Keyframe, InterpolationType};
 
 // ─── Mask Blend Mode ───────────────────────────────────────────────────────
 
 /// How this mask combines with masks below it on the same layer.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Default)]
 pub enum MaskMode {
     /// Add to the existing alpha (default AE mode)
+    #[default]
     Add,
     /// Subtract from the existing alpha
     Subtract,
@@ -31,9 +33,6 @@ pub enum MaskMode {
     None,
 }
 
-impl Default for MaskMode {
-    fn default() -> Self { MaskMode::Add }
-}
 
 // ─── Mask Vertex ───────────────────────────────────────────────────────────
 
@@ -73,14 +72,15 @@ impl MaskVertex {
 
 /// Compute a point on a 2D cubic Bezier curve at parameter t in [0, 1].
 pub fn eval_cubic_bezier(p0: [f32; 2], c0: [f32; 2], c1: [f32; 2], p1: [f32; 2], t: f32) -> [f32; 2] {
-    let u = 1.0 - t;
+    let t_safe = t.clamp(0.0, 1.0);
+    let u = 1.0 - t_safe;
     let u2 = u * u;
     let u3 = u2 * u;
-    let t2 = t * t;
-    let t3 = t2 * t;
+    let t2 = t_safe * t_safe;
+    let t3 = t2 * t_safe;
 
-    let x = u3 * p0[0] + 3.0 * u2 * t * c0[0] + 3.0 * u * t2 * c1[0] + t3 * p1[0];
-    let y = u3 * p0[1] + 3.0 * u2 * t * c0[1] + 3.0 * u * t2 * c1[1] + t3 * p1[1];
+    let x = u3 * p0[0] + 3.0 * u2 * t_safe * c0[0] + 3.0 * u * t2 * c1[0] + t3 * p1[0];
+    let y = u3 * p0[1] + 3.0 * u2 * t_safe * c0[1] + 3.0 * u * t2 * c1[1] + t3 * p1[1];
     [x, y]
 }
 
@@ -115,8 +115,8 @@ impl MaskPath {
     pub fn new_ellipse(cx: f32, cy: f32, rx: f32, ry: f32) -> Self {
         // Approximate circle/ellipse with 4 cubic bezier segments
         // Control point distance k ≈ 0.55228475 * radius
-        let kx = rx * 0.55228475;
-        let ky = ry * 0.55228475;
+        let kx = rx * 0.552_284_8;
+        let ky = ry * 0.552_284_8;
         let verts = vec![
             [cx, cy - ry],        // top
             [cx + rx, cy],        // right
@@ -214,6 +214,69 @@ impl MaskPath {
         if self.is_closed {
             if let Some(&first) = out_vec.first() {
                 out_vec.push(first);
+            }
+        }
+    }
+
+    /// Return mask anchor vertices at the given frame (not curve-sampled).
+    pub fn vertices_at_frame(&self, frame: u32) -> Vec<[f32; 2]> {
+        match &self.vertices {
+            Animatable::Constant(v) => v.clone(),
+            Animatable::Animated(kfs) => {
+                if kfs.is_empty() {
+                    Vec::new()
+                } else if kfs.len() == 1 || frame <= kfs[0].frame {
+                    kfs[0].value.clone()
+                } else if let Some(last_kf) = kfs.last() {
+                    if frame >= last_kf.frame {
+                        last_kf.value.clone()
+                    } else {
+                        let mut prev = &kfs[0];
+                        let mut next = &kfs[0];
+                        for kf in kfs {
+                            if kf.frame <= frame { prev = kf; }
+                            if kf.frame >= frame { next = kf; break; }
+                        }
+                        if prev.frame == next.frame {
+                            prev.value.clone()
+                        } else {
+                            let t = (frame - prev.frame) as f32 / (next.frame - prev.frame) as f32;
+                            prev.value.iter().zip(next.value.iter()).map(|(&p0, &p1)| {
+                                [p0[0] + (p1[0] - p0[0]) * t, p0[1] + (p1[1] - p0[1]) * t]
+                            }).collect()
+                        }
+                    }
+                } else {
+                    Vec::new()
+                }
+            }
+        }
+    }
+
+    /// Move a single anchor vertex at `frame`, preserving tangents and keyframe structure.
+    pub fn set_vertex_at_frame(&mut self, frame: u32, vertex_idx: usize, new_pos: [f32; 2]) {
+        match &mut self.vertices {
+            Animatable::Constant(verts) => {
+                if vertex_idx < verts.len() {
+                    verts[vertex_idx] = new_pos;
+                }
+            }
+            Animatable::Animated(keyframes) => {
+                if let Some(kf) = keyframes.iter_mut().find(|k| k.frame == frame) {
+                    if vertex_idx < kf.value.len() {
+                        kf.value[vertex_idx] = new_pos;
+                    }
+                } else {
+                    let mut current = self.vertices_at_frame(frame);
+                    if vertex_idx < current.len() {
+                        current[vertex_idx] = new_pos;
+                        self.vertices.add_keyframe(Keyframe::new(
+                            frame,
+                            current,
+                            InterpolationType::Linear,
+                        ));
+                    }
+                }
             }
         }
     }
@@ -335,6 +398,16 @@ mod tests {
         let p1 = [100.0, 100.0];
         let mid = eval_cubic_bezier(p0, c0, c1, p1, 0.5);
         assert_eq!(mid, [50.0, 50.0]);
+    }
+
+    #[test]
+    fn test_set_vertex_at_frame_preserves_tangents() {
+        let mut path = MaskPath::new_ellipse(100.0, 100.0, 50.0, 50.0);
+        let tangents_before = path.tangents.clone();
+        path.set_vertex_at_frame(0, 0, [120.0, 80.0]);
+        let verts = path.vertices_at_frame(0);
+        assert_eq!(verts[0], [120.0, 80.0]);
+        assert_eq!(path.tangents, tangents_before);
     }
 
     #[test]

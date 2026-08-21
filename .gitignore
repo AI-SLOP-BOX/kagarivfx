@@ -1,2 +1,4 @@
 /target
 **/*.rs.bk
+test_project.json
+test_text_only.json

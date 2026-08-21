@@ -50,13 +50,13 @@ pub fn init_image_loaders(ctx: &egui::Context) {
     egui_extras::install_image_loaders(ctx);
 }
 
-/// Render an SVG string directly as an egui Image widget
-pub fn render_svg_bytes(ui: &mut egui::Ui, name: &str, svg_str: &str, size: egui::Vec2, tint: egui::Color32) -> egui::Response {
-    let uri = format!("bytes://{}", name);
+/// Render an SVG string directly as an egui Image widget.
+/// SVG bytes are borrowed statically; only the cache URI is allocated per call.
+pub fn render_svg_bytes(ui: &mut egui::Ui, name: &str, svg_str: &'static str, size: egui::Vec2, tint: egui::Color32) -> egui::Response {
     ui.add(
         egui::Image::new(egui::ImageSource::Bytes {
-            uri: uri.into(),
-            bytes: svg_str.as_bytes().to_vec().into(),
+            uri: std::borrow::Cow::Owned(name.to_string()),
+            bytes: egui::load::Bytes::Static(svg_str.as_bytes()),
         })
         .fit_to_exact_size(size)
         .tint(tint)

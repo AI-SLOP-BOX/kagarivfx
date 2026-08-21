@@ -1,0 +1,417 @@
+//! CPU pixel-effect pipeline.
+//!
+//! This module is the bridge that finally wires the large library of orphaned
+//! `ae_effects_pack*` image kernels into the render pipeline. The GPU path
+//! (`effect_plugin` -> `EffectParams` -> WGSL) handles the live viewport; this
+//! CPU path applies the same logical effects to a layer's rasterized RGBA
+//! buffer so effects are also visible in the software renderer used for frame
+//! export and CPU preview, and so the effect kernels are actually used.
+//!
+//! Each `EffectType` maps to one or more `ae_effects_pack::apply_*` kernels.
+
+use crate::core::timeline::{Effect, EffectType};
+
+/// Convert a color (0..1 floats) into an `[u8; 4]` (0..255).
+fn color_to_u8(c: [f32; 4]) -> [u8; 4] {
+    [
+        (c[0].clamp(0.0, 1.0) * 255.0).round() as u8,
+        (c[1].clamp(0.0, 1.0) * 255.0).round() as u8,
+        (c[2].clamp(0.0, 1.0) * 255.0).round() as u8,
+        (c[3].clamp(0.0, 1.0) * 255.0).round() as u8,
+    ]
+}
+
+/// Convert a color (0..1 floats) into a 3-channel `[u8; 3]`.
+fn color3_to_u8(c: [f32; 4]) -> [u8; 3] {
+    let c = color_to_u8(c);
+    [c[0], c[1], c[2]]
+}
+
+/// Apply every enabled effect on a layer to its already-rasterized RGBA buffer.
+///
+/// `pixels` is a straight (non-premultiplied) RGBA8 buffer of size
+/// `width*height*4`. Effects are applied in order, mirroring After Effects'
+/// top-to-bottom effect stack within a layer.
+pub fn apply_layer_effects(
+    pixels: &mut [u8],
+    width: u32,
+    height: u32,
+    effects: &[Effect],
+    frame: u32,
+) {
+    for effect in effects {
+        if !effect.enabled {
+            continue;
+        }
+        apply_one(pixels, width, height, &effect.effect_type, frame);
+    }
+}
+
+fn apply_one(
+    pixels: &mut [u8],
+    width: u32,
+    height: u32,
+    effect_type: &EffectType,
+    frame: u32,
+) {
+    use crate::core::ae_effects_pack as pack;
+
+    match effect_type {
+        // Effects already present in the GPU pipeline, mirrored on CPU.
+        EffectType::GaussianBlur { blur_radius } => {
+            let r = blur_radius.evaluate(frame).max(0.0) as u32;
+            pack::apply_fast_box_blur(pixels, width, height, r);
+        }
+        EffectType::ColorTint { color, intensity } => {
+            let rgb = color3_to_u8(color.evaluate(frame));
+            let amount = (intensity.evaluate(frame) / 100.0).clamp(0.0, 1.0);
+            pack::apply_tint(pixels, rgb, rgb, amount);
+        }
+        EffectType::DropShadow { color, opacity, direction, distance, softness } => {
+            let mut sc = color_to_u8(color.evaluate(frame));
+            sc[3] = (sc[3] as f32 * (opacity.evaluate(frame) / 100.0)).clamp(0.0, 255.0) as u8;
+            pack::apply_drop_shadow(
+                pixels,
+                width,
+                height,
+                direction.evaluate(frame),
+                distance.evaluate(frame),
+                softness.evaluate(frame).max(0.0) as u32,
+                sc,
+            );
+        }
+        EffectType::Glow { threshold, radius, intensity, .. } => {
+            pack::apply_glow(
+                pixels,
+                width,
+                height,
+                threshold.evaluate(frame) / 100.0,
+                radius.evaluate(frame).max(0.0) as u32,
+                intensity.evaluate(frame) / 100.0,
+            );
+        }
+
+        // New CPU-only kernels (no GPU equivalent yet).
+        EffectType::Twirl { angle, radius } => {
+            pack::apply_twirl(
+                pixels,
+                width,
+                height,
+                angle.evaluate(frame),
+                radius.evaluate(frame).max(1.0),
+            );
+        }
+        EffectType::Bulge { amount, radius } => {
+            pack::apply_bulge(
+                pixels,
+                width,
+                height,
+                amount.evaluate(frame),
+                radius.evaluate(frame).max(1.0),
+            );
+        }
+        EffectType::Posterize { levels } => {
+            pack::apply_posterize(pixels, levels.evaluate(frame).max(2.0) as u32);
+        }
+        EffectType::Invert { invert_alpha } => {
+            pack::apply_invert(pixels, *invert_alpha);
+        }
+        EffectType::Offset { shift_x, shift_y } => {
+            pack::apply_offset(
+                pixels,
+                width,
+                height,
+                shift_x.evaluate(frame) as i32,
+                shift_y.evaluate(frame) as i32,
+            );
+        }
+        EffectType::DirectionalBlur { angle, length } => {
+            pack::apply_directional_blur(
+                pixels,
+                width,
+                height,
+                angle.evaluate(frame),
+                length.evaluate(frame),
+            );
+        }
+        EffectType::RadialBlur { amount } => {
+            pack::apply_radial_blur(pixels, width, height, amount.evaluate(frame));
+        }
+        EffectType::Sharpen { amount } => {
+            pack::apply_sharpen(pixels, width, height, amount.evaluate(frame));
+        }
+        EffectType::Threshold { threshold } => {
+            pack::apply_threshold(pixels, threshold.evaluate(frame).clamp(0.0, 255.0) as u8);
+        }
+        EffectType::LinearWipe { completion, angle } => {
+            pack::apply_linear_wipe(
+                pixels,
+                width,
+                height,
+                completion.evaluate(frame).clamp(0.0, 100.0),
+                angle.evaluate(frame),
+            );
+        }
+        EffectType::SimpleChoker { choke_amount } => {
+            pack::apply_simple_choker(pixels, choke_amount.evaluate(frame));
+        }
+
+        // Effects from standalone core modules.
+        EffectType::ChromaKey { screen_color, screen_gain, clip_black, clip_white } => {
+            let sc = screen_color.evaluate(frame);
+            let opts = crate::core::chroma_key::ChromaKeyOptions {
+                screen_color: sc,
+                screen_gain: screen_gain.evaluate(frame),
+                screen_balance: 0.5,
+                despill_strength: 0.8,
+                clip_black: clip_black.evaluate(frame),
+                clip_white: clip_white.evaluate(frame),
+            };
+            crate::core::chroma_key::apply_chroma_key(pixels, width, height, &opts);
+        }
+        EffectType::Spherize { radius, refractive_index } => {
+            let opts = crate::core::spherize::SpherizeOptions {
+                radius: radius.evaluate(frame),
+                center: [width as f32 * 0.5, height as f32 * 0.5],
+                refractive_index: refractive_index.evaluate(frame),
+            };
+            let out = crate::core::spherize::apply_spherize(pixels, width, height, &opts);
+            pixels.copy_from_slice(&out);
+        }
+        EffectType::TurbulentDisplace { amount, size, evolution, complexity } => {
+            let opts = crate::core::turbulent_displace::TurbulentDisplaceOptions {
+                displace_type: crate::core::turbulent_displace::TurbulentDisplaceType::Turbulent,
+                amount: amount.evaluate(frame),
+                size: size.evaluate(frame),
+                evolution_deg: evolution.evaluate(frame),
+                complexity: complexity.evaluate(frame).max(1.0) as u32,
+            };
+            let out = crate::core::turbulent_displace::apply_turbulent_displace(pixels, width, height, &opts);
+            pixels.copy_from_slice(&out);
+        }
+        EffectType::Colorama { preset_index, cycle_phase } => {
+            let idx = preset_index.evaluate(frame).round() as u32 % 4;
+            let preset = match idx {
+                0 => crate::core::colorama::ColoramaPreset::Rainbow,
+                1 => crate::core::colorama::ColoramaPreset::Heatmap,
+                2 => crate::core::colorama::ColoramaPreset::Sepia,
+                _ => crate::core::colorama::ColoramaPreset::Solarize,
+            };
+            crate::core::colorama::apply_colorama(pixels, width, height, preset, cycle_phase.evaluate(frame));
+        }
+
+        // Effects with CPU kernels: dispatch to cpu_effects_new
+        EffectType::ChromaticAberration { shift_r, shift_b, edge_falloff } => {
+            crate::core::cpu_effects_new::apply_chromatic_aberration(
+                pixels, width, height,
+                shift_r.evaluate(frame), shift_b.evaluate(frame), edge_falloff.evaluate(frame),
+            );
+        }
+        EffectType::Vignette { intensity, roundness, feather, color } => {
+            crate::core::cpu_effects_new::apply_vignette(
+                pixels, width, height,
+                intensity.evaluate(frame), roundness.evaluate(frame),
+                feather.evaluate(frame), color.evaluate(frame),
+            );
+        }
+        EffectType::Levels { input_black, input_white, gamma, output_black, output_white } => {
+            crate::core::cpu_effects_new::apply_levels(
+                pixels, width, height,
+                input_black.evaluate(frame), input_white.evaluate(frame),
+                gamma.evaluate(frame), output_black.evaluate(frame),
+                output_white.evaluate(frame),
+            );
+        }
+        EffectType::HueSaturation { hue_shift, saturation, lightness } => {
+            crate::core::cpu_effects_new::apply_hue_saturation(
+                pixels, width, height,
+                hue_shift.evaluate(frame), saturation.evaluate(frame),
+                lightness.evaluate(frame),
+            );
+        }
+        EffectType::MotionBlur { shutter_angle, samples } => {
+            crate::core::cpu_effects_new::apply_motion_blur(
+                pixels, width, height,
+                shutter_angle.evaluate(frame), *samples as f32,
+            );
+        }
+        EffectType::MeshWarp { top_left, top_right, bottom_left, bottom_right } => {
+            crate::core::cpu_effects_new::apply_mesh_warp(
+                pixels, width, height,
+                top_left.evaluate(frame), top_right.evaluate(frame),
+                bottom_left.evaluate(frame), bottom_right.evaluate(frame),
+            );
+        }
+        EffectType::ColorGradeLUT { lut_path, intensity } => {
+            let _ = intensity.evaluate(frame);
+            if !lut_path.is_empty() {
+                log::debug!("ColorGradeLUT: LUT file support pending (path={})", lut_path);
+            }
+        }
+        EffectType::ColorSpaceConvert { mode } => {
+            crate::core::cpu_effects_new::apply_color_space_convert(
+                pixels, width, height, *mode as u32,
+            );
+        }
+        EffectType::FilmGrain { intensity, grain_size, color_film: _ } => {
+            crate::core::cpu_effects_new::apply_film_grain(
+                pixels, width, height,
+                intensity.evaluate(frame), *grain_size as u32, frame,
+            );
+        }
+        EffectType::FractalNoise { fractal_type, contrast, brightness, complexity, evolution } => {
+            crate::core::cpu_effects_new::apply_fractal_noise(
+                pixels, width, height,
+                fractal_type.evaluate(frame), contrast.evaluate(frame),
+                brightness.evaluate(frame), complexity.evaluate(frame),
+                evolution.evaluate(frame),
+            );
+        }
+        EffectType::Curves { channel } => {
+            crate::core::cpu_effects_new::apply_curves(
+                pixels, width, height, channel.evaluate(frame),
+            );
+        }
+        EffectType::DisplacementMap { source_layer, max_horizontal, max_vertical } => {
+            crate::core::cpu_effects_new::apply_displacement_map(
+                pixels, width, height,
+                source_layer.evaluate(frame), max_horizontal.evaluate(frame),
+                max_vertical.evaluate(frame),
+            );
+        }
+        EffectType::CompoundBlur { source_layer, max_blur } => {
+            crate::core::cpu_effects_new::apply_compound_blur(
+                pixels, width, height,
+                source_layer.evaluate(frame), max_blur.evaluate(frame),
+            );
+        }
+        EffectType::Minimax { operation, radius } => {
+            crate::core::cpu_effects_new::apply_minimax(
+                pixels, width, height,
+                operation.evaluate(frame), radius.evaluate(frame),
+            );
+        }
+        EffectType::ShiftChannels { take_red, take_green, take_blue, take_alpha } => {
+            crate::core::cpu_effects_new::apply_shift_channels(
+                pixels, width, height,
+                take_red.evaluate(frame), take_green.evaluate(frame),
+                take_blue.evaluate(frame), take_alpha.evaluate(frame),
+            );
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::core::property::Animatable;
+    use crate::core::timeline::{Effect, EffectType};
+
+    fn solid_layer(w: u32, h: u32, r: u8, g: u8, b: u8) -> Vec<u8> {
+        let mut px = vec![0u8; (w * h * 4) as usize];
+        for p in px.chunks_exact_mut(4) {
+            p[0] = r; p[1] = g; p[2] = b; p[3] = 255;
+        }
+        px
+    }
+
+    fn effect(name: &str, et: EffectType) -> Effect {
+        Effect { id: name.to_string(), name: name.to_string(), effect_type: et, enabled: true }
+    }
+
+    #[test]
+    fn test_invert_flips_values() {
+        let mut px = solid_layer(4, 4, 100, 150, 200);
+        let before = px[1];
+        apply_layer_effects(
+            &mut px, 4, 4,
+            &[effect("inv", EffectType::Invert { invert_alpha: false })],
+            0,
+        );
+        assert_eq!(px[0], 255 - 100);
+        assert_eq!(px[1], 255 - before);
+    }
+
+    #[test]
+    fn test_posterize_reduces_levels() {
+        let mut px = solid_layer(8, 8, 123, 45, 67);
+        apply_layer_effects(
+            &mut px, 8, 8,
+            &[effect("post", EffectType::Posterize { levels: Animatable::new_constant(2.0) })],
+            0,
+        );
+        // With 2 levels, each channel becomes either 0 or 255.
+        for &c in &[px[0], px[1], px[2]] {
+            assert!(c == 0 || c == 255, "channel {} not posterized", c);
+        }
+    }
+
+    #[test]
+    fn test_threshold_binaries() {
+        let mut px = solid_layer(8, 8, 123, 200, 10);
+        apply_layer_effects(
+            &mut px, 8, 8,
+            &[effect("thr", EffectType::Threshold { threshold: Animatable::new_constant(128.0) })],
+            0,
+        );
+        for p in px.chunks_exact(4) {
+            let luma = (p[0] as u32 * 299 + p[1] as u32 * 587 + p[2] as u32 * 114) / 1000;
+            let expected = if luma >= 128 { 255 } else { 0 };
+            assert_eq!(p[0], expected);
+            assert_eq!(p[1], expected);
+            assert_eq!(p[2], expected);
+        }
+    }
+
+    #[test]
+    fn test_blur_changes_pixels() {
+        // A single bright pixel in an otherwise dark buffer should spread when blurred.
+        let mut px = vec![0u8; 8 * 8 * 4];
+        for p in px.chunks_exact_mut(4) { p[3] = 255; }
+        let cx = (4 * 8 + 4) * 4;
+        px[cx] = 255; px[cx + 1] = 255; px[cx + 2] = 255;
+
+        apply_layer_effects(
+            &mut px, 8, 8,
+            &[effect("blur", EffectType::GaussianBlur { blur_radius: Animatable::new_constant(3.0) })],
+            0,
+        );
+        // Center stays bright, a near neighbor should now be non-zero (spread).
+        assert!(px[cx] > 0);
+        let neighbor = ((4 * 8 + 5) * 4) as usize;
+        assert!(px[neighbor] > 0, "blur did not spread to neighbor");
+    }
+
+    #[test]
+    fn test_disabled_effect_is_noop() {
+        let mut px = solid_layer(4, 4, 100, 100, 100);
+        let mut eff = effect("inv", EffectType::Invert { invert_alpha: false });
+        eff.enabled = false;
+        apply_layer_effects(&mut px, 4, 4, &[eff], 0);
+        assert_eq!(px[0], 100);
+    }
+
+    #[test]
+    fn test_offset_shifts_content() {
+        // Place a small bright patch at center of a transparent buffer, then offset.
+        let mut px = vec![0u8; 8 * 8 * 4];
+        for p in px.chunks_exact_mut(4) { p[3] = 255; }
+        // Paint pixel (4,4) red.
+        let idx = ((4 * 8 + 4) * 4) as usize;
+        px[idx] = 255; px[idx+1] = 0; px[idx+2] = 0;
+
+        apply_layer_effects(
+            &mut px, 8, 8,
+            &[effect("off", EffectType::Offset {
+                shift_x: Animatable::new_constant(2.0),
+                shift_y: Animatable::new_constant(0.0),
+            })],
+            0,
+        );
+        // After toroidal shift right by 2, red pixel moved from (4,4) to (6,4).
+        let new_idx = ((4 * 8 + 6) * 4) as usize;
+        assert_eq!(px[new_idx], 255, "red channel at shifted position");
+        // Original position should now be transparent (or at least not red).
+        assert_eq!(px[idx], 0, "original position cleared after offset");
+    }
+}

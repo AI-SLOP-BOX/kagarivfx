@@ -25,21 +25,24 @@ pub fn draw_shortcuts_dialog(app: &mut AfterEffectsApp, ctx: &egui::Context) {
                         ui.end_row();
 
                         let shortcuts = [
+                            ("Cmd + K / Ctrl + K", "✨ Open Command Palette (Fuzzy Search Everything)"),
+                            ("Tab", "🕸 Toggle Hybrid Node Graph / Timeline Dual View"),
+                            ("Double-Click Layer", "✏ Open Canvas Inline Quick Numeric Editor"),
+                            ("Shift + Drag", "🎯 15° Rotation Snap / Orthogonal Axis Movement"),
                             ("Cmd + Y", "Create New Solid Layer"),
                             ("Cmd + Alt + Shift + T", "Create New Text Layer"),
                             ("Cmd + Alt + Shift + Y", "Create New Null Object Layer"),
                             ("Cmd + Alt + Y", "Create New Adjustment Layer"),
                             ("Cmd + Shift + C", "Pre-Compose Selected Layers"),
-                            ("Cmd + K", "Composition Settings Dialog"),
                             ("Cmd + D", "Duplicate Selected Layer"),
                             ("Cmd + Shift + D", "Split Layer at Current Time"),
-                            ("F9", "Easy Ease Keyframes"),
+                            ("F9", "Easy Ease Keyframes (with Bezier Presets)"),
                             ("J", "Jump to Previous Keyframe"),
                             ("K", "Jump to Next Keyframe"),
                             ("B", "Set Work Area Start at Current Frame"),
                             ("N", "Set Work Area End at Current Frame"),
-                            ("Space", "Play / Stop Preview"),
-                            ("Cmd + Z", "Undo"),
+                            ("Space", "Play / Stop RAM Preview"),
+                            ("Cmd + Z", "Undo Single Drag Gesture"),
                             ("Cmd + Shift + Z", "Redo"),
                             ("P", "Select Position Property"),
                             ("S", "Select Scale Property"),
@@ -51,7 +54,7 @@ pub fn draw_shortcuts_dialog(app: &mut AfterEffectsApp, ctx: &egui::Context) {
                             ("W", "Rotation Tool"),
                             ("Y", "Pan Behind / Anchor Point Tool"),
                             ("Q", "Shape Tool (Rectangle / Ellipse)"),
-                            ("G", "Pen Tool"),
+                            ("G", "Pen / Vector Bezier Path Tool"),
                         ];
 
                         for (sc, desc) in shortcuts {

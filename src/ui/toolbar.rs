@@ -101,6 +101,10 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
                     }
                 }
 
+                ui.add_space(8.0);
+                ui.separator();
+                crate::ui::align_hud::draw_alignment_hud(app, ui);
+
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     if ui.button(egui::RichText::new("🚀 Render Queue (Cmd+M)").strong().color(egui::Color32::from_rgb(255, 200, 80)))
                         .clicked()

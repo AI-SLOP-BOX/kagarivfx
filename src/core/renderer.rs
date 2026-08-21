@@ -125,6 +125,9 @@ struct LayerUniform {
     // Track Matte System
     track_matte_mode: u32,
 
+    // Shape params: x = polygon/star point count, y = rectangle corner radius (px)
+    shape_params: [f32; 4],
+
     // Mesh Warp / Corner Pin
     meshwarp_enabled: u32,
     corner_top_left: [f32; 2],
@@ -132,8 +135,102 @@ struct LayerUniform {
     corner_bottom_left: [f32; 2],
     corner_bottom_right: [f32; 2],
 
-    _padding_align: [[f32; 4]; 11], // Align to 512 bytes (multiple of 256 for WGPU dynamic uniform offsets)
+    _padding_align: [[f32; 4]; 10], // Align to 512 bytes (multiple of 256 for WGPU dynamic uniform offsets)
 }
+
+/// Bakes a text stroke into a rasterized text bitmap: dilates the fill alpha by the
+/// stroke radius, colors it with stroke_color, and composites it behind the fill.
+/// Returns padded (width, height, pixels) so the stroke is not clipped.
+fn bake_text_stroke(
+    pixels: &[u8],
+    width: u32,
+    height: u32,
+    stroke_color: [f32; 4],
+    stroke_width: f32,
+) -> (u32, u32, Vec<u8>) {
+    let radius = (stroke_width * 0.5).ceil().max(1.0) as i32;
+    let pad = radius + 1;
+    let (nw, nh) = (width + (pad * 2) as u32, height + (pad * 2) as u32);
+    let mut out = vec![0u8; (nw * nh * 4) as usize];
+
+    let sr = (stroke_color[0].clamp(0.0, 1.0) * 255.0) as u8;
+    let sg = (stroke_color[1].clamp(0.0, 1.0) * 255.0) as u8;
+    let sb = (stroke_color[2].clamp(0.0, 1.0) * 255.0) as u8;
+    let stroke_a = stroke_color[3];
+
+    let w = width as i32;
+    let h = height as i32;
+    for py in 0..nh as i32 {
+        for px in 0..nw as i32 {
+            let tx = px - pad;
+            let ty = py - pad;
+            let oidx = ((py as u32 * nw + px as u32) * 4) as usize;
+
+            // Fill sample (offset back by pad)
+            let fill_alpha = if tx >= 0 && ty >= 0 && tx < w && ty < h {
+                let idx = ((ty * w + tx) * 4) as usize;
+                pixels[idx + 3] as f32 / 255.0
+            } else {
+                0.0
+            };
+
+            // Stroke: max over neighbors within radius of fill alpha, feathered by distance
+            let mut stroke_alpha = 0.0f32;
+            if fill_alpha < 0.999 {
+                for dy in -radius..=radius {
+                    for dx in -radius..=radius {
+                        let nx = tx + dx;
+                        let ny = ty + dy;
+                        if nx >= 0 && ny >= 0 && nx < w && ny < h {
+                            let dist = ((dx * dx + dy * dy) as f32).sqrt();
+                            if dist <= stroke_width * 0.5 {
+                                let nidx = ((ny * w + nx) * 4) as usize;
+                                let n_alpha = pixels[nidx + 3] as f32 / 255.0;
+                                if n_alpha > 0.001 {
+                                    let edge = (stroke_width * 0.5 - dist) / (stroke_width * 0.25).max(0.5);
+                                    stroke_alpha = stroke_alpha.max(edge.clamp(0.0, 1.0));
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Composite stroke behind fill (premultiplied-style over)
+            let stroke_a_px = stroke_alpha * stroke_a;
+            let out_a = fill_alpha + stroke_a_px * (1.0 - fill_alpha);
+            if out_a > 0.001 {
+                let fr = pixels.get(((ty.max(0) * w + tx.max(0)) * 4) as usize).copied().unwrap_or(0);
+                let fg = pixels.get(((ty.max(0) * w + tx.max(0)) * 4 + 1) as usize).copied().unwrap_or(0);
+                let fb = pixels.get(((ty.max(0) * w + tx.max(0)) * 4 + 2) as usize).copied().unwrap_or(0);
+                // Stroke color behind fill color
+                let mix_r = (sr as f32 * (1.0 - fill_alpha) + fr as f32 * fill_alpha) as u8;
+                let mix_g = (sg as f32 * (1.0 - fill_alpha) + fg as f32 * fill_alpha) as u8;
+                let mix_b = (sb as f32 * (1.0 - fill_alpha) + fb as f32 * fill_alpha) as u8;
+                out[oidx] = mix_r;
+                out[oidx + 1] = mix_g;
+                out[oidx + 2] = mix_b;
+                out[oidx + 3] = (out_a * 255.0) as u8;
+            }
+        }
+    }
+    (nw, nh, out)
+}
+
+struct TextRasterParams {
+    text: String,
+    font_size: u32,
+    color: [f32; 4],
+    font_family: String,
+    tracking: f32,
+    leading: f32,
+    align: usize,
+    stroke_color: [f32; 4],
+    stroke_width: f32,
+}
+
+type TextTextureCache =
+    std::collections::HashMap<(String, String, u32), (wgpu::Texture, std::sync::Arc<wgpu::BindGroup>)>;
 
 #[allow(dead_code)]
 pub struct WgpuRenderer {
@@ -161,6 +258,9 @@ pub struct WgpuRenderer {
     // Snapshot target offscreen texture
     pub snapshot_texture: Option<wgpu::Texture>,
     pub snapshot_view: Option<wgpu::TextureView>,
+
+    // GPU text rendering: cache of CPU-rasterized text textures keyed by (layer_id, text, font_size)
+    text_texture_cache: std::cell::RefCell<TextTextureCache>,
 }
 
 impl WgpuRenderer {
@@ -420,13 +520,95 @@ impl WgpuRenderer {
             target_size: (0, 0),
             snapshot_texture: None,
             snapshot_view: None,
+            text_texture_cache: std::cell::RefCell::new(std::collections::HashMap::new()),
         }
     }
 
     /// Prepares/resizes the offscreen target texture if needed.
     /// Returns true if the texture was recreated.
-    pub fn ensure_target_size(&mut self, width: u32, height: u32) -> bool {
-        if self.target_size == (width, height) && self.target_texture.is_some() {
+    /// Rasterizes text on CPU and uploads it as a GPU texture, cached by (layer_id, text, font_size).
+    /// Returns (width, height, bind_group) for the text texture, or None if rasterization fails.
+    fn get_or_create_text_texture(
+        &self,
+        layer_id: &str,
+        params: &TextRasterParams,
+    ) -> Option<(u32, u32, std::sync::Arc<wgpu::BindGroup>)> {
+        let (text, font_size, color, font_family, tracking, leading, align) =
+            (params.text.as_str(), params.font_size, params.color, params.font_family.as_str(), params.tracking, params.leading, params.align);
+        let (stroke_color, stroke_width) = (params.stroke_color, params.stroke_width);
+        let key = (layer_id.to_string(), text.to_string(), font_size);
+        if let Some(bind_group) = self.text_texture_cache.borrow().get(&key).map(|(_, bg)| bg.clone()) {
+            // Cached: recompute dims from text layout for matrix sizing
+            let (w, h) = crate::core::font_rasterizer::with_font_rasterizer(|r| {
+                let family = r.resolve_family(font_family);
+                r.rasterize_text_formatted(&family, text, font_size as f32, color, tracking, leading, 0.0,
+                    crate::core::text_layout::TextAlign::Left)
+                    .map(|(w, h, _)| (w, h))
+                    .unwrap_or((1, 1))
+            });
+            return Some((w, h, bind_group));
+        }
+
+        let alignment = match align {
+            1 => crate::core::text_layout::TextAlign::Center,
+            2 => crate::core::text_layout::TextAlign::Right,
+            _ => crate::core::text_layout::TextAlign::Left,
+        };
+        let rasterized = crate::core::font_rasterizer::with_font_rasterizer(|r| {
+            let family = r.resolve_family(font_family);
+            r.rasterize_text_formatted(&family, text, font_size as f32, color, tracking, leading, 0.0, alignment)
+        })?;
+        if rasterized.0 == 0 || rasterized.1 == 0 || rasterized.2.is_empty() {
+            return None;
+        }
+        // Bake stroke (if any) into the bitmap with padding
+        let (tw, th, pixels) = if stroke_width > 0.1 {
+            bake_text_stroke(&rasterized.2, rasterized.0, rasterized.1, stroke_color, stroke_width)
+        } else {
+            rasterized
+        };
+
+        let size = wgpu::Extent3d { width: tw, height: th, depth_or_array_layers: 1 };
+        let texture = self.device.create_texture(&wgpu::TextureDescriptor {
+            label: Some("Text Layer Texture"),
+            size,
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: wgpu::TextureFormat::Rgba8UnormSrgb,
+            usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+            view_formats: &[],
+        });
+        self.queue.write_texture(
+            wgpu::ImageCopyTexture {
+                texture: &texture,
+                mip_level: 0,
+                origin: wgpu::Origin3d::ZERO,
+                aspect: wgpu::TextureAspect::All,
+            },
+            &pixels,
+            wgpu::ImageDataLayout {
+                offset: 0,
+                bytes_per_row: Some(tw * 4),
+                rows_per_image: Some(th),
+            },
+            size,
+        );
+        let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
+        let bind_group = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
+            layout: &self.texture_bind_group_layout,
+            entries: &[
+                wgpu::BindGroupEntry { binding: 0, resource: wgpu::BindingResource::TextureView(&view) },
+                wgpu::BindGroupEntry { binding: 1, resource: wgpu::BindingResource::Sampler(&self.sampler) },
+            ],
+            label: Some("text_texture_bind_group"),
+        });
+        let bind_group = std::sync::Arc::new(bind_group);
+        self.text_texture_cache.borrow_mut().insert(key, (texture, bind_group.clone()));
+        Some((tw, th, bind_group))
+    }
+
+    pub fn ensure_target_size(&mut self, width: u32, height: u32) -> bool {        if self.target_size == (width, height) && self.target_texture.is_some() {
             return false;
         }
 
@@ -482,6 +664,9 @@ impl WgpuRenderer {
         };
         self.queue
             .write_buffer(&self.globals_buffer, 0, bytemuck::bytes_of(&globals));
+
+        // Per-layer text texture bind groups (declared before the render pass so they outlive it)
+        let mut layer_textures: Vec<Option<std::sync::Arc<wgpu::BindGroup>>> = Vec::new();
 
         // Create Command Encoder
         let mut encoder = self
@@ -546,22 +731,57 @@ impl WgpuRenderer {
                     continue;
                 }
 
-                // Retrieve transform values at the current frame
-                let pos = layer.transform.position.evaluate(frame);
-                let scale = layer.transform.scale.evaluate(frame);
-                let rotation = layer.transform.rotation.evaluate(frame);
-                let opacity = layer.transform.opacity.evaluate(frame);
+                // Retrieve transform values at the current frame.
+                // Parented layers and expression-driven layers resolve through the full
+                // composition-aware path (position/scale/rotation/opacity inherit).
+                let layer_has_exprs = layer.transform.position_expression.is_some()
+                    || layer.transform.rotation_expression.is_some()
+                    || layer.transform.scale_expression.is_some()
+                    || layer.transform.opacity_expression.is_some();
+                let (pos, scale, rotation, opacity) = if layer.parent_id.is_some() || layer_has_exprs {
+                    let (p, s, r, o) = comp.resolve_world_transform(layer, frame);
+                    (p, s, r, o / 100.0)
+                } else {
+                    (
+                        layer.transform.position.evaluate(frame),
+                        layer.transform.scale.evaluate(frame),
+                        layer.transform.rotation.evaluate(frame),
+                        layer.transform.opacity.evaluate(frame),
+                    )
+                };
 
                 // Default layer dimensions (solid size or fallback)
-                let (layer_w, layer_h) = match &layer.layer_type {
+                let (mut layer_w, mut layer_h) = match &layer.layer_type {
                     LayerType::Solid { .. } => (1.0, 1.0),
                     LayerType::Image { .. } => (1.0, 1.0),
-                    LayerType::Text { font_size, .. } => (1.0, *font_size as f32 * 10.0),
+                    LayerType::Text { font_size, .. } => (1.0, *font_size as f32 * 10.0), // Overridden below if text texture rasterization succeeds
                     LayerType::Shape { .. } => (1.0, 1.0),
                     LayerType::Null => (0.0, 0.0),
                     LayerType::PreComp { .. } => (comp.width as f32, comp.height as f32),
+                    LayerType::AdjustmentLayer => (comp.width as f32, comp.height as f32),
                     LayerType::Audio { .. } => (0.0, 0.0),
+                    LayerType::Particle { .. } => (comp.width as f32, comp.height as f32),
                 };
+
+                // GPU text rendering: rasterize text to a cached texture; if successful,
+                // size the quad to the text bitmap and render via the image sampling path.
+                let mut text_bind_group: Option<std::sync::Arc<wgpu::BindGroup>> = None;
+                let mut is_textured_text = false;
+                if let LayerType::Text { text, font_size, color, font_family, tracking, leading, align, stroke_color, stroke_width, .. } = &layer.layer_type {
+                    let params = TextRasterParams {
+                        text: text.clone(), font_size: *font_size, color: *color,
+                        font_family: font_family.clone(), tracking: *tracking, leading: *leading, align: *align,
+                        stroke_color: *stroke_color, stroke_width: *stroke_width,
+                    };
+                    if let Some((tw, th, bg)) = self.get_or_create_text_texture(&layer.id, &params) {
+                        layer_w = tw as f32;
+                        layer_h = th as f32;
+                        text_bind_group = Some(bg);
+                        is_textured_text = true;
+                    }
+                }
+                layer_textures.push(text_bind_group);
+
 
                 let anc = layer.transform.anchor_point.evaluate(frame);
 
@@ -617,25 +837,50 @@ impl WgpuRenderer {
                 };
 
                 // Prepare Layer Uniform details
-                let (layer_type, shape_type, color) = match &layer.layer_type {
+                let (mut layer_type, shape_type, mut color) = match &layer.layer_type {
                     LayerType::Solid { color } => (0u32, 0u32, *color),
                     LayerType::Image { .. } => (1u32, 0u32, [1.0, 1.0, 1.0, 1.0]),
-                    LayerType::Shape { shape_type, color } => {
+                    LayerType::Shape { shape_type, color, .. } => {
                         let st = match shape_type {
-                            ShapeType::Rectangle => 0u32,
-                            ShapeType::Ellipse => 1u32,
-                            ShapeType::Star => 2u32,
-                            ShapeType::Polygon => 3u32,
+                            ShapeType::Rectangle { .. } => 0u32,
+                            ShapeType::Ellipse { .. } => 1u32,
+                            ShapeType::Star { .. } => 2u32,
+                            ShapeType::Polygon { .. } => 3u32,
                         };
                         (2u32, st, *color)
                     }
-                    LayerType::Text { color, .. } => (3u32, 0u32, *color),
-                    LayerType::Null => (4u32, 0u32, [0.0, 0.0, 0.0, 0.0]),
+                    LayerType::Text { color, .. } => (3u32, 0u32, *color),                    LayerType::Null => (4u32, 0u32, [0.0, 0.0, 0.0, 0.0]),
                     LayerType::PreComp { .. } => (5u32, 0u32, [1.0, 1.0, 1.0, 1.0]),
+                    LayerType::AdjustmentLayer => (7u32, 0u32, [1.0, 1.0, 1.0, 1.0]),
                     LayerType::Audio { .. } => (6u32, 0u32, [0.0, 0.0, 0.0, 0.0]),
+                    LayerType::Particle { .. } => (8u32, 0u32, [1.0, 1.0, 1.0, 1.0]),
                 };
 
+                // Textured text uses the image sampling path with unmodified texture colors
+                if is_textured_text {
+                    layer_type = 1u32;
+                    color = [1.0, 1.0, 1.0, 1.0];
+                }
+
+
                 let ep = evaluate_effects(&layer.effects, frame);
+
+                // Shape parameters for GPU SDFs: polygon/star point count, rectangle corner radius
+                let shape_params_eval: [f32; 4] = match &layer.layer_type {
+                    LayerType::Shape { shape_type, .. } => match shape_type {
+                        ShapeType::Polygon { sides, .. } => [sides.evaluate(frame), 0.0, 0.0, 0.0],
+                        ShapeType::Star { points, .. } => [points.evaluate(frame), 0.0, 0.0, 0.0],
+                        ShapeType::Rectangle { corner_radius, width, height, .. } => {
+                            let cr = corner_radius.evaluate(frame);
+                            let w = width.evaluate(frame).max(1.0);
+                            let h = height.evaluate(frame).max(1.0);
+                            // Normalize corner radius to 0..0.5 of the smaller half-size
+                            [0.0, (cr / w.min(h)).clamp(0.0, 0.5), 0.0, 0.0]
+                        }
+                        _ => [0.0; 4],
+                    },
+                    _ => [0.0; 4],
+                };
 
                 let layer_uniform = LayerUniform {
                     transform_matrix,
@@ -671,6 +916,12 @@ impl WgpuRenderer {
                         crate::core::timeline::BlendMode::Add => 4,
                         crate::core::timeline::BlendMode::Darken => 5,
                         crate::core::timeline::BlendMode::Lighten => 6,
+                        crate::core::timeline::BlendMode::SoftLight => 7,
+                        crate::core::timeline::BlendMode::HardLight => 8,
+                        crate::core::timeline::BlendMode::Difference => 9,
+                        crate::core::timeline::BlendMode::Exclusion => 10,
+                        crate::core::timeline::BlendMode::Divide => 11,
+                        crate::core::timeline::BlendMode::Subtract => 12,
                     },
                     levels_enabled: ep.levels_enabled,
                     levels_in_black: ep.levels_in_black,
@@ -690,6 +941,7 @@ impl WgpuRenderer {
                     grain_enabled: ep.grain_enabled,
                     grain_intensity: ep.grain_intensity,
                     grain_size: ep.grain_size,
+                    shape_params: shape_params_eval,
                     track_matte_mode: match layer.track_matte {
                         crate::core::timeline::TrackMatteMode::None => 0,
                         crate::core::timeline::TrackMatteMode::AlphaMatte => 1,
@@ -702,7 +954,7 @@ impl WgpuRenderer {
                     corner_top_right: ep.corner_top_right,
                     corner_bottom_left: ep.corner_bottom_left,
                     corner_bottom_right: ep.corner_bottom_right,
-                    _padding_align: [[0.0; 4]; 11],
+                    _padding_align: [[0.0; 4]; 10],
                 };
 
                 uniforms.push(layer_uniform);
@@ -735,8 +987,12 @@ impl WgpuRenderer {
                 let dynamic_offset = (i * std::mem::size_of::<LayerUniform>()) as u32;
                 render_pass.set_bind_group(1, &self.layer_bind_group, &[dynamic_offset]);
 
-                // Texture binding (use dummy for solid/SDF shapes)
-                render_pass.set_bind_group(2, &self.dummy_texture_bind_group, &[]);
+                // Texture binding (use per-layer text texture when available, dummy for solid/SDF shapes)
+                let tex_bg: &wgpu::BindGroup = match layer_textures.get(i) {
+                    Some(Some(bg)) => bg,
+                    _ => &self.dummy_texture_bind_group,
+                };
+                render_pass.set_bind_group(2, tex_bg, &[]);
 
                 // Draw!
                 render_pass.draw_indexed(0..(INDICES.len() as u32), 0, 0..1);

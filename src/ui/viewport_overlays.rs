@@ -1,0 +1,354 @@
+#![allow(clippy::too_many_arguments)]
+
+use eframe::egui;
+use crate::AfterEffectsApp;
+
+pub fn draw_viewport_overlays(
+    ui: &mut egui::Ui,
+    app: &AfterEffectsApp,
+    ctx: &egui::Context,
+    current_frame: u32,
+    origin_x: f32,
+    origin_y: f32,
+    draw_w: f32,
+    draw_h: f32,
+    comp_w: f32,
+    comp_h: f32,
+    rendered_gpu: bool,
+) {
+    // ── Grid Overlay ──
+    if app.show_grid {
+        let grid_step = draw_w / 16.0;
+        let grid_stroke = egui::Stroke::new(0.5, egui::Color32::from_rgba_unmultiplied(255, 255, 255, 30));
+        let mut gx = origin_x + grid_step;
+        while gx < origin_x + draw_w {
+            ui.painter().line_segment([egui::pos2(gx, origin_y), egui::pos2(gx, origin_y + draw_h)], grid_stroke);
+            gx += grid_step;
+        }
+        let mut gy = origin_y + grid_step;
+        while gy < origin_y + draw_h {
+            ui.painter().line_segment([egui::pos2(origin_x, gy), egui::pos2(origin_x + draw_w, gy)], grid_stroke);
+            gy += grid_step;
+        }
+    }
+
+    // 📍 Live Motion Path Trajectory Overlay (AE Standard)
+    let comp = app.history.current().active_composition();
+    if let Some(idx) = app.selected_layer_idx {
+        if idx < comp.layers.len() {
+            let layer = &comp.layers[idx];
+            if let Some(kfs) = layer.transform.position.keyframes() {
+                if kfs.len() >= 2 {
+                    let path_stroke = egui::Stroke::new(1.5, egui::Color32::from_rgb(0, 200, 255));
+                    let mut prev_pt = None;
+                    for kf in kfs {
+                        let pos_x = kf.value[0];
+                        let pos_y = kf.value[1];
+                        let norm_x = pos_x / comp_w;
+                        let norm_y = pos_y / comp_h;
+                        let px = origin_x + norm_x * draw_w;
+                        let py = origin_y + norm_y * draw_h;
+                        let p = egui::pos2(px, py);
+
+                        if let Some(pp) = prev_pt {
+                            ui.painter().line_segment([pp, p], path_stroke);
+                        }
+                        prev_pt = Some(p);
+
+                        // Keyframe Anchor Point Marker (📍)
+                        ui.painter().circle_filled(p, 4.0, egui::Color32::from_rgb(255, 200, 0));
+                        ui.painter().circle_stroke(p, 4.0, egui::Stroke::new(1.0, egui::Color32::BLACK));
+                    }
+                }
+            }
+        }
+    }
+
+    // ── Action & Title Safe Guides Overlay ──
+    if app.show_guides {
+        let guide_stroke = egui::Stroke::new(1.0, egui::Color32::from_rgb(0, 200, 230));
+        let cx = origin_x + draw_w * 0.5;
+        let cy = origin_y + draw_h * 0.5;
+
+        // Action Safe (90%)
+        let as_w = draw_w * 0.9;
+        let as_h = draw_h * 0.9;
+        let as_rect = egui::Rect::from_center_size(egui::pos2(cx, cy), egui::vec2(as_w, as_h));
+        ui.painter().rect_stroke(as_rect, 0.0, guide_stroke);
+
+        // Title Safe (80%)
+        let ts_w = draw_w * 0.8;
+        let ts_h = draw_h * 0.8;
+        let ts_rect = egui::Rect::from_center_size(egui::pos2(cx, cy), egui::vec2(ts_w, ts_h));
+        ui.painter().rect_stroke(ts_rect, 0.0, guide_stroke);
+
+        // Center Crosshair
+        ui.painter().line_segment([egui::pos2(cx - 10.0, cy), egui::pos2(cx + 10.0, cy)], guide_stroke);
+        ui.painter().line_segment([egui::pos2(cx, cy - 10.0), egui::pos2(cx, cy + 10.0)], guide_stroke);
+    }
+
+    // ── HUD Overlay Badges ──
+    let backend_text = if rendered_gpu { "[GPU] WGPU Acceleration" } else { "[CPU] Software Canvas" };
+    let backend_color = if rendered_gpu { egui::Color32::from_rgb(40, 160, 100) } else { egui::Color32::from_rgb(180, 120, 40) };
+    
+    // Top Left Performance & FPS HUD Overlay
+    let dt = ctx.input(|i| i.stable_dt.max(0.001));
+    let real_fps = (1.0 / dt).clamp(1.0, 240.0);
+    let render_ms = dt * 1000.0;
+    let cached_frames = app.frame_cache.cached_count();
+    let total_comp_frames = app.history.current().active_composition().duration_frames.max(1);
+    let cache_pct = (cached_frames as f32 / total_comp_frames as f32 * 100.0).clamp(0.0, 100.0);
+
+    let fps_text = format!(
+        "⚡ PERF: {:.1}ms ({:.0} FPS) | RAM Cache: {}/{} ({:.0}%)",
+        render_ms, real_fps, cached_frames, total_comp_frames, cache_pct
+    );
+    let fps_rect = egui::Rect::from_min_size(
+        egui::pos2(origin_x + 10.0, origin_y + 10.0),
+        egui::vec2(290.0, 24.0),
+    );
+    ui.painter().rect_filled(fps_rect, 4.0, egui::Color32::from_rgba_unmultiplied(15, 22, 32, 220));
+    let stroke_c = if render_ms > 33.3 {
+        egui::Color32::from_rgb(255, 100, 80) // Red warning for < 30fps
+    } else {
+        egui::Color32::from_rgb(0, 200, 255) // Blue neon
+    };
+    ui.painter().rect_stroke(fps_rect, 4.0, egui::Stroke::new(1.0, stroke_c));
+    ui.painter().text(fps_rect.center(), egui::Align2::CENTER_CENTER, fps_text, egui::FontId::monospace(10.5), egui::Color32::from_rgb(200, 235, 255));
+
+    // Top Right Engine Badge
+    let badge_rect = egui::Rect::from_min_size(
+        egui::pos2(origin_x + draw_w - 180.0, origin_y + 10.0),
+        egui::vec2(170.0, 24.0),
+    );
+    ui.painter().rect_filled(badge_rect, 4.0, egui::Color32::from_rgba_unmultiplied(20, 20, 20, 210));
+    ui.painter().rect_stroke(badge_rect, 4.0, egui::Stroke::new(1.0, backend_color));
+    ui.painter().text(badge_rect.center(), egui::Align2::CENTER_CENTER, backend_text, egui::FontId::proportional(11.0), backend_color);
+
+    // Bottom Left Selection HUD Status
+    if let Some(s_idx) = app.selected_layer_idx {
+        let comp = app.history.current().active_composition();
+        if s_idx < comp.layers.len() {
+            let s_layer = &comp.layers[s_idx];
+            let pos = s_layer.transform.position.evaluate(current_frame);
+            let scale = s_layer.transform.scale.evaluate(current_frame);
+            let rot = s_layer.transform.rotation.evaluate(current_frame);
+            
+            let status_str = format!(
+                "SELECTED: Layer {} ({}) | Pos: ({:.0}, {:.0}) | Scale: {:.0}% | Rot: {:.1}°",
+                s_idx + 1, s_layer.name, pos[0], pos[1], scale[0], rot
+            );
+            
+            let status_rect = egui::Rect::from_min_size(
+                egui::pos2(origin_x + 10.0, origin_y + draw_h - 34.0),
+                egui::vec2(status_str.len() as f32 * 6.8 + 20.0, 24.0),
+            );
+            ui.painter().rect_filled(status_rect, 4.0, egui::Color32::from_rgba_unmultiplied(15, 20, 30, 220));
+            ui.painter().rect_stroke(status_rect, 4.0, egui::Stroke::new(1.0, egui::Color32::from_rgb(70, 140, 240)));
+            ui.painter().text(
+                status_rect.center(),
+                egui::Align2::CENTER_CENTER,
+                status_str,
+                egui::FontId::proportional(11.0),
+                egui::Color32::from_rgb(200, 220, 255),
+            );
+        }
+    }
+
+    // ── 3D Axis Transform Gizmo Overlay ──
+    if app.show_handles {
+        if let Some(s_idx) = app.selected_layer_idx {
+            let comp = app.history.current().active_composition();
+            if s_idx < comp.layers.len() {
+                let s_layer = &comp.layers[s_idx];
+                let (pos, _scale, _rot, _op) = comp.resolve_world_transform(s_layer, current_frame);
+                let rx = origin_x + (pos[0] / comp_w) * draw_w;
+                let ry = origin_y + (pos[1] / comp_h) * draw_h;
+                let center = egui::pos2(rx, ry);
+
+                // X-Axis (Red)
+                let x_end = egui::pos2(rx + 65.0, ry);
+                ui.painter().line_segment([center, x_end], egui::Stroke::new(2.5, egui::Color32::from_rgb(240, 70, 70)));
+                ui.painter().text(egui::pos2(x_end.x + 8.0, x_end.y), egui::Align2::LEFT_CENTER, "X", egui::FontId::proportional(12.0), egui::Color32::from_rgb(240, 70, 70));
+
+                // Y-Axis (Green)
+                let y_end = egui::pos2(rx, ry + 65.0);
+                ui.painter().line_segment([center, y_end], egui::Stroke::new(2.5, egui::Color32::from_rgb(60, 220, 80)));
+                ui.painter().text(egui::pos2(y_end.x, y_end.y + 8.0), egui::Align2::CENTER_TOP, "Y", egui::FontId::proportional(12.0), egui::Color32::from_rgb(60, 220, 80));
+
+                // Z-Axis (Blue Diagonal)
+                let z_end = egui::pos2(rx - 45.0, ry + 45.0);
+                ui.painter().line_segment([center, z_end], egui::Stroke::new(2.5, egui::Color32::from_rgb(60, 150, 255)));
+                ui.painter().text(egui::pos2(z_end.x - 8.0, z_end.y + 4.0), egui::Align2::RIGHT_TOP, "Z", egui::FontId::proportional(12.0), egui::Color32::from_rgb(60, 150, 255));
+
+                // 8-Point Bounding Box Transform Handles
+                let scale = s_layer.transform.scale.evaluate(current_frame);
+                let hw = (scale[0].abs() / 100.0 * 100.0 * 0.5) * (draw_w / comp_w);
+                let hh = (scale[1].abs() / 100.0 * 100.0 * 0.5) * (draw_h / comp_h);
+                let bbox_corners = [
+                    egui::pos2(rx - hw, ry - hh), // Top-Left
+                    egui::pos2(rx, ry - hh),      // Top-Center
+                    egui::pos2(rx + hw, ry - hh), // Top-Right
+                    egui::pos2(rx + hw, ry),      // Mid-Right
+                    egui::pos2(rx + hw, ry + hh), // Bottom-Right
+                    egui::pos2(rx, ry + hh),      // Bottom-Center
+                    egui::pos2(rx - hw, ry + hh), // Bottom-Left
+                    egui::pos2(rx - hw, ry),      // Mid-Left
+                ];
+
+                let bbox_rect = egui::Rect::from_center_size(center, egui::vec2(hw * 2.0, hh * 2.0));
+                ui.painter().rect_stroke(bbox_rect, 0.0, egui::Stroke::new(1.5, egui::Color32::from_rgb(0, 180, 255)));
+
+                let hover_pos = ctx.input(|i| i.pointer.hover_pos());
+
+                for hp in bbox_corners {
+                    let dist = hover_pos.map_or(999.0, |p| p.distance(hp));
+                    let is_hovered = dist <= 14.0;
+
+                    let h_size = if is_hovered { 12.0 } else { 7.0 };
+                    let fill_c = if is_hovered { egui::Color32::from_rgb(255, 230, 100) } else { egui::Color32::WHITE };
+                    let stroke_c = if is_hovered { egui::Color32::from_rgb(255, 100, 0) } else { egui::Color32::from_rgb(0, 120, 255) };
+
+                    let h_rect = egui::Rect::from_center_size(hp, egui::vec2(h_size, h_size));
+                    ui.painter().rect_filled(h_rect, 1.0, fill_c);
+                    ui.painter().rect_stroke(h_rect, 1.0, egui::Stroke::new(if is_hovered { 2.0 } else { 1.0 }, stroke_c));
+                }
+
+                // Center Target Circle with Magnetic Hover
+                let center_dist = hover_pos.map_or(999.0, |p| p.distance(center));
+                let is_center_hovered = center_dist <= 14.0;
+                let c_radius = if is_center_hovered { 8.0 } else { 5.0 };
+
+                ui.painter().circle_filled(center, c_radius, egui::Color32::from_rgb(255, 215, 0));
+                ui.painter().circle_stroke(center, c_radius, egui::Stroke::new(1.5, egui::Color32::BLACK));
+                if is_center_hovered {
+                    ui.painter().circle_stroke(center, 30.0, egui::Stroke::new(1.5, egui::Color32::from_rgb(60, 140, 255)));
+                }
+
+                // ── Vector Mask Bezier Tangents & Path Overlay ──
+                for mask in &s_layer.masks {
+                    if mask.enabled {
+                        let verts = mask.path.vertices_at_frame(current_frame);
+                        for v in &verts {
+                            let vx = origin_x + (v[0] / comp_w) * draw_w;
+                            let vy = origin_y + (v[1] / comp_h) * draw_h;
+                            let v_pos = egui::pos2(vx, vy);
+
+                            // Draw Mask Vertex Anchor Point
+                            ui.painter().rect_filled(
+                                egui::Rect::from_center_size(v_pos, egui::vec2(7.0, 7.0)),
+                                1.0,
+                                egui::Color32::from_rgb(255, 200, 0),
+                            );
+                            ui.painter().rect_stroke(
+                                egui::Rect::from_center_size(v_pos, egui::vec2(7.0, 7.0)),
+                                1.0,
+                                egui::Stroke::new(1.0, egui::Color32::BLACK),
+                            );
+                        }
+                    }
+                }
+
+                // Dragging Floating HUD Badge next to cursor
+                if app.viewport_drag_state.is_some() || app.viewport_mask_drag_state.is_some() {
+                    if let Some(ptr) = hover_pos {
+                        let hud_pos = egui::pos2(ptr.x + 16.0, ptr.y + 16.0);
+                        let hud_rect = egui::Rect::from_min_size(hud_pos, egui::vec2(130.0, 22.0));
+                        ui.painter().rect_filled(hud_rect, 4.0, egui::Color32::from_rgba_unmultiplied(10, 15, 25, 220));
+                        ui.painter().rect_stroke(hud_rect, 4.0, egui::Stroke::new(1.0, egui::Color32::from_rgb(0, 200, 255)));
+                        ui.painter().text(
+                            hud_rect.center(),
+                            egui::Align2::CENTER_CENTER,
+                            format!("Scale: ({:.0}%, {:.0}%)", scale[0], scale[1]),
+                            egui::FontId::monospace(10.0),
+                            egui::Color32::from_rgb(200, 240, 255),
+                        );
+                    }
+                }
+
+                // Render 3D Vector Spatial Gizmo Overlay if layer is 3D
+                if s_layer.is_3d {
+                    let axis_len = 65.0f32;
+                    // Red X-Axis Line
+                    ui.painter().line_segment(
+                        [center, egui::pos2(center.x + axis_len, center.y)],
+                        egui::Stroke::new(2.5, egui::Color32::from_rgb(255, 60, 80)),
+                    );
+                    ui.painter().text(
+                        egui::pos2(center.x + axis_len + 8.0, center.y),
+                        egui::Align2::LEFT_CENTER,
+                        "X",
+                        egui::FontId::monospace(11.0),
+                        egui::Color32::from_rgb(255, 60, 80),
+                    );
+
+                        // Green Y-Axis Line
+                        ui.painter().line_segment(
+                            [center, egui::pos2(center.x, center.y - axis_len)],
+                            egui::Stroke::new(2.5, egui::Color32::from_rgb(60, 230, 90)),
+                        );
+                        ui.painter().text(
+                            egui::pos2(center.x, center.y - axis_len - 8.0),
+                            egui::Align2::CENTER_BOTTOM,
+                            "Y",
+                            egui::FontId::monospace(11.0),
+                            egui::Color32::from_rgb(60, 230, 90),
+                        );
+
+                        // Blue Z-Axis Line (Diagonal Depth)
+                        let z_end = egui::pos2(center.x - axis_len * 0.6, center.y + axis_len * 0.6);
+                        ui.painter().line_segment(
+                            [center, z_end],
+                            egui::Stroke::new(2.5, egui::Color32::from_rgb(40, 160, 255)),
+                        );
+                        ui.painter().text(
+                            egui::pos2(z_end.x - 8.0, z_end.y + 4.0),
+                            egui::Align2::RIGHT_TOP,
+                            "Z",
+                            egui::FontId::monospace(11.0),
+                            egui::Color32::from_rgb(40, 160, 255),
+                        );
+                    }
+                }
+            }
+        }
+
+    // ── Snapshot A/B Interactive Split Wipe Line Overlay ──
+    if crate::ui::viewport_state::is_comparing(ctx) {
+        let wipe_pos = crate::ui::viewport_state::wipe_pos(ctx);
+        let wipe_x = origin_x + wipe_pos * draw_w;
+        let handle_center = egui::pos2(wipe_x, origin_y + draw_h * 0.5);
+
+        ui.painter().line_segment(
+            [egui::pos2(wipe_x, origin_y), egui::pos2(wipe_x, origin_y + draw_h)],
+            egui::Stroke::new(2.5, egui::Color32::from_rgb(100, 220, 255)),
+        );
+        ui.painter().circle_filled(handle_center, 10.0, egui::Color32::from_rgb(100, 220, 255));
+        ui.painter().circle_stroke(handle_center, 10.0, egui::Stroke::new(1.5, egui::Color32::WHITE));
+        ui.painter().text(
+            egui::pos2(wipe_x - 15.0, origin_y + 15.0),
+            egui::Align2::RIGHT_TOP,
+            "[Snap A]",
+            egui::FontId::proportional(11.0),
+            egui::Color32::from_rgb(100, 220, 255),
+        );
+        ui.painter().text(
+            egui::pos2(wipe_x + 15.0, origin_y + 15.0),
+            egui::Align2::LEFT_TOP,
+            "[Live Frame]",
+            egui::FontId::proportional(11.0),
+            egui::Color32::from_rgb(255, 200, 100),
+        );
+
+        let handle_rect = egui::Rect::from_center_size(handle_center, egui::vec2(24.0, draw_h.max(24.0)));
+        let wipe_response = ui.interact(handle_rect, ui.id().with("viewport_wipe_drag"), egui::Sense::drag());
+        if wipe_response.dragged() {
+            if let Some(ptr) = wipe_response.interact_pointer_pos() {
+                crate::ui::viewport_state::set_wipe_pos(
+                    ctx,
+                    ((ptr.x - origin_x) / draw_w).clamp(0.05, 0.95),
+                );
+            }
+        }
+    }
+}

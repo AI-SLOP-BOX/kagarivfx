@@ -66,15 +66,20 @@ pub fn draw_timeline_header(
         if ui.button("+ Text").clicked() {
             let id = format!("layer_{}", comp.layers.len());
             let name = format!("Text {}", comp.layers.len());
-            let mut layer = Layer::new(id, name, LayerType::Text {
-                text: "New Text".to_string(),
-                font_size: 48,
-                color: [1.0, 1.0, 1.0, 1.0],
-            }, total_frames);
+            let mut layer = Layer::new(id, name, LayerType::new_text("New Text", 48, [1.0, 1.0, 1.0, 1.0]), total_frames);
+
             layer.transform.position = Animatable::new_constant([comp.width as f32 / 2.0, comp.height as f32 / 2.0]);
             comp.add_layer(layer);
             project_changed = true;
         }
+        if ui.button("+ Adj").clicked() {
+            let id = format!("layer_{}", comp.layers.len());
+            let name = format!("Adjustment Layer {}", comp.layers.len());
+            let layer = Layer::new_adjustment(id, name, total_frames);
+            comp.add_layer(layer);
+            project_changed = true;
+        }
+
         if ui.button("+ Marker (M)").clicked() {
             let m_idx = comp.markers.len() + 1;
             comp.markers.push(crate::core::timeline::TimelineMarker {
@@ -88,8 +93,14 @@ pub fn draw_timeline_header(
             let id = format!("layer_{}", comp.layers.len());
             let name = format!("Shape {}", comp.layers.len());
             let mut layer = Layer::new(id, name, LayerType::Shape {
-                shape_type: ShapeType::Star,
+                shape_type: ShapeType::Star {
+                    points: Animatable::new_constant(5.0),
+                    inner_radius: Animatable::new_constant(40.0),
+                    outer_radius: Animatable::new_constant(100.0),
+                },
                 color: [0.9, 0.4, 0.2, 1.0],
+                stroke_color: [0.0, 0.0, 0.0, 1.0],
+                stroke_width: 0.0,
             }, total_frames);
             layer.transform.position = Animatable::new_constant([comp.width as f32 / 2.0, comp.height as f32 / 2.0]);
             comp.add_layer(layer);
@@ -103,6 +114,17 @@ pub fn draw_timeline_header(
                 volume: Animatable::new_constant(1.0),
             }, total_frames);
             layer.label = crate::core::timeline::LabelColor::Aqua;
+            comp.add_layer(layer);
+            project_changed = true;
+        }
+        if ui.button("+ Particles").clicked() {
+            let id = format!("layer_{}", comp.layers.len());
+            let name = format!("Particles {}", comp.layers.len());
+            let mut layer = Layer::new(id, name, LayerType::Particle {
+                emitter: crate::core::particle_system::ParticleEmitter::default(),
+            }, total_frames);
+            layer.transform.position = Animatable::new_constant([comp.width as f32 / 2.0, comp.height as f32 * 0.75]);
+            layer.label = crate::core::timeline::LabelColor::Yellow;
             comp.add_layer(layer);
             project_changed = true;
         }

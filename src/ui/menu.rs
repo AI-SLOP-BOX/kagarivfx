@@ -124,6 +124,12 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
                     app.history.redo();
                     ui.close_menu();
                 }
+                ui.separator();
+                if ui.add(egui::Button::new("Duplicate").shortcut_text("Cmd+D")).clicked() {
+                    // Handled via keyboard shortcut in timeline
+                    app.toasts.info("Select a layer in the Timeline, then press Cmd+D to duplicate");
+                    ui.close_menu();
+                }
             });
             ui.menu_button("Composition", |ui| {
                 let comp_sc = crate::ui::shortcuts::format_shortcut("K", true, false, false);
@@ -156,7 +162,7 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
                         let comp_mut = app.history.current_mut().active_composition_mut();
                         let id = format!("layer_{}", comp_mut.layers.len());
                         let name = format!("Text {}", comp_mut.layers.len());
-                        let layer = crate::core::timeline::Layer::new(id, name, crate::core::timeline::LayerType::Text { text: "Title Text".to_string(), font_size: 72, color: [1.0, 1.0, 1.0, 1.0] }, total_frames);
+                        let layer = crate::core::timeline::Layer::new(id, name, crate::core::timeline::LayerType::new_text("Title Text", 72, [1.0, 1.0, 1.0, 1.0]), total_frames);
                         comp_mut.add_layer(layer);
                         crate::core::frame_cache::bump_version();
                         ui.close_menu();
@@ -179,6 +185,26 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
                         let layer = crate::core::timeline::Layer::new_adjustment(id, name, total_frames);
                         comp_mut.add_layer(layer);
                         crate::core::frame_cache::bump_version();
+                        ui.close_menu();
+                    }
+
+                    if ui.add(egui::Button::new("Adjustment Layer").shortcut_text("Cmd+Alt+Y")).clicked() {
+                        let total_frames = app.history.current().active_composition().duration_frames;
+                        let comp_mut = app.history.current_mut().active_composition_mut();
+                        let id = format!("layer_{}", comp_mut.layers.len());
+                        let name = format!("Adjustment Layer {}", comp_mut.layers.len());
+                        let layer = crate::core::timeline::Layer::new_adjustment(id, name, total_frames);
+                        comp_mut.add_layer(layer);
+                        crate::core::frame_cache::bump_version();
+                        ui.close_menu();
+                    }
+                });
+                ui.menu_button("Time", |ui| {
+                    if ui.add(egui::Button::new("Enable Time Remapping").shortcut_text("Cmd+Alt+T")).clicked() {
+                        ui.close_menu();
+                    }
+                    if ui.add(egui::Button::new("Time Stretch...").shortcut_text("Cmd+Shift+K")).clicked() {
+                        app.toasts.info("Layer Time Stretch: Scale layer in/out duration by factor");
                         ui.close_menu();
                     }
                 });
@@ -223,6 +249,28 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
                     crate::core::frame_cache::bump_version();
                     ui.close_menu();
                 }
+                ui.menu_button("Workspaces", |ui| {
+                    if ui.button("🖥 Standard").clicked() {
+                        app.right_tab_idx = 0;
+                        app.show_graph_editor = false;
+                        ui.close_menu();
+                    }
+                    if ui.button("📈 Motion Graphics").clicked() {
+                        app.right_tab_idx = 0;
+                        app.show_graph_editor = true;
+                        ui.close_menu();
+                    }
+                    if ui.button("🎛 VFX & Color").clicked() {
+                        app.right_tab_idx = 30; // Effect Controls
+                        app.show_graph_editor = false;
+                        ui.close_menu();
+                    }
+                    if ui.button("🎵 Audio Editing").clicked() {
+                        app.right_tab_idx = 7; // Audio Panel
+                        app.show_graph_editor = false;
+                        ui.close_menu();
+                    }
+                });
             });
             ui.menu_button("Help", |ui| {
                 if ui.button("Keyboard Shortcuts Reference...").clicked() {
@@ -258,4 +306,7 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
             });
         ctx.data_mut(|d| d.insert_temp(help_id, show_help));
     }
+
+    // 📦 Pre-Compose Dialog (Cmd+Shift+C)
+    crate::ui::precompose_dialog::draw_precompose_dialog(app, ctx);
 }

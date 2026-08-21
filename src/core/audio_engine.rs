@@ -4,7 +4,6 @@
 /// - Real PCM stereo AudioBuffer storage & multi-track mixing
 /// - Per-layer animated volume/gain evaluation (`volume.evaluate(frame)`)
 /// - Peak RMS VU meter calculation for audio mixers
-
 use crate::core::timeline::{Composition, LayerType};
 
 #[allow(dead_code)]
@@ -30,6 +29,7 @@ impl AudioBuffer {
     }
 
     /// Resample PCM audio samples to match destination sample rate (e.g. 44.1kHz -> 48kHz).
+    #[allow(dead_code)]
     pub fn resample(&self, target_sample_rate: u32) -> Self {
         if self.sample_rate == target_sample_rate || self.sample_rate == 0 || self.samples.is_empty() {
             return self.clone();
@@ -148,6 +148,48 @@ pub fn mix_audio_for_frame(
 
     (stereo_output, meter)
 }
+
+/// Keyframe data point generated from audio amplitude analysis
+#[derive(Debug, Clone)]
+#[allow(dead_code)]
+pub struct AudioAmplitudeKeyframe {
+    pub frame: u32,
+    pub left_amp: f32,
+    pub right_amp: f32,
+    pub both_amp: f32,
+}
+
+/// Evaluates audio waveforms across the composition duration and converts volume amplitudes into keyframe sequences.
+/// Returns a list of generated AudioAmplitudeKeyframe structs.
+pub fn convert_audio_to_keyframes(comp: &Composition) -> Vec<AudioAmplitudeKeyframe> {
+    let mut keyframes = Vec::with_capacity(comp.duration_frames as usize);
+    let sample_rate = 44100;
+    let buffer_size = (sample_rate / comp.fps.max(1)) as usize;
+
+    for frame in 0..comp.duration_frames {
+        let (_pcm, meter) = mix_audio_for_frame(comp, frame, sample_rate, buffer_size);
+
+        // Convert dB (-90dB .. +6dB) to normalized 0.0 .. 100.0 AE amplitude scale
+        let db_to_ae_scale = |db: f32| -> f32 {
+            let norm = ((db + 90.0) / 96.0).clamp(0.0, 1.0);
+            norm * 100.0
+        };
+
+        let left_amp = db_to_ae_scale(meter.rms_db_left);
+        let right_amp = db_to_ae_scale(meter.rms_db_right);
+        let both_amp = (left_amp + right_amp) * 0.5;
+
+        keyframes.push(AudioAmplitudeKeyframe {
+            frame,
+            left_amp,
+            right_amp,
+            both_amp,
+        });
+    }
+
+    keyframes
+}
+
 
 #[cfg(test)]
 mod tests {

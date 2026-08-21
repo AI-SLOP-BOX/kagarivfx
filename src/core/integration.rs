@@ -44,11 +44,15 @@ impl OtioTimeline {
                 LayerType::Null => None,
                 LayerType::PreComp { comp_id } => Some(format!("precomp:{}", comp_id)),
                 LayerType::Audio { path, .. } => Some(format!("audio:{}", path)),
+                LayerType::AdjustmentLayer => Some("adjustment_layer".to_string()),
+                LayerType::Particle { .. } => Some("particle_emitter".to_string()),
+
             };
 
             video_track.items.push(OtioItem {
                 name: layer.name.clone(),
-                source_range: [layer.in_frame, layer.out_frame - layer.in_frame],
+                // Use saturating_sub to guard against u32 underflow when out_frame < in_frame
+                source_range: [layer.in_frame, layer.out_frame.saturating_sub(layer.in_frame)],
                 media_reference: media_ref,
             });
         }
@@ -77,17 +81,23 @@ impl OtioTimeline {
             if track.kind == "video" {
                 for item in &track.items {
                     let layer_type = match &item.media_reference {
-                        Some(ref_str) if ref_str.starts_with("text:") => LayerType::Text {
-                            text: ref_str["text:".len()..].to_string(),
-                            font_size: 48,
-                            color: [1.0, 1.0, 1.0, 1.0],
-                        },
+                        Some(ref_str) if ref_str.starts_with("text:") => LayerType::new_text(
+                            &ref_str["text:".len()..],
+                            48,
+                            [1.0, 1.0, 1.0, 1.0],
+                        ),
                         Some(ref_str) if ref_str == "color_solid" => LayerType::Solid {
                             color: [0.2, 0.5, 0.8, 1.0],
                         },
                         Some(ref_str) if ref_str == "vector_shape" => LayerType::Shape {
-                            shape_type: crate::core::timeline::ShapeType::Rectangle,
+                            shape_type: crate::core::timeline::ShapeType::Rectangle {
+                                width: crate::core::property::Animatable::new_constant(100.0),
+                                height: crate::core::property::Animatable::new_constant(100.0),
+                                corner_radius: crate::core::property::Animatable::new_constant(0.0),
+                            },
                             color: [0.3, 0.6, 1.0, 1.0],
+                            stroke_color: [0.0, 0.0, 0.0, 1.0],
+                            stroke_width: 0.0,
                         },
                         Some(path) => LayerType::Image { path: path.clone() },
                         None => {
@@ -206,21 +216,16 @@ pub fn start_sync_server(
     port: u16,
     frame_tx: std::sync::mpsc::Sender<u32>,
     connection_tx: std::sync::mpsc::Sender<Option<String>>,
-) {
+) -> Result<u16, std::io::Error> {
     use std::io::{BufRead, BufReader, Write};
     use std::net::TcpListener;
     use std::thread;
 
-    thread::spawn(move || {
-        let listener = match TcpListener::bind(format!("127.0.0.1:{}", port)) {
-            Ok(l) => l,
-            Err(e) => {
-                log::error!("Failed to bind TCP sync port {}: {}", port, e);
-                return;
-            }
-        };
-        log::info!("Dynamic Link Sync Server listening on port {}", port);
+    let listener = TcpListener::bind(format!("127.0.0.1:{}", port))?;
+    let bound_port = listener.local_addr()?.port();
+    log::info!("Dynamic Link Sync Server listening on port {}", bound_port);
 
+    thread::spawn(move || {
         for stream in listener.incoming() {
             let stream = match stream {
                 Ok(s) => s,
@@ -295,6 +300,8 @@ pub fn start_sync_server(
             connection_tx.send(None).ok();
         }
     });
+
+    Ok(bound_port)
 }
 
 #[cfg(test)]
@@ -362,19 +369,11 @@ mod tests {
         let (frame_tx, frame_rx) = channel();
         let (conn_tx, conn_rx) = channel();
 
-        // Start server on a test port (e.g. 19001)
-        start_sync_server(19001, frame_tx, conn_tx);
+        // Start server on dynamic OS port 0
+        let port = start_sync_server(0, frame_tx, conn_tx).unwrap();
 
-        // Connect client with retry loop
-        let mut stream = None;
-        for _ in 0..10 {
-            if let Ok(s) = TcpStream::connect("127.0.0.1:19001") {
-                stream = Some(s);
-                break;
-            }
-            std::thread::sleep(std::time::Duration::from_millis(50));
-        }
-        let mut stream = stream.expect("Failed to connect to test TCP server");
+        // Connect client
+        let mut stream = TcpStream::connect(format!("127.0.0.1:{}", port)).expect("Failed to connect to test TCP server");
         let mut reader = BufReader::new(stream.try_clone().unwrap());
 
         // Send Handshake Request

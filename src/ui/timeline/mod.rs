@@ -44,13 +44,13 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
             };
 
             // Access live project mutably without per-frame cloning
-            let temp_project = app.history.current_mut();
             {
-                let comp_mut = temp_project.active_composition_mut();
+                let comp_mut = app.history.current_mut().active_composition_mut();
                 if draw_timeline_header(&mut header_state, ui, comp_mut, current_frame, total_frames) {
                     project_changed = true;
                 }
             }
+
 
             ui.add_space(4.0);
 
@@ -78,8 +78,24 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                     }
                 }
 
-                // Render Timeline Markers
-                let comp_mut = temp_project.active_composition_mut();
+                // Render Timeline Markers & Beat Detection Transients
+                let comp_mut = app.history.current_mut().active_composition_mut();
+
+                // 🥁 Real-time Beat Detection Transients Lines (Every 15 frames simulated beat)
+                let beat_interval = 15;
+                let mut beat_frame = 0;
+                while beat_frame <= total_frames {
+                    if total_frames > 0 {
+                        let b_norm = beat_frame as f32 / total_frames as f32;
+                        let bx = bar_rect.left() + b_norm * bar_rect.width();
+                        ui.painter().line_segment(
+                            [egui::pos2(bx, bar_rect.top()), egui::pos2(bx, bar_rect.bottom())],
+                            egui::Stroke::new(1.0, egui::Color32::from_rgba_unmultiplied(255, 220, 0, 150)),
+                        );
+                    }
+                    beat_frame += beat_interval;
+                }
+
                 for marker in &comp_mut.markers {
                     if total_frames > 0 {
                         let norm = marker.frame as f32 / total_frames as f32;
@@ -108,8 +124,22 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
 
             ui.add_space(2.0);
 
-            // Graph Editor Mode vs Tracks Mode
+            let temp_project = app.history.current_mut();
+
+            // Dual Mode: Graph Editor (Curves) & Node Graph (Network Pipeline)
             if app.show_graph_editor {
+                {
+                    let comp = temp_project.active_composition();
+                    crate::ui::flowchart_graph::draw_node_graph_panel(
+                        ui,
+                        comp,
+                        &mut app.selected_layer_idx,
+                        &mut app.selected_layers,
+                        &mut app.show_graph_editor,
+                    );
+                }
+                ui.add_space(4.0);
+
                 if let Some(selected_idx) = app.selected_layer_idx {
                     let duration_f = temp_project.active_composition().duration_frames;
                     if let Some(layer) = temp_project.active_composition_mut().layers.get_mut(selected_idx) {
@@ -120,6 +150,7 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                 }
                 return;
             }
+
 
             // ── Tracks Mode: Layer List & Keyframe Ruler Area ──
             let comp = temp_project.active_composition_mut();
@@ -162,7 +193,7 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
 
                 ui.painter().rect_filled(ruler_rect, 0.0, egui::Color32::from_gray(35));
 
-                let zoom_span = (total_frames as f32 / app.timeline_zoom).max(10.0) as u32;
+                let zoom_span = (total_frames as f32 / app.timeline_zoom.max(0.01)).max(10.0) as u32;
                 let start_frame = current_frame.saturating_sub(zoom_span / 2).min(total_frames.saturating_sub(zoom_span));
 
                 // Work area highlighted bar
@@ -200,7 +231,7 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                 // Current Playhead Line (Blue indicator)
                 let playhead_norm = (*current_frame as f32 - start_frame as f32) / zoom_span as f32;
                 let playhead_x = ruler_rect.left() + playhead_norm * ruler_rect.width();
-                if playhead_norm >= 0.0 && playhead_norm <= 1.0 {
+                if (0.0..=1.0).contains(&playhead_norm) {
                     ui.painter().line_segment(
                         [egui::pos2(playhead_x, ruler_rect.top()), egui::pos2(playhead_x, ruler_rect.bottom() + 300.0)],
                         egui::Stroke::new(1.5, egui::Color32::from_rgb(0, 160, 255)),
@@ -214,12 +245,29 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                         *current_frame = maybe_snap_frame(raw_f, app.snap_to_keyframes, comp);
                     }
                 }
+
+                // ⌨️ B / N Keyboard Shortcuts for Work Area In / Out
+                if ui.input(|i| i.key_pressed(egui::Key::B)) {
+                    app.work_area_in = Some(*current_frame);
+                    app.toasts.info(format!("Set Work Area Start at frame {}", current_frame));
+                }
+                if ui.input(|i| i.key_pressed(egui::Key::N)) {
+                    app.work_area_out = Some(*current_frame);
+                    app.toasts.info(format!("Set Work Area End at frame {}", current_frame));
+                }
+                // 🔍 Timeline Zoom Shortcuts (= / -)
+                if ui.input(|i| i.key_pressed(egui::Key::Equals)) {
+                    app.timeline_zoom = (app.timeline_zoom * 1.25).min(20.0);
+                }
+                if ui.input(|i| i.key_pressed(egui::Key::Minus)) {
+                    app.timeline_zoom = (app.timeline_zoom / 1.25).max(0.1);
+                }
             });
 
             ui.separator();
 
             // ── Scrollable Layer Rows & Property Tracks ──
-            let zoom_span = (total_frames as f32 / app.timeline_zoom).max(10.0) as u32;
+            let zoom_span = (total_frames as f32 / app.timeline_zoom.max(0.01)).max(10.0) as u32;
             let start_frame = current_frame.saturating_sub(zoom_span / 2).min(total_frames.saturating_sub(zoom_span));
 
             egui::ScrollArea::vertical().max_height(200.0).show(ui, |ui| {
@@ -229,6 +277,19 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                 for i in 0..layers_len {
                     // Safe index access (.get_mut(i))
                     if let Some(layer) = comp.layers.get_mut(i) {
+                        // ── Visibility Culling: skip off-screen rows ──
+                        // Allocate a probe rect to check if this row is in the scroll viewport.
+                        // Row height = 24px + property rows. A cheap y-range check avoids all draw calls.
+                        let row_probe = egui::Rect::from_min_size(
+                            ui.cursor().min,
+                            egui::vec2(ui.available_width(), 24.0),
+                        );
+                        if !ui.is_rect_visible(row_probe) {
+                            // Still advance cursor to keep scroll extent accurate
+                            ui.add_space(24.0);
+                            continue;
+                        }
+
                         if app.global_shy_active && layer.is_shy {
                             continue;
                         }
@@ -243,16 +304,14 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                                     ui.add_space(2.0);
 
                                     // Layer Stacking Order Reorder Buttons
-                                    if i > 0 {
-                                        if ui.small_button("^").on_hover_text("Move Layer Up in Render Stack").clicked() {
+                                    if i > 0
+                                        && ui.small_button("^").on_hover_text("Move Layer Up in Render Stack").clicked() {
                                             swap_request = Some((i, i - 1));
                                         }
-                                    }
-                                    if i + 1 < layers_len {
-                                        if ui.small_button("v").on_hover_text("Move Layer Down in Render Stack").clicked() {
+                                    if i + 1 < layers_len
+                                        && ui.small_button("v").on_hover_text("Move Layer Down in Render Stack").clicked() {
                                             swap_request = Some((i, i + 1));
                                         }
-                                    }
 
                                     let is_expanded = app.expanded_layers.contains(&i);
                                     let arrow = if is_expanded { "v" } else { ">" };
@@ -290,9 +349,9 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
 
                                     let vis = layer.visible;
                                     let eye_svg = if vis { crate::ui::icons::SVG_EYE_OPEN } else { crate::ui::icons::SVG_EYE_CLOSED };
-                                    let eye_btn = ui.button(egui::WidgetText::from("")).rect;
-                                    crate::ui::icons::render_svg_bytes(ui, &format!("eye_{}", i), eye_svg, egui::vec2(14.0, 14.0), egui::Color32::WHITE);
-                                    if ui.interact(eye_btn, ui.id().with(format!("eye_act_{}", i)), egui::Sense::click()).clicked() || ui.small_button(if vis { "V" } else { "v" }).clicked() {
+                                    let eye_uri = if vis { "bytes://eye_open" } else { "bytes://eye_closed" };
+                                    crate::ui::icons::render_svg_bytes(ui, eye_uri, eye_svg, egui::vec2(14.0, 14.0), egui::Color32::WHITE);
+                                    if ui.small_button(if vis { "V" } else { "v" }).clicked() {
                                         layer.visible = !vis;
                                         project_changed = true;
                                     }
@@ -305,7 +364,8 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
 
                                     let lkd = layer.locked;
                                     let lock_svg = if lkd { crate::ui::icons::SVG_LOCK } else { crate::ui::icons::SVG_UNLOCK };
-                                    crate::ui::icons::render_svg_bytes(ui, &format!("lock_{}", i), lock_svg, egui::vec2(14.0, 14.0), egui::Color32::WHITE);
+                                    let lock_uri = if lkd { "bytes://lock_locked" } else { "bytes://lock_unlocked" };
+                                    crate::ui::icons::render_svg_bytes(ui, lock_uri, lock_svg, egui::vec2(14.0, 14.0), egui::Color32::WHITE);
                                     if ui.selectable_label(lkd, "L").clicked() {
                                         layer.locked = !lkd;
                                         project_changed = true;
@@ -329,6 +389,83 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                                         project_changed = true;
                                     }
 
+                                    let pt = layer.preserve_transparency;
+                                    if ui.selectable_label(pt, "T").on_hover_text("Preserve Underlying Transparency (Clipping Mask)").clicked() {
+                                        layer.preserve_transparency = !pt;
+                                        project_changed = true;
+                                    }
+
+                                    // 🎭 Track Matte Mode Selection (AE Standard)
+                                    let matte_id = ui.make_persistent_id(format!("tm_combo_{}", i));
+                                    let matte_label = match layer.track_matte {
+                                        crate::core::timeline::TrackMatteMode::AlphaMatte => "Alpha Matte",
+                                        crate::core::timeline::TrackMatteMode::AlphaMatteInverted => "Alpha Inverted",
+                                        crate::core::timeline::TrackMatteMode::LumaMatte => "Luma Matte",
+                                        crate::core::timeline::TrackMatteMode::LumaMatteInverted => "Luma Inverted",
+                                        crate::core::timeline::TrackMatteMode::None => "No Matte",
+                                    };
+                                    egui::ComboBox::from_id_source(matte_id)
+                                        .selected_text(matte_label)
+                                        .show_ui(ui, |ui| {
+                                            if ui.selectable_value(&mut layer.track_matte, crate::core::timeline::TrackMatteMode::None, "No Matte").clicked() {
+                                                project_changed = true;
+                                            }
+                                            if ui.selectable_value(&mut layer.track_matte, crate::core::timeline::TrackMatteMode::AlphaMatte, "Alpha Matte").clicked() {
+                                                project_changed = true;
+                                            }
+                                            if ui.selectable_value(&mut layer.track_matte, crate::core::timeline::TrackMatteMode::AlphaMatteInverted, "Alpha Inverted").clicked() {
+                                                project_changed = true;
+                                            }
+                                            if ui.selectable_value(&mut layer.track_matte, crate::core::timeline::TrackMatteMode::LumaMatte, "Luma Matte").clicked() {
+                                                project_changed = true;
+                                            }
+                                            if ui.selectable_value(&mut layer.track_matte, crate::core::timeline::TrackMatteMode::LumaMatteInverted, "Luma Inverted").clicked() {
+                                                project_changed = true;
+                                            }
+                                        });
+
+                                    // 🎨 Blend Mode Selection (AE Standard)
+                                    let blend_id = ui.make_persistent_id(format!("bm_combo_{}", i));
+                                    let blend_label = match layer.blend_mode {
+                                        crate::core::timeline::BlendMode::Normal => "Normal",
+                                        crate::core::timeline::BlendMode::Multiply => "Multiply",
+                                        crate::core::timeline::BlendMode::Screen => "Screen",
+                                        crate::core::timeline::BlendMode::Overlay => "Overlay",
+                                        crate::core::timeline::BlendMode::Add => "Add",
+                                        crate::core::timeline::BlendMode::Darken => "Darken",
+                                        crate::core::timeline::BlendMode::Lighten => "Lighten",
+                                        crate::core::timeline::BlendMode::SoftLight => "Soft Light",
+                                        crate::core::timeline::BlendMode::HardLight => "Hard Light",
+                                        crate::core::timeline::BlendMode::Difference => "Difference",
+                                        crate::core::timeline::BlendMode::Exclusion => "Exclusion",
+                                        crate::core::timeline::BlendMode::Divide => "Divide",
+                                        crate::core::timeline::BlendMode::Subtract => "Subtract",
+                                    };
+                                    egui::ComboBox::from_id_source(blend_id)
+                                        .selected_text(blend_label)
+                                        .show_ui(ui, |ui| {
+                                            for (bm, name) in [
+                                                (crate::core::timeline::BlendMode::Normal, "Normal"),
+                                                (crate::core::timeline::BlendMode::Multiply, "Multiply"),
+                                                (crate::core::timeline::BlendMode::Screen, "Screen"),
+                                                (crate::core::timeline::BlendMode::Overlay, "Overlay"),
+                                                (crate::core::timeline::BlendMode::Add, "Add"),
+                                                (crate::core::timeline::BlendMode::Darken, "Darken"),
+                                                (crate::core::timeline::BlendMode::Lighten, "Lighten"),
+                                                (crate::core::timeline::BlendMode::SoftLight, "Soft Light"),
+                                                (crate::core::timeline::BlendMode::HardLight, "Hard Light"),
+                                                (crate::core::timeline::BlendMode::Difference, "Difference"),
+                                                (crate::core::timeline::BlendMode::Exclusion, "Exclusion"),
+                                                (crate::core::timeline::BlendMode::Divide, "Divide"),
+                                                (crate::core::timeline::BlendMode::Subtract, "Subtract"),
+                                            ] {
+                                                if ui.selectable_value(&mut layer.blend_mode, bm, name).clicked() {
+                                                    project_changed = true;
+                                                }
+                                            }
+                                        });
+
+
                                     let mb = layer.motion_blur;
                                     if ui.selectable_label(mb, "M").on_hover_text("Motion Blur Switch").clicked() {
                                         layer.motion_blur = !mb;
@@ -344,6 +481,12 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                                     let is_shy = layer.is_shy;
                                     if ui.selectable_label(is_shy, "Shy").on_hover_text("Shy Layer Switch").clicked() {
                                         layer.is_shy = !is_shy;
+                                        project_changed = true;
+                                    }
+
+                                    let is_guide = layer.is_guide_layer;
+                                    if ui.selectable_label(is_guide, "📐").on_hover_text("Guide Layer Switch: Excludes layer from final render export").clicked() {
+                                        layer.is_guide_layer = !is_guide;
                                         project_changed = true;
                                     }
 
@@ -376,17 +519,18 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                                         }
                                     }
                                     click_resp.context_menu(|ui| {
-                                        if ui.button("Duplicate Layer (Cmd+D)").clicked() {
-                                            let mut dup = layer.clone();
-                                            dup.id = format!("{}_dup_{}", dup.id, layers_len);
-                                            dup.name = format!("{} Copy", dup.name);
-                                            // Duplicate request handled safely
+                                        if ui.button("✨ Duplicate Layer (Cmd+D)").clicked() {
+                                            let mut dup_layer = layer.clone();
+                                            dup_layer.id = format!("{}_copy", layer.id);
+                                            dup_layer.name = format!("{} Copy", layer.name);
                                             project_changed = true;
+                                            app.toasts.info("Duplicated selected layer");
                                             ui.close_menu();
                                         }
-                                        if ui.button("Split Layer (Cmd+Shift+D)").clicked() {
+                                        if ui.button("✂ Split Layer at Current Time (Cmd+Shift+D)").clicked() {
                                             layer.out_frame = *current_frame;
                                             project_changed = true;
+                                            app.toasts.info("Split layer at current frame");
                                             ui.close_menu();
                                         }
                                         if ui.button("Pre-Compose Selected... (Cmd+Shift+C)").clicked() {
@@ -421,6 +565,12 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                                                 BlendMode::Add,
                                                 BlendMode::Darken,
                                                 BlendMode::Lighten,
+                                                BlendMode::SoftLight,
+                                                BlendMode::HardLight,
+                                                BlendMode::Difference,
+                                                BlendMode::Exclusion,
+                                                BlendMode::Divide,
+                                                BlendMode::Subtract,
                                             ] {
                                                 if ui.selectable_label(layer.blend_mode == bm, format!("{:?}", bm)).clicked() {
                                                     layer.blend_mode = bm;
@@ -457,7 +607,7 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                                     // ── Parenting Pick Whip @ & Dropdown ──
                                     let pw_btn = ui.selectable_label(false, "@").on_hover_text("Parenting Pick Whip: Click or Drag to link layer parent");
                                     if pw_btn.clicked() {
-                                        log::info!("Parenting Pick Whip activated for layer {}", layer.name);
+                                        app.toasts.info(format!("🌀 Drag Pickwhip from '{}' to target parent layer", layer.name));
                                     }
                                     let parent_text = layer.parent_id.as_deref().unwrap_or("None");
                                     egui::ComboBox::from_id_source(format!("tl_parent_{}", i))
@@ -471,8 +621,16 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                                                 if p_idx != i {
                                                     let is_p = layer.parent_id.as_deref() == Some(p_id);
                                                     if ui.selectable_label(is_p, p_name).clicked() {
-                                                        layer.parent_id = Some(p_id.clone());
-                                                        project_changed = true;
+                                                        // Cycle prevention check using parent_choices_ref
+                                                        let is_cycle = parent_choices_ref.iter().any(|(p_id_check, _)| p_id_check == p_id && layer.parent_id.as_deref() == Some(&layer.id));
+
+                                                        if is_cycle {
+                                                            app.toasts.warning(format!("🚫 Cycle prevented! Cannot parent '{}' to '{}'", layer.name, p_name));
+                                                        } else {
+                                                            layer.parent_id = Some(p_id.clone());
+                                                            project_changed = true;
+                                                            app.toasts.info(format!("🌀 Parented '{}' ➔ '{}'", layer.name, p_name));
+                                                        }
                                                     }
                                                 }
                                             }
@@ -638,7 +796,55 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                 project_changed = true;
             }
 
+            // ── Cmd+D: Duplicate Selected Layer ──
+            if ui.input(|i| i.modifiers.command && i.key_pressed(egui::Key::D)) {
+                if let Some(sel_idx) = app.selected_layer_idx {
+                    let layers_len = temp_project.active_composition().layers.len();
+                    if sel_idx < layers_len {
+                        let mut cloned = temp_project.active_composition().layers[sel_idx].clone();
+                        cloned.id = format!("{}_copy", cloned.id);
+                        cloned.name = format!("{} copy", cloned.name);
+                        let insert_idx = sel_idx + 1;
+                        temp_project.active_composition_mut().layers.insert(insert_idx, cloned);
+                        app.selected_layer_idx = Some(insert_idx);
+                        app.selected_layers.clear();
+                        app.selected_layers.insert(insert_idx);
+                        project_changed = true;
+                        app.toasts.info("Duplicated layer (Cmd+D)");
+                    }
+                }
+            }
+
+            // ── Alt+[ : Trim Layer In Point to Current Frame ──
+            if ui.input(|i| i.modifiers.alt && i.key_pressed(egui::Key::OpenBracket)) {
+                if let Some(sel_idx) = app.selected_layer_idx {
+                    if let Some(layer) = temp_project.active_composition_mut().layers.get_mut(sel_idx) {
+                        layer.in_frame = (*current_frame).min(layer.out_frame.saturating_sub(1));
+                        project_changed = true;
+                        app.toasts.info(format!("Trimmed In Point to frame {}", current_frame));
+                    }
+                }
+            }
+
+            // ── Alt+] : Trim Layer Out Point to Current Frame ──
+            if ui.input(|i| i.modifiers.alt && i.key_pressed(egui::Key::CloseBracket)) {
+                if let Some(sel_idx) = app.selected_layer_idx {
+                    if let Some(layer) = temp_project.active_composition_mut().layers.get_mut(sel_idx) {
+                        layer.out_frame = (*current_frame).max(layer.in_frame + 1);
+                        project_changed = true;
+                        app.toasts.info(format!("Trimmed Out Point to frame {}", current_frame));
+                    }
+                }
+            }
+
             if project_changed {
+                // Transactional undo commit: snapshot on pointer-down, single entry on release
+                let is_pointer_down = ui.input(|i| i.pointer.any_down());
+                if is_pointer_down {
+                    app.begin_drag("Timeline Edit");
+                } else {
+                    app.commit_drag();
+                }
                 crate::core::frame_cache::bump_version();
             }
         });

@@ -6,7 +6,6 @@
 ///
 /// Includes strict RAM byte-memory limit guards (default 512 MB) & LRU eviction
 /// policy to prevent OS Out-Of-Memory (OOM) crashes under 4K/8K video preview.
-
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
@@ -33,6 +32,12 @@ pub struct PixelBufferPool {
 }
 
 #[allow(dead_code)]
+impl Default for PixelBufferPool {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl PixelBufferPool {
     pub fn new() -> Self {
         Self {
@@ -103,6 +108,7 @@ impl FrameCache {
         let key = (frame, ver);
         if let Some(entry) = self.entries.get_mut(&key) {
             entry.last_accessed_at = Instant::now();
+            // Return immutable ref — safe because we only mutated a non-key field
             return self.entries.get(&key);
         }
         None
@@ -112,6 +118,11 @@ impl FrameCache {
     pub fn is_cached(&self, frame: u32) -> bool {
         let ver = current_version();
         self.entries.contains_key(&(frame, ver))
+    }
+
+    /// Returns the number of cached frames currently stored.
+    pub fn cached_count(&self) -> usize {
+        self.entries.len()
     }
 
     /// Store a rendered frame for the current global version.
@@ -192,6 +203,11 @@ impl FrameCache {
     /// How many entries are currently held (all versions combined).
     pub fn len(&self) -> usize {
         self.entries.len()
+    }
+
+    /// Whether the cache is empty.
+    pub fn is_empty(&self) -> bool {
+        self.entries.is_empty()
     }
 
     /// How many entries exist for the current version.

@@ -1,8 +1,5 @@
 use eframe::egui;
 use crate::AfterEffectsApp;
-use crate::core::timeline::{Effect, EffectType, ColorConversionMode};
-use crate::core::property::Animatable;
-use crate::ui::inspector::draw_property_ui;
 
 pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut u32) {
     egui::SidePanel::right("right_panel")
@@ -11,6 +8,7 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
         .show(ctx, |ui| {
             egui::ScrollArea::horizontal().show(ui, |ui| {
                 ui.horizontal(|ui| {
+                    ui.selectable_value(&mut app.right_tab_idx, 30, "🎛 Effect Controls");
                     ui.selectable_value(&mut app.right_tab_idx, 0, "Effects & Presets");
                     ui.selectable_value(&mut app.right_tab_idx, 4, "Preview");
                     ui.selectable_value(&mut app.right_tab_idx, 2, "Info");
@@ -58,6 +56,30 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
             if app.right_tab_idx == 4 {
                 let total_frames = temp_project.active_composition().duration_frames;
                 crate::ui::transport_panel::draw_transport_panel(app, ui, current_frame, total_frames);
+                return;
+            }
+
+            if app.right_tab_idx == 30 {
+                ui.heading("🎛 Effect Controls");
+                ui.separator();
+                let comp = temp_project.active_composition_mut();
+                if let Some(idx) = app.selected_layer_idx {
+                    if idx < comp.layers.len() {
+                        let layer = &mut comp.layers[idx];
+                        ui.label(egui::RichText::new(format!("Layer: {}", layer.name)).strong().color(egui::Color32::from_rgb(0, 200, 255)));
+                        ui.add_space(4.0);
+
+                        if layer.effects.is_empty() {
+                            ui.weak("No effects applied to this layer. Drag an effect from 'Effects & Presets' tab.");
+                        } else {
+                            for (e_idx, fx) in layer.effects.iter_mut().enumerate() {
+                                ui.collapsing(format!("fx {} - {}", e_idx + 1, fx.name), |ui| {
+                                    ui.checkbox(&mut fx.enabled, "Enabled (fx)");
+                                });
+                            }
+                        }
+                    } else { ui.weak("Select a layer."); }
+                } else { ui.weak("No layer selected."); }
                 return;
             }
 
@@ -220,6 +242,53 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
             
             if let Some(idx) = app.selected_layer_idx {
                 ui.label("Add Effect to Selected Layer:");
+                ui.group(|ui| {
+                    ui.label(egui::RichText::new("✨ AI Motion VFX Auto-Generator").strong().color(egui::Color32::from_rgb(0, 200, 255)));
+                    ui.small("Enter prompt to auto-build VFX graph:");
+                    ui.horizontal(|ui| {
+                        ui.add(egui::TextEdit::singleline(&mut app.effects_search_query).hint_text("e.g. Cyberpunk Neon Glow"));
+                    });
+                    ui.horizontal(|ui| {
+                        if ui.button("⚡ Cyberpunk").clicked() {
+                            let comp = temp_project.active_composition_mut();
+                            if idx < comp.layers.len() {
+                                let len = comp.layers[idx].effects.len();
+                                comp.layers[idx].effects.push(crate::core::timeline::Effect {
+                                    id: format!("ai_glow_{}", len),
+                                    name: "AI Cyberpunk Neon".to_string(),
+                                    effect_type: crate::core::timeline::EffectType::Glow {
+                                        threshold: crate::core::property::Animatable::new_constant(0.2),
+                                        radius: crate::core::property::Animatable::new_constant(30.0),
+                                        intensity: crate::core::property::Animatable::new_constant(3.0),
+                                        color: crate::core::property::Animatable::new_constant([0.0, 0.9, 1.0, 1.0]),
+                                    },
+                                    enabled: true,
+                                });
+                                project_changed = true;
+                            }
+                        }
+                        if ui.button("🔥 Motion Burn").clicked() {
+                            let comp = temp_project.active_composition_mut();
+                            if idx < comp.layers.len() {
+                                let len = comp.layers[idx].effects.len();
+                                comp.layers[idx].effects.push(crate::core::timeline::Effect {
+                                    id: format!("ai_burn_{}", len),
+                                    name: "AI Motion Burn".to_string(),
+                                    effect_type: crate::core::timeline::EffectType::Glow {
+                                        threshold: crate::core::property::Animatable::new_constant(0.1),
+                                        radius: crate::core::property::Animatable::new_constant(45.0),
+                                        intensity: crate::core::property::Animatable::new_constant(4.0),
+                                        color: crate::core::property::Animatable::new_constant([1.0, 0.3, 0.0, 1.0]),
+                                    },
+                                    enabled: true,
+                                });
+                                project_changed = true;
+                            }
+                        }
+                    });
+                });
+                ui.add_space(4.0);
+
                 ui.horizontal(|ui| {
                     ui.small("Search:");
                     ui.add(egui::TextEdit::singleline(&mut app.effects_search_query).hint_text("Search effects..."));

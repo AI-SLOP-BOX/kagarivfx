@@ -2,7 +2,6 @@
 ///
 /// Uses an $O(N)$ BFS Distance Transform & Fast Marching Boundary Propagation
 /// to fill masked pixel areas smoothly without $O(R^2)$ performance stutter.
-
 use std::collections::VecDeque;
 use rayon::prelude::*;
 use rayon::slice::ParallelSliceMut;
@@ -26,7 +25,7 @@ pub fn generate_content_aware_fill_frame(
     alpha_expansion: f32,
     _method: FillMethod,
 ) -> Vec<u8> {
-    let size = (width * height * 4) as usize;
+    let size = crate::core::software_renderer::rgba_buffer_size(width, height).unwrap_or(0);
     let mut out_buffer = if src_pixels.len() == size {
         src_pixels.to_vec()
     } else {
@@ -55,7 +54,7 @@ pub fn generate_content_aware_fill_frame(
 
     // Step 2: Continuous Subpixel Euclidean Distance Transform Mask Expansion
     if alpha_expansion > 0.5 {
-        let radius_sq = (alpha_expansion * alpha_expansion) as f32;
+        let radius_sq = alpha_expansion * alpha_expansion;
         let r_ceil = alpha_expansion.ceil() as i32;
 
         let original_masked = is_masked.clone();
@@ -72,15 +71,14 @@ pub fn generate_content_aware_fill_frame(
                             let dy_sq = (dy * dy) as f32;
                             for dx in -r_ceil..=r_ceil {
                                 let nx = x + dx;
-                                if nx >= 0 && nx < w {
-                                    if (dx * dx) as f32 + dy_sq <= radius_sq {
+                                if nx >= 0 && nx < w
+                                    && (dx * dx) as f32 + dy_sq <= radius_sq {
                                         let nidx = (ny * w + nx) as usize;
                                         if original_masked[nidx] {
                                             row[idx] = true;
                                             break 'search;
                                         }
                                     }
-                                }
                             }
                         }
                     }

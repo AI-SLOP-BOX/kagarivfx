@@ -2,7 +2,6 @@
 ///
 /// Ensures saved project files (.json) remain 100% loadable even as
 /// fields are added, renamed, or refactored across application versions.
-
 use serde::{Deserialize, Serialize};
 use crate::core::timeline::Project;
 

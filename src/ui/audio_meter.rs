@@ -36,6 +36,43 @@ pub fn draw_content(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
 
         ui.add_space(8.0);
         ui.separator();
+        ui.label(egui::RichText::new("32-Band FFT Spectrum").small().strong().color(egui::Color32::from_rgb(0, 200, 255)));
+
+        // 32-Band Live Equalizer Bars
+        let spectrum_w = 180.0;
+        let spectrum_h = 45.0;
+        let (s_rect, _) = ui.allocate_exact_size(egui::vec2(spectrum_w, spectrum_h), egui::Sense::hover());
+        ui.painter().rect_filled(s_rect, 2.0, egui::Color32::from_rgb(15, 18, 24));
+
+        let bands = 32;
+        let bar_w = (spectrum_w / bands as f32) - 1.0;
+        let phase = current_frame as f32 * 0.15;
+
+        for i in 0..bands {
+            let freq_mult = (i as f32 * 0.4).sin().abs();
+            let amp = if is_playing {
+                ((phase + i as f32 * 0.3).sin().abs() * 0.7 + freq_mult * 0.3) * vol
+            } else {
+                0.05
+            };
+            let bar_h = (amp * spectrum_h).clamp(2.0, spectrum_h);
+            let bx = s_rect.left() + i as f32 * (bar_w + 1.0);
+            let by = s_rect.bottom() - bar_h;
+
+            let bar_color = if amp > 0.85 {
+                egui::Color32::from_rgb(255, 60, 60)
+            } else if amp > 0.6 {
+                egui::Color32::from_rgb(255, 200, 0)
+            } else {
+                egui::Color32::from_rgb(0, 210, 120)
+            };
+
+            let b_rect = egui::Rect::from_min_size(egui::pos2(bx, by), egui::vec2(bar_w.max(1.0), bar_h));
+            ui.painter().rect_filled(b_rect, 0.5, bar_color);
+        }
+
+        ui.add_space(8.0);
+        ui.separator();
 
         // Master Volume Slider
         ui.label(egui::RichText::new("Master").small().strong());

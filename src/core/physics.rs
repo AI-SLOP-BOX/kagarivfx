@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 /// Kinematic Physics Engine for AE Motion Graphics layers, particle emitters, and dynamics.
 /// Ported & adapted from NextVFX Sovereign Engine.
 
@@ -67,8 +68,10 @@ impl KinematicSolver {
         state.velocity.y += (self.gravity.y + state.acceleration.y) * dt;
         state.velocity.z += (self.gravity.z + state.acceleration.z) * dt;
 
-        // Apply drag damping
-        let damp = self.drag.powf(dt * 60.0);
+        // Apply drag damping (clamped: 0.0 = instant stop, 1.0 = no drag)
+        // drag > 1.0 would *add* energy per-frame — guard against it.
+        let clamped_drag = self.drag.clamp(0.0, 1.0);
+        let damp = clamped_drag.powf(dt * 60.0);
         state.velocity.x *= damp;
         state.velocity.y *= damp;
         state.velocity.z *= damp;

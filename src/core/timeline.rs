@@ -2,6 +2,9 @@ use crate::core::property::Animatable;
 use crate::core::expression_engine;
 use serde::{Deserialize, Serialize};
 
+/// Bounding box: (min_xy, max_xy, width, height)
+type BoundingBox = ([f32; 2], [f32; 2], f32, f32);
+
 // Thread-local cached Rhai engine — building it is expensive (~1ms), reusing is free.
 thread_local! {
     static RHAI_ENGINE: rhai::Engine = expression_engine::build_engine();
@@ -32,9 +35,15 @@ impl TrackerPoint {
     }
 }
 
+// ─── Serde default helpers for LayerType::Text new fields ────────────────
+
+fn default_font_family() -> String { "Inter".to_string() }
+fn default_leading() -> f32 { 1.2 }
+fn default_stroke_color() -> [f32; 4] { [0.0, 0.0, 0.0, 1.0] }
+
 // ─── Layer Type ────────────────────────────────────────────────────────────
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum LayerType {
     Solid {
         color: [f32; 4],
@@ -46,10 +55,33 @@ pub enum LayerType {
         text: String,
         font_size: u32,
         color: [f32; 4],
+        /// Font family name, e.g. "Inter"
+        #[serde(default = "default_font_family")]
+        font_family: String,
+        /// Tracking (letter-spacing) in virtual Adobe units
+        #[serde(default)]
+        tracking: f32,
+        /// Leading (line-height) multiplier
+        #[serde(default = "default_leading")]
+        leading: f32,
+        /// Paragraph alignment: 0=Left, 1=Center, 2=Right
+        #[serde(default)]
+        align: usize,
+        /// Stroke color [r,g,b,a]
+        #[serde(default = "default_stroke_color")]
+        stroke_color: [f32; 4],
+        /// Stroke width in pixels (0 = no stroke)
+        #[serde(default)]
+        stroke_width: f32,
+        /// Text on Path: use first mask as text path
+        #[serde(default)]
+        text_on_path: bool,
     },
     Shape {
         shape_type: ShapeType,
         color: [f32; 4],
+        stroke_color: [f32; 4],
+        stroke_width: f32,
     },
     Null,
     PreComp {
@@ -59,14 +91,156 @@ pub enum LayerType {
         path: String,
         volume: Animatable<f32>,
     },
+    /// Adjustment Layer: applies layer effects to the composited buffer of lower layers
+    AdjustmentLayer,
+    /// Particle emitter layer: procedural particle simulation
+    Particle {
+        #[serde(default)]
+        emitter: crate::core::particle_system::ParticleEmitter,
+    },
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+// ─── Trim Paths Animator ───────────────────────────────────────────────────
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct TrimPaths {
+    /// Start percentage (0.0 .. 100.0)
+    pub start: Animatable<f32>,
+    /// End percentage (0.0 .. 100.0)
+    pub end: Animatable<f32>,
+    /// Offset degrees (0.0 .. 360.0)
+    pub offset: Animatable<f32>,
+}
+
+impl Default for TrimPaths {
+    fn default() -> Self {
+        Self {
+            start: Animatable::new_constant(0.0),
+            end: Animatable::new_constant(100.0),
+            offset: Animatable::new_constant(0.0),
+        }
+    }
+}
+
+impl TrimPaths {
+    /// Trims a list of 2D polygon points based on start/end/offset percentages.
+    pub fn trim_polygon(&self, points: &[[f32; 2]], frame: u32) -> Vec<[f32; 2]> {
+        if points.len() < 2 {
+            return points.to_vec();
+        }
+
+        let mut start_pct = self.start.evaluate(frame).clamp(0.0, 100.0) / 100.0;
+        let mut end_pct = self.end.evaluate(frame).clamp(0.0, 100.0) / 100.0;
+        let offset_norm = (self.offset.evaluate(frame) / 360.0).fract();
+
+        start_pct = (start_pct + offset_norm).fract();
+        end_pct = (end_pct + offset_norm).fract();
+        if start_pct < 0.0 { start_pct += 1.0; }
+        if end_pct < 0.0 { end_pct += 1.0; }
+
+        if (start_pct - end_pct).abs() < 0.001 {
+            return Vec::new();
+        }
+
+        let mut segment_lengths = Vec::with_capacity(points.len() - 1);
+        let mut total_len = 0.0f32;
+
+        for w in points.windows(2) {
+            let dx = w[1][0] - w[0][0];
+            let dy = w[1][1] - w[0][1];
+            let len = (dx * dx + dy * dy).sqrt();
+            segment_lengths.push(len);
+            total_len += len;
+        }
+
+        if total_len <= 0.0001 {
+            return points.to_vec();
+        }
+
+        let target_start = start_pct.min(end_pct) * total_len;
+        let target_end = start_pct.max(end_pct) * total_len;
+
+        let mut current_accum = 0.0f32;
+        let mut trimmed = Vec::new();
+
+        for i in 0..segment_lengths.len() {
+            let seg_len = segment_lengths[i];
+            let seg_start = current_accum;
+            let seg_end = current_accum + seg_len;
+
+            if seg_end >= target_start && seg_start <= target_end {
+                let p0 = points[i];
+                let p1 = points[i + 1];
+
+                // Interpolate start point
+                let t_start = if target_start > seg_start {
+                    ((target_start - seg_start) / seg_len).clamp(0.0, 1.0)
+                } else {
+                    0.0
+                };
+
+                // Interpolate end point
+                let t_end = if target_end < seg_end {
+                    ((target_end - seg_start) / seg_len).clamp(0.0, 1.0)
+                } else {
+                    1.0
+                };
+
+                let sub_p0 = [p0[0] + (p1[0] - p0[0]) * t_start, p0[1] + (p1[1] - p0[1]) * t_start];
+                let sub_p1 = [p0[0] + (p1[0] - p0[0]) * t_end, p0[1] + (p1[1] - p0[1]) * t_end];
+
+                if trimmed.is_empty() {
+                    trimmed.push(sub_p0);
+                }
+                trimmed.push(sub_p1);
+            }
+
+            current_accum = seg_end;
+        }
+
+        trimmed
+    }
+}
+
+
+impl LayerType {
+    /// Convenience constructor for a new text layer with sensible defaults.
+    pub fn new_text(text: impl Into<String>, font_size: u32, color: [f32; 4]) -> Self {
+        LayerType::Text {
+            text: text.into(),
+            font_size,
+            color,
+            font_family: "Inter".to_string(),
+            tracking: 0.0,
+            leading: 1.2,
+            align: 0,
+            stroke_color: [0.0, 0.0, 0.0, 1.0],
+            stroke_width: 0.0,
+            text_on_path: false,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum ShapeType {
-    Rectangle,
-    Ellipse,
-    Star,
-    Polygon,
+    Rectangle {
+        width: Animatable<f32>,
+        height: Animatable<f32>,
+        corner_radius: Animatable<f32>,
+    },
+    Ellipse {
+        width: Animatable<f32>,
+        height: Animatable<f32>,
+    },
+    Star {
+        points: Animatable<f32>,
+        inner_radius: Animatable<f32>,
+        outer_radius: Animatable<f32>,
+    },
+    Polygon {
+        sides: Animatable<f32>,
+        radius: Animatable<f32>,
+    },
 }
 
 // ─── Track Matte ───────────────────────────────────────────────────────────
@@ -93,6 +267,12 @@ pub enum BlendMode {
     Add,
     Darken,
     Lighten,
+    SoftLight,
+    HardLight,
+    Difference,
+    Exclusion,
+    Divide,
+    Subtract,
 }
 
 // ─── Label Colors ──────────────────────────────────────────────────────────
@@ -145,7 +325,7 @@ impl Expression {
         let time = frame as f32 / fps.max(1) as f32;
         match self {
             Expression::Wiggle { frequency, amplitude } => {
-                let seed = (frame as f32 * frequency * 1.618_034) % 6.283_185;
+                let seed = (frame as f32 * frequency * 1.618_034) % std::f32::consts::TAU;
                 let noise = seed.sin() * 0.7 + (seed * 2.1).sin() * 0.2 + (seed * 5.3).sin() * 0.1;
                 base + noise * amplitude
             }
@@ -238,106 +418,137 @@ pub fn remap_frame_for_loop(frame: u32, first_kf: u32, last_kf: u32, is_pingpong
     }
 }
 
-impl Transform2D {
-    pub fn eval_position(&self, frame: u32, fps: u32) -> [f32; 2] {
-        let eval_frame = match &self.position_expression {
-            Some(Expression::LoopOut) => {
-                if let Some(kfs) = self.position.keyframes() {
-                    if !kfs.is_empty() {
-                        remap_frame_for_loop(frame, kfs[0].frame, kfs.last().unwrap().frame, false)
-                    } else { frame }
-                } else { frame }
-            }
-            Some(Expression::PingPong) => {
-                if let Some(kfs) = self.position.keyframes() {
-                    if !kfs.is_empty() {
-                        remap_frame_for_loop(frame, kfs[0].frame, kfs.last().unwrap().frame, true)
-                    } else { frame }
-                } else { frame }
-            }
-            _ => frame,
-        };
+#[derive(Clone, Copy)]
+enum LoopProp {
+    Position,
+    Scale,
+    Rotation,
+    Opacity,
+}
 
+impl Transform2D {
+    fn remap_loop_frame(frame: u32, expression: &Option<Expression>, first_frame: u32, last_frame: u32) -> u32 {
+        match expression {
+            Some(Expression::LoopOut) => remap_frame_for_loop(frame, first_frame, last_frame, false),
+            Some(Expression::PingPong) => remap_frame_for_loop(frame, first_frame, last_frame, true),
+            _ => frame,
+        }
+    }
+
+    pub fn eval_position(&self, frame: u32, fps: u32) -> [f32; 2] {
+        let eval_frame = if let Some(kfs) = self.position.keyframes() {
+            if !kfs.is_empty() {
+                Self::remap_loop_frame(frame, &self.position_expression, kfs[0].frame, kfs.last().unwrap().frame)
+            } else { frame }
+        } else { frame };
         let base = self.position.evaluate(eval_frame);
         match &self.position_expression {
+            Some(Expression::Raw(script)) if expression_engine::script_uses_loops(script) => {
+                let loops = self.compute_loop_vals(frame, fps, LoopProp::Position);
+                expression_engine::eval_v2_with_loops(script, base, frame, fps, loops)
+            }
             Some(expr) => expr.evaluate_v2(base, eval_frame, fps),
             None => base,
         }
     }
 
-    pub fn eval_rotation(&self, frame: u32, fps: u32) -> f32 {
-        let eval_frame = match &self.rotation_expression {
-            Some(Expression::LoopOut) => {
-                if let Some(kfs) = self.rotation.keyframes() {
-                    if !kfs.is_empty() {
-                        remap_frame_for_loop(frame, kfs[0].frame, kfs.last().unwrap().frame, false)
-                    } else { frame }
-                } else { frame }
+    /// Computes loopOut/loopIn reference values from this property's keyframes for Raw scripts.
+    fn compute_loop_vals(&self, frame: u32, _fps: u32, prop: LoopProp) -> expression_engine::LoopVals {
+        use crate::core::expression_engine::LoopVals;
+        let mut vals = LoopVals::default();
+        // Sample the animatable at one cycle past the last keyframe for each loop mode
+        let mut compute = |kfs: &[crate::core::keyframe::Keyframe<[f32; 2]>], sample: &dyn Fn(u32) -> [f32; 2]| {
+            if kfs.len() >= 2 {
+                let first = kfs[0].frame;
+                let last = kfs.last().unwrap().frame;
+                let out_c = sample(remap_frame_for_loop(frame, first, last, false));
+                let out_p = sample(remap_frame_for_loop(frame, first, last, true));
+                vals.out_cycle = out_c[0];
+                vals.out_pingpong = out_p[0];
+                vals.in_cycle = out_c[1];
+                vals.in_pingpong = out_p[1];
             }
-            Some(Expression::PingPong) => {
-                if let Some(kfs) = self.rotation.keyframes() {
-                    if !kfs.is_empty() {
-                        remap_frame_for_loop(frame, kfs[0].frame, kfs.last().unwrap().frame, true)
-                    } else { frame }
-                } else { frame }
-            }
-            _ => frame,
         };
+        match prop {
+            LoopProp::Position => {
+                if let Some(kfs) = self.position.keyframes() {
+                    compute(kfs, &|f| self.position.evaluate(f));
+                }
+            }
+            LoopProp::Scale => {
+                if let Some(kfs) = self.scale.keyframes() {
+                    compute(kfs, &|f| self.scale.evaluate(f));
+                }
+            }
+            LoopProp::Rotation | LoopProp::Opacity => {
+                // Scalar properties: expose the scalar in both X and Y slots
+                type ScalarKfs<'a> = (Option<&'a [crate::core::keyframe::Keyframe<f32>]>, &'a dyn Fn(u32) -> f32);
+                let (kfs, anim): ScalarKfs = match prop {
+                    LoopProp::Rotation => (self.rotation.keyframes(), &|f| self.rotation.evaluate(f)),
+                    _ => (self.opacity.keyframes(), &|f| self.opacity.evaluate(f)),
+                };
+                if let Some(kfs) = kfs {
+                    if kfs.len() >= 2 {
+                        let first = kfs[0].frame;
+                        let last = kfs.last().unwrap().frame;
+                        let v2 = |f: u32| [anim(f), anim(f)];
+                        vals.out_cycle = v2(remap_frame_for_loop(frame, first, last, false))[0];
+                        vals.out_pingpong = v2(remap_frame_for_loop(frame, first, last, true))[0];
+                        vals.in_cycle = vals.out_cycle;
+                        vals.in_pingpong = vals.out_pingpong;
+                    }
+                }
+            }
+        }
+        vals
+    }
 
+    pub fn eval_rotation(&self, frame: u32, fps: u32) -> f32 {
+        let eval_frame = if let Some(kfs) = self.rotation.keyframes() {
+            if !kfs.is_empty() {
+                Self::remap_loop_frame(frame, &self.rotation_expression, kfs[0].frame, kfs.last().unwrap().frame)
+            } else { frame }
+        } else { frame };
         let base = self.rotation.evaluate(eval_frame);
         match &self.rotation_expression {
+            Some(Expression::Raw(script)) if expression_engine::script_uses_loops(script) => {
+                let loops = self.compute_loop_vals(frame, fps, LoopProp::Rotation);
+                expression_engine::eval_f32_with_loops(script, base, frame, fps, loops)
+            }
             Some(expr) => expr.evaluate_f32(base, eval_frame, fps),
             None => base,
         }
     }
 
     pub fn eval_scale(&self, frame: u32, fps: u32) -> [f32; 2] {
-        let eval_frame = match &self.scale_expression {
-            Some(Expression::LoopOut) => {
-                if let Some(kfs) = self.scale.keyframes() {
-                    if !kfs.is_empty() {
-                        remap_frame_for_loop(frame, kfs[0].frame, kfs.last().unwrap().frame, false)
-                    } else { frame }
-                } else { frame }
-            }
-            Some(Expression::PingPong) => {
-                if let Some(kfs) = self.scale.keyframes() {
-                    if !kfs.is_empty() {
-                        remap_frame_for_loop(frame, kfs[0].frame, kfs.last().unwrap().frame, true)
-                    } else { frame }
-                } else { frame }
-            }
-            _ => frame,
-        };
-
+        let eval_frame = if let Some(kfs) = self.scale.keyframes() {
+            if !kfs.is_empty() {
+                Self::remap_loop_frame(frame, &self.scale_expression, kfs[0].frame, kfs.last().unwrap().frame)
+            } else { frame }
+        } else { frame };
         let base = self.scale.evaluate(eval_frame);
         match &self.scale_expression {
+            Some(Expression::Raw(script)) if expression_engine::script_uses_loops(script) => {
+                let loops = self.compute_loop_vals(frame, fps, LoopProp::Scale);
+                expression_engine::eval_v2_with_loops(script, base, frame, fps, loops)
+            }
             Some(expr) => expr.evaluate_v2(base, eval_frame, fps),
             None => base,
         }
     }
 
     pub fn eval_opacity(&self, frame: u32, fps: u32) -> f32 {
-        let eval_frame = match &self.opacity_expression {
-            Some(Expression::LoopOut) => {
-                if let Some(kfs) = self.opacity.keyframes() {
-                    if !kfs.is_empty() {
-                        remap_frame_for_loop(frame, kfs[0].frame, kfs.last().unwrap().frame, false)
-                    } else { frame }
-                } else { frame }
-            }
-            Some(Expression::PingPong) => {
-                if let Some(kfs) = self.opacity.keyframes() {
-                    if !kfs.is_empty() {
-                        remap_frame_for_loop(frame, kfs[0].frame, kfs.last().unwrap().frame, true)
-                    } else { frame }
-                } else { frame }
-            }
-            _ => frame,
-        };
-
+        let eval_frame = if let Some(kfs) = self.opacity.keyframes() {
+            if !kfs.is_empty() {
+                Self::remap_loop_frame(frame, &self.opacity_expression, kfs[0].frame, kfs.last().unwrap().frame)
+            } else { frame }
+        } else { frame };
         let base = self.opacity.evaluate(eval_frame);
         match &self.opacity_expression {
+            Some(Expression::Raw(script)) if expression_engine::script_uses_loops(script) => {
+                let loops = self.compute_loop_vals(frame, fps, LoopProp::Opacity);
+                expression_engine::eval_f32_with_loops(script, base, frame, fps, loops)
+            }
             Some(expr) => expr.evaluate_f32(base, eval_frame, fps),
             None => base,
         }
@@ -466,6 +677,98 @@ pub enum EffectType {
         grain_size: f32,
         color_film: bool,
     },
+
+    // ── CPU pixel-effect kernels (wired to core::cpu_effects → ae_effects_pack) ──
+    // These run on the software/CPU render path so effects are visible even
+    // without the GPU pipeline, and reuse the orphaned ae_effects_pack kernels.
+    Twirl {
+        angle: Animatable<f32>,
+        radius: Animatable<f32>,
+    },
+    Bulge {
+        amount: Animatable<f32>,
+        radius: Animatable<f32>,
+    },
+    Posterize {
+        levels: Animatable<f32>,
+    },
+    Invert {
+        invert_alpha: bool,
+    },
+    Offset {
+        shift_x: Animatable<f32>,
+        shift_y: Animatable<f32>,
+    },
+    DirectionalBlur {
+        angle: Animatable<f32>,
+        length: Animatable<f32>,
+    },
+    RadialBlur {
+        amount: Animatable<f32>,
+    },
+    Sharpen {
+        amount: Animatable<f32>,
+    },
+    Threshold {
+        threshold: Animatable<f32>,
+    },
+    LinearWipe {
+        completion: Animatable<f32>,
+        angle: Animatable<f32>,
+    },
+    SimpleChoker {
+        choke_amount: Animatable<f32>,
+    },
+    ChromaKey {
+        screen_color: Animatable<[f32; 3]>,
+        screen_gain: Animatable<f32>,
+        clip_black: Animatable<f32>,
+        clip_white: Animatable<f32>,
+    },
+    Spherize {
+        radius: Animatable<f32>,
+        refractive_index: Animatable<f32>,
+    },
+    TurbulentDisplace {
+        amount: Animatable<f32>,
+        size: Animatable<f32>,
+        evolution: Animatable<f32>,
+        complexity: Animatable<f32>,
+    },
+    Colorama {
+        preset_index: Animatable<f32>,
+        cycle_phase: Animatable<f32>,
+    },
+    // ── New AE-standard effects ──
+    FractalNoise {
+        fractal_type: Animatable<f32>,
+        contrast: Animatable<f32>,
+        brightness: Animatable<f32>,
+        complexity: Animatable<f32>,
+        evolution: Animatable<f32>,
+    },
+    Curves {
+        channel: Animatable<f32>,
+    },
+    DisplacementMap {
+        source_layer: Animatable<f32>,
+        max_horizontal: Animatable<f32>,
+        max_vertical: Animatable<f32>,
+    },
+    CompoundBlur {
+        source_layer: Animatable<f32>,
+        max_blur: Animatable<f32>,
+    },
+    Minimax {
+        operation: Animatable<f32>,
+        radius: Animatable<f32>,
+    },
+    ShiftChannels {
+        take_red: Animatable<f32>,
+        take_green: Animatable<f32>,
+        take_blue: Animatable<f32>,
+        take_alpha: Animatable<f32>,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -522,6 +825,15 @@ pub struct TextFormatting {
     pub leading: f32,
     pub stroke_color: Option<[f32; 4]>,
     pub stroke_width: f32,
+    /// Paragraph alignment: 0=Left, 1=Center, 2=Right, 3=Justify
+    #[serde(default)]
+    pub alignment: u32,
+    /// Text box width for line wrapping (0 = no wrapping)
+    #[serde(default)]
+    pub box_width: f32,
+    /// Text box height for vertical overflow (0 = no limit)
+    #[serde(default)]
+    pub box_height: f32,
 }
 
 impl Default for TextFormatting {
@@ -532,6 +844,9 @@ impl Default for TextFormatting {
             leading: 1.2,
             stroke_color: None,
             stroke_width: 1.0,
+            alignment: 0,
+            box_width: 0.0,
+            box_height: 0.0,
         }
     }
 }
@@ -579,10 +894,32 @@ pub struct Layer {
 
     // ── Text Formatting System ──
     pub text_formatting: Option<TextFormatting>,
+
+    // ── Text Animator (per-character animation) ──
+    #[serde(default)]
+    pub text_animator: Option<crate::core::text_animator::TextAnimatorSettings>,
+
+    // ── AE Transparency System ──
+    #[serde(default)]
+    pub preserve_transparency: bool,
+
+    // ── Trim Paths Animator (Shape path trimming) ──
+    #[serde(default)]
+    pub trim_paths: Option<TrimPaths>,
+
+    // ── Shape Repeater (shape duplication) ──
+    #[serde(default)]
+    pub shape_repeater: Option<crate::core::shape_repeater::ShapeRepeaterOptions>,
+
+    // ── Layer Constraints System (Pinning) ──
+    #[serde(default)]
+    pub constraints: crate::core::layer_constraints::LayerConstraints,
 }
+
 
 impl Layer {
     pub fn new(id: String, name: String, layer_type: LayerType, duration_frames: u32) -> Self {
+        let is_adj = matches!(layer_type, LayerType::AdjustmentLayer);
         Self {
             id,
             name,
@@ -597,13 +934,13 @@ impl Layer {
             track_matte: TrackMatteMode::None,
             solo: false,
             motion_blur: false,
-            label: LabelColor::None,
+            label: LabelColor::Red,
             time_remap: None,
             trackers: Vec::new(),
             is_3d: false,
             transform_3d: Transform3D::default(),
             blend_mode: BlendMode::Normal,
-            is_adjustment_layer: false,
+            is_adjustment_layer: is_adj,
             is_guide_layer: false,
             is_shy: false,
             effects_enabled: true,
@@ -611,6 +948,11 @@ impl Layer {
             masks: Vec::new(),
             style: LayerStyle::default(),
             text_formatting: None,
+            text_animator: None,
+            preserve_transparency: false,
+            trim_paths: None,
+            shape_repeater: None,
+            constraints: crate::core::layer_constraints::LayerConstraints::default(),
         }
     }
 
@@ -620,12 +962,31 @@ impl Layer {
         l
     }
 
+
     pub fn new_adjustment(id: String, name: String, duration_frames: u32) -> Self {
-        let mut l = Self::new(id, name, LayerType::Solid { color: [1.0, 1.0, 1.0, 0.0] }, duration_frames);
-        l.is_adjustment_layer = true;
-        l.label = LabelColor::Purple;
+        let mut l = Self::new(id, name, LayerType::AdjustmentLayer, duration_frames);
+        l.label = LabelColor::Lavender;
         l
     }
+
+
+    /// Computes the accurate, unscaled bounding box dimensions (width, height) of the layer based on its LayerType.
+    pub fn bounding_size(&self) -> [f32; 2] {
+        match &self.layer_type {
+            LayerType::Solid { color: _ } => [1920.0, 1080.0],
+            LayerType::Text { text, font_size, tracking, .. } => {
+                let char_count = text.chars().count().max(1) as f32;
+                let fs = *font_size as f32;
+                let approx_w = char_count * fs * 0.6 + (char_count - 1.0) * tracking;
+                let approx_h = fs * 1.2;
+                [approx_w.max(10.0), approx_h.max(10.0)]
+            }
+            _ => [100.0, 100.0],
+        }
+    }
+
+
+
 
     pub fn is_active(&self, frame: u32) -> bool {
         self.visible && frame >= self.in_frame && frame <= self.out_frame
@@ -698,6 +1059,10 @@ pub struct Composition {
     pub active_camera: Camera3D,
     pub lights: Vec<Light3D>,
     pub markers: Vec<TimelineMarker>,
+
+    /// Sub-compositions for PreComp nesting (keyed by comp id).
+    #[serde(default)]
+    pub sub_compositions: Vec<Composition>,
 }
 
 impl Composition {
@@ -722,6 +1087,37 @@ impl Composition {
             active_camera: Camera3D::default(),
             lights: vec![Light3D::default()],
             markers: Vec::new(),
+            sub_compositions: Vec::new(),
+        }
+    }
+
+    /// Look up a sub-composition by id (recursive search).
+    pub fn find_sub_comp(&self, comp_id: &str) -> Option<&Composition> {
+        for sub in &self.sub_compositions {
+            if sub.id == comp_id {
+                return Some(sub);
+            }
+            if let Some(found) = sub.find_sub_comp(comp_id) {
+                return Some(found);
+            }
+        }
+        None
+    }
+
+    /// Resizes the composition to new dimensions and automatically remaps layer positions based on Constraints.
+    pub fn resize_and_remap(&mut self, new_w: u32, new_h: u32, old_w: u32, old_h: u32) {
+        self.width = new_w;
+        self.height = new_h;
+        for layer in &mut self.layers {
+            let current_p = layer.transform.position.evaluate(0);
+            let remapped = layer.constraints.remap_position(
+                current_p,
+                old_w as f32,
+                old_h as f32,
+                new_w as f32,
+                new_h as f32,
+            );
+            layer.transform.position = Animatable::new_constant(remapped);
         }
     }
 
@@ -735,10 +1131,46 @@ impl Composition {
         frame: u32,
     ) -> ([f32; 2], [f32; 2], f32, f32) {
         let fps = self.fps;
-        let pos = layer.transform.eval_position(frame, fps);
-        let scale = layer.transform.eval_scale(frame, fps);
-        let rot = layer.transform.eval_rotation(frame, fps);
-        let opa = layer.transform.eval_opacity(frame, fps);
+
+        // Layer expressions with composition context (thisComp.layer(...) / thisLayer)
+        let has_exprs = layer.transform.position_expression.is_some()
+            || layer.transform.rotation_expression.is_some()
+            || layer.transform.scale_expression.is_some()
+            || layer.transform.opacity_expression.is_some();
+        let (pos, scale, rot, opa) = if has_exprs {
+            let comp_snap = expression_engine::build_comp_snapshot(self, frame);
+            let this_snap = comp_snap.layers.get(&layer.name).cloned();
+            fn raw_script(e: &Option<Expression>) -> Option<&String> {
+                match e {
+                    Some(Expression::Raw(s)) => Some(s),
+                    _ => None,
+                }
+            }
+            let base_pos = layer.transform.eval_position(frame, fps);
+            let pos = raw_script(&layer.transform.position_expression)
+                .map(|s| expression_engine::eval_v2_with_comp(s, base_pos, frame, fps, &comp_snap, this_snap.as_ref()))
+                .unwrap_or(base_pos);
+            let base_scale = layer.transform.eval_scale(frame, fps);
+            let scale = raw_script(&layer.transform.scale_expression)
+                .map(|s| expression_engine::eval_v2_with_comp(s, base_scale, frame, fps, &comp_snap, this_snap.as_ref()))
+                .unwrap_or(base_scale);
+            let base_rot = layer.transform.eval_rotation(frame, fps);
+            let rot = raw_script(&layer.transform.rotation_expression)
+                .map(|s| expression_engine::eval_f32_with_comp(s, base_rot, frame, fps, &comp_snap, this_snap.as_ref()))
+                .unwrap_or(base_rot);
+            let base_opa = layer.transform.eval_opacity(frame, fps);
+            let opa = raw_script(&layer.transform.opacity_expression)
+                .map(|s| expression_engine::eval_f32_with_comp(s, base_opa, frame, fps, &comp_snap, this_snap.as_ref()))
+                .unwrap_or(base_opa);
+            (pos, scale, rot, opa)
+        } else {
+            (
+                layer.transform.eval_position(frame, fps),
+                layer.transform.eval_scale(frame, fps),
+                layer.transform.eval_rotation(frame, fps),
+                layer.transform.eval_opacity(frame, fps),
+            )
+        };
 
         if let Some(pid) = &layer.parent_id {
             if let Some(parent) = self.layers.iter().find(|l| &l.id == pid) {
@@ -767,7 +1199,7 @@ impl Composition {
             let mut curr = pid.clone();
             let mut visited = std::collections::HashSet::new();
             visited.insert(layer_id.to_string());
-            while let Some(parent_layer) = self.layers.iter().find(|l| &l.id == &curr) {
+            while let Some(parent_layer) = self.layers.iter().find(|l| l.id == curr) {
                 if visited.contains(&parent_layer.id) {
                     return false; // Cycle detected!
                 }
@@ -857,10 +1289,10 @@ impl Composition {
         &self,
         layer: &Layer,
         frame: u32,
-        cache: &mut std::collections::HashMap<String, ([f32; 2], [f32; 2], f32, f32)>,
+        cache: &mut std::collections::HashMap<String, BoundingBox>,
         visited: &mut std::collections::HashSet<String>,
         id_map: &std::collections::HashMap<&str, usize>,
-    ) -> ([f32; 2], [f32; 2], f32, f32) {
+    ) -> BoundingBox {
         if let Some(cached) = cache.get(&layer.id) {
             return *cached;
         }
@@ -914,9 +1346,11 @@ impl Composition {
         // Perspective Projection Matrix for Camera
         let fov_rad = self.active_camera.fov_degrees.to_radians();
         let aspect = self.width as f32 / self.height.max(1) as f32;
+        // Guard against degenerate FOV (e.g. fov_degrees=0 → tan(0)=0 → division by zero)
+        let f = if fov_rad.abs() < 1e-4 { 1e6 } else { 1.0 / (fov_rad * 0.5).tan() };
         let near = 0.1f32;
         let far = 10000.0f32;
-        let f = 1.0 / (fov_rad * 0.5).tan();
+
 
         let proj_3d = [
             [f / aspect, 0.0, 0.0, 0.0],
@@ -995,6 +1429,12 @@ impl Composition {
         let min_pos = layers_info.first().unwrap().1;
         let max_pos = layers_info.last().unwrap().1;
         let count = layers_info.len();
+
+        // Guard: if all layers are at the same coordinate, distribution is a no-op
+        if (max_pos - min_pos).abs() < 0.001 {
+            return;
+        }
+
         let step = (max_pos - min_pos) / (count - 1) as f32;
 
         for (i, &(layer_idx, _)) in layers_info.iter().enumerate() {
@@ -1076,11 +1516,7 @@ impl Default for Project {
         let mut text_layer = Layer::new(
             "layer_text".to_string(),
             "Main Title".to_string(),
-            LayerType::Text {
-                text: "After Effects OSS".to_string(),
-                font_size: 64,
-                color: [1.0, 1.0, 1.0, 1.0],
-            },
+            LayerType::new_text("After Effects OSS", 64, [1.0, 1.0, 1.0, 1.0]),
             300,
         );
         text_layer.transform.position = Animatable::new_constant([960.0, 500.0]);
@@ -1115,11 +1551,13 @@ impl Default for Project {
 
 impl Project {
     pub fn active_composition(&self) -> &Composition {
-        &self.compositions[self.active_composition_idx]
+        let idx = self.active_composition_idx.min(self.compositions.len().saturating_sub(1));
+        &self.compositions[idx]
     }
 
     pub fn active_composition_mut(&mut self) -> &mut Composition {
-        &mut self.compositions[self.active_composition_idx]
+        let idx = self.active_composition_idx.min(self.compositions.len().saturating_sub(1));
+        &mut self.compositions[idx]
     }
 }
 
@@ -1180,3 +1618,4 @@ mod tests {
         assert!(!comp.set_layer_parent("l1", Some("l2".into())), "Cycle parent assignment must be rejected");
     }
 }
+

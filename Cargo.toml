@@ -4,24 +4,44 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-eframe = { version = "0.27.2", features = ["wgpu"] }
+eframe = { version = "0.27.2", features = ["wgpu"], optional = true }
 log = "0.4.21"
 env_logger = "0.11.3"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 bytemuck = { version = "1.15.0", features = ["derive"] }
-wgpu = "0.19.4"
+wgpu = { version = "0.19.4", optional = true }
 # Rhai: lightweight Rust-native scripting engine for AE-style expressions
 rhai = { version = "1.18", features = ["sync"] }
 # rand: for film grain and procedural noise
 rand = "0.8"
 # egui_extras for SVG icon rendering support
-egui_extras = { version = "0.27.2", features = ["svg"] }
+egui_extras = { version = "0.27.2", features = ["svg"], optional = true }
 # rfd for native OS file dialogs (macOS / Windows / Linux)
-rfd = "0.14"
+rfd = { version = "0.14", optional = true }
 # rayon for multi-core parallel pixel sweeps
 rayon = "1.8"
+# clap: CLI argument parsing
+clap = { version = "4", features = ["derive"], optional = true }
+# png: headless frame export
+png = { version = "0.17", optional = true }
+# ab_glyph: font loading and glyph rasterization for text layers
+ab_glyph = "0.2"
+# image: loading JPEG/PNG image layers
+image = { version = "0.25", default-features = false, features = ["jpeg", "png"] }
 
 [features]
-default = ["wgpu"]
+default = ["gui"]
+gui = ["dep:eframe", "dep:wgpu", "dep:egui_extras", "dep:rfd"]
+cli = ["dep:clap", "dep:png"]
 wgpu = []
+
+[[bin]]
+name = "aevfx"
+path = "src/bin/cli.rs"
+required-features = ["cli"]
+
+[[bin]]
+name = "aftereffects-oss"
+path = "src/main.rs"
+required-features = ["gui"]

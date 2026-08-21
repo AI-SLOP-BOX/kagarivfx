@@ -7,16 +7,12 @@ pub fn draw(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
     ui.separator();
 
     // ── Asset Search Filter ──
-    let search_id = egui::Id::new("project_panel_search");
-    let mut search_query = ui.ctx().data_mut(|d| d.get_temp_mut_or_insert_with(search_id, String::new).clone());
     ui.horizontal(|ui| {
         ui.label("Search:");
-        if ui.add(egui::TextEdit::singleline(&mut search_query).hint_text("Search bin...")).changed() {
-            ui.ctx().data_mut(|d| d.insert_temp(search_id, search_query.clone()));
-        }
+        ui.add(egui::TextEdit::singleline(&mut app.project_search_query).hint_text("Search bin..."));
     });
-    let query = search_query.to_lowercase();
-    ui.add_space(4.0);
+    let query = app.project_search_query.to_lowercase();
+
 
     // Read current state without cloning upfront
     let current_project = app.history.current();

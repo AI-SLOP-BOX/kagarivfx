@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 /// OBS-Studio inspired plugin trait system for render effects.
 ///
 /// # Current Architecture (Adapter Pattern)
@@ -15,7 +16,6 @@
 /// WGSL shader fragment and an arbitrary GPU buffer, enabling multi-pass
 /// compositing without touching the core renderer. This mirrors how Nuke's
 /// Blink script system or OBS's source plugin model works.
-
 use crate::core::timeline::{EffectType, ColorConversionMode};
 
 /// The GPU-facing data that an effect plugin can read and modify.
@@ -173,6 +173,27 @@ impl RenderEffectPlugin for EnumEffectPlugin {
             EffectType::ColorGradeLUT { .. } => "3D LUT Color Grading",
             EffectType::ColorSpaceConvert { .. } => "Color Space Converter",
             EffectType::FilmGrain { .. } => "Physical Film Grain",
+            EffectType::Twirl { .. } => "Twirl",
+            EffectType::Bulge { .. } => "Bulge",
+            EffectType::Posterize { .. } => "Posterize",
+            EffectType::Invert { .. } => "Invert",
+            EffectType::Offset { .. } => "Offset",
+            EffectType::DirectionalBlur { .. } => "Directional Blur",
+            EffectType::RadialBlur { .. } => "Radial Blur",
+            EffectType::Sharpen { .. } => "Sharpen",
+            EffectType::Threshold { .. } => "Threshold",
+            EffectType::LinearWipe { .. } => "Linear Wipe",
+            EffectType::SimpleChoker { .. } => "Simple Choker",
+            EffectType::ChromaKey { .. } => "Chroma Key",
+            EffectType::Spherize { .. } => "Spherize",
+            EffectType::TurbulentDisplace { .. } => "Turbulent Displace",
+            EffectType::Colorama { .. } => "Colorama",
+            EffectType::FractalNoise { .. } => "Fractal Noise",
+            EffectType::Curves { .. } => "Curves",
+            EffectType::DisplacementMap { .. } => "Displacement Map",
+            EffectType::CompoundBlur { .. } => "Compound Blur",
+            EffectType::Minimax { .. } => "Minimax",
+            EffectType::ShiftChannels { .. } => "Shift Channels",
         }
     }
 
@@ -191,6 +212,27 @@ impl RenderEffectPlugin for EnumEffectPlugin {
             EffectType::ColorGradeLUT { .. } => "color_grade_lut",
             EffectType::ColorSpaceConvert { .. } => "color_space_convert",
             EffectType::FilmGrain { .. } => "film_grain",
+            EffectType::Twirl { .. } => "twirl",
+            EffectType::Bulge { .. } => "bulge",
+            EffectType::Posterize { .. } => "posterize",
+            EffectType::Invert { .. } => "invert",
+            EffectType::Offset { .. } => "offset",
+            EffectType::DirectionalBlur { .. } => "directional_blur",
+            EffectType::RadialBlur { .. } => "radial_blur",
+            EffectType::Sharpen { .. } => "sharpen",
+            EffectType::Threshold { .. } => "threshold",
+            EffectType::LinearWipe { .. } => "linear_wipe",
+            EffectType::SimpleChoker { .. } => "simple_choker",
+            EffectType::ChromaKey { .. } => "chroma_key",
+            EffectType::Spherize { .. } => "spherize",
+            EffectType::TurbulentDisplace { .. } => "turbulent_displace",
+            EffectType::Colorama { .. } => "colorama",
+            EffectType::FractalNoise { .. } => "fractal_noise",
+            EffectType::Curves { .. } => "curves",
+            EffectType::DisplacementMap { .. } => "displacement_map",
+            EffectType::CompoundBlur { .. } => "compound_blur",
+            EffectType::Minimax { .. } => "minimax",
+            EffectType::ShiftChannels { .. } => "shift_channels",
         }
     }
 
@@ -295,6 +337,12 @@ pub fn evaluate_effects(effects: &[crate::core::timeline::Effect], frame: u32) -
 /// Thread-safe central registry for dynamic effect plugins.
 pub struct EffectPluginRegistry {
     plugins: std::sync::RwLock<std::collections::HashMap<String, Box<dyn RenderEffectPlugin>>>,
+}
+
+impl Default for EffectPluginRegistry {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl EffectPluginRegistry {

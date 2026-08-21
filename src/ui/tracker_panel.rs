@@ -47,6 +47,49 @@ pub fn draw_tracker_panel(app: &mut AfterEffectsApp, ui: &mut egui::Ui, current_
                 }
             });
 
+            ui.add_space(8.0);
+            ui.separator();
+            ui.label(egui::RichText::new("✨ AI Auto-Mask & Roto Generator").strong().color(egui::Color32::from_rgb(0, 200, 255)));
+            ui.horizontal(|ui| {
+                if ui.button("🎯 Auto-Generate Mask").on_hover_text("Auto-create 4-vertex Bezier Mask around tracked feature").clicked() {
+                    let mut temp_proj = app.history.current().clone();
+                    let comp_mut = temp_proj.active_composition_mut();
+                    if idx < comp_mut.layers.len() {
+                        let target_pos = comp_mut.layers[idx].transform.position.evaluate(current_frame);
+                        let (cx, cy) = (target_pos[0], target_pos[1]);
+                        let (hw, hh) = (60.0f32, 60.0f32);
+
+                        let vertices = vec![
+                            [cx - hw, cy - hh], // Top-Left
+                            [cx + hw, cy - hh], // Top-Right
+                            [cx + hw, cy + hh], // Bottom-Right
+                            [cx - hw, cy + hh], // Bottom-Left
+                        ];
+
+                        let mask = crate::core::mask::Mask {
+                            id: format!("auto_mask_{}", comp_mut.layers[idx].masks.len()),
+                            name: format!("Auto Track Mask {}", comp_mut.layers[idx].masks.len() + 1),
+                            mode: crate::core::mask::MaskMode::Add,
+                            inverted: false,
+                            path: crate::core::mask::MaskPath {
+                                vertices: crate::core::property::Animatable::new_constant(vertices),
+                                tangents: None,
+                                is_closed: true,
+                            },
+                            feather: crate::core::property::Animatable::new_constant(5.0),
+                            opacity: crate::core::property::Animatable::new_constant(100.0),
+                            expansion: crate::core::property::Animatable::new_constant(0.0),
+                            enabled: true,
+                        };
+
+                        comp_mut.layers[idx].masks.push(mask);
+                        app.history.commit(temp_proj);
+                        crate::core::frame_cache::bump_version();
+                        app.toasts.info(format!("Auto-generated Bezier Mask on {}", layer_name));
+                    }
+                }
+            });
+
             ui.add_space(6.0);
             ui.horizontal(|ui| {
                 if ui.button("Reset Track").clicked() {

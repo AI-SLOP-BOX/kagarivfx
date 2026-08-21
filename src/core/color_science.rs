@@ -4,7 +4,7 @@
 /// - Tone Curves (Cubic spline interpolation for R, G, B, and Luminance)
 /// - Levels adjustment (Input / Output clamping and gamma correction)
 /// - Hue, Saturation, and Lightness (HSL) conversion and shifting
-
+///
 /// RGB to HSL color space conversion.
 /// Input: R, G, B in [0.0, 1.0].
 /// Output: Hue in [0.0, 360.0], Saturation in [0.0, 1.0], Lightness in [0.0, 1.0].
@@ -104,11 +104,13 @@ pub fn shift_hsl(rgb: [f32; 3], hue_shift: f32, sat_mult: f32, light_mult: f32) 
 
 /// 3D LUT Color Grade Table with Tetrahedral Interpolation from NextVFX Engine.
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+#[allow(dead_code)]
 pub struct Lut3D {
     pub size: usize,
     pub data: Vec<f32>, // Flat RGB array of length size * size * size * 3
 }
 
+#[allow(dead_code)]
 impl Lut3D {
     /// Create a flat identity 3D LUT of dimension `size`.
     pub fn identity(size: usize) -> Self {
@@ -132,10 +134,14 @@ impl Lut3D {
         if self.size == 0 || self.data.is_empty() {
             return (r, g, b);
         }
+        let r_safe = if r.is_nan() { 0.0 } else { r };
+        let g_safe = if g.is_nan() { 0.0 } else { g };
+        let b_safe = if b.is_nan() { 0.0 } else { b };
+
         let s = (self.size - 1) as f32;
-        let fr = (r * s).clamp(0.0, s - 0.001);
-        let fg = (g * s).clamp(0.0, s - 0.001);
-        let fb = (b * s).clamp(0.0, s - 0.001);
+        let fr = (r_safe * s).clamp(0.0, s - 0.001);
+        let fg = (g_safe * s).clamp(0.0, s - 0.001);
+        let fb = (b_safe * s).clamp(0.0, s - 0.001);
 
         let ir = fr as usize;
         let ig = fg as usize;
@@ -183,32 +189,30 @@ impl Lut3D {
                     c000.2 + (c001.2 - c000.2) * db + (c101.2 - c001.2) * dr + (c111.2 - c101.2) * dg,
                 )
             }
-        } else {
-            if db > dg { // B > G > R
-                let c001 = get(ir, ig, ib + 1);
-                let c011 = get(ir, ig + 1, ib + 1);
-                (
-                    c000.0 + (c001.0 - c000.0) * db + (c011.0 - c001.0) * dg + (c111.0 - c011.0) * dr,
-                    c000.1 + (c001.1 - c000.1) * db + (c011.1 - c001.1) * dg + (c111.1 - c011.1) * dr,
-                    c000.2 + (c001.2 - c000.2) * db + (c011.2 - c001.2) * dg + (c111.2 - c011.2) * dr,
-                )
-            } else if db > dr { // G > B > R
-                let c010 = get(ir, ig + 1, ib);
-                let c011 = get(ir, ig + 1, ib + 1);
-                (
-                    c000.0 + (c010.0 - c000.0) * dg + (c011.0 - c010.0) * db + (c111.0 - c011.0) * dr,
-                    c000.1 + (c010.1 - c000.1) * dg + (c011.1 - c010.1) * db + (c111.1 - c011.1) * dr,
-                    c000.2 + (c010.2 - c000.2) * dg + (c011.2 - c010.2) * db + (c111.2 - c011.2) * dr,
-                )
-            } else { // G > R > B
-                let c010 = get(ir, ig + 1, ib);
-                let c110 = get(ir + 1, ig + 1, ib);
-                (
-                    c000.0 + (c010.0 - c000.0) * dg + (c110.0 - c010.0) * dr + (c111.0 - c110.0) * db,
-                    c000.1 + (c010.1 - c000.1) * dg + (c110.1 - c010.1) * dr + (c111.1 - c110.1) * db,
-                    c000.2 + (c010.2 - c000.2) * dg + (c110.2 - c010.2) * dr + (c111.2 - c110.2) * db,
-                )
-            }
+        } else if db > dg { // B > G > R
+            let c001 = get(ir, ig, ib + 1);
+            let c011 = get(ir, ig + 1, ib + 1);
+            (
+                c000.0 + (c001.0 - c000.0) * db + (c011.0 - c001.0) * dg + (c111.0 - c011.0) * dr,
+                c000.1 + (c001.1 - c000.1) * db + (c011.1 - c001.1) * dg + (c111.1 - c011.1) * dr,
+                c000.2 + (c001.2 - c000.2) * db + (c011.2 - c001.2) * dg + (c111.2 - c011.2) * dr,
+            )
+        } else if db > dr { // G > B > R
+            let c010 = get(ir, ig + 1, ib);
+            let c011 = get(ir, ig + 1, ib + 1);
+            (
+                c000.0 + (c010.0 - c000.0) * dg + (c011.0 - c010.0) * db + (c111.0 - c011.0) * dr,
+                c000.1 + (c010.1 - c000.1) * dg + (c011.1 - c010.1) * db + (c111.1 - c011.1) * dr,
+                c000.2 + (c010.2 - c000.2) * dg + (c011.2 - c010.2) * db + (c111.2 - c011.2) * dr,
+            )
+        } else { // G > R > B
+            let c010 = get(ir, ig + 1, ib);
+            let c110 = get(ir + 1, ig + 1, ib);
+            (
+                c000.0 + (c010.0 - c000.0) * dg + (c110.0 - c010.0) * dr + (c111.0 - c110.0) * db,
+                c000.1 + (c010.1 - c000.1) * dg + (c110.1 - c010.1) * dr + (c111.1 - c110.1) * db,
+                c000.2 + (c010.2 - c000.2) * dg + (c110.2 - c010.2) * dr + (c111.2 - c110.2) * db,
+            )
         }
     }
 }
@@ -242,5 +246,19 @@ mod tests {
         assert!((mapped.0 - 0.5).abs() < 1e-3);
         assert!((mapped.1 - 0.25).abs() < 1e-3);
         assert!((mapped.2 - 0.75).abs() < 1e-3);
+    }
+
+    #[test]
+    fn test_lut3d_nan_input_sanitization() {
+        let lut = Lut3D::identity(4);
+        let (r, g, b) = lut.apply(f32::NAN, f32::NAN, f32::NAN);
+        // NaN inputs must be sanitized to 0.0 and produce valid (non-NaN) outputs
+        assert!(!r.is_nan(), "Lut3D::apply returned NaN for NaN r input");
+        assert!(!g.is_nan(), "Lut3D::apply returned NaN for NaN g input");
+        assert!(!b.is_nan(), "Lut3D::apply returned NaN for NaN b input");
+        // Identity LUT with 0.0 input → should return near 0.0
+        assert!(r.abs() < 0.01);
+        assert!(g.abs() < 0.01);
+        assert!(b.abs() < 0.01);
     }
 }

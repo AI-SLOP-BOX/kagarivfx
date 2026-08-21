@@ -67,7 +67,15 @@ struct Layer {
     // Track Matte System
     track_matte_mode: u32,
 
-    _padding_align: u32,
+    // Shape params: x = polygon sides, y = rectangle corner radius (normalized 0..1 of half-size)
+    shape_params: vec4<f32>,
+
+    // Mesh Warp / Corner Pin
+    meshwarp_enabled: u32,
+    corner_top_left: vec2<f32>,
+    corner_top_right: vec2<f32>,
+    corner_bottom_left: vec2<f32>,
+    corner_bottom_right: vec2<f32>,
 };
 
 @group(0) @binding(0) var<uniform> globals: Globals;
@@ -96,7 +104,26 @@ fn vs_main(model: VertexInput) -> VertexOutput {
 }
 
 // Helper: sample layer color at a given local_pos and tex_coords
-fn sample_layer_color(local_pos: vec2<f32>, tc: vec2<f32>, blur_extend: f32) -> vec4<f32> {
+fn sample_layer_color(local_pos_in: vec2<f32>, tc_in: vec2<f32>, blur_extend: f32) -> vec4<f32> {
+    // Mesh Warp / Corner Pin: bilinear corner-offset displacement field.
+    // Corners are pixel offsets from each quad corner; normalize by viewport to get UV deltas.
+    var tc = tc_in;
+    var local_pos = local_pos_in;
+    if (layer.meshwarp_enabled == 1u) {
+        let vp = max(globals.viewport_size, vec2<f32>(1.0, 1.0));
+        let d_tl = layer.corner_top_left / vp;
+        let d_tr = layer.corner_top_right / vp;
+        let d_bl = layer.corner_bottom_left / vp;
+        let d_br = layer.corner_bottom_right / vp;
+        let u = tc.x;
+        let v = tc.y;
+        let top = mix(d_tl, d_tr, u);
+        let bot = mix(d_bl, d_br, u);
+        let disp = mix(top, bot, v);
+        // One-step inverse approximation: sample opposite the displacement
+        tc = vec2<f32>(tc.x - disp.x, tc.y + disp.y);
+        local_pos = vec2<f32>(local_pos.x - disp.x * 2.0, local_pos.y + disp.y * 2.0);
+    }
     var c = vec4<f32>(1.0, 1.0, 1.0, 1.0);
     if (layer.layer_type == 0u) {
         if (layer.effect_blur_enabled == 1u) {
@@ -104,6 +131,13 @@ fn sample_layer_color(local_pos: vec2<f32>, tc: vec2<f32>, blur_extend: f32) -> 
             let d_y = abs(local_pos.y) - 0.5;
             let d = max(d_x, d_y);
             let alpha = 1.0 - smoothstep(-0.02 - blur_extend, 0.0 + blur_extend, d);
+            c = vec4<f32>(layer.color.rgb, layer.color.a * alpha);
+        } else if (layer.shape_params.y > 0.001) {
+            // Rounded-corner solid via SDF
+            let half_sz = vec2<f32>(0.5, 0.5);
+            let q = abs(local_pos) - (half_sz - layer.shape_params.y);
+            let d = length(max(q, vec2<f32>(0.0, 0.0))) + min(max(q.x, q.y), 0.0) - layer.shape_params.y;
+            let alpha = 1.0 - smoothstep(-0.02 - blur_extend, 0.02 + blur_extend, d);
             c = vec4<f32>(layer.color.rgb, layer.color.a * alpha);
         } else {
             c = layer.color;
@@ -144,21 +178,21 @@ fn sample_layer_color(local_pos: vec2<f32>, tc: vec2<f32>, blur_extend: f32) -> 
             let alpha = 1.0 - smoothstep(0.48 - blur_extend, 0.5 + blur_extend, dist);
             c = vec4<f32>(layer.color.rgb, layer.color.a * alpha);
         } else if (layer.shape_type == 2u) {
-            // Procedural 5-Point Star SDF
+            // Procedural N-Point Star SDF (points from shape_params.x, default 5)
             let p = local_pos * 2.0;
             let r = length(p);
             let angle = atan2(p.y, p.x);
-            let n = 5.0;
+            let n = max(layer.shape_params.x, 3.0);
             let angle_mod = abs(fract((angle / 6.2831853) * n + 0.5) - 0.5) * (6.2831853 / n);
             let d_star = r * cos(angle_mod - 0.314159) - 0.45;
             let alpha = 1.0 - smoothstep(-0.04 - blur_extend, 0.04 + blur_extend, d_star);
             c = vec4<f32>(layer.color.rgb, layer.color.a * alpha);
         } else if (layer.shape_type == 3u) {
-            // Procedural Regular Hexagon (6-Point Polygon) SDF
+            // Procedural Regular N-Gon Polygon SDF (sides from shape_params.x, default 6)
             let p = local_pos * 2.0;
             let r = length(p);
             let angle = atan2(p.y, p.x);
-            let n = 6.0;
+            let n = max(layer.shape_params.x, 3.0);
             let angle_mod = abs(fract((angle / 6.2831853) * n + 0.5) - 0.5) * (6.2831853 / n);
             let d_poly = r * cos(angle_mod) - 0.45;
             let alpha = 1.0 - smoothstep(-0.04 - blur_extend, 0.04 + blur_extend, d_poly);
@@ -168,6 +202,10 @@ fn sample_layer_color(local_pos: vec2<f32>, tc: vec2<f32>, blur_extend: f32) -> 
         }
     } else if (layer.layer_type == 3u) {
         c = layer.color;
+    } else if (layer.layer_type == 8u) {
+        // Particle layers are simulated and rasterized on the CPU;
+        // return fully transparent so fs_main's alpha check discards this quad.
+        c = vec4<f32>(0.0, 0.0, 0.0, 0.0);
     }
     return c;
 }

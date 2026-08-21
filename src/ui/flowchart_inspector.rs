@@ -25,6 +25,9 @@ pub fn draw_flowchart_inspector(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
                     crate::core::timeline::LayerType::Null => "Null",
                     crate::core::timeline::LayerType::PreComp { .. } => "PreComp",
                     crate::core::timeline::LayerType::Audio { .. } => "Audio",
+                    crate::core::timeline::LayerType::AdjustmentLayer => "Adjustment",
+                    crate::core::timeline::LayerType::Particle { .. } => "Particle",
+
                 };
                 let parent_info = if let Some(ref p_id) = layer.parent_id {
                     format!(" 🔗 Parent: {}", p_id)

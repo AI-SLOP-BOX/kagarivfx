@@ -149,7 +149,7 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
                                 }
                             });
 
-                            let _ = crate::core::ffmpeg_export::start_export(config, tx_ff, move |frame| {
+                            let _ = crate::core::ffmpeg_export::start_export_cancelable(config, tx_ff, cancel_flag, move |frame| {
                                 crate::core::software_renderer::render_frame_to_pixels(
                                     &comp_snapshot,
                                     frame,

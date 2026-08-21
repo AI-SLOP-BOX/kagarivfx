@@ -1,9 +1,10 @@
 use eframe::egui;
 use crate::AfterEffectsApp;
-use crate::core::timeline::{LayerType, LabelColor, TrackMatteMode, Expression, TrackerPoint, BlendMode};
+use crate::core::timeline::{LayerType, LabelColor, TrackMatteMode, TrackerPoint, BlendMode};
 use crate::core::property::Animatable;
-use crate::core::keyframe::{Keyframe, InterpolationType, BezierControlPoint};
+use crate::core::keyframe::{InterpolationType, BezierControlPoint};
 use crate::core::tracker_engine::TrackerEngine;
+use crate::ui::inspector_property::draw_property_ui;
 
 pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut u32) {
     // ── Non-blocking Async Motion Tracker Event Receiver ──
@@ -13,7 +14,7 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
             if let crate::TrackerEvent::Finished { ref layer_id, layer_idx, tracker_idx, keyframes } = event {
                 let comp_mut = app.history.current_mut().active_composition_mut();
                 let layer_opt = comp_mut.layers.iter().position(|l| l.id == *layer_id)
-                    .or_else(|| if layer_idx < comp_mut.layers.len() { Some(layer_idx) } else { None });
+                    .or(if layer_idx < comp_mut.layers.len() { Some(layer_idx) } else { None });
 
                 if let Some(idx) = layer_opt {
                     let layer = &mut comp_mut.layers[idx];
@@ -117,7 +118,7 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                     // ── Safe Parent selector logic ──
                     let other_layers: Vec<(String, String)> = comp.layers.iter()
                         .enumerate()
-                        .filter(|&(i, l)| i != idx && l.layer_type != LayerType::Null)
+                        .filter(|&(i, l)| i != idx && !matches!(l.layer_type, LayerType::Null))
                         .map(|(_, l)| (l.id.clone(), l.name.clone()))
                         .collect();
 
@@ -311,166 +312,12 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                     ui.add_space(8.0);
 
                     // Transform Section (Conditional on 3D Layer status)
-                    ui.group(|ui| {
-                        if layer.is_3d {
-                            ui.label("Transform 3D");
-                            
-                            let pos_before = layer.transform_3d.position.clone();
-                            if let Some(nf) = draw_property_ui(*current_frame, ui, "Position (XYZ)", &mut layer.transform_3d.position, |ui, val| {
-                                ui.horizontal(|ui| {
-                                    ui.add(egui::DragValue::new(&mut val[0]).speed(1.0).prefix("X: "));
-                                    ui.add(egui::DragValue::new(&mut val[1]).speed(1.0).prefix("Y: "));
-                                    ui.add(egui::DragValue::new(&mut val[2]).speed(1.0).prefix("Z: "));
-                                });
-                            }) { next_frame = Some(nf); }
-                            draw_easy_ease_button(ui, &mut layer.transform_3d.position, &mut project_changed);
-                            if pos_before != layer.transform_3d.position { project_changed = true; }
-
-                            ui.separator();
-                            let rot_before = layer.transform_3d.rotation.clone();
-                            if let Some(nf) = draw_property_ui(*current_frame, ui, "Rotation (YPR)", &mut layer.transform_3d.rotation, |ui, val| {
-                                ui.horizontal(|ui| {
-                                    ui.add(egui::DragValue::new(&mut val[0]).speed(1.0).suffix("° P"));
-                                    ui.add(egui::DragValue::new(&mut val[1]).speed(1.0).suffix("° Y"));
-                                    ui.add(egui::DragValue::new(&mut val[2]).speed(1.0).suffix("° R"));
-                                });
-                            }) { next_frame = Some(nf); }
-                            draw_easy_ease_button(ui, &mut layer.transform_3d.rotation, &mut project_changed);
-                            if rot_before != layer.transform_3d.rotation { project_changed = true; }
-
-                            ui.separator();
-                            let scale_before = layer.transform_3d.scale.clone();
-                            if let Some(nf) = draw_property_ui(*current_frame, ui, "Scale (XYZ)", &mut layer.transform_3d.scale, |ui, val| {
-                                ui.horizontal(|ui| {
-                                    ui.add(egui::DragValue::new(&mut val[0]).speed(0.1).suffix("% X"));
-                                    ui.add(egui::DragValue::new(&mut val[1]).speed(0.1).suffix("% Y"));
-                                    ui.add(egui::DragValue::new(&mut val[2]).speed(0.1).suffix("% Z"));
-                                });
-                            }) { next_frame = Some(nf); }
-                            draw_easy_ease_button(ui, &mut layer.transform_3d.scale, &mut project_changed);
-                            if scale_before != layer.transform_3d.scale { project_changed = true; }
-                        } else {
-                            ui.label("Transform 2D");
-                            
-                            let val_before = layer.transform.anchor_point.clone();
-                            if let Some(nf) = draw_property_ui(*current_frame, ui, "Anchor Point", &mut layer.transform.anchor_point, |ui, val| {
-                                ui.horizontal(|ui| {
-                                    ui.add(egui::DragValue::new(&mut val[0]).speed(1.0).prefix("X: "));
-                                    ui.add(egui::DragValue::new(&mut val[1]).speed(1.0).prefix("Y: "));
-                                });
-                            }) { next_frame = Some(nf); }
-                            if val_before != layer.transform.anchor_point { project_changed = true; }
-
-                            ui.separator();
-                            let pos_before = layer.transform.position.clone();
-                            if let Some(nf) = draw_property_ui(*current_frame, ui, "Position", &mut layer.transform.position, |ui, val| {
-                                ui.horizontal(|ui| {
-                                    ui.add(egui::DragValue::new(&mut val[0]).speed(1.0).prefix("X: "));
-                                    ui.add(egui::DragValue::new(&mut val[1]).speed(1.0).prefix("Y: "));
-                                });
-                            }) { next_frame = Some(nf); }
-                            draw_easy_ease_button(ui, &mut layer.transform.position, &mut project_changed);
-                            draw_expression_selector(ui, "position", &mut layer.transform.position_expression, &mut project_changed);
-                            if pos_before != layer.transform.position { project_changed = true; }
-
-                            ui.separator();
-                            let scale_before = layer.transform.scale.clone();
-                            if let Some(nf) = draw_property_ui(*current_frame, ui, "Scale", &mut layer.transform.scale, |ui, val| {
-                                ui.horizontal(|ui| {
-                                    ui.add(egui::DragValue::new(&mut val[0]).speed(0.1).suffix("% X"));
-                                    ui.add(egui::DragValue::new(&mut val[1]).speed(0.1).suffix("% Y"));
-                                });
-                            }) { next_frame = Some(nf); }
-                            draw_easy_ease_button(ui, &mut layer.transform.scale, &mut project_changed);
-                            draw_expression_selector(ui, "scale", &mut layer.transform.scale_expression, &mut project_changed);
-                            if scale_before != layer.transform.scale { project_changed = true; }
-
-                            ui.separator();
-                            let rot_before = layer.transform.rotation.clone();
-                            if let Some(nf) = draw_property_ui(*current_frame, ui, "Rotation", &mut layer.transform.rotation, |ui, val| {
-                                ui.add(egui::Slider::new(val, -360.0..=360.0).suffix("°"));
-                            }) { next_frame = Some(nf); }
-                            draw_easy_ease_button(ui, &mut layer.transform.rotation, &mut project_changed);
-                            draw_expression_selector(ui, "rotation", &mut layer.transform.rotation_expression, &mut project_changed);
-                            if rot_before != layer.transform.rotation { project_changed = true; }
-
-                            ui.separator();
-                            let op_before = layer.transform.opacity.clone();
-                            if let Some(nf) = draw_property_ui(*current_frame, ui, "Opacity", &mut layer.transform.opacity, |ui, val| {
-                                ui.add(egui::Slider::new(val, 0.0..=100.0).suffix("%"));
-                            }) { next_frame = Some(nf); }
-                            draw_easy_ease_button(ui, &mut layer.transform.opacity, &mut project_changed);
-                            draw_expression_selector(ui, "opacity", &mut layer.transform.opacity_expression, &mut project_changed);
-                            if op_before != layer.transform.opacity { project_changed = true; }
-                        }
-                    });
+                    crate::ui::inspector_layer::draw_layer_transforms(ui, layer, *current_frame, &mut project_changed, &mut next_frame);
                     
                     ui.add_space(8.0);
                     
                     // Layer Type specifics
-                    ui.group(|ui| {
-                        ui.label("Layer Specs");
-                        match &mut layer.layer_type {
-                            LayerType::Solid { color } => {
-                                let val_before = *color;
-                                ui.horizontal(|ui| {
-                                    ui.label("Color:");
-                                    ui.color_edit_button_rgba_unmultiplied(color);
-                                });
-                                if val_before != *color { project_changed = true; }
-                            }
-                            LayerType::Image { path } => {
-                                let val_before = path.clone();
-                                ui.text_edit_singleline(path);
-                                if val_before != *path { project_changed = true; }
-                            }
-                            LayerType::Text { text, font_size, color } => {
-                                let val_before_text = text.clone();
-                                let val_before_sz = *font_size;
-                                let val_before_col = *color;
-                                
-                                ui.text_edit_multiline(text);
-                                ui.horizontal(|ui| {
-                                    ui.label("Font Size:");
-                                    ui.add(egui::DragValue::new(font_size).clamp_range(8..=256));
-                                });
-                                ui.horizontal(|ui| {
-                                    ui.label("Color:");
-                                    ui.color_edit_button_rgba_unmultiplied(color);
-                                });
-                                if val_before_text != *text || val_before_sz != *font_size || val_before_col != *color {
-                                    project_changed = true;
-                                }
-                            }
-                            LayerType::Shape { shape_type, color } => {
-                                ui.label(format!("Shape: {:?}", shape_type));
-                                let mut c_arr = *color;
-                                ui.horizontal(|ui| {
-                                    ui.label("Color:");
-                                    if ui.color_edit_button_rgba_unmultiplied(&mut c_arr).changed() {
-                                        *color = c_arr;
-                                        project_changed = true;
-                                    }
-                                });
-                            }
-                            LayerType::Null => {
-                                ui.label("Null Object (Controller)");
-                            }
-                            LayerType::PreComp { comp_id } => {
-                                ui.label(format!("Pre-Composition ({})", comp_id));
-                            }
-                            LayerType::Audio { path, volume } => {
-                                ui.label(format!("Audio File ({})", path));
-                                let v_before = volume.clone();
-                                if let Some(nf) = draw_property_ui(*current_frame, ui, "  Volume", volume, |ui, val| {
-                                    ui.add(egui::Slider::new(val, -48.0..=12.0).suffix(" dB"));
-                                }) {
-                                    next_frame = Some(nf);
-                                }
-                                if v_before != *volume { project_changed = true; }
-                            }
-                        }
-                    });
+                    crate::ui::inspector_layer::draw_layer_type_specs(ui, layer, *current_frame, &mut project_changed, &mut next_frame);
 
                     // ── Masks Control Section ──
                     ui.add_space(6.0);
@@ -568,12 +415,16 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                     crate::ui::graph_editor::draw_graph_editor(&mut selected_prop, ui, comp.duration_frames, layer, &mut project_changed);
                 }
                 
-                // Transactional commit: lazy snapshot push on mouse release (zero clones while idle or dragging)
+                // ── Transactional Commit (Issue #2 fix) ──────────────────────────────
+                // begin_drag() captures a pre-edit snapshot the moment the pointer goes
+                // down (no-op if already started). The live project is mutated in-place
+                // via current_mut(). commit_drag() pushes one single Undo entry on release.
                 if project_changed {
                     let is_pointer_down = ui.input(|i| i.pointer.any_down());
-                    if !is_pointer_down {
-                        let snapshot = app.history.current().clone();
-                        app.history.commit(snapshot);
+                    if is_pointer_down {
+                        app.begin_drag("Inspector Edit");
+                    } else {
+                        app.commit_drag();
                     }
                     crate::core::frame_cache::bump_version();
                 }
@@ -612,191 +463,4 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
         });
 }
 
-fn draw_easy_ease_button<T: Clone>(ui: &mut egui::Ui, property: &mut Animatable<T>, project_changed: &mut bool) {
-    ui.horizontal(|ui| {
-        ui.add_space(20.0);
-        if ui.button("Easy Ease (F9)").on_hover_text("Symmetrical Bezier Ease (F9)").clicked() {
-            if let Animatable::Animated(ref mut keyframes) = property {
-                for kf in keyframes {
-                    kf.interpolation = InterpolationType::Bezier {
-                        outgoing: BezierControlPoint { influence: 0.333, speed: 0.0 },
-                        incoming: BezierControlPoint { influence: 0.333, speed: 0.0 },
-                        custom_bezier: Some([0.4, 0.0, 0.2, 1.0]),
-                    };
-                }
-                *project_changed = true;
-            }
-        }
-        if ui.button("Ease In (Shift+F9)").on_hover_text("Decelerate into keyframe (Shift+F9)").clicked() {
-            if let Animatable::Animated(ref mut keyframes) = property {
-                for kf in keyframes {
-                    kf.interpolation = InterpolationType::Bezier {
-                        outgoing: BezierControlPoint { influence: 0.0, speed: 0.0 },
-                        incoming: BezierControlPoint { influence: 0.333, speed: 0.0 },
-                        custom_bezier: Some([0.0, 0.0, 0.2, 1.0]),
-                    };
-                }
-                *project_changed = true;
-            }
-        }
-        if ui.button("Ease Out (Ctrl+Shift+F9)").on_hover_text("Accelerate out of keyframe (Ctrl+Shift+F9)").clicked() {
-            if let Animatable::Animated(ref mut keyframes) = property {
-                for kf in keyframes {
-                    kf.interpolation = InterpolationType::Bezier {
-                        outgoing: BezierControlPoint { influence: 0.333, speed: 0.0 },
-                        incoming: BezierControlPoint { influence: 0.0, speed: 0.0 },
-                        custom_bezier: Some([0.4, 0.0, 1.0, 1.0]),
-                    };
-                }
-                *project_changed = true;
-            }
-        }
-    });
-}
 
-fn draw_expression_selector(ui: &mut egui::Ui, label: &str, expr_opt: &mut Option<Expression>, project_changed: &mut bool) {
-    ui.horizontal(|ui| {
-        ui.small("Expression: ");
-        let expr_text = match expr_opt {
-            Some(Expression::Wiggle { frequency, amplitude }) => format!("wiggle({}, {})", frequency, amplitude),
-            Some(Expression::TimeDriver { multiplier, offset }) => format!("time * {} + {}", multiplier, offset),
-            Some(Expression::LoopOut) => "loopOut()".to_string(),
-            Some(Expression::PingPong) => "loopOut(\"pingpong\")".to_string(),
-            Some(Expression::Raw(s)) => s.clone(),
-            None => "None".to_string(),
-        };
-
-        let before = expr_opt.clone();
-        let combo_id = ui.make_persistent_id(format!("ae_expr_combo_{}", label));
-        egui::ComboBox::from_id_source(combo_id)
-            .selected_text(expr_text)
-            .show_ui(ui, |ui| {
-                ui.selectable_value(expr_opt, None, "None");
-                ui.selectable_value(expr_opt, Some(Expression::Wiggle { frequency: 2.0, amplitude: 50.0 }), "Wiggle (2Hz, 50px)");
-                ui.selectable_value(expr_opt, Some(Expression::TimeDriver { multiplier: 30.0, offset: 0.0 }), "Time Spin (30°/s)");
-                ui.selectable_value(expr_opt, Some(Expression::LoopOut), "loopOut(\"cycle\")");
-                ui.selectable_value(expr_opt, Some(Expression::PingPong), "loopOut(\"pingpong\")");
-            });
-
-        if before != *expr_opt {
-            *project_changed = true;
-        }
-    });
-}
-
-pub fn draw_property_ui<T: Clone + crate::core::property::Interpolate + PartialEq + std::fmt::Debug + 'static>(
-    current_frame: u32,
-    ui: &mut egui::Ui,
-    label: &str,
-    property: &mut Animatable<T>,
-    draw_value_widget: impl FnOnce(&mut egui::Ui, &mut T),
-) -> Option<u32> {
-    let mut next_frame = None;
-    ui.horizontal(|ui| {
-        ui.label(label);
-        
-        let has_keyframes = property.keyframes().is_some();
-        if has_keyframes {
-            if ui.small_button("◀").on_hover_text("Jump to Previous Keyframe (J)").clicked() {
-                if let Some(kfs) = property.keyframes() {
-                    if let Some(target) = kfs.iter().rev().find(|k| k.frame < current_frame) {
-                        next_frame = Some(target.frame);
-                    }
-                }
-            }
-        }
-
-        let stopwatch_btn = if has_keyframes { "[K]" } else { "[+]" };
-        if ui.small_button(stopwatch_btn).on_hover_text(if has_keyframes { "Disable Keyframes" } else { "Enable Keyframes / Add Keyframe" }).clicked() {
-            if has_keyframes {
-                let current_val = property.evaluate(current_frame);
-                *property = Animatable::Constant(current_val);
-            } else {
-                let current_val = property.evaluate(current_frame);
-                *property = Animatable::Animated(vec![
-                    Keyframe::new(current_frame, current_val, InterpolationType::Linear)
-                ]);
-            }
-        }
-
-        if has_keyframes {
-            if ui.small_button("▶").on_hover_text("Jump to Next Keyframe (K)").clicked() {
-                if let Some(kfs) = property.keyframes() {
-                    if let Some(target) = kfs.iter().find(|k| k.frame > current_frame) {
-                        next_frame = Some(target.frame);
-                    }
-                }
-            }
-            ui.menu_button("Ease", |ui| {
-                if ui.button("Easy Ease (F9)").clicked() {
-                    if let Animatable::Animated(ref mut kfs) = property {
-                        for kf in kfs {
-                            kf.interpolation = InterpolationType::Bezier {
-                                outgoing: BezierControlPoint { influence: 0.333, speed: 0.0 },
-                                incoming: BezierControlPoint { influence: 0.333, speed: 0.0 },
-                                custom_bezier: Some([0.333, 0.0, 0.333, 1.0]),
-                            };
-                        }
-                    }
-                    ui.close_menu();
-                }
-                if ui.button("Ease In").clicked() {
-                    if let Animatable::Animated(ref mut kfs) = property {
-                        for kf in kfs {
-                            kf.interpolation = InterpolationType::Bezier {
-                                outgoing: BezierControlPoint { influence: 0.1, speed: 0.0 },
-                                incoming: BezierControlPoint { influence: 0.75, speed: 0.0 },
-                                custom_bezier: Some([0.75, 0.0, 1.0, 1.0]),
-                            };
-                        }
-                    }
-                    ui.close_menu();
-                }
-                if ui.button("Ease Out").clicked() {
-                    if let Animatable::Animated(ref mut kfs) = property {
-                        for kf in kfs {
-                            kf.interpolation = InterpolationType::Bezier {
-                                outgoing: BezierControlPoint { influence: 0.75, speed: 0.0 },
-                                incoming: BezierControlPoint { influence: 0.1, speed: 0.0 },
-                                custom_bezier: Some([0.0, 0.0, 0.25, 1.0]),
-                            };
-                        }
-                    }
-                    ui.close_menu();
-                }
-                if ui.button("Linear").clicked() {
-                    if let Animatable::Animated(ref mut kfs) = property {
-                        for kf in kfs {
-                            kf.interpolation = InterpolationType::Linear;
-                        }
-                    }
-                    ui.close_menu();
-                }
-            });
-        }
-
-        let mut temp_val = property.evaluate(current_frame);
-        draw_value_widget(ui, &mut temp_val);
-
-        match property {
-            Animatable::Constant(val) => {
-                if *val != temp_val {
-                    *val = temp_val;
-                }
-            }
-            Animatable::Animated(keyframes) => {
-                let existing_idx = keyframes.iter().position(|kf| kf.frame == current_frame);
-                if let Some(idx) = existing_idx {
-                    keyframes[idx].value = temp_val;
-                } else {
-                    let evaluated = property.evaluate(current_frame);
-                    if temp_val != evaluated {
-                        property.add_keyframe(Keyframe::new(current_frame, temp_val, InterpolationType::Linear));
-                    }
-                }
-            }
-        }
-    });
-
-    next_frame
-}

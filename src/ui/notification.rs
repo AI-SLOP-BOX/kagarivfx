@@ -17,6 +17,7 @@ pub fn toast_color(level: &ToastLevel) -> egui::Color32 {
 }
 
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct ToastNotification {
     pub id: u64,
     pub level: ToastLevel,

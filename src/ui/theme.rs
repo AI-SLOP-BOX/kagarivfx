@@ -1,6 +1,7 @@
 use eframe::egui;
 
-/// 🎨 Adobe After Effects / Premiere Professional Dark Theme Palette
+/// Adobe After Effects / Premiere Professional Dark Theme Palette
+#[allow(dead_code)]
 pub mod colors {
     use eframe::egui::Color32;
 
@@ -33,7 +34,8 @@ pub mod colors {
     pub const TEXT_ACCENT: Color32 = Color32::from_rgb(100, 200, 255);
 }
 
-/// 📐 Layout & Spacing Constants for Consistent AE Ergonomics
+/// Layout & Spacing Constants for Consistent AE Ergonomics
+#[allow(dead_code)]
 pub mod layout {
     pub const SIDEBAR_DEFAULT_WIDTH: f32 = 280.0;
     pub const TOOLBAR_HEIGHT: f32 = 36.0;
@@ -51,49 +53,49 @@ pub mod layout {
 pub fn configure_ae_theme(ctx: &egui::Context) {
     let mut visuals = egui::Visuals::dark();
 
-    // Base background colors
-    visuals.panel_fill = colors::BG_PANEL;
-    visuals.window_fill = colors::BG_PANEL;
-    visuals.faint_bg_color = colors::BG_DARKEST;
-    visuals.extreme_bg_color = colors::BG_DARKEST;
+    // Dark Glassmorphism Base Colors
+    visuals.panel_fill = egui::Color32::from_rgb(18, 21, 27);
+    visuals.window_fill = egui::Color32::from_rgba_unmultiplied(18, 21, 27, 235);
+    visuals.faint_bg_color = egui::Color32::from_rgb(12, 14, 18);
+    visuals.extreme_bg_color = egui::Color32::from_rgb(10, 12, 16);
 
-    // Selection highlight
-    visuals.selection.bg_fill = colors::BG_ACTIVE;
-    visuals.selection.stroke = egui::Stroke::new(1.0, colors::ACCENT_CYAN);
+    // Selection highlight (Neon Blue Accent)
+    visuals.selection.bg_fill = egui::Color32::from_rgb(0, 120, 215);
+    visuals.selection.stroke = egui::Stroke::new(1.0, colors::ACCENT_BLUE);
 
     // Non-interactive widgets (Labels, Dividers, Cards)
-    visuals.widgets.noninteractive.bg_fill = colors::BG_SURFACE;
-    visuals.widgets.noninteractive.bg_stroke = egui::Stroke::new(1.0, colors::BORDER_SUBTLE);
+    visuals.widgets.noninteractive.bg_fill = egui::Color32::from_rgba_unmultiplied(26, 32, 42, 200);
+    visuals.widgets.noninteractive.bg_stroke = egui::Stroke::new(1.0, egui::Color32::from_rgb(45, 55, 70));
     visuals.widgets.noninteractive.fg_stroke = egui::Stroke::new(1.0, colors::TEXT_PRIMARY);
-    visuals.widgets.noninteractive.rounding = egui::Rounding::same(3.0);
+    visuals.widgets.noninteractive.rounding = egui::Rounding::same(6.0);
 
     // Inactive interactive widgets (Buttons, Dropdowns)
-    visuals.widgets.inactive.bg_fill = colors::BG_HEADER;
-    visuals.widgets.inactive.bg_stroke = egui::Stroke::new(1.0, colors::BORDER_MEDIUM);
+    visuals.widgets.inactive.bg_fill = egui::Color32::from_rgba_unmultiplied(32, 40, 52, 220);
+    visuals.widgets.inactive.bg_stroke = egui::Stroke::new(1.0, egui::Color32::from_rgb(55, 68, 88));
     visuals.widgets.inactive.fg_stroke = egui::Stroke::new(1.0, colors::TEXT_PRIMARY);
-    visuals.widgets.inactive.rounding = egui::Rounding::same(3.0);
+    visuals.widgets.inactive.rounding = egui::Rounding::same(6.0);
 
     // Hovered widgets
-    visuals.widgets.hovered.bg_fill = colors::BG_HOVER;
-    visuals.widgets.hovered.bg_stroke = egui::Stroke::new(1.5, colors::ACCENT_CYAN);
+    visuals.widgets.hovered.bg_fill = egui::Color32::from_rgb(42, 54, 72);
+    visuals.widgets.hovered.bg_stroke = egui::Stroke::new(1.5, colors::ACCENT_BLUE);
     visuals.widgets.hovered.fg_stroke = egui::Stroke::new(1.0, egui::Color32::WHITE);
-    visuals.widgets.hovered.rounding = egui::Rounding::same(3.0);
+    visuals.widgets.hovered.rounding = egui::Rounding::same(6.0);
 
     // Active (Clicked/Dragged) widgets
-    visuals.widgets.active.bg_fill = colors::BG_ACTIVE;
+    visuals.widgets.active.bg_fill = egui::Color32::from_rgb(0, 140, 240);
     visuals.widgets.active.bg_stroke = egui::Stroke::new(1.5, colors::ACCENT_CYAN);
     visuals.widgets.active.fg_stroke = egui::Stroke::new(1.0, egui::Color32::WHITE);
-    visuals.widgets.active.rounding = egui::Rounding::same(3.0);
+    visuals.widgets.active.rounding = egui::Rounding::same(6.0);
 
     // Open/Expanded popups
-    visuals.widgets.open.bg_fill = colors::BG_SURFACE_ELEVATED;
-    visuals.widgets.open.bg_stroke = egui::Stroke::new(1.0, colors::BORDER_ACTIVE);
+    visuals.widgets.open.bg_fill = egui::Color32::from_rgba_unmultiplied(28, 35, 46, 240);
+    visuals.widgets.open.bg_stroke = egui::Stroke::new(1.0, colors::ACCENT_BLUE);
     visuals.widgets.open.fg_stroke = egui::Stroke::new(1.0, colors::TEXT_PRIMARY);
-    visuals.widgets.open.rounding = egui::Rounding::same(3.0);
+    visuals.widgets.open.rounding = egui::Rounding::same(6.0);
 
-    // Window shadow & borders
-    visuals.window_stroke = egui::Stroke::new(1.0, colors::BORDER_STRONG);
-    visuals.window_rounding = egui::Rounding::same(4.0);
+    // Window shadow & glassmorphism borders
+    visuals.window_stroke = egui::Stroke::new(1.0, egui::Color32::from_rgb(55, 70, 95));
+    visuals.window_rounding = egui::Rounding::same(8.0);
 
     ctx.set_visuals(visuals);
 
@@ -107,6 +109,7 @@ pub fn configure_ae_theme(ctx: &egui::Context) {
 }
 
 /// Helper: Render section headers with a crisp left accent bar, icon, and high-contrast typography.
+#[allow(dead_code)]
 pub fn draw_section_header(ui: &mut egui::Ui, title: &str, icon: &str) {
     ui.horizontal(|ui| {
         let (rect, _) = ui.allocate_exact_size(egui::vec2(3.0, 16.0), egui::Sense::hover());
@@ -141,6 +144,7 @@ pub fn draw_custom_tab(ui: &mut egui::Ui, selected: bool, title: &str) -> egui::
 }
 
 /// Helper: Draw formatted property label, value, and unit (`px`, `%`, `dB`, `f`).
+#[allow(dead_code)]
 pub fn draw_prop_value(ui: &mut egui::Ui, label: &str, val_str: &str, unit: &str) {
     ui.horizontal(|ui| {
         ui.label(egui::RichText::new(label).small().color(colors::TEXT_SECONDARY));

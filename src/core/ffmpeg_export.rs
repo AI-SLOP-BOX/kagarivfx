@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 /// FFmpeg-based async video export pipeline.
 ///
 /// Spawns an FFmpeg subprocess in a background thread to avoid blocking the UI.
@@ -11,7 +12,6 @@
 ///    `ffmpeg -f rawvideo -pix_fmt rgba -s WxH -r FPS -i pipe:0 -c:v libx264 -pix_fmt yuv420p output.mp4`
 /// 4. Progress events are sent back to the UI via the mpsc sender.
 /// 5. The UI polls the receiver each frame (non-blocking `try_recv`).
-
 use std::io::Write;
 use std::process::{Command, Stdio};
 use std::sync::mpsc::Sender;
@@ -106,9 +106,23 @@ where
                 }
             };
 
-            let mut stdin = child.stdin.take().expect("FFmpeg stdin pipe failed");
+            let mut stdin = match child.stdin.take() {
+                Some(s) => s,
+                None => {
+                    let _ = tx.send(ExportEvent::Error("FFmpeg stdin pipe was not opened".to_string()));
+                    return;
+                }
+            };
 
-            let frame_bytes = (config.width * config.height * 4) as usize;
+            if config.total_frames == 0 {
+                let _ = tx.send(ExportEvent::Finished(format!("Export complete (0 frames) → {}", config.output_path)));
+                return;
+            }
+
+            let Some(frame_bytes) = crate::core::software_renderer::rgba_buffer_size(config.width, config.height) else {
+                let _ = tx.send(ExportEvent::Error(format!("Invalid dimensions: {}x{}", config.width, config.height)));
+                return;
+            };
 
             for frame_idx in 0..config.total_frames {
                 if cancel_flag.load(Ordering::SeqCst) {
@@ -135,7 +149,7 @@ where
                     return;
                 }
 
-                // Report progress
+                // Report progress (total_frames guaranteed > 0 here)
                 let progress = (frame_idx + 1) as f32 / config.total_frames as f32;
                 let _ = tx.send(ExportEvent::Progress(
                     progress,
@@ -176,6 +190,234 @@ where
             }
         })
         .map_err(|e| format!("Failed to spawn export thread: {}", e))?;
+
+    Ok(())
+}
+
+/// Start an asynchronous FFmpeg GIF export job with a two-pass palette approach.
+///
+/// Pass 1: Generate an optimal 256-color palette from all frames.
+/// Pass 2: Encode the GIF using that palette with sierra2_4a dithering.
+pub fn start_gif_export<F>(
+    config: ExportConfig,
+    tx: Sender<ExportEvent>,
+    cancel_flag: Arc<AtomicBool>,
+    render_frame_fn: F,
+) -> Result<(), String>
+where
+    F: Fn(u32) -> Vec<u8> + Send + 'static,
+{
+    if !is_ffmpeg_available() {
+        let msg = "FFmpeg not found. Install it via `brew install ffmpeg` (macOS) or your package manager.".to_string();
+        let _ = tx.send(ExportEvent::Error(msg.clone()));
+        return Err(msg);
+    }
+
+    let config_clone = config.clone();
+
+    std::thread::Builder::new()
+        .name("ffmpeg_gif_export".to_string())
+        .spawn(move || {
+            let config = config_clone;
+            let palette_path = format!("{}.palette.png", config.output_path);
+
+            let Some(frame_bytes) = crate::core::software_renderer::rgba_buffer_size(config.width, config.height) else {
+                let _ = tx.send(ExportEvent::Error(format!("Invalid dimensions: {}x{}", config.width, config.height)));
+                return;
+            };
+
+            if config.total_frames == 0 {
+                let _ = tx.send(ExportEvent::Finished(format!("GIF export complete (0 frames) → {}", config.output_path)));
+                return;
+            }
+
+            // ── Pass 1: Generate palette ──────────────────────────────────
+            let _ = tx.send(ExportEvent::Progress(0.0, "Generating GIF palette...".to_string()));
+
+            let palette_result = Command::new("ffmpeg")
+                .args([
+                    "-y",
+                    "-f", "rawvideo",
+                    "-pix_fmt", "rgba",
+                    "-s", &format!("{}x{}", config.width, config.height),
+                    "-r", &config.fps.to_string(),
+                    "-i", "pipe:0",
+                    "-vf",
+                    &format!("fps={},palettegen=max_colors=256:stats_mode=diff", config.fps),
+                    &palette_path,
+                ])
+                .stdin(Stdio::piped())
+                .stdout(Stdio::null())
+                .stderr(Stdio::piped())
+                .spawn();
+
+            let mut palette_child = match palette_result {
+                Ok(c) => c,
+                Err(e) => {
+                    let _ = tx.send(ExportEvent::Error(format!("Failed to launch FFmpeg (palette pass): {}", e)));
+                    return;
+                }
+            };
+
+            let mut palette_stdin = match palette_child.stdin.take() {
+                Some(s) => s,
+                None => {
+                    let _ = tx.send(ExportEvent::Error("FFmpeg stdin pipe was not opened (palette pass)".to_string()));
+                    return;
+                }
+            };
+
+            for frame_idx in 0..config.total_frames {
+                if cancel_flag.load(Ordering::SeqCst) {
+                    let _ = palette_child.kill();
+                    let _ = tx.send(ExportEvent::Error("Export canceled by user".to_string()));
+                    return;
+                }
+
+                let pixels = render_frame_fn(frame_idx);
+                if pixels.len() != frame_bytes {
+                    let _ = tx.send(ExportEvent::Error(format!(
+                        "Frame {} pixel data mismatch: expected {} bytes, got {}",
+                        frame_idx, frame_bytes, pixels.len()
+                    )));
+                    return;
+                }
+                if let Err(e) = palette_stdin.write_all(&pixels) {
+                    let _ = tx.send(ExportEvent::Error(format!("Pipe write error (palette pass) at frame {}: {}", frame_idx, e)));
+                    return;
+                }
+
+                let progress = (frame_idx + 1) as f32 / config.total_frames as f32 * 0.5;
+                let _ = tx.send(ExportEvent::Progress(
+                    progress,
+                    format!("Palette pass: frame {}/{}", frame_idx + 1, config.total_frames),
+                ));
+            }
+
+            drop(palette_stdin);
+
+            match palette_child.wait() {
+                Ok(status) if status.success() => { /* ok */ }
+                Ok(status) => {
+                    let stderr_output = palette_child.stderr.take().map(|mut s| {
+                        let mut buf = String::new();
+                        std::io::Read::read_to_string(&mut s, &mut buf).ok();
+                        buf
+                    }).unwrap_or_default();
+                    let _ = tx.send(ExportEvent::Error(format!(
+                        "FFmpeg palette pass exited with code {:?}\n{}",
+                        status.code(),
+                        &stderr_output[..stderr_output.len().min(500)]
+                    )));
+                    let _ = std::fs::remove_file(&palette_path);
+                    return;
+                }
+                Err(e) => {
+                    let _ = tx.send(ExportEvent::Error(format!("FFmpeg palette pass wait() error: {}", e)));
+                    let _ = std::fs::remove_file(&palette_path);
+                    return;
+                }
+            }
+
+            // ── Pass 2: Encode GIF using palette ──────────────────────────
+            let _ = tx.send(ExportEvent::Progress(0.5, "Encoding GIF...".to_string()));
+
+            let gif_result = Command::new("ffmpeg")
+                .args([
+                    "-y",
+                    "-f", "rawvideo",
+                    "-pix_fmt", "rgba",
+                    "-s", &format!("{}x{}", config.width, config.height),
+                    "-r", &config.fps.to_string(),
+                    "-i", "pipe:0",
+                    "-i", &palette_path,
+                    "-lavfi", "paletteuse=dither=sierra2_4a",
+                    "-loop", "0",
+                    &config.output_path,
+                ])
+                .stdin(Stdio::piped())
+                .stdout(Stdio::null())
+                .stderr(Stdio::piped())
+                .spawn();
+
+            let mut gif_child = match gif_result {
+                Ok(c) => c,
+                Err(e) => {
+                    let _ = tx.send(ExportEvent::Error(format!("Failed to launch FFmpeg (gif pass): {}", e)));
+                    let _ = std::fs::remove_file(&palette_path);
+                    return;
+                }
+            };
+
+            let mut gif_stdin = match gif_child.stdin.take() {
+                Some(s) => s,
+                None => {
+                    let _ = tx.send(ExportEvent::Error("FFmpeg stdin pipe was not opened (gif pass)".to_string()));
+                    let _ = std::fs::remove_file(&palette_path);
+                    return;
+                }
+            };
+
+            for frame_idx in 0..config.total_frames {
+                if cancel_flag.load(Ordering::SeqCst) {
+                    let _ = gif_child.kill();
+                    let _ = tx.send(ExportEvent::Error("Export canceled by user".to_string()));
+                    let _ = std::fs::remove_file(&palette_path);
+                    return;
+                }
+
+                let pixels = render_frame_fn(frame_idx);
+                if pixels.len() != frame_bytes {
+                    let _ = tx.send(ExportEvent::Error(format!(
+                        "Frame {} pixel data mismatch: expected {} bytes, got {}",
+                        frame_idx, frame_bytes, pixels.len()
+                    )));
+                    let _ = std::fs::remove_file(&palette_path);
+                    return;
+                }
+                if let Err(e) = gif_stdin.write_all(&pixels) {
+                    let _ = tx.send(ExportEvent::Error(format!("Pipe write error (gif pass) at frame {}: {}", frame_idx, e)));
+                    let _ = std::fs::remove_file(&palette_path);
+                    return;
+                }
+
+                let progress = 0.5 + (frame_idx + 1) as f32 / config.total_frames as f32 * 0.5;
+                let _ = tx.send(ExportEvent::Progress(
+                    progress,
+                    format!("GIF pass: frame {}/{}", frame_idx + 1, config.total_frames),
+                ));
+            }
+
+            drop(gif_stdin);
+
+            match gif_child.wait() {
+                Ok(status) if status.success() => {
+                    let _ = std::fs::remove_file(&palette_path);
+                    let _ = tx.send(ExportEvent::Finished(format!(
+                        "GIF export complete → {}",
+                        config.output_path
+                    )));
+                }
+                Ok(status) => {
+                    let stderr_output = gif_child.stderr.take().map(|mut s| {
+                        let mut buf = String::new();
+                        std::io::Read::read_to_string(&mut s, &mut buf).ok();
+                        buf
+                    }).unwrap_or_default();
+                    let _ = tx.send(ExportEvent::Error(format!(
+                        "FFmpeg GIF pass exited with code {:?}\n{}",
+                        status.code(),
+                        &stderr_output[..stderr_output.len().min(500)]
+                    )));
+                    let _ = std::fs::remove_file(&palette_path);
+                }
+                Err(e) => {
+                    let _ = tx.send(ExportEvent::Error(format!("FFmpeg GIF pass wait() error: {}", e)));
+                    let _ = std::fs::remove_file(&palette_path);
+                }
+            }
+        })
+        .map_err(|e| format!("Failed to spawn GIF export thread: {}", e))?;
 
     Ok(())
 }

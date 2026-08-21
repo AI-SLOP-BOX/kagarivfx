@@ -1,6 +1,6 @@
 use eframe::egui;
 use crate::core::timeline::Composition;
-use crate::ui::inspector::draw_property_ui;
+use crate::ui::inspector_property::draw_property_ui;
 
 pub fn draw_camera_settings(
     ui: &mut egui::Ui,

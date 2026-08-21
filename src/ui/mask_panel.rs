@@ -79,6 +79,34 @@ pub fn draw_mask_panel(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
                                         ui.selectable_value(&mut mask.mode, MaskMode::None, "None");
                                     });
                             });
+
+                            // 🪶 Mask Feather & Expansion & Opacity controls
+                            let mut feather_val = mask.feather.evaluate(app.current_frame);
+                            ui.horizontal(|ui| {
+                                ui.label("🪶 Feather:");
+                                if ui.add(egui::Slider::new(&mut feather_val, 0.0..=500.0).suffix(" px")).changed() {
+                                    mask.feather = crate::core::property::Animatable::new_constant(feather_val);
+                                    *project_changed_flag = true;
+                                }
+                            });
+
+                            let mut expansion_val = mask.expansion.evaluate(app.current_frame);
+                            ui.horizontal(|ui| {
+                                ui.label("↔ Expansion:");
+                                if ui.add(egui::Slider::new(&mut expansion_val, -200.0..=200.0).suffix(" px")).changed() {
+                                    mask.expansion = crate::core::property::Animatable::new_constant(expansion_val);
+                                    *project_changed_flag = true;
+                                }
+                            });
+
+                            let mut opacity_val = mask.opacity.evaluate(app.current_frame);
+                            ui.horizontal(|ui| {
+                                ui.label("🌓 Opacity:");
+                                if ui.add(egui::Slider::new(&mut opacity_val, 0.0..=100.0).suffix(" %")).changed() {
+                                    mask.opacity = crate::core::property::Animatable::new_constant(opacity_val);
+                                    *project_changed_flag = true;
+                                }
+                            });
                         });
                     }
                 });

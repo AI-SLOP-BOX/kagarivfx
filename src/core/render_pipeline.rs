@@ -6,7 +6,6 @@
 /// rendering, and writes results to FrameCache.
 /// Includes atomic `CancellationToken` checks so stale seek/scrub tasks abort
 /// immediately before wasting CPU/GPU cycles.
-
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::sync::Arc;
@@ -57,11 +56,7 @@ impl RenderPipeline {
             .name("render_worker".to_string())
             .spawn(move || {
                 log::info!("[RenderWorker] started");
-                loop {
-                    let cmd = match cmd_rx.recv() {
-                        Ok(c) => c,
-                        Err(_) => break, // channel closed
-                    };
+                while let Ok(cmd) = cmd_rx.recv() {
                     match &cmd {
                         RenderCommand::Shutdown => {
                             log::info!("[RenderWorker] shutting down");
@@ -136,6 +131,12 @@ impl Drop for RenderPipeline {
 
 pub struct LazyFrameEvaluator {
     in_flight: std::collections::HashSet<u32>,
+}
+
+impl Default for LazyFrameEvaluator {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl LazyFrameEvaluator {

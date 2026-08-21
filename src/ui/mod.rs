@@ -1,10 +1,16 @@
 pub mod menu;
 pub mod inspector;
 pub mod inspector_camera;
+pub mod inspector_property;
+pub mod inspector_layer;
 pub mod effects_library;
 pub mod effects_controls;
 pub mod timeline;
 pub mod viewport;
+pub mod viewport_state;
+pub mod viewport_overlays;
+pub mod viewport_canvas;
+pub mod viewport_camera_3d;
 pub mod export_dialog;
 pub mod audio_meter;
 pub mod icons;
@@ -46,3 +52,12 @@ pub mod theme;
 pub mod notification;
 pub mod focus;
 pub mod shortcuts;
+pub mod command_palette;
+pub mod flowchart_graph;
+pub mod viewport_inline_editor;
+pub mod viewport_minimap;
+pub mod align_hud;
+pub mod camera_dof_hud;
+pub mod precompose_dialog;
+
+
