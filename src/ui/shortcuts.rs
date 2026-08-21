@@ -262,6 +262,34 @@ pub fn handle_global_shortcuts(
             }
         }
 
+        // ── Delete / Backspace removes all selected keyframes ──
+        if allow_single_key
+            && (i.key_pressed(Key::Delete) || i.key_pressed(Key::Backspace))
+            && !app.selected_keyframes.is_empty()
+        {
+                use std::collections::HashMap;
+                let mut by_layer: HashMap<usize, Vec<(String, u32)>> = HashMap::new();
+                for (li, pk, f) in app.selected_keyframes.iter() {
+                    by_layer.entry(*li).or_default().push((pk.clone(), *f));
+                }
+                let project = app.history.current_mut();
+                for (li, kfs) in by_layer {
+                    let Some(comp) = project.active_composition_mut().layers.get_mut(li) else { continue };
+                    let t = &mut comp.transform;
+                    for (pk, frame) in kfs {
+                        match pk.as_str() {
+                            "position" => delete_kf_at(&mut t.position, frame),
+                            "scale" => delete_kf_at(&mut t.scale, frame),
+                            "rotation" => delete_kf_at(&mut t.rotation, frame),
+                            "opacity" => delete_kf_at(&mut t.opacity, frame),
+                            _ => {}
+                        }
+                    }
+                }
+                app.selected_keyframes.clear();
+                crate::core::frame_cache::bump_version();
+        }
+
         // Cmd+Z → Undo, Cmd+Shift+Z → Redo
         if cmd && !shift && i.key_pressed(Key::Z) {
             app.history.undo();
@@ -505,5 +533,13 @@ fn move_kf_in<T: Clone + crate::core::property::Interpolate>(
             kf.frame = new_frame;
             kfs.sort_by_key(|k| k.frame);
         }
+    }
+}
+
+/// Deletes the keyframe at `frame` from a track (keeps at least nothing —
+/// emptying a track turns it back into a constant, which Animatable handles).
+fn delete_kf_at<T: Clone>(anim: &mut crate::core::property::Animatable<T>, frame: u32) {
+    if let Some(kfs) = anim.keyframes_mut() {
+        kfs.retain(|k| k.frame != frame);
     }
 }
