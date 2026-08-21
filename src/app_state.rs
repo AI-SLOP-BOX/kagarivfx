@@ -154,6 +154,8 @@ pub struct AfterEffectsApp {
     pub project_path: String,
     pub otio_path: String,
     pub expanded_layers: std::collections::HashSet<usize>,
+    /// Index of the layer currently being drag-reordered in the timeline.
+    pub dragging_layer: Option<usize>,
     pub show_grid: bool,
     pub show_guides: bool,
     pub show_handles: bool,
@@ -259,6 +261,7 @@ impl Default for AfterEffectsApp {
             precompose_name: String::new(),
             precompose_move_attributes: true,
             snap_to_keyframes: true,
+            dragging_layer: None,
             show_graph_editor: false,
             timeline_zoom: 1.0,
             timeline_view_start: 0,

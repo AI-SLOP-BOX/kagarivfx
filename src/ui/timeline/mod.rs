@@ -539,6 +539,23 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                                     
                                     ui.style_mut().visuals.override_text_color = Some(text_color);
                                     let click_resp = ui.selectable_label(is_selected, &layer.name);
+
+                                    // ── Drag & drop reordering (live, AE-style) ──
+                                    if click_resp.dragged() && app.dragging_layer.is_none() {
+                                        app.dragging_layer = Some(i);
+                                    }
+                                    if let Some(src) = app.dragging_layer {
+                                        if click_resp.hovered() && src != i {
+                                            // Live swap; the dragged row follows the pointer
+                                            swap_request = Some((src, i));
+                                            app.dragging_layer = Some(i);
+                                        }
+                                    }
+                                    if click_resp.drag_stopped() || (app.dragging_layer.is_some() && !click_resp.dragged()) {
+                                        // Drag ended — clear state (row index moved with the pointer)
+                                        app.dragging_layer = None;
+                                    }
+
                                     if click_resp.clicked() {
                                         let modifiers = ui.input(|inp| inp.modifiers);
                                         if modifiers.shift || modifiers.command || modifiers.ctrl {
