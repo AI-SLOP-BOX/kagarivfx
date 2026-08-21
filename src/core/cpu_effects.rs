@@ -60,7 +60,7 @@ fn apply_one(
         // Effects already present in the GPU pipeline, mirrored on CPU.
         EffectType::GaussianBlur { blur_radius } => {
             let r = blur_radius.evaluate(frame).max(0.0) as u32;
-            pack::apply_fast_box_blur(pixels, width, height, r);
+            pack::apply_gaussian_blur(pixels, width, height, r);
         }
         EffectType::ColorTint { color, intensity } => {
             let rgb = color3_to_u8(color.evaluate(frame));
