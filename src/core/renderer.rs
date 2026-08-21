@@ -1079,24 +1079,27 @@ impl WgpuRenderer {
         recreated
     }
 
-    /// Pre-renders `from..=to` into the RAM preview ring so playback can display
-    /// cached textures without re-rendering each frame. Frames are rendered as
-    /// fast as the GPU allows (not realtime), which is what makes RAM preview
-    /// smoother than live rendering on heavy compositions.
-    pub fn render_ram_preview(
+    /// Pre-renders `from..=to` into the RAM preview ring. Called incrementally
+    /// (a few frames per UI frame) so the UI stays responsive during the pass.
+    ///
+    /// `total_count` is the final ring size for this pre-pass; it is allocated on
+    /// the first call and reused afterwards. Frames already in the ring are
+    /// skipped, so repeated calls with advancing ranges are cheap.
+    pub fn render_ram_preview_range(
         &mut self,
         comp: &Composition,
         from: u32,
         to: u32,
         exposure_ev: f32,
         lut_mode: u32,
+        total_count: u32,
     ) {
         let ver = crate::core::frame_cache::current_version();
         if self.ram_ring_version != ver {
             self.ram_ring.clear();
             self.ram_ring_version = ver;
         }
-        let count = (to.saturating_sub(from) + 1) as usize;
+        let count = total_count.max(1) as usize;
         if self.ram_ring.len() != count {
             self.ram_ring.clear();
             for _ in 0..count {
@@ -1117,8 +1120,18 @@ impl WgpuRenderer {
         let width = eff_w.clamp(1, max_dim);
         let height = eff_h.clamp(1, max_dim);
 
-        for (i, frame) in (from..=to).enumerate() {
-            if self.ram_ring[i].1.is_none() {
+        for frame in from..=to {
+            // Find or allocate this frame's slot (frames map to slots by order of
+            // first appearance; the cursor advances monotonically).
+            let slot_idx = match self.ram_ring.iter().position(|(f, _)| *f == frame) {
+                Some(i) => i,
+                None => match self.ram_ring.iter().position(|(_, t)| t.is_none()) {
+                    Some(i) => i,
+                    None => continue, // ring full — skip
+                },
+            };
+
+            if self.ram_ring[slot_idx].1.is_none() {
                 let size = wgpu::Extent3d { width, height, depth_or_array_layers: 1 };
                 let texture = self.device.create_texture(&wgpu::TextureDescriptor {
                     label: Some("RAM Preview Slot"),
@@ -1131,11 +1144,11 @@ impl WgpuRenderer {
                     view_formats: &[],
                 });
                 let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
-                self.ram_ring[i] = (frame, Some((texture, view)));
+                self.ram_ring[slot_idx] = (frame, Some((texture, view)));
             } else {
-                self.ram_ring[i].0 = frame;
+                self.ram_ring[slot_idx].0 = frame;
             }
-            self.ram_render_idx = i;
+            self.ram_render_idx = slot_idx;
             self.render_internal(comp, frame, exposure_ev, lut_mode, false);
         }
         self.ram_render_idx = usize::MAX;

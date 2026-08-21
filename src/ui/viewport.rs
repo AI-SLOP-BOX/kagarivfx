@@ -104,19 +104,33 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: u32) 
                 let preview_px = ((display_px * app.adaptive_preview_factor) as u32).clamp(64, 4096);
                 renderer.set_preview_max_width(Some(preview_px));
 
-                // ── RAM preview: pre-render the work area when playback starts ──
+                // ── RAM preview: incremental pre-pass, a few frames per UI frame ──
+                // Rendering everything up front would freeze the UI on heavy comps;
+                // instead we chip away at the work area while playback runs.
+                const RAM_PREPASS_FRAMES_PER_TICK: u32 = 6;
+                const RAM_PREPASS_MAX_FRAMES: u32 = 300;
                 if app.is_playing && !app.was_playing_last_frame {
                     let wa_in = app.work_area_in.unwrap_or(0);
                     let wa_out = app
                         .work_area_out
                         .unwrap_or(comp.duration_frames)
                         .min(comp.duration_frames.saturating_sub(1));
-                    // Cap the pre-pass so huge timelines don't freeze the UI for minutes
-                    let to = wa_in + (wa_out - wa_in).min(300);
-                    renderer.render_ram_preview(comp, wa_in, to.max(wa_in), exposure_ev, lut_idx as u32);
-                    // Register egui texture ids for all ring slots
                     app.ram_texture_ids.clear();
-                    for f in wa_in..=to.max(wa_in) {
+                    app.ram_prepass_cursor = wa_in;
+                    app.ram_prepass_end = wa_in + (wa_out - wa_in).min(RAM_PREPASS_MAX_FRAMES);
+                }
+                if app.is_playing && app.ram_prepass_cursor <= app.ram_prepass_end {
+                    let batch_end = app.ram_prepass_cursor + RAM_PREPASS_FRAMES_PER_TICK - 1;
+                    let batch_end = batch_end.min(app.ram_prepass_end);
+                    renderer.render_ram_preview_range(
+                        comp,
+                        app.ram_prepass_cursor,
+                        batch_end,
+                        exposure_ev,
+                        lut_idx as u32,
+                        app.ram_prepass_end - app.ram_prepass_cursor + 1,
+                    );
+                    for f in app.ram_prepass_cursor..=batch_end {
                         if let Some(view) = renderer.ram_frame_view(f) {
                             let id = wgpu_state.renderer.write().register_native_texture(
                                 &wgpu_state.device,
@@ -126,6 +140,7 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: u32) 
                             app.ram_texture_ids.push((f, id));
                         }
                     }
+                    app.ram_prepass_cursor = batch_end.saturating_add(1);
                 }
                 if !app.is_playing && app.was_playing_last_frame {
                     // Playback stopped: free ring textures and egui ids

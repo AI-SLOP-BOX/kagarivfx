@@ -168,6 +168,10 @@ pub struct AfterEffectsApp {
     /// True if the previous frame had playback active — used to detect playback
     /// start and kick off the RAM preview pre-pass.
     pub was_playing_last_frame: bool,
+    /// Incremental RAM preview pre-pass state: next frame to pre-render.
+    pub ram_prepass_cursor: u32,
+    /// Last frame (inclusive) of the current pre-pass.
+    pub ram_prepass_end: u32,
     pub viewport_snapshot_texture_id: Option<eframe::egui::TextureId>,
     pub rx_frame: Option<std::sync::mpsc::Receiver<u32>>,
     pub rx_connection: Option<std::sync::mpsc::Receiver<Option<String>>>,
@@ -270,6 +274,8 @@ impl Default for AfterEffectsApp {
             viewport_texture_id: None,
             ram_texture_ids: Vec::new(),
             was_playing_last_frame: false,
+            ram_prepass_cursor: u32::MAX,
+            ram_prepass_end: u32::MAX,
             viewport_snapshot_texture_id: None,
             rx_frame: None,
             rx_connection: None,
