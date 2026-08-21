@@ -55,6 +55,19 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
 /// Start an asynchronous FFmpeg export job with an optional cancellation flag.
+/// Invokes a render closure with the cooperative cancel flag installed on the
+/// current thread, so a cancelled export aborts mid-frame instead of waiting
+/// for the frame to finish.
+fn render_with_cancel<F>(cancel_flag: &std::sync::Arc<std::sync::atomic::AtomicBool>, render_frame_fn: &F, frame_idx: u32) -> Vec<u8>
+where
+    F: Fn(u32) -> Vec<u8>,
+{
+    crate::core::software_renderer::set_render_cancel_flag(Some(cancel_flag.clone()));
+    let pixels = render_frame_fn(frame_idx);
+    crate::core::software_renderer::set_render_cancel_flag(None);
+    pixels
+}
+
 pub fn start_export_cancelable<F>(
     config: ExportConfig,
     tx: Sender<ExportEvent>,
@@ -132,8 +145,8 @@ where
                     return;
                 }
 
-                // Render the frame to raw RGBA pixels
-                let pixels = render_frame_fn(frame_idx);
+                // Render the frame to raw RGBA pixels (cancellable mid-frame)
+                let pixels = render_with_cancel(&cancel_flag, &render_frame_fn, frame_idx);
 
                 if pixels.len() != frame_bytes {
                     let _ = tx.send(ExportEvent::Error(format!(
@@ -274,7 +287,7 @@ where
                     return;
                 }
 
-                let pixels = render_frame_fn(frame_idx);
+                let pixels = render_with_cancel(&cancel_flag, &render_frame_fn, frame_idx);
                 if pixels.len() != frame_bytes {
                     let _ = tx.send(ExportEvent::Error(format!(
                         "Frame {} pixel data mismatch: expected {} bytes, got {}",
@@ -366,7 +379,7 @@ where
                     return;
                 }
 
-                let pixels = render_frame_fn(frame_idx);
+                let pixels = render_with_cancel(&cancel_flag, &render_frame_fn, frame_idx);
                 if pixels.len() != frame_bytes {
                     let _ = tx.send(ExportEvent::Error(format!(
                         "Frame {} pixel data mismatch: expected {} bytes, got {}",
