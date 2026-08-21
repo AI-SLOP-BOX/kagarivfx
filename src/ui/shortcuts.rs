@@ -177,12 +177,52 @@ pub fn handle_global_shortcuts(
         if allow_single_key && i.key_pressed(Key::Home) { *current_frame = 0; }
         if allow_single_key && i.key_pressed(Key::End)  { *current_frame = total_frames.saturating_sub(1); }
 
-        // Page Up / ← → frame step backward/forward (single-key)
-        if allow_single_key && (i.key_pressed(Key::PageUp) || i.key_pressed(Key::ArrowLeft)) {
+        // Page Up / Down → frame step backward/forward (always available)
+        if allow_single_key && i.key_pressed(Key::PageUp) {
             *current_frame = current_frame.saturating_sub(1);
         }
-        if allow_single_key && (i.key_pressed(Key::PageDown) || i.key_pressed(Key::ArrowRight)) {
+        if allow_single_key && i.key_pressed(Key::PageDown) {
             *current_frame = (*current_frame + 1).min(total_frames.saturating_sub(1));
+        }
+
+        // Arrow keys → nudge selected layer position by 1 px (Shift = 10 px),
+        // matching AE. Falls back to frame stepping when no layer is selected.
+        let step = if i.modifiers.shift { 10.0 } else { 1.0 };
+        let cur_frame = *current_frame;
+        let mut arrow_nudge = |dx: f32, dy: f32| -> bool {
+            let Some(idx) = app.selected_layer_idx else { return false };
+            let project = app.history.current_mut();
+            let Some(comp) = project.active_composition_mut().layers.get_mut(idx) else {
+                return false;
+            };
+            let cur = comp.transform.position.evaluate(cur_frame);
+            comp.transform.position = crate::core::property::Animatable::new_constant([
+                cur[0] + dx,
+                cur[1] + dy,
+            ]);
+            true
+        };
+        let mut nudged = false;
+        if allow_single_key && i.key_pressed(Key::ArrowLeft) {
+            nudged = arrow_nudge(-step, 0.0);
+            if !nudged {
+                *current_frame = cur_frame.saturating_sub(1);
+            }
+        }
+        if allow_single_key && i.key_pressed(Key::ArrowRight) {
+            nudged = arrow_nudge(step, 0.0);
+            if !nudged {
+                *current_frame = (cur_frame + 1).min(total_frames.saturating_sub(1));
+            }
+        }
+        if allow_single_key && i.key_pressed(Key::ArrowUp) {
+            nudged = arrow_nudge(0.0, -step);
+        }
+        if allow_single_key && i.key_pressed(Key::ArrowDown) {
+            nudged = arrow_nudge(0.0, step);
+        }
+        if nudged {
+            crate::core::frame_cache::bump_version();
         }
 
         // Cmd+Z → Undo, Cmd+Shift+Z → Redo
