@@ -290,6 +290,29 @@ pub fn handle_global_shortcuts(
                 crate::core::frame_cache::bump_version();
         }
 
+        // ── Cmd+A: select all keyframes of the selected layer ──
+        if cmd && !shift && i.key_pressed(Key::A) {
+            if let Some(idx) = app.selected_layer_idx {
+                let project = app.history.current();
+                if let Some(comp) = project.active_composition().layers.get(idx) {
+                    let t = &comp.transform;
+                    app.selected_keyframes.clear();
+                    for (pk, kfs) in [
+                        ("position", t.position.keyframes()),
+                        ("scale", t.scale.keyframes()),
+                        ("rotation", t.rotation.keyframes()),
+                        ("opacity", t.opacity.keyframes()),
+                    ] {
+                        if let Some(kfs) = kfs {
+                            for kf in kfs {
+                                app.selected_keyframes.insert((idx, pk.to_string(), kf.frame));
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
         // ── Cmd+C / Cmd+V: copy & paste selected keyframes ──
         // Clipboard entries: (prop_key, frame_offset_from_anchor, serialized keyframe)
         if cmd && !shift && i.key_pressed(Key::C) && !app.selected_keyframes.is_empty() {
