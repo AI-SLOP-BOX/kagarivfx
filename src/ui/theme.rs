@@ -99,12 +99,28 @@ pub fn configure_ae_theme(ctx: &egui::Context) {
 
     ctx.set_visuals(visuals);
 
-    // Adjust global spacing and padding for pro ergonomics
+    // Adjust global spacing and padding for pro ergonomics.
+    // Tighter than egui defaults: pro NLE/VFX apps pack more information per
+    // pixel, with small controls and dense rows.
     ctx.style_mut(|style| {
-        style.spacing.item_spacing = egui::vec2(6.0, 5.0);
-        style.spacing.button_padding = egui::vec2(7.0, 4.0);
-        style.spacing.indent = 14.0;
-        style.spacing.scroll.bar_width = 8.0;
+        style.spacing.item_spacing = egui::vec2(4.0, 3.0);
+        style.spacing.button_padding = egui::vec2(5.0, 2.0);
+        style.spacing.indent = 12.0;
+        style.spacing.scroll.bar_width = 7.0;
+        style.spacing.menu_margin = egui::Margin::symmetric(6.0, 3.0);
+        style.spacing.window_margin = egui::Margin::same(8.0);
+    });
+
+    // Compact typography for panel content
+    let mut fonts = egui::FontDefinitions::default();
+    fonts.families.entry(egui::FontFamily::Proportional).or_default().insert(1, "ubuntu-light".into());
+    let _ = fonts; // family tweaks reserved; sizes applied via text styles below
+    ctx.style_mut(|style| {
+        use egui::{FontId, TextStyle};
+        style.text_styles.insert(TextStyle::Body, FontId::proportional(13.0));
+        style.text_styles.insert(TextStyle::Small, FontId::proportional(11.0));
+        style.text_styles.insert(TextStyle::Button, FontId::proportional(13.0));
+        style.text_styles.insert(TextStyle::Heading, FontId::proportional(17.0));
     });
 }
 
