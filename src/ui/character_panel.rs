@@ -259,3 +259,24 @@ pub fn apply_text_preset(
         }
     });
 }
+
+/// Text animation presets section — adds to the bottom of the panel.
+pub fn draw_animation_presets(
+    app: &mut AfterEffectsApp,
+    ui: &mut egui::Ui,
+    current_frame: u32,
+    duration_frames: u32,
+) {
+    ui.separator();
+    ui.label("Text Animation Presets:");
+    let presets = ["Fade In", "Slide In Left", "Slide In Right", "Slide In Up", "Scale Up"];
+    ui.horizontal_wrapped(|ui| {
+        for preset in presets {
+            if ui.small_button(preset).clicked() {
+                if let Some(idx) = app.selected_layer_idx {
+                    crate::ui::character_panel::apply_text_preset(app, preset, idx, current_frame, duration_frames);
+                }
+            }
+        }
+    });
+}
