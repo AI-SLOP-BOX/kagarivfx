@@ -272,6 +272,7 @@ impl Default for AfterEffectsApp {
             recovery_snapshot_time: None,
             is_playing: false,
             adaptive_preview_factor: 1.0,
+            viewport_pan: eframe::egui::Vec2::ZERO,
             preview_render_ema_ms: 0.0,
             current_frame: 0,
             playback_speed: 1,
