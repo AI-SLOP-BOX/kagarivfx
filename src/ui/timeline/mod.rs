@@ -773,6 +773,9 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                                 egui::pos2(layer_rect.right() - HANDLE_W * 0.5, layer_rect.top()),
                                 egui::vec2(HANDLE_W, layer_rect.height()),
                             );
+                            let in_resp = ui.interact(in_handle, egui::Id::new(("trim_in", i)), egui::Sense::click_and_drag());
+                            let out_resp = ui.interact(out_handle, egui::Id::new(("trim_out", i)), egui::Sense::click_and_drag());
+
                             // ── Body drag: slide the whole layer (in/out preserved) ──
                             {
                                 const HEADER_W: f32 = 6.0;
@@ -803,8 +806,6 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                                 }
                             }
 
-                            let in_resp = ui.interact(in_handle, egui::Id::new(("trim_in", i)), egui::Sense::click_and_drag());
-                            let out_resp = ui.interact(out_handle, egui::Id::new(("trim_out", i)), egui::Sense::click_and_drag());
                             for (resp, is_in) in [(&in_resp, true), (&out_resp, false)] {
                                 if resp.hovered() {
                                     ui.ctx().set_cursor_icon(egui::CursorIcon::ResizeHorizontal);
