@@ -135,23 +135,20 @@ impl Lut3D {
                 // B > R > G
                 self.tetra(c000, c001, c101, c111, db, dr, dg)
             }
+        } else if dr > db {
+            // G > R > B
+            self.tetra(c000, c010, c110, c111, dg, dr, db)
+        } else if dg > db {
+            // G > B > R
+            self.tetra(c000, c010, c011, c111, dg, db, dr)
         } else {
-            if dg > db {
-                if dr > db {
-                    // G > R > B
-                    self.tetra(c000, c010, c110, c111, dg, dr, db)
-                } else {
-                    // G > B > R
-                    self.tetra(c000, c010, c011, c111, dg, db, dr)
-                }
-            } else {
-                // B > G > R
-                self.tetra(c000, c001, c011, c111, db, dg, dr)
-            }
+            // B > G > R
+            self.tetra(c000, c001, c011, c111, db, dg, dr)
         }
     }
 
     #[inline]
+    #[allow(clippy::too_many_arguments)]
     fn tetra(&self, c0: [f32; 3], ca: [f32; 3], cb: [f32; 3], cc: [f32; 3], da: f32, db: f32, dc: f32) -> (f32, f32, f32) {
         let mut out = [0.0f32; 3];
         for i in 0..3 {
