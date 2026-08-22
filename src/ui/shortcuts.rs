@@ -439,7 +439,7 @@ pub fn handle_global_shortcuts(
         }
 
         // ── Jump between markers: Shift+M cycles forward, Alt+M backward? Use [ ] keys ──
-        if allow_single_key && i.key_pressed(Key::OpenBracket) || allow_single_key && i.key_pressed(Key::CloseBracket) {
+        if allow_single_key && (i.key_pressed(Key::OpenBracket) || i.key_pressed(Key::CloseBracket)) {
             let forward = i.key_pressed(Key::CloseBracket);
             let project = app.history.current();
             let mut frames: Vec<u32> = project
