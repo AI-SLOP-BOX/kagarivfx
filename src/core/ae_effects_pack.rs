@@ -1,4 +1,5 @@
 #![allow(dead_code)]
+use rayon::prelude::*;
 /// Pack of 20 Essential Adobe After Effects Effects & Filters.
 // 1. Fast Box Blur (Separable 2-pass: Horizontal then Vertical)
 pub fn apply_fast_box_blur(pixels: &mut [u8], width: u32, height: u32, radius: u32) {
@@ -307,8 +308,12 @@ pub fn apply_twirl(pixels: &mut [u8], width: u32, height: u32, angle_deg: f32, r
 
     let temp = pixels.to_vec();
 
-    for y in 0..height {
-        for x in 0..width {
+    // Per-pixel independent — parallelize with rayon
+    pixels.par_chunks_exact_mut(4)
+        .enumerate()
+        .for_each(|(i, out)| {
+            let x = i % width as usize;
+            let y = i / width as usize;
             let rx = x as f32 - cx;
             let ry = y as f32 - cy;
             let r = (rx * rx + ry * ry).sqrt();
@@ -322,12 +327,12 @@ pub fn apply_twirl(pixels: &mut [u8], width: u32, height: u32, angle_deg: f32, r
                 let sx = (cx + new_a.cos() * r).clamp(0.0, width as f32 - 1.0) as u32;
                 let sy = (cy + new_a.sin() * r).clamp(0.0, height as f32 - 1.0) as u32;
 
-                let idx = ((y * width + x) * 4) as usize;
                 let s_idx = ((sy * width + sx) * 4) as usize;
-                pixels[idx..idx + 4].copy_from_slice(&temp[s_idx..s_idx + 4]);
+                out.copy_from_slice(&temp[s_idx..s_idx + 4]);
+            } else {
+                out.copy_from_slice(&temp[i * 4..i * 4 + 4]);
             }
-        }
-    }
+        });
 }
 
 // 17. Bulge
@@ -336,8 +341,11 @@ pub fn apply_bulge(pixels: &mut [u8], width: u32, height: u32, amount: f32, radi
     let cy = height as f32 * 0.5;
     let temp = pixels.to_vec();
 
-    for y in 0..height {
-        for x in 0..width {
+    pixels.par_chunks_exact_mut(4)
+        .enumerate()
+        .for_each(|(i, out)| {
+            let x = i % width as usize;
+            let y = i / width as usize;
             let rx = x as f32 - cx;
             let ry = y as f32 - cy;
             let r = (rx * rx + ry * ry).sqrt();
@@ -348,12 +356,12 @@ pub fn apply_bulge(pixels: &mut [u8], width: u32, height: u32, amount: f32, radi
                 let sx = (cx + rx * factor).clamp(0.0, width as f32 - 1.0) as u32;
                 let sy = (cy + ry * factor).clamp(0.0, height as f32 - 1.0) as u32;
 
-                let idx = ((y * width + x) * 4) as usize;
                 let s_idx = ((sy * width + sx) * 4) as usize;
-                pixels[idx..idx + 4].copy_from_slice(&temp[s_idx..s_idx + 4]);
+                out.copy_from_slice(&temp[s_idx..s_idx + 4]);
+            } else {
+                out.copy_from_slice(&temp[i * 4..i * 4 + 4]);
             }
-        }
-    }
+        });
 }
 
 // 18. Offset
