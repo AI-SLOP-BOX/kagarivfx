@@ -1,7 +1,7 @@
 use eframe::egui;
 use crate::AfterEffectsApp;
 
-pub fn draw_content_aware_fill(_app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
+pub fn draw_content_aware_fill(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
     ui.heading("Content-Aware Fill");
     ui.separator();
 
@@ -42,7 +42,44 @@ pub fn draw_content_aware_fill(_app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
     ui.add_space(10.0);
     ui.separator();
 
-    if ui.button("⚡ Generate Fill Layer").on_hover_text("Synthesize Content-Aware Fill PNG sequence").clicked() {
-        log::info!("Started Content-Aware Fill synthesis...");
+    if ui.button("Generate Fill Layer").on_hover_text("Render the current frame and synthesize a fill for the selected layer's first mask").clicked() {
+        let Some(layer_idx) = app.selected_layer_idx else {
+            app.toasts.error("Select a layer with a mask first");
+            return;
+        };
+        let project = app.history.current();
+        let comp = project.active_composition();
+        let Some(layer) = comp.layers.get(layer_idx) else { return };
+        let Some(mask) = layer.masks.first() else {
+            app.toasts.error("Selected layer has no mask — draw a mask around the object to remove");
+            return;
+        };
+
+        // Render the frame, then synthesize a fill over the mask polygon
+        let (w, h) = (comp.width, comp.height);
+        let frame_idx = app.current_frame;
+        let mut pixels = crate::core::software_renderer::render_frame_to_pixels(
+            comp, frame_idx, w, h, 0.0, 0,
+        );
+        let polygon = mask.path.to_polygon(frame_idx, 12);
+        let method = match method_idx {
+            1 => crate::core::content_aware_engine::FillMethod::Surface,
+            2 => crate::core::content_aware_engine::FillMethod::EdgeBlend,
+            _ => crate::core::content_aware_engine::FillMethod::Object,
+        };
+        let filled = crate::core::content_aware_engine::generate_content_aware_fill_frame(
+            &pixels, w, h, &polygon, alpha_exp, method,
+        );
+        pixels = filled;
+
+        // Write the synthesized frame as a PNG via the image crate
+        let out_path = std::env::temp_dir().join(format!("caf_frame_{}.png", frame_idx));
+        match image::save_buffer(&out_path, &pixels, w, h, image::ColorType::Rgba8) {
+            Ok(_) => app.toasts.info(format!(
+                "Fill generated: {} (add it as an image layer to composite)",
+                out_path.display()
+            )),
+            Err(e) => app.toasts.error(format!("Failed to write fill: {}", e)),
+        }
     }
 }
