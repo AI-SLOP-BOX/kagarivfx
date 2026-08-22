@@ -18,6 +18,7 @@ pub mod color_science;
 pub mod software_renderer;
 pub mod content_aware_engine;
 pub mod audio_engine;
+pub mod fft;
 pub mod autosave;
 #[cfg(feature = "gui")]
 pub mod audio_playback;
@@ -95,7 +96,11 @@ pub mod ae_effects_pack_v23;
 pub mod ae_effects_pack_v24;
 pub mod ae_effects_pack_v25;
 pub mod ae_effects_pack_v26;
+pub mod ae_effects_pack_v27;
 pub mod temporal_denoise;
+pub mod text_animator_advanced;
+pub mod particle_forces;
+pub mod color_correction;
 
 
 

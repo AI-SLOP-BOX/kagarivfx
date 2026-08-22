@@ -336,7 +336,7 @@ mod tests {
     #[test]
     fn test_lines_unit_selects_per_line() {
         let anim = TextAnimatorAdvanced {
-            selector: square(34.0, 100.0), // excludes line 0 (pct 0)
+            selector: square(33.0, 100.0), // excludes line 0 (pct 0); line 1 sits at 33.3%
             unit: SelectorUnit::Lines,
             ..Default::default()
         };

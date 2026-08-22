@@ -182,3 +182,80 @@ pub fn draw_character_panel(
 
     project_changed
 }
+
+/// Applies a text animation preset to the selected layer's position/opacity.
+pub fn apply_text_preset(
+    app: &mut AfterEffectsApp,
+    preset: &str,
+    layer_idx: usize,
+    current_frame: u32,
+    duration_frames: u32,
+) {
+    use crate::core::keyframe::{Keyframe, InterpolationType};
+    use crate::core::property::Animatable;
+
+    let dur = if duration_frames > 0 { duration_frames } else { 30 }; // default: 1s at 30fps
+    let ease = InterpolationType::Bezier {
+        outgoing: crate::core::keyframe::BezierControlPoint { influence: 0.33, speed: 0.0 },
+        incoming: crate::core::keyframe::BezierControlPoint { influence: 0.33, speed: 0.0 },
+        custom_bezier: Some([0.25, 0.1, 0.25, 1.0]), // Easy Ease
+    };
+
+    app.modify_project(|p| {
+        let comp = p.active_composition_mut();
+        let Some(layer) = comp.layers.get_mut(layer_idx) else { return };
+
+        let base_pos = layer.transform.position.evaluate(current_frame);
+        let end_frame = current_frame + dur;
+
+        match preset {
+            "Fade In" => {
+                layer.transform.opacity = Animatable::new_animated(vec![
+                    Keyframe::new(current_frame, 0.0, ease),
+                    Keyframe::new(end_frame, 100.0, ease),
+                ]);
+            }
+            "Slide In Left" => {
+                layer.transform.position = Animatable::new_animated(vec![
+                    Keyframe::new(current_frame, [base_pos[0] - 200.0, base_pos[1]], ease),
+                    Keyframe::new(end_frame, base_pos, ease),
+                ]);
+                layer.transform.opacity = Animatable::new_animated(vec![
+                    Keyframe::new(current_frame, 0.0, ease),
+                    Keyframe::new(end_frame, 100.0, ease),
+                ]);
+            }
+            "Slide In Right" => {
+                layer.transform.position = Animatable::new_animated(vec![
+                    Keyframe::new(current_frame, [base_pos[0] + 200.0, base_pos[1]], ease),
+                    Keyframe::new(end_frame, base_pos, ease),
+                ]);
+                layer.transform.opacity = Animatable::new_animated(vec![
+                    Keyframe::new(current_frame, 0.0, ease),
+                    Keyframe::new(end_frame, 100.0, ease),
+                ]);
+            }
+            "Slide In Up" => {
+                layer.transform.position = Animatable::new_animated(vec![
+                    Keyframe::new(current_frame, [base_pos[0], base_pos[1] + 150.0], ease),
+                    Keyframe::new(end_frame, base_pos, ease),
+                ]);
+                layer.transform.opacity = Animatable::new_animated(vec![
+                    Keyframe::new(current_frame, 0.0, ease),
+                    Keyframe::new(end_frame, 100.0, ease),
+                ]);
+            }
+            "Scale Up" => {
+                layer.transform.scale = Animatable::new_animated(vec![
+                    Keyframe::new(current_frame, [0.0, 0.0], ease),
+                    Keyframe::new(end_frame, [100.0, 100.0], ease),
+                ]);
+                layer.transform.opacity = Animatable::new_animated(vec![
+                    Keyframe::new(current_frame, 0.0, ease),
+                    Keyframe::new(end_frame, 100.0, ease),
+                ]);
+            }
+            _ => {}
+        }
+    });
+}

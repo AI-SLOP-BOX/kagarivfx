@@ -84,14 +84,24 @@ impl SpectrumAnalyzer {
         let take = pcm.len().min(win);
         let window = &pcm[pcm.len() - take..]; // most recent audio
 
-        let mags = match magnitude_spectrum(window) {
-            Ok(m) => m,
-            Err(_) => return self.bands.clone(),
-        };
+        // Hann windowing is applied here (the fft kernel itself is window-free).
+        let wlen = window.len();
+        let windowed: Vec<f32> = window
+            .iter()
+            .enumerate()
+            .map(|(i, &s)| {
+                let w = 0.5 * (1.0 - (2.0 * std::f32::consts::PI * i as f32 / wlen as f32).cos());
+                s * w
+            })
+            .collect();
+
+        // Returns `win` bins; the first win/2 carry the unique real spectrum.
+        let mags = magnitude_spectrum(&windowed, win);
         if mags.is_empty() {
             return self.bands.clone();
         }
-        let bin_hz = sample_rate as f32 / (window.len() as f32 * 2.0);
+        let usable_bins = (win / 2).max(1);
+        let bin_hz = sample_rate as f32 / win as f32;
         if bin_hz <= 0.0 {
             return self.bands.clone();
         }
@@ -107,8 +117,8 @@ impl SpectrumAnalyzer {
             let f0 = lo * (hi / lo).powf(t0);
             let f1 = lo * (hi / lo).powf(t1);
             let b0 = (f0 / bin_hz).floor() as usize;
-            let b1 = ((f1 / bin_hz).ceil() as usize).clamp(b0 + 1, mags.len());
-            let energy = mags[b0..b1].iter().fold(0.0f32, |a, &m| a.max(m));
+            let b1 = ((f1 / bin_hz).ceil() as usize).clamp(b0 + 1, usable_bins);
+            let energy: f32 = mags[b0..b1].iter().copied().fold(0.0f32, f32::max);
 
             // dB normalize into 0..1.
             let db = 20.0 * energy.max(1e-6).log10();
@@ -155,7 +165,7 @@ pub fn extract_waveform(pcm: &[f32], num_points: u32) -> Vec<f32> {
     if pcm.is_empty() {
         return vec![0.0; n];
     }
-    let chunk = (pcm.len() + n - 1) / n;
+    let chunk = pcm.len().div_ceil(n);
     (0..n)
         .map(|i| {
             let start = i * chunk;

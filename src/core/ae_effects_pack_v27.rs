@@ -11,7 +11,6 @@
 ///
 /// All functions are deterministic, panic-free and allocation-light (single
 /// source snapshot per invocation).
-
 use std::f32::consts::{PI, TAU};
 
 // ────────────────────────── Sampling Helper ──────────────────────────
@@ -348,15 +347,22 @@ mod tests {
     fn test_waveforms_bounded_and_periodic() {
         for wt in [WaveType::Sine, WaveType::Triangle, WaveType::Square, WaveType::Sawtooth] {
             for i in 0..360 {
-                let v = wt.waveform(i as f32 / 360.0 * TAU);
+                // Half-degree offsets avoid landing exactly on the Square
+                // waveform's discontinuity at phase = PI.
+                let phase = (i as f32 + 0.5) / 360.0 * TAU;
+                let v = wt.waveform(phase);
                 assert!((-1.0..=1.0).contains(&v), "{wt:?} out of range at {i}");
-                // Periodicity: phase + full turn reproduces the value.
-                assert_eq!(v, wt.waveform(i as f32 / 360.0 * TAU + TAU));
+                // Periodicity: phase + full turn reproduces the value (within fp tolerance).
+                let shifted = wt.waveform(phase + TAU);
+                assert!((v - shifted).abs() < 1e-4, "{wt:?} not periodic at {i}: {v} vs {shifted}");
             }
         }
         assert_eq!(WaveType::Square.waveform(0.0), 1.0);
         assert_eq!(WaveType::Square.waveform(PI), -1.0);
-        assert!((WaveType::Triangle.waveform(PI * 0.5) - 1.0).abs() < 1e-6);
+        // Triangle starts at -1 and peaks at half period (phase = PI).
+        assert!((WaveType::Triangle.waveform(0.0) + 1.0).abs() < 1e-6);
+        assert!((WaveType::Triangle.waveform(PI) - 1.0).abs() < 1e-6);
+        assert!((WaveType::Triangle.waveform(PI * 0.5) - 0.0).abs() < 1e-6);
     }
 
     #[test]
