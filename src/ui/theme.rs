@@ -51,63 +51,31 @@ pub mod layout {
 
 /// Apply global Adobe After Effects high-contrast pro dark theme to egui.
 pub fn configure_ae_theme(ctx: &egui::Context) {
-    // Force dark theme at the egui level so text colors, widget styles,
-    // and backgrounds all agree.
+    // Force dark theme at the egui level so all widgets use dark colors.
+    ctx.set_theme(egui::Theme::Dark);
 
+    // Apply AE-specific visuals
     let mut visuals = egui::Visuals::dark();
-
-    // Explicit global text colors — without this some widgets inherit the OS
-    // light-mode text color (dark on dark) and become invisible.
-
-    // Dark Glassmorphism Base Colors
     visuals.panel_fill = egui::Color32::from_rgb(18, 21, 27);
-    visuals.window_fill = egui::Color32::from_rgba_unmultiplied(18, 21, 27, 235);
+    visuals.window_fill = egui::Color32::from_rgb(18, 21, 27);
     visuals.faint_bg_color = egui::Color32::from_rgb(12, 14, 18);
     visuals.extreme_bg_color = egui::Color32::from_rgb(10, 12, 16);
-
-    // Selection highlight (Neon Blue Accent)
     visuals.selection.bg_fill = egui::Color32::from_rgb(0, 120, 215);
     visuals.selection.stroke = egui::Stroke::new(1.0, colors::ACCENT_BLUE);
-
-    // Non-interactive widgets (Labels, Dividers, Cards)
-    visuals.widgets.noninteractive.bg_fill = egui::Color32::from_rgba_unmultiplied(26, 32, 42, 200);
-    visuals.widgets.noninteractive.bg_stroke = egui::Stroke::new(1.0, egui::Color32::from_rgb(45, 55, 70));
-    visuals.widgets.noninteractive.fg_stroke = egui::Stroke::new(1.0, colors::TEXT_PRIMARY);
-    visuals.widgets.noninteractive.rounding = egui::Rounding::same(6.0);
-
-    // Inactive interactive widgets (Buttons, Dropdowns)
-    visuals.widgets.inactive.bg_fill = egui::Color32::from_rgba_unmultiplied(32, 40, 52, 220);
-    visuals.widgets.inactive.bg_stroke = egui::Stroke::new(1.0, egui::Color32::from_rgb(55, 68, 88));
-    visuals.widgets.inactive.fg_stroke = egui::Stroke::new(1.0, colors::TEXT_PRIMARY);
-    visuals.widgets.inactive.rounding = egui::Rounding::same(6.0);
-
-    // Hovered widgets
-    visuals.widgets.hovered.bg_fill = egui::Color32::from_rgb(42, 54, 72);
-    visuals.widgets.hovered.bg_stroke = egui::Stroke::new(1.5, colors::ACCENT_BLUE);
-    visuals.widgets.hovered.fg_stroke = egui::Stroke::new(1.0, egui::Color32::WHITE);
-    visuals.widgets.hovered.rounding = egui::Rounding::same(6.0);
-
-    // Active (Clicked/Dragged) widgets
-    visuals.widgets.active.bg_fill = egui::Color32::from_rgb(0, 140, 240);
-    visuals.widgets.active.bg_stroke = egui::Stroke::new(1.5, colors::ACCENT_CYAN);
-    visuals.widgets.active.fg_stroke = egui::Stroke::new(1.0, egui::Color32::WHITE);
-    visuals.widgets.active.rounding = egui::Rounding::same(6.0);
-
-    // Open/Expanded popups
-    visuals.widgets.open.bg_fill = egui::Color32::from_rgba_unmultiplied(28, 35, 46, 240);
-    visuals.widgets.open.bg_stroke = egui::Stroke::new(1.0, colors::ACCENT_BLUE);
-    visuals.widgets.open.fg_stroke = egui::Stroke::new(1.0, colors::TEXT_PRIMARY);
-    visuals.widgets.open.rounding = egui::Rounding::same(6.0);
-
-    // Window shadow & glassmorphism borders
-    visuals.window_stroke = egui::Stroke::new(1.0, egui::Color32::from_rgb(55, 70, 95));
-    visuals.window_rounding = egui::Rounding::same(8.0);
+    visuals.widgets.noninteractive.fg_stroke =
+        egui::Stroke::new(1.0, egui::Color32::from_rgb(240, 240, 240));
+    visuals.widgets.inactive.fg_stroke =
+        egui::Stroke::new(1.0, egui::Color32::from_rgb(240, 240, 240));
+    visuals.widgets.hovered.fg_stroke =
+        egui::Stroke::new(1.0, egui::Color32::WHITE);
+    visuals.widgets.active.fg_stroke =
+        egui::Stroke::new(1.0, egui::Color32::WHITE);
+    visuals.widgets.open.fg_stroke =
+        egui::Stroke::new(1.0, egui::Color32::from_rgb(240, 240, 240));
 
     ctx.set_visuals(visuals);
 
-    // Adjust global spacing and padding for pro ergonomics.
-    // Tighter than egui defaults: pro NLE/VFX apps pack more information per
-    // pixel, with small controls and dense rows.
+    // Tighter spacing for pro density
     ctx.style_mut(|style| {
         style.spacing.item_spacing = egui::vec2(4.0, 3.0);
         style.spacing.button_padding = egui::vec2(5.0, 2.0);
@@ -116,12 +84,8 @@ pub fn configure_ae_theme(ctx: &egui::Context) {
         style.spacing.menu_margin = egui::Margin::symmetric(6.0, 3.0);
         style.spacing.window_margin = egui::Margin::same(8.0);
     });
-
-    // Compact typography for panel content — only tweak sizes after confirming
-    // default fonts render correctly on egui 0.29.
-    // NOTE: custom text_styles removed because overriding them without also
-    // registering matching fonts caused all text to render blank.
 }
+
 
 /// Helper: Render section headers with a crisp left accent bar, icon, and high-contrast typography.
 #[allow(dead_code)]
