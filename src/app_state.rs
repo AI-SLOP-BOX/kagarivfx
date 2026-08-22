@@ -249,6 +249,9 @@ pub struct AfterEffectsApp {
     pub project_search_query: String,
     pub cc_libraries_search: String,
     pub audio_mixer_channels: Vec<(f32, f32)>,
+    /// Synced audio playback for AV preview (gui builds with an audio device).
+    #[cfg(feature = "gui")]
+    pub audio_playback: Option<crate::core::audio_playback::AudioPlayback>,
     pub camera_view_layout: usize,
     pub camera_view_angle: usize,
     pub font_family_idx: usize,
@@ -350,6 +353,7 @@ impl Default for AfterEffectsApp {
             project_search_query: String::new(),
             cc_libraries_search: String::new(),
             audio_mixer_channels: Vec::new(),
+            audio_playback: crate::core::audio_playback::AudioPlayback::new().ok(),
             camera_view_layout: 0,
             camera_view_angle: 0,
             font_family_idx: 0,
@@ -426,6 +430,41 @@ impl eframe::App for AfterEffectsApp {
         // Crash-recovery autosave: write a rotating snapshot when dirty and due
         if let Some(path) = self.autosave.tick(self.history.current()) {
             log::info!("[Autosave] Recovery snapshot written: {:?}", path);
+        }
+
+        // ── Synced audio playback: follow the playhead while playing ──
+        {
+            // First video layer's extracted WAV drives the preview audio
+            let wav = self
+                .history
+                .current()
+                .active_composition()
+                .layers
+                .iter()
+                .find_map(|l| match &l.layer_type {
+                    crate::core::timeline::LayerType::Video { audio_wav, .. } => audio_wav.clone(),
+                    _ => None,
+                });
+            let audio_enabled = ctx.data_mut(|d| {
+                *d.get_temp_mut_or_insert_with(egui::Id::new("ae_audio_preview"), || true)
+            });
+            let fps = self.history.current().active_composition().fps.max(1);
+            let playhead_sec = self.current_frame as f32 / fps as f32;
+
+            match (self.is_playing, audio_enabled, wav, &mut self.audio_playback) {
+                (true, true, Some(wav), Some(playback)) => {
+                    if let Err(e) = playback.play(&std::path::PathBuf::from(wav), playhead_sec) {
+                        log::warn!("[Audio] playback error: {}", e);
+                    }
+                }
+                _ => {
+                    if let Some(playback) = &mut self.audio_playback {
+                        if playback.is_playing() {
+                            playback.pause();
+                        }
+                    }
+                }
+            }
         }
 
         if let Some(rx_frame) = &self.rx_frame {
