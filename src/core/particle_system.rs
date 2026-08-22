@@ -19,6 +19,28 @@ pub enum EmitterShape {
 }
 
 
+/// Opacity fade curve over particle lifetime.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Default)]
+pub enum FadeCurve {
+    #[default]
+    Linear = 0,
+    EaseIn = 1,
+    EaseOut = 2,
+}
+
+impl FadeCurve {
+    /// Map normalized lifetime progress t (0..1) to fade factor (0..1).
+    pub fn apply(self, t: f32) -> f32 {
+        let t = t.clamp(0.0, 1.0);
+        match self {
+            FadeCurve::Linear => 1.0 - t,
+            FadeCurve::EaseIn => 1.0 - t * t,
+            FadeCurve::EaseOut => (1.0 - t) * (1.0 - t),
+        }
+    }
+}
+
 /// Particle emitter configuration.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ParticleEmitter {
@@ -59,7 +81,17 @@ pub struct ParticleEmitter {
     /// End opacity (0..1)
     pub opacity_end: f32,
     /// Rotation speed (degrees/sec)
+    #[serde(default)]
     pub rotation_speed: f32,
+    /// Initial rotation (degrees)
+    #[serde(default)]
+    pub rotation_start: f32,
+    /// Random rotation speed variation (0..1)
+    #[serde(default)]
+    pub rotation_speed_variance: f32,
+    /// Opacity fade curve over lifetime
+    #[serde(default)]
+    pub fade_curve: FadeCurve,
     /// Blend mode: 0=Normal, 1=Add, 2=Screen
     pub blend_mode: u32,
 }
@@ -86,6 +118,9 @@ impl Default for ParticleEmitter {
             opacity_start: 1.0,
             opacity_end: 0.0,
             rotation_speed: 0.0,
+            rotation_start: 0.0,
+            rotation_speed_variance: 0.0,
+            fade_curve: FadeCurve::Linear,
             blend_mode: 1, // Add
         }
     }
@@ -102,6 +137,8 @@ pub struct Particle {
     pub max_life: f32,
     pub size: f32,
     pub rotation: f32,
+    /// Per-particle angular velocity (degrees/sec), set at emission
+    pub angular_velocity: f32,
 }
 
 /// Particle system simulation.
@@ -141,6 +178,12 @@ impl ParticleSystem {
 
         let lifetime = self.emitter.lifetime * (1.0 - self.emitter.lifetime_variance * (self.next_random() * 2.0 - 1.0));
         let speed = self.emitter.speed * (1.0 + self.emitter.speed_variance * (self.next_random() * 2.0 - 1.0));
+        let rotation_speed = if self.emitter.rotation_speed_variance > 0.0 {
+            self.emitter.rotation_speed
+                * (1.0 + self.emitter.rotation_speed_variance * (self.next_random() * 2.0 - 1.0))
+        } else {
+            self.emitter.rotation_speed
+        };
 
         let spread_rad = self.emitter.spread_degrees.to_radians();
         let angle = (self.next_random() - 0.5) * spread_rad;
@@ -170,7 +213,8 @@ impl ParticleSystem {
             life: lifetime,
             max_life: lifetime,
             size: self.emitter.size_start,
-            rotation: 0.0,
+            rotation: self.emitter.rotation_start,
+            angular_velocity: rotation_speed,
         });
     }
 
@@ -186,7 +230,6 @@ impl ParticleSystem {
         let gravity = self.emitter.gravity;
         let wind = self.emitter.wind;
         let turbulence = self.emitter.turbulence;
-        let rotation_speed = self.emitter.rotation_speed;
         let size_start = self.emitter.size_start;
         let size_end = self.emitter.size_end;
 
@@ -213,7 +256,7 @@ impl ParticleSystem {
             p.y += p.vy * dt;
 
             // Rotation
-            p.rotation += rotation_speed * dt;
+            p.rotation += p.angular_velocity * dt;
 
             // Interpolate size and opacity over lifetime
             let t = 1.0 - (p.life / p.max_life);
@@ -240,7 +283,7 @@ impl ParticleSystem {
             let r = e.color_start[0] + (e.color_end[0] - e.color_start[0]) * t;
             let g = e.color_start[1] + (e.color_end[1] - e.color_start[1]) * t;
             let b = e.color_start[2] + (e.color_end[2] - e.color_start[2]) * t;
-            let a = e.color_start[3] + (e.color_end[3] - e.color_start[3]) * t;
+            let a = (e.color_start[3] + (e.color_end[3] - e.color_start[3]) * t) * e.fade_curve.apply(t);
 
             let half = p.size * 0.5;
             let x0 = (p.x - half).max(0.0) as u32;
@@ -359,6 +402,74 @@ mod tests {
         ps.render(&mut buf, 100, 100, 0.0);
         // At least some pixels should be non-zero
         assert!(buf.iter().any(|&b| b > 0));
+    }
+
+    #[test]
+    fn test_fade_curve() {
+        assert_eq!(FadeCurve::Linear.apply(0.0), 1.0);
+        assert_eq!(FadeCurve::Linear.apply(1.0), 0.0);
+        // EaseIn fades slowly at first: higher factor than linear mid-life
+        assert!(FadeCurve::EaseIn.apply(0.5) > FadeCurve::Linear.apply(0.5));
+        // EaseOut fades fast at first: lower factor than linear mid-life
+        assert!(FadeCurve::EaseOut.apply(0.5) < FadeCurve::Linear.apply(0.5));
+    }
+
+    #[test]
+    fn test_fade_curve_affects_render() {
+        let mut buf_linear = vec![0u8; 100 * 100 * 4];
+        let mut buf_ease = vec![0u8; 100 * 100 * 4];
+
+        for (buf, curve) in [(&mut buf_linear, FadeCurve::Linear), (&mut buf_ease, FadeCurve::EaseIn)] {
+            let emitter = ParticleEmitter {
+                rate: 100.0,
+                lifetime: 10.0,
+                lifetime_variance: 0.0,
+                size_start: 20.0,
+                fade_curve: curve,
+                ..Default::default()
+            };
+            let mut ps = ParticleSystem::new(emitter);
+            ps.update(0.5, 50.0, 50.0);
+            ps.render(buf, 100, 100, 0.0);
+        }
+        // EaseIn particles are still mostly opaque at t=0.05, so brighter than linear
+        let sum = |b: &[u8]| b.iter().map(|&v| v as u64).sum::<u64>();
+        assert!(sum(&buf_ease) >= sum(&buf_linear));
+    }
+
+    #[test]
+    fn test_spin_initial_rotation_and_variance() {
+        let emitter = ParticleEmitter {
+            rate: 1000.0,
+            rotation_start: 45.0,
+            rotation_speed: 90.0,
+            ..Default::default()
+        };
+        let mut ps = ParticleSystem::new(emitter);
+        ps.update(0.01, 0.0, 0.0);
+        assert!(!ps.particles.is_empty());
+        for p in &ps.particles {
+            assert!((p.rotation - (45.0 + 90.0 * 0.01)).abs() < 0.001);
+        }
+
+        // Variance gives per-particle angular velocities but stays deterministic
+        let make = || ParticleSystem::new(ParticleEmitter {
+            rate: 1000.0,
+            rotation_start: 0.0,
+            rotation_speed: 90.0,
+            rotation_speed_variance: 0.5,
+            ..Default::default()
+        });
+        let mut a = make();
+        let mut b = make();
+        a.update(0.05, 0.0, 0.0);
+        b.update(0.05, 0.0, 0.0);
+        let rots: Vec<f32> = a.particles.iter().map(|p| p.rotation).collect();
+        assert!(!rots.is_empty());
+        assert!(rots.windows(2).any(|w| (w[0] - w[1]).abs() > f32::EPSILON), "variance should differ per particle");
+        for (pa, pb) in a.particles.iter().zip(b.particles.iter()) {
+            assert_eq!(pa.rotation, pb.rotation);
+        }
     }
 
     #[test]
