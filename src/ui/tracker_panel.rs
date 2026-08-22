@@ -6,7 +6,7 @@ pub fn draw_tracker_panel(app: &mut AfterEffectsApp, ui: &mut egui::Ui, current_
     ui.separator();
 
     let sel_idx = app.selected_layer_idx;
-    let (layer_name, tracker_count, has_media, layer_pos_at_head, masks_len) = {
+    let (layer_name, tracker_count, has_media, layer_pos_at_head, _masks_len) = {
         let comp = app.history.current().active_composition();
         match sel_idx.and_then(|i| comp.layers.get(i)) {
             Some(l) => (
