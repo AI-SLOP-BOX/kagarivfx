@@ -437,7 +437,7 @@ pub fn mix_audio_sources_for_frame(
         // Source samples: real WAV if present, otherwise silent placeholder
         let source: Option<std::sync::Arc<AudioBuffer>> = match &wav_path {
             Some(p) => {
-                let mut map = cache.lock().unwrap_or_else(|e| e.into_inner());
+                let map = cache.lock().unwrap_or_else(|e| e.into_inner());
                 if let Some(buf) = map.get(p) {
                     Some(buf.clone())
                 } else {
