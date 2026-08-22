@@ -693,7 +693,7 @@ pub fn render_frame_to_pixels(comp: &Composition, frame: u32, width: u32, height
                 (text.chars().count().max(1) as f32 * *font_size as f32 * 0.6).max(*font_size as f32),
                 *font_size as f32 * 1.2,
             ),
-            LayerType::Shape { .. } | LayerType::Image { .. } => (comp.width as f32, comp.height as f32),
+            LayerType::Shape { .. } | LayerType::Image { .. } | LayerType::Video { .. } => (comp.width as f32, comp.height as f32),
             _ => continue, // Null or audio layers don't output visual pixels
         };
 
@@ -703,7 +703,7 @@ pub fn render_frame_to_pixels(comp: &Composition, frame: u32, width: u32, height
         let base_color = match &layer.layer_type {
             LayerType::Solid { color } | LayerType::Text { color, .. } => *color,
             LayerType::Shape { color, .. } => *color,
-            LayerType::Image { .. } => [0.2, 0.6, 0.9, 1.0], // fallback image color
+            LayerType::Image { .. } | LayerType::Video { .. } => [0.2, 0.6, 0.9, 1.0], // fallback image color
             LayerType::PreComp { .. } => [1.0, 1.0, 1.0, 1.0],
             _ => continue,
         };
@@ -940,8 +940,9 @@ pub fn render_frame_to_pixels(comp: &Composition, frame: u32, width: u32, height
             use crate::core::image_cache::with_image_cache;
 
             let img_path = match &layer.layer_type {
-                LayerType::Video { frames_dir, frame_count, .. } => {
-                    let seq_frame = effective_frame.min(frame_count.saturating_sub(1));
+                LayerType::Video { frames_dir, frame_count, speed, .. } => {
+                    let seq_frame = ((effective_frame as f32 * speed.max(0.0)) as u32)
+                        .min(frame_count.saturating_sub(1));
                     std::path::Path::new(frames_dir)
                         .join(format!("frame_{:05}.png", seq_frame))
                         .to_string_lossy()
@@ -1405,7 +1406,54 @@ mod tests {
     use super::*;
     use crate::core::timeline::{Composition, Layer, LayerType, BlendMode, Effect, EffectType};
     use crate::core::property::Animatable;
-    
+
+    fn write_gray_png(path: &std::path::Path, gray: u8) {
+        let img = image::GrayImage::from_pixel(4, 4, image::Luma([gray]));
+        image::DynamicImage::ImageLuma8(img)
+            .save_with_format(path, image::ImageFormat::Png)
+            .expect("save png");
+    }
+
+    #[test]
+    fn test_video_layer_speed_scales_sequence_index() {
+        let dir = std::env::temp_dir().join(format!("aevfx_speed_test_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        // frame i encoded as gray value i * 10 (frame 20 -> 200)
+        for i in 0..=20u32 {
+            write_gray_png(&dir.join(format!("frame_{:05}.png", i)), (i * 10) as u8);
+        }
+        let frames_dir = dir.to_string_lossy().to_string();
+
+        let make_comp = |speed: f32| {
+            let mut comp = Composition::new("c1".into(), "Comp".into(), 16, 16, 30, 30);
+            let mut layer = Layer::new("v".into(), "V".into(), LayerType::Video {
+                source: "test".into(),
+                frames_dir: frames_dir.clone(),
+                frame_count: 21,
+                audio_wav: None,
+                speed,
+            }, 30);
+            layer.transform.position = Animatable::new_constant([8.0, 8.0]);
+            comp.layers.push(layer);
+            comp
+        };
+
+        // speed 2.0: timeline frame 10 -> sequence frame 20 (gray 200)
+        let px_fast = render_frame_to_pixels(&make_comp(2.0), 10, 16, 16, 0.0, 0);
+        assert_eq!(px_fast[8 * 16 * 4 + 8 * 4], 200, "speed=2.0 must map frame 10 to seq frame 20");
+
+        // speed 1.0: timeline frame 10 -> sequence frame 10 (gray 100)
+        let px_norm = render_frame_to_pixels(&make_comp(1.0), 10, 16, 16, 0.0, 0);
+        assert_eq!(px_norm[8 * 16 * 4 + 8 * 4], 100);
+
+        // clamping: speed 2.0 at last frame stays within sequence
+        let px_clamp = render_frame_to_pixels(&make_comp(2.0), 15, 16, 16, 0.0, 0);
+        assert_eq!(px_clamp[8 * 16 * 4 + 8 * 4], 200, "index must clamp to last frame");
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
 
     #[test]
     fn test_software_render_frame_to_pixels() {

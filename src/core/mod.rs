@@ -94,6 +94,7 @@ pub mod ae_effects_pack_v23;
 pub mod ae_effects_pack_v24;
 pub mod ae_effects_pack_v25;
 pub mod ae_effects_pack_v26;
+pub mod temporal_denoise;
 
 
 

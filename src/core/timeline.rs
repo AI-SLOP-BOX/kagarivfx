@@ -40,6 +40,7 @@ impl TrackerPoint {
 fn default_font_family() -> String { "Inter".to_string() }
 fn default_leading() -> f32 { 1.2 }
 fn default_stroke_color() -> [f32; 4] { [0.0, 0.0, 0.0, 1.0] }
+fn default_video_speed() -> f32 { 1.0 }
 
 // ─── Layer Type ────────────────────────────────────────────────────────────
 
@@ -60,6 +61,9 @@ pub enum LayerType {
         frame_count: u32,
         #[serde(default)]
         audio_wav: Option<String>,
+        /// Playback speed multiplier: 1.0 = normal, 2.0 = double speed
+        #[serde(default = "default_video_speed")]
+        speed: f32,
     },
     Text {
         text: String,

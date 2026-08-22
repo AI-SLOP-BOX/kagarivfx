@@ -108,6 +108,7 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
                                             frames_dir: asset.frames_dir.clone(),
                                             frame_count: asset.frame_count,
                                             audio_wav: asset.audio_wav.clone(),
+                                            speed: 1.0,
                                         },
                                         comp.fps,
                                     );

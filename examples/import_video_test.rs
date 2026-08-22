@@ -16,6 +16,7 @@ fn main() {
         frames_dir: asset.frames_dir.clone(),
         frame_count: asset.frame_count,
         audio_wav: asset.audio_wav.clone(),
+        speed: 1.0,
     }, 10);
     vid.transform.position = Animatable::new_constant([80.0, 60.0]);
     comp.layers.push(vid);
