@@ -1285,7 +1285,10 @@ pub fn render_frame_to_pixels(comp: &Composition, frame: u32, width: u32, height
 
     // Apply exposure EV shift and LUT color mapping in parallel across CPU cores
     let mult = 2.0f32.powf(exposure_ev);
-    buffer.par_chunks_exact_mut(4).for_each(|p| {
+    buffer
+        .par_chunks_exact_mut(4)
+        .enumerate()
+        .for_each(|(pix_i, p)| {
         let mut r = p[0] as f32 / 255.0 * mult;
         let mut g = p[1] as f32 / 255.0 * mult;
         let mut b = p[2] as f32 / 255.0 * mult;
@@ -1317,12 +1320,32 @@ pub fn render_frame_to_pixels(comp: &Composition, frame: u32, width: u32, height
             b = (b * (a * b + b_val)) / denom_b;
         }
 
-        p[0] = (r.clamp(0.0, 1.0) * 255.0) as u8;
-        p[1] = (g.clamp(0.0, 1.0) * 255.0) as u8;
-        p[2] = (b.clamp(0.0, 1.0) * 255.0) as u8;
+        // Triangular-PDF dither: breaks up 8-bit banding from exposure/LUT
+        // grading without adding perceptible noise. Deterministic (hash-based),
+        // so renders stay reproducible.
+                let grading_active = exposure_ev != 0.0 || lut_mode != 0;
+        let px_coord = if grading_active { pix_i as f32 } else { f32::NAN };
+        let dither_seed = px_coord * 0.618_034; // golden-ratio scatter
+        let dith = |v: f32| -> u8 {
+            if dither_seed.is_nan() {
+                return (v.clamp(0.0, 1.0) * 255.0).round() as u8;
+            }
+            let t1 = fract(dither_seed * 7.13);
+            let t2 = fract(dither_seed * 3.71);
+            let noise = (t1 - t2) / 255.0; // triangular distribution in [-1/255, 1/255]
+            ((v + noise).clamp(0.0, 1.0) * 255.0).round() as u8
+        };
+        p[0] = dith(r);
+        p[1] = dith(g);
+        p[2] = dith(b);
     });
 
     buffer
+}
+
+#[inline]
+fn fract(x: f32) -> f32 {
+    x - x.floor()
 }
 
 /// Calculate the shortest distance from point (px, py) to the polygon boundary.
