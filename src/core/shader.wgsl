@@ -213,6 +213,32 @@ fn sample_layer_color(local_pos_in: vec2<f32>, tc_in: vec2<f32>, blur_extend: f3
         // return fully transparent so fs_main's alpha check discards this quad.
         c = vec4<f32>(0.0, 0.0, 0.0, 0.0);
     }
+    // ── Glow: screen-space bloom from bright areas ──
+    if (layer.glow_enabled == 1u && c.a > 0.01) {
+        let vp = max(globals.viewport_size, vec2<f32>(1.0, 1.0));
+        let texel = vec2<f32>(1.0) / vp;
+        let gr = layer.glow_radius * texel;
+
+        var bloom = vec3<f32>(0.0);
+        for (var s = 0; s < 8; s = s + 1) {
+            let angle = f32(s) * 0.785398; // PI/4
+            let sx = tc.x + cos(angle) * gr.x;
+            let sy = tc.y + sin(angle) * gr.y;
+            let sc = textureSample(t_diffuse, s_diffuse, vec2<f32>(sx, sy));
+            let luma = dot(sc.rgb, vec3<f32>(0.299, 0.587, 0.114));
+            let thresh = max(layer.glow_threshold, 0.001);
+            if (luma > thresh) {
+                bloom += sc.rgb * ((luma - thresh) / luma);
+            }
+        }
+        bloom = bloom / 8.0 * layer.glow_intensity;
+
+        // Tint the bloom
+        let gc = layer.glow_color.rgb;
+        let gc_lum = max(dot(gc, vec3<f32>(0.333)), 0.001);
+        c = vec4<f32>(c.r + bloom.r * gc.r / gc_lum, c.g + bloom.g * gc.g / gc_lum, c.b + bloom.b * gc.b / gc_lum, c.a);
+    }
+
     return c;
 }
 
