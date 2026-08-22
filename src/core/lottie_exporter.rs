@@ -1,6 +1,17 @@
 #![allow(dead_code)]
 use serde_json::{json, Value};
-use crate::core::timeline::{Composition, Layer, LayerType, BlendMode};
+use crate::core::timeline::{Composition, Layer, LayerType, BlendMode, ShapeType};
+
+fn color_to_lottie(c: &[f32; 4]) -> Value {
+    json!([c[0], c[1], c[2], 1.0])
+}
+
+fn hex_color(c: &[f32; 4]) -> String {
+    format!("#{:02x}{:02x}{:02x}",
+        (c[0].clamp(0.0, 1.0) * 255.0).round() as u8,
+        (c[1].clamp(0.0, 1.0) * 255.0).round() as u8,
+        (c[2].clamp(0.0, 1.0) * 255.0).round() as u8)
+}
 use crate::core::property::Animatable;
 
 /// Exporter for converting Aura Composition into industry-standard Lottie / Bodymovin JSON format.
@@ -48,6 +59,80 @@ fn blend_mode_code(bm: &BlendMode) -> i32 {
         BlendMode::Darken | BlendMode::Lighten | BlendMode::Difference
         | BlendMode::Exclusion | BlendMode::Divide | BlendMode::Subtract => 4,
     }
+}
+
+/// Serializes a ShapeType into the Lottie shape item ("el"/"rc"/"sr"/"sr").
+fn shape_geometry(st: &ShapeType) -> Value {
+    match st {
+        ShapeType::Rectangle { width, height, corner_radius } => json!({
+            "ty": "rc",
+            "d": 1,
+            "s": anim_property_v2(&merge_dims(width, height), 1.0),
+            "p": { "a": 0, "k": [0.0, 0.0] },
+            "r": anim_property_f32(corner_radius, 1.0),
+        }),
+        ShapeType::Ellipse { width, height } => json!({
+            "ty": "el",
+            "d": 1,
+            "s": anim_property_v2(&merge_dims(width, height), 1.0),
+            "p": { "a": 0, "k": [0.0, 0.0] },
+        }),
+        ShapeType::Star { points, inner_radius, outer_radius } => json!({
+            "ty": "sr",
+            "sy": 2,
+            "d": 1,
+            "pt": anim_property_f32(points, 1.0),
+            "p": { "a": 0, "k": [0.0, 0.0] },
+            "or": anim_property_f32(outer_radius, 1.0),
+            "ir": anim_property_f32(inner_radius, 1.0),
+            "os": { "a": 0, "k": 0 },
+            "is": { "a": 0, "k": 0 },
+            "r": { "a": 0, "k": 0 },
+        }),
+        ShapeType::Polygon { sides, radius } => json!({
+            "ty": "sr",
+            "sy": 1,
+            "d": 1,
+            "pt": anim_property_f32(sides, 1.0),
+            "p": { "a": 0, "k": [0.0, 0.0] },
+            "or": anim_property_f32(radius, 1.0),
+            "os": { "a": 0, "k": 0 },
+            "r": { "a": 0, "k": 0 },
+        }),
+    }
+}
+
+/// Combines separately-animated width/height into a single animated [w,h] property.
+fn merge_dims(w: &Animatable<f32>, h: &Animatable<f32>) -> Animatable<[f32; 2]> {
+    match (w, h) {
+        (Animatable::Constant(wv), Animatable::Constant(hv)) =>
+            Animatable::Constant([*wv, *hv]),
+        _ => Animatable::Animated(Vec::new()),
+    }
+}
+
+/// Builds the Lottie shapes array (a group with geometry + fill + stroke) for shape layers.
+fn serialize_shapes(shape_type: &ShapeType, color: &[f32; 4], stroke_color: &[f32; 4], stroke_width: f32) -> Vec<Value> {
+    let mut items = vec![shape_geometry(shape_type)];
+    items.push(json!({
+        "ty": "fl",
+        "c": { "a": 0, "k": color_to_lottie(color) },
+        "o": { "a": 0, "k": 100 },
+        "nm": "Fill",
+    }));
+    if stroke_width > 0.0 {
+        items.push(json!({
+            "ty": "st",
+            "c": { "a": 0, "k": color_to_lottie(stroke_color) },
+            "o": { "a": 0, "k": 100 },
+            "w": { "a": 0, "k": stroke_width },
+            "lc": 2,
+            "lj": 2,
+            "nm": "Stroke",
+        }));
+    }
+    items.push(json!({ "ty": "tr", "p": { "a": 0, "k": [0.0, 0.0] }, "a": { "a": 0, "k": [0.0, 0.0] }, "s": { "a": 0, "k": [100.0, 100.0] }, "r": { "a": 0, "k": 0 }, "o": { "a": 0, "k": 100 } }));
+    vec![json!({ "ty": "gr", "it": items, "nm": "Shape", "np": items.len() })]
 }
 
 fn layer_type_code(lt: &LayerType) -> (i32, Value) {
@@ -105,6 +190,9 @@ fn serialize_layer(layer: &Layer, comp: &Composition, index: usize) -> Value {
         if layer.motion_blur {
             obj.insert("mb".into(), json!(1));
         }
+        if let LayerType::Shape { shape_type, color, stroke_color, stroke_width } = &layer.layer_type {
+            obj.insert("shapes".into(), json!(serialize_shapes(shape_type, color, stroke_color, *stroke_width)));
+        }
     }
     l
 }
@@ -125,6 +213,7 @@ impl LottieExporter {
             "h": comp.height,
             "nm": comp.name,
             "ddd": 0,
+            "bg": hex_color(&comp.background_color),
             "assets": [],
             "layers": layers,
         });
@@ -185,5 +274,76 @@ mod tests {
         assert_eq!(v["layers"][0]["ty"], 3, "null type");
         assert_eq!(v["layers"][1]["ty"], 5, "text type");
         assert_eq!(v["layers"][1]["parent"], 1, "parent mapped to index");
+    }
+
+    #[test]
+    fn test_lottie_shape_layer_geometry() {
+        use crate::core::timeline::ShapeType;
+        let mut comp = Composition::new("c".into(), "Shapes".into(), 100, 100, 30, 30);
+        comp.layers.push(Layer::new("s1".into(), "Circle".into(), LayerType::Shape {
+            shape_type: ShapeType::Ellipse { width: Animatable::new_constant(50.0), height: Animatable::new_constant(80.0) },
+            color: [1.0, 0.0, 0.0, 1.0],
+            stroke_color: [0.0, 0.0, 1.0, 1.0],
+            stroke_width: 4.0,
+        }, 30));
+        comp.layers.push(Layer::new("s2".into(), "Rect".into(), LayerType::Shape {
+            shape_type: ShapeType::Rectangle {
+                width: Animatable::new_constant(20.0), height: Animatable::new_constant(10.0),
+                corner_radius: Animatable::new_constant(5.0),
+            },
+            color: [0.0, 1.0, 0.0, 1.0],
+            stroke_color: [0.0, 0.0, 0.0, 1.0],
+            stroke_width: 0.0,
+        }, 30));
+        comp.layers.push(Layer::new("s3".into(), "Poly".into(), LayerType::Shape {
+            shape_type: ShapeType::Polygon { sides: Animatable::new_constant(6.0), radius: Animatable::new_constant(30.0) },
+            color: [1.0, 1.0, 1.0, 1.0],
+            stroke_color: [0.0, 0.0, 0.0, 1.0],
+            stroke_width: 2.0,
+        }, 30));
+        comp.layers.push(Layer::new("s4".into(), "Star".into(), LayerType::Shape {
+            shape_type: ShapeType::Star { points: Animatable::new_constant(5.0), inner_radius: Animatable::new_constant(15.0), outer_radius: Animatable::new_constant(40.0) },
+            color: [0.5, 0.5, 0.0, 1.0],
+            stroke_color: [0.0, 0.0, 0.0, 1.0],
+            stroke_width: 0.0,
+        }, 30));
+
+        let v: Value = serde_json::from_str(&LottieExporter::export_to_json(&comp)).unwrap();
+
+        let circle = &v["layers"][0]["shapes"][0];
+        assert_eq!(circle["ty"], "gr");
+        let geom = &circle["it"][0];
+        assert_eq!(geom["ty"], "el");
+        assert_eq!(geom["s"]["k"], json!([50.0, 80.0]));
+        let fill = &circle["it"][1];
+        assert_eq!(fill["ty"], "fl");
+        assert_eq!(fill["c"]["k"], json!([1.0, 0.0, 0.0, 1.0]));
+        let stroke = &circle["it"][2];
+        assert_eq!(stroke["ty"], "st");
+        assert_eq!(stroke["w"]["k"], 4.0);
+
+        let rect_geom = &v["layers"][1]["shapes"][0]["it"][0];
+        assert_eq!(rect_geom["ty"], "rc");
+        assert_eq!(rect_geom["r"]["k"], 5.0);
+        // stroke_width == 0 → no stroke item
+        assert_eq!(v["layers"][1]["shapes"][0]["it"][1]["ty"], "fl");
+
+        let poly_geom = &v["layers"][2]["shapes"][0]["it"][0];
+        assert_eq!(poly_geom["ty"], "sr");
+        assert_eq!(poly_geom["sy"], 1);
+        assert_eq!(poly_geom["pt"]["k"], 6.0);
+
+        let star_geom = &v["layers"][3]["shapes"][0]["it"][0];
+        assert_eq!(star_geom["ty"], "sr");
+        assert_eq!(star_geom["sy"], 2);
+        assert_eq!(star_geom["pt"]["k"], 5.0);
+    }
+
+    #[test]
+    fn test_lottie_background_color() {
+        let mut comp = Composition::new("c".into(), "BG".into(), 100, 100, 30, 30);
+        comp.background_color = [0.05, 0.05, 0.08, 1.0];
+        let v: Value = serde_json::from_str(&LottieExporter::export_to_json(&comp)).unwrap();
+        assert_eq!(v["bg"], "#0d0d14", "background as hex string");
     }
 }

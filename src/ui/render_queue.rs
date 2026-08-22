@@ -1,5 +1,27 @@
 use eframe::egui;
+use std::sync::Mutex;
+use std::time::Instant;
+
 use crate::AfterEffectsApp;
+
+const START_TIME_ID: &str = "render_queue_export_start";
+const CANCEL_CONFIRM_ID: &str = "render_queue_cancel_confirm";
+
+fn preset_name(preset: usize) -> &'static str {
+    match preset {
+        1 => "Apple ProRes 422 HQ (MOV)",
+        2 => "PNG Image Sequence",
+        _ => "H.264 High Bitrate (MP4)",
+    }
+}
+
+fn format_duration(secs: f64) -> String {
+    if !secs.is_finite() || secs <= 0.0 {
+        return "--:--".to_string();
+    }
+    let total = secs.round() as u64;
+    format!("{:02}:{:02}", total / 60, total % 60)
+}
 
 pub fn draw_render_queue_panel(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
     ui.heading("Render Queue");
@@ -8,18 +30,41 @@ pub fn draw_render_queue_panel(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
     let comp = app.history.current().active_composition();
 
     ui.horizontal(|ui| {
-        if ui.button("⚡ Render All Queue (Cmd+M)").on_hover_text("Start rendering active queue items").clicked() {
+        if ui
+            .add_enabled(!app.is_exporting, egui::Button::new("⚡ Render All Queue (Cmd+M)"))
+            .on_hover_text("Start rendering active queue items")
+            .clicked()
+        {
             app.show_export_dialog = true;
         }
-        if ui.button("+ Add Active Comp").clicked() {
+        if ui
+            .add_enabled(!app.is_exporting, egui::Button::new("+ Add Active Comp"))
+            .on_disabled_hover_text("Cannot modify queue while exporting")
+            .clicked()
+        {
             log::info!("Added active composition {} to Render Queue", comp.name);
         }
-        if ui.button("Clear Queue").clicked() {
+        if ui
+            .add_enabled(!app.is_exporting, egui::Button::new("Clear Queue"))
+            .on_disabled_hover_text("Cannot clear queue while exporting")
+            .clicked()
+        {
             log::info!("Cleared Render Queue");
         }
     });
 
     ui.add_space(8.0);
+
+    // Frame range derived from the work area when one is set.
+    let wa_in = app.work_area_in.unwrap_or(0);
+    let wa_out = app
+        .work_area_out
+        .unwrap_or(comp.duration_frames.saturating_sub(1))
+        .min(comp.duration_frames.saturating_sub(1));
+    let range_frames = wa_out.saturating_sub(wa_in).saturating_add(1);
+
+    // Editable output path persisted across frames via egui's temp store.
+    let path_id = egui::Id::new("render_queue_output_path");
 
     let frame = egui::Frame::none()
         .fill(egui::Color32::from_rgb(20, 24, 32))
@@ -27,35 +72,176 @@ pub fn draw_render_queue_panel(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
         .stroke(egui::Stroke::new(1.0, egui::Color32::from_rgb(45, 55, 75)));
 
     frame.show(ui, |ui| {
+        let (status_text, status_color) = if app.is_exporting {
+            ("Rendering", egui::Color32::from_rgb(80, 200, 120))
+        } else {
+            ("Queued", egui::Color32::YELLOW)
+        };
+
         ui.horizontal(|ui| {
-            ui.label(egui::RichText::new("Item 1").strong().color(egui::Color32::from_rgb(0, 180, 255)));
+            ui.label(
+                egui::RichText::new("Item 1")
+                    .strong()
+                    .color(egui::Color32::from_rgb(0, 180, 255)),
+            );
             ui.label(format!("Comp: {}", comp.name));
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                ui.label(egui::RichText::new("Status: Queued").strong().color(egui::Color32::YELLOW));
+                ui.label(egui::RichText::new(format!("Status: {}", status_text)).strong().color(status_color));
             });
         });
 
         ui.separator();
 
-        egui::Grid::new("render_queue_grid").num_columns(2).spacing([12.0, 6.0]).show(ui, |ui| {
-            ui.label("Render Settings:");
-            ui.label(egui::RichText::new("Best Quality / Full Resolution").color(egui::Color32::WHITE));
-            ui.end_row();
+        egui::Grid::new("render_queue_grid")
+            .num_columns(2)
+            .spacing([12.0, 6.0])
+            .show(ui, |ui| {
+                ui.label("Render Settings:");
+                ui.label(
+                    egui::RichText::new("Best Quality / Full Resolution").color(egui::Color32::WHITE),
+                );
+                ui.end_row();
 
-            ui.label("Output Module:");
-            ui.label(egui::RichText::new("H.264 High Bitrate (MP4)").color(egui::Color32::WHITE));
-            ui.end_row();
+                ui.label("Output Module:");
+                ui.label(
+                    egui::RichText::new(preset_name(app.export_format_preset))
+                        .color(egui::Color32::WHITE),
+                );
+                ui.end_row();
 
-            ui.label("Output To:");
-            ui.label(egui::RichText::new(format!("./exports/{}.mp4", comp.name.to_lowercase().replace(' ', "_"))).color(egui::Color32::from_rgb(140, 200, 255)));
-            ui.end_row();
+                ui.label("Output To:");
+                {
+                    let mut edit = ui.ctx().data_mut(|d| {
+                        d.get_temp_mut_or_insert_with(path_id, || {
+                            std::sync::Arc::new(Mutex::new(app.export_output_path.clone()))
+                        })
+                        .lock()
+                        .map(|g| g.clone())
+                        .unwrap_or_default()
+                    });
+                    let resp = ui.add_sized(
+                        [ui.available_width().max(120.0), 18.0],
+                        egui::TextEdit::singleline(&mut edit),
+                    );
+                    if resp.changed() || resp.lost_focus() {
+                        ui.ctx().data_mut(|d| {
+                            let arc = d.get_temp_mut_or_insert_with(path_id, || {
+                                std::sync::Arc::new(Mutex::new(edit.clone()))
+                            });
+                            if let Ok(mut g) = arc.lock() {
+                                *g = edit.clone();
+                            }
+                        });
+                        app.export_output_path = edit;
+                    }
+                }
+                ui.end_row();
 
-            ui.label("Frame Range:");
-            ui.label(format!("0 to {} ({} frames @ {} fps)", comp.duration_frames, comp.duration_frames, comp.fps));
-            ui.end_row();
-        });
+                ui.label("Frame Range:");
+                ui.horizontal(|ui| {
+                    let mut in_v = wa_in as i32;
+                    let mut out_v = wa_out as i32;
+                    ui.add(
+                        egui::DragValue::new(&mut in_v)
+                            .prefix("In: ")
+                            .speed(0.5)
+                            .clamp_range(0..=(comp.duration_frames.saturating_sub(1) as i32)),
+                    );
+                    ui.add(
+                        egui::DragValue::new(&mut out_v)
+                            .prefix("Out: ")
+                            .speed(0.5)
+                            .clamp_range(in_v..=(comp.duration_frames.saturating_sub(1) as i32)),
+                    );
+                    ui.label(
+                        egui::RichText::new(format!(
+                            "({} frames @ {} fps, {:.2}s)",
+                            range_frames,
+                            comp.fps,
+                            range_frames as f64 / comp.fps.max(1) as f64
+                        ))
+                        .color(egui::Color32::GRAY)
+                        .small(),
+                    );
+                    app.work_area_in = Some(in_v.max(0) as u32);
+                    app.work_area_out = Some(out_v.max(in_v.max(0)) as u32);
+                });
+                ui.end_row();
+            });
 
         ui.add_space(6.0);
-        ui.add(egui::ProgressBar::new(0.0).text("Ready to Render"));
+
+        if app.is_exporting {
+            // Track elapsed time for ETA estimation.
+            let start: Instant = ui
+                .ctx()
+                .data_mut(|d| *d.get_temp_mut_or_insert_with(egui::Id::new(START_TIME_ID), Instant::now));
+
+            let progress = app.export_progress.clamp(0.0, 1.0);
+            let elapsed = start.elapsed().as_secs_f64();
+            let eta_secs = if progress > 0.01 {
+                elapsed / progress as f64 * (1.0 - progress as f64)
+            } else {
+                f64::INFINITY
+            };
+
+            ui.add(
+                egui::ProgressBar::new(progress)
+                    .text(format!("Rendering… {:.0}%", progress * 100.0)),
+            );
+            ui.horizontal(|ui| {
+                ui.label(
+                    egui::RichText::new(format!("Elapsed: {}", format_duration(elapsed)))
+                        .small()
+                        .color(egui::Color32::GRAY),
+                );
+                ui.label(
+                    egui::RichText::new(format!("Remaining (est.): {}", format_duration(eta_secs)))
+                        .small()
+                        .color(egui::Color32::GRAY),
+                );
+                if let Some(status) = &app.export_status {
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        ui.label(egui::RichText::new(status).small().color(egui::Color32::from_rgb(140, 200, 255)));
+                    });
+                }
+            });
+
+            // Cancel with a lightweight confirmation step.
+            let confirming = ui
+                .ctx()
+                .data_mut(|d| *d.get_temp_mut_or_default::<bool>(egui::Id::new(CANCEL_CONFIRM_ID)));
+            ui.horizontal(|ui| {
+                if confirming {
+                    ui.label(
+                        egui::RichText::new("Cancel this render?")
+                            .small()
+                            .color(egui::Color32::YELLOW),
+                    );
+                    if ui.button("Yes, Cancel").clicked() {
+                        if let Some(flag) = &app.export_cancel_flag {
+                            flag.store(true, std::sync::atomic::Ordering::Relaxed);
+                            log::info!("Render cancelled by user");
+                        }
+                        ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new(CANCEL_CONFIRM_ID), false));
+                    }
+                    if ui.button("Keep Rendering").clicked() {
+                        ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new(CANCEL_CONFIRM_ID), false));
+                    }
+                } else if ui.button("■ Cancel Render").clicked() {
+                    ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new(CANCEL_CONFIRM_ID), true));
+                }
+            });
+        } else {
+            // Reset transient render state when idle.
+            ui.ctx().data_mut(|d| {
+                d.remove::<Instant>(egui::Id::new(START_TIME_ID));
+                d.remove::<bool>(egui::Id::new(CANCEL_CONFIRM_ID));
+            });
+            ui.add(
+                egui::ProgressBar::new(0.0)
+                    .text(format!("Ready to Render ({} frames)", range_frames)),
+            );
+        }
     });
 }
