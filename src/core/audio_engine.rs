@@ -404,6 +404,8 @@ pub fn mix_audio_sources_for_frame(
     frame: u32,
     sample_rate: u32,
     buffer_size: usize,
+    // Optional per-layer (gain_db, pan_percent) overrides indexed by layer order
+    mixer: Option<&[(f32, f32)]>,
 ) -> (Vec<f32>, AudioFrameMeter) {
     use std::collections::HashMap;
     use std::sync::Mutex;
@@ -419,7 +421,7 @@ pub fn mix_audio_sources_for_frame(
     let mut max_peak_r = 0.0f32;
     let fps = comp.fps.max(1) as f32;
 
-    for layer in &comp.layers {
+    for (layer_idx, layer) in comp.layers.iter().enumerate() {
         if !layer.is_active(frame) || !layer.visible {
             continue;
         }
@@ -431,7 +433,14 @@ pub fn mix_audio_sources_for_frame(
             LayerType::Video { audio_wav: Some(w), .. } => (Some(w.clone()), 0.0f32),
             _ => continue,
         };
-        let gain = 10.0f32.powf(gain_db / 20.0);
+        let mut gain = 10.0f32.powf(gain_db / 20.0);
+        let mut pan = 0.0f32;
+        if let Some(mix) = mixer {
+            if let Some((mg, mp)) = mix.get(layer_idx) {
+                gain *= 10.0f32.powf(*mg / 20.0);
+                pan = (*mp / 100.0).clamp(-1.0, 1.0);
+            }
+        }
         let time_start = (frame.saturating_sub(layer.in_frame)) as f32 / fps;
 
         // Source samples: real WAV if present, otherwise silent placeholder
@@ -468,7 +477,9 @@ pub fn mix_audio_sources_for_frame(
                     } else {
                         l
                     };
-                    (l * gain, r * gain)
+                    let gl = gain * (1.0 - pan.max(0.0));
+                    let gr = gain * (1.0 - (-pan).max(0.0));
+                    (l * gl, r * gr)
                 }
                 None => (0.0, 0.0),
             };
@@ -565,7 +576,7 @@ mod multitrack_tests {
         comp.layers.push(la);
         comp.layers.push(lb);
 
-        let (mix, meter) = mix_audio_sources_for_frame(&comp, 0, rate, 480);
+        let (mix, meter) = mix_audio_sources_for_frame(&comp, 0, rate, 480, None);
         // Sum of 0.5 + 0.25 at sample 0 ≈ 0.75
         assert!((mix[0] - 0.75).abs() < 0.01, "mix[0] = {}", mix[0]);
         // Meter reflects the combined level

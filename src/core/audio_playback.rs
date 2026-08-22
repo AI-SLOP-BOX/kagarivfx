@@ -71,6 +71,13 @@ impl AudioPlayback {
         Ok(())
     }
 
+    /// Applies master output volume (0.0..1.0) to the live sink.
+    pub fn set_volume(&self, volume: f32) {
+        if let Some(sink) = &self.sink {
+            sink.set_volume(volume.clamp(0.0, 1.0));
+        }
+    }
+
     /// Pauses playback while keeping the current position.
     pub fn pause(&mut self) {
         if let Some(sink) = &self.sink {

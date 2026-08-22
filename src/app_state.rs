@@ -252,6 +252,8 @@ pub struct AfterEffectsApp {
     /// Synced audio playback for AV preview (gui builds with an audio device).
     #[cfg(feature = "gui")]
     pub audio_playback: Option<crate::core::audio_playback::AudioPlayback>,
+    /// Live audio meter (linear 0..1) from the mix, updated each UI frame.
+    pub audio_meter: (f32, f32),
     pub camera_view_layout: usize,
     pub camera_view_angle: usize,
     pub font_family_idx: usize,
@@ -354,6 +356,7 @@ impl Default for AfterEffectsApp {
             cc_libraries_search: String::new(),
             audio_mixer_channels: Vec::new(),
             audio_playback: crate::core::audio_playback::AudioPlayback::new().ok(),
+            audio_meter: (0.0, 0.0),
             camera_view_layout: 0,
             camera_view_angle: 0,
             font_family_idx: 0,
@@ -451,6 +454,24 @@ impl eframe::App for AfterEffectsApp {
             let fps = self.history.current().active_composition().fps.max(1);
             let playhead_sec = self.current_frame as f32 / fps as f32;
 
+            // Live metering: mix a tiny buffer at the playhead with mixer gains
+            {
+                let project = self.history.current();
+                let comp = project.active_composition();
+                let (_mix, meter) = crate::core::audio_engine::mix_audio_sources_for_frame(
+                    comp,
+                    self.current_frame,
+                    48000,
+                    64, // small buffer — metering only
+                    Some(&self.audio_mixer_channels),
+                );
+                let db_to_lin = |db: f32| 10.0f32.powf(db / 20.0).min(1.0);
+                self.audio_meter = (
+                    db_to_lin(meter.peak_db_left),
+                    db_to_lin(meter.peak_db_right),
+                );
+            }
+
             match (self.is_playing, audio_enabled, wav, &mut self.audio_playback) {
                 (true, true, Some(wav), Some(playback)) => {
                     if let Err(e) = playback.play(&std::path::PathBuf::from(wav), playhead_sec) {
@@ -464,6 +485,10 @@ impl eframe::App for AfterEffectsApp {
                         }
                     }
                 }
+            }
+            // Master volume applies to the sink output
+            if let Some(playback) = &self.audio_playback {
+                playback.set_volume(self.master_volume);
             }
         }
 
