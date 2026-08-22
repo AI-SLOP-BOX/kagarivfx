@@ -216,6 +216,7 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: u32) 
                         app.viewport_texture_id = Some(id);
                     }
                     rendered_gpu = true;
+                app.gpu_rendered = true;
                 }
                 let (texture_view, recreated) = if ram_id.is_some() {
                     // Skip live rendering entirely this frame

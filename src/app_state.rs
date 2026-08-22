@@ -254,6 +254,8 @@ pub struct AfterEffectsApp {
     pub audio_playback: Option<crate::core::audio_playback::AudioPlayback>,
     /// Live audio meter (linear 0..1) from the mix, updated each UI frame.
     pub audio_meter: (f32, f32),
+    /// Whether the last viewport render used GPU (updated each frame by viewport)
+    pub gpu_rendered: bool,
     /// Tracker panel: target layer index for Apply Motion.
     pub tracker_apply_target: Option<usize>,
     /// Real render queue entries (composition names awaiting export).
@@ -361,6 +363,7 @@ impl Default for AfterEffectsApp {
             audio_mixer_channels: Vec::new(),
             audio_playback: crate::core::audio_playback::AudioPlayback::new().ok(),
             audio_meter: (0.0, 0.0),
+            gpu_rendered: false,
             tracker_apply_target: None,
             render_queue_items: Vec::new(),
             camera_view_layout: 0,
@@ -565,9 +568,25 @@ impl eframe::App for AfterEffectsApp {
             .show(ctx, |ui| {
                 ui.horizontal(|ui| {
                     ui.style_mut().spacing.item_spacing.x = 6.0;
-                    ui.label(egui::RichText::new("● Metal GPU Render Engine").small().color(egui::Color32::from_rgb(0, 200, 120)));
+                    let (gpu_label, gpu_color) = if self.gpu_rendered {
+                        ("● Metal GPU Render Engine", egui::Color32::from_rgb(0, 200, 120))
+                    } else {
+                        ("○ CPU Software Renderer", egui::Color32::from_rgb(180, 140, 50))
+                    };
+                    ui.label(egui::RichText::new(gpu_label).small().color(gpu_color));
                     ui.separator();
-                    ui.label(egui::RichText::new("16-bpc | Rec.709 (Linear)").small().color(egui::Color32::from_gray(180)));
+                    // Timecode
+                    let fps = self.history.current().active_composition().fps.max(1);
+                    let cf = self.current_frame;
+                    ui.label(egui::RichText::new(format!(
+                        "TC: {:02}:{:02}:{:02}:{:02}",
+                        cf / (fps * 3600), (cf / fps) / 60 % 60,
+                        (cf / fps) % 60, cf % fps
+                    )).monospace().small().color(egui::Color32::from_rgb(255, 234, 0)));
+                    ui.separator();
+                    ui.label(egui::RichText::new(format!("Frame: {} / {}", cf, total_frames)).small().color(egui::Color32::from_gray(200)));
+                    ui.separator();
+                    ui.label(egui::RichText::new("16-bpc | Rec.709").small().color(egui::Color32::from_gray(180)));
                     ui.separator();
                     let cached_cnt = (0..total_frames).filter(|&f| self.frame_cache.is_cached(f)).count();
                     ui.label(egui::RichText::new(format!("RAM Preview: {}/{} frames cached", cached_cnt, total_frames)).small().color(egui::Color32::from_gray(180)));
