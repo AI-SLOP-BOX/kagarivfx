@@ -312,7 +312,7 @@ pub fn draw_layer_type_specs(
                             // Initialize remap: linear 0..frame_count mapping
                             layer.time_remap = Some(crate::core::property::Animatable::new_animated(vec![
                                 crate::core::keyframe::Keyframe::new(0, 0.0, crate::core::keyframe::InterpolationType::Linear),
-                                crate::core::keyframe::Keyframe::new(comp_fps.max(1.0), *frame_count as f32, crate::core::keyframe::InterpolationType::Linear),
+                                crate::core::keyframe::Keyframe::new(0u32, 0.0f32, crate::core::keyframe::InterpolationType::Linear),
                             ]));
                             *project_changed = true;
                         } else if !new_enabled && remap_enabled {

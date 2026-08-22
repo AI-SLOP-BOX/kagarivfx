@@ -345,6 +345,25 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                                     ui.label(egui::RichText::new(format!("{:02}", i + 1)).small().strong().color(egui::Color32::from_gray(140)));
                                     ui.add_space(2.0);
 
+                                    // ── Layer type icon ──
+                                    {
+                                        let type_icon = match &layer.layer_type {
+                                            crate::core::timeline::LayerType::Video { .. } => "🎬",
+                                            crate::core::timeline::LayerType::Image { .. } => "🖼",
+                                            crate::core::timeline::LayerType::Audio { .. } => "🔊",
+                                            crate::core::timeline::LayerType::Text { .. } => "T",
+                                            crate::core::timeline::LayerType::Shape { .. } => "◆",
+                                            crate::core::timeline::LayerType::Solid { .. } => "■",
+                                            crate::core::timeline::LayerType::Null => "∅",
+                                            crate::core::timeline::LayerType::PreComp { .. } => "📦",
+                                            crate::core::timeline::LayerType::AdjustmentLayer => "◐",
+                                            crate::core::timeline::LayerType::Particle { .. } => "✦",
+                                            _ => "·",
+                                        };
+                                        ui.label(egui::RichText::new(type_icon).small().color(egui::Color32::from_gray(160)));
+                                    }
+                                    ui.add_space(1.0);
+
                                     // ── Label color chip: click cycles through AE label colors ──
                                     {
                                         let rgb = layer.label.to_rgb();
