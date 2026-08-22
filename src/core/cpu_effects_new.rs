@@ -73,20 +73,25 @@ pub fn apply_chromatic_aberration(
                 dist
             };
 
+            // Radial dispersion model (from NextVFX): channels shift ALONG the
+            // vector from image center through this pixel — like real lens
+            // chromatic aberration, which fringes radially, not horizontally.
+            let dir_x = if dist > 1e-6 { dx / dist } else { 0.0 };
+            let dir_y = if dist > 1e-6 { dy / dist } else { 0.0 };
             let r_sample = sample_bilinear(
                 pixels,
                 width,
                 height,
-                x as f32 + shift_r * falloff,
-                y as f32,
+                x as f32 + shift_r * falloff * dir_x,
+                y as f32 + shift_r * falloff * dir_y,
             );
             let g_sample = sample_bilinear(pixels, width, height, x as f32, y as f32);
             let b_sample = sample_bilinear(
                 pixels,
                 width,
                 height,
-                x as f32 - shift_b * falloff,
-                y as f32,
+                x as f32 - shift_b * falloff * dir_x,
+                y as f32 - shift_b * falloff * dir_y,
             );
 
             tmp[idx] = r_sample[0];
@@ -944,5 +949,63 @@ pub fn apply_shift_channels(
         px[1] = match src_g { 0..=3 => orig[src_g], 4 => 0, 5 => 255, _ => orig[1] };
         px[2] = match src_b { 0..=3 => orig[src_b], 4 => 0, 5 => 255, _ => orig[2] };
         px[3] = match src_a { 0..=3 => orig[src_a], 4 => 0, 5 => 255, _ => orig[3] };
+    }
+}
+
+#[cfg(test)]
+mod ca_radial_tests {
+    use super::*;
+
+    #[test]
+    fn test_ca_center_pixel_unchanged() {
+        // At the exact center, falloff direction is zero → no shift anywhere
+        let w = 33u32;
+        let h = 33u32;
+        let mut px = vec![0u8; (w * h * 4) as usize];
+        for i in (0..px.len()).step_by(4) {
+            px[i] = 200;
+            px[i + 1] = 100;
+            px[i + 2] = 50;
+            px[i + 3] = 255;
+        }
+        let before = px.clone();
+        apply_chromatic_aberration(&mut px, w, h, 20.0, 20.0, 0.0);
+        let center = ((16 * w + 16) * 4) as usize;
+        assert_eq!(px[center], before[center], "center R unchanged");
+        assert_eq!(px[center + 1], before[center + 1]);
+    }
+
+    #[test]
+    fn test_ca_radial_fringes_left_and_right_symmetrically() {
+        // A white block on black: radial fringing must push red outward on BOTH
+        // sides of the block (left side of block gains red on its left, right
+        // side loses red beyond its right edge).
+        let w = 64u32;
+        let h = 32u32;
+        let mut px = vec![0u8; (w * h * 4) as usize];
+        for y in 12..20 {
+            for x in 16..48 {
+                let idx = ((y * w + x) * 4) as usize;
+                px[idx] = 255;
+                px[idx + 1] = 255;
+                px[idx + 2] = 255;
+                px[idx + 3] = 255;
+            }
+        }
+        apply_chromatic_aberration(&mut px, w, h, 6.0, 6.0, 0.0);
+
+        // Probe row through the block's vertical center.
+        // Radial CA creates mirrored channel separation around the center:
+        // whichever way each side fringes, the pattern must be point-symmetric.
+        let row = 15usize;
+        let separation_at = |x: usize| -> i32 {
+            let idx = (row * w as usize + x) * 4;
+            px[idx] as i32 - px[idx + 2] as i32 // R - B
+        };
+        // Sum |separation| near both edges of the block
+        let sep_left: i32 = (14..20).map(|x| separation_at(x).abs()).sum();
+        let sep_right: i32 = (44..50).map(|x| separation_at(x).abs()).sum();
+        assert!(sep_left > 30, "channel separation expected at left edge, got {}", sep_left);
+        assert!(sep_right > 30, "channel separation expected at right edge, got {}", sep_right);
     }
 }
