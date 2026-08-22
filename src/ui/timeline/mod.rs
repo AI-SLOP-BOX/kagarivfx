@@ -755,6 +755,46 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                             ui.painter().rect_filled(layer_rect, 2.0, fill_c);
                             ui.painter().rect_stroke(layer_rect, 2.0, egui::Stroke::new(1.0, egui::Color32::from_gray(160)));
 
+                            // ── Trim handles: drag bar edges to set in/out points ──
+                            fn handle_rect_of(is_in: bool, lr: &egui::Rect) -> egui::Rect {
+                                const HW: f32 = 6.0;
+                                if is_in {
+                                    egui::Rect::from_min_size(egui::pos2(lr.left() - HW * 0.5, lr.top()), egui::vec2(HW, lr.height()))
+                                } else {
+                                    egui::Rect::from_min_size(egui::pos2(lr.right() - HW * 0.5, lr.top()), egui::vec2(HW, lr.height()))
+                                }
+                            }
+                            const HANDLE_W: f32 = 6.0;
+                            let in_handle = egui::Rect::from_min_size(
+                                egui::pos2(layer_rect.left() - HANDLE_W * 0.5, layer_rect.top()),
+                                egui::vec2(HANDLE_W, layer_rect.height()),
+                            );
+                            let out_handle = egui::Rect::from_min_size(
+                                egui::pos2(layer_rect.right() - HANDLE_W * 0.5, layer_rect.top()),
+                                egui::vec2(HANDLE_W, layer_rect.height()),
+                            );
+                            let in_resp = ui.interact(in_handle, egui::Id::new(("trim_in", i)), egui::Sense::click_and_drag());
+                            let out_resp = ui.interact(out_handle, egui::Id::new(("trim_out", i)), egui::Sense::click_and_drag());
+                            for (resp, is_in) in [(&in_resp, true), (&out_resp, false)] {
+                                if resp.hovered() {
+                                    ui.ctx().set_cursor_icon(egui::CursorIcon::ResizeHorizontal);
+                                    ui.painter().rect_filled(handle_rect_of(is_in, &layer_rect), 2.0, egui::Color32::from_rgba_unmultiplied(255, 220, 120, 180));
+                                }
+                                if resp.dragged() {
+                                    if let Some(pos) = resp.interact_pointer_pos() {
+                                        let norm = ((pos.x - bar_rect.left()) / bar_rect.width()).clamp(0.0, 1.0);
+                                        let frame = (start_frame as f32 + norm * zoom_span as f32).round() as u32;
+                                        let frame = frame.min(total_frames);
+                                        if is_in {
+                                            layer.in_frame = frame.min(layer.out_frame.saturating_sub(1));
+                                        } else {
+                                            layer.out_frame = frame.max(layer.in_frame + 1);
+                                        }
+                                        project_changed = true;
+                                    }
+                                }
+                            }
+
                             if let LayerType::Audio { .. } = &layer.layer_type {
                                 let samples = 12;
                                 let step_x = layer_rect.width() / samples as f32;
