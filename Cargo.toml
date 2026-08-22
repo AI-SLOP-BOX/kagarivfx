@@ -21,6 +21,8 @@ egui_extras = { version = "0.27.2", features = ["svg"], optional = true }
 rfd = { version = "0.14", optional = true }
 # rayon for multi-core parallel pixel sweeps
 rayon = "1.8"
+# rodio: audio playback for synced AV preview (gui only)
+rodio = { version = "0.19", optional = true }
 # clap: CLI argument parsing
 clap = { version = "4", features = ["derive"], optional = true }
 # png: headless frame export
@@ -36,7 +38,7 @@ naga = { version = "0.19", features = ["wgsl-in"] }
 
 [features]
 default = ["gui"]
-gui = ["dep:eframe", "dep:wgpu", "dep:egui_extras", "dep:rfd"]
+gui = ["dep:eframe", "dep:wgpu", "dep:egui_extras", "dep:rfd", "dep:rodio"]
 cli = ["dep:clap", "dep:png"]
 wgpu = []
 

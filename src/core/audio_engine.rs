@@ -203,3 +203,191 @@ mod tests {
         assert_eq!(meter.peak_db_left, -90.0);
     }
 }
+
+// ── WAV loading & waveform extraction ───────────────────────────────────────
+
+impl AudioBuffer {
+    /// Parses a RIFF/WAVE file (PCM 8/16/24-bit, mono or stereo).
+    /// Returns an error with a human-readable reason for unsupported formats.
+    pub fn load_wav(path: &std::path::Path) -> Result<Self, String> {
+        let data = std::fs::read(path)
+            .map_err(|e| format!("cannot read WAV: {}", e))?;
+        if data.len() < 44 || &data[0..4] != b"RIFF" || &data[8..12] != b"WAVE" {
+            return Err("not a RIFF/WAVE file".into());
+        }
+
+        // Walk chunks to find fmt and data
+        let mut pos = 12usize;
+        let mut format_tag = 1u16;
+        let mut channels = 0u16;
+        let mut sample_rate = 0u32;
+        let mut bits = 0u16;
+        let mut audio_data: Option<&[u8]> = None;
+
+        while pos + 8 <= data.len() {
+            let id = &data[pos..pos + 4];
+            let size =
+                u32::from_le_bytes([data[pos + 4], data[pos + 5], data[pos + 6], data[pos + 7]])
+                    as usize;
+            let body_start = pos + 8;
+            let body_end = body_start.saturating_add(size).min(data.len());
+            match id {
+                b"fmt " => {
+                    let b = &data[body_start..body_end];
+                    if b.len() >= 16 {
+                        format_tag = u16::from_le_bytes([b[0], b[1]]);
+                        channels = u16::from_le_bytes([b[2], b[3]]);
+                        sample_rate = u32::from_le_bytes([b[4], b[5], b[6], b[7]]);
+                        bits = u16::from_le_bytes([b[14], b[15]]);
+                    }
+                }
+                b"data" => audio_data = Some(&data[body_start..body_end]),
+                _ => {}
+            }
+            // Chunks are word-aligned
+            pos = body_start + size + (size & 1);
+        }
+
+        if audio_data.is_none() {
+            return Err("WAV has no data chunk".into());
+        }
+        if channels == 0 || sample_rate == 0 || bits == 0 {
+            return Err("WAV has invalid fmt chunk".into());
+        }
+        if format_tag != 1 {
+            return Err(format!("unsupported WAV format tag {} (need PCM)", format_tag));
+        }
+        let raw = audio_data.unwrap();
+        let bytes_per_sample = (bits / 8) as usize;
+        let frame_bytes = bytes_per_sample * channels as usize;
+
+        let mut samples = Vec::with_capacity(raw.len() / frame_bytes * channels as usize);
+        let mut i = 0usize;
+        while i + frame_bytes <= raw.len() {
+            for ch in 0..channels as usize {
+                let base = i + ch * bytes_per_sample;
+                let v = match bits {
+                    8 => (raw[base] as f32 - 128.0) / 128.0,
+                    16 => i16::from_le_bytes([raw[base], raw[base + 1]]) as f32 / 32768.0,
+                    24 => {
+                        let b0 = raw[base] as i32;
+                        let b1 = raw[base + 1] as i32;
+                        let b2 = raw[base + 2] as i32;
+                        (((b2 << 16) | (b1 << 8) | b0) << 8) as f32 / 2147483648.0
+                    }
+                    _ => return Err(format!("unsupported bit depth {}", bits)),
+                };
+                samples.push(v.clamp(-1.0, 1.0));
+            }
+            i += frame_bytes;
+        }
+
+        Ok(Self { samples, sample_rate, channels })
+    }
+
+    /// Peak amplitude in [0, 1] at a given time offset (± window/2 seconds).
+    pub fn peak_at(&self, time_sec: f32, window_sec: f32) -> f32 {
+        let start_sample = ((time_sec - window_sec * 0.5).max(0.0) * self.sample_rate as f32) as usize
+            * self.channels as usize;
+        let end_sample = (((time_sec + window_sec * 0.5) * self.sample_rate as f32) as usize)
+            .saturating_mul(self.channels as usize)
+            .min(self.samples.len());
+        let mut peak = 0.0f32;
+        for s in &self.samples[start_sample.min(self.samples.len())..end_sample] {
+            peak = peak.max(s.abs());
+        }
+        peak
+    }
+
+    /// Downsamples the buffer into `bins` peak values — ready for waveform drawing.
+    pub fn waveform_peaks(&self, bins: usize) -> Vec<f32> {
+        let bins = bins.max(1);
+        let total = self.samples.len();
+        let per_bin = (total / bins).max(1);
+        let mut peaks = Vec::with_capacity(bins);
+        for b in 0..bins {
+            let range = b * per_bin..((b + 1) * per_bin).min(total);
+            peaks.push(range.clone().next().map_or(0.0, |_| {
+                self.samples[range].iter().fold(0.0f32, |m, s| m.max(s.abs()))
+            }));
+        }
+        peaks
+    }
+}
+
+#[cfg(test)]
+mod wav_tests {
+    use super::*;
+
+    /// Writes a minimal 16-bit PCM WAV file for testing.
+    fn write_test_wav(path: &std::path::Path, samples: &[f32], rate: u32) {
+        use std::io::Write;
+        let mut f = std::fs::File::create(path).unwrap();
+        let data_len = (samples.len() * 2) as u32;
+        f.write_all(b"RIFF").unwrap();
+        f.write_all(&(36 + data_len).to_le_bytes()).unwrap();
+        f.write_all(b"WAVE").unwrap();
+        f.write_all(b"fmt ").unwrap();
+        f.write_all(&16u32.to_le_bytes()).unwrap();
+        f.write_all(&1u16.to_le_bytes()).unwrap(); // PCM
+        f.write_all(&1u16.to_le_bytes()).unwrap(); // mono
+        f.write_all(&rate.to_le_bytes()).unwrap();
+        f.write_all(&(rate * 2).to_le_bytes()).unwrap(); // byte rate
+        f.write_all(&2u16.to_le_bytes()).unwrap(); // block align
+        f.write_all(&16u16.to_le_bytes()).unwrap();
+        f.write_all(b"data").unwrap();
+        f.write_all(&data_len.to_le_bytes()).unwrap();
+        for s in samples {
+            let v = (s.clamp(-1.0, 1.0) * 32767.0) as i16;
+            f.write_all(&v.to_le_bytes()).unwrap();
+        }
+    }
+
+    #[test]
+    fn test_load_wav_roundtrip_and_peaks() {
+        let path = std::env::temp_dir().join("aevfx_test_tone.wav");
+        let rate = 48000u32;
+        // 1-second sine at 440 Hz with amplitude 0.5
+        let samples: Vec<f32> = (0..rate as usize)
+            .map(|i| 0.5 * (2.0 * std::f32::consts::PI * 440.0 * i as f32 / rate as f32).sin())
+            .collect();
+        write_test_wav(&path, &samples, rate);
+
+        let buf = AudioBuffer::load_wav(&path).expect("wav must parse");
+        assert_eq!(buf.sample_rate, rate);
+        assert_eq!(buf.channels, 1);
+        assert_eq!(buf.samples.len(), samples.len());
+
+        // Peak near the max of the sine should be close to 0.5
+        let peak = buf.peak_at(0.25, 0.01);
+        assert!(peak > 0.45 && peak <= 0.51, "unexpected peak {}", peak);
+
+        // Waveform bins cover the file and stay normalized
+        let peaks = buf.waveform_peaks(100);
+        assert_eq!(peaks.len(), 100);
+        assert!(peaks.iter().all(|p| (0.0..=1.0).contains(p)));
+
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn test_invalid_wav_files_error_cleanly() {
+        let dir = std::env::temp_dir().join(format!("aevfx_wav_{}", std::process::id()));
+        let _ = std::fs::create_dir_all(&dir);
+
+        // Missing file
+        assert!(AudioBuffer::load_wav(&dir.join("nope.wav")).is_err());
+
+        // Garbage bytes
+        let bad = dir.join("bad.wav");
+        std::fs::write(&bad, b"totally not a wav file at all").unwrap();
+        assert!(AudioBuffer::load_wav(&bad).is_err());
+
+        // Truncated header
+        let trunc = dir.join("trunc.wav");
+        std::fs::write(&trunc, b"RIFF----WAVEfmt ").unwrap();
+        assert!(AudioBuffer::load_wav(&trunc).is_err());
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+}

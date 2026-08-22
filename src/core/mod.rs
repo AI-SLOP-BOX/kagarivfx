@@ -19,6 +19,8 @@ pub mod software_renderer;
 pub mod content_aware_engine;
 pub mod audio_engine;
 pub mod autosave;
+#[cfg(feature = "gui")]
+pub mod audio_playback;
 pub mod video_import;
 pub mod project_migration;
 pub mod physics;
