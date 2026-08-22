@@ -236,9 +236,9 @@ type VideoFrameKey = (String, String, u32);
 type VideoFrameCache = std::collections::HashMap<VideoFrameKey, (std::sync::Arc<wgpu::Texture>, std::sync::Arc<wgpu::BindGroup>)>;
 
 /// Maximum cached video frame textures before oldest entries are evicted.
-/// 600 frames at 1080p RGBA is ~1.5 GB of VRAM, so the default keeps long
-/// videos from exhausting the GPU while retaining generous scrub headroom.
-pub const MAX_VIDEO_FRAME_TEXTURES: usize = 600;
+/// 200 frames at 1080p RGBA is ~830 MB of VRAM; evicted frames re-upload
+/// cheaply on demand, so this only bounds memory, not correctness.
+pub const MAX_VIDEO_FRAME_TEXTURES: usize = 200;
 
 #[allow(dead_code)]
 pub struct WgpuRenderer {

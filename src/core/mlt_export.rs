@@ -201,3 +201,206 @@ mod tests {
         assert_eq!(MltExporter::timecode(62.25, 30.0), "00:01:02.250");
     }
 }
+
+// ── MLT XML import (Shotcut / Kdenlive -> this tool) ────────────────────────
+
+/// A layer recovered from an MLT document.
+#[derive(Debug, Clone)]
+pub struct MltImportedClip {
+    pub name: String,
+    pub resource: String,
+    pub in_frame: u32,
+    pub out_frame: u32,
+    pub is_audio: bool,
+}
+
+/// Parses an MLT XML document by walking producer/entry elements with a
+/// lightweight tag scanner (no XML dependency; MLT output is machine-generated
+/// and regular). Returns clips in playlist order.
+pub fn import_from_mlt(xml: &str, fps: u32) -> Result<Vec<MltImportedClip>, String> {
+    if !xml.contains("<mlt") {
+        return Err("not an MLT XML document".into());
+    }
+
+    // Pass 1: producers id -> (resource, name, service)
+    let mut producers: std::collections::HashMap<String, (String, String, String)> =
+        std::collections::HashMap::new();
+    let mut rest = xml;
+    while let Some(start) = rest.find("<producer ") {
+        let Some(tag_end) = rest[start..].find('>').map(|i| start + i) else { break; };
+        // Self-closing producers carry no properties
+        if rest[..tag_end].ends_with('/') {
+            rest = &rest[tag_end..];
+            continue;
+        }
+        let header = &rest[start..tag_end];
+        let id = header
+            .split("id=\"")
+            .nth(1)
+            .and_then(|s| s.split('"').next())
+            .unwrap_or("")
+            .to_string();
+        let Some(body_end) = rest[tag_end..].find("</producer>").map(|i| tag_end + i) else { break; };
+        let body = &rest[tag_end..body_end];
+        let get_prop = |key: &str| -> String {
+            body.split(&format!("name=\"{}\"", key))
+                .nth(1)
+                .and_then(|s| s.split('>').nth(1))
+                .and_then(|s| s.split('<').next())
+                .unwrap_or("")
+                .to_string()
+        };
+        producers.insert(
+            id,
+            (get_prop("resource"), get_prop("name"), get_prop("mlt_service")),
+        );
+        rest = &rest[body_end..];
+    }
+
+    // Pass 2: playlist entries in order
+    let mut clips = Vec::new();
+    let mut rest = xml;
+    while let Some(start) = rest.find("<entry ") {
+        let Some(tag_end) = rest[start..].find('>').map(|i| start + i) else { break; };
+        let header = &rest[start..tag_end];
+        let producer_id = header
+            .split("producer=\"")
+            .nth(1)
+            .and_then(|s| s.split('"').next())
+            .unwrap_or("");
+        let out_tc = header
+            .split("out=\"")
+            .nth(1)
+            .and_then(|s| s.split('"').next())
+            .unwrap_or("00:00:00.000");
+        // Self-closing entries (e.g. blank/black placeholders) have no body
+        if rest[start..tag_end].ends_with('/') {
+            rest = &rest[tag_end..];
+            continue;
+        }
+        let Some(body_end) = rest[tag_end..].find("</entry>").map(|i| tag_end + i) else { break; };
+        let body = &rest[tag_end..body_end];
+        let name = body
+            .split("name=\"name\"")
+            .nth(1)
+            .and_then(|s| s.split('>').nth(1))
+            .and_then(|s| s.split('<').next())
+            .unwrap_or("Imported Clip")
+            .to_string();
+        rest = &rest[body_end..];
+
+        // Skip the background/black producer
+        if producer_id == "black" || producer_id == "background" {
+            continue;
+        }
+        let Some((resource, prod_name, service)) = producers.get(producer_id) else {
+            continue;
+        };
+        let out_frames = timecode_to_frames(out_tc, fps);
+        let name = if name.is_empty() || name == "Imported Clip" {
+            if prod_name.is_empty() { producer_id.to_string() } else { prod_name.clone() }
+        } else {
+            name
+        };
+        clips.push(MltImportedClip {
+            name: unescape_xml(&name),
+            resource: unescape_xml(resource),
+            in_frame: 0,
+            out_frame: out_frames.max(1),
+            is_audio: service.contains("novalidate") && resource.ends_with(".wav"),
+        });
+    }
+
+    if clips.is_empty() {
+        return Err(format!("MLT document contains no media entries (producers: {})", producers.len()));
+    }
+    Ok(clips)
+}
+
+fn timecode_to_frames(tc: &str, fps: u32) -> u32 {
+    let parts: Vec<&str> = tc.split(':').collect();
+    if parts.len() != 3 {
+        return 1;
+    }
+    let h: u64 = parts[0].parse().unwrap_or(0);
+    let m: u64 = parts[1].parse().unwrap_or(0);
+    let mut sec_parts = parts[2].split('.');
+    let s: u64 = sec_parts.next().and_then(|v| v.parse().ok()).unwrap_or(0);
+    let ms: u64 = sec_parts.next().and_then(|v| v.parse().ok()).unwrap_or(0);
+    let total_sec = h * 3600 + m * 60 + s;
+    ((total_sec * fps as u64) + (ms * fps as u64) / 1000) as u32
+}
+
+fn unescape_xml(s: &str) -> String {
+    s.replace("&amp;", "&")
+        .replace("&lt;", "<")
+        .replace("&gt;", ">")
+        .replace("&quot;", "\"")
+}
+
+#[cfg(test)]
+mod import_tests {
+    use super::*;
+
+    const SAMPLE: &str = r#"<?xml version="1.0"?>
+<mlt version="7.0.0">
+  <profile width="640" height="360" frame_rate_num="30"/>
+  <producer id="black" in="00:00:00.000" out="00:99:00.000">
+    <property name="resource">0</property>
+    <property name="mlt_service">color</property>
+  </producer>
+  <producer id="producer0" in="00:00:00.000" out="00:00:03.000">
+    <property name="resource">/media/clip.mp4</property>
+    <property name="mlt_service">avformat</property>
+    <property name="name">My &amp; Clip</property>
+  </producer>
+  <playlist id="playlist0">
+    <entry producer="black" in="00:00:00.000" out="00:00:00.000"/>
+    <entry producer="producer0" in="00:00:00.000" out="00:00:03.000">
+      <property name="name">Renamed</property>
+    </entry>
+  </playlist>
+  <tractor id="tractor0"><track producer="playlist0"/></tractor>
+</mlt>"#;
+
+    #[test]
+    fn test_import_recovers_clips_in_order() {
+        let clips = import_from_mlt(SAMPLE, 30).expect("must parse");
+        assert_eq!(clips.len(), 1, "black producer skipped");
+        let clip = &clips[0];
+        assert_eq!(clip.resource, "/media/clip.mp4");
+        assert_eq!(clip.name, "Renamed");
+        // out 00:00:03.000 @30fps = 90 frames
+        assert_eq!(clip.out_frame, 90);
+        assert!(!clip.is_audio);
+    }
+
+    #[test]
+    fn test_import_rejects_non_mlt() {
+        assert!(import_from_mlt("<html></html>", 30).is_err());
+        assert!(import_from_mlt("", 30).is_err());
+    }
+
+    #[test]
+    fn test_roundtrip_export_then_import() {
+        let mut comp = Composition::new("c".into(), "RT".into(), 320, 180, 30, 60);
+        let vid = Layer::new(
+            "v".into(),
+            "Clip".into(),
+            LayerType::Video {
+                source: "/media/clip.mp4".into(),
+                frames_dir: "/tmp/f".into(),
+                frame_count: 100,
+                audio_wav: None,
+                speed: 1.0,
+            },
+            30,
+        );
+        comp.layers.push(vid);
+        let xml = MltExporter::export_to_xml(&comp);
+        let clips = import_from_mlt(&xml, 30).expect("roundtrip must parse");
+        assert_eq!(clips.len(), 1);
+        assert_eq!(clips[0].resource, "/media/clip.mp4");
+        assert_eq!(clips[0].name, "Clip");
+    }
+}
