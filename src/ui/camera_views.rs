@@ -6,7 +6,7 @@ pub fn draw_camera_views(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
     ui.separator();
 
     ui.label("Viewport Layout Split:");
-    egui::ComboBox::from_id_source("viewport_layout_combo")
+    egui::ComboBox::from_id_salt("viewport_layout_combo")
         .selected_text(match app.camera_view_layout {
             0 => "1 View (Active Camera / Front)",
             1 => "2 Views - Horizontal Split",

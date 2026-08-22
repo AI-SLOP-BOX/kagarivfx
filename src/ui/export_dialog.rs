@@ -56,7 +56,7 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
 
             ui.horizontal(|ui| {
                 ui.label("Format Preset:");
-                egui::ComboBox::from_id_source("export_fmt_combo")
+                egui::ComboBox::from_id_salt("export_fmt_combo")
                     .selected_text(match app.export_format_preset {
                         0 => "H.264 / MP4 (Standard)",
                         1 => "Apple ProRes 422 HQ (MOV)",
@@ -71,7 +71,7 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
 
             ui.horizontal(|ui| {
                 ui.label("Render Resolution Scale:");
-                egui::ComboBox::from_id_source("export_scale_combo")
+                egui::ComboBox::from_id_salt("export_scale_combo")
                     .selected_text(match app.export_resolution_scale {
                         0 => "100% Full Resolution",
                         1 => "50% Half Resolution",
@@ -86,7 +86,7 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
 
             ui.horizontal(|ui| {
                 ui.label("Target FPS:");
-                ui.add(egui::DragValue::new(&mut app.export_fps).clamp_range(1..=120));
+                ui.add(egui::DragValue::new(&mut app.export_fps).range(1..=120));
             });
 
             ui.horizontal(|ui| {

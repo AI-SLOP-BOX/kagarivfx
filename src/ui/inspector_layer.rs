@@ -171,7 +171,7 @@ pub fn draw_layer_transforms(
 
             ui.horizontal(|ui| {
                 ui.label("Horizontal Pin:");
-                egui::ComboBox::from_id_source(format!("pin_h_{}", layer.id))
+                egui::ComboBox::from_id_salt(format!("pin_h_{}", layer.id))
                     .selected_text(format!("{:?}", layer.constraints.horizontal))
                     .show_ui(ui, |ui| {
                         ui.selectable_value(&mut layer.constraints.horizontal, HorizontalPin::Left, "Left");
@@ -183,7 +183,7 @@ pub fn draw_layer_transforms(
 
             ui.horizontal(|ui| {
                 ui.label("Vertical Pin:");
-                egui::ComboBox::from_id_source(format!("pin_v_{}", layer.id))
+                egui::ComboBox::from_id_salt(format!("pin_v_{}", layer.id))
                     .selected_text(format!("{:?}", layer.constraints.vertical))
                     .show_ui(ui, |ui| {
                         ui.selectable_value(&mut layer.constraints.vertical, VerticalPin::Top, "Top");
@@ -285,7 +285,7 @@ pub fn draw_layer_type_specs(
                     ui.add(
                         egui::DragValue::new(speed)
                             .speed(0.05)
-                            .clamp_range(0.05..=10.0)
+                            .range(0.05..=10.0)
                             .suffix("x"),
                     );
                     if ui.button("1x").on_hover_text("Reset to realtime").clicked() {
@@ -294,7 +294,7 @@ pub fn draw_layer_type_specs(
                 });
                 ui.horizontal(|ui| {
                     ui.label("Frame count:");
-                    ui.add(egui::DragValue::new(frame_count).clamp_range(1..=100_000));
+                    ui.add(egui::DragValue::new(frame_count).range(1..=100_000));
                 });
                 ui.label(format!(
                     "Effective duration: {:.1}s at {:.2}x | audio: {}",
@@ -315,7 +315,7 @@ pub fn draw_layer_type_specs(
                 ui.text_edit_multiline(text);
                 ui.horizontal(|ui| {
                     ui.label("Font Size:");
-                    ui.add(egui::DragValue::new(font_size).clamp_range(8..=256));
+                    ui.add(egui::DragValue::new(font_size).range(8..=256));
                 });
                 ui.horizontal(|ui| {
                     ui.label("Color:");
@@ -339,11 +339,11 @@ pub fn draw_layer_type_specs(
 
                     ui.horizontal(|ui| {
                         ui.label("Range Start:");
-                        if ui.add(egui::DragValue::new(&mut anim.selector.start).speed(0.5).suffix("%").clamp_range(0.0..=100.0)).changed() {
+                        if ui.add(egui::DragValue::new(&mut anim.selector.start).speed(0.5).suffix("%").range(0.0..=100.0)).changed() {
                             *project_changed = true;
                         }
                         ui.label("End:");
-                        if ui.add(egui::DragValue::new(&mut anim.selector.end).speed(0.5).suffix("%").clamp_range(0.0..=100.0)).changed() {
+                        if ui.add(egui::DragValue::new(&mut anim.selector.end).speed(0.5).suffix("%").range(0.0..=100.0)).changed() {
                             *project_changed = true;
                         }
                     });
@@ -358,7 +358,7 @@ pub fn draw_layer_type_specs(
 
                         ui.label("Shape:");
                         let shape_before = anim.selector.shape;
-                        egui::ComboBox::from_id_source(format!("text_anim_shape_{}", layer.id))
+                        egui::ComboBox::from_id_salt(format!("text_anim_shape_{}", layer.id))
                             .selected_text(format!("{:?}", anim.selector.shape))
                             .show_ui(ui, |ui| {
                                 for shape in [
@@ -419,7 +419,7 @@ pub fn draw_layer_type_specs(
                 });
                 ui.horizontal(|ui| {
                     ui.label("Stroke Width:");
-                    if ui.add(egui::DragValue::new(stroke_width).speed(0.5).clamp_range(0.0..=50.0).suffix(" px")).changed() {
+                    if ui.add(egui::DragValue::new(stroke_width).speed(0.5).range(0.0..=50.0).suffix(" px")).changed() {
                         *project_changed = true;
                     }
                 });

@@ -6,7 +6,7 @@ pub fn draw_font_picker(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
     ui.separator();
 
     ui.label("Font Family & Weight Variant:");
-    egui::ComboBox::from_id_source("font_family_combo")
+    egui::ComboBox::from_id_salt("font_family_combo")
         .selected_text(match app.font_family_idx {
             0 => "Inter - Regular",
             1 => "Inter - Bold",

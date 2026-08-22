@@ -8,7 +8,7 @@ pub fn draw_color_management(_app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
     ui.label("Working Color Space:");
     let space_id = egui::Id::new("ae_color_space_combo");
     let mut space_idx = ui.ctx().data_mut(|d| *d.get_temp_mut_or_insert_with(space_id, || 0));
-    egui::ComboBox::from_id_source("color_space_combo")
+    egui::ComboBox::from_id_salt("color_space_combo")
         .selected_text(match space_idx {
             0 => "Rec.709 Gamma 2.4 (sRGB)",
             1 => "ACEScg (AP1 Linear)",
@@ -45,7 +45,7 @@ pub fn draw_color_management(_app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
     ui.label("Display Simulation:");
     let disp_id = egui::Id::new("ae_display_sim");
     let mut disp_idx = ui.ctx().data_mut(|d| *d.get_temp_mut_or_insert_with(disp_id, || 0));
-    egui::ComboBox::from_id_source("display_sim_combo")
+    egui::ComboBox::from_id_salt("display_sim_combo")
         .selected_text(match disp_idx {
             0 => "Macintosh sRGB",
             1 => "Rec.709 HDTV (Video Studio)",

@@ -482,9 +482,11 @@ impl WgpuRenderer {
 
         // Pipeline
         let render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+            cache: None,
             label: Some("Render Pipeline"),
             layout: Some(&render_pipeline_layout),
             vertex: wgpu::VertexState {
+                compilation_options: Default::default(),
                 module: &shader,
                 entry_point: "vs_main",
                 buffers: &[wgpu::VertexBufferLayout {
@@ -505,6 +507,7 @@ impl WgpuRenderer {
                 }],
             },
             fragment: Some(wgpu::FragmentState {
+                compilation_options: Default::default(),
                 module: &shader,
                 entry_point: "fs_main",
                 targets: &[Some(wgpu::ColorTargetState {

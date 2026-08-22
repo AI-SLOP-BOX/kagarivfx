@@ -419,6 +419,10 @@ impl eframe::App for AfterEffectsApp {
     fn update(&mut self, ctx: &eframe::egui::Context, _frame: &mut eframe::Frame) {
         use eframe::egui;
 
+        // Re-assert the dark AE theme every frame (cheap, and guards against
+        // eframe's system-theme following resetting visuals)
+        crate::ui::theme::configure_ae_theme(ctx);
+
         // One-time startup check for crash recovery snapshots
         if !self.recovery_checked {
             self.recovery_checked = true;
@@ -613,7 +617,7 @@ impl eframe::App for AfterEffectsApp {
         self.current_frame = current_frame;
     }
 
-    fn on_exit(&mut self, _gl: Option<&eframe::glow::Context>) {
+    fn on_exit(&mut self) {
         if let Some(ref flag) = self.export_cancel_flag {
             flag.store(true, std::sync::atomic::Ordering::SeqCst);
         }

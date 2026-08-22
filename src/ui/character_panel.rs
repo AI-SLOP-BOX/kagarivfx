@@ -55,7 +55,7 @@ pub fn draw_character_panel(
                         // Font Family
                         ui.horizontal(|ui| {
                             ui.label("Font Family:");
-                            egui::ComboBox::from_id_source("ae_text_font_family")
+                            egui::ComboBox::from_id_salt("ae_text_font_family")
                                 .selected_text(font_family.as_str())
                                 .show_ui(ui, |ui| {
                                     for name in ["Inter", "Roboto", "Helvetica", "Arial",
@@ -72,7 +72,7 @@ pub fn draw_character_panel(
                         ui.horizontal(|ui| {
                             ui.label("Font Size:");
                             let fs_before = *font_size;
-                            ui.add(egui::DragValue::new(font_size).clamp_range(6..=300).suffix(" px"));
+                            ui.add(egui::DragValue::new(font_size).range(6..=300).suffix(" px"));
                             if fs_before != *font_size { project_changed = true; }
                         });
 
@@ -80,7 +80,7 @@ pub fn draw_character_panel(
                         ui.horizontal(|ui| {
                             ui.label("Tracking:");
                             if ui.add(egui::DragValue::new(tracking)
-                                .speed(1.0).clamp_range(-100.0..=500.0).suffix(" VA"))
+                                .speed(1.0).range(-100.0..=500.0).suffix(" VA"))
                                 .changed() { project_changed = true; }
                         });
 
@@ -88,7 +88,7 @@ pub fn draw_character_panel(
                         ui.horizontal(|ui| {
                             ui.label("Leading:");
                             if ui.add(egui::DragValue::new(leading)
-                                .speed(0.05).clamp_range(0.5..=3.0).suffix(" em"))
+                                .speed(0.05).range(0.5..=3.0).suffix(" em"))
                                 .changed() { project_changed = true; }
                         });
 
@@ -107,7 +107,7 @@ pub fn draw_character_panel(
                         ui.horizontal(|ui| {
                             ui.label("Stroke Width:");
                             if ui.add(egui::DragValue::new(stroke_width)
-                                .speed(0.5).clamp_range(0.0..=50.0).suffix(" px"))
+                                .speed(0.5).range(0.0..=50.0).suffix(" px"))
                                 .changed() { project_changed = true; }
                             if *stroke_width > 0.0
                                 && ui.color_edit_button_rgba_unmultiplied(stroke_color).changed() {

@@ -17,7 +17,7 @@ pub fn draw_graph_editor(
         ui.horizontal(|ui| {
             ui.label(egui::RichText::new("📈 Graph Editor").strong());
             let prop_name = selected_property.clone().unwrap_or_else(|| "Position X".to_string());
-            egui::ComboBox::from_id_source("graph_prop_select_module")
+            egui::ComboBox::from_id_salt("graph_prop_select_module")
                 .selected_text(&prop_name)
                 .show_ui(ui, |ui| {
                     for p in ["Position X", "Position Y", "Scale X", "Scale Y", "Rotation", "Opacity"] {

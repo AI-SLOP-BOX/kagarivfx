@@ -9,7 +9,7 @@ pub fn draw_render_presets(_app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
     let preset_id = egui::Id::new("ae_render_preset_select");
     let mut preset_idx = ui.ctx().data_mut(|d| *d.get_temp_mut_or_insert_with(preset_id, || 0));
 
-    egui::ComboBox::from_id_source("render_preset_combo")
+    egui::ComboBox::from_id_salt("render_preset_combo")
         .selected_text(match preset_idx {
             0 => "Lossless (Apple ProRes 4444 + Alpha)",
             1 => "H.264 High Quality (MP4 50 Mbps)",

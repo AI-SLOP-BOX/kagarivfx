@@ -22,7 +22,7 @@ pub fn draw_easy_ease_button<T: Clone>(ui: &mut egui::Ui, property: &mut Animata
 
         // Smart Ease Curve Preset Selector Dropdown
         let combo_id = ui.make_persistent_id(format!("smart_ease_combo_{:?}", ui.id()));
-        egui::ComboBox::from_id_source(combo_id)
+        egui::ComboBox::from_id_salt(combo_id)
             .selected_text("✨ Smart Presets...")
             .show_ui(ui, |ui| {
                 for (preset, label, desc) in [
@@ -160,7 +160,7 @@ pub fn draw_expression_selector(ui: &mut egui::Ui, label: &str, expr_opt: &mut O
 
         let before = expr_opt.clone();
         let combo_id = ui.make_persistent_id(format!("ae_expr_combo_{}", label));
-        egui::ComboBox::from_id_source(combo_id)
+        egui::ComboBox::from_id_salt(combo_id)
             .selected_text(expr_text)
             .show_ui(ui, |ui| {
                 ui.selectable_value(expr_opt, None, "None");

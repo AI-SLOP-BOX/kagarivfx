@@ -77,7 +77,7 @@ pub fn draw_transport_panel(app: &mut AfterEffectsApp, ui: &mut egui::Ui, curren
     let res_id = egui::Id::new("ae_preview_resolution");
     let mut res_idx = ui.ctx().data_mut(|d| *d.get_temp_mut_or_insert_with(res_id, || 0));
 
-    egui::ComboBox::from_id_source("preview_res_combo")
+    egui::ComboBox::from_id_salt("preview_res_combo")
         .selected_text(match res_idx {
             0 => "Full (1:1 Resolution)",
             1 => "Half (1/2 Resolution)",

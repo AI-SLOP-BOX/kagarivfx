@@ -59,7 +59,7 @@ pub fn draw_mask_panel(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
                             ui.horizontal(|ui| {
                                 ui.label("Mode:");
                                 let combo_id = format!("mask_mode_combo_{}_{}", layer_id, m_idx);
-                                egui::ComboBox::from_id_source(combo_id)
+                                egui::ComboBox::from_id_salt(combo_id)
                                     .selected_text(match mask.mode {
                                         MaskMode::Add => "Add",
                                         MaskMode::Subtract => "Subtract",

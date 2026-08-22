@@ -70,7 +70,7 @@ pub fn draw_lumetri_color(_app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
         // --- 1. Basic Correction ---
         ui.collapsing("Basic Correction", |ui| {
             ui.label(egui::RichText::new("Input LUT").small());
-            egui::ComboBox::from_id_source("lumetri_lut_combo")
+            egui::ComboBox::from_id_salt("lumetri_lut_combo")
                 .selected_text("None")
                 .show_ui(ui, |ui| {
                     ui.selectable_value(&mut 0, 0, "None");

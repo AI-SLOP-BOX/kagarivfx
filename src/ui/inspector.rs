@@ -156,7 +156,7 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                         ui.horizontal(|ui| {
                             ui.label("Blend Mode:");
                             let blend_before = layer.blend_mode;
-                            egui::ComboBox::from_id_source(format!("blend_mode_combo_{}", layer.id))
+                            egui::ComboBox::from_id_salt(format!("blend_mode_combo_{}", layer.id))
                                 .selected_text(format!("{:?}", layer.blend_mode))
                                 .show_ui(ui, |ui| {
                                     for mode in [
@@ -172,7 +172,7 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                         ui.horizontal(|ui| {
                             ui.label("Label:");
                             let label_before = layer.label;
-                            egui::ComboBox::from_id_source(format!("label_color_combo_{}", layer.id))
+                            egui::ComboBox::from_id_salt(format!("label_color_combo_{}", layer.id))
                                 .selected_text(format!("{:?}", layer.label))
                                 .show_ui(ui, |ui| {
                                     for color in [
@@ -189,7 +189,7 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                         ui.horizontal(|ui| {
                             ui.label("Track Matte:");
                             let matte_before = layer.track_matte;
-                            egui::ComboBox::from_id_source(format!("track_matte_combo_{}", layer.id))
+                            egui::ComboBox::from_id_salt(format!("track_matte_combo_{}", layer.id))
                                 .selected_text(format!("{:?}", layer.track_matte))
                                 .show_ui(ui, |ui| {
                                     for mode in [
@@ -211,7 +211,7 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                                 ui.label("Shutter Angle:");
                                 let sa_id = ui.make_persistent_id(format!("ae_shutter_angle_{}", layer.id));
                                 let mut shutter_angle = ui.ctx().data_mut(|d| *d.get_temp_mut_or_insert_with(sa_id, || 180.0f32));
-                                if ui.add(egui::DragValue::new(&mut shutter_angle).speed(1.0).clamp_range(0.0..=720.0).suffix("°")).changed() {
+                                if ui.add(egui::DragValue::new(&mut shutter_angle).speed(1.0).range(0.0..=720.0).suffix("°")).changed() {
                                     ui.ctx().data_mut(|d| d.insert_temp(sa_id, shutter_angle));
                                 }
 
@@ -219,7 +219,7 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                                 ui.label("Phase:");
                                 let sp_id = ui.make_persistent_id(format!("ae_shutter_phase_{}", layer.id));
                                 let mut shutter_phase = ui.ctx().data_mut(|d| *d.get_temp_mut_or_insert_with(sp_id, || -90.0f32));
-                                if ui.add(egui::DragValue::new(&mut shutter_phase).speed(1.0).clamp_range(-180.0..=180.0).suffix("°")).changed() {
+                                if ui.add(egui::DragValue::new(&mut shutter_phase).speed(1.0).range(-180.0..=180.0).suffix("°")).changed() {
                                     ui.ctx().data_mut(|d| d.insert_temp(sp_id, shutter_phase));
                                 }
                             });
@@ -238,7 +238,7 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                                 "None".to_string()
                             };
 
-                            egui::ComboBox::from_id_source(format!("parent_select_combo_{}", layer.id))
+                            egui::ComboBox::from_id_salt(format!("parent_select_combo_{}", layer.id))
                                 .selected_text(parent_name)
                                 .show_ui(ui, |ui| {
                                     ui.selectable_value(&mut layer.parent_id, None, "None");
@@ -370,7 +370,7 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                                     ui.horizontal(|ui| {
                                         ui.label("Mode:");
                                         let mode_before = mask.mode;
-                                        egui::ComboBox::from_id_source(format!("mask_mode_{}", mask.id))
+                                        egui::ComboBox::from_id_salt(format!("mask_mode_{}", mask.id))
                                             .selected_text(format!("{:?}", mask.mode))
                                             .show_ui(ui, |ui| {
                                                 use crate::core::mask::MaskMode;

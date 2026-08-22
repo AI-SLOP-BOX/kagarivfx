@@ -8,7 +8,7 @@ pub fn draw_content_aware_fill(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
     ui.label("Fill Method:");
     let method_id = egui::Id::new("ae_caf_fill_method");
     let mut method_idx = ui.ctx().data_mut(|d| *d.get_temp_mut_or_insert_with(method_id, || 0));
-    egui::ComboBox::from_id_source("caf_method_combo")
+    egui::ComboBox::from_id_salt("caf_method_combo")
         .selected_text(match method_idx {
             0 => "Object (Motion Objects Removal)",
             1 => "Surface (Flat Texture Fill)",

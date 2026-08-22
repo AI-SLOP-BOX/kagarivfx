@@ -514,7 +514,7 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: u32) 
             ui.style_mut().spacing.item_spacing.x = 4.0;
             // AE Magnification Ratio Dropdown
             let mag_val = app.viewport_mag_ratio;
-            egui::ComboBox::from_id_source("mag_combo_bottom")
+            egui::ComboBox::from_id_salt("mag_combo_bottom")
                 .selected_text(if mag_val == 4.0 { "400%" } else if mag_val == 2.0 { "200%" } else if mag_val == 1.0 { "100%" } else if mag_val == 0.5 { "50%" } else if mag_val == 0.25 { "25%" } else { "Fit" })
                 .show_ui(ui, |ui| {
                     if ui.selectable_label(app.viewport_mag_ratio == 0.0, "Fit").clicked() { app.viewport_mag_ratio = 0.0; }
@@ -532,7 +532,7 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: u32) 
 
             ui.separator();
             // AE Camera View Selector
-            egui::ComboBox::from_id_source("cam_view_combo_bottom")
+            egui::ComboBox::from_id_salt("cam_view_combo_bottom")
                 .selected_text(match app.viewport_cam_view {
                     0 => "Active Camera",
                     1 => "Front",
@@ -560,7 +560,7 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: u32) 
 
             ui.separator();
             // AE Render Quality / Downsample Resolution
-            egui::ComboBox::from_id_source("res_combo_bottom")
+            egui::ComboBox::from_id_salt("res_combo_bottom")
                 .selected_text(match app.viewport_render_resolution {
                     0 => "Full",
                     1 => "Half",
@@ -576,7 +576,7 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: u32) 
 
             ui.separator();
             // AE Color Channels
-            egui::ComboBox::from_id_source("chan_combo_bottom")
+            egui::ComboBox::from_id_salt("chan_combo_bottom")
                 .selected_text(match app.viewport_color_channel {
                     0 => "RGB Color",
                     1 => "Red",
@@ -608,7 +608,7 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: u32) 
             }
 
             ui.separator();
-            egui::ComboBox::from_id_source("fast_preview_combo")
+            egui::ComboBox::from_id_salt("fast_preview_combo")
                 .selected_text(match app.viewport_fast_preview {
                     0 => "Off (Final Quality)",
                     1 => "Adaptive Resolution",

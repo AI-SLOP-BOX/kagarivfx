@@ -40,7 +40,7 @@ pub fn draw_camera_light_options(_app: &mut AfterEffectsApp, ui: &mut egui::Ui) 
         ui.collapsing("💡 3D Light Options", |ui| {
             ui.label("Light Type:");
             let mut light_type = 0;
-            egui::ComboBox::from_id_source("light_type_combo")
+            egui::ComboBox::from_id_salt("light_type_combo")
                 .selected_text(match light_type {
                     0 => "Point Light",
                     1 => "Spot Light",

@@ -29,7 +29,7 @@ pub fn draw_comp_settings_dialog(app: &mut AfterEffectsApp, ctx: &egui::Context)
             let preset_id = egui::Id::new("ae_comp_preset_choice");
             let mut preset_choice = ui.ctx().data_mut(|d| *d.get_temp_mut_or_insert_with(preset_id, || 0));
 
-            egui::ComboBox::from_id_source("comp_preset_combo")
+            egui::ComboBox::from_id_salt("comp_preset_combo")
                 .selected_text(match preset_choice {
                     0 => "HDTV 1080 29.97 (1920 x 1080)",
                     1 => "4K UHD 60fps (3840 x 2160)",
@@ -94,9 +94,9 @@ pub fn draw_comp_settings_dialog(app: &mut AfterEffectsApp, ctx: &egui::Context)
             ui.add_space(6.0);
             ui.horizontal(|ui| {
                 ui.label("Width:");
-                ui.add(egui::DragValue::new(&mut comp.width).speed(1.0).suffix(" px").clamp_range(16..=16384));
+                ui.add(egui::DragValue::new(&mut comp.width).speed(1.0).suffix(" px").range(16..=16384));
                 ui.label("Height:");
-                ui.add(egui::DragValue::new(&mut comp.height).speed(1.0).suffix(" px").clamp_range(16..=16384));
+                ui.add(egui::DragValue::new(&mut comp.height).speed(1.0).suffix(" px").range(16..=16384));
             });
 
             comp.width = comp.width.max(16);
@@ -104,11 +104,11 @@ pub fn draw_comp_settings_dialog(app: &mut AfterEffectsApp, ctx: &egui::Context)
 
             ui.horizontal(|ui| {
                 ui.label("Frame Rate (FPS):");
-                ui.add(egui::DragValue::new(&mut comp.fps).speed(1).clamp_range(1..=120));
+                ui.add(egui::DragValue::new(&mut comp.fps).speed(1).range(1..=120));
                 
                 let fps_id = ui.make_persistent_id("ae_fps_preset_choice");
                 let mut fps_choice: usize = ui.ctx().data_mut(|d| *d.get_temp_mut_or_insert_with(fps_id, || 0));
-                egui::ComboBox::from_id_source(fps_id)
+                egui::ComboBox::from_id_salt(fps_id)
                     .selected_text(format!("Preset ({} fps)", comp.fps))
                     .show_ui(ui, |ui| {
                         if ui.selectable_value(&mut fps_choice, 0, "Film (24 fps)").clicked() { comp.fps = 24; }
@@ -122,7 +122,7 @@ pub fn draw_comp_settings_dialog(app: &mut AfterEffectsApp, ctx: &egui::Context)
 
             ui.horizontal(|ui| {
                 ui.label("Duration (Frames):");
-                ui.add(egui::DragValue::new(&mut comp.duration_frames).speed(1.0).clamp_range(1..=100000));
+                ui.add(egui::DragValue::new(&mut comp.duration_frames).speed(1.0).range(1..=100000));
                 comp.duration_frames = comp.duration_frames.max(1);
                 let seconds = comp.duration_frames as f64 / comp.fps as f64;
                 ui.small(format!("({:.2} seconds)", seconds));
@@ -140,7 +140,7 @@ pub fn draw_comp_settings_dialog(app: &mut AfterEffectsApp, ctx: &egui::Context)
                 };
                 ui.horizontal(|ui| {
                     ui.label("Working Color Space:");
-                    egui::ComboBox::from_id_source(color_space_id)
+                    egui::ComboBox::from_id_salt(color_space_id)
                         .selected_text(cs_label)
                         .show_ui(ui, |ui| {
                             if ui.selectable_value(&mut cs_idx, 0, "sRGB (Web / Standard)").clicked() { ui.ctx().data_mut(|d| d.insert_temp(color_space_id, cs_idx)); }
@@ -159,7 +159,7 @@ pub fn draw_comp_settings_dialog(app: &mut AfterEffectsApp, ctx: &egui::Context)
                 };
                 ui.horizontal(|ui| {
                     ui.label("Depth:");
-                    egui::ComboBox::from_id_source(bit_depth_id)
+                    egui::ComboBox::from_id_salt(bit_depth_id)
                         .selected_text(depth_label)
                         .show_ui(ui, |ui| {
                             if ui.selectable_value(&mut depth_idx, 0, "8-bit per channel (8-bpc)").clicked() { ui.ctx().data_mut(|d| d.insert_temp(bit_depth_id, depth_idx)); }

@@ -61,7 +61,7 @@ pub fn draw_time_remap_panel(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
             let mut stretch_factor: f32 = ui.ctx().data_mut(|d| *d.get_temp_mut_or_insert_with(stretch_id, || 100.0));
             ui.horizontal(|ui| {
                 ui.label("Stretch Factor:");
-                if ui.add(egui::DragValue::new(&mut stretch_factor).clamp_range(1.0..=1000.0).suffix(" %")).changed() {
+                if ui.add(egui::DragValue::new(&mut stretch_factor).range(1.0..=1000.0).suffix(" %")).changed() {
                     ui.ctx().data_mut(|d| d.insert_temp(stretch_id, stretch_factor));
                 }
             });

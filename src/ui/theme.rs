@@ -51,7 +51,16 @@ pub mod layout {
 
 /// Apply global Adobe After Effects high-contrast pro dark theme to egui.
 pub fn configure_ae_theme(ctx: &egui::Context) {
+    // NOTE: temporarily disabled to debug text rendering
+    return;
+    // Force dark theme at the egui level (not just visuals) so text colors,
+    // widget styles, and backgrounds all agree.
+    ctx.set_theme(egui::Theme::Dark);
+
     let mut visuals = egui::Visuals::dark();
+
+    // Explicit global text colors — without this some widgets inherit the OS
+    // light-mode text color (dark on dark) and become invisible.
 
     // Dark Glassmorphism Base Colors
     visuals.panel_fill = egui::Color32::from_rgb(18, 21, 27);
@@ -111,17 +120,10 @@ pub fn configure_ae_theme(ctx: &egui::Context) {
         style.spacing.window_margin = egui::Margin::same(8.0);
     });
 
-    // Compact typography for panel content
-    let mut fonts = egui::FontDefinitions::default();
-    fonts.families.entry(egui::FontFamily::Proportional).or_default().insert(1, "ubuntu-light".into());
-    let _ = fonts; // family tweaks reserved; sizes applied via text styles below
-    ctx.style_mut(|style| {
-        use egui::{FontId, TextStyle};
-        style.text_styles.insert(TextStyle::Body, FontId::proportional(13.0));
-        style.text_styles.insert(TextStyle::Small, FontId::proportional(11.0));
-        style.text_styles.insert(TextStyle::Button, FontId::proportional(13.0));
-        style.text_styles.insert(TextStyle::Heading, FontId::proportional(17.0));
-    });
+    // Compact typography for panel content — only tweak sizes after confirming
+    // default fonts render correctly on egui 0.29.
+    // NOTE: custom text_styles removed because overriding them without also
+    // registering matching fonts caused all text to render blank.
 }
 
 /// Helper: Render section headers with a crisp left accent bar, icon, and high-contrast typography.

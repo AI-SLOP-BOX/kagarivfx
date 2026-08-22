@@ -32,7 +32,7 @@ pub fn draw_timeline_header(
 
         ui.label(egui::RichText::new(format!("TC: {}", tc_str)).strong().color(egui::Color32::from_rgb(255, 234, 0)));
         ui.add_space(4.0);
-        ui.add(egui::DragValue::new(current_frame).clamp_range(0..=total_frames).prefix("Frame: ").suffix(format!(" / {}", total_frames)))
+        ui.add(egui::DragValue::new(current_frame).range(0..=total_frames).prefix("Frame: ").suffix(format!(" / {}", total_frames)))
             .on_hover_text("Click or Drag to set current frame timecode");
         ui.add_space(8.0);
         if ui.button("|< First").clicked() { *current_frame = 0; }
@@ -50,7 +50,7 @@ pub fn draw_timeline_header(
         ui.add(
             egui::DragValue::new(&mut zoom_log)
                 .speed(0.02)
-                .clamp_range(-1.0..=(20.0f32).log10())
+                .range(-1.0..=(20.0f32).log10())
                 .prefix("x")
         )
         .on_hover_text("Timeline zoom (logarithmic, 0.1x - 20.0x)");

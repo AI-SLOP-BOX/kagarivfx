@@ -110,7 +110,7 @@ pub fn draw_tracker_panel(app: &mut AfterEffectsApp, ui: &mut egui::Ui, current_
             });
 
             // Target picker + apply
-            egui::ComboBox::from_id_source("tracker_apply_target")
+            egui::ComboBox::from_id_salt("tracker_apply_target")
                 .selected_text(app.tracker_apply_target.map(|i| format!("Layer {}", i + 1)).unwrap_or_else(|| "Target layer...".into()))
                 .show_ui(ui, |ui| {
                     let names: Vec<(usize, String)> = app.history.current().active_composition()

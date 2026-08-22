@@ -38,7 +38,7 @@ fn main() -> eframe::Result<()> {
             aftereffects_oss::ui::theme::configure_ae_theme(&cc.egui_ctx);
             aftereffects_oss::ui::icons::init_image_loaders(&cc.egui_ctx);
 
-            Box::new(app) as Box<dyn eframe::App>
+            Ok(Box::new(app) as Box<dyn eframe::App>)
         }),
     )
 }

@@ -11,7 +11,7 @@ pub fn draw_layer_styles(_app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
             let mut blend_mode = 0;
             ui.horizontal(|ui| {
                 ui.label("Blend Mode:");
-                egui::ComboBox::from_id_source("ds_blend")
+                egui::ComboBox::from_id_salt("ds_blend")
                     .selected_text("Multiply")
                     .show_ui(ui, |ui| {
                         ui.selectable_value(&mut blend_mode, 0, "Multiply");
@@ -91,7 +91,7 @@ pub fn draw_layer_styles(_app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
             let mut position = 0;
             ui.horizontal(|ui| {
                 ui.label("Position:");
-                egui::ComboBox::from_id_source("stroke_pos")
+                egui::ComboBox::from_id_salt("stroke_pos")
                     .selected_text("Outside")
                     .show_ui(ui, |ui| {
                         ui.selectable_value(&mut position, 0, "Outside");

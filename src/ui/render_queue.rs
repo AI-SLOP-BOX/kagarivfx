@@ -151,13 +151,13 @@ pub fn draw_render_queue_panel(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
                         egui::DragValue::new(&mut in_v)
                             .prefix("In: ")
                             .speed(0.5)
-                            .clamp_range(0..=(comp.duration_frames.saturating_sub(1) as i32)),
+                            .range(0..=(comp.duration_frames.saturating_sub(1) as i32)),
                     );
                     ui.add(
                         egui::DragValue::new(&mut out_v)
                             .prefix("Out: ")
                             .speed(0.5)
-                            .clamp_range(in_v..=(comp.duration_frames.saturating_sub(1) as i32)),
+                            .range(in_v..=(comp.duration_frames.saturating_sub(1) as i32)),
                     );
                     ui.label(
                         egui::RichText::new(format!(

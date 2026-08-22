@@ -486,7 +486,7 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                                         crate::core::timeline::TrackMatteMode::LumaMatteInverted => "Luma Inverted",
                                         crate::core::timeline::TrackMatteMode::None => "No Matte",
                                     };
-                                    egui::ComboBox::from_id_source(matte_id)
+                                    egui::ComboBox::from_id_salt(matte_id)
                                         .selected_text(matte_label)
                                         .show_ui(ui, |ui| {
                                             if ui.selectable_value(&mut layer.track_matte, crate::core::timeline::TrackMatteMode::None, "No Matte").clicked() {
@@ -523,7 +523,7 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                                         crate::core::timeline::BlendMode::Divide => "Divide",
                                         crate::core::timeline::BlendMode::Subtract => "Subtract",
                                     };
-                                    egui::ComboBox::from_id_source(blend_id)
+                                    egui::ComboBox::from_id_salt(blend_id)
                                         .selected_text(blend_label)
                                         .show_ui(ui, |ui| {
                                             for (bm, name) in [
@@ -653,7 +653,7 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
 
                                     // ── Blend Mode Dropdown ──
                                     let bm_text = format!("{:?}", layer.blend_mode);
-                                    egui::ComboBox::from_id_source(format!("tl_blend_{}", i))
+                                    egui::ComboBox::from_id_salt(format!("tl_blend_{}", i))
                                         .selected_text(format!("Blend: {}", bm_text))
                                         .show_ui(ui, |ui| {
                                             for bm in [
@@ -686,7 +686,7 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                                         TrackMatteMode::LumaMatte => "Luma",
                                         TrackMatteMode::LumaMatteInverted => "Luma Inv",
                                     };
-                                    egui::ComboBox::from_id_source(format!("tl_matte_{}", i))
+                                    egui::ComboBox::from_id_salt(format!("tl_matte_{}", i))
                                         .selected_text(format!("Matte: {}", tm_text))
                                         .show_ui(ui, |ui| {
                                             for (mode, label) in [
@@ -709,7 +709,7 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                                         app.toasts.info(format!("🌀 Drag Pickwhip from '{}' to target parent layer", layer.name));
                                     }
                                     let parent_text = layer.parent_id.as_deref().unwrap_or("None");
-                                    egui::ComboBox::from_id_source(format!("tl_parent_{}", i))
+                                    egui::ComboBox::from_id_salt(format!("tl_parent_{}", i))
                                         .selected_text(format!("Parent: {}", parent_text))
                                         .show_ui(ui, |ui| {
                                             if ui.selectable_label(layer.parent_id.is_none(), "None").clicked() {

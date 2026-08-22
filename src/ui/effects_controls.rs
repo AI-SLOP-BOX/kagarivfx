@@ -736,7 +736,7 @@ pub fn draw_effect_type_ui(
             ui.horizontal(|ui| {
                 ui.label("Samples:");
                 let before_s = *samples;
-                ui.add(egui::DragValue::new(samples).clamp_range(2..=16));
+                ui.add(egui::DragValue::new(samples).range(2..=16));
                 if before_s != *samples { *project_changed = true; }
             });
         }
@@ -793,7 +793,7 @@ pub fn draw_effect_type_ui(
         }
         EffectType::ColorSpaceConvert { mode } => {
             let mode_before = *mode;
-            egui::ComboBox::from_id_source(format!("convert_combo_{:?}", ui.next_auto_id()))
+            egui::ComboBox::from_id_salt(format!("convert_combo_{:?}", ui.next_auto_id()))
                 .selected_text(format!("{:?}", mode))
                 .show_ui(ui, |ui| {
                     for m in [
