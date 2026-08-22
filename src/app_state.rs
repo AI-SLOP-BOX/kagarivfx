@@ -254,6 +254,8 @@ pub struct AfterEffectsApp {
     pub audio_playback: Option<crate::core::audio_playback::AudioPlayback>,
     /// Live audio meter (linear 0..1) from the mix, updated each UI frame.
     pub audio_meter: (f32, f32),
+    /// Tracker panel: target layer index for Apply Motion.
+    pub tracker_apply_target: Option<usize>,
     pub camera_view_layout: usize,
     pub camera_view_angle: usize,
     pub font_family_idx: usize,
@@ -357,6 +359,7 @@ impl Default for AfterEffectsApp {
             audio_mixer_channels: Vec::new(),
             audio_playback: crate::core::audio_playback::AudioPlayback::new().ok(),
             audio_meter: (0.0, 0.0),
+            tracker_apply_target: None,
             camera_view_layout: 0,
             camera_view_angle: 0,
             font_family_idx: 0,
