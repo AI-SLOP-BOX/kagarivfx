@@ -289,6 +289,7 @@ pub struct WgpuRenderer {
     // GPU text rendering: cache of CPU-rasterized text textures keyed by (layer_id, text, font_size)
     text_texture_cache: std::cell::RefCell<TextTextureCache>,
     video_frame_cache: std::cell::RefCell<VideoFrameCache>,
+    video_cache_version: std::cell::Cell<u64>,
 }
 
 impl WgpuRenderer {
@@ -550,6 +551,7 @@ impl WgpuRenderer {
             snapshot_view: None,
             text_texture_cache: std::cell::RefCell::new(std::collections::HashMap::new()),
             video_frame_cache: std::cell::RefCell::new(std::collections::HashMap::new()),
+            video_cache_version: std::cell::Cell::new(0),
             last_main_key: None,
             last_snapshot_key: None,
             ram_ring: Vec::new(),
@@ -849,7 +851,7 @@ impl WgpuRenderer {
                 if let LayerType::Video { frames_dir, frame_count, .. } = &layer.layer_type {
                     let seq_frame = frame.min(frame_count.saturating_sub(1));
                     if let Some((_, _, bg)) =
-                        self.get_or_create_video_frame_texture(&layer.id, frames_dir, seq_frame)
+                        self.get_or_create_video_frame_texture(&layer.id, frames_dir, seq_frame, crate::core::frame_cache::current_version())
                     {
                         text_bind_group = Some(bg);
                         is_video_frame = true;
@@ -1200,8 +1202,15 @@ impl WgpuRenderer {
         layer_id: &str,
         frames_dir: &str,
         frame_idx: u32,
+        version: u64,
     ) -> Option<(u32, u32, std::sync::Arc<wgpu::BindGroup>)> {
         let key: VideoFrameKey = (layer_id.to_string(), frames_dir.to_string(), frame_idx);
+        // Re-imports write into the same frames_dir; the version check ensures
+        // stale pixels from a previous project state are never displayed.
+        if self.video_cache_version.get() != version {
+            self.video_frame_cache.borrow_mut().clear();
+            self.video_cache_version.set(version);
+        }
         if let Some(bg) = self.video_frame_cache.borrow().get(&key).map(|(_, bg)| bg.clone()) {
             return Some((1, 1, bg));
         }

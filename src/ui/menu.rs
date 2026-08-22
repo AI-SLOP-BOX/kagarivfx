@@ -379,6 +379,8 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
                     ui.label("Cmd + C / V"); ui.label("Copy / Paste Selected Keyframes"); ui.end_row();
                     ui.label("Cmd + A"); ui.label("Select All Keyframes of Layer"); ui.end_row();
                     ui.label("Esc"); ui.label("Deselect (Keyframes, then Layers)"); ui.end_row();
+                    ui.label("M"); ui.label("Add / Remove Timeline Marker"); ui.end_row();
+                    ui.label("[ / ]"); ui.label("Jump to Prev / Next Marker"); ui.end_row();
                 });
             });
         ctx.data_mut(|d| d.insert_temp(help_id, show_help));
