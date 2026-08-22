@@ -252,3 +252,65 @@ mod tests {
         assert_eq!(matched, [6.0, 6.0], "SAD template matching should find the feature at (6, 6)");
     }
 }
+
+/// Subpixel refinement: parabola fit through the SAD cost at (x-1, x, x+1)
+/// along each axis. Returns the refined offset in [-0.5, 0.5] per axis.
+/// Ported concept from NextVFX's dense optical flow post-processing.
+pub fn subpixel_refine(
+    sad_at: &dyn Fn(i32, i32) -> f32,
+    best_x: i32,
+    best_y: i32,
+) -> [f32; 2] {
+    let fit = |minus: f32, center: f32, plus: f32| -> f32 {
+        let denom = (minus - 2.0 * center + plus).abs();
+        if denom < 1e-9 {
+            return 0.0;
+        }
+        // Vertex of the parabola through the three samples
+        (0.5 * (minus - plus) / denom).clamp(-0.5, 0.5)
+    };
+    let dx = fit(sad_at(best_x - 1, best_y), sad_at(best_x, best_y), sad_at(best_x + 1, best_y));
+    let dy = fit(sad_at(best_x, best_y - 1), sad_at(best_x, best_y), sad_at(best_x, best_y + 1));
+    [dx, dy]
+}
+
+/// Match confidence from the two lowest SAD values: ratio near 0 means a
+/// distinctive peak (good), near 1 means a flat valley (ambiguous match).
+pub fn match_confidence(min_sad: f32, second_min_sad: f32) -> f32 {
+    if second_min_sad <= 1e-9 {
+        if min_sad <= 1e-9 { return 1.0; } else { return 0.0; }
+    }
+    (min_sad / second_min_sad).clamp(0.0, 1.0)
+}
+
+#[cfg(test)]
+mod subpixel_tests {
+    use super::*;
+
+    #[test]
+    fn test_subpixel_refine_finds_true_minimum() {
+        // Synthetic SAD valley centered at x = 10.4, y = 7.6
+        let true_x = 10.4f32;
+        let true_y = 7.6f32;
+        let sad = |x: i32, y: i32| -> f32 {
+            let fx = x as f32 - true_x;
+            let fy = y as f32 - true_y;
+            fx * fx + fy * fy
+        };
+        // Integer search finds (10, 8)
+        let [dx, dy] = subpixel_refine(&sad, 10, 8);
+        let refined_x = 10.0 + dx;
+        let refined_y = 8.0 + dy;
+        assert!((refined_x - true_x).abs() < 0.15, "x {} vs {}", refined_x, true_x);
+        assert!((refined_y - true_y).abs() < 0.15, "y {} vs {}", refined_y, true_y);
+    }
+
+    #[test]
+    fn test_confidence_distinguishes_sharp_vs_flat() {
+        // Sharp peak: best is far below second-best → low ratio (high confidence)
+        let sharp = match_confidence(10.0, 100.0);
+        // Flat valley: nearly equal → high ratio (ambiguous)
+        let flat = match_confidence(100.0, 101.0);
+        assert!(sharp < 0.2 && flat > 0.99);
+    }
+}
