@@ -78,7 +78,7 @@ fn render_precomp_layers_inner(_comp: &Composition, precomp_comp: &Composition, 
                 (text.chars().count().max(1) as f32 * *font_size as f32 * 0.6).max(*font_size as f32),
                 *font_size as f32 * 1.2,
             ),
-            LayerType::Shape { .. } | LayerType::Image { .. } => (precomp_comp.width as f32, precomp_comp.height as f32),
+            LayerType::Shape { .. } | LayerType::Image { .. } | LayerType::Video { .. } => (precomp_comp.width as f32, precomp_comp.height as f32),
             _ => continue,
         };
 
