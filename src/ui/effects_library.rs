@@ -181,7 +181,8 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
             }
 
             if app.right_tab_idx == 24 {
-                crate::ui::speed_graph_options::draw_speed_graph_options(app, ui);
+                let cf = app.current_frame;
+                crate::ui::speed_graph_options::draw_speed_graph_options(app, ui, cf);
                 return;
             }
 
