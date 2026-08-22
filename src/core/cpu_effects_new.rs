@@ -353,12 +353,12 @@ pub fn apply_mesh_warp(
     let w = width as f32;
     let h = height as f32;
 
-    for out_y in 0..height {
-        for out_x in 0..width {
-            let out_idx = ((out_y * width + out_x) * 4) as usize;
-            if out_idx + 3 >= pixels.len() {
-                continue;
-            }
+    // Bilinear homography warp is per-pixel independent — parallelize.
+    tmp.par_chunks_exact_mut(4)
+        .enumerate()
+        .for_each(|(i, out)| {
+            let out_x = i % width as usize;
+            let out_y = i / width as usize;
             let u = out_x as f32 / w;
             let v = out_y as f32 / h;
 
@@ -380,13 +380,9 @@ pub fn apply_mesh_warp(
                 + bl_y * (1.0 - u) * v
                 + br_y * u * v;
 
-            let c = sample_bilinear(pixels, width, height, src_x, src_y);
-            tmp[out_idx] = c[0];
-            tmp[out_idx + 1] = c[1];
-            tmp[out_idx + 2] = c[2];
-            tmp[out_idx + 3] = c[3];
-        }
-    }
+            let ch = sample_bilinear(pixels, width, height, src_x, src_y);
+            out.copy_from_slice(&ch);
+        });
     pixels[..tmp.len()].copy_from_slice(&tmp);
 }
 
