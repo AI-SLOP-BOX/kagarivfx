@@ -80,6 +80,50 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
                     }
                     ui.close_menu();
                 }
+                if ui.button("Import Video (FFmpeg)...").clicked() {
+                    if let Some(path) = rfd::FileDialog::new()
+                        .add_filter("Video Files", &["mp4", "mov", "avi", "mkv", "webm"])
+                        .pick_file()
+                    {
+                        // Extract at the active composition's fps so 1 seq frame == 1 comp frame
+                        let comp = app.history.current().active_composition();
+                        let fps = comp.fps as f32;
+                        let name = path.file_stem().map(|s| s.to_string_lossy().to_string())
+                            .unwrap_or_else(|| "video".to_string());
+                        let dest = std::env::temp_dir().join("aevfx_media").join(&name);
+                        ui.ctx().request_repaint();
+                        match crate::core::video_import::import_video(
+                            &path.to_string_lossy(), &dest, fps,
+                        ) {
+                            Ok(asset) => {
+                                let src = path.to_string_lossy().to_string();
+                                app.modify_project(|p| {
+                                    let comp = p.active_composition_mut();
+                                    let layer = crate::core::timeline::Layer::new(
+                                        format!("video_{}", p.compositions.len()),
+                                        name.clone(),
+                                        crate::core::timeline::LayerType::Video {
+                                            source: src.clone(),
+                                            frames_dir: asset.frames_dir.clone(),
+                                            frame_count: asset.frame_count,
+                                            audio_wav: asset.audio_wav.clone(),
+                                        },
+                                        comp.fps,
+                                    );
+                                    comp.layers.push(layer);
+                                });
+                                app.toasts.info(format!(
+                                    "Imported video: {} ({} frames)",
+                                    name, asset.frame_count
+                                ));
+                            }
+                            Err(err) => {
+                                app.toasts.error(format!("Video import failed: {}", err));
+                            }
+                        }
+                    }
+                    ui.close_menu();
+                }
                 if ui.button("Import OpenTimelineIO (.otio.json)").clicked() {
                     match std::fs::read_to_string(&app.otio_path) {
                         Ok(json) => match serde_json::from_str::<crate::core::integration::OtioTimeline>(&json) {
