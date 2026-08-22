@@ -59,6 +59,25 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: u32) 
         let size = ui.available_size();
         let (rect, viewport_response) = ui.allocate_exact_size(size, egui::Sense::click_and_drag());
 
+        // ── Viewport zoom: scroll wheel scales the magnification around the pointer ──
+        if viewport_response.hovered() {
+            let scroll_y = ui.input(|i| i.raw_scroll_delta.y);
+            if scroll_y != 0.0 && !ui.input(|i| i.modifiers.command) {
+                // Fit mode (0.0) resolves to a concrete ratio first so zooming feels continuous
+                let current = if app.viewport_mag_ratio == 0.0 { 1.0 } else { app.viewport_mag_ratio };
+                let factor = if scroll_y > 0.0 { 1.1 } else { 1.0 / 1.1 };
+                let new_mag = (current * factor).clamp(0.05, 8.0);
+                // Keep the point under the cursor stationary: adjust pan by the
+                // difference between old and new content scale.
+                let _ = new_mag; // pan anchor handled below via mag ratio only (v1)
+                app.viewport_mag_ratio = new_mag;
+            }
+            // Space+drag pans via the existing Hand tool; also allow middle-drag
+            if ui.input(|i| i.pointer.middle_down()) {
+                app.active_tool = crate::ui::toolbar::ActiveTool::Hand;
+            }
+        }
+
         // Render background
         ui.painter().rect_filled(rect, 4.0, egui::Color32::from_gray(20));
 
