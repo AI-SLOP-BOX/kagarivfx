@@ -111,7 +111,7 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
                 // Include-audio toggle (only meaningful for MP4)
                 let audio_toggle_id = egui::Id::new("ae_export_include_audio");
                 let mut include_audio = ctx.data_mut(|d| {
-                    d.get_temp_mut_or_insert_with(audio_toggle_id, || true).clone()
+                    *d.get_temp_mut_or_insert_with(audio_toggle_id, || true)
                 });
                 let has_wav = app.history.current().active_composition().layers.iter().any(|l| {
                     matches!(&l.layer_type, crate::core::timeline::LayerType::Video { audio_wav: Some(_), .. })

@@ -243,7 +243,7 @@ pub fn draw(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
                     LayerType::Solid { color },
                     comp.duration_frames,
                 ),
-                ProjectItemType::Video { path, duration_sec } => {
+                ProjectItemType::Video { path, duration_sec: _ } => {
                     // Import the video (frame extraction) and add a Video layer
                     let media_dir = std::env::temp_dir()
                         .join("aevfx_media")
