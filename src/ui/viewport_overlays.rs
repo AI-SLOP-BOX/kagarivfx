@@ -99,13 +99,23 @@ pub fn draw_viewport_overlays(
     let total_comp_frames = app.history.current().active_composition().duration_frames.max(1);
     let cache_pct = (cached_frames as f32 / total_comp_frames as f32 * 100.0).clamp(0.0, 100.0);
 
+    // Adaptive quality indicator
+    let quality_pct = (app.adaptive_preview_factor * 100.0).round();
+    let quality_label = if app.adaptive_preview_factor >= 1.0 {
+        "FULL"
+    } else if app.adaptive_preview_factor >= 0.5 {
+        "½"
+    } else {
+        "¼"
+    };
+
     let fps_text = format!(
-        "⚡ PERF: {:.1}ms ({:.0} FPS) | RAM Cache: {}/{} ({:.0}%)",
-        render_ms, real_fps, cached_frames, total_comp_frames, cache_pct
+        "⚡ {:.1}ms ({:.0} FPS) | Q:{}% ({}) | RAM:{}/{}",
+        render_ms, real_fps, quality_pct, quality_label, cached_frames, total_comp_frames
     );
     let fps_rect = egui::Rect::from_min_size(
         egui::pos2(origin_x + 10.0, origin_y + 10.0),
-        egui::vec2(290.0, 24.0),
+        egui::vec2(320.0, 24.0),
     );
     ui.painter().rect_filled(fps_rect, 4.0, egui::Color32::from_rgba_unmultiplied(15, 22, 32, 220));
     let stroke_c = if render_ms > 33.3 {
