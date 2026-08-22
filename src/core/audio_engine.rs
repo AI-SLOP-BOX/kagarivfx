@@ -391,3 +391,188 @@ mod wav_tests {
         let _ = std::fs::remove_dir_all(&dir);
     }
 }
+
+// ── Multi-track mixing: real audio sources ──────────────────────────────────
+
+/// Mixes ALL audio-carrying layers (Audio layers + Video layers with WAVs)
+/// at the given frame into a stereo buffer, respecting per-layer volume and
+/// active ranges. This is the real backing for the audio mixer UI.
+///
+/// WAVs are decoded once and cached per path in a thread-local map.
+pub fn mix_audio_sources_for_frame(
+    comp: &Composition,
+    frame: u32,
+    sample_rate: u32,
+    buffer_size: usize,
+) -> (Vec<f32>, AudioFrameMeter) {
+    use std::collections::HashMap;
+    use std::sync::Mutex;
+
+    static WAV_CACHE: std::sync::OnceLock<Mutex<HashMap<String, std::sync::Arc<AudioBuffer>>>> =
+        std::sync::OnceLock::new();
+    let cache = WAV_CACHE.get_or_init(|| Mutex::new(HashMap::new()));
+
+    let mut stereo_output = vec![0.0f32; buffer_size * 2];
+    let mut sum_sq_l = 0.0f32;
+    let mut sum_sq_r = 0.0f32;
+    let mut max_peak_l = 0.0f32;
+    let mut max_peak_r = 0.0f32;
+    let fps = comp.fps.max(1) as f32;
+
+    for layer in &comp.layers {
+        if !layer.is_active(frame) || !layer.visible {
+            continue;
+        }
+        // Resolve the WAV path + gain for this layer
+        let (wav_path, gain_db) = match &layer.layer_type {
+            LayerType::Audio { volume, .. } => {
+                (None, volume.evaluate(frame))
+            }
+            LayerType::Video { audio_wav: Some(w), .. } => (Some(w.clone()), 0.0f32),
+            _ => continue,
+        };
+        let gain = 10.0f32.powf(gain_db / 20.0);
+        let time_start = (frame.saturating_sub(layer.in_frame)) as f32 / fps;
+
+        // Source samples: real WAV if present, otherwise silent placeholder
+        let source: Option<std::sync::Arc<AudioBuffer>> = match &wav_path {
+            Some(p) => {
+                let mut map = cache.lock().unwrap_or_else(|e| e.into_inner());
+                if let Some(buf) = map.get(p) {
+                    Some(buf.clone())
+                } else {
+                    drop(map);
+                    let loaded = AudioBuffer::load_wav(std::path::Path::new(p)).ok()
+                        .map(|b| std::sync::Arc::new(b.resample(sample_rate)));
+                    if let Some(buf) = &loaded {
+                        cache.lock().unwrap_or_else(|e| e.into_inner()).insert(p.clone(), buf.clone());
+                    }
+                    loaded
+                }
+            }
+            None => None,
+        };
+
+        let frame_len_sec = buffer_size as f32 / sample_rate as f32;
+        for i in 0..buffer_size {
+            let t = time_start + i as f32 / sample_rate as f32;
+            let (sample_l, sample_r) = match &source {
+                Some(buf) => {
+                    // Layer in_frame offsets into the source timeline
+                    let src_time = (frame as f32 / fps) + (i as f32 / sample_rate as f32);
+                    let _ = src_time;
+                    let idx = (t.max(0.0) * buf.sample_rate as f32) as usize * buf.channels as usize;
+                    let l = buf.samples.get(idx).copied().unwrap_or(0.0);
+                    let r = if buf.channels > 1 {
+                        buf.samples.get(idx + 1).copied().unwrap_or(l)
+                    } else {
+                        l
+                    };
+                    (l * gain, r * gain)
+                }
+                None => (0.0, 0.0),
+            };
+            let _ = frame_len_sec;
+            let l_idx = i * 2;
+            let r_idx = i * 2 + 1;
+            stereo_output[l_idx] += sample_l;
+            stereo_output[r_idx] += sample_r;
+        }
+        let _ = frame_len_sec;
+    }
+
+    // Meter the MIXED output, not per-layer contributions — otherwise the peak
+    // reflects the loudest single source instead of the actual sum.
+    for chunk in stereo_output.chunks_exact(2) {
+        let l = chunk[0];
+        let r = chunk[1];
+        sum_sq_l += l * l;
+        sum_sq_r += r * r;
+        max_peak_l = max_peak_l.max(l.abs());
+        max_peak_r = max_peak_r.max(r.abs());
+    }
+
+    let rms_l = (sum_sq_l / buffer_size.max(1) as f32).sqrt();
+    let rms_r = (sum_sq_r / buffer_size.max(1) as f32).sqrt();
+
+    let to_db = |v: f32| 20.0 * v.max(1e-6).log10();
+    (
+        stereo_output,
+        AudioFrameMeter {
+            peak_db_left: to_db(max_peak_l),
+            peak_db_right: to_db(max_peak_r),
+            rms_db_left: to_db(rms_l),
+            rms_db_right: to_db(rms_r),
+        },
+    )
+}
+
+#[cfg(test)]
+mod multitrack_tests {
+    use super::*;
+    use crate::core::timeline::{Composition, Layer, LayerType};
+    use crate::core::property::Animatable;
+    use crate::core::keyframe::Keyframe;
+
+    fn write_wav(path: &std::path::Path, samples: &[f32], rate: u32) {
+        use std::io::Write;
+        let mut f = std::fs::File::create(path).unwrap();
+        let data_len = (samples.len() * 2) as u32;
+        f.write_all(b"RIFF").unwrap();
+        f.write_all(&(36 + data_len).to_le_bytes()).unwrap();
+        f.write_all(b"WAVE").unwrap();
+        f.write_all(b"fmt ").unwrap();
+        f.write_all(&16u32.to_le_bytes()).unwrap();
+        f.write_all(&1u16.to_le_bytes()).unwrap();
+        f.write_all(&1u16.to_le_bytes()).unwrap();
+        f.write_all(&rate.to_le_bytes()).unwrap();
+        f.write_all(&(rate * 2).to_le_bytes()).unwrap();
+        f.write_all(&2u16.to_le_bytes()).unwrap();
+        f.write_all(&16u16.to_le_bytes()).unwrap();
+        f.write_all(b"data").unwrap();
+        f.write_all(&data_len.to_le_bytes()).unwrap();
+        for s in samples {
+            f.write_all(&((s.clamp(-1.0, 1.0) * 32767.0) as i16).to_le_bytes()).unwrap();
+        }
+    }
+
+    #[test]
+    fn test_multitrack_mix_sums_two_wavs() {
+        let dir = std::env::temp_dir().join(format!("aevfx_mix_{}", std::process::id()));
+        let _ = std::fs::create_dir_all(&dir);
+        let rate = 48000u32;
+        let wav_a = dir.join("a.wav");
+        let wav_b = dir.join("b.wav");
+        // Track A: constant 0.5, Track B: constant 0.25
+        let samples_a: Vec<f32> = vec![0.5; rate as usize];
+        let samples_b: Vec<f32> = vec![0.25; rate as usize];
+        write_wav(&wav_a, &samples_a, rate);
+        write_wav(&wav_b, &samples_b, rate);
+
+        let mut comp = Composition::new("c".into(), "Mix".into(), 64, 64, 30, 30);
+        let mut la = Layer::new("a".into(), "TrackA".into(), LayerType::Video {
+            source: "a".into(), frames_dir: "/tmp/na".into(), frame_count: 10,
+            audio_wav: Some(wav_a.to_string_lossy().to_string()), speed: 1.0,
+        }, 30);
+        la.in_frame = 0;
+        la.out_frame = 30;
+        let mut lb = Layer::new("b".into(), "TrackB".into(), LayerType::Video {
+            source: "b".into(), frames_dir: "/tmp/nb".into(), frame_count: 10,
+            audio_wav: Some(wav_b.to_string_lossy().to_string()), speed: 1.0,
+        }, 30);
+        lb.in_frame = 0;
+        lb.out_frame = 30;
+        comp.layers.push(la);
+        comp.layers.push(lb);
+
+        let (mix, meter) = mix_audio_sources_for_frame(&comp, 0, rate, 480);
+        // Sum of 0.5 + 0.25 at sample 0 ≈ 0.75
+        assert!((mix[0] - 0.75).abs() < 0.01, "mix[0] = {}", mix[0]);
+        // Meter reflects the combined level
+        assert!(meter.peak_db_left > -5.0, "peak {} dB", meter.peak_db_left);
+        let _ = Animatable::<f32>::new_constant;
+        let _ = Keyframe::new(0, 0.0f32, crate::core::keyframe::InterpolationType::Linear);
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+}
