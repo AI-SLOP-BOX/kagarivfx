@@ -126,6 +126,29 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
                     }
                     ui.close_menu();
                 }
+                if ui.button("Export MLT XML (Shotcut / Kdenlive)...").clicked() {
+                    if let Some(path) = rfd::FileDialog::new()
+                        .add_filter("MLT XML", &["xml", "mlt"])
+                        .set_file_name(format!("{}.mlt.xml",
+                            app.history.current().active_composition().name))
+                        .save_file()
+                    {
+                        let comp = app.history.current().active_composition();
+                        let xml = crate::core::mlt_export::MltExporter::export_to_xml(comp);
+                        match std::fs::write(&path, xml) {
+                            Ok(_) => {
+                                app.toasts.info(format!(
+                                    "Exported MLT XML: {}",
+                                    path.to_string_lossy()
+                                ));
+                            }
+                            Err(err) => {
+                                app.toasts.error(format!("Failed to save MLT file: {}", err));
+                            }
+                        }
+                    }
+                    ui.close_menu();
+                }
                 if ui.button("Import OpenTimelineIO (.otio.json)").clicked() {
                     match std::fs::read_to_string(&app.otio_path) {
                         Ok(json) => match serde_json::from_str::<crate::core::integration::OtioTimeline>(&json) {
