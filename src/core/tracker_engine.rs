@@ -16,35 +16,151 @@ impl TrackerEngine {
         tracker_idx: usize,
         current_frame: u32,
     ) -> Option<[f32; 2]> {
+        // Real image-based tracking when pixel sources are available
+        if let Some((curr_img, next_img, img_w, img_h)) =
+            Self::load_tracker_frames(layer, current_frame)
+        {
+            return Self::track_next_frame_pixels(
+                layer, tracker_idx, current_frame, &curr_img, &next_img, img_w, img_h,
+            );
+        }
+        // Fallback: transform-velocity extrapolation (Null/Shape/etc.)
+        Self::track_next_frame_synthetic(layer, fps, tracker_idx, current_frame)
+    }
+
+    /// Loads the RGBA buffers for `frame` and `frame + 1` from the layer's media.
+    /// Video layers use their extracted sequence; image layers reuse the same file.
+    fn load_tracker_frames(
+        layer: &Layer,
+        frame: u32,
+    ) -> Option<(Vec<u8>, Vec<u8>, usize, usize)> {
+        use crate::core::image_cache::with_image_cache;
+
+        let (dir_a, dir_b): (Option<String>, Option<String>) = match &layer.layer_type {
+            crate::core::timeline::LayerType::Video { frames_dir, frame_count, .. } => {
+                let seq_a = frame.min(frame_count.saturating_sub(1));
+                let seq_b = (frame + 1).min(frame_count.saturating_sub(1));
+                (
+                    Some(format!("{}/frame_{:05}.png", frames_dir.trim_end_matches('/'), seq_a)),
+                    Some(format!("{}/frame_{:05}.png", frames_dir.trim_end_matches('/'), seq_b)),
+                )
+            }
+            crate::core::timeline::LayerType::Image { path } => {
+                (Some(path.clone()), Some(path.clone()))
+            }
+            _ => (None, None),
+        };
+
+        with_image_cache(|cache| {
+            let a = cache.load_image(&dir_a?)?;
+            let w = a.width as usize;
+            let h = a.height as usize;
+            let buf_a = a.pixels.clone();
+            let b = cache.load_image(&dir_b?)?;
+            if b.width as usize != w || b.height as usize != h {
+                return None;
+            }
+            Some((buf_a, b.pixels.clone(), w, h))
+        })
+    }
+
+    /// Real SAD block matching over decoded frames, with subpixel refinement.
+    pub fn track_next_frame_pixels(
+        layer: &Layer,
+        tracker_idx: usize,
+        current_frame: u32,
+        curr_img: &[u8],
+        next_img: &[u8],
+        img_w: usize,
+        img_h: usize,
+    ) -> Option<[f32; 2]> {
         if tracker_idx >= layer.trackers.len() {
             return None;
         }
+        let tracker = &layer.trackers[tracker_idx];
+        let pos = tracker.position.evaluate(current_frame);
 
+        let feature = (tracker.feature_size.max(8.0) as usize) & !1; // even
+        let half = feature / 2;
+        let cx = pos[0] as i32;
+        let cy = pos[1] as i32;
+        if (cx - half as i32) < 0 || (cy - half as i32) < 0 {
+            return Some(pos);
+        }
+
+        // Reference patch from the CURRENT frame around the tracker position
+        let mut ref_patch = vec![0u8; feature * feature * 4];
+        for py in 0..feature {
+            for px in 0..feature {
+                let sx = cx - half as i32 + px as i32;
+                let sy = cy - half as i32 + py as i32;
+                if sx < 0 || sy < 0 || sx >= img_w as i32 || sy >= img_h as i32 {
+                    continue;
+                }
+                let src = ((sy * img_w as i32 + sx) * 4) as usize;
+                let dst = (py * feature + px) * 4;
+                ref_patch[dst..dst + 4].copy_from_slice(&curr_img[src..src + 4]);
+            }
+        }
+
+        let search_radius = (tracker.search_size as i32).clamp(2, 64);
+        let [bx, by] = compute_sad_match(
+            &ref_patch, feature, feature,
+            next_img, img_w, img_h,
+            cx, cy, search_radius,
+        );
+
+        // Subpixel refinement along each axis
+        let sad_at = |x: i32, y: i32| -> f32 {
+            let mut shifted = [bx, by];
+            shifted[0] = x as f32;
+            shifted[1] = y as f32;
+            let _ = shifted;
+            // Recompute SAD at integer offsets around best
+            let mut total = 0.0f32;
+            for py in 0..feature {
+                for px in 0..feature {
+                    let tx = x - half as i32 + px as i32;
+                    let ty = y - half as i32 + py as i32;
+                    if tx < 0 || ty < 0 || tx >= img_w as i32 || ty >= img_h as i32 {
+                        continue;
+                    }
+                    let ref_idx = (py * feature + px) * 4;
+                    let tgt_idx = ((ty * img_w as i32 + tx) * 4) as usize;
+                    if ref_idx + 3 < ref_patch.len() && tgt_idx + 3 < next_img.len() {
+                        total += (ref_patch[ref_idx] as f32 - next_img[tgt_idx] as f32).abs()
+                            + (ref_patch[ref_idx + 1] as f32 - next_img[tgt_idx + 1] as f32).abs();
+                    }
+                }
+            }
+            total
+        };
+        let [dx_sub, dy_sub] = subpixel_refine(&sad_at, bx as i32, by as i32);
+
+        // New position = original anchor + (matched center - original center) + subpixel
+        let moved_x = bx as f32 - cx as f32 + dx_sub;
+        let moved_y = by as f32 - cy as f32 + dy_sub;
+        Some([pos[0] + moved_x, pos[1] + moved_y])
+    }
+
+    /// Fallback tracking for layers without pixel data (velocity extrapolation).
+    pub fn track_next_frame_synthetic(
+        layer: &Layer,
+        fps: u32,
+        tracker_idx: usize,
+        current_frame: u32,
+    ) -> Option<[f32; 2]> {
+        if tracker_idx >= layer.trackers.len() {
+            return None;
+        }
         let tracker = &layer.trackers[tracker_idx];
         let current_pos = tracker.position.evaluate(current_frame);
-        let search_size = tracker.search_size;
-
-        let new_pos = match &layer.layer_type {
-            crate::core::timeline::LayerType::Image { path } => {
-                let mut drift_x = (path.len() as f32 * 0.13).sin() * 2.0;
-                let mut drift_y = (path.len() as f32 * 0.29).cos() * 1.5;
-                
-                drift_x = drift_x.clamp(-search_size, search_size);
-                drift_y = drift_y.clamp(-search_size, search_size);
-
-                [current_pos[0] + drift_x, current_pos[1] + drift_y]
-            }
-            _ => {
-                let pos_t0 = layer.transform.eval_position(current_frame, fps);
-                let pos_t1 = layer.transform.eval_position(current_frame + 1, fps);
-                let vel_x = pos_t1[0] - pos_t0[0];
-                let vel_y = pos_t1[1] - pos_t0[1];
-
-                [current_pos[0] + vel_x, current_pos[1] + vel_y]
-            }
-        };
-
-        Some(new_pos)
+        let pos_t0 = layer.transform.eval_position(current_frame, fps);
+        let pos_t1 = layer.transform.eval_position(current_frame + 1, fps);
+        Some([
+            current_pos[0] + (pos_t1[0] - pos_t0[0]),
+            current_pos[1] + (pos_t1[1] - pos_t0[1]),
+        ])
     }
 
     /// Run tracking analysis over a range of frames.
@@ -195,7 +311,14 @@ pub fn compute_sad_match(
                 }
             }
 
-            if sad < min_sad {
+            // Tie-break toward the search center: flat regions (uniform areas)
+            // have many equal-SAD offsets, and without this the first-scanned
+            // corner always won, causing spurious drift.
+            let is_better = sad < min_sad
+                || ((sad - min_sad).abs() <= 1e-3
+                    && (dx.abs() + dy.abs()) < (best_x as i32 - search_center_x).abs()
+                        + (best_y as i32 - search_center_y).abs());
+            if is_better {
                 min_sad = sad;
                 best_x = cx as f32;
                 best_y = cy as f32;
@@ -312,5 +435,78 @@ mod subpixel_tests {
         // Flat valley: nearly equal → high ratio (ambiguous)
         let flat = match_confidence(100.0, 101.0);
         assert!(sharp < 0.2 && flat > 0.99);
+    }
+}
+
+#[cfg(test)]
+mod pixel_tracking_tests {
+    use super::*;
+    use crate::core::timeline::{Composition, Layer, LayerType, TrackerPoint};
+    use crate::core::property::Animatable;
+
+    /// Builds a 64x64 gray frame with a bright square at `sq_x`.
+    fn frame_with_square(sq_x: usize) -> Vec<u8> {
+        let w = 64usize;
+        let h = 64usize;
+        let mut px = vec![30u8; w * h * 4];
+        for y in 20..40 {
+            for x in sq_x..sq_x + 12 {
+                let idx = ((y * w + x) * 4) as usize;
+                px[idx] = 240;
+                px[idx + 1] = 240;
+                px[idx + 2] = 240;
+                px[idx + 3] = 255;
+            }
+        }
+        px
+    }
+
+    #[test]
+    fn test_real_pixel_tracking_follows_moving_feature() {
+        // Square at x=10 in frame A, x=16 in frame B → tracker must move ~+6
+        let curr = frame_with_square(10);
+        let next = frame_with_square(16);
+        let (w, h) = (64usize, 64usize);
+
+        let mut layer = Layer::new("l".into(), "L".into(), LayerType::Null, 30);
+        layer.trackers.push(TrackerPoint {
+            id: "t1".into(),
+            name: "Track".into(),
+            // Straddle the square's LEFT EDGE (square spans x 10..22): gives the
+            // patch a unique texture so the SAD minimum is well-defined.
+            position: Animatable::new_constant([10.0, 32.0]),
+            search_size: 24.0,
+            feature_size: 12.0,
+            reference_pattern: None,
+        });
+
+        let result = TrackerEngine::track_next_frame_pixels(&layer, 0, 0, &curr, &next, w, h);
+        assert!(result.is_some());
+        let new_pos = result.unwrap();
+        // The tracked edge pattern moved +6 px; tracker follows onto the new
+        // edge position.
+        assert!(
+            (new_pos[0] - 16.0).abs() < 1.5,
+            "expected x≈16 (edge followed +6), got {}",
+            new_pos[0]
+        );
+        // Y should stay put
+        assert!((new_pos[1] - 32.0).abs() < 1.5, "expected y≈32, got {}", new_pos[1]);
+    }
+
+    #[test]
+    fn test_tracking_stationary_scene_stays_put() {
+        let f = frame_with_square(20);
+        let mut layer = Layer::new("l".into(), "L".into(), LayerType::Null, 30);
+        layer.trackers.push(TrackerPoint {
+            id: "t1".into(),
+            name: "T".into(),
+            position: Animatable::new_constant([20.0, 32.0]), // on the edge
+            search_size: 20.0,
+            feature_size: 12.0,
+            reference_pattern: None,
+        });
+        let r = TrackerEngine::track_next_frame_pixels(&layer, 0, 0, &f, &f.clone(), 64, 64).unwrap();
+        assert!((r[0] - 20.0).abs() < 0.6 && (r[1] - 32.0).abs() < 0.6, "{:?}", r);
     }
 }
