@@ -98,9 +98,10 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
                             Ok(asset) => {
                                 let src = path.to_string_lossy().to_string();
                                 app.modify_project(|p| {
+                                    let layer_count = p.compositions.len();
                                     let comp = p.active_composition_mut();
                                     let layer = crate::core::timeline::Layer::new(
-                                        format!("video_{}", p.compositions.len()),
+                                        format!("video_{}", layer_count),
                                         name.clone(),
                                         crate::core::timeline::LayerType::Video {
                                             source: src.clone(),
