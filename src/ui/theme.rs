@@ -51,11 +51,8 @@ pub mod layout {
 
 /// Apply global Adobe After Effects high-contrast pro dark theme to egui.
 pub fn configure_ae_theme(ctx: &egui::Context) {
-    // NOTE: temporarily disabled to debug text rendering
-    return;
-    // Force dark theme at the egui level (not just visuals) so text colors,
-    // widget styles, and backgrounds all agree.
-    ctx.set_theme(egui::Theme::Dark);
+    // Force dark theme at the egui level so text colors, widget styles,
+    // and backgrounds all agree.
 
     let mut visuals = egui::Visuals::dark();
 
