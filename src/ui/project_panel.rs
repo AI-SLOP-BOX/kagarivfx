@@ -41,6 +41,9 @@ pub fn draw(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
                             ProjectItemType::Image { width, height, .. } => {
                                 ui.small(format!("{} x {} px | RGB 8-bpc", width, height));
                             }
+                            ProjectItemType::Video { duration_sec, .. } => {
+                                ui.small(format!("Video | {:.1}s", duration_sec));
+                            }
                             ProjectItemType::Audio { duration_sec, .. } => {
                                 ui.small(format!("44.1 kHz / 16-bit / Stereo | {:.1}s", duration_sec));
                             }
@@ -98,6 +101,7 @@ pub fn draw(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
             let (icon_str, item_tag) = match &item.item_type {
                 ProjectItemType::Composition { .. } => ("[COMP]", "Composition"),
                 ProjectItemType::Image { .. } => ("[IMG]", "Footage Image"),
+                ProjectItemType::Video { .. } => ("[VID]", "Footage Video"),
                 ProjectItemType::Audio { .. } => ("[AUD]", "Audio File"),
                 ProjectItemType::Solid { .. } => ("[SOL]", "Solid Color"),
                 ProjectItemType::Folder { .. } => ("[DIR]", "Folder Bin"),
@@ -149,6 +153,10 @@ pub fn draw(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
                     ProjectItemType::Image { path, width, height } => {
                         ui.small(format!("File: {}", path));
                         ui.small(format!("Dimensions: {} x {} px", width, height));
+                    }
+                    ProjectItemType::Video { path, duration_sec } => {
+                        ui.small(format!("File: {}", path));
+                        ui.small(format!("Duration: {:.1}s", duration_sec));
                     }
                     ProjectItemType::Audio { path, duration_sec } => {
                         ui.small(format!("File: {}", path));
@@ -235,6 +243,44 @@ pub fn draw(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
                     LayerType::Solid { color },
                     comp.duration_frames,
                 ),
+                ProjectItemType::Video { path, duration_sec } => {
+                    // Import the video (frame extraction) and add a Video layer
+                    let media_dir = std::env::temp_dir()
+                        .join("aevfx_media")
+                        .join(std::path::Path::new(&path)
+                            .file_stem()
+                            .map(|s| s.to_string_lossy().to_string())
+                            .unwrap_or_else(|| "video".into()));
+                    match crate::core::video_import::import_video(&path, &media_dir, comp.fps as f32) {
+                        Ok(asset) => {
+                            let mut vl = Layer::new(
+                                format!("layer_video_{}", len),
+                                item.name,
+                                LayerType::Video {
+                                    source: asset.source_path,
+                                    frames_dir: asset.frames_dir,
+                                    frame_count: asset.frame_count,
+                                    audio_wav: asset.audio_wav,
+                                    speed: 1.0,
+                                },
+                                comp.duration_frames,
+                            );
+                            vl.out_frame = vl
+                                .out_frame
+                                .min(asset.frame_count.max(1));
+                            vl
+                        }
+                        Err(err) => {
+                            eprintln!("video import failed: {}", err);
+                            Layer::new(
+                                format!("layer_video_failed_{}", len),
+                                format!("{} (import failed)", item.name),
+                                LayerType::Solid { color: [0.6, 0.1, 0.1, 1.0] },
+                                comp.duration_frames,
+                            )
+                        }
+                    }
+                }
                 _ => Layer::new(
                     format!("layer_gen_{}", len),
                     item.name,

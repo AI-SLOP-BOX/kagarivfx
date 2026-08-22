@@ -1514,6 +1514,7 @@ impl Composition {
 pub enum ProjectItemType {
     Composition { comp_idx: usize },
     Image { path: String, width: u32, height: u32 },
+    Video { path: String, duration_sec: f32 },
     Audio { path: String, duration_sec: f32 },
     Solid { color: [f32; 4] },
     Folder { name: String },

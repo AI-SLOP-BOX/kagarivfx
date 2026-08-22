@@ -120,11 +120,15 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
                     include_audio = false;
                 }
                 ui.horizontal(|ui| {
-                    let resp = ui.add(egui::Checkbox::new(&mut include_audio, "Include Audio")
-                        .enabled(has_wav));
-                    if !has_wav {
-                        resp.on_disabled_hover_text("No audio source: import a video with sound first");
-                    }
+                    let resp = ui.add_enabled(
+                        has_wav,
+                        egui::Checkbox::new(&mut include_audio, "Include Audio"),
+                    );
+                    let resp = if has_wav {
+                        resp
+                    } else {
+                        resp.on_disabled_hover_text("No audio source: import a video with sound first")
+                    };
                     if resp.changed() {
                         ctx.data_mut(|d| d.insert_temp(audio_toggle_id, include_audio));
                     }
