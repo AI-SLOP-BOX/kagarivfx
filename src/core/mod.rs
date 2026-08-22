@@ -22,6 +22,7 @@ pub mod autosave;
 #[cfg(feature = "gui")]
 pub mod audio_playback;
 pub mod video_import;
+pub mod mlt_export;
 pub mod project_migration;
 pub mod physics;
 pub mod text_animator;
