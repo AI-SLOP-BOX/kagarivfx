@@ -423,10 +423,17 @@ impl eframe::App for AfterEffectsApp {
         // eframe's system-theme following resetting visuals)
         crate::ui::theme::configure_ae_theme(ctx);
 
-        // One-time startup check for crash recovery snapshots
+        // One-time startup check for crash recovery snapshots.
+        // Only prompt if a "dirty exit" marker exists — written on startup and
+        // removed on clean shutdown. This prevents false positives when the
+        // user simply closed the app normally with autosave files still present.
         if !self.recovery_checked {
             self.recovery_checked = true;
-            if self.autosave.has_recovery() {
+            let dirty_exit_marker = std::env::temp_dir().join("aevfx_dirty_exit");
+            let had_crash = dirty_exit_marker.exists();
+            // Write the marker for THIS session
+            let _ = std::fs::write(&dirty_exit_marker, std::process::id().to_string());
+            if had_crash && self.autosave.has_recovery() {
                 self.recovery_snapshot_time = std::fs::metadata(
                     std::env::temp_dir().join("aevfx_recovery").join("recovery_0.json"),
                 )
@@ -618,6 +625,9 @@ impl eframe::App for AfterEffectsApp {
     }
 
     fn on_exit(&mut self) {
+        // Clean exit — remove the dirty-exit marker so next launch doesn't
+        // show the recovery dialog
+        let _ = std::fs::remove_file(std::env::temp_dir().join("aevfx_dirty_exit"));
         if let Some(ref flag) = self.export_cancel_flag {
             flag.store(true, std::sync::atomic::Ordering::SeqCst);
         }
