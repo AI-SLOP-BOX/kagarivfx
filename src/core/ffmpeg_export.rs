@@ -32,6 +32,9 @@ pub struct ExportConfig {
     pub height: u32,
     pub fps: u32,
     pub total_frames: u32,
+    /// Optional WAV to mux as the audio track (from a video layer's import).
+    /// When None, the export is video-only.
+    pub audio_wav: Option<String>,
 }
 
 /// Check whether `ffmpeg` is available in PATH.
@@ -91,21 +94,38 @@ where
 
             // Build FFmpeg command:
             // Read raw RGBA frames from stdin, encode to H.264 yuv420p MP4.
-            let ffmpeg_result = Command::new("ffmpeg")
-                .args([
-                    "-y",                           // Overwrite output without prompt
-                    "-f", "rawvideo",               // Input format: raw video
-                    "-pix_fmt", "rgba",             // 4 bytes per pixel
-                    "-s", &format!("{}x{}", config.width, config.height),
-                    "-r", &config.fps.to_string(),  // Frame rate
-                    "-i", "pipe:0",                 // Read from stdin
-                    "-c:v", "libx264",              // H.264 encoder
-                    "-preset", "fast",              // Encoding speed/quality tradeoff
-                    "-crf", "18",                   // Constant Rate Factor (quality: 0=lossless, 51=worst)
-                    "-pix_fmt", "yuv420p",          // Required for broad compatibility (iOS, browsers)
-                    "-movflags", "+faststart",      // MP4 faststart for streaming
-                    &config.output_path,
-                ])
+            // When an audio WAV is provided it is muxed as a second input with
+            // AAC encoding, producing a complete AV file.
+            let mut cmd = Command::new("ffmpeg");
+            cmd.arg("-y");
+            if let Some(wav) = &config.audio_wav {
+                // Audio input first (input 0) so the WAV clock defines duration sync
+                cmd.args(["-i", wav]);
+            }
+            cmd.args([
+                "-f", "rawvideo",               // Input format: raw video
+                "-pix_fmt", "rgba",             // 4 bytes per pixel
+                "-s", &format!("{}x{}", config.width, config.height),
+                "-r", &config.fps.to_string(),  // Frame rate
+                "-i", "pipe:0",                 // Read from stdin
+                "-c:v", "libx264",              // H.264 encoder
+                "-preset", "fast",              // Encoding speed/quality tradeoff
+                "-crf", "18",                   // Constant Rate Factor (quality: 0=lossless, 51=worst)
+                "-pix_fmt", "yuv420p",          // Required for broad compatibility (iOS, browsers)
+            ]);
+            if config.audio_wav.is_some() {
+                // Video is input 1 when audio present; encode audio to AAC
+                cmd.args([
+                    "-map", "0:a",
+                    "-map", "1:v",
+                    "-c:a", "aac",
+                    "-b:a", "192k",
+                    "-shortest",
+                ]);
+            }
+            cmd.arg("-movflags").arg("+faststart").arg(&config.output_path);
+
+            let ffmpeg_result = cmd
                 .stdin(Stdio::piped())
                 .stdout(Stdio::null())
                 .stderr(Stdio::piped())
@@ -459,6 +479,7 @@ mod tests {
     #[test]
     fn test_export_config_clone() {
         let cfg = ExportConfig {
+            audio_wav: None,
             output_path: "test.mp4".to_string(),
             width: 1920, height: 1080, fps: 30, total_frames: 90,
         };

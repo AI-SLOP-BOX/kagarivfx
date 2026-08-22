@@ -119,7 +119,15 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
                         let comp_snapshot = comp.clone();
                         let output_path = app.export_output_path.clone();
 
+                        // Mux the first video layer's extracted WAV when present
+                        let audio_wav = app.history.current().active_composition().layers.iter().find_map(|l| {
+                            match &l.layer_type {
+                                crate::core::timeline::LayerType::Video { audio_wav, .. } => audio_wav.clone(),
+                                _ => None,
+                            }
+                        });
                         let config = crate::core::ffmpeg_export::ExportConfig {
+                            audio_wav,
                             output_path: output_path.clone(),
                             width: comp.width,
                             height: comp.height,

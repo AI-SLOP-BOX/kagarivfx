@@ -252,12 +252,17 @@ fn render_to_mp4(comp: &Composition, spec: &RenderSpec) -> Result<(), Box<dyn st
     let cancel_clone = cancel_flag.clone();
     let (tx, rx) = std::sync::mpsc::channel();
 
+    let audio_wav = comp.layers.iter().find_map(|l| match &l.layer_type {
+        aftereffects_oss::core::timeline::LayerType::Video { audio_wav, .. } => audio_wav.clone(),
+        _ => None,
+    });
     let config = ExportConfig {
         output_path: spec.output.to_string(),
         width: spec.w,
         height: spec.h,
         fps: comp.fps,
         total_frames: spec.to.saturating_sub(spec.from) + 1,
+        audio_wav,
     };
 
     let (from, _to, w, h, exposure, lut) = (spec.from, spec.to, spec.w, spec.h, spec.exposure, spec.lut);
@@ -302,12 +307,17 @@ fn render_to_gif(comp: &Composition, spec: &RenderSpec) -> Result<(), Box<dyn st
     let cancel_clone = cancel_flag.clone();
     let (tx, rx) = std::sync::mpsc::channel();
 
+    let audio_wav = comp.layers.iter().find_map(|l| match &l.layer_type {
+        aftereffects_oss::core::timeline::LayerType::Video { audio_wav, .. } => audio_wav.clone(),
+        _ => None,
+    });
     let config = ExportConfig {
         output_path: spec.output.to_string(),
         width: spec.w,
         height: spec.h,
         fps: comp.fps,
         total_frames: spec.to.saturating_sub(spec.from) + 1,
+        audio_wav,
     };
 
     let (from, w, h, exposure, lut) = (spec.from, spec.w, spec.h, spec.exposure, spec.lut);
