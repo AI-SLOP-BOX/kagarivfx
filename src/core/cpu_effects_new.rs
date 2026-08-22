@@ -58,14 +58,14 @@ pub fn apply_chromatic_aberration(
     let cx = width as f32 * 0.5;
     let cy = height as f32 * 0.5;
 
-    for y in 0..height {
-        for x in 0..width {
-            let idx = ((y * width + x) * 4) as usize;
-            if idx + 3 >= pixels.len() {
-                continue;
-            }
-            let dx = (x as f32 - cx) / cx;
-            let dy = (y as f32 - cy) / cy;
+    // Per-pixel independent — parallelized across rows with rayon.
+    tmp.par_chunks_exact_mut(4)
+        .enumerate()
+        .for_each(|(i, out)| {
+            let x = (i % width as usize) as f32;
+            let y = (i / width as usize) as f32;
+            let dx = (x - cx) / cx;
+            let dy = (y - cy) / cy;
             let dist = ((dx * dx + dy * dy).sqrt()).min(1.0);
             let falloff = if edge_falloff < 1.0 {
                 dist.powf(1.0 - edge_falloff.clamp(0.0, 1.0))
@@ -82,24 +82,23 @@ pub fn apply_chromatic_aberration(
                 pixels,
                 width,
                 height,
-                x as f32 + shift_r * falloff * dir_x,
-                y as f32 + shift_r * falloff * dir_y,
+                x + shift_r * falloff * dir_x,
+                y + shift_r * falloff * dir_y,
             );
-            let g_sample = sample_bilinear(pixels, width, height, x as f32, y as f32);
+            let g_sample = sample_bilinear(pixels, width, height, x, y);
             let b_sample = sample_bilinear(
                 pixels,
                 width,
                 height,
-                x as f32 - shift_b * falloff * dir_x,
-                y as f32 - shift_b * falloff * dir_y,
+                x - shift_b * falloff * dir_x,
+                y - shift_b * falloff * dir_y,
             );
 
-            tmp[idx] = r_sample[0];
-            tmp[idx + 1] = g_sample[1];
-            tmp[idx + 2] = b_sample[2];
-            tmp[idx + 3] = g_sample[3];
-        }
-    }
+            out[0] = r_sample[0];
+            out[1] = g_sample[1];
+            out[2] = b_sample[2];
+            out[3] = g_sample[3];
+        });
     pixels[..tmp.len()].copy_from_slice(&tmp);
 }
 
@@ -305,34 +304,33 @@ pub fn apply_motion_blur(
     let inv_samples = 1.0 / samples as f32;
     let mut tmp = vec![0u8; pixels.len()];
 
-    for y in 0..height {
-        for x in 0..width {
-            let idx = ((y * width + x) * 4) as usize;
-            if idx + 3 >= pixels.len() {
-                continue;
-            }
-            let mut sum_r = 0u32;
-            let mut sum_g = 0u32;
-            let mut sum_b = 0u32;
-            let mut sum_a = 0u32;
+    // Directional blur is sample-heavy: parallelize per pixel with rayon.
+    tmp.par_chunks_exact_mut(4)
+        .enumerate()
+        .for_each(|(i, out)| {
+            let x = (i % width as usize) as f32;
+            let y = (i / width as usize) as f32;
+            let mut sum_r = 0f32;
+            let mut sum_g = 0f32;
+            let mut sum_b = 0f32;
+            let mut sum_a = 0f32;
 
             for s in -samples / 2..=samples / 2 {
                 let offset = s as f32;
-                let sx = x as f32 + dir_x * offset;
-                let sy = y as f32 + dir_y * offset;
-                let c = sample_bilinear(pixels, width, height, sx, sy);
-                sum_r += c[0] as u32;
-                sum_g += c[1] as u32;
-                sum_b += c[2] as u32;
-                sum_a += c[3] as u32;
+                let sx = x + dir_x * offset;
+                let sy = y + dir_y * offset;
+                let ch = sample_bilinear(pixels, width, height, sx, sy);
+                sum_r += ch[0] as u32 as f32;
+                sum_g += ch[1] as u32 as f32;
+                sum_b += ch[2] as u32 as f32;
+                sum_a += ch[3] as u32 as f32;
             }
 
-            tmp[idx] = (sum_r as f32 * inv_samples) as u8;
-            tmp[idx + 1] = (sum_g as f32 * inv_samples) as u8;
-            tmp[idx + 2] = (sum_b as f32 * inv_samples) as u8;
-            tmp[idx + 3] = (sum_a as f32 * inv_samples) as u8;
-        }
-    }
+            out[0] = (sum_r * inv_samples) as u8;
+            out[1] = (sum_g * inv_samples) as u8;
+            out[2] = (sum_b * inv_samples) as u8;
+            out[3] = (sum_a * inv_samples) as u8;
+        });
     pixels[..tmp.len()].copy_from_slice(&tmp);
 }
 
