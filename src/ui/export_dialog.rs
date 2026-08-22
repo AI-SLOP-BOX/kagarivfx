@@ -108,6 +108,28 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
                     ui.label(egui::RichText::new(status).color(color));
                     ui.add_space(4.0);
                 }
+                // Include-audio toggle (only meaningful for MP4)
+                let audio_toggle_id = egui::Id::new("ae_export_include_audio");
+                let mut include_audio = ctx.data_mut(|d| {
+                    d.get_temp_mut_or_insert_with(audio_toggle_id, || true).clone()
+                });
+                let has_wav = app.history.current().active_composition().layers.iter().any(|l| {
+                    matches!(&l.layer_type, crate::core::timeline::LayerType::Video { audio_wav: Some(_), .. })
+                });
+                if !has_wav {
+                    include_audio = false;
+                }
+                ui.horizontal(|ui| {
+                    let resp = ui.add(egui::Checkbox::new(&mut include_audio, "Include Audio")
+                        .enabled(has_wav));
+                    if !has_wav {
+                        resp.on_disabled_hover_text("No audio source: import a video with sound first");
+                    }
+                    if resp.changed() {
+                        ctx.data_mut(|d| d.insert_temp(audio_toggle_id, include_audio));
+                    }
+                });
+                ui.separator();
                 ui.horizontal(|ui| {
                     if ui.button("Start Async Render").clicked() {
                         app.is_exporting = true;
@@ -119,13 +141,17 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
                         let comp_snapshot = comp.clone();
                         let output_path = app.export_output_path.clone();
 
-                        // Mux the first video layer's extracted WAV when present
-                        let audio_wav = app.history.current().active_composition().layers.iter().find_map(|l| {
-                            match &l.layer_type {
-                                crate::core::timeline::LayerType::Video { audio_wav, .. } => audio_wav.clone(),
-                                _ => None,
-                            }
-                        });
+                        // Mux the first video layer's extracted WAV when present AND enabled
+                        let audio_wav = if include_audio {
+                            app.history.current().active_composition().layers.iter().find_map(|l| {
+                                match &l.layer_type {
+                                    crate::core::timeline::LayerType::Video { audio_wav, .. } => audio_wav.clone(),
+                                    _ => None,
+                                }
+                            })
+                        } else {
+                            None
+                        };
                         let config = crate::core::ffmpeg_export::ExportConfig {
                             audio_wav,
                             output_path: output_path.clone(),
