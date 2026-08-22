@@ -275,6 +275,7 @@ fn render_to_mp4(comp: &Composition, spec: &RenderSpec) -> Result<(), Box<dyn st
         fps: comp.fps,
         total_frames: spec.to.saturating_sub(spec.from) + 1,
         audio_wav,
+        codec: aftereffects_oss::core::ffmpeg_export::VideoCodec::H264,
     };
 
     let (from, _to, w, h, exposure, lut) = (spec.from, spec.to, spec.w, spec.h, spec.exposure, spec.lut);
@@ -330,6 +331,7 @@ fn render_to_gif(comp: &Composition, spec: &RenderSpec) -> Result<(), Box<dyn st
         fps: comp.fps,
         total_frames: spec.to.saturating_sub(spec.from) + 1,
         audio_wav,
+        codec: aftereffects_oss::core::ffmpeg_export::VideoCodec::H264,
     };
 
     let (from, w, h, exposure, lut) = (spec.from, spec.w, spec.h, spec.exposure, spec.lut);

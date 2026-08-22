@@ -134,6 +134,22 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
                     }
                 });
                 ui.separator();
+
+                // Codec selection
+                ui.horizontal(|ui| {
+                    ui.label("Video Codec:");
+                    let codec_id = egui::Id::new("ae_export_codec");
+                    let mut codec_idx = ctx.data_mut(|d| {
+                        *d.get_temp_mut_or_insert_with(codec_id, || 0usize)
+                    });
+                    if ui.selectable_value(&mut codec_idx, 0, "H.264").changed()
+                        || ui.selectable_value(&mut codec_idx, 1, "ProRes 422").changed()
+                        || ui.selectable_value(&mut codec_idx, 2, "ProRes 4444").changed()
+                    {
+                        ctx.data_mut(|d| d.insert_temp(codec_id, codec_idx));
+                    }
+                });
+
                 ui.horizontal(|ui| {
                     if ui.button("Start Async Render").clicked() {
                         app.is_exporting = true;
@@ -156,6 +172,16 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
                         } else {
                             None
                         };
+                        // Codec selection
+                        let codec_id = egui::Id::new("ae_export_codec");
+                        let codec_idx = ctx.data_mut(|d| {
+                            *d.get_temp_mut_or_insert_with(codec_id, || 0usize)
+                        });
+                        let codec = match codec_idx {
+                            1 => crate::core::ffmpeg_export::VideoCodec::ProRes422,
+                            2 => crate::core::ffmpeg_export::VideoCodec::ProRes4444,
+                            _ => crate::core::ffmpeg_export::VideoCodec::H264,
+                        };
                         let config = crate::core::ffmpeg_export::ExportConfig {
                             audio_wav,
                             output_path: output_path.clone(),
@@ -163,6 +189,7 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
                             height: comp.height,
                             fps: comp.fps,
                             total_frames: total_frames.max(1),
+                            codec,
                         };
 
                         if let Some(old_flag) = app.export_cancel_flag.take() {

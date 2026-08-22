@@ -25,7 +25,19 @@ pub enum ExportEvent {
 }
 
 /// Configuration for the export job.
-#[derive(Debug, Clone)]
+#[derive(Clone, PartialEq, Eq)]
+pub enum VideoCodec {
+    /// H.264 — universal compatibility, small files
+    H264,
+    /// Apple ProRes 422 — professional editing codec, large files
+    ProRes422,
+    /// Apple ProRes 4444 — highest quality, alpha channel support
+    ProRes4444,
+    /// GIF animation
+    Gif,
+}
+
+#[derive(Clone)]
 pub struct ExportConfig {
     pub output_path: String,
     pub width: u32,
@@ -35,6 +47,14 @@ pub struct ExportConfig {
     /// Optional WAV to mux as the audio track (from a video layer's import).
     /// When None, the export is video-only.
     pub audio_wav: Option<String>,
+    /// Video codec selection (default: H264)
+    pub codec: VideoCodec,
+}
+
+impl Default for VideoCodec {
+    fn default() -> Self {
+        Self::H264
+    }
 }
 
 /// Check whether `ffmpeg` is available in PATH.
@@ -108,11 +128,20 @@ where
                 "-s", &format!("{}x{}", config.width, config.height),
                 "-r", &config.fps.to_string(),  // Frame rate
                 "-i", "pipe:0",                 // Read from stdin
-                "-c:v", "libx264",              // H.264 encoder
-                "-preset", "fast",              // Encoding speed/quality tradeoff
-                "-crf", "18",                   // Constant Rate Factor (quality: 0=lossless, 51=worst)
-                "-pix_fmt", "yuv420p",          // Required for broad compatibility (iOS, browsers)
             ]);
+            // Codec-specific encoding args
+            match &config.codec {
+                VideoCodec::H264 => {
+                    cmd.args(["-c:v", "libx264", "-preset", "fast", "-crf", "18", "-pix_fmt", "yuv420p"]);
+                }
+                VideoCodec::ProRes422 => {
+                    cmd.args(["-c:v", "prores_ks", "-profile:v", "3", "-pix_fmt", "yuv422p10le"]);
+                }
+                VideoCodec::ProRes4444 => {
+                    cmd.args(["-c:v", "prores_ks", "-profile:v", "4", "-pix_fmt", "yuva444p10le"]);
+                }
+                VideoCodec::Gif => { /* GIF uses separate pipeline */ }
+            }
             if config.audio_wav.is_some() {
                 // Video is input 1 when audio present; encode audio to AAC
                 cmd.args([
@@ -480,6 +509,7 @@ mod tests {
     fn test_export_config_clone() {
         let cfg = ExportConfig {
             audio_wav: None,
+            codec: VideoCodec::H264,
             output_path: "test.mp4".to_string(),
             width: 1920, height: 1080, fps: 30, total_frames: 90,
         };
