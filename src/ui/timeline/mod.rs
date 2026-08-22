@@ -947,43 +947,53 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                                 }
                             }
 
-                            for effect in &layer.effects {
-                                match &effect.effect_type {
+                            // Effect properties are fully keyframeable: each row
+                            // gets a mutator bound to its own Animatable track.
+                            for effect in layer.effects.iter_mut() {
+                                let fx_name = effect.name.clone();
+                                let moved = &mut project_changed;
+                                macro_rules! fx_row {
+                                    ($label:expr, $anim:expr) => {{
+                                        let kfs = get_kfs($anim);
+                                        draw_prop_row(ui, &format!("  [{}] {}", fx_name, $label), &kfs, current_frame, start_frame, zoom_span, left_pane_w,
+                                            Some(&mut |old_f, new_f| { move_kf($anim, old_f, new_f); *moved = true; }));
+                                    }};
+                                }
+                                match &mut effect.effect_type {
                                     crate::core::timeline::EffectType::GaussianBlur { blur_radius, .. } => {
-                                        draw_prop_row(ui, &format!("  [{}] Blur Radius", effect.name), &get_kfs(blur_radius), current_frame, start_frame, zoom_span, left_pane_w, None);
+                                        fx_row!("Blur Radius", blur_radius);
                                     }
                                     crate::core::timeline::EffectType::ColorTint { intensity, .. } => {
-                                        draw_prop_row(ui, &format!("  [{}] Tint Intensity", effect.name), &get_kfs(intensity), current_frame, start_frame, zoom_span, left_pane_w, None);
+                                        fx_row!("Tint Intensity", intensity);
                                     }
                                     crate::core::timeline::EffectType::DropShadow { distance, softness, .. } => {
-                                        draw_prop_row(ui, &format!("  [{}] Distance", effect.name), &get_kfs(distance), current_frame, start_frame, zoom_span, left_pane_w, None);
-                                        draw_prop_row(ui, &format!("  [{}] Softness", effect.name), &get_kfs(softness), current_frame, start_frame, zoom_span, left_pane_w, None);
+                                        fx_row!("Distance", distance);
+                                        fx_row!("Softness", softness);
                                     }
                                     crate::core::timeline::EffectType::HueSaturation { hue_shift, saturation, lightness } => {
-                                        draw_prop_row(ui, &format!("  [{}] Hue Shift", effect.name), &get_kfs(hue_shift), current_frame, start_frame, zoom_span, left_pane_w, None);
-                                        draw_prop_row(ui, &format!("  [{}] Saturation", effect.name), &get_kfs(saturation), current_frame, start_frame, zoom_span, left_pane_w, None);
-                                        draw_prop_row(ui, &format!("  [{}] Lightness", effect.name), &get_kfs(lightness), current_frame, start_frame, zoom_span, left_pane_w, None);
+                                        fx_row!("Hue Shift", hue_shift);
+                                        fx_row!("Saturation", saturation);
+                                        fx_row!("Lightness", lightness);
                                     }
-                                    crate::core::timeline::EffectType::Glow { threshold, radius, intensity, color } => {
-                                        draw_prop_row(ui, &format!("  [{}] Threshold", effect.name), &get_kfs(threshold), current_frame, start_frame, zoom_span, left_pane_w, None);
-                                        draw_prop_row(ui, &format!("  [{}] Radius", effect.name), &get_kfs(radius), current_frame, start_frame, zoom_span, left_pane_w, None);
-                                        draw_prop_row(ui, &format!("  [{}] Intensity", effect.name), &get_kfs(intensity), current_frame, start_frame, zoom_span, left_pane_w, None);
-                                        draw_prop_row(ui, &format!("  [{}] Color", effect.name), &get_kfs(color), current_frame, start_frame, zoom_span, left_pane_w, None);
+                                    crate::core::timeline::EffectType::Glow { threshold, radius, intensity, .. } => {
+                                        fx_row!("Threshold", threshold);
+                                        fx_row!("Radius", radius);
+                                        fx_row!("Intensity", intensity);
                                     }
                                     crate::core::timeline::EffectType::MotionBlur { shutter_angle, .. } => {
-                                        draw_prop_row(ui, &format!("  [{}] Shutter Angle", effect.name), &get_kfs(shutter_angle), current_frame, start_frame, zoom_span, left_pane_w, None);
+                                        fx_row!("Shutter Angle", shutter_angle);
                                     }
                                     crate::core::timeline::EffectType::MeshWarp { top_left, top_right, bottom_left, bottom_right } => {
-                                        draw_prop_row(ui, &format!("  [{}] Top Left", effect.name), &get_kfs(top_left), current_frame, start_frame, zoom_span, left_pane_w, None);
-                                        draw_prop_row(ui, &format!("  [{}] Top Right", effect.name), &get_kfs(top_right), current_frame, start_frame, zoom_span, left_pane_w, None);
-                                        draw_prop_row(ui, &format!("  [{}] Bottom Left", effect.name), &get_kfs(bottom_left), current_frame, start_frame, zoom_span, left_pane_w, None);
-                                        draw_prop_row(ui, &format!("  [{}] Bottom Right", effect.name), &get_kfs(bottom_right), current_frame, start_frame, zoom_span, left_pane_w, None);
+                                        fx_row!("Top Left", top_left);
+                                        fx_row!("Top Right", top_right);
+                                        fx_row!("Bottom Left", bottom_left);
+                                        fx_row!("Bottom Right", bottom_right);
                                     }
                                     crate::core::timeline::EffectType::ColorGradeLUT { intensity, .. } => {
-                                        draw_prop_row(ui, &format!("  [{}] LUT Intensity", effect.name), &get_kfs(intensity), current_frame, start_frame, zoom_span, left_pane_w, None);
+                                        fx_row!("LUT Intensity", intensity);
                                     }
                                     crate::core::timeline::EffectType::FilmGrain { intensity, .. } => {
-                                        draw_prop_row(ui, &format!("  [{}] Grain Intensity", effect.name), &get_kfs(intensity), current_frame, start_frame, zoom_span, left_pane_w, None);
+                                        fx_row!("Grain Intensity", intensity);
                                     }
                                     _ => {}
                                 }
