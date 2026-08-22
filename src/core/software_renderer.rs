@@ -509,25 +509,19 @@ pub fn render_frame_to_pixels(comp: &Composition, frame: u32, width: u32, height
         skip: bool,
     }
 
-    let layer_count = comp.layers.len();
-    let mut layer_data: Vec<LayerRenderData> = Vec::with_capacity(layer_count);
-
-    {
+    let layer_data: Vec<LayerRenderData> = {
         use rayon::prelude::*;
-        let data: Vec<LayerRenderData> = comp.layers
+        comp.layers
             .par_iter()
             .map(|layer| {
-                let mut d = LayerRenderData::default();
-                d.skip = true; // skip unless proven visible
-
-                if !layer.is_active(frame) { return d; }
-                if has_solo && !layer.solo { return d; }
-                if !layer.visible { return d; }
+                if !layer.is_active(frame) || (has_solo && !layer.solo) || !layer.visible {
+                    return LayerRenderData::default(); // skip=true
+                }
 
                 let effective_frame = layer.remap_frame(frame);
                 let (pos, scale, rotation, opacity) = comp.resolve_world_transform(layer, effective_frame);
                 let l_opacity = (opacity / 100.0).clamp(0.0, 1.0);
-                if l_opacity < 0.001 { return d; }
+                if l_opacity < 0.001 { return LayerRenderData::default(); }
 
                 let mut mask_vertices = Vec::new();
                 let mut mask_feather = 0.0;
@@ -541,20 +535,20 @@ pub fn render_frame_to_pixels(comp: &Composition, frame: u32, width: u32, height
                     }
                 }
 
-                d.effective_frame = effective_frame;
-                d.pos = pos;
-                d.scale = scale;
-                d.rotation = rotation;
-                d.l_opacity = l_opacity;
-                d.mask_vertices = mask_vertices;
-                d.mask_feather = mask_feather;
-                d.mask_inverted = mask_inverted;
-                d.skip = false;
-                d
+                LayerRenderData {
+                    effective_frame,
+                    pos,
+                    scale,
+                    rotation,
+                    l_opacity,
+                    mask_vertices,
+                    mask_feather,
+                    mask_inverted,
+                    skip: false,
+                }
             })
-            .collect();
-        layer_data = data;
-    }
+            .collect()
+    };
 
     let mut layer_idx = 0usize;
     for layer in &comp.layers {
@@ -622,10 +616,10 @@ pub fn render_frame_to_pixels(comp: &Composition, frame: u32, width: u32, height
                             // Vector mask check
                             let mut mask_alpha = 1.0;
                             if !mask_vertices.is_empty() {
-                                let inside = point_in_polygon(px as f32, py as f32, &mask_vertices);
+                                let inside = point_in_polygon(px as f32, py as f32, mask_vertices);
                                 let actual_inside = if mask_inverted { !inside } else { inside };
                                 if mask_feather > 0.1 {
-                                    let dist = distance_to_polygon(px as f32, py as f32, &mask_vertices);
+                                    let dist = distance_to_polygon(px as f32, py as f32, mask_vertices);
                                     mask_alpha = if actual_inside {
                                         (dist / mask_feather).clamp(0.0, 1.0)
                                     } else {
@@ -915,10 +909,10 @@ pub fn render_frame_to_pixels(comp: &Composition, frame: u32, width: u32, height
                             // Vector mask check
                             let mut mask_alpha = 1.0;
                             if !mask_vertices.is_empty() {
-                                let is_inside = point_in_polygon(px as f32, py as f32, &mask_vertices);
+                                let is_inside = point_in_polygon(px as f32, py as f32, mask_vertices);
                                 let actual_inside = if mask_inverted { !is_inside } else { is_inside };
                                 if mask_feather > 0.1 {
-                                    let dist = distance_to_polygon(px as f32, py as f32, &mask_vertices);
+                                    let dist = distance_to_polygon(px as f32, py as f32, mask_vertices);
                                     mask_alpha = if actual_inside {
                                         (dist / mask_feather).clamp(0.0, 1.0)
                                     } else {
@@ -1013,10 +1007,10 @@ pub fn render_frame_to_pixels(comp: &Composition, frame: u32, width: u32, height
                             // Vector mask check
                             let mut mask_alpha = 1.0;
                             if !mask_vertices.is_empty() {
-                                let is_inside = point_in_polygon(px as f32, py as f32, &mask_vertices);
+                                let is_inside = point_in_polygon(px as f32, py as f32, mask_vertices);
                                 let actual_inside = if mask_inverted { !is_inside } else { is_inside };
                                 if mask_feather > 0.1 {
-                                    let dist = distance_to_polygon(px as f32, py as f32, &mask_vertices);
+                                    let dist = distance_to_polygon(px as f32, py as f32, mask_vertices);
                                     mask_alpha = if actual_inside {
                                         (dist / mask_feather).clamp(0.0, 1.0)
                                     } else {
@@ -1062,11 +1056,11 @@ pub fn render_frame_to_pixels(comp: &Composition, frame: u32, width: u32, height
                     // Vector mask check with feathering support
                     let mut mask_alpha = 1.0;
                     if !mask_vertices.is_empty() {
-                        let is_inside = point_in_polygon(px as f32, py as f32, &mask_vertices);
+                        let is_inside = point_in_polygon(px as f32, py as f32, mask_vertices);
                         let actual_inside = if mask_inverted { !is_inside } else { is_inside };
 
                         if mask_feather > 0.1 {
-                            let dist = distance_to_polygon(px as f32, py as f32, &mask_vertices);
+                            let dist = distance_to_polygon(px as f32, py as f32, mask_vertices);
                             if actual_inside {
                                 mask_alpha = (dist / mask_feather).clamp(0.0, 1.0);
                             } else {
