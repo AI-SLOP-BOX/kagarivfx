@@ -1294,6 +1294,13 @@ pub fn render_frame_to_pixels(comp: &Composition, frame: u32, width: u32, height
             r = r.powf(2.2);
             g = g.powf(2.2);
             b = b.powf(2.2);
+        } else if lut_mode == 3 {
+            // User-loaded 3D LUT (tetrahedral interpolation); falls back to
+            // passthrough when no LUT is loaded.
+            let (nr, ng, nb) = crate::core::ocio_color::apply_lut_pixel(r, g, b);
+            r = nr;
+            g = ng;
+            b = nb;
         } else if lut_mode == 2 {
             // ACEScg filmic tone mapping curve
             let a = 2.51f32;
