@@ -240,6 +240,18 @@ fn render_to_png_sequence(comp: &Composition, spec: &RenderSpec) -> Result<(), B
     Ok(())
 }
 
+/// Render a single frame as JPEG with quality setting.
+fn write_jpeg(path: &str, rgba: &[u8], width: u32, height: u32, quality: u8) -> Result<(), Box<dyn std::error::Error>> {
+    let img = image::RgbaImage::from_raw(width, height, rgba.to_vec())
+        .ok_or("pixel buffer size mismatch")?;
+    let rgb = image::DynamicImage::ImageRgba8(img).to_rgb8();
+    let file = std::fs::File::create(path)?;
+    let mut writer = std::io::BufWriter::new(file);
+    let encoder = image::codecs::jpeg::JpegEncoder::new_with_quality(&mut writer, quality.min(100));
+    rgb.write_with_encoder(encoder)?;
+    Ok(())
+}
+
 fn render_to_mp4(comp: &Composition, spec: &RenderSpec) -> Result<(), Box<dyn std::error::Error>> {
     use aftereffects_oss::core::ffmpeg_export::{is_ffmpeg_available, ExportConfig, start_export_cancelable};
     use std::sync::{Arc, atomic::AtomicBool};
