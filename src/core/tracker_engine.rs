@@ -138,8 +138,8 @@ impl TrackerEngine {
         let [dx_sub, dy_sub] = subpixel_refine(&sad_at, bx as i32, by as i32);
 
         // New position = original anchor + (matched center - original center) + subpixel
-        let moved_x = bx as f32 - cx as f32 + dx_sub;
-        let moved_y = by as f32 - cy as f32 + dy_sub;
+        let moved_x = bx - cx as f32 + dx_sub;
+        let moved_y = by - cy as f32 + dy_sub;
         Some([pos[0] + moved_x, pos[1] + moved_y])
     }
 
