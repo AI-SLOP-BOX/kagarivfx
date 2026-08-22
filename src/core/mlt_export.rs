@@ -78,9 +78,7 @@ impl MltExporter {
 
         // Playlist track referencing all produced entries
         xml.push_str("  <playlist id=\"playlist0\">\n");
-        xml.push_str(&format!(
-            "    <property name=\"shotcut:video\">1</property>\n"
-        ));
+        xml.push_str("    <property name=\"shotcut:video\">1</property>\n");
         xml.push_str("    <entry producer=\"black\" in=\"00:00:00.000\" out=\"00:00:00.000\">\n");
         xml.push_str("      <property name=\"blank_length\">00:00:00.040</property>\n");
         xml.push_str("    </entry>\n");
