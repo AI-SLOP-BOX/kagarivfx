@@ -420,6 +420,51 @@ pub fn handle_global_shortcuts(
             app.show_export_dialog = true;
         }
 
+        // ── Timeline markers: M adds/removes a marker at the playhead ──
+        // (single-key M is free; Cmd+M opens export)
+        if allow_single_key && !cmd && i.key_pressed(Key::M) {
+            let frame = *current_frame;
+            app.modify_project(|p| {
+                let comp = p.active_composition_mut();
+                if let Some(existing) = comp.markers.iter().position(|m| m.frame == frame) {
+                    comp.markers.remove(existing);
+                } else {
+                    comp.markers.push(crate::core::timeline::TimelineMarker {
+                        frame,
+                        label: format!("M{}", comp.markers.len() + 1),
+                        color: [0.2, 0.9, 0.5],
+                    });
+                }
+            });
+        }
+
+        // ── Jump between markers: Shift+M cycles forward, Alt+M backward? Use [ ] keys ──
+        if allow_single_key && i.key_pressed(Key::OpenBracket) || allow_single_key && i.key_pressed(Key::CloseBracket) {
+            let forward = i.key_pressed(Key::CloseBracket);
+            let project = app.history.current();
+            let mut frames: Vec<u32> = project
+                .active_composition()
+                .markers
+                .iter()
+                .map(|m| m.frame)
+                .collect();
+            frames.sort_unstable();
+            frames.dedup();
+            if !frames.is_empty() {
+                let target = if forward {
+                    frames.iter().find(|&&f| f > *current_frame).copied()
+                } else {
+                    frames.iter().rev().find(|&&f| f < *current_frame).copied()
+                };
+                if let Some(f) = target {
+                    *current_frame = f;
+                } else {
+                    // wrap around
+                    *current_frame = if forward { frames[0] } else { frames[frames.len() - 1] };
+                }
+            }
+        }
+
         // Cmd+Shift+C → Pre-Compose Selected Layers
         if cmd && shift && i.key_pressed(Key::C) {
             let mut temp_project = app.history.current().clone();
