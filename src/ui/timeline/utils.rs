@@ -1,3 +1,4 @@
+use crate::core::keyframe::InterpolationType;
 use eframe::egui;
 use crate::core::property::Animatable;
 
@@ -60,14 +61,37 @@ pub fn draw_keyframe_tick(
         egui::Color32::from_rgb(180, 180, 180)
     };
 
+    // Shape by interpolation type: diamond=bezier/ease, circle=linear, square=hold
     let painter = ui.painter();
-    let pts = vec![
-        egui::pos2(x, y - size),
-        egui::pos2(x + size, y),
-        egui::pos2(x, y + size),
-        egui::pos2(x - size, y),
-    ];
-    painter.add(egui::Shape::convex_polygon(pts, color, egui::Stroke::NONE));
+    let is_linear = matches!(_interpolation, Some(InterpolationType::Linear));
+    let is_hold = matches!(_interpolation, Some(InterpolationType::Hold));
+
+    if is_selected {
+        // Selection glow ring behind keyframe
+        painter.circle_filled(egui::pos2(x, y), size + 3.0,
+            egui::Color32::from_rgba_unmultiplied(255, 140, 0, 50));
+        painter.circle_stroke(egui::pos2(x, y), size + 2.0,
+            egui::Stroke::new(1.5, egui::Color32::from_rgb(255, 120, 20)));
+    }
+
+    if is_linear {
+        // Linear: circle (AE convention)
+        painter.circle_filled(egui::pos2(x, y), size * 0.8, color);
+    } else if is_hold {
+        // Hold: square (AE convention)
+        painter.rect_filled(
+            egui::Rect::from_center_size(egui::pos2(x, y), egui::vec2(size * 1.4, size * 1.4)),
+            1.0, color);
+    } else {
+        // Bezier/Default: diamond (AE convention)
+        let pts = vec![
+            egui::pos2(x, y - size),
+            egui::pos2(x + size, y),
+            egui::pos2(x, y + size),
+            egui::pos2(x - size, y),
+        ];
+        painter.add(egui::Shape::convex_polygon(pts.to_vec(), color, egui::Stroke::NONE));
+    }
 
     if is_selected {
         let sel_rect = egui::Rect::from_center_size(egui::pos2(x, y), egui::vec2(size * 2.0, size * 2.0));
