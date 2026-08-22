@@ -35,6 +35,17 @@ pub fn set_wipe_pos(ctx: &egui::Context, pos: f32) {
 }
 
 /// Fit composition into viewport rect, then apply AE magnification ratio (0 = Fit).
+/// Like compute_draw_layout but with a pan offset applied after centering.
+pub fn compute_draw_layout_pan(
+    rect: egui::Rect,
+    aspect: f32,
+    mag_ratio: f32,
+    pan: egui::Vec2,
+) -> (f32, f32, f32, f32) {
+    let (origin_x, origin_y, draw_w, draw_h) = compute_draw_layout(rect, aspect, mag_ratio);
+    (origin_x + pan.x, origin_y + pan.y, draw_w, draw_h)
+}
+
 pub fn compute_draw_layout(rect: egui::Rect, aspect: f32, mag_ratio: f32) -> (f32, f32, f32, f32) {
     let safe_aspect = if aspect.is_nan() || aspect <= 0.001 { 1.0 } else { aspect };
     let mut fit_w = rect.width();

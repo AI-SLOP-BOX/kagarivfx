@@ -59,7 +59,7 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: u32) 
         let size = ui.available_size();
         let (rect, viewport_response) = ui.allocate_exact_size(size, egui::Sense::click_and_drag());
 
-        // ── Viewport zoom: scroll wheel scales the magnification around the pointer ──
+        // ── Viewport zoom: scroll wheel scales magnification anchored at the pointer ──
         if viewport_response.hovered() {
             let scroll_y = ui.input(|i| i.raw_scroll_delta.y);
             if scroll_y != 0.0 && !ui.input(|i| i.modifiers.command) {
@@ -67,12 +67,38 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: u32) 
                 let current = if app.viewport_mag_ratio == 0.0 { 1.0 } else { app.viewport_mag_ratio };
                 let factor = if scroll_y > 0.0 { 1.1 } else { 1.0 / 1.1 };
                 let new_mag = (current * factor).clamp(0.05, 8.0);
-                // Keep the point under the cursor stationary: adjust pan by the
-                // difference between old and new content scale.
-                let _ = new_mag; // pan anchor handled below via mag ratio only (v1)
+
+                // Keep the content point under the cursor stationary:
+                // screen_delta = content_pos * (new_scale - old_scale), where scale
+                // is measured relative to the fit size.
+                if let Some(pointer) = viewport_response.hover_pos() {
+                    let aspect = {
+                        let comp = app.history.current().active_composition();
+                        comp.width as f32 / comp.height as f32
+                    };
+                    let (fit_w, fit_h) = {
+                        let mut fw = rect.width();
+                        let mut fh = fw / aspect;
+                        if fh > rect.height() {
+                            fh = rect.height();
+                            fw = fh * aspect;
+                        }
+                        (fw, fh)
+                    };
+                    let center = rect.center();
+                    // Content coordinate under the pointer at the OLD zoom
+                    let old_scale = if app.viewport_mag_ratio == 0.0 { 1.0 } else { app.viewport_mag_ratio };
+                    let content = egui::vec2(
+                        (pointer.x - center.x) / (fit_w * old_scale),
+                        (pointer.y - center.y) / (fit_h * old_scale),
+                    );
+                    // Pan adjustment keeps that content point at the pointer
+                    app.viewport_pan.x += content.x * fit_w * (old_scale - new_mag);
+                    app.viewport_pan.y += content.y * fit_h * (old_scale - new_mag);
+                }
                 app.viewport_mag_ratio = new_mag;
             }
-            // Space+drag pans via the existing Hand tool; also allow middle-drag
+            // Middle-drag pans regardless of active tool (AE behavior)
             if ui.input(|i| i.pointer.middle_down()) {
                 app.active_tool = crate::ui::toolbar::ActiveTool::Hand;
             }
@@ -84,7 +110,7 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: u32) 
         let comp = app.history.current().active_composition();
         let aspect = comp.width as f32 / comp.height as f32;
         let (origin_x, origin_y, draw_w, draw_h) =
-            crate::ui::viewport_state::compute_draw_layout(rect, aspect, app.viewport_mag_ratio);
+            crate::ui::viewport_state::compute_draw_layout_pan(rect, aspect, app.viewport_mag_ratio, app.viewport_pan);
         let draw_rect = egui::Rect::from_min_size(
             egui::pos2(origin_x, origin_y),
             egui::vec2(draw_w, draw_h),

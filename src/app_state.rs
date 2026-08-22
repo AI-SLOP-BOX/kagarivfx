@@ -13,6 +13,8 @@ pub struct PlaybackDomainState {
     /// budget, the factor drops so playback stays smooth; it recovers when fast.
     /// This mirrors AE's automatic resolution reduction during RAM preview.
     pub adaptive_preview_factor: f32,
+    /// Viewport pan offset in screen pixels (used with zoom != Fit).
+    pub viewport_pan: eframe::egui::Vec2,
     /// Exponential moving average of GPU render time in milliseconds.
     pub preview_render_ema_ms: f32,
     pub current_frame: u32,
@@ -26,6 +28,7 @@ impl Default for PlaybackDomainState {
         Self {
             is_playing: false,
             adaptive_preview_factor: 1.0,
+            viewport_pan: eframe::egui::Vec2::ZERO,
             preview_render_ema_ms: 0.0,
             current_frame: 0,
             master_volume: 1.0,
@@ -150,6 +153,8 @@ pub struct AfterEffectsApp {
     /// budget, the factor drops so playback stays smooth; it recovers when fast.
     /// This mirrors AE's automatic resolution reduction during RAM preview.
     pub adaptive_preview_factor: f32,
+    /// Viewport pan offset in screen pixels (used with zoom != Fit).
+    pub viewport_pan: eframe::egui::Vec2,
     /// Exponential moving average of GPU render time in milliseconds.
     pub preview_render_ema_ms: f32,
     pub current_frame: u32,
