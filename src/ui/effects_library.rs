@@ -242,6 +242,45 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                 ui.separator();
             
             if let Some(idx) = app.selected_layer_idx {
+                // ── Categorized effect browser with search ──
+                let presets = crate::ui::effects_controls::get_all_effect_presets();
+                let search_q = app.effects_search_query.to_lowercase();
+
+                // Category assignment by effect name
+                fn category_of(name: &str) -> &'static str {
+                    if name.contains("Blur") || name.contains("Sharpen") { "Blur & Sharpen" }
+                    else if name.contains("Tint") || name.contains("Hue") || name.contains("LUT")
+                         || name.contains("Levels") || name.contains("Log Space") { "Color Correction" }
+                    else if name.contains("Warp") || name.contains("Bulge") || name.contains("Twirl")
+                         || name.contains("Offset") { "Distort" }
+                    else if name.contains("Glow") || name.contains("Grain") || name.contains("Vignette")
+                         || name.contains("Aberration") { "Stylize" }
+                    else { "Other" }
+                }
+
+                ui.collapsing("Effect Browser (categorized)", |ui| {
+                    let categories = ["Blur & Sharpen", "Color Correction", "Distort", "Stylize", "Other"];
+                    for cat in categories {
+                        let matching: Vec<_> = presets.iter()
+                            .filter(|p| category_of(p.name) == cat)
+                            .filter(|p| search_q.is_empty() || p.search_key.contains(&search_q) || p.name.to_lowercase().contains(&search_q))
+                            .collect();
+                        if matching.is_empty() { continue; }
+                        ui.collapsing(format!("{} ({})", cat, matching.len()), |ui| {
+                            for p in matching {
+                                if ui.button(p.button_label).clicked() {
+                                    let comp = temp_project.active_composition_mut();
+                                    if idx < comp.layers.len() {
+                                        let effect = (p.create_fn)(comp.layers[idx].effects.len());
+                                        comp.layers[idx].effects.push(effect);
+                                        project_changed = true;
+                                    }
+                                }
+                            }
+                        });
+                    }
+                });
+
                 ui.label("Add Effect to Selected Layer:");
                 ui.group(|ui| {
                     ui.label(egui::RichText::new("AI Motion VFX Auto-Generator").strong().color(egui::Color32::from_rgb(0, 200, 255)));
