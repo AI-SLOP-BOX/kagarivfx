@@ -317,7 +317,8 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                     ui.add_space(8.0);
                     
                     // Layer Type specifics
-                    crate::ui::inspector_layer::draw_layer_type_specs(ui, layer, *current_frame, &mut project_changed, &mut next_frame);
+                    let comp_fps = comp.fps as f32;
+                    crate::ui::inspector_layer::draw_layer_type_specs(ui, layer, *current_frame, &mut project_changed, &mut next_frame, comp_fps);
 
                     // ── Masks Control Section ──
                     ui.add_space(6.0);

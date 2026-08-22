@@ -247,6 +247,7 @@ pub fn draw_layer_type_specs(
     current_frame: u32,
     project_changed: &mut bool,
     next_frame: &mut Option<u32>,
+    comp_fps: f32,
 ) {
     ui.group(|ui| {
         ui.label("Layer Specs");
@@ -264,9 +265,11 @@ pub fn draw_layer_type_specs(
                 ui.text_edit_singleline(path);
                 if val_before != *path { *project_changed = true; }
             }
-            LayerType::Video { source, frames_dir, frame_count, audio_wav, .. } => {
+            LayerType::Video { source, frames_dir, frame_count, audio_wav, speed } => {
                 let before_src = source.clone();
                 let before_frames = frames_dir.clone();
+                let before_speed = *speed;
+                let before_count = *frame_count;
                 ui.label(egui::RichText::new("Video Layer").strong());
                 ui.horizontal(|ui| {
                     ui.label("Source:");
@@ -276,9 +279,31 @@ pub fn draw_layer_type_specs(
                     ui.label("Frames dir:");
                     ui.text_edit_singleline(frames_dir);
                 });
-                ui.label(format!("{} frames | audio: {}", frame_count,
-                    if audio_wav.is_some() { "yes" } else { "no" }));
-                if before_src != *source || before_frames != *frames_dir {
+                // Playback speed: 1.0 = realtime, 0.5 = half, 2.0 = double
+                ui.horizontal(|ui| {
+                    ui.label("Speed:");
+                    ui.add(
+                        egui::DragValue::new(speed)
+                            .speed(0.05)
+                            .clamp_range(0.05..=10.0)
+                            .suffix("x"),
+                    );
+                    if ui.button("1x").on_hover_text("Reset to realtime").clicked() {
+                        *speed = 1.0;
+                    }
+                });
+                ui.horizontal(|ui| {
+                    ui.label("Frame count:");
+                    ui.add(egui::DragValue::new(frame_count).clamp_range(1..=100_000));
+                });
+                ui.label(format!(
+                    "Effective duration: {:.1}s at {:.2}x | audio: {}",
+                    *frame_count as f32 / comp_fps.max(1.0) / speed.max(0.01),
+                    speed,
+                    if audio_wav.is_some() { "yes" } else { "no" }
+                ));
+                if before_src != *source || before_frames != *frames_dir
+                    || before_speed != *speed || before_count != *frame_count {
                     *project_changed = true;
                 }
             }
