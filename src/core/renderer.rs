@@ -232,6 +232,8 @@ struct TextRasterParams {
 type RenderKey = (u64, u32, u32, u32, (u32, u32));
 type TextTextureKey = (String, String, u32, [u32; 4], u32);
 type TextTextureCache = std::collections::HashMap<TextTextureKey, (wgpu::Texture, std::sync::Arc<wgpu::BindGroup>, u32, u32)>;
+type VideoFrameKey = (String, String, u32);
+type VideoFrameCache = std::collections::HashMap<VideoFrameKey, (std::sync::Arc<wgpu::Texture>, std::sync::Arc<wgpu::BindGroup>)>;
 
 #[allow(dead_code)]
 pub struct WgpuRenderer {
@@ -281,6 +283,7 @@ pub struct WgpuRenderer {
 
     // GPU text rendering: cache of CPU-rasterized text textures keyed by (layer_id, text, font_size)
     text_texture_cache: std::cell::RefCell<TextTextureCache>,
+    video_frame_cache: std::cell::RefCell<VideoFrameCache>,
 }
 
 impl WgpuRenderer {
@@ -541,6 +544,7 @@ impl WgpuRenderer {
             snapshot_texture: None,
             snapshot_view: None,
             text_texture_cache: std::cell::RefCell::new(std::collections::HashMap::new()),
+            video_frame_cache: std::cell::RefCell::new(std::collections::HashMap::new()),
             last_main_key: None,
             last_snapshot_key: None,
             ram_ring: Vec::new(),
@@ -834,6 +838,18 @@ impl WgpuRenderer {
                 // size the quad to the text bitmap and render via the image sampling path.
                 let mut text_bind_group: Option<std::sync::Arc<wgpu::BindGroup>> = None;
                 let mut is_textured_text = false;
+                // Video layers sample their frame sequence via the image path too,
+                // but keep composition-sized geometry (unlike text, which fits the bitmap).
+                let mut is_video_frame = false;
+                if let LayerType::Video { frames_dir, frame_count, .. } = &layer.layer_type {
+                    let seq_frame = frame.min(frame_count.saturating_sub(1));
+                    if let Some((_, _, bg)) =
+                        self.get_or_create_video_frame_texture(&layer.id, frames_dir, seq_frame)
+                    {
+                        text_bind_group = Some(bg);
+                        is_video_frame = true;
+                    }
+                }
                 if let LayerType::Text { text, font_size, color, font_family, tracking, leading, align, stroke_color, stroke_width, .. } = &layer.layer_type {
                     let params = TextRasterParams {
                         text: text.clone(), font_size: *font_size, color: *color,
@@ -924,7 +940,7 @@ impl WgpuRenderer {
                 };
 
                 // Textured text uses the image sampling path with unmodified texture colors
-                if is_textured_text {
+                if is_textured_text || is_video_frame {
                     layer_type = 1u32;
                     color = [1.0, 1.0, 1.0, 1.0];
                 }
@@ -1170,6 +1186,73 @@ impl WgpuRenderer {
     pub fn clear_ram_preview(&mut self) {
         self.ram_ring.clear();
         self.ram_ring_version = 0;
+    }
+
+    /// Uploads a video frame PNG as a GPU texture, cached by (layer, dir, frame).
+    /// Pixels come from the shared CPU image cache, so playback reuses decoded data.
+    fn get_or_create_video_frame_texture(
+        &self,
+        layer_id: &str,
+        frames_dir: &str,
+        frame_idx: u32,
+    ) -> Option<(u32, u32, std::sync::Arc<wgpu::BindGroup>)> {
+        let key: VideoFrameKey = (layer_id.to_string(), frames_dir.to_string(), frame_idx);
+        if let Some(bg) = self.video_frame_cache.borrow().get(&key).map(|(_, bg)| bg.clone()) {
+            return Some((1, 1, bg));
+        }
+        let png_path = std::path::Path::new(frames_dir)
+            .join(format!("frame_{:05}.png", frame_idx))
+            .to_string_lossy()
+            .to_string();
+        let (tw, th, pixels) = {
+            use crate::core::image_cache::with_image_cache;
+            with_image_cache(|cache| {
+                cache.load_image(&png_path).map(|img| {
+                    (img.width, img.height, img.pixels.clone())
+                })
+            })?
+        };
+
+        let size = wgpu::Extent3d { width: tw, height: th, depth_or_array_layers: 1 };
+        let texture = self.device.create_texture(&wgpu::TextureDescriptor {
+            label: Some("Video Frame Texture"),
+            size,
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: wgpu::TextureFormat::Rgba8UnormSrgb,
+            usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+            view_formats: &[],
+        });
+        self.queue.write_texture(
+            wgpu::ImageCopyTexture {
+                texture: &texture,
+                mip_level: 0,
+                origin: wgpu::Origin3d::ZERO,
+                aspect: wgpu::TextureAspect::All,
+            },
+            &pixels,
+            wgpu::ImageDataLayout {
+                offset: 0,
+                bytes_per_row: Some(tw * 4),
+                rows_per_image: Some(th),
+            },
+            size,
+        );
+        let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
+        let bind_group = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
+            layout: &self.texture_bind_group_layout,
+            entries: &[
+                wgpu::BindGroupEntry { binding: 0, resource: wgpu::BindingResource::TextureView(&view) },
+                wgpu::BindGroupEntry { binding: 1, resource: wgpu::BindingResource::Sampler(&self.sampler) },
+            ],
+            label: Some("video_frame_bind_group"),
+        });
+        let bind_group = std::sync::Arc::new(bind_group);
+        self.video_frame_cache
+            .borrow_mut()
+            .insert(key, (std::sync::Arc::new(texture), bind_group.clone()));
+        Some((tw, th, bind_group))
     }
 
     /// Caps preview render width (px). `None` renders at composition resolution.
