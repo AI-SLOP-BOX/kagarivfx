@@ -492,51 +492,103 @@ pub fn render_frame_to_pixels(comp: &Composition, frame: u32, width: u32, height
 
     let has_solo = comp.layers.iter().any(|l| l.is_active(frame) && l.solo);
 
+
+    // ── Phase 1: Parallel layer data preparation ──
+    // Pre-compute transform/mask/effect data for all visible layers at once,
+    // eliminating redundant property evaluation during the sequential pass.
+    #[derive(Default)]
+    struct LayerRenderData {
+        effective_frame: u32,
+        pos: [f32; 2],
+        scale: [f32; 2],
+        rotation: f32,
+        l_opacity: f32,
+        mask_vertices: Vec<[f32; 2]>,
+        mask_feather: f32,
+        mask_inverted: bool,
+        skip: bool,
+    }
+
+    let layer_count = comp.layers.len();
+    let mut layer_data: Vec<LayerRenderData> = Vec::with_capacity(layer_count);
+
+    {
+        use rayon::prelude::*;
+        let data: Vec<LayerRenderData> = comp.layers
+            .par_iter()
+            .map(|layer| {
+                let mut d = LayerRenderData::default();
+                d.skip = true; // skip unless proven visible
+
+                if !layer.is_active(frame) { return d; }
+                if has_solo && !layer.solo { return d; }
+                if !layer.visible { return d; }
+
+                let effective_frame = layer.remap_frame(frame);
+                let (pos, scale, rotation, opacity) = comp.resolve_world_transform(layer, effective_frame);
+                let l_opacity = (opacity / 100.0).clamp(0.0, 1.0);
+                if l_opacity < 0.001 { return d; }
+
+                let mut mask_vertices = Vec::new();
+                let mut mask_feather = 0.0;
+                let mut mask_inverted = false;
+                for mask in &layer.masks {
+                    if mask.enabled && mask.mode != crate::core::mask::MaskMode::None {
+                        mask_vertices = mask.path.to_polygon(frame, 16);
+                        mask_feather = mask.feather.evaluate(frame);
+                        mask_inverted = mask.inverted;
+                        break;
+                    }
+                }
+
+                d.effective_frame = effective_frame;
+                d.pos = pos;
+                d.scale = scale;
+                d.rotation = rotation;
+                d.l_opacity = l_opacity;
+                d.mask_vertices = mask_vertices;
+                d.mask_feather = mask_feather;
+                d.mask_inverted = mask_inverted;
+                d.skip = false;
+                d
+            })
+            .collect();
+        layer_data = data;
+    }
+
+    let mut layer_idx = 0usize;
     for layer in &comp.layers {
         // Cooperative cancellation: checked once per layer
         if render_cancelled() {
             break;
         }
-        if !layer.is_active(frame) {
-            continue;
-        }
-        if has_solo && !layer.solo {
-            continue;
-        }
-        if !layer.visible {
+        if !layer.is_active(frame) || (has_solo && !layer.solo) || !layer.visible {
+            layer_idx += 1;
             continue;
         }
 
-        // Apply time remap: the layer evaluates its properties at the remapped frame
-        let effective_frame = layer.remap_frame(frame);
-
-        // Get world transform properties
-        let (pos, scale, rotation, opacity) = comp.resolve_world_transform(layer, effective_frame);
-
-        let l_opacity = (opacity / 100.0).clamp(0.0, 1.0);
-        if l_opacity < 0.001 {
+        // Use precomputed data from the parallel phase
+        let ld = &layer_data[layer_idx];
+        if ld.skip {
+            layer_idx += 1;
             continue;
         }
+        let effective_frame = ld.effective_frame;
+        let pos = ld.pos;
+        let scale = ld.scale;
+        let rotation = ld.rotation;
+        let l_opacity = ld.l_opacity;
+        let mask_vertices = &ld.mask_vertices;
+        let mask_feather = ld.mask_feather;
+        let mask_inverted = ld.mask_inverted;
 
         // Adjustment Layer: apply effects to the composite below
         if matches!(layer.layer_type, LayerType::AdjustmentLayer) {
             if !layer.effects.is_empty() {
                 crate::core::cpu_effects::apply_layer_effects(&mut buffer, width, height, &layer.effects, effective_frame);
             }
+            layer_idx += 1;
             continue;
-        }
-
-        // Evaluate Vector Mask geometry (if any) — used by all rasterization paths
-        let mut mask_vertices = Vec::new();
-        let mut mask_feather = 0.0;
-        let mut mask_inverted = false;
-        for mask in &layer.masks {
-            if mask.enabled && mask.mode != crate::core::mask::MaskMode::None {
-                mask_vertices = mask.path.to_polygon(frame, 16);
-                mask_feather = mask.feather.evaluate(frame);
-                mask_inverted = mask.inverted;
-                break; // Use the first active mask for clipping
-            }
         }
 
         // PreComp: recursively render the sub-composition, then composite it
