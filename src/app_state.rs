@@ -256,6 +256,8 @@ pub struct AfterEffectsApp {
     pub audio_meter: (f32, f32),
     /// Tracker panel: target layer index for Apply Motion.
     pub tracker_apply_target: Option<usize>,
+    /// Real render queue entries (composition names awaiting export).
+    pub render_queue_items: Vec<String>,
     pub camera_view_layout: usize,
     pub camera_view_angle: usize,
     pub font_family_idx: usize,
@@ -360,6 +362,7 @@ impl Default for AfterEffectsApp {
             audio_playback: crate::core::audio_playback::AudioPlayback::new().ok(),
             audio_meter: (0.0, 0.0),
             tracker_apply_target: None,
+            render_queue_items: Vec::new(),
             camera_view_layout: 0,
             camera_view_angle: 0,
             font_family_idx: 0,

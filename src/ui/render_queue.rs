@@ -42,14 +42,14 @@ pub fn draw_render_queue_panel(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
             .on_disabled_hover_text("Cannot modify queue while exporting")
             .clicked()
         {
-            log::info!("Added active composition {} to Render Queue", comp.name);
+            app.render_queue_items.push(comp.name.clone());
         }
         if ui
             .add_enabled(!app.is_exporting, egui::Button::new("Clear Queue"))
             .on_disabled_hover_text("Cannot clear queue while exporting")
             .clicked()
         {
-            log::info!("Cleared Render Queue");
+            app.render_queue_items.clear();
         }
     });
 
@@ -79,8 +79,14 @@ pub fn draw_render_queue_panel(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
         };
 
         ui.horizontal(|ui| {
+            let queue_pos = app
+                .render_queue_items
+                .iter()
+                .position(|n| n == &comp.name)
+                .map(|p| p + 1)
+                .unwrap_or(app.render_queue_items.len().max(1));
             ui.label(
-                egui::RichText::new("Item 1")
+                egui::RichText::new(format!("Item {}", queue_pos))
                     .strong()
                     .color(egui::Color32::from_rgb(0, 180, 255)),
             );

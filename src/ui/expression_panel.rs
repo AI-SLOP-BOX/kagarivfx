@@ -28,8 +28,25 @@ pub fn draw_expression_panel(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
 
             ui.add_space(6.0);
             ui.horizontal(|ui| {
-                if ui.button("▶ Test Expression").on_hover_text("Execute JS Expression Sandbox").clicked() {
-                    log::info!("Tested expression on layer {}: {}", layer_name, script);
+                if ui.button("▶ Test Expression").on_hover_text("Execute the expression at the current frame and show the result").clicked() {
+                    use crate::core::expression_engine::{build_comp_snapshot, eval_f32_with_comp};
+                    let current_frame = app.current_frame;
+                    let project = app.history.current();
+                    let comp = project.active_composition();
+                    let snap = build_comp_snapshot(comp, current_frame);
+                    let this_layer = comp.layers.iter().find(|l| &l.name == layer_name)
+                        .and_then(|l| snap.layers.get(&l.name).cloned());
+                    let base = crate::core::timeline::Expression::evaluate_v2(
+                        &crate::core::timeline::Expression::Raw(script.clone()),
+                        [0.0, 0.0], current_frame, comp.fps.max(1),
+                    );
+                    let result = eval_f32_with_comp(&script, base[0], current_frame, comp.fps.max(1), &snap, this_layer.as_ref());
+                    let msg = if result != base[0] || script.contains("value") || script.contains("this") {
+                        format!("Result @f{}: {:.3}", current_frame, result)
+                    } else {
+                        format!("Result @f{}: {:.3} (base)", current_frame, result)
+                    };
+                    app.toasts.info(msg);
                 }
                 if ui.button("Preset: wiggle(f, a)").clicked() {
                     script = "wiggle(4, 30)".to_string();
