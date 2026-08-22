@@ -97,7 +97,7 @@ pub fn draw_viewport_overlays(
     let render_ms = dt * 1000.0;
     let cached_frames = app.frame_cache.cached_count();
     let total_comp_frames = app.history.current().active_composition().duration_frames.max(1);
-    let cache_pct = (cached_frames as f32 / total_comp_frames as f32 * 100.0).clamp(0.0, 100.0);
+    let _cache_pct = (cached_frames as f32 / total_comp_frames as f32 * 100.0).clamp(0.0, 100.0);
 
     // Adaptive quality indicator
     let quality_pct = (app.adaptive_preview_factor * 100.0).round();

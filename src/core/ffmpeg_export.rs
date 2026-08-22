@@ -25,9 +25,10 @@ pub enum ExportEvent {
 }
 
 /// Configuration for the export job.
-#[derive(Clone, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq, Default)]
 pub enum VideoCodec {
     /// H.264 — universal compatibility, small files
+    #[default]
     H264,
     /// Apple ProRes 422 — professional editing codec, large files
     ProRes422,
@@ -51,11 +52,7 @@ pub struct ExportConfig {
     pub codec: VideoCodec,
 }
 
-impl Default for VideoCodec {
-    fn default() -> Self {
-        Self::H264
-    }
-}
+
 
 /// Check whether `ffmpeg` is available in PATH.
 pub fn is_ffmpeg_available() -> bool {

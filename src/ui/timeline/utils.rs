@@ -84,13 +84,14 @@ pub fn draw_keyframe_tick(
             1.0, color);
     } else {
         // Bezier/Default: diamond (AE convention)
+        #[allow(clippy::useless_vec)]
         let pts = vec![
             egui::pos2(x, y - size),
             egui::pos2(x + size, y),
             egui::pos2(x, y + size),
             egui::pos2(x - size, y),
         ];
-        painter.add(egui::Shape::convex_polygon(pts.to_vec(), color, egui::Stroke::NONE));
+        painter.add(egui::Shape::convex_polygon(pts, color, egui::Stroke::NONE));
     }
 
     if is_selected {

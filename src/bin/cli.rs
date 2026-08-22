@@ -241,6 +241,7 @@ fn render_to_png_sequence(comp: &Composition, spec: &RenderSpec) -> Result<(), B
 }
 
 /// Render a single frame as JPEG with quality setting.
+#[allow(dead_code)]
 fn write_jpeg(path: &str, rgba: &[u8], width: u32, height: u32, quality: u8) -> Result<(), Box<dyn std::error::Error>> {
     let img = image::RgbaImage::from_raw(width, height, rgba.to_vec())
         .ok_or("pixel buffer size mismatch")?;
