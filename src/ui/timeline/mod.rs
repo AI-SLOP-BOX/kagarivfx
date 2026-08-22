@@ -829,6 +829,40 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                                 }
                             }
 
+                            // ── Real waveform for video layers with audio ──
+                            if let LayerType::Video { audio_wav: Some(wav_path), .. } = &layer.layer_type {
+                                let wav_id = egui::Id::new(("wav_peaks", layer.id.as_str()));
+                                let peaks: std::sync::Arc<Vec<f32>> = ui.ctx().data_mut(|d| {
+                                    d.get_temp::<std::sync::Arc<Vec<f32>>>(wav_id)
+                                        .unwrap_or_else(|| {
+                                            let peaks = std::cell::RefCell::new(Vec::new());
+                                            if let Ok(buf) = crate::core::audio_engine::AudioBuffer::load_wav(std::path::Path::new(wav_path)) {
+                                                *peaks.borrow_mut() = buf.waveform_peaks(200);
+                                            }
+                                            let peaks = std::sync::Arc::new(peaks.into_inner());
+                                            d.insert_temp(wav_id, peaks.clone());
+                                            peaks
+                                        })
+                                });
+                                if !peaks.is_empty() {
+                                    let bin_span = (total_frames.max(1) as f32) / peaks.len() as f32;
+                                    for (bin, &amp) in peaks.iter().enumerate() {
+                                        let frame_at = bin as f32 * bin_span;
+                                        if frame_at < start_frame as f32 || frame_at > (start_frame + zoom_span) as f32 {
+                                            continue;
+                                        }
+                                        let norm = (frame_at - start_frame as f32) / zoom_span as f32;
+                                        let sx = bar_rect.left() + norm * bar_rect.width();
+                                        let h = (amp * layer_rect.height() * 0.45).max(1.0);
+                                        let sy = layer_rect.center().y;
+                                        ui.painter().line_segment(
+                                            [egui::pos2(sx, sy - h), egui::pos2(sx, sy + h)],
+                                            egui::Stroke::new(1.0, egui::Color32::from_rgb(120, 220, 255)),
+                                        );
+                                    }
+                                }
+                            }
+
                             if let LayerType::Audio { .. } = &layer.layer_type {
                                 let samples = 12;
                                 let step_x = layer_rect.width() / samples as f32;
