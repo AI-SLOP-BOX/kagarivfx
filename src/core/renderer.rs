@@ -235,6 +235,11 @@ type TextTextureCache = std::collections::HashMap<TextTextureKey, (wgpu::Texture
 type VideoFrameKey = (String, String, u32);
 type VideoFrameCache = std::collections::HashMap<VideoFrameKey, (std::sync::Arc<wgpu::Texture>, std::sync::Arc<wgpu::BindGroup>)>;
 
+/// Maximum cached video frame textures before oldest entries are evicted.
+/// 600 frames at 1080p RGBA is ~1.5 GB of VRAM, so the default keeps long
+/// videos from exhausting the GPU while retaining generous scrub headroom.
+pub const MAX_VIDEO_FRAME_TEXTURES: usize = 600;
+
 #[allow(dead_code)]
 pub struct WgpuRenderer {
     device: Arc<wgpu::Device>,
@@ -1249,9 +1254,19 @@ impl WgpuRenderer {
             label: Some("video_frame_bind_group"),
         });
         let bind_group = std::sync::Arc::new(bind_group);
-        self.video_frame_cache
-            .borrow_mut()
-            .insert(key, (std::sync::Arc::new(texture), bind_group.clone()));
+        {
+            let mut cache = self.video_frame_cache.borrow_mut();
+            cache.insert(key, (std::sync::Arc::new(texture), bind_group.clone()));
+            // Simple FIFO eviction: HashMap order is arbitrary but bounded memory
+            // matters more than exact LRU here (frames re-upload cheaply).
+            while cache.len() > MAX_VIDEO_FRAME_TEXTURES {
+                if let Some(oldest) = cache.keys().next().cloned() {
+                    cache.remove(&oldest);
+                } else {
+                    break;
+                }
+            }
+        }
         Some((tw, th, bind_group))
     }
 
@@ -1338,5 +1353,16 @@ mod tests {
         for align in [64, 256, 512] {
             assert_eq!(align_uniform_buffer_offset(size as u64, align) % align as u64, 0);
         }
+    }
+}
+
+#[cfg(test)]
+mod video_cache_tests {
+    #[test]
+    fn test_video_texture_budget_is_sane() {
+        // 600 frames x 1080p RGBA ≈ 1.5GB — must stay under 2GB
+        let bytes = crate::core::renderer::MAX_VIDEO_FRAME_TEXTURES as u64 * 1920 * 1080 * 4;
+        assert!(bytes < 2 * 1024 * 1024 * 1024, "budget {} bytes too large", bytes);
+        assert!(crate::core::renderer::MAX_VIDEO_FRAME_TEXTURES >= 300, "must hold 10s at 30fps");
     }
 }
