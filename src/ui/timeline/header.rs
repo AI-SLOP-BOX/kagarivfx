@@ -8,6 +8,9 @@ pub struct TimelineHeaderState<'a> {
     pub snap_to_keyframes: &'a mut bool,
     pub show_graph_editor: &'a mut bool,
     pub layer_filter_text: &'a mut String,
+    pub timeline_view_start: &'a mut u32,
+    pub work_area_in: &'a mut Option<u32>,
+    pub work_area_out: &'a mut Option<u32>,
 }
 
 pub fn draw_timeline_header(
@@ -42,7 +45,24 @@ pub fn draw_timeline_header(
 
         ui.separator();
         ui.label("Zoom:");
-        ui.add(egui::Slider::new(state.timeline_zoom, 0.1..=10.0));
+        // Logarithmic zoom control (0.1 ..= 20.0)
+        let mut zoom_log = (*state.timeline_zoom).max(0.1).log10();
+        ui.add(
+            egui::DragValue::new(&mut zoom_log)
+                .speed(0.02)
+                .clamp_range(-1.0..=(20.0f32).log10())
+                .prefix("x")
+        )
+        .on_hover_text("Timeline zoom (logarithmic, 0.1x - 20.0x)");
+        *state.timeline_zoom = 10f32.powf(zoom_log).clamp(0.1, 20.0);
+        if ui.button("Fit").on_hover_text("Fit Timeline (reset zoom & scroll)").clicked() {
+            *state.timeline_zoom = 1.0;
+            *state.timeline_view_start = 0;
+        }
+        if ui.button("Clear WA").on_hover_text("Clear Work Area (In/Out)").clicked() {
+            *state.work_area_in = None;
+            *state.work_area_out = None;
+        }
         ui.checkbox(state.snap_to_keyframes, "Snap");
         let mode_btn_text = if *state.show_graph_editor { "Graph Mode" } else { "Tracks Mode" };
         if ui.selectable_label(*state.show_graph_editor, mode_btn_text).clicked() {

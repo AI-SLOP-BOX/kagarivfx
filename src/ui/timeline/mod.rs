@@ -41,6 +41,9 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                 snap_to_keyframes: &mut app.snap_to_keyframes,
                 show_graph_editor: &mut app.show_graph_editor,
                 layer_filter_text: &mut app.layer_filter_text,
+                timeline_view_start: &mut app.timeline_view_start,
+                work_area_in: &mut app.work_area_in,
+                work_area_out: &mut app.work_area_out,
             };
 
             // Access live project mutably without per-frame cloning
