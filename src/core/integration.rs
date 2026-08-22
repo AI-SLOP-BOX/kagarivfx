@@ -38,6 +38,10 @@ impl OtioTimeline {
         for layer in &comp.layers {
             let media_ref = match &layer.layer_type {
                 LayerType::Image { path } => Some(path.clone()),
+                LayerType::Video { source, frames_dir, frame_count, audio_wav, .. } => {
+                    Some(format!("video:{}:{}:{}:{}", source, frames_dir, frame_count,
+                        audio_wav.as_deref().unwrap_or("")))
+                }
                 LayerType::Solid { .. } => Some("color_solid".to_string()),
                 LayerType::Text { text, .. } => Some(format!("text:{}", text)),
                 LayerType::Shape { .. } => Some("vector_shape".to_string()),

@@ -935,11 +935,21 @@ pub fn render_frame_to_pixels(comp: &Composition, frame: u32, width: u32, height
                     }
                 }
             });
-        } else if let LayerType::Image { path } = &layer.layer_type {
-            // Image layers: load from disk and sample pixels
+        } else if matches!(layer.layer_type, LayerType::Image { .. } | LayerType::Video { .. }) {
+            // Image layers load directly; Video layers resolve their frame PNG first.
             use crate::core::image_cache::with_image_cache;
 
-            let img_path = path.clone();
+            let img_path = match &layer.layer_type {
+                LayerType::Video { frames_dir, frame_count, .. } => {
+                    let seq_frame = effective_frame.min(frame_count.saturating_sub(1));
+                    std::path::Path::new(frames_dir)
+                        .join(format!("frame_{:05}.png", seq_frame))
+                        .to_string_lossy()
+                        .to_string()
+                }
+                LayerType::Image { path } => path.clone(),
+                _ => unreachable!(),
+            };
             with_image_cache(|cache| {
                 if let Some(img) = cache.load_image(&img_path) {
                     let img_w = img.width as f32;

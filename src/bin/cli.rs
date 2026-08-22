@@ -404,6 +404,7 @@ fn cmd_info(project_path: &str) -> Result<(), Box<dyn std::error::Error>> {
                 aftereffects_oss::core::timeline::LayerType::Solid { .. } => "Solid",
                 aftereffects_oss::core::timeline::LayerType::Text { .. } => "Text",
                 aftereffects_oss::core::timeline::LayerType::Image { .. } => "Image",
+                aftereffects_oss::core::timeline::LayerType::Video { .. } => "Video",
                 aftereffects_oss::core::timeline::LayerType::Shape { .. } => "Shape",
                 aftereffects_oss::core::timeline::LayerType::Null => "Null",
                 aftereffects_oss::core::timeline::LayerType::PreComp { .. } => "PreComp",

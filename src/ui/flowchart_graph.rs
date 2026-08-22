@@ -131,6 +131,7 @@ pub fn draw_node_graph_panel(
 
             // Icon prefix
             let icon = match &layer.layer_type {
+                crate::core::timeline::LayerType::Video { .. } => "Video",
                 LayerType::Solid { .. } => "█",
                 LayerType::Image { .. } => "🖼",
                 LayerType::Text { .. } => "T",

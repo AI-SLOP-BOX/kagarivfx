@@ -19,6 +19,7 @@ pub mod software_renderer;
 pub mod content_aware_engine;
 pub mod audio_engine;
 pub mod autosave;
+pub mod video_import;
 pub mod project_migration;
 pub mod physics;
 pub mod text_animator;

@@ -264,6 +264,24 @@ pub fn draw_layer_type_specs(
                 ui.text_edit_singleline(path);
                 if val_before != *path { *project_changed = true; }
             }
+            LayerType::Video { source, frames_dir, frame_count, audio_wav, .. } => {
+                let before_src = source.clone();
+                let before_frames = frames_dir.clone();
+                ui.label(egui::RichText::new("Video Layer").strong());
+                ui.horizontal(|ui| {
+                    ui.label("Source:");
+                    ui.text_edit_singleline(source);
+                });
+                ui.horizontal(|ui| {
+                    ui.label("Frames dir:");
+                    ui.text_edit_singleline(frames_dir);
+                });
+                ui.label(format!("{} frames | audio: {}", frame_count,
+                    if audio_wav.is_some() { "yes" } else { "no" }));
+                if before_src != *source || before_frames != *frames_dir {
+                    *project_changed = true;
+                }
+            }
             LayerType::Text { text, font_size, color, .. } => {
                 let val_before_text = text.clone();
                 let val_before_sz = *font_size;

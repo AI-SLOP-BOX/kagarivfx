@@ -21,6 +21,7 @@ pub fn draw_flowchart_inspector(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
                     crate::core::timeline::LayerType::Text { .. } => "Text",
                     crate::core::timeline::LayerType::Solid { .. } => "Solid",
                     crate::core::timeline::LayerType::Image { .. } => "Image",
+                    crate::core::timeline::LayerType::Video { .. } => "Video",
                     crate::core::timeline::LayerType::Shape { .. } => "Shape",
                     crate::core::timeline::LayerType::Null => "Null",
                     crate::core::timeline::LayerType::PreComp { .. } => "PreComp",

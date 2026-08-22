@@ -820,6 +820,7 @@ impl WgpuRenderer {
                 let (mut layer_w, mut layer_h) = match &layer.layer_type {
                     LayerType::Solid { .. } => (1.0, 1.0),
                     LayerType::Image { .. } => (1.0, 1.0),
+                    LayerType::Video { .. } => (1.0, 1.0),
                     LayerType::Text { font_size, .. } => (1.0, *font_size as f32 * 10.0), // Overridden below if text texture rasterization succeeds
                     LayerType::Shape { .. } => (1.0, 1.0),
                     LayerType::Null => (0.0, 0.0),
@@ -905,7 +906,7 @@ impl WgpuRenderer {
                 // Prepare Layer Uniform details
                 let (mut layer_type, shape_type, mut color) = match &layer.layer_type {
                     LayerType::Solid { color } => (0u32, 0u32, *color),
-                    LayerType::Image { .. } => (1u32, 0u32, [1.0, 1.0, 1.0, 1.0]),
+                    LayerType::Image { .. } | LayerType::Video { .. } => (1u32, 0u32, [1.0, 1.0, 1.0, 1.0]),
                     LayerType::Shape { shape_type, color, .. } => {
                         let st = match shape_type {
                             ShapeType::Rectangle { .. } => 0u32,
