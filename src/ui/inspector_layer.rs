@@ -302,6 +302,32 @@ pub fn draw_layer_type_specs(
                     speed,
                     if audio_wav.is_some() { "yes" } else { "no" }
                 ));
+
+                // Time remap toggle
+                ui.horizontal(|ui| {
+                    let remap_enabled = layer.time_remap.is_some();
+                    let mut new_enabled = remap_enabled;
+                    if ui.checkbox(&mut new_enabled, "Time Remap").changed() {
+                        if new_enabled && !remap_enabled {
+                            // Initialize remap: linear 0..frame_count mapping
+                            layer.time_remap = Some(crate::core::property::Animatable::new_animated(vec![
+                                crate::core::keyframe::Keyframe::new(0, 0.0, crate::core::keyframe::InterpolationType::Linear),
+                                crate::core::keyframe::Keyframe::new(comp_fps.max(1.0), *frame_count as f32, crate::core::keyframe::InterpolationType::Linear),
+                            ]));
+                            *project_changed = true;
+                        } else if !new_enabled && remap_enabled {
+                            layer.time_remap = None;
+                            *project_changed = true;
+                        }
+                    }
+                });
+                if let Some(remap) = &mut layer.time_remap {
+                    ui.small("Time remap: source frame ← timeline frame");
+                    let kfs = remap.keyframes();
+                    if let Some(kfs) = kfs {
+                        ui.small(format!("  {} keyframes", kfs.len()));
+                    }
+                }
                 if before_src != *source || before_frames != *frames_dir
                     || before_speed != *speed || before_count != *frame_count {
                     *project_changed = true;
