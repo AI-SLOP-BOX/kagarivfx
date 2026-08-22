@@ -85,6 +85,22 @@ pub fn draw_layer_transforms(
             });
 
             if val_before != layer.transform.anchor_point { *project_changed = true; }
+            // Anchor point expression
+            {
+                let mut expr_enabled = layer.transform.anchor_point_expression.is_some();
+                ui.horizontal(|ui| {
+                    let toggle = ui.checkbox(&mut expr_enabled, "⭯ Expression").changed();
+                    if toggle {
+                        layer.transform.anchor_point_expression = if expr_enabled {
+                            Some(crate::core::timeline::Expression::Raw("value".into()))
+                        } else { None };
+                        *project_changed = true;
+                    }
+                });
+                if let Some(crate::core::timeline::Expression::Raw(script)) = &mut layer.transform.anchor_point_expression {
+                    ui.add(egui::TextEdit::singleline(script).code_editor().desired_width(280.0));
+                }
+            }
 
             ui.separator();
             let pos_before = layer.transform.position.clone();

@@ -390,6 +390,8 @@ pub struct Transform2D {
     pub rotation: Animatable<f32>,
     pub opacity: Animatable<f32>,
 
+    #[serde(default)]
+    pub anchor_point_expression: Option<Expression>,
     pub position_expression: Option<Expression>,
     pub rotation_expression: Option<Expression>,
     pub scale_expression: Option<Expression>,
@@ -404,6 +406,7 @@ impl Default for Transform2D {
             scale: Animatable::new_constant([100.0, 100.0]),
             rotation: Animatable::new_constant(0.0),
             opacity: Animatable::new_constant(100.0),
+            anchor_point_expression: None,
             position_expression: None,
             rotation_expression: None,
             scale_expression: None,

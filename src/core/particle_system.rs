@@ -2,10 +2,15 @@
 ///
 /// Supports:
 /// - Emitter with configurable rate, lifetime, speed, spread
-/// - Gravity, turbulence, and wind forces
+/// - Gravity (with lifetime curve), wind gusts, turbulence and air drag
+/// - Boundary collisions with restitution & friction
 /// - Per-particle size, color, and opacity over lifetime
 /// - Point and box emitter shapes
 use serde::{Serialize, Deserialize};
+
+use crate::core::particle_forces::{
+    apply_drag, resolve_bounds_collision, wind_with_gust, LifeCurve,
+};
 
 /// Emitter shape type.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -94,6 +99,30 @@ pub struct ParticleEmitter {
     pub fade_curve: FadeCurve,
     /// Blend mode: 0=Normal, 1=Add, 2=Screen
     pub blend_mode: u32,
+    /// Gravity multiplier sampled over normalized particle lifetime.
+    #[serde(default)]
+    pub gravity_curve: LifeCurve,
+    /// Peak sinusoidal wind gust strength (px/s^2), 0 = steady wind only.
+    #[serde(default)]
+    pub wind_gust_strength: f32,
+    /// Wind gust frequency in Hz.
+    #[serde(default)]
+    pub wind_gust_frequency: f32,
+    /// Exponential air drag coefficient (1/s).
+    #[serde(default)]
+    pub drag: f32,
+    /// Enable axis-aligned boundary collisions.
+    #[serde(default)]
+    pub collision_enabled: bool,
+    /// Collision bounds [min_x, min_y, max_x, max_y].
+    #[serde(default)]
+    pub collision_bounds: [f32; 4],
+    /// Bounce energy retention on collision (0..1).
+    #[serde(default)]
+    pub restitution: f32,
+    /// Tangential velocity retention on collision (0..1).
+    #[serde(default)]
+    pub surface_friction: f32,
 }
 
 impl Default for ParticleEmitter {
@@ -122,6 +151,14 @@ impl Default for ParticleEmitter {
             rotation_speed_variance: 0.0,
             fade_curve: FadeCurve::Linear,
             blend_mode: 1, // Add
+            gravity_curve: LifeCurve::default(),
+            wind_gust_strength: 0.0,
+            wind_gust_frequency: 0.5,
+            drag: 0.0,
+            collision_enabled: false,
+            collision_bounds: [0.0, 0.0, 1920.0, 1080.0],
+            restitution: 0.5,
+            surface_friction: 0.9,
         }
     }
 }
@@ -148,6 +185,8 @@ pub struct ParticleSystem {
     pub particles: Vec<Particle>,
     /// Accumulated time for emission scheduling
     pub emit_accumulator: f32,
+    /// Total simulated time (drives wind gusts)
+    pub elapsed_time: f32,
     /// PRNG state for deterministic randomness
     rng_state: u64,
 }
@@ -158,6 +197,7 @@ impl ParticleSystem {
             emitter,
             particles: Vec::new(),
             emit_accumulator: 0.0,
+            elapsed_time: 0.0,
             rng_state: 0xDEAD_BEEF_CAFE_BABE,
         }
     }
@@ -226,12 +266,21 @@ impl ParticleSystem {
             self.emit_particle(emitter_x, emitter_y);
             self.emit_accumulator -= 1.0;
         }
+        self.elapsed_time += dt;
 
         let gravity = self.emitter.gravity;
-        let wind = self.emitter.wind;
+        let gcurve = self.emitter.gravity_curve.clone();
+        let gust_strength = self.emitter.wind_gust_strength;
+        let gust_freq = self.emitter.wind_gust_frequency;
+        let base_wind = self.emitter.wind;
         let turbulence = self.emitter.turbulence;
         let size_start = self.emitter.size_start;
         let size_end = self.emitter.size_end;
+        let drag = self.emitter.drag;
+        let collide = self.emitter.collision_enabled;
+        let bounds = self.emitter.collision_bounds;
+        let restitution = self.emitter.restitution.clamp(0.0, 1.0);
+        let friction = self.emitter.surface_friction.clamp(0.0, 1.0);
 
         // Update existing particles
         for p in &mut self.particles {
@@ -240,9 +289,15 @@ impl ParticleSystem {
                 continue;
             }
 
-            // Forces
-            p.vx += (gravity[0] + wind[0]) * dt;
-            p.vy += (gravity[1] + wind[1]) * dt;
+            // Forces — gravity scaled by its lifetime curve, wind with gusts.
+            let age_t = 1.0 - (p.life / p.max_life).max(0.0);
+            let gmul = gcurve.eval(age_t);
+            let wind = wind_with_gust(base_wind, gust_strength, gust_freq, self.elapsed_time);
+            p.vx += (gravity[0] * gmul + wind[0]) * dt;
+            p.vy += (gravity[1] * gmul + wind[1]) * dt;
+
+            // Air drag
+            apply_drag(&mut p.vx, &mut p.vy, drag, dt);
 
             // Turbulence
             if turbulence > 0.0 {
@@ -254,6 +309,17 @@ impl ParticleSystem {
             // Integrate position
             p.x += p.vx * dt;
             p.y += p.vy * dt;
+
+            // Boundary collisions
+            if collide {
+                let mut pos = [p.x, p.y];
+                let mut vel = [p.vx, p.vy];
+                resolve_bounds_collision(&mut pos, &mut vel, bounds, restitution, friction);
+                p.x = pos[0];
+                p.y = pos[1];
+                p.vx = vel[0];
+                p.vy = vel[1];
+            }
 
             // Rotation
             p.rotation += p.angular_velocity * dt;
@@ -483,6 +549,179 @@ mod tests {
             let mut ps = ParticleSystem::new(emitter);
             ps.update(1.0, 50.0, 50.0);
             assert!(!ps.particles.is_empty(), "Shape {:?} should emit particles", shape);
+        }
+    }
+
+    #[test]
+    fn test_gravity_curve_accelerates_fall() {
+        let make = |curve: LifeCurve| ParticleSystem::new(ParticleEmitter {
+            rate: 1000.0,
+            lifetime: 10.0,
+            lifetime_variance: 0.0,
+            speed: 0.0,
+            speed_variance: 0.0,
+            spread_degrees: 0.0,
+            gravity: [0.0, 100.0],
+            gravity_curve: curve,
+            ..Default::default()
+        });
+        // Constant gravity x2 vs constant x1.
+        let mut weak = make(LifeCurve::constant(1.0));
+        let mut strong = make(LifeCurve::constant(2.0));
+        weak.update(0.5, 0.0, 0.0);
+        strong.update(0.5, 0.0, 0.0);
+        let y_weak: f32 = weak.particles.iter().map(|p| p.y).sum::<f32>() / weak.particles.len().max(1) as f32;
+        let y_strong: f32 = strong.particles.iter().map(|p| p.y).sum::<f32>() / strong.particles.len().max(1) as f32;
+        assert!(y_strong > y_weak * 1.5, "curve-multiplied gravity should fall faster");
+
+        // Determinism: identical configs produce identical results.
+        let mut a = make(LifeCurve(vec![0.0, 3.0]));
+        let mut b = make(LifeCurve(vec![0.0, 3.0]));
+        a.update(0.3, 0.0, 0.0);
+        b.update(0.3, 0.0, 0.0);
+        let ya: Vec<f32> = a.particles.iter().map(|p| p.y).collect();
+        let yb: Vec<f32> = b.particles.iter().map(|p| p.y).collect();
+        assert_eq!(ya, yb);
+    }
+
+    #[test]
+    fn test_wind_gust_changes_velocity_over_time() {
+        let emitter = ParticleEmitter {
+            rate: 1000.0,
+            lifetime: 10.0,
+            lifetime_variance: 0.0,
+            speed: 0.0,
+            speed_variance: 0.0,
+            spread_degrees: 0.0,
+            gravity: [0.0, 0.0],
+            wind: [100.0, 0.0],
+            wind_gust_strength: 80.0,
+            wind_gust_frequency: 1.0,
+            ..Default::default()
+        };
+        let mut ps = ParticleSystem::new(emitter);
+        ps.emit_accumulator = 5.0;
+        ps.update(0.01, 0.0, 0.0); // t=0.01 → gust ≈ sin(2π*0.01) > 0
+        let vx_early = ps.particles[0].vx;
+        let mut ps2 = ParticleSystem::new(ParticleEmitter {
+            rate: 1000.0,
+            lifetime: 10.0,
+            lifetime_variance: 0.0,
+            speed: 0.0,
+            speed_variance: 0.0,
+            spread_degrees: 0.0,
+            gravity: [0.0, 0.0],
+            wind: [100.0, 0.0],
+            wind_gust_strength: 80.0,
+            wind_gust_frequency: 1.0,
+            ..Default::default()
+        });
+        ps2.emit_accumulator = 5.0;
+        // Fast-forward to half a gust period later.
+        for _ in 0..50 { ps2.update(0.01, 0.0, 0.0); }
+        let vx_late = ps2.particles.iter().map(|p| p.vx).sum::<f32>()
+            / ps2.particles.len().max(1) as f32;
+        assert!((vx_early - vx_late).abs() > 1.0, "gust should modulate wind over time");
+    }
+
+    #[test]
+    fn test_collision_bounces_on_floor() {
+        let emitter = ParticleEmitter {
+            rate: 1000.0,
+            lifetime: 10.0,
+            lifetime_variance: 0.0,
+            speed: 0.0,
+            speed_variance: 0.0,
+            spread_degrees: 0.0,
+            gravity: [0.0, 500.0],
+            collision_enabled: true,
+            collision_bounds: [-1000.0, -1000.0, 1000.0, 200.0],
+            restitution: 0.6,
+            surface_friction: 0.9,
+            ..Default::default()
+        };
+        let mut ps = ParticleSystem::new(emitter);
+        ps.emit_accumulator = 5.0;
+        for _ in 0..120 { ps.update(0.05, 0.0, 0.0); }
+        assert!(!ps.particles.is_empty());
+        for p in &ps.particles {
+            assert!(p.y <= 200.0 + 1e-3, "particle fell through floor: {}", p.y);
+        }
+        // At least one particle must have bounced (upward velocity after contact).
+        assert!(ps.particles.iter().any(|p| p.vy < -1.0), "no bounce detected");
+    }
+
+    #[test]
+    fn test_drag_slows_particles() {
+        let make = |drag: f32| ParticleSystem::new(ParticleEmitter {
+            rate: 1000.0,
+            lifetime: 10.0,
+            lifetime_variance: 0.0,
+            speed: 300.0,
+            speed_variance: 0.0,
+            spread_degrees: 0.0,
+            gravity: [0.0, 0.0],
+            drag,
+            ..Default::default()
+        });
+        let mut free = make(0.0);
+        let mut damped = make(4.0);
+        free.update(1.0, 0.0, 0.0);
+        damped.update(1.0, 0.0, 0.0);
+        let v_free = free.particles[0].vx;
+        let v_damped = damped.particles[0].vx;
+        assert!(v_free > v_damped, "drag must reduce velocity");
+        assert!(v_damped > 0.0);
+    }
+
+    #[test]
+    fn test_emitter_serde_backward_compat_without_new_fields() {
+        // Old project JSON lacking the physics-extension fields must deserialize.
+        let json = r#"{
+            "rate": 30.0, "max_particles": 500, "lifetime": 1.5,
+            "lifetime_variance": 0.1, "speed": 150.0, "speed_variance": 0.2,
+            "spread_degrees": 180.0, "shape": "Point",
+            "emitter_size": [50.0, 50.0], "gravity": [0.0, 200.0],
+            "wind": [0.0, 0.0], "turbulence": 0.0,
+            "color_start": [1.0, 1.0, 1.0, 1.0], "color_end": [0.0, 0.0, 0.0, 0.0],
+            "size_start": 6.0, "size_end": 1.0,
+            "opacity_start": 1.0, "opacity_end": 0.0, "blend_mode": 1
+        }"#;
+        let e: ParticleEmitter = serde_json::from_str(json).unwrap_or_default();
+        assert_eq!(e.rate, 30.0);
+        assert_eq!(e.gravity_curve, LifeCurve::default());
+        assert!(!e.collision_enabled);
+        assert_eq!(e.drag, 0.0);
+        assert_eq!(e.wind_gust_strength, 0.0);
+    }
+
+    #[test]
+    fn test_simulation_is_deterministic_with_all_forces() {
+        let make = || ParticleSystem::new(ParticleEmitter {
+            rate: 500.0,
+            lifetime: 3.0,
+            gravity_curve: LifeCurve(vec![0.2, 1.5, 0.8]),
+            wind: [60.0, -20.0],
+            wind_gust_strength: 40.0,
+            wind_gust_frequency: 2.0,
+            drag: 0.8,
+            turbulence: 15.0,
+            collision_enabled: true,
+            collision_bounds: [0.0, 0.0, 800.0, 600.0],
+            restitution: 0.55,
+            surface_friction: 0.85,
+            ..Default::default()
+        });
+        let mut a = make();
+        let mut b = make();
+        for _ in 0..60 { a.update(1.0 / 30.0, 400.0, 100.0); }
+        for _ in 0..60 { b.update(1.0 / 30.0, 400.0, 100.0); }
+        assert_eq!(a.particles.len(), b.particles.len());
+        for (pa, pb) in a.particles.iter().zip(b.particles.iter()) {
+            assert_eq!(pa.x, pb.x);
+            assert_eq!(pa.y, pb.y);
+            assert_eq!(pa.vx, pb.vx);
+            assert_eq!(pa.vy, pb.vy);
         }
     }
 }

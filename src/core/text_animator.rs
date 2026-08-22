@@ -247,12 +247,40 @@ impl TextAnimatorEngine {
         cumulative_tracking: bool,
     ) -> Vec<CharacterTransform> {
         let total_chars = text.chars().count();
+        let amounts: Vec<f32> = (0..total_chars)
+            .map(|idx| Self::compute_amount(idx, total_chars, selector))
+            .collect();
+        Self::eval_with_amounts(
+            amounts,
+            target_position,
+            target_scale,
+            target_opacity,
+            target_tracking,
+            target_rotation,
+            target_blur,
+            cumulative_tracking,
+        )
+    }
+
+    /// Core interpolation from precomputed per-character selector amounts
+    /// (each in 0..1) to transforms. Public so unit-based selectors
+    /// (words/lines) can drive the same math.
+    #[allow(clippy::too_many_arguments)]
+    pub fn eval_with_amounts(
+        amounts: Vec<f32>,
+        target_position: [f32; 2],
+        target_scale: [f32; 2],
+        target_opacity: f32,
+        target_tracking: f32,
+        target_rotation: f32,
+        target_blur: f32,
+        cumulative_tracking: bool,
+    ) -> Vec<CharacterTransform> {
+        let total_chars = amounts.len();
         let mut transforms = Vec::with_capacity(total_chars);
         let mut tracking_accum = 0.0;
 
-        for (idx, _) in text.chars().enumerate() {
-            let amount = Self::compute_amount(idx, total_chars, selector);
-
+        for amount in amounts.iter().copied() {
             let pos_x = target_position[0] * amount;
             let pos_y = target_position[1] * amount;
             let scale_x = 1.0 + (target_scale[0] - 1.0) * amount;

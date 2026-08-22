@@ -358,7 +358,7 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                                             crate::core::timeline::LayerType::PreComp { .. } => "📦",
                                             crate::core::timeline::LayerType::AdjustmentLayer => "◐",
                                             crate::core::timeline::LayerType::Particle { .. } => "✦",
-                                            _ => "·",
+                                        
                                         };
                                         ui.label(egui::RichText::new(type_icon).small().color(egui::Color32::from_gray(160)));
                                     }
