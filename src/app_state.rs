@@ -302,6 +302,8 @@ pub struct AfterEffectsApp {
     pub color_space_idx: usize,
     pub bit_depth_idx: usize,
     pub display_sim_idx: usize,
+    /// Custom saved workspaces
+    pub custom_workspaces: Vec<crate::ui::workspace_manager::SavedWorkspace>,
 }
 
 #[cfg(feature = "gui")]
@@ -421,6 +423,7 @@ impl Default for AfterEffectsApp {
             color_space_idx: 0,
             bit_depth_idx: 2,
             display_sim_idx: 0,
+            custom_workspaces: Vec::new(),
         }
     }
 }

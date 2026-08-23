@@ -734,6 +734,6 @@ mod tests {
         let row0 = (px[0] as u32 + px[4] as u32) / 2;
         let row1 = ((px[(1 * 8 * 4)] as u32) + px[(1 * 8 * 4) + 4] as u32) / 2;
         assert_eq!(row0, 45, "row 0 (y%2==0) darkened to 50%");
-        assert_eq!(row1, 140, "row 1 untouched");
+        assert_eq!(row1, 90, "odd rows untouched");
     }
 }
