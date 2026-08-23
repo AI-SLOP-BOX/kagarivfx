@@ -785,7 +785,7 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
 
                             // Render Layer Bar Span & Waveform + parent link line
                             let avail_w = ui.available_width();
-                            let (bar_rect, bar_sense) = ui.allocate_exact_size(
+                            let (bar_rect, _bar_sense) = ui.allocate_exact_size(
                                 egui::vec2(avail_w, 24.0),
                                 egui::Sense::hover().union(egui::Sense::drag()),
                             );
