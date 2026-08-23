@@ -357,7 +357,8 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                     if name.contains("Key") || name.contains("Matte") || name.contains("Choker")
                          || name.contains("Choke") || name.contains("Minimax")
                          || name.contains("Alpha") { "Keying & Matte" }
-                    else if name.contains("Blur") || name.contains("Sharpen") { "Blur & Sharpen" }
+                    else if name.contains("Blur") || name.contains("Sharpen")
+                         || name.contains("Median") || name.contains("Tilt") { "Blur & Sharpen" }
                     else if name.contains("Tint") || name.contains("Hue") || name.contains("LUT")
                          || name.contains("Levels") || name.contains("Log Space")
                          || name.contains("Balance") || name.contains("Vibrance")

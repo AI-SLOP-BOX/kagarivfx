@@ -815,6 +815,78 @@ pub fn get_all_effect_presets() -> &'static [EffectPreset] {
                 enabled: true,
             },
         },
+        EffectPreset {
+            name: "Median Filter",
+            button_label: "+ Median Filter",
+            search_key: "median filter noise removal salt pepper denoise",
+            id_prefix: "medf",
+            create_fn: |idx| Effect {
+                id: format!("medf_{}", idx),
+                name: "Median Filter".to_string(),
+                effect_type: EffectType::MedianFilter {
+                    radius: Animatable::new_constant(2.0),
+                },
+                enabled: true,
+            },
+        },
+        EffectPreset {
+            name: "Sobel Edges",
+            button_label: "+ Sobel Edges",
+            search_key: "sobel edge detection outline sketch line",
+            id_prefix: "sobel",
+            create_fn: |idx| Effect {
+                id: format!("sobel_{}", idx),
+                name: "Sobel Edges".to_string(),
+                effect_type: EffectType::SobelEdges { invert: false },
+                enabled: true,
+            },
+        },
+        EffectPreset {
+            name: "Mosaic",
+            button_label: "+ Mosaic",
+            search_key: "mosaic pixelate block censor blur squares",
+            id_prefix: "mosaic",
+            create_fn: |idx| Effect {
+                id: format!("mosaic_{}", idx),
+                name: "Mosaic".to_string(),
+                effect_type: EffectType::Mosaic {
+                    block_w: Animatable::new_constant(10.0),
+                    block_h: Animatable::new_constant(10.0),
+                },
+                enabled: true,
+            },
+        },
+        EffectPreset {
+            name: "Tilt Shift",
+            button_label: "+ Tilt Shift",
+            search_key: "tilt shift miniature focus depth of field diorama",
+            id_prefix: "tiltsh",
+            create_fn: |idx| Effect {
+                id: format!("tiltsh_{}", idx),
+                name: "Tilt Shift".to_string(),
+                effect_type: EffectType::TiltShift {
+                    focus_y: Animatable::new_constant(0.5),
+                    focus_height: Animatable::new_constant(0.3),
+                    max_blur: Animatable::new_constant(6.0),
+                },
+                enabled: true,
+            },
+        },
+        EffectPreset {
+            name: "Emboss",
+            button_label: "+ Emboss",
+            search_key: "emboss relief 3d surface engrave",
+            id_prefix: "emboss",
+            create_fn: |idx| Effect {
+                id: format!("emboss_{}", idx),
+                name: "Emboss".to_string(),
+                effect_type: EffectType::Emboss {
+                    angle_deg: Animatable::new_constant(45.0),
+                    depth: Animatable::new_constant(1.0),
+                },
+                enabled: true,
+            },
+        },
     ]
 }
 
@@ -1456,6 +1528,27 @@ pub fn draw_effect_type_ui(
         }
         EffectType::RadialBlurZoom { amount } => {
             draw_prop(ui, current_frame, project_changed, next_frame, "Amount", amount, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=100.0)); });
+        }
+        EffectType::MedianFilter { radius } => {
+            draw_prop(ui, current_frame, project_changed, next_frame, "Radius", radius, |ui, v| { ui.add(egui::Slider::new(v, 1.0..=16.0).suffix(" px")); });
+        }
+        EffectType::SobelEdges { invert } => {
+            if ui.checkbox(invert, "Invert").changed() {
+                *project_changed = true;
+            }
+        }
+        EffectType::Mosaic { block_w, block_h } => {
+            draw_prop(ui, current_frame, project_changed, next_frame, "Block Width", block_w, |ui, v| { ui.add(egui::Slider::new(v, 1.0..=128.0).suffix(" px")); });
+            draw_prop(ui, current_frame, project_changed, next_frame, "Block Height", block_h, |ui, v| { ui.add(egui::Slider::new(v, 1.0..=128.0).suffix(" px")); });
+        }
+        EffectType::TiltShift { focus_y, focus_height, max_blur } => {
+            draw_prop(ui, current_frame, project_changed, next_frame, "Focus Y", focus_y, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=1.0)); });
+            draw_prop(ui, current_frame, project_changed, next_frame, "Band Height", focus_height, |ui, v| { ui.add(egui::Slider::new(v, 0.02..=1.0)); });
+            draw_prop(ui, current_frame, project_changed, next_frame, "Max Blur", max_blur, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=32.0).suffix(" px")); });
+        }
+        EffectType::Emboss { angle_deg, depth } => {
+            draw_prop(ui, current_frame, project_changed, next_frame, "Angle", angle_deg, |ui, v| { ui.add(egui::Slider::new(v, -180.0..=180.0).suffix("°")); });
+            draw_prop(ui, current_frame, project_changed, next_frame, "Depth", depth, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=10.0)); });
         }
     }
 }

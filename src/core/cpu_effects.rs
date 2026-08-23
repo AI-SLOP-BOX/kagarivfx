@@ -551,6 +551,39 @@ fn apply_one(
             let center = [width as f32 * 0.5, height as f32 * 0.5];
             apply_radial_blur_zoom(pixels, width, height, center, amount.evaluate(frame));
         }
+        EffectType::MedianFilter { radius } => {
+            use crate::core::ae_effects_pack_v19::apply_median_filter;
+            apply_median_filter(pixels, width, height, radius.evaluate(frame).round().clamp(1.0, 16.0) as u32);
+        }
+        EffectType::SobelEdges { invert } => {
+            use crate::core::ae_effects_pack_v19::apply_sobel_edges;
+            apply_sobel_edges(pixels, width, height, *invert);
+        }
+        EffectType::Mosaic { block_w, block_h } => {
+            use crate::core::ae_effects_pack_v19::apply_mosaic;
+            apply_mosaic(
+                pixels,
+                width,
+                height,
+                block_w.evaluate(frame).round().clamp(1.0, 256.0) as u32,
+                block_h.evaluate(frame).round().clamp(1.0, 256.0) as u32,
+            );
+        }
+        EffectType::TiltShift { focus_y, focus_height, max_blur } => {
+            use crate::core::ae_effects_pack_v19::apply_tilt_shift;
+            apply_tilt_shift(
+                pixels,
+                width,
+                height,
+                focus_y.evaluate(frame),
+                focus_height.evaluate(frame).max(1.0),
+                max_blur.evaluate(frame).round().clamp(0.0, 32.0) as u32,
+            );
+        }
+        EffectType::Emboss { angle_deg, depth } => {
+            use crate::core::ae_effects_pack_v17::apply_emboss;
+            apply_emboss(pixels, width, height, angle_deg.evaluate(frame), depth.evaluate(frame));
+        }
     }
 }
 
@@ -1013,5 +1046,45 @@ mod tests {
         );
         let center = ((8 * 16 + 8) * 4) as usize;
         assert!(px[center] > 0, "zoom blur keeps centre bright");
+    }
+
+    #[test]
+    fn test_sharpen_stylize_pack_uniform_safety() {
+        // Median filter of a uniform image must be the image itself.
+        let base = solid_layer(8, 8, 90, 140, 200);
+        let mut px = base.clone();
+        apply_layer_effects(
+            &mut px, 8, 8,
+            &[effect("med", EffectType::MedianFilter { radius: Animatable::new_constant(2.0) })],
+            0,
+        );
+        assert_eq!(px, base, "median of uniform image is identity");
+
+        // Mosaic with block size 1x1 must be identity.
+        let mut px = base.clone();
+        apply_layer_effects(
+            &mut px, 8, 8,
+            &[effect("mos", EffectType::Mosaic {
+                block_w: Animatable::new_constant(1.0),
+                block_h: Animatable::new_constant(1.0),
+            })],
+            0,
+        );
+        assert_eq!(px, base, "1x1 mosaic is identity");
+
+        // Sobel on a uniform image must produce no edges inside the frame.
+        // (The kernel leaves the 1px border untouched, so only check interior.)
+        let mut px = base.clone();
+        apply_layer_effects(
+            &mut px, 8, 8,
+            &[effect("sobel", EffectType::SobelEdges { invert: false })],
+            0,
+        );
+        for y in 1..7usize {
+            for x in 1..7usize {
+                let i = (y * 8 + x) * 4;
+                assert!(px[i] < 16, "uniform image must have no sobel edges (got {})", px[i]);
+            }
+        }
     }
 }
