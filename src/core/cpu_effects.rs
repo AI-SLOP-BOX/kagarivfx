@@ -507,6 +507,19 @@ fn apply_one(
             use crate::core::ae_effects_pack_v22::apply_alpha_from_luminance;
             apply_alpha_from_luminance(pixels, *invert);
         }
+        EffectType::NightVision { amplification } => {
+            use crate::core::ae_effects_pack_v20::apply_night_vision;
+            // Seed advances with the frame: deterministic per frame, animated over time.
+            apply_night_vision(pixels, amplification.evaluate(frame), frame.wrapping_mul(2654435761));
+        }
+        EffectType::IrisWipe { completion } => {
+            use crate::core::ae_effects_pack_v2::apply_iris_wipe;
+            apply_iris_wipe(pixels, width, height, completion.evaluate(frame));
+        }
+        EffectType::RadialWipe { completion } => {
+            use crate::core::ae_effects_pack_v2::apply_radial_wipe;
+            apply_radial_wipe(pixels, width, height, completion.evaluate(frame));
+        }
     }
 }
 
@@ -871,5 +884,46 @@ mod tests {
         );
         assert_eq!(px[3], 0, "inverted white must become transparent");
         assert_eq!(px[7], 255, "inverted black must become opaque");
+    }
+
+    #[test]
+    fn test_stylize_transition_pack() {
+        // Night vision output must be phosphor-green dominant.
+        let mut px = solid_layer(4, 4, 90, 140, 200);
+        apply_layer_effects(
+            &mut px, 4, 4,
+            &[effect("nv", EffectType::NightVision { amplification: Animatable::new_constant(2.0) })],
+            0,
+        );
+        for p in px.chunks_exact(4) {
+            assert!(p[1] >= p[0] && p[1] >= p[2], "green channel must dominate");
+        }
+        // Determinism: same frame → identical output.
+        let mut again = solid_layer(4, 4, 90, 140, 200);
+        apply_layer_effects(
+            &mut again, 4, 4,
+            &[effect("nv", EffectType::NightVision { amplification: Animatable::new_constant(2.0) })],
+            0,
+        );
+        assert_eq!(px, again, "night vision must be deterministic per frame");
+
+        // Iris wipe at 0% must leave the image untouched (fully covered).
+        let base = solid_layer(8, 8, 90, 140, 200);
+        let mut px = base.clone();
+        apply_layer_effects(
+            &mut px, 8, 8,
+            &[effect("iris", EffectType::IrisWipe { completion: Animatable::new_constant(0.0) })],
+            0,
+        );
+        assert_eq!(px, base, "0% iris wipe must be a no-op");
+
+        // Same for radial wipe.
+        let mut px = base.clone();
+        apply_layer_effects(
+            &mut px, 8, 8,
+            &[effect("rad", EffectType::RadialWipe { completion: Animatable::new_constant(0.0) })],
+            0,
+        );
+        assert_eq!(px, base, "0% radial wipe must be a no-op");
     }
 }

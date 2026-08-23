@@ -373,6 +373,7 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                          || name.contains("Scanline") || name.contains("CRT")
                          || name.contains("Posterize") || name.contains("Invert")
                          || name.contains("Threshold") || name.contains("Light Sweep")
+                         || name.contains("Night") || name.contains("Vision")
                          { "Stylize" }
                     else if name.contains("Noise") || name.contains("Fractal") { "Generate & Simulation" }
                     else if name.contains("Wipe") { "Transition" }

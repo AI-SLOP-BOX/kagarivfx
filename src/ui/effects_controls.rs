@@ -724,6 +724,48 @@ pub fn get_all_effect_presets() -> &'static [EffectPreset] {
                 enabled: true,
             },
         },
+        EffectPreset {
+            name: "Night Vision",
+            button_label: "+ Night Vision",
+            search_key: "night vision green phosphor goggles surveillance",
+            id_prefix: "nv",
+            create_fn: |idx| Effect {
+                id: format!("nv_{}", idx),
+                name: "Night Vision".to_string(),
+                effect_type: EffectType::NightVision {
+                    amplification: Animatable::new_constant(2.5),
+                },
+                enabled: true,
+            },
+        },
+        EffectPreset {
+            name: "Iris Wipe",
+            button_label: "+ Iris Wipe",
+            search_key: "iris circle wipe transition reveal round",
+            id_prefix: "irisw",
+            create_fn: |idx| Effect {
+                id: format!("irisw_{}", idx),
+                name: "Iris Wipe".to_string(),
+                effect_type: EffectType::IrisWipe {
+                    completion: Animatable::new_constant(0.0),
+                },
+                enabled: true,
+            },
+        },
+        EffectPreset {
+            name: "Radial Wipe",
+            button_label: "+ Radial Wipe",
+            search_key: "radial sweep wipe transition clock reveal",
+            id_prefix: "radw",
+            create_fn: |idx| Effect {
+                id: format!("radw_{}", idx),
+                name: "Radial Wipe".to_string(),
+                effect_type: EffectType::RadialWipe {
+                    completion: Animatable::new_constant(0.0),
+                },
+                enabled: true,
+            },
+        },
     ]
 }
 
@@ -1340,6 +1382,15 @@ pub fn draw_effect_type_ui(
             if ui.checkbox(invert, "Invert (dark = opaque)").changed() {
                 *project_changed = true;
             }
+        }
+        EffectType::NightVision { amplification } => {
+            draw_prop(ui, current_frame, project_changed, next_frame, "Amplification", amplification, |ui, v| { ui.add(egui::Slider::new(v, 1.0..=8.0).suffix("×")); });
+        }
+        EffectType::IrisWipe { completion } => {
+            draw_prop(ui, current_frame, project_changed, next_frame, "Completion", completion, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=100.0).suffix("%")); });
+        }
+        EffectType::RadialWipe { completion } => {
+            draw_prop(ui, current_frame, project_changed, next_frame, "Completion", completion, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=100.0).suffix("%")); });
         }
     }
 }

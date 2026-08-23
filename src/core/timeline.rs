@@ -974,6 +974,18 @@ pub enum EffectType {
     AlphaFromLuminance {
         invert: bool,
     },
+    /// Phosphor-green night vision look with per-frame film noise.
+    NightVision {
+        amplification: Animatable<f32>,
+    },
+    /// Circular iris wipe transition (0 = fully covered).
+    IrisWipe {
+        completion: Animatable<f32>,
+    },
+    /// Sweeping radial wipe transition (0 = fully covered).
+    RadialWipe {
+        completion: Animatable<f32>,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

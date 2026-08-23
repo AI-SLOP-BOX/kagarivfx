@@ -221,6 +221,9 @@ impl RenderEffectPlugin for EnumEffectPlugin {
             EffectType::MatteChokeSpread { .. } => "Matte Choke / Spread",
             EffectType::AlphaFeather { .. } => "Alpha Feather",
             EffectType::AlphaFromLuminance { .. } => "Alpha From Luminance",
+            EffectType::NightVision { .. } => "Night Vision",
+            EffectType::IrisWipe { .. } => "Iris Wipe",
+            EffectType::RadialWipe { .. } => "Radial Wipe",
         }
     }
 
@@ -287,6 +290,9 @@ impl RenderEffectPlugin for EnumEffectPlugin {
             EffectType::MatteChokeSpread { .. } => "matte_choke_spread",
             EffectType::AlphaFeather { .. } => "alpha_feather",
             EffectType::AlphaFromLuminance { .. } => "alpha_from_luminance",
+            EffectType::NightVision { .. } => "night_vision",
+            EffectType::IrisWipe { .. } => "iris_wipe",
+            EffectType::RadialWipe { .. } => "radial_wipe",
         }
     }
 
