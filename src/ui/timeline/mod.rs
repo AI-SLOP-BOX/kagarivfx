@@ -245,6 +245,7 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
 
                 // Ruler Ticks
                 let step = (zoom_span / 10).max(1);
+                let fps = comp.fps.max(1);
                 for f in (start_frame..=(start_frame + zoom_span)).step_by(step as usize) {
                     let norm = (f - start_frame) as f32 / zoom_span as f32;
                     let tick_x = ruler_rect.left() + norm * ruler_rect.width();
@@ -252,10 +253,15 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                         [egui::pos2(tick_x, ruler_rect.bottom() - 6.0), egui::pos2(tick_x, ruler_rect.bottom())],
                         egui::Stroke::new(1.0, colors::BORDER_STRONG),
                     );
+                    let tc_s = f / fps;
+                    let tc_sub = f % fps;
+                    let tc_m = tc_s / 60;
+                    let tc_h = tc_m / 60;
+                    let tc_str = format!("{:02}:{:02}:{:02}:{:02}", tc_h, tc_m % 60, tc_s % 60, tc_sub);
                     ui.painter().text(
                         egui::pos2(tick_x, ruler_rect.top() + 2.0),
                         egui::Align2::CENTER_TOP,
-                        format!("{}", f),
+                        &tc_str,
                         egui::FontId::monospace(9.0),
                         colors::TEXT_SECONDARY,
                     );
