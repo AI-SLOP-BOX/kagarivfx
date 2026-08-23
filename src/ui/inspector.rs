@@ -34,9 +34,18 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
         app.tracker_rx = None;
     }
 
+    // Update panel animation
+    let dt = ctx.input(|i| i.stable_dt);
+    app.inspector_animation.update(dt);
+
+    let animated_width = crate::ui::panel_animation::animate_panel_width(
+        ctx, &app.inspector_animation, 400.0
+    ).max(200.0);
+
     egui::SidePanel::left("left_panel")
         .resizable(true)
         .default_width(280.0)
+        .min_width(animated_width)
         .show(ctx, |ui| {
             ui.horizontal(|ui| {
                 if ui.selectable_label(app.left_tab_idx == 0, "Project").clicked() { app.left_tab_idx = 0; }

@@ -3,9 +3,18 @@ use crate::AfterEffectsApp;
 use crate::ui::theme::colors;
 
 pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut u32) {
+    // Update panel animation
+    let dt = ctx.input(|i| i.stable_dt);
+    app.effects_animation.update(dt);
+
+    let animated_width = crate::ui::panel_animation::animate_panel_width(
+        ctx, &app.effects_animation, 350.0
+    ).max(200.0);
+
     egui::SidePanel::right("right_panel")
         .resizable(true)
         .default_width(240.0)
+        .min_width(animated_width)
         .show(ctx, |ui| {
             egui::ScrollArea::horizontal().show(ui, |ui| {
                 ui.horizontal(|ui| {

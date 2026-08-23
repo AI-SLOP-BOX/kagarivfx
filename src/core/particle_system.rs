@@ -21,6 +21,8 @@ pub enum EmitterShape {
     Box = 1,
     Circle = 2,
     Line = 3,
+    /// Emission from a thin circle at `emitter_size[0]` diameter.
+    Ring = 4,
 }
 
 
@@ -255,6 +257,12 @@ impl ParticleSystem {
                 emitter_x + (self.next_random() - 0.5) * self.emitter.emitter_size[0],
                 emitter_y,
             ),
+            EmitterShape::Ring => {
+                // Points sit ON the circle of the given diameter.
+                let r = self.emitter.emitter_size[0] * 0.5;
+                let a = self.next_random() * std::f32::consts::TAU;
+                (emitter_x + r * a.cos(), emitter_y + r * a.sin())
+            }
         };
 
         self.particles.push(Particle {

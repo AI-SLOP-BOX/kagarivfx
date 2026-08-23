@@ -291,6 +291,9 @@ pub struct AfterEffectsApp {
     pub toasts: crate::ui::notification::ToastManager,
     pub frame_cache: crate::core::frame_cache::FrameCache,
     pub lazy_evaluator: crate::core::render_pipeline::LazyFrameEvaluator,
+    /// Panel animation states for smooth open/close transitions
+    pub inspector_animation: crate::ui::panel_animation::PanelAnimation,
+    pub effects_animation: crate::ui::panel_animation::PanelAnimation,
 }
 
 #[cfg(feature = "gui")]
@@ -402,6 +405,8 @@ impl Default for AfterEffectsApp {
             toasts: crate::ui::notification::ToastManager::new(),
             frame_cache: crate::core::frame_cache::FrameCache::new(256),
             lazy_evaluator: crate::core::render_pipeline::LazyFrameEvaluator::new(),
+            inspector_animation: crate::ui::panel_animation::PanelAnimation::new(true),
+            effects_animation: crate::ui::panel_animation::PanelAnimation::new(true),
         }
     }
 }

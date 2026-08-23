@@ -53,7 +53,7 @@ pub fn draw_flowchart_view(
         // Draw Composition Root Node
         let root_pos = egui::pos2(rect.left() + 90.0, rect.center().y);
         let root_rect = egui::Rect::from_center_size(root_pos, egui::vec2(130.0, 44.0));
-        painter.rect_filled(root_rect, 6.0, egui::Color32::from_rgb(40, 90, 160));
+        painter.rect_filled(root_rect, 6.0, colors::BG_ACTIVE);
         painter.rect_stroke(root_rect, 6.0, egui::Stroke::new(1.5, egui::Color32::WHITE));
         painter.text(
             root_pos,
@@ -71,7 +71,7 @@ pub fn draw_flowchart_view(
                 egui::Align2::CENTER_CENTER,
                 "No layers in composition",
                 egui::FontId::proportional(14.0),
-                egui::Color32::GRAY,
+                colors::TEXT_MUTED,
             );
             return;
         }
@@ -99,7 +99,7 @@ pub fn draw_flowchart_view(
             let stroke_color = if is_selected {
                 colors::ACCENT_CYAN
             } else {
-                egui::Color32::from_gray(120)
+                colors::BORDER_STRONG
             };
 
             painter.rect_filled(node_rect, 4.0, base_color);
@@ -143,7 +143,7 @@ pub fn draw_flowchart_view(
 
             painter.add(egui::Shape::line(
                 curve_pts,
-                egui::Stroke::new(1.2, egui::Color32::from_rgba_unmultiplied(100, 180, 255, 140)),
+                egui::Stroke::new(1.2, colors::MOTION_PATH.linear_multiply(140.0 / 255.0)),
             ));
 
             // Draw Parent Connection Lines

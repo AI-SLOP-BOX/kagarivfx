@@ -689,6 +689,29 @@ pub fn quad_track_confidence(
         .collect()
 }
 
+/// Post-analysis cleanup: frames whose lock confidence falls below
+/// `conf_threshold` are replaced by their spike-smoothed counterparts while
+/// healthy frames stay bit-identical. Combines [`quad_track_confidence`] and
+/// [`smooth_quad_track`] into the standard refinement pass.
+pub fn refine_quad_track(
+    track: &QuadTrackData,
+    source_rect: [[f32; 2]; 4],
+    conf_threshold: f32,
+    max_jump: f32,
+) -> QuadTrackData {
+    let smoothed = smooth_quad_track(track, max_jump);
+    let conf = quad_track_confidence(track, source_rect);
+    let mut out = track.clone();
+    for i in 0..out.frames.len() {
+        if conf.get(i).copied().unwrap_or(1.0) < conf_threshold {
+            if let Some(s) = smoothed.corners.get(i) {
+                out.corners[i] = *s;
+            }
+        }
+    }
+    out
+}
+
 #[cfg(test)]
 mod subpixel_tests {
     use super::*;
@@ -990,5 +1013,31 @@ mod quad_track_tests {
             (new_pos[0] - 40.0).abs() < 2.0 && (new_pos[1] - 32.0).abs() < 2.0,
             "tracker must lock onto the templated checker: {new_pos:?}"
         );
+    }
+
+    #[test]
+    fn test_refine_replaces_only_low_confidence_frames() {
+        // Rigid translation with frame 3 collapsed to a degenerate point.
+        let mut track = QuadTrackData::default();
+        for f in 0..6u32 {
+            let o = f as f32 * 5.0;
+            let quad = if f == 3 {
+                [[50.0, 50.0]; 4]
+            } else {
+                [[10.0 + o, 10.0], [60.0 + o, 10.0], [60.0 + o, 60.0], [10.0 + o, 60.0]]
+            };
+            track.frames.push(f);
+            track.corners.push(quad);
+        }
+        let refined = refine_quad_track(&track, RECT, 0.5, 25.0);
+
+        // Healthy frames bit-identical.
+        assert_eq!(refined.corners[0], track.corners[0]);
+        assert_eq!(refined.corners[4], track.corners[4]);
+        // Degenerate frame pulled toward the smoothed midpoint: neighbour
+        // corner-0 positions are (20,10)/(30,10) → midpoint (25,10).
+        assert_ne!(refined.corners[3], track.corners[3]);
+        let c = refined.corners[3][0];
+        assert!((c[0] - 25.0).abs() < 1e-4 && (c[1] - 10.0).abs() < 1e-4, "midpoint {c:?}");
     }
 }

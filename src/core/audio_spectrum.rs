@@ -633,3 +633,51 @@ mod beat_tests {
         assert!((tight.threshold_mult - 4.0).abs() < 1e-6);
     }
 }
+
+#[cfg(test)]
+mod spectrogram_tests {
+    use super::*;
+
+    #[test]
+    fn test_empty_history_leaves_buffer_untouched() {
+        let mut buf = vec![9u8; 8 * 4 * 4];
+        let before = buf.clone();
+        render_spectrogram(&mut buf, 4, 4, &[], [0, 0, 0], [255, 255, 255]);
+        assert_eq!(buf, before);
+    }
+
+    #[test]
+    fn test_newest_right_and_band_bottom_mapping() {
+        // Two frames: oldest has full energy, newest is silent.
+        let history = vec![vec![1.0f32], vec![0.0]];
+        let (w, h) = (4usize, 3usize);
+        let mut buf = vec![0u8; w * h * 4];
+        render_spectrogram(&mut buf, w as u32, h as u32, &history, [0, 0, 0], [255, 255, 255]);
+
+        let px = |x: usize, y: usize| (y * w + x) * 4;
+        // Rightmost column = newest (silent) → near-black, alpha set.
+        let r = px(w - 1, h - 1);
+        assert_eq!(buf[r], 0);
+        assert_eq!(buf[r + 3], 255);
+        // Second-from-right = loudest → near-white.
+        let l = px(w - 2, h - 1);
+        assert!(buf[l] > 240, "{}", buf[l]);
+        // Columns without data keep the caller's background (alpha untouched).
+        assert_eq!(buf[px(0, 0) + 3], 0);
+    }
+
+    #[test]
+    fn test_degenerate_dimensions_safe() {
+        let history = vec![vec![0.5f32]];
+        render_spectrogram(&mut [], 0, 0, &history, [0; 3], [255; 3]);
+        // A single-pixel buffer is valid and gets painted at mid-ramp.
+        let mut one = vec![0u8; 4];
+        render_spectrogram(&mut one, 1, 1, &history, [0; 3], [255; 3]);
+        assert_eq!(one[3], 255, "alpha set");
+        assert_eq!(one[0], 128, "mid amplitude ≈ half of high colour");
+        // Undersized buffer is a safe no-op.
+        let mut tiny = vec![0u8; 4];
+        render_spectrogram(&mut tiny, 4, 4, &history, [0; 3], [255; 3]);
+        assert_eq!(tiny, vec![0u8; 4]);
+    }
+}
