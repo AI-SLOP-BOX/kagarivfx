@@ -227,6 +227,11 @@ impl RenderEffectPlugin for EnumEffectPlugin {
             EffectType::FilmEmulation { .. } => "Film Emulation",
             EffectType::GodRays { .. } => "God Rays",
             EffectType::RadialBlurZoom { .. } => "Zoom Blur",
+            EffectType::MedianFilter { .. } => "Median Filter",
+            EffectType::SobelEdges { .. } => "Sobel Edges",
+            EffectType::Mosaic { .. } => "Mosaic",
+            EffectType::TiltShift { .. } => "Tilt Shift",
+            EffectType::Emboss { .. } => "Emboss",
         }
     }
 

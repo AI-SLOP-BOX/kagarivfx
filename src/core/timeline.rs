@@ -1005,6 +1005,30 @@ pub enum EffectType {
     RadialBlurZoom {
         amount: Animatable<f32>,
     },
+    /// Median filter — salt-and-pepper noise removal.
+    MedianFilter {
+        radius: Animatable<f32>,
+    },
+    /// Sobel edge outline.
+    SobelEdges {
+        invert: bool,
+    },
+    /// Block pixelation.
+    Mosaic {
+        block_w: Animatable<f32>,
+        block_h: Animatable<f32>,
+    },
+    /// Tilt-shift miniature focus band.
+    TiltShift {
+        focus_y: Animatable<f32>,
+        focus_height: Animatable<f32>,
+        max_blur: Animatable<f32>,
+    },
+    /// Surface relief emboss.
+    Emboss {
+        angle_deg: Animatable<f32>,
+        depth: Animatable<f32>,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

@@ -164,7 +164,7 @@ pub fn draw_graph_editor(
         }
 
         // Allocate drawing region
-        let (rect, _graph_response) = ui.allocate_exact_size(
+        let (rect, graph_response) = ui.allocate_exact_size(
             egui::vec2(ui.available_width(), 70.0),
             egui::Sense::click_and_drag(),
         );
@@ -188,6 +188,77 @@ pub fn draw_graph_editor(
                 [window[0], window[1]],
                 egui::Stroke::new(2.0, colors::TIMELINE_KEYFRAME),
             );
+        }
+
+        // ── Click on empty graph area → create a keyframe at that frame/value ──
+        {
+            use crate::core::keyframe::{InterpolationType as GInterp, Keyframe as GKeyframe};
+
+            let x_of = |f: u32| rect.left() + (f as f32 / total_f as f32) * rect.width();
+            let y_of = |v: f32| rect.bottom() - 4.0 - ((v - min_val) / val_range) * (rect.height() - 8.0);
+
+            if graph_response.clicked() {
+                if let Some(pos) = graph_response.interact_pointer_pos() {
+                    if rect.contains(pos) {
+                        // Existing anchor proximity guard: clicks on anchors belong to the anchor drag
+                        let chan_kfs = |p: &crate::core::property::Animatable<[f32; 2]>, ci: usize| -> Vec<(u32, f32)> {
+                            p.keyframes().map(|kfs| kfs.iter().map(|kf| (kf.frame, kf.value[ci])).collect()).unwrap_or_default()
+                        };
+                        let scalar_kfs = |p: &crate::core::property::Animatable<f32>| -> Vec<(u32, f32)> {
+                            p.keyframes().map(|kfs| kfs.iter().map(|kf| (kf.frame, kf.value)).collect()).unwrap_or_default()
+                        };
+                        let anchor_pts: Vec<(u32, f32)> = match graph_prop.as_str() {
+                            "Position X" => chan_kfs(&layer.transform.position, 0),
+                            "Position Y" => chan_kfs(&layer.transform.position, 1),
+                            "Scale X" => chan_kfs(&layer.transform.scale, 0),
+                            "Scale Y" => chan_kfs(&layer.transform.scale, 1),
+                            "Rotation" => scalar_kfs(&layer.transform.rotation),
+                            "Opacity" => scalar_kfs(&layer.transform.opacity),
+                            _ => vec![],
+                        };
+                        let near_anchor = anchor_pts.iter().any(|&(f, v)| {
+                            egui::pos2(x_of(f), y_of(v)).distance(pos) < 8.0
+                        });
+
+                        if !near_anchor {
+                            let new_frame = (((pos.x - rect.left()) / rect.width()) * total_f as f32)
+                                .round().clamp(0.0, total_f as f32) as u32;
+                            let new_val = min_val
+                                + ((rect.bottom() - 4.0 - pos.y) / (rect.height() - 8.0)) * val_range;
+                            match graph_prop.as_str() {
+                                "Position X" => {
+                                    let mut v = layer.transform.position.evaluate(new_frame);
+                                    v[0] = new_val;
+                                    layer.transform.position.add_keyframe(GKeyframe::new(new_frame, v, GInterp::Linear));
+                                }
+                                "Position Y" => {
+                                    let mut v = layer.transform.position.evaluate(new_frame);
+                                    v[1] = new_val;
+                                    layer.transform.position.add_keyframe(GKeyframe::new(new_frame, v, GInterp::Linear));
+                                }
+                                "Scale X" => {
+                                    let mut v = layer.transform.scale.evaluate(new_frame);
+                                    v[0] = new_val;
+                                    layer.transform.scale.add_keyframe(GKeyframe::new(new_frame, v, GInterp::Linear));
+                                }
+                                "Scale Y" => {
+                                    let mut v = layer.transform.scale.evaluate(new_frame);
+                                    v[1] = new_val;
+                                    layer.transform.scale.add_keyframe(GKeyframe::new(new_frame, v, GInterp::Linear));
+                                }
+                                "Rotation" => {
+                                    layer.transform.rotation.add_keyframe(GKeyframe::new(new_frame, new_val, GInterp::Linear));
+                                }
+                                "Opacity" => {
+                                    layer.transform.opacity.add_keyframe(GKeyframe::new(new_frame, new_val.clamp(0.0, 100.0), GInterp::Linear));
+                                }
+                                _ => {}
+                            }
+                            *project_changed = true;
+                        }
+                    }
+                }
+            }
         }
 
         // Draw Speed Graph Velocity Line (First Derivative v(t) = dy/dt)
