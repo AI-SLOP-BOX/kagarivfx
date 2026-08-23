@@ -961,6 +961,19 @@ pub enum EffectType {
         seed: Animatable<f32>,
         amount: Animatable<f32>,
     },
+    /// Morphological matte choke (erode) or spread (dilate).
+    MatteChokeSpread {
+        radius: Animatable<f32>,
+        expand: bool,
+    },
+    /// Soft blur applied to the alpha edge only.
+    AlphaFeather {
+        radius: Animatable<f32>,
+    },
+    /// Replace alpha with luminance (optionally inverted).
+    AlphaFromLuminance {
+        invert: bool,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

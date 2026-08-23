@@ -484,6 +484,29 @@ fn apply_one(
                 amount.evaluate(frame),
             );
         }
+        EffectType::MatteChokeSpread { radius, expand } => {
+            use crate::core::ae_effects_pack_v22::apply_matte_choke;
+            apply_matte_choke(
+                pixels,
+                width,
+                height,
+                radius.evaluate(frame).round().clamp(1.0, 64.0) as u32,
+                *expand,
+            );
+        }
+        EffectType::AlphaFeather { radius } => {
+            use crate::core::ae_effects_pack_v22::apply_alpha_feather;
+            apply_alpha_feather(
+                pixels,
+                width,
+                height,
+                radius.evaluate(frame).round().clamp(1.0, 64.0) as u32,
+            );
+        }
+        EffectType::AlphaFromLuminance { invert } => {
+            use crate::core::ae_effects_pack_v22::apply_alpha_from_luminance;
+            apply_alpha_from_luminance(pixels, *invert);
+        }
     }
 }
 
@@ -788,5 +811,65 @@ mod tests {
             0,
         );
         assert_eq!(px, base, "zero-amount glitch must be a no-op");
+    }
+
+    #[test]
+    fn test_matte_alpha_pack_behaviour() {
+        // Opaque square in a transparent 8x8 buffer (alpha edge at x=1..6).
+        let mut base = vec![0u8; 8 * 8 * 4];
+        for y in 1..7usize {
+            for x in 1..7usize {
+                let i = (y * 8 + x) * 4;
+                base[i] = 200; base[i + 1] = 100; base[i + 2] = 50; base[i + 3] = 255;
+            }
+        }
+
+        // Choke with radius 1 must shrink the matte: corner pixel (1,1) loses alpha.
+        let mut px = base.clone();
+        apply_layer_effects(
+            &mut px, 8, 8,
+            &[effect("choke", EffectType::MatteChokeSpread {
+                radius: Animatable::new_constant(1.0),
+                expand: false,
+            })],
+            0,
+        );
+        let corner = (1 * 8 + 1) * 4;
+        assert_eq!(px[corner + 3], 0, "choke must erode the alpha corner");
+
+        // Spread must re-dilate it back.
+        let mut px = base.clone();
+        apply_layer_effects(
+            &mut px, 8, 8,
+            &[effect("spread", EffectType::MatteChokeSpread {
+                radius: Animatable::new_constant(1.0),
+                expand: true,
+            })],
+            0,
+        );
+        assert_eq!(px[(1 * 8 + 0) * 4 + 3], 255, "spread must dilate alpha outward");
+
+        // Luma→alpha: white = opaque, black = transparent; invert flips both.
+        let mut px = vec![0u8; 2 * 1 * 4];
+        px[0] = 255; px[1] = 255; px[2] = 255; px[3] = 255;
+        px[4] = 0; px[5] = 0; px[6] = 0; px[7] = 255;
+        apply_layer_effects(
+            &mut px, 2, 1,
+            &[effect("luma", EffectType::AlphaFromLuminance { invert: false })],
+            0,
+        );
+        assert_eq!(px[3], 255, "white luma must become full alpha");
+        assert_eq!(px[7], 0, "black luma must become zero alpha");
+
+        let mut px = vec![0u8; 2 * 1 * 4];
+        px[0] = 255; px[1] = 255; px[2] = 255; px[3] = 255;
+        px[4] = 0; px[5] = 0; px[6] = 0; px[7] = 255;
+        apply_layer_effects(
+            &mut px, 2, 1,
+            &[effect("lumainv", EffectType::AlphaFromLuminance { invert: true })],
+            0,
+        );
+        assert_eq!(px[3], 0, "inverted white must become transparent");
+        assert_eq!(px[7], 255, "inverted black must become opaque");
     }
 }

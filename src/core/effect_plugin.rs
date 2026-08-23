@@ -218,6 +218,9 @@ impl RenderEffectPlugin for EnumEffectPlugin {
             EffectType::Fisheye { .. } => "Fisheye",
             EffectType::LensCorrection { .. } => "Lens Correction",
             EffectType::GlitchDisplacement { .. } => "Glitch Displacement",
+            EffectType::MatteChokeSpread { .. } => "Matte Choke / Spread",
+            EffectType::AlphaFeather { .. } => "Alpha Feather",
+            EffectType::AlphaFromLuminance { .. } => "Alpha From Luminance",
         }
     }
 
@@ -281,6 +284,9 @@ impl RenderEffectPlugin for EnumEffectPlugin {
             EffectType::Fisheye { .. } => "fisheye",
             EffectType::LensCorrection { .. } => "lens_correction",
             EffectType::GlitchDisplacement { .. } => "glitch_displacement",
+            EffectType::MatteChokeSpread { .. } => "matte_choke_spread",
+            EffectType::AlphaFeather { .. } => "alpha_feather",
+            EffectType::AlphaFromLuminance { .. } => "alpha_from_luminance",
         }
     }
 

@@ -683,6 +683,47 @@ pub fn get_all_effect_presets() -> &'static [EffectPreset] {
                 enabled: true,
             },
         },
+        EffectPreset {
+            name: "Matte Choke / Spread",
+            button_label: "+ Matte Choke",
+            search_key: "matte choke spread alpha erode dilate mask edge shrink grow",
+            id_prefix: "mchoke",
+            create_fn: |idx| Effect {
+                id: format!("mchoke_{}", idx),
+                name: "Matte Choke / Spread".to_string(),
+                effect_type: EffectType::MatteChokeSpread {
+                    radius: Animatable::new_constant(3.0),
+                    expand: false,
+                },
+                enabled: true,
+            },
+        },
+        EffectPreset {
+            name: "Alpha Feather",
+            button_label: "+ Alpha Feather",
+            search_key: "alpha feather soft edge blur mask smooth",
+            id_prefix: "afeather",
+            create_fn: |idx| Effect {
+                id: format!("afeather_{}", idx),
+                name: "Alpha Feather".to_string(),
+                effect_type: EffectType::AlphaFeather {
+                    radius: Animatable::new_constant(4.0),
+                },
+                enabled: true,
+            },
+        },
+        EffectPreset {
+            name: "Alpha From Luminance",
+            button_label: "+ Alpha From Luma",
+            search_key: "alpha from luminance luma matte transparency set",
+            id_prefix: "aluma",
+            create_fn: |idx| Effect {
+                id: format!("aluma_{}", idx),
+                name: "Alpha From Luminance".to_string(),
+                effect_type: EffectType::AlphaFromLuminance { invert: false },
+                enabled: true,
+            },
+        },
     ]
 }
 
@@ -1285,6 +1326,20 @@ pub fn draw_effect_type_ui(
         EffectType::GlitchDisplacement { seed, amount } => {
             draw_prop(ui, current_frame, project_changed, next_frame, "Seed", seed, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=9999.0)); });
             draw_prop(ui, current_frame, project_changed, next_frame, "Amount", amount, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=10.0)); });
+        }
+        EffectType::MatteChokeSpread { radius, expand } => {
+            draw_prop(ui, current_frame, project_changed, next_frame, "Radius", radius, |ui, v| { ui.add(egui::Slider::new(v, 1.0..=64.0).suffix(" px")); });
+            if ui.checkbox(expand, "Expand (spread instead of choke)").changed() {
+                *project_changed = true;
+            }
+        }
+        EffectType::AlphaFeather { radius } => {
+            draw_prop(ui, current_frame, project_changed, next_frame, "Radius", radius, |ui, v| { ui.add(egui::Slider::new(v, 1.0..=64.0).suffix(" px")); });
+        }
+        EffectType::AlphaFromLuminance { invert } => {
+            if ui.checkbox(invert, "Invert (dark = opaque)").changed() {
+                *project_changed = true;
+            }
         }
     }
 }

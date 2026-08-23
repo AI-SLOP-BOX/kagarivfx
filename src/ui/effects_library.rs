@@ -355,7 +355,8 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                 // NOTE: keep in sync with the preset names in effects_controls.rs.
                 fn category_of(name: &str) -> &'static str {
                     if name.contains("Key") || name.contains("Matte") || name.contains("Choker")
-                         || name.contains("Minimax") { "Keying & Matte" }
+                         || name.contains("Choke") || name.contains("Minimax")
+                         || name.contains("Alpha") { "Keying & Matte" }
                     else if name.contains("Blur") || name.contains("Sharpen") { "Blur & Sharpen" }
                     else if name.contains("Tint") || name.contains("Hue") || name.contains("LUT")
                          || name.contains("Levels") || name.contains("Log Space")
