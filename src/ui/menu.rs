@@ -14,6 +14,21 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
                     ui.close_menu();
                 }
                 ui.separator();
+                let save_sc = crate::ui::shortcuts::format_shortcut("S", true, false, false);
+                if ui.add(egui::Button::new("Save Project").shortcut_text(save_sc)).clicked() {
+                    let path = app.project_path.clone();
+                    let project = app.history.current();
+                    match crate::core::project_migration::save_project_atomic(project, &path) {
+                        Ok(_) => {
+                            let _ = app.autosave.save_now(project);
+                            app.toasts.info(format!("Saved: {}", path));
+                        }
+                        Err(e) => {
+                            app.toasts.error(format!("Save failed: {}", e));
+                        }
+                    }
+                    ui.close_menu();
+                }
                 if ui.button("Save Project As...").clicked() {
                     if let Some(path) = rfd::FileDialog::new()
                         .add_filter("After Effects OSS Project", &["json", "aevfx"])

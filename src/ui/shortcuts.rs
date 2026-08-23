@@ -437,6 +437,20 @@ pub fn handle_global_shortcuts(
             app.toasts.info("New 1920x1080 @ 30fps");
         }
 
+        // Cmd+S → Save Project (overwrite)
+        if cmd && !shift && i.key_pressed(Key::S) {
+            let path = app.project_path.clone();
+            let proj = app.history.current();
+            match crate::core::project_migration::save_project_atomic(proj, &path) {
+                Ok(()) => {
+                    app.toasts.info(format!("Saved: {}", path));
+                }
+                Err(e) => {
+                    app.toasts.error(format!("Save failed: {}", e));
+                }
+            }
+        }
+
         // Cmd+K → Composition Settings Dialog
         if cmd && !shift && i.key_pressed(Key::K) {
             app.show_comp_settings = true;
