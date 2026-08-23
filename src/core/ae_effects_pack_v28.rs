@@ -10,7 +10,6 @@
 ///
 /// All functions are deterministic, panic-free, and reuse clamp-to-edge
 /// bilinear sampling semantics consistent with Part 27.
-
 // ────────────────────────── Sampling Helper ──────────────────────────
 
 fn sample_bilinear(src: &[u8], w: u32, h: u32, fx: f32, fy: f32, out: &mut [u8; 4]) {
