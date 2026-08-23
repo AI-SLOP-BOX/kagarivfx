@@ -351,20 +351,35 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                 let presets = crate::ui::effects_controls::get_all_effect_presets();
                 let search_q = app.effects_search_query.to_lowercase();
 
-                // Category assignment by effect name
+                // Category assignment by effect name.
+                // NOTE: keep in sync with the preset names in effects_controls.rs.
                 fn category_of(name: &str) -> &'static str {
-                    if name.contains("Blur") || name.contains("Sharpen") { "Blur & Sharpen" }
+                    if name.contains("Key") || name.contains("Matte") || name.contains("Choker")
+                         || name.contains("Minimax") { "Keying & Matte" }
+                    else if name.contains("Blur") || name.contains("Sharpen") { "Blur & Sharpen" }
                     else if name.contains("Tint") || name.contains("Hue") || name.contains("LUT")
-                         || name.contains("Levels") || name.contains("Log Space") { "Color Correction" }
+                         || name.contains("Levels") || name.contains("Log Space")
+                         || name.contains("Balance") || name.contains("Vibrance")
+                         || name.contains("HSL") || name.contains("Curve")
+                         || name.contains("Channel") || name.contains("Colorama")
+                         || name.contains("Color Space") { "Color Correction" }
                     else if name.contains("Warp") || name.contains("Bulge") || name.contains("Twirl")
-                         || name.contains("Offset") { "Distort" }
-                    else if name.contains("Glow") || name.contains("Grain") || name.contains("Vignette")
-                         || name.contains("Aberration") { "Stylize" }
+                         || name.contains("Offset") || name.contains("Distort")
+                         || name.contains("Ripple") || name.contains("Spherize")
+                         || name.contains("Displace") { "Distort" }
+                    else if name.contains("Shadow") || name.contains("Glow") || name.contains("Grain")
+                         || name.contains("Vignette") || name.contains("Aberration")
+                         || name.contains("Scanline") || name.contains("CRT")
+                         || name.contains("Posterize") || name.contains("Invert")
+                         || name.contains("Threshold") || name.contains("Light Sweep")
+                         { "Stylize" }
+                    else if name.contains("Noise") || name.contains("Fractal") { "Generate & Simulation" }
+                    else if name.contains("Wipe") { "Transition" }
                     else { "Other" }
                 }
 
                 ui.collapsing("Effect Browser (categorized)", |ui| {
-                    let categories = ["Blur & Sharpen", "Color Correction", "Distort", "Stylize", "Other"];
+                    let categories = ["Blur & Sharpen", "Color Correction", "Distort", "Stylize", "Keying & Matte", "Generate & Simulation", "Transition", "Other"];
                     for cat in categories {
                         let matching: Vec<_> = presets.iter()
                             .filter(|p| category_of(p.name) == cat)
