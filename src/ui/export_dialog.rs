@@ -2,9 +2,116 @@ use eframe::egui;
 use crate::ExportEvent;
 use crate::ui::theme::colors;
 
+/// Spawn the async FFmpeg (or fallback) render worker for one composition.
+/// Shared by the export dialog button and the Render Queue batch runner.
+pub fn start_comp_export(app: &mut crate::AfterEffectsApp, ctx: &egui::Context, comp_name: &str) {
+    let Some(comp) = app.history.current().compositions.iter().find(|c| c.name == comp_name).cloned() else {
+        app.toasts.error(format!("Queue comp not found: {}", comp_name));
+        return;
+    };
+    let total_frames = comp.duration_frames;
+
+    app.is_exporting = true;
+    app.export_progress = 0.0;
+    app.export_status = Some(format!("Rendering '{}'…", comp.name));
+
+    // Mux the first video layer's extracted WAV when present AND enabled
+    let include_audio = ctx.data_mut(|d| *d.get_temp_mut_or_insert_with(egui::Id::new("ae_export_include_audio"), || true));
+    let audio_wav = if include_audio {
+        comp.layers.iter().find_map(|l| {
+            match &l.layer_type {
+                crate::core::timeline::LayerType::Video { audio_wav, .. } => audio_wav.clone(),
+                _ => None,
+            }
+        })
+    } else {
+        None
+    };
+    let codec_idx = ctx.data_mut(|d| *d.get_temp_mut_or_insert_with(egui::Id::new("ae_export_codec"), || 0usize));
+    let codec = match codec_idx {
+        1 => crate::core::ffmpeg_export::VideoCodec::ProRes422,
+        2 => crate::core::ffmpeg_export::VideoCodec::ProRes4444,
+        _ => crate::core::ffmpeg_export::VideoCodec::H264,
+    };
+    let res_scale = ctx.data_mut(|d| *d.get_temp_mut_or_insert_with(egui::Id::new("ae_export_res_scale"), || 1.0f32));
+
+    let output_path = app.export_output_path.clone();
+    let render_w = ((comp.width as f32 * res_scale) as u32).max(2);
+    let render_h = ((comp.height as f32 * res_scale) as u32).max(2);
+    let config = crate::core::ffmpeg_export::ExportConfig {
+        audio_wav,
+        output_path: output_path.clone(),
+        width: render_w,
+        height: render_h,
+        fps: comp.fps,
+        total_frames: total_frames.max(1),
+        codec,
+    };
+
+    if let Some(old_flag) = app.export_cancel_flag.take() {
+        old_flag.store(true, std::sync::atomic::Ordering::SeqCst);
+    }
+    let cancel_flag = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+    app.export_cancel_flag = Some(cancel_flag.clone());
+
+    if crate::core::ffmpeg_export::is_ffmpeg_available() {
+        let (tx_ff, rx_ff) = std::sync::mpsc::channel();
+        let (tx_ui, rx_ui) = std::sync::mpsc::channel();
+        app.export_rx = Some(rx_ui);
+
+        std::thread::spawn(move || {
+            while let Ok(evt) = rx_ff.recv() {
+                let mapped = match evt {
+                    crate::core::ffmpeg_export::ExportEvent::Progress(p, m) => ExportEvent::Progress(p, m),
+                    crate::core::ffmpeg_export::ExportEvent::Finished(m) => ExportEvent::Finished(m),
+                    crate::core::ffmpeg_export::ExportEvent::Error(m) => ExportEvent::Error(m),
+                };
+                let _ = tx_ui.send(mapped);
+            }
+        });
+
+        let _ = crate::core::ffmpeg_export::start_export_cancelable(config, tx_ff, cancel_flag, move |frame| {
+            crate::core::software_renderer::render_frame_to_pixels(
+                &comp,
+                frame,
+                comp.width,
+                comp.height,
+                0.0,
+                0,
+            )
+        });
+    } else {
+        // Fallback async render thread with progress feedback & cancellation support
+        let (tx, rx) = std::sync::mpsc::channel();
+        app.export_rx = Some(rx);
+        let thread_cancel = cancel_flag.clone();
+        let duration = total_frames.max(1);
+        std::thread::spawn(move || {
+            for frame in 0..=duration {
+                if thread_cancel.load(std::sync::atomic::Ordering::Relaxed) {
+                    log::info!("Export worker thread canceled cleanly");
+                    return;
+                }
+                for layer in &comp.layers {
+                    let _world_tf = comp.resolve_world_transform(layer, frame);
+                }
+                std::thread::sleep(std::time::Duration::from_millis(4));
+                let prog = frame as f32 / duration as f32;
+                let msg = format!("Rendering frame {} / {}...", frame, duration);
+                let _ = tx.send(ExportEvent::Progress(prog, msg));
+            }
+            let finished_msg = format!("Export complete → Saved to {}", output_path);
+            let _ = tx.send(ExportEvent::Finished(finished_msg));
+        });
+    }
+
+    log::info!("Spawned async render pipeline for {}", app.export_output_path);
+}
+
 pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
     // ── Non-blocking Channel Event Receiver ──
     let mut finished_export = false;
+    let mut next_batch_comp: Option<String> = None;
     if let Some(ref rx) = app.export_rx {
         while let Ok(event) = rx.try_recv() {
             match event {
@@ -18,12 +125,27 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
                     app.is_exporting = false;
                     finished_export = true;
                     app.toasts.info(format!("Export Complete: {}", msg));
+                    // ── Batch runner: advance to the next queued comp ──
+                    app.batch_idx += 1;
+                    if app.batch_idx < app.batch_queue.len() {
+                        next_batch_comp = Some(app.batch_queue[app.batch_idx].clone());
+                    } else if !app.batch_queue.is_empty() {
+                        app.toasts.info("Batch render complete: all queue items exported");
+                        app.batch_queue.clear();
+                        app.batch_idx = 0;
+                    }
                 }
                 ExportEvent::Error(msg) => {
                     app.export_status = Some(format!("Error: {}", msg));
                     app.is_exporting = false;
                     finished_export = true;
                     app.toasts.error(format!("Export Failed: {}", msg));
+                    // A failed item aborts the batch to avoid cascading failures
+                    if !app.batch_queue.is_empty() {
+                        app.toasts.error("Batch render aborted");
+                        app.batch_queue.clear();
+                        app.batch_idx = 0;
+                    }
                 }
             }
         }
@@ -31,6 +153,9 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
 
     if finished_export {
         app.export_rx = None;
+    }
+    if let Some(name) = next_batch_comp {
+        start_comp_export(app, ctx, &name);
     }
 
     if !app.show_export_dialog {
@@ -194,112 +319,9 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
                 });
 
                 ui.horizontal(|ui| {
+                    let active_comp_name = app.history.current().active_composition().name.clone();
                     if ui.button("Start Async Render").clicked() {
-                        app.is_exporting = true;
-                        app.export_progress = 0.0;
-                        app.export_status = Some("Initializing async render worker thread...".to_string());
-
-                        let (tx, rx) = std::sync::mpsc::channel();
-                        app.export_rx = Some(rx);
-                        let comp_snapshot = comp.clone();
-                        let output_path = app.export_output_path.clone();
-
-                        // Mux the first video layer's extracted WAV when present AND enabled
-                        let audio_wav = if include_audio {
-                            app.history.current().active_composition().layers.iter().find_map(|l| {
-                                match &l.layer_type {
-                                    crate::core::timeline::LayerType::Video { audio_wav, .. } => audio_wav.clone(),
-                                    _ => None,
-                                }
-                            })
-                        } else {
-                            None
-                        };
-                        // Codec selection
-                        let codec_id = egui::Id::new("ae_export_codec");
-                        let codec_idx = ctx.data_mut(|d| {
-                            *d.get_temp_mut_or_insert_with(codec_id, || 0usize)
-                        });
-                        let codec = match codec_idx {
-                            1 => crate::core::ffmpeg_export::VideoCodec::ProRes422,
-                            2 => crate::core::ffmpeg_export::VideoCodec::ProRes4444,
-                            _ => crate::core::ffmpeg_export::VideoCodec::H264,
-                        };
-                        // Re-read from egui temp storage: the picker above lives in a
-                        // sibling scope, so the value must be fetched by Id here.
-                        let res_scale = ctx.data_mut(|d| {
-                            *d.get_temp_mut_or_insert_with(egui::Id::new("ae_export_res_scale"), || 1.0f32)
-                        });
-
-                        let render_w = ((comp.width as f32 * res_scale) as u32).max(2);
-
-                        let render_h = ((comp.height as f32 * res_scale) as u32).max(2);
-                        let config = crate::core::ffmpeg_export::ExportConfig {
-                            audio_wav,
-                            output_path: output_path.clone(),
-                            width: render_w,
-                            height: render_h,
-                            fps: comp.fps,
-                            total_frames: total_frames.max(1),
-                            codec,
-                        };
-
-                        if let Some(old_flag) = app.export_cancel_flag.take() {
-                            old_flag.store(true, std::sync::atomic::Ordering::SeqCst);
-                        }
-                        let cancel_flag = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
-                        app.export_cancel_flag = Some(cancel_flag.clone());
-
-                        if crate::core::ffmpeg_export::is_ffmpeg_available() {
-                            let (tx_ff, rx_ff) = std::sync::mpsc::channel();
-                            let (tx_ui, rx_ui) = std::sync::mpsc::channel();
-                            app.export_rx = Some(rx_ui);
-
-                            std::thread::spawn(move || {
-                                while let Ok(evt) = rx_ff.recv() {
-                                    let mapped = match evt {
-                                        crate::core::ffmpeg_export::ExportEvent::Progress(p, m) => ExportEvent::Progress(p, m),
-                                        crate::core::ffmpeg_export::ExportEvent::Finished(m) => ExportEvent::Finished(m),
-                                        crate::core::ffmpeg_export::ExportEvent::Error(m) => ExportEvent::Error(m),
-                                    };
-                                    let _ = tx_ui.send(mapped);
-                                }
-                            });
-
-                            let _ = crate::core::ffmpeg_export::start_export_cancelable(config, tx_ff, cancel_flag, move |frame| {
-                                crate::core::software_renderer::render_frame_to_pixels(
-                                    &comp_snapshot,
-                                    frame,
-                                    comp_snapshot.width,
-                                    comp_snapshot.height,
-                                    0.0,
-                                    0,
-                                )
-                            });
-                        } else {
-                            // Fallback async render thread with progress feedback & cancellation support
-                            let thread_cancel = cancel_flag.clone();
-                            std::thread::spawn(move || {
-                                let duration = total_frames.max(1);
-                                for frame in 0..=duration {
-                                    if thread_cancel.load(std::sync::atomic::Ordering::Relaxed) {
-                                        log::info!("Export worker thread canceled cleanly");
-                                        return;
-                                    }
-                                    for layer in &comp_snapshot.layers {
-                                        let _world_tf = comp_snapshot.resolve_world_transform(layer, frame);
-                                    }
-                                    std::thread::sleep(std::time::Duration::from_millis(4));
-                                    let prog = frame as f32 / duration as f32;
-                                    let msg = format!("Rendering frame {} / {}...", frame, duration);
-                                    let _ = tx.send(ExportEvent::Progress(prog, msg));
-                                }
-                                let finished_msg = format!("Export complete → Saved to {}", output_path);
-                                let _ = tx.send(ExportEvent::Finished(finished_msg));
-                            });
-                        }
-
-                        log::info!("Spawned async render pipeline for {}", app.export_output_path);
+                        start_comp_export(app, ctx, &active_comp_name);
                     }
                     if ui.button("Close").clicked() {
                         app.show_export_dialog = false;

@@ -284,6 +284,10 @@ pub struct AfterEffectsApp {
     pub tracker_apply_target: Option<usize>,
     /// Real render queue entries (composition names awaiting export).
     pub render_queue_items: Vec<String>,
+    /// Sequential batch export: remaining comps to render after the current one.
+    pub batch_queue: Vec<String>,
+    /// Index of the comp currently rendering within the original queue snapshot.
+    pub batch_idx: usize,
     pub camera_view_layout: usize,
     pub camera_view_angle: usize,
     pub font_family_idx: usize,
@@ -407,6 +411,8 @@ impl Default for AfterEffectsApp {
             renaming_layer: None,
             tracker_apply_target: None,
             render_queue_items: Vec::new(),
+            batch_queue: Vec::new(),
+            batch_idx: 0,
             camera_view_layout: 0,
             camera_view_angle: 0,
             font_family_idx: 0,

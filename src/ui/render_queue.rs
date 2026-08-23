@@ -29,41 +29,36 @@ pub fn draw_render_queue_panel(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
     ui.heading("Render Queue");
     ui.separator();
 
-    let comp = app.history.current().active_composition();
+    let comp_name = app.history.current().active_composition().name.clone();
 
     ui.horizontal(|ui| {
         if custom_widgets::ae_button_accent(ui, "⚡ Render All Queue (Cmd+M)")
-            .on_hover_text("Start rendering active queue items")
+            .on_hover_text("Sequentially export every queued composition to video")
             .clicked()
         {
-            // Batch render: iterate all queued comps and export each
-            if app.render_queue_items.len() > 1 {
-                for (qi, comp_name) in app.render_queue_items.iter().enumerate() {
-                    if let Some(comp) = app.history.current().compositions.iter().find(|c| &c.name == comp_name) {
-                        let pixels = crate::core::software_renderer::render_frame_to_pixels(
-                            comp, 0, comp.width, comp.height, 0.0, 0,
-                        );
-                        let out_dir = std::env::temp_dir().join("aevfx_render_batch");
-                        let _ = std::fs::create_dir_all(&out_dir);
-                        let out_path = out_dir.join(format!("{}_frame_0.png", comp.name));
-                        let _ = image::save_buffer(&out_path, &pixels, comp.width, comp.height, image::ColorType::Rgba8);
-                        log::info!("Batch rendered {} → {}", comp_name, out_path.display());
-                    }
-                    let _ = qi;
-                }
+            if app.render_queue_items.is_empty() {
+                app.render_queue_items.push(comp_name.clone());
             }
-            // Always show the export dialog for detailed settings
+            // Sequential background batch: each item runs the real FFmpeg
+            // export; the next starts automatically when the previous finishes.
+            app.batch_queue = app.render_queue_items.clone();
+            app.batch_idx = 0;
             app.show_export_dialog = true;
+            let first = app.batch_queue[0].clone();
+            crate::ui::export_dialog::start_comp_export(app, ui.ctx(), &first);
         }
         if custom_widgets::ae_button(ui, "+ Add Active Comp")
-            .on_hover_text("Cannot modify queue while exporting")
+            .on_hover_text("Add the active composition to the render queue")
             .clicked()
         {
-            app.render_queue_items.push(comp.name.clone());
+            if !app.render_queue_items.contains(&comp_name) {
+                app.render_queue_items.push(comp_name.clone());
+            }
         }
         if custom_widgets::ae_button(ui, "Clear Queue")
-            .on_hover_text("Cannot clear queue while exporting")
+            .on_hover_text("Remove all items from the queue")
             .clicked()
+            && !app.is_exporting
         {
             app.render_queue_items.clear();
         }
@@ -72,11 +67,12 @@ pub fn draw_render_queue_panel(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
     ui.add_space(8.0);
 
     // Frame range derived from the work area when one is set.
+    let comp_duration = app.history.current().active_composition().duration_frames;
     let wa_in = app.work_area_in.unwrap_or(0);
     let wa_out = app
         .work_area_out
-        .unwrap_or(comp.duration_frames.saturating_sub(1))
-        .min(comp.duration_frames.saturating_sub(1));
+        .unwrap_or(comp_duration.saturating_sub(1))
+        .min(comp_duration.saturating_sub(1));
     let range_frames = wa_out.saturating_sub(wa_in).saturating_add(1);
 
     // Editable output path persisted across frames via egui's temp store.
@@ -98,7 +94,7 @@ pub fn draw_render_queue_panel(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
             let queue_pos = app
                 .render_queue_items
                 .iter()
-                .position(|n| n == &comp.name)
+                .position(|n| n == &comp_name)
                 .map(|p| p + 1)
                 .unwrap_or(app.render_queue_items.len().max(1));
             ui.label(
@@ -106,7 +102,7 @@ pub fn draw_render_queue_panel(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
                     .strong()
                     .color(colors::TEXT_ACCENT),
             );
-            ui.label(format!("Comp: {}", comp.name));
+            ui.label(format!("Comp: {}", comp_name));
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 ui.label(egui::RichText::new(format!("Status: {}", status_text)).strong().color(status_color));
             });
@@ -163,24 +159,25 @@ pub fn draw_render_queue_panel(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
                 ui.horizontal(|ui| {
                     let mut in_v = wa_in as i32;
                     let mut out_v = wa_out as i32;
+                    let comp_fps = app.history.current().active_composition().fps.max(1);
                     ui.add(
                         egui::DragValue::new(&mut in_v)
                             .prefix("In: ")
                             .speed(0.5)
-                            .range(0..=(comp.duration_frames.saturating_sub(1) as i32)),
+                            .range(0..=(comp_duration.saturating_sub(1) as i32)),
                     );
                     ui.add(
                         egui::DragValue::new(&mut out_v)
                             .prefix("Out: ")
                             .speed(0.5)
-                            .range(in_v..=(comp.duration_frames.saturating_sub(1) as i32)),
+                            .range(in_v..=(comp_duration.saturating_sub(1) as i32)),
                     );
                     ui.label(
                         egui::RichText::new(format!(
                             "({} frames @ {} fps, {:.2}s)",
                             range_frames,
-                            comp.fps,
-                            range_frames as f64 / comp.fps.max(1) as f64
+                            comp_fps,
+                            range_frames as f64 / comp_fps as f64
                         ))
                         .color(egui::Color32::GRAY)
                         .small(),
