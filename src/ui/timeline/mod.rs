@@ -70,7 +70,7 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                     egui::Sense::click(),
                 );
 
-                ui.painter().rect_filled(bar_rect, 2.0, egui::Color32::from_gray(28));
+                ui.painter().rect_filled(bar_rect, 2.0, colors::BG_DARKEST);
 
                 if total_frames > 0 {
                     let frame_w = bar_rect.width() / total_frames as f32;
@@ -92,7 +92,7 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                                         egui::vec2(w, bar_height),
                                     ),
                                     0.0,
-                                    egui::Color32::from_rgb(0, 180, 80),
+                                    colors::ACCENT_GREEN,
                                 );
                             }
                         }
@@ -216,7 +216,7 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                     egui::Sense::click_and_drag(),
                 );
 
-                ui.painter().rect_filled(ruler_rect, 0.0, egui::Color32::from_gray(35));
+                ui.painter().rect_filled(ruler_rect, 0.0, colors::BG_DARK);
 
                 let zoom_span = (total_frames as f32 / app.timeline_zoom.max(0.01)).max(10.0) as u32;
                 // Keep the visible window fixed while scrubbing; only re-center when
@@ -250,14 +250,14 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                     let tick_x = ruler_rect.left() + norm * ruler_rect.width();
                     ui.painter().line_segment(
                         [egui::pos2(tick_x, ruler_rect.bottom() - 6.0), egui::pos2(tick_x, ruler_rect.bottom())],
-                        egui::Stroke::new(1.0, egui::Color32::from_gray(120)),
+                        egui::Stroke::new(1.0, colors::BORDER_STRONG),
                     );
                     ui.painter().text(
                         egui::pos2(tick_x, ruler_rect.top() + 2.0),
                         egui::Align2::CENTER_TOP,
                         format!("{}", f),
                         egui::FontId::monospace(9.0),
-                        egui::Color32::from_gray(160),
+                        colors::TEXT_SECONDARY,
                     );
                 }
 
@@ -673,14 +673,14 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                                         if click_resp.hovered() {
                                             // Visual drop indicator: blue glow on the layer row
                                             let row_rect = click_resp.rect;
-                                            ui.painter().rect_stroke(
-                                                row_rect, 4.0,
-                                                egui::Stroke::new(2.0, egui::Color32::from_rgb(0, 180, 255))
-                                            );
-                                            ui.painter().rect_filled(
-                                                row_rect, 4.0,
-                                                egui::Color32::from_rgba_premultiplied(0, 100, 255, 25)
-                                            );
+                                             ui.painter().rect_stroke(
+                                                 row_rect, 4.0,
+                                                 egui::Stroke::new(2.0, colors::ACCENT_BLUE)
+                                             );
+                                             ui.painter().rect_filled(
+                                                 row_rect, 4.0,
+                                                 colors::TIMELINE_SELECTION
+                                             );
                                         }
                                         // Collect effect on drop (apply after loop to avoid borrow conflicts)
                                         if click_resp.drag_stopped() && click_resp.hovered() {
@@ -837,13 +837,13 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                             if let Some(pid) = &layer.parent_id {
                                 if parent_choices_ref.iter().any(|(lid, _)| lid == pid) {
                                     // Small chain icon on the left of the bar
-                                    ui.painter().text(
-                                        egui::pos2(bar_rect.left() + 8.0, bar_rect.top() + 4.0),
-                                        egui::Align2::LEFT_TOP,
-                                        "🔗",
-                                        egui::FontId::proportional(10.0),
-                                        egui::Color32::from_rgb(100, 100, 220),
-                                    );
+                                     ui.painter().text(
+                                         egui::pos2(bar_rect.left() + 8.0, bar_rect.top() + 4.0),
+                                         egui::Align2::LEFT_TOP,
+                                         "🔗",
+                                         egui::FontId::proportional(10.0),
+                                         colors::ACCENT_PURPLE,
+                                     );
                                 }
                             }
                             
@@ -856,13 +856,13 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                             );
 
                             let fill_c = if app.selected_layer_idx == Some(i) {
-                                egui::Color32::from_rgb(0, 140, 240)
+                                colors::ACCENT_BLUE
                             } else {
                                 egui::Color32::from_rgb(50, 70, 100)
                             };
 
                             ui.painter().rect_filled(layer_rect, 2.0, fill_c);
-                            ui.painter().rect_stroke(layer_rect, 2.0, egui::Stroke::new(1.0, egui::Color32::from_gray(160)));
+                            ui.painter().rect_stroke(layer_rect, 2.0, egui::Stroke::new(1.0, colors::TEXT_SECONDARY));
 
                             // ── Trim handles: drag bar edges to set in/out points ──
                             fn handle_rect_of(is_in: bool, lr: &egui::Rect) -> egui::Rect {
@@ -918,7 +918,7 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                             for (resp, is_in) in [(&in_resp, true), (&out_resp, false)] {
                                 if resp.hovered() {
                                     ui.ctx().set_cursor_icon(egui::CursorIcon::ResizeHorizontal);
-                                    ui.painter().rect_filled(handle_rect_of(is_in, &layer_rect), 2.0, egui::Color32::from_rgba_unmultiplied(255, 220, 120, 180));
+                                    ui.painter().rect_filled(handle_rect_of(is_in, &layer_rect), 2.0, colors::HANDLE_HOVER_FILL.linear_multiply(180.0 / 255.0));
                                 }
                                 if resp.dragged() {
                                     if let Some(pos) = resp.interact_pointer_pos() {
@@ -963,7 +963,7 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                                         let sy = layer_rect.center().y;
                                         ui.painter().line_segment(
                                             [egui::pos2(sx, sy - h), egui::pos2(sx, sy + h)],
-                                            egui::Stroke::new(1.0, egui::Color32::from_rgb(120, 220, 255)),
+                                            egui::Stroke::new(1.0, colors::ACCENT_CYAN),
                                         );
                                     }
                                 }
@@ -978,7 +978,7 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                                     let sy = layer_rect.center().y;
                                     ui.painter().line_segment(
                                         [egui::pos2(sx, sy - h), egui::pos2(sx, sy + h)],
-                                        egui::Stroke::new(1.0, egui::Color32::from_rgb(120, 220, 255)),
+                                        egui::Stroke::new(1.0, colors::ACCENT_CYAN),
                                     );
                                 }
                             }
