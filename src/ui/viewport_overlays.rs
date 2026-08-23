@@ -41,25 +41,52 @@ pub fn draw_viewport_overlays(
             if let Some(kfs) = layer.transform.position.keyframes() {
                 if kfs.len() >= 2 {
                     let path_stroke = egui::Stroke::new(1.5, colors::MOTION_PATH);
-                    let mut prev_pt = None;
-                    for kf in kfs {
-                        let pos_x = kf.value[0];
-                        let pos_y = kf.value[1];
-                        let norm_x = pos_x / comp_w;
-                        let norm_y = pos_y / comp_h;
-                        let px = origin_x + norm_x * draw_w;
-                        let py = origin_y + norm_y * draw_h;
-                        let p = egui::pos2(px, py);
+                    let to_screen = |v: [f32; 2]| {
+                        let px = origin_x + (v[0] / comp_w) * draw_w;
+                        let py = origin_y + (v[1] / comp_h) * draw_h;
+                        egui::pos2(px, py)
+                    };
 
-                        if let Some(pp) = prev_pt {
-                            ui.painter().line_segment([pp, p], path_stroke);
+                    // Sample each segment with the keyframe's real easing
+                    // (Hold / Linear / Bezier) so the polyline matches what the
+                    // renderer actually evaluates frame by frame.
+                    for seg in kfs.windows(2) {
+                        let (a, b) = (&seg[0], &seg[1]);
+                        let span = (b.frame - a.frame).max(1);
+                        let steps = ((span as usize) / 4).clamp(4, 32);
+                        let mut prev = to_screen(a.value);
+                        for s in 1..=steps {
+                            let raw_t = s as f32 / steps as f32;
+                            let eased_t = match &a.interpolation {
+                                crate::core::keyframe::InterpolationType::Hold => 0.0,
+                                crate::core::keyframe::InterpolationType::Linear => raw_t,
+                                crate::core::keyframe::InterpolationType::Bezier { custom_bezier, .. } => {
+                                    let c = custom_bezier.unwrap_or([0.25, 0.1, 0.25, 1.0]);
+                                    crate::core::keyframe::solve_bezier_eased_time(raw_t, c[0], c[1], c[2], c[3])
+                                }
+                            };
+                            let val = [
+                                a.value[0] + (b.value[0] - a.value[0]) * eased_t,
+                                a.value[1] + (b.value[1] - a.value[1]) * eased_t,
+                            ];
+                            let p = to_screen(val);
+                            ui.painter().line_segment([prev, p], path_stroke);
+                            prev = p;
                         }
-                        prev_pt = Some(p);
+                    }
 
-                        // Keyframe Anchor Point Marker (📍)
+                    // Keyframe Anchor Point Markers (📍)
+                    for kf in kfs {
+                        let p = to_screen(kf.value);
                         ui.painter().circle_filled(p, 4.0, colors::KEYFRAME_DOT);
                         ui.painter().circle_stroke(p, 4.0, egui::Stroke::new(1.0, egui::Color32::BLACK));
                     }
+
+                    // Current playhead position marker on the path
+                    let cur = layer.transform.position.evaluate(app.current_frame);
+                    let cp = to_screen(cur);
+                    ui.painter().circle_filled(cp, 3.0, colors::TIMELINE_PLAYHEAD);
+                    ui.painter().circle_stroke(cp, 3.0, egui::Stroke::new(1.0, egui::Color32::BLACK));
                 }
             }
         }
