@@ -32,7 +32,7 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
             }
 
             let mut project_changed = false;
-            let compact_mode = ui.ctx().data_mut(|d| {
+            let _compact_mode = ui.ctx().data_mut(|d| {
                 *d.get_temp_mut_or_insert_with(egui::Id::new("ae_compact_timeline"), || false)
             });
             let mut pending_precomp_indices: Option<Vec<usize>> = None;
@@ -295,8 +295,18 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                         app.timeline_view_start = anchored_start(app.timeline_zoom, new_zoom);
                         app.timeline_zoom = new_zoom;
                     }
-                    // Cmd/Ctrl + scroll wheel over the ruler: zoom anchored at the pointer
-                    if ruler_response.hovered() && ui.input(|i| i.modifiers.command) {
+                    // Scroll wheel over ruler: zoom anchored at pointer (NLE standard)
+                    if ruler_response.hovered() && ui.input(|i| i.raw_scroll_delta.y != 0.0) && !ui.input(|i| i.modifiers.command) {
+                        let scroll = ui.input(|i| i.raw_scroll_delta.y);
+                        let factor = if scroll > 0.0 { 1.0 / 1.15 } else { 1.15 };
+                        let new_zoom = (app.timeline_zoom * factor).clamp(0.1, 20.0);
+                        if new_zoom != app.timeline_zoom {
+                            app.timeline_view_start = anchored_start(app.timeline_zoom, new_zoom);
+                            app.timeline_zoom = new_zoom;
+                        }
+                    }
+                    // Cmd/Ctrl + scroll: horizontal pan
+                    else if ruler_response.hovered() && ui.input(|i| i.modifiers.command) {
                         let scroll = ui.input(|i| i.raw_scroll_delta.y);
                         if scroll != 0.0 {
                             let new_zoom = (app.timeline_zoom * (if scroll > 0.0 { 1.15 } else { 1.0 / 1.15 })).clamp(0.1, 20.0);

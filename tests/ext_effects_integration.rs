@@ -196,11 +196,17 @@ fn test_audio_pipeline_end_to_end() {
 fn test_text_animator_stack_with_color_channels() {
     use aftereffects_oss::core::text_animator::{RangeSelector, SelectorShape};
     use aftereffects_oss::core::text_animator_advanced::{
-        AdvancedProperties, AnimatorStack, SelectorUnit, TextAnimatorAdvanced,
+        AnimatorStack, SelectorUnit, TextAnimatorAdvanced,
     };
 
+    // Square selector covering only the second word (unit pct 50%).
     let mut pop = TextAnimatorAdvanced {
-        selector: RangeSelector { shape: SelectorShape::RampUp, ..Default::default() },
+        selector: RangeSelector {
+            shape: SelectorShape::Square,
+            start: 34.0,
+            end: 100.0,
+            ..Default::default()
+        },
         unit: SelectorUnit::Words,
         position: [0.0, -30.0],
         opacity: 0.0,
@@ -221,8 +227,10 @@ fn test_text_animator_stack_with_color_channels() {
     let composed = stack.compose("hello world");
     assert_eq!(composed.len(), 11);
 
-    // Word 0 fully selected by RampUp at unit pct 0? RampUp gives amount 0 at
-    // the first unit — word 1 ("world") should carry full effects.
+    // Word 1 ("world") must carry the full effect set; word 0 none of the
+    // word-scoped channels.
+    let first = &composed[0];
+    assert!(first.fill_mix.abs() < 1e-4, "word 0 must be unselected");
     let last = &composed[10];
     assert!((last.fill_mix - 1.0).abs() < 1e-4, "word 1 fill fully applied");
     assert_eq!(last.fill_color, Some([1.0, 0.4, 0.1, 1.0]));
