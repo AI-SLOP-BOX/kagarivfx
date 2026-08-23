@@ -198,6 +198,22 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
                 }
             });
             ui.menu_button("Composition", |ui| {
+                if ui.add(egui::Button::new("New Composition...").shortcut_text("Cmd+N")).clicked() {
+                    let default_w = 1920;
+                    let default_h = 1080;
+                    let default_fps = 30;
+                    let default_dur = 300;
+                    let count = app.history.current().compositions.len();
+                    let new_comp = crate::core::timeline::Composition::new(
+                        format!("comp_{}", count), "Composition 1".to_string(), default_w, default_h, default_fps, default_dur,
+                    );
+                    let proj = app.history.current_mut();
+                    proj.compositions.push(new_comp);
+                    proj.active_composition_idx = proj.compositions.len() - 1;
+                    crate::core::frame_cache::bump_version();
+                    app.toasts.info(format!("New {}x{} @ {}fps", default_w, default_h, default_fps));
+                    ui.close_menu();
+                }
                 let comp_sc = crate::ui::shortcuts::format_shortcut("K", true, false, false);
                 let btn = egui::Button::new("Composition Settings...").shortcut_text(comp_sc);
                 if ui.add(btn).clicked() {
