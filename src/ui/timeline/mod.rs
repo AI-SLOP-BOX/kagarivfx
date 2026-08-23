@@ -809,7 +809,7 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                             );
                             // Draw parent connection if this layer has a parent
                             if let Some(pid) = &layer.parent_id {
-                                if comp.layers.iter().any(|l| &l.id == pid) {
+                                if parent_choices_ref.iter().any(|(lid, _)| lid == pid) {
                                     // Small chain icon on the left of the bar
                                     ui.painter().text(
                                         egui::pos2(bar_rect.left() + 8.0, bar_rect.top() + 4.0),

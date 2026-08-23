@@ -88,3 +88,24 @@ cargo run --features cli --bin aevfx -- frame --project test_project.json --fram
 - Puppet tool, roto brush, paint tools are UI stubs only
 
 ---
+
+# egui致命的罠リスト（全エージェント必読）
+
+## 罠①: 大量行の「頂点数超過」クラッシュ
+eguiは画面外要素を自動クリップするが、ウィジェット生成自体が数千個に達すると
+内部で頂点バッファ上限を超え、UIが壊れるかパニックする。
+
+### 対策ルール（違反禁止）
+- レイヤー一覧等の大量行は ScrollArea::show_rows() で可視行のみ生成するか、
+  ui.is_rect_visible() プローブで非表示行のウィジェット生成を完全スキップする。
+- painter呼び出し数はフレームあたりO(画面内要素)に抑えること。全フレームループでのrect描画は禁止。
+- 実装済み対策: RAMプレビューバーは連続キャッシュ区間を1矩形に統合、ビート線は自動間隔倍増で最大約200本。
+
+## 罠②: request_repaint()の無秩序発火によるCPU常時消費
+- 無条件の ctx.request_repaint() は禁止。is_playingゲート／request_repaint_afterスロットル／操作直後1回のいずれかで発火すること。
+- 停止中はマウス操作時のみ再描画される省エネモードが正しい挙動。
+- 実装済み対策: 再生ループはis_playingゲート(app_state.rs)、エクスポート進捗は100msスロットル(export_dialog.rs)。
+
+## 罠③: マルチラインheredocの端末貼り付け禁止
+cat << EOF 形式の複数行ヒアドキュメントは端末統合が入力を正しく送れずファイル破損を起こす。
+ファイル編集は必ず replace_in_file / write_to_file を使うこと。やむを得ない場合は perl -i -pe の単行置換で行う。
