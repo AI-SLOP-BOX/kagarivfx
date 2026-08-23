@@ -662,7 +662,24 @@ impl eframe::App for AfterEffectsApp {
                     ui.separator();
                     ui.label(egui::RichText::new(format!("X: {:.0} Y: {:.0} px", pointer_pos.x, pointer_pos.y)).small().color(egui::Color32::from_rgb(0, 180, 255)));
                     ui.separator();
-                    ui.label(egui::RichText::new("R: 128 G: 128 B: 128 A: 255").small().color(egui::Color32::from_rgb(255, 200, 100)));
+                    let pixel_rgba = {
+                        let comp = self.history.current().active_composition();
+                        let px = pointer_pos.x as i32;
+                        let py = pointer_pos.y as i32;
+                        if px >= 0 && py >= 0 && (px as u32) < comp.width && (py as u32) < comp.height {
+                            if let Some(entry) = self.frame_cache.get(self.current_frame) {
+                                let idx = ((py as u32 * comp.width + px as u32) * 4) as usize;
+                                if idx + 3 < entry.pixels.len() {
+                                    Some([entry.pixels[idx], entry.pixels[idx+1], entry.pixels[idx+2], entry.pixels[idx+3]])
+                                } else { None }
+                            } else { None }
+                        } else { None }
+                    };
+                    if let Some([r, g, b, a]) = pixel_rgba {
+                        ui.label(egui::RichText::new(format!("R: {} G: {} B: {} A: {}", r, g, b, a)).small().color(egui::Color32::from_rgb(255, 200, 100)));
+                    } else {
+                        ui.label(egui::RichText::new("R: – G: – B: – A: –").small().color(egui::Color32::from_rgb(255, 200, 100)));
+                    }
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         ui.label(egui::RichText::new("AE OSS v0.1.0-parity").small().color(egui::Color32::from_gray(120)));
                         ui.separator();
