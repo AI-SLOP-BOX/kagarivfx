@@ -35,6 +35,23 @@ pub fn draw_render_queue_panel(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
             .on_hover_text("Start rendering active queue items")
             .clicked()
         {
+            // Batch render: iterate all queued comps and export each
+            if app.render_queue_items.len() > 1 {
+                for (qi, comp_name) in app.render_queue_items.iter().enumerate() {
+                    if let Some(comp) = app.history.current().compositions.iter().find(|c| &c.name == comp_name) {
+                        let pixels = crate::core::software_renderer::render_frame_to_pixels(
+                            comp, 0, comp.width, comp.height, 0.0, 0,
+                        );
+                        let out_dir = std::env::temp_dir().join("aevfx_render_batch");
+                        let _ = std::fs::create_dir_all(&out_dir);
+                        let out_path = out_dir.join(format!("{}_frame_0.png", comp.name));
+                        let _ = image::save_buffer(&out_path, &pixels, comp.width, comp.height, image::ColorType::Rgba8);
+                        log::info!("Batch rendered {} → {}", comp_name, out_path.display());
+                    }
+                    let _ = qi;
+                }
+            }
+            // Always show the export dialog for detailed settings
             app.show_export_dialog = true;
         }
         if ui
