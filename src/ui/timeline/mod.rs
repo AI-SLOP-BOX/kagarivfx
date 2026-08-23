@@ -32,6 +32,9 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
             }
 
             let mut project_changed = false;
+            let compact_mode = ui.ctx().data_mut(|d| {
+                *d.get_temp_mut_or_insert_with(egui::Id::new("ae_compact_timeline"), || false)
+            });
             let mut pending_precomp_indices: Option<Vec<usize>> = None;
             let mut swap_request: Option<(usize, usize)> = None;
 

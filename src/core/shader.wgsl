@@ -213,6 +213,33 @@ fn sample_layer_color(local_pos_in: vec2<f32>, tc_in: vec2<f32>, blur_extend: f3
         // return fully transparent so fs_main's alpha check discards this quad.
         c = vec4<f32>(0.0, 0.0, 0.0, 0.0);
     }
+    // ── Vignette: darkened edges ──
+    if (layer.effect_vignette_enabled == 1u) {
+        let center_uv = vec2<f32>(0.5, 0.5);
+        let d = distance(local_pos, center_uv) * 2.0;
+        let vig = 1.0 - smoothstep(
+            1.0 - layer.effect_vignette_feather,
+            1.0,
+            d * (1.0 - layer.effect_vignette_roundness * 0.3)
+        );
+        let vig_amount = layer.effect_vignette_intensity;
+        c = vec4<f32>(
+            mix(c.rgb, layer.effect_vignette_color.rgb * c.rgb, (1.0 - vig) * vig_amount),
+            c.a
+        );
+    }
+
+    // ── Chromatic Aberration: radial RGB separation ──
+    if (layer.effect_ca_enabled == 1u) {
+        let center = vec2<f32>(0.5, 0.5);
+        let dir = normalize(tc - center);
+        let shift_r = tc + dir * vec2<f32>(layer.effect_ca_shift_r / globals.viewport_size.x);
+        let shift_b = tc + dir * vec2<f32>(layer.effect_ca_shift_b / globals.viewport_size.y);
+        let r = textureSample(t_diffuse, s_diffuse, shift_r).r;
+        let b = textureSample(t_diffuse, s_diffuse, shift_b).b;
+        c = vec4<f32>(r, c.g, b, c.a);
+    }
+
     // ── Glow: screen-space bloom from bright areas ──
     if (layer.glow_enabled == 1u && c.a > 0.01) {
         let vp = max(globals.viewport_size, vec2<f32>(1.0, 1.0));
