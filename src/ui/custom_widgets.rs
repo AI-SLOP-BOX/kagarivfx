@@ -7,6 +7,12 @@ pub struct HoverAnim {
     pub target: f32,
 }
 
+impl Default for HoverAnim {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl HoverAnim {
     pub fn new() -> Self {
         Self { progress: 0.0, target: 0.0 }
@@ -66,6 +72,12 @@ pub struct PulseAnim {
     pub speed: f32,
     pub min_alpha: u8,
     pub max_alpha: u8,
+}
+
+impl Default for PulseAnim {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl PulseAnim {
