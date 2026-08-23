@@ -232,6 +232,7 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                 // Work area highlighted bar
                 let wa_in = app.work_area_in.unwrap_or(0);
                 let wa_out = app.work_area_out.unwrap_or(total_frames);
+                let mut wa_drag_active = false;
                 if wa_out > wa_in && wa_out >= start_frame && wa_in <= start_frame + zoom_span {
                     let norm_in = (wa_in.saturating_sub(start_frame)) as f32 / zoom_span as f32;
                     let norm_out = (wa_out.saturating_sub(start_frame)) as f32 / zoom_span as f32;
@@ -241,6 +242,42 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                     );
                     ui.painter().rect_filled(wa_rect, 2.0, colors::TIMELINE_SELECTION);
                     ui.painter().rect_stroke(wa_rect, 2.0, egui::Stroke::new(1.0, colors::BORDER_ACTIVE));
+
+                    // ── Work-area edge handles: drag to set In/Out points ──
+                    const WA_HW: f32 = 5.0;
+                    let wa_in_handle = egui::Rect::from_min_size(
+                        egui::pos2(wa_rect.left() - WA_HW * 0.5, ruler_rect.top()),
+                        egui::vec2(WA_HW, ruler_rect.height()),
+                    );
+                    let wa_out_handle = egui::Rect::from_min_size(
+                        egui::pos2(wa_rect.right() - WA_HW * 0.5, ruler_rect.top()),
+                        egui::vec2(WA_HW, ruler_rect.height()),
+                    );
+                    let wa_in_resp = ui.interact(wa_in_handle, egui::Id::new("wa_in_handle"), egui::Sense::drag());
+                    let wa_out_resp = ui.interact(wa_out_handle, egui::Id::new("wa_out_handle"), egui::Sense::drag());
+                    let wa_frame_from_pointer = |resp: &egui::Response| -> Option<u32> {
+                        resp.interact_pointer_pos().map(|p| {
+                            let norm = ((p.x - ruler_rect.left()) / ruler_rect.width()).clamp(0.0, 1.0);
+                            start_frame.saturating_add((norm * zoom_span as f32).round() as u32)
+                        })
+                    };
+                    if wa_in_resp.dragged() {
+                        wa_drag_active = true;
+                        if let Some(f) = wa_frame_from_pointer(&wa_in_resp) {
+                            app.work_area_in = Some(f.min(app.work_area_out.unwrap_or(total_frames).saturating_sub(1)));
+                            crate::core::frame_cache::bump_version();
+                        }
+                    }
+                    if wa_out_resp.dragged() {
+                        wa_drag_active = true;
+                        if let Some(f) = wa_frame_from_pointer(&wa_out_resp) {
+                            app.work_area_out = Some(f.max(app.work_area_in.unwrap_or(0) + 1));
+                            crate::core::frame_cache::bump_version();
+                        }
+                    }
+                    if wa_in_resp.hovered() || wa_out_resp.hovered() {
+                        ui.output_mut(|o| o.cursor_icon = egui::CursorIcon::ResizeHorizontal);
+                    }
                 }
 
                 // Ruler Ticks
@@ -277,7 +314,7 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                     );
                 }
 
-                if ruler_response.clicked() || ruler_response.dragged() {
+                if !wa_drag_active && (ruler_response.clicked() || ruler_response.dragged()) {
                     if let Some(pos) = ruler_response.interact_pointer_pos() {
                         let norm = ((pos.x - ruler_rect.left()) / ruler_rect.width()).clamp(0.0, 1.0);
                         let raw_f = start_frame + (norm * zoom_span as f32).round() as u32;

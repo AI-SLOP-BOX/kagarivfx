@@ -296,6 +296,9 @@ impl RenderEffectPlugin for EnumEffectPlugin {
             EffectType::NightVision { .. } => "night_vision",
             EffectType::IrisWipe { .. } => "iris_wipe",
             EffectType::RadialWipe { .. } => "radial_wipe",
+            EffectType::FilmEmulation { .. } => "film_emulation",
+            EffectType::GodRays { .. } => "god_rays",
+            EffectType::RadialBlurZoom { .. } => "radial_blur_zoom",
         }
     }
 
