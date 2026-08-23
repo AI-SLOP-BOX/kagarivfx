@@ -100,7 +100,6 @@ fn test_registry_parameter_sweep_never_panics() {
             let mut img = gradient(32, 32);
             e.apply(&mut img, 32, 32, t);
             assert_eq!(img.len(), 32 * 32 * 4, "{} changed buffer size", e.type_id());
-            assert!(img.chunks(4).all(|px| px.iter().all(|&v| v <= 255)));
         }
     }
 }

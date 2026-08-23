@@ -1,11 +1,12 @@
 use eframe::egui;
 use crate::AfterEffectsApp;
+use crate::ui::theme::colors;
 
 pub fn draw_lumetri_color(_app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
     // ── 📊 Live 256-Bin Luma & RGB Histogram Analyzer HUD ──
     ui.group(|ui| {
         ui.horizontal(|ui| {
-            ui.label(egui::RichText::new("📊 Live Luma Histogram").strong().color(egui::Color32::from_rgb(0, 200, 255)));
+            ui.label(egui::RichText::new("📊 Live Luma Histogram").strong().color(colors::ACCENT_CYAN));
             ui.weak("— Real-time Exposure & Waveform Monitor");
         });
         ui.separator();
@@ -13,8 +14,8 @@ pub fn draw_lumetri_color(_app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
         let histo_w = ui.available_width().max(200.0);
         let histo_h = 60.0;
         let (h_rect, _) = ui.allocate_exact_size(egui::vec2(histo_w, histo_h), egui::Sense::hover());
-        ui.painter().rect_filled(h_rect, 2.0, egui::Color32::from_rgb(14, 18, 24));
-        ui.painter().rect_stroke(h_rect, 2.0, egui::Stroke::new(1.0, egui::Color32::from_rgb(45, 55, 75)));
+        ui.painter().rect_filled(h_rect, 2.0, colors::BG_DEEPEST);
+        ui.painter().rect_stroke(h_rect, 2.0, egui::Stroke::new(1.0, colors::BORDER_MEDIUM));
 
         let bins = 64;
         let bin_w = histo_w / bins as f32;
@@ -30,11 +31,11 @@ pub fn draw_lumetri_color(_app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
             let b_rect = egui::Rect::from_min_size(egui::pos2(bx, by), egui::vec2(bin_w.max(1.0), bar_h));
 
             let bar_color = if norm_x < 0.15 {
-                egui::Color32::from_rgb(40, 140, 255) // Shadows / Blacks
+                colors::ACCENT_BLUE
             } else if norm_x > 0.85 {
-                egui::Color32::from_rgb(255, 200, 100) // Highlights / Whites
+                colors::ACCENT_YELLOW
             } else {
-                egui::Color32::from_rgb(0, 220, 180) // Midtones
+                colors::ACCENT_GREEN
             };
             ui.painter().rect_filled(b_rect, 0.0, bar_color);
         }
@@ -49,7 +50,7 @@ pub fn draw_lumetri_color(_app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
 
     ui.add_space(4.0);
     ui.group(|ui| {
-        ui.label(egui::RichText::new("🌈 Master Gradient Ramp Palette").strong().color(egui::Color32::from_rgb(0, 200, 255)));
+        ui.label(egui::RichText::new("🌈 Master Gradient Ramp Palette").strong().color(colors::ACCENT_CYAN));
         ui.small("1-Tap Apply Trend Gradient Ramps:");
         ui.horizontal(|ui| {
             if ui.button("⚡ Cyberpunk Pink/Cyan").clicked() {
@@ -151,13 +152,13 @@ pub fn draw_lumetri_color(_app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
         ui.collapsing("Curves (RGB & Hue)", |ui| {
             ui.label("RGB Master Curves Spline");
             let (rect, _response) = ui.allocate_exact_size(egui::vec2(ui.available_width(), 120.0), egui::Sense::hover());
-            ui.painter().rect_filled(rect, 4.0, egui::Color32::from_rgb(25, 25, 25));
-            ui.painter().rect_stroke(rect, 4.0, (1.0, egui::Color32::from_rgb(60, 60, 60)));
+            ui.painter().rect_filled(rect, 4.0, colors::BG_DEEPEST);
+            ui.painter().rect_stroke(rect, 4.0, (1.0, colors::BORDER_MEDIUM));
 
             // Draw diagonal reference line
             ui.painter().line_segment(
                 [rect.left_bottom(), rect.right_top()],
-                (1.0, egui::Color32::from_rgb(100, 100, 100))
+                (1.0, colors::TEXT_MUTED)
             );
         });
 
@@ -167,17 +168,17 @@ pub fn draw_lumetri_color(_app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
                 ui.vertical(|ui| {
                     ui.label(egui::RichText::new("Shadows").small());
                     let (r, _) = ui.allocate_exact_size(egui::vec2(60.0, 60.0), egui::Sense::hover());
-                    ui.painter().circle_stroke(r.center(), 25.0, (1.5, egui::Color32::from_rgb(200, 200, 200)));
+                    ui.painter().circle_stroke(r.center(), 25.0, (1.5, colors::TEXT_SECONDARY));
                 });
                 ui.vertical(|ui| {
                     ui.label(egui::RichText::new("Midtones").small());
                     let (r, _) = ui.allocate_exact_size(egui::vec2(60.0, 60.0), egui::Sense::hover());
-                    ui.painter().circle_stroke(r.center(), 25.0, (1.5, egui::Color32::from_rgb(200, 200, 200)));
+                    ui.painter().circle_stroke(r.center(), 25.0, (1.5, colors::TEXT_SECONDARY));
                 });
                 ui.vertical(|ui| {
                     ui.label(egui::RichText::new("Highlights").small());
                     let (r, _) = ui.allocate_exact_size(egui::vec2(60.0, 60.0), egui::Sense::hover());
-                    ui.painter().circle_stroke(r.center(), 25.0, (1.5, egui::Color32::from_rgb(200, 200, 200)));
+                    ui.painter().circle_stroke(r.center(), 25.0, (1.5, colors::TEXT_SECONDARY));
                 });
             });
         });

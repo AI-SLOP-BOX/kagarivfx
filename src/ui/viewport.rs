@@ -2,6 +2,7 @@ use crate::AfterEffectsApp;
 use crate::core::timeline::Layer;
 use crate::core::property::Animatable;
 use crate::ViewportMode;
+use crate::ui::theme::colors;
 use eframe::egui;
 
 pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: u32) {
@@ -10,13 +11,13 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: u32) 
         let active_comp_name = app.history.current().active_composition().name.clone();
         ui.horizontal(|ui| {
             let tab_frame = egui::Frame::none()
-                .fill(egui::Color32::from_rgb(34, 38, 46))
+                .fill(colors::BG_DARK)
                 .inner_margin(egui::Margin::symmetric(10.0, 4.0))
-                .stroke(egui::Stroke::new(1.0, egui::Color32::from_rgb(55, 65, 80)));
+                .stroke(egui::Stroke::new(1.0, colors::BORDER_SUBTLE));
             
             tab_frame.show(ui, |ui| {
                 ui.horizontal(|ui| {
-                    ui.label(egui::RichText::new(format!("Composition: {}", active_comp_name)).strong().color(egui::Color32::WHITE));
+                    ui.label(egui::RichText::new(format!("Composition: {}", active_comp_name)).strong().color(colors::TEXT_PRIMARY));
                     if ui.small_button("×").clicked() {
                         log::info!("Composition tab active");
                     }

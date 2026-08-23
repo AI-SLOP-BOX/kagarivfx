@@ -330,10 +330,12 @@ mod tests {
 
     #[test]
     fn test_char_range_selection() {
-        let mut selector = RangeSelector::default();
-        selector.shape = SelectorShape::Square;
-        selector.char_start = 2;
-        selector.char_end = 4;
+        let mut selector = RangeSelector {
+            shape: SelectorShape::Square,
+            char_start: 2,
+            char_end: 4,
+            ..Default::default()
+        };
 
         let amounts: Vec<f32> = (0..6)
             .map(|i| TextAnimatorEngine::compute_amount(i, 6, &selector))
@@ -353,8 +355,7 @@ mod tests {
 
     #[test]
     fn test_wobble_shape_bounded_and_deterministic() {
-        let mut selector = RangeSelector::default();
-        selector.shape = SelectorShape::Wobble;
+        let selector = RangeSelector { shape: SelectorShape::Wobble, ..Default::default() };
 
         for i in 0..20 {
             let a = TextAnimatorEngine::compute_amount(i, 20, &selector);
@@ -365,8 +366,7 @@ mod tests {
 
     #[test]
     fn test_random_shape_deterministic() {
-        let mut selector = RangeSelector::default();
-        selector.shape = SelectorShape::Random;
+        let selector = RangeSelector { shape: SelectorShape::Random, ..Default::default() };
 
         for i in 0..20 {
             let a = TextAnimatorEngine::compute_amount(i, 20, &selector);

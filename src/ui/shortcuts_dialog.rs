@@ -1,5 +1,6 @@
 use eframe::egui;
 use crate::AfterEffectsApp;
+use crate::ui::theme::colors;
 
 pub fn draw_shortcuts_dialog(app: &mut AfterEffectsApp, ctx: &egui::Context) {
     let mut show = app.show_shortcuts_dialog;
@@ -58,7 +59,7 @@ pub fn draw_shortcuts_dialog(app: &mut AfterEffectsApp, ctx: &egui::Context) {
                         ];
 
                         for (sc, desc) in shortcuts {
-                            ui.label(egui::RichText::new(sc).monospace().color(egui::Color32::from_rgb(0, 180, 255)));
+                            ui.label(egui::RichText::new(sc).monospace().color(colors::ACCENT_BLUE));
                             ui.label(desc);
                             ui.end_row();
                         }

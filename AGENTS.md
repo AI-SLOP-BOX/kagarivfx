@@ -29,19 +29,21 @@ cargo run --features cli --bin aevfx -- frame --project test_project.json --fram
 - `src/core/shader.wgsl` — WGSL shader (all layer types, effects, mesh warp, glow)
 
 ### Key Modules
-- `src/core/timeline.rs` — Composition/Layer/Keyframe data model
+- `src/core/timeline.rs` — Composition/Layer/Keyframe data model (47 EffectType variants, MaterialOptions, Camera3D DOF)
 - `src/core/keyframe.rs` — Keyframe interpolation (Linear/Hold/Bezier with 19 ease presets)
 - `src/core/property.rs` — Animatable<T> with expression support
-- `src/core/expression_engine.rs` — Rhai-based expression evaluation
+- `src/core/expression_engine.rs` — Rhai-based expression evaluation (LOOP_ENGINE cached)
 - `src/core/video_import.rs` — FFmpeg video → frame sequence
 - `src/core/ffmpeg_export.rs` — MP4 (H.264/ProRes) / GIF export
 - `src/core/mlt_export.rs` — MLT XML (Shotcut/Kdenlive)
 - `src/core/lottie_exporter.rs` — Lottie/Bodymovin JSON
-- `src/core/audio_engine.rs` — WAV loading, multi-track mixing
+- `src/core/audio_engine.rs` — WAV loading, multi-track mixing with Mute/Solo
 - `src/core/audio_playback.rs` — rodio-synced audio playback
 - `src/core/tracker_engine.rs` — SAD motion tracking with subpixel refinement
 - `src/core/particle_system.rs` — Deterministic particle simulation
 - `src/core/font_rasterizer.rs` — ab_glyph text rasterization (TTC support)
+- `src/core/ae_effects_pack.rs` — 20+ CPU effects (box blur, directional, radial, glow, etc.)
+- `src/core/cpu_effects.rs` — CPU effect dispatch for all 47 EffectType variants
 
 ### UI Panels (src/ui/)
 - `viewport.rs` — Composition viewer (GPU/CPU dual path)
@@ -59,7 +61,7 @@ cargo run --features cli --bin aevfx -- frame --project test_project.json --fram
 ## Critical Rules
 
 1. **NEVER remove `default_fonts` from eframe features** — without it NO text renders
-2. **Always run `cargo test --all-features` before committing** — 262 tests must pass
+2. **Always run `cargo test --all-features` before committing** — 363 tests must pass
 3. **Always run `cargo clippy --all-features`** — must be zero warnings
 4. **Use `git commit` after every meaningful change** — atomic commits
 5. **GPU rendering**: viewport uses WgpuRenderer when available; falls back to CPU

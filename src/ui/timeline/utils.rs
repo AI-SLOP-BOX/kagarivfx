@@ -1,6 +1,7 @@
 use crate::core::keyframe::InterpolationType;
 use eframe::egui;
 use crate::core::property::Animatable;
+use crate::ui::theme::colors;
 
 pub fn get_kfs<T: Clone>(prop: &Animatable<T>) -> Vec<(u32, crate::core::keyframe::InterpolationType)> {
     prop.keyframes()
@@ -54,11 +55,11 @@ pub fn draw_keyframe_tick(
     let size = if is_sub_prop { 5.0 } else { 7.0 };
     let rect = egui::Rect::from_center_size(egui::pos2(x, y), egui::vec2(size * 2.0 + 4.0, size * 2.0 + 4.0));
     let color = if is_selected {
-        egui::Color32::from_rgb(255, 150, 40)
+        colors::ACCENT_ORANGE
     } else if *current_frame == kf_frame {
-        egui::Color32::from_rgb(255, 200, 50)
+        colors::TIMELINE_KEYFRAME
     } else {
-        egui::Color32::from_rgb(180, 180, 180)
+        colors::TEXT_SECONDARY
     };
 
     // Shape by interpolation type: diamond=bezier/ease, circle=linear, square=hold
@@ -69,9 +70,9 @@ pub fn draw_keyframe_tick(
     if is_selected {
         // Selection glow ring behind keyframe
         painter.circle_filled(egui::pos2(x, y), size + 3.0,
-            egui::Color32::from_rgba_unmultiplied(255, 140, 0, 50));
+            egui::Color32::from_rgba_premultiplied(255, 140, 0, 50));
         painter.circle_stroke(egui::pos2(x, y), size + 2.0,
-            egui::Stroke::new(1.5, egui::Color32::from_rgb(255, 120, 20)));
+            egui::Stroke::new(1.5, colors::ACCENT_ORANGE));
     }
 
     if is_linear {
@@ -96,7 +97,7 @@ pub fn draw_keyframe_tick(
 
     if is_selected {
         let sel_rect = egui::Rect::from_center_size(egui::pos2(x, y), egui::vec2(size * 2.0, size * 2.0));
-        painter.rect_stroke(sel_rect, 1.5, egui::Stroke::new(1.5, egui::Color32::from_rgb(255, 120, 20)));
+        painter.rect_stroke(sel_rect, 1.5, egui::Stroke::new(1.5, colors::ACCENT_ORANGE));
     }
 
     let response = ui.allocate_rect(rect, egui::Sense::click_and_drag());

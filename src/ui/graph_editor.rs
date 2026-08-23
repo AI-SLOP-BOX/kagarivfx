@@ -1,5 +1,6 @@
 use eframe::egui;
 use crate::core::timeline::Layer;
+use crate::ui::theme::colors;
 
 /// A reusable module for rendering the After Effects keyframe Graph Editor.
 ///
@@ -185,7 +186,7 @@ pub fn draw_graph_editor(
         for window in points.windows(2) {
             ui.painter().line_segment(
                 [window[0], window[1]],
-                egui::Stroke::new(2.0, egui::Color32::from_rgb(255, 180, 50)),
+                egui::Stroke::new(2.0, colors::TIMELINE_KEYFRAME),
             );
         }
 
@@ -210,7 +211,7 @@ pub fn draw_graph_editor(
                 let nsy = rect.bottom() - 4.0 - (speed_pts[next_i] / max_speed) * (rect.height() - 16.0);
                 let p2 = egui::pos2(nsx, nsy);
 
-                ui.painter().line_segment([p1, p2], egui::Stroke::new(1.2, egui::Color32::from_rgb(0, 220, 180)));
+                ui.painter().line_segment([p1, p2], egui::Stroke::new(1.2, colors::MOTION_PATH));
             }
 
             // Peak Speed Badge HUD
@@ -220,7 +221,7 @@ pub fn draw_graph_editor(
                 egui::Align2::LEFT_TOP,
                 format!("⚡ Peak: {:.0} px/s", max_speed * 30.0),
                 egui::FontId::monospace(10.0),
-                egui::Color32::from_rgb(0, 220, 180),
+                colors::MOTION_PATH,
             );
         }
 
@@ -316,15 +317,15 @@ pub fn draw_graph_editor(
                     });
                 }
                 let anchor_color = if anchor_resp.dragged() {
-                    egui::Color32::WHITE
+                    colors::HANDLE_NORMAL
                 } else if anchor_resp.hovered() {
-                    egui::Color32::from_rgb(255, 245, 150)
+                    colors::HANDLE_HOVER_FILL
                 } else {
-                    egui::Color32::from_rgb(255, 230, 100)
+                    colors::TIMELINE_KEYFRAME
                 };
                 ui.painter().circle_filled(pt, 4.0, anchor_color);
                 if anchor_resp.hovered() {
-                    ui.painter().circle_stroke(pt, 7.0, egui::Stroke::new(1.0, egui::Color32::from_rgb(255, 230, 100)));
+                    ui.painter().circle_stroke(pt, 7.0, egui::Stroke::new(1.0, colors::TIMELINE_KEYFRAME));
                 }
 
                 // --- Tangent handles: drag to edit custom bezier control points ---
@@ -377,15 +378,15 @@ pub fn draw_graph_editor(
 
                 let any_hover = h_out_resp.hovered() || h_in_resp.dragged() || h_in_resp.hovered() || h_out_resp.dragged();
                 let stroke_color = if any_hover {
-                    egui::Color32::from_rgb(255, 120, 150)
+                    colors::ACCENT_ORANGE
                 } else {
-                    egui::Color32::from_rgb(100, 200, 255)
+                    colors::MOTION_PATH
                 };
                 ui.painter().line_segment([pt, h_out], egui::Stroke::new(1.2, stroke_color));
                 ui.painter().line_segment([pt, h_in], egui::Stroke::new(1.2, stroke_color));
 
-                let h_out_color = if h_out_resp.hovered() || h_out_resp.dragged() { egui::Color32::WHITE } else { egui::Color32::from_rgb(100, 220, 255) };
-                let h_in_color = if h_in_resp.hovered() || h_in_resp.dragged() { egui::Color32::WHITE } else { egui::Color32::from_rgb(100, 220, 255) };
+                let h_out_color = if h_out_resp.hovered() || h_out_resp.dragged() { colors::HANDLE_NORMAL } else { colors::MOTION_PATH };
+                let h_in_color = if h_in_resp.hovered() || h_in_resp.dragged() { colors::HANDLE_NORMAL } else { colors::MOTION_PATH };
                 ui.painter().circle_filled(h_out, 4.0, h_out_color);
                 ui.painter().circle_filled(h_in, 4.0, h_in_color);
             }

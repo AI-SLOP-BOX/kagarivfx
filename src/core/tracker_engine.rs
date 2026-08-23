@@ -441,7 +441,7 @@ mod subpixel_tests {
 #[cfg(test)]
 mod pixel_tracking_tests {
     use super::*;
-    use crate::core::timeline::{Composition, Layer, LayerType, TrackerPoint};
+    use crate::core::timeline::{Layer, LayerType, TrackerPoint};
     use crate::core::property::Animatable;
 
     /// Builds a 64x64 gray frame with a bright square at `sq_x`.
@@ -451,7 +451,7 @@ mod pixel_tracking_tests {
         let mut px = vec![30u8; w * h * 4];
         for y in 20..40 {
             for x in sq_x..sq_x + 12 {
-                let idx = ((y * w + x) * 4) as usize;
+                let idx = (y * w + x) * 4;
                 px[idx] = 240;
                 px[idx + 1] = 240;
                 px[idx + 2] = 240;

@@ -151,7 +151,7 @@ mod tests {
             operator: EchoOperator::Add,
             ..Default::default()
         };
-        let one = apply_echo_effect(&current, &[frame.clone()], 4, 4, &options);
+        let one = apply_echo_effect(&current, std::slice::from_ref(&frame), 4, 4, &options);
         let two = apply_echo_effect(&current, &history, 4, 4, &options);
         // Second echo adds 200*0.5=100 → strictly brighter than one echo alone.
         assert!(two[0] > one[0], "second echo must still add light");
@@ -160,11 +160,11 @@ mod tests {
 
     #[test]
     fn test_add_operator_grows_alpha_monotonically() {
-        let mut current = vec![10u8, 10, 10, 40]; // semi-transparent foreground
+        let current = vec![10u8, 10, 10, 40]; // semi-transparent foreground
         let history = vec![vec![30u8, 30, 30, 120]];
         let options = EchoOptions { num_echoes: 1, ..Default::default() };
         let before_a = current[3];
-        let result = apply_echo_effect(&mut std::mem::take(&mut current), &history, 1, 1, &options);
+        let result = apply_echo_effect(&current, &history, 1, 1, &options);
         assert!(result[3] >= before_a, "alpha must never shrink");
         assert!(result[3] >= 120, "echo alpha contributes");
     }

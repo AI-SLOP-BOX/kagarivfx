@@ -182,6 +182,5 @@ mod tests {
         let a = apply_spherize(&img, 24, 24, &options);
         let b = apply_spherize(&img, 24, 24, &options);
         assert_eq!(a, b);
-        assert!(a.chunks(4).all(|px| px.iter().all(|&v| v <= 255)));
     }
 }

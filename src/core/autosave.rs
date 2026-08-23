@@ -226,7 +226,7 @@ mod tests {
 
         let tmp_count = std::fs::read_dir(&dir)
             .unwrap()
-            .filter(|e| e.as_ref().unwrap().path().extension().map_or(false, |x| x == "tmp"))
+            .filter(|e| e.as_ref().unwrap().path().extension().is_some_and(|x| x == "tmp"))
             .count();
         assert_eq!(tmp_count, 0, "no .tmp files may remain after successful save");
         let _ = std::fs::remove_dir_all(&dir);

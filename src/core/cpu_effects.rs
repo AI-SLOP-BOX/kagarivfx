@@ -74,8 +74,8 @@ fn apply_one(
                 pixels,
                 width,
                 height,
-                direction.evaluate(frame),
                 distance.evaluate(frame),
+                direction.evaluate(frame),
                 softness.evaluate(frame).max(0.0) as u32,
                 sc,
             );
@@ -297,6 +297,106 @@ fn apply_one(
                 take_red.evaluate(frame), take_green.evaluate(frame),
                 take_blue.evaluate(frame), take_alpha.evaluate(frame),
             );
+        }
+
+        // ── Effects migrated from ExtEffect ──
+        EffectType::WaveWarp { wave_height, wave_width, speed, direction_deg, wave_type, pinning } => {
+            use crate::core::ae_effects_pack_v27::{apply_wave_warp_pro, WaveWarpParams, WaveType, PinKind};
+            let params = WaveWarpParams {
+                wave_height: wave_height.evaluate(frame),
+                wave_width: wave_width.evaluate(frame),
+                speed: speed.evaluate(frame),
+                time: frame as f32 / 30.0,
+                direction_deg: direction_deg.evaluate(frame),
+                wave_type: match wave_type {
+                    1 => WaveType::Triangle,
+                    2 => WaveType::Square,
+                    3 => WaveType::Sawtooth,
+                    _ => WaveType::Sine,
+                },
+                pinning: match pinning {
+                    1 => PinKind::LeftRight,
+                    2 => PinKind::TopBottom,
+                    3 => PinKind::None,
+                    _ => PinKind::All,
+                },
+                ..Default::default()
+            };
+            apply_wave_warp_pro(pixels, width, height, &params);
+        }
+        EffectType::CcLens { convergence, zoom } => {
+            use crate::core::ae_effects_pack_v27::{apply_cc_lens_pro, CcLensParams};
+            apply_cc_lens_pro(pixels, width, height, &CcLensParams {
+                convergence: convergence.evaluate(frame),
+                zoom: zoom.evaluate(frame),
+            });
+        }
+        EffectType::PolarCoordinates { to_polar, interpolation } => {
+            use crate::core::ae_effects_pack_v27::{apply_polar_coordinates_pro, PolarMode};
+            let mode = if *to_polar { PolarMode::RectToPolar } else { PolarMode::PolarToRect };
+            apply_polar_coordinates_pro(pixels, width, height, mode, interpolation.evaluate(frame));
+        }
+        EffectType::OpticsCompensation { field_of_view_deg, reverse, zoom } => {
+            use crate::core::ae_effects_pack_v27::{apply_optics_compensation, OpticsCompensationParams};
+            apply_optics_compensation(pixels, width, height, &OpticsCompensationParams {
+                field_of_view_deg: field_of_view_deg.evaluate(frame),
+                reverse: *reverse,
+                zoom: zoom.evaluate(frame),
+            });
+        }
+        EffectType::ColorBalance { shadows, midtones, highlights, preserve_luminosity } => {
+            use crate::core::color_correction::{apply_color_balance, ColorBalance};
+            apply_color_balance(pixels, &ColorBalance {
+                shadows: *shadows,
+                midtones: *midtones,
+                highlights: *highlights,
+                preserve_luminosity: *preserve_luminosity,
+            });
+        }
+        EffectType::ChannelMixer { matrix, monochrome } => {
+            use crate::core::color_correction::{apply_channel_mixer, ChannelMixer};
+            apply_channel_mixer(pixels, &ChannelMixer {
+                matrix: *matrix,
+                monochrome: *monochrome,
+            });
+        }
+        EffectType::LightSweep { direction_deg, center, width: sweep_width, sweep_intensity, edge_intensity } => {
+            use crate::core::ae_effects_pack_v28::{apply_light_sweep, LightSweepParams};
+            apply_light_sweep(pixels, width, height, &LightSweepParams {
+                direction_deg: direction_deg.evaluate(frame),
+                center: center.evaluate(frame),
+                width: sweep_width.evaluate(frame),
+                sweep_intensity: sweep_intensity.evaluate(frame),
+                edge_intensity: edge_intensity.evaluate(frame),
+            });
+        }
+        EffectType::RadialFastBlur { amount, samples } => {
+            use crate::core::ae_effects_pack_v28::apply_radial_fast_blur;
+            let cx = width as f32 * 0.5;
+            let cy = height as f32 * 0.5;
+            apply_radial_fast_blur(pixels, width, height, [cx, cy], amount.evaluate(frame), *samples);
+        }
+        EffectType::BendIt { top_offset, bottom_offset } => {
+            use crate::core::ae_effects_pack_v28::apply_cc_bend_it_pro;
+            apply_cc_bend_it_pro(pixels, width, height, top_offset.evaluate(frame), bottom_offset.evaluate(frame));
+        }
+        EffectType::Tiler { scale_percent, mirror } => {
+            use crate::core::ae_effects_pack_v28::{apply_cc_tiler_pro, TileEdgeMode};
+            let mode = if *mirror { TileEdgeMode::Mirror } else { TileEdgeMode::Repeat };
+            apply_cc_tiler_pro(pixels, width, height, scale_percent.evaluate(frame), mode);
+        }
+        EffectType::Tritone { shadow_color, mid_color, highlight_color } => {
+            let to_c3 = |c: [f32; 3]| [(c[0].clamp(0.0, 1.0) * 255.0).round() as u8, (c[1].clamp(0.0, 1.0) * 255.0).round() as u8, (c[2].clamp(0.0, 1.0) * 255.0).round() as u8];
+            let s = to_c3(shadow_color.evaluate(frame));
+            let m = to_c3(mid_color.evaluate(frame));
+            let h = to_c3(highlight_color.evaluate(frame));
+            pack::apply_tritone(pixels, s, m, h);
+        }
+        EffectType::MatteChoker { choke_amount, gray_level } => {
+            pack::apply_matte_choker(pixels, choke_amount.evaluate(frame), gray_level.evaluate(frame));
+        }
+        EffectType::VenetianBlinds { completion, width: blind_width } => {
+            pack::apply_venetian_blinds(pixels, width, height, completion.evaluate(frame), blind_width.evaluate(frame).max(1.0) as u32);
         }
     }
 }

@@ -79,6 +79,7 @@ impl Default for AudioFrameMeter {
 }
 
 /// Mix audio tracks across all active layers for a given frame window into a 2-channel stereo f32 buffer.
+/// Delegates to `mix_audio_sources_for_frame` for real WAV sampling.
 #[allow(dead_code)]
 pub fn mix_audio_for_frame(
     comp: &Composition,
@@ -86,67 +87,7 @@ pub fn mix_audio_for_frame(
     sample_rate: u32,
     buffer_size: usize,
 ) -> (Vec<f32>, AudioFrameMeter) {
-    let mut stereo_output = vec![0.0f32; buffer_size * 2];
-    if comp.layers.is_empty() {
-        return (stereo_output, AudioFrameMeter::default());
-    }
-
-    let mut sum_sq_l = 0.0f32;
-    let mut sum_sq_r = 0.0f32;
-    let mut max_peak_l = 0.0f32;
-    let mut max_peak_r = 0.0f32;
-
-    for layer in &comp.layers {
-        if !layer.is_active(frame) {
-            continue;
-        }
-
-        if let LayerType::Audio { volume, .. } = &layer.layer_type {
-            let vol_db = volume.evaluate(frame);
-            let gain = 10.0f32.powf(vol_db / 20.0);
-
-            let time_start = (frame.saturating_sub(layer.in_frame)) as f32 / comp.fps.max(1) as f32;
-            let start_sample_idx = (time_start * sample_rate as f32) as usize * 2;
-
-            for i in 0..buffer_size {
-                let _sample_idx = start_sample_idx + i * 2;
-                let sample_l = ((time_start + i as f32 / sample_rate as f32) * 440.0 * std::f32::consts::TAU).sin() * 0.25 * gain;
-                let sample_r = sample_l;
-
-                let l_idx = i * 2;
-                let r_idx = i * 2 + 1;
-
-                stereo_output[l_idx] += sample_l;
-                stereo_output[r_idx] += sample_r;
-
-                let abs_l = stereo_output[l_idx].abs();
-                let abs_r = stereo_output[r_idx].abs();
-
-                if abs_l > max_peak_l { max_peak_l = abs_l; }
-                if abs_r > max_peak_r { max_peak_r = abs_r; }
-
-                sum_sq_l += abs_l * abs_l;
-                sum_sq_r += abs_r * abs_r;
-            }
-        }
-    }
-
-    let n = buffer_size as f32;
-    let rms_l = (sum_sq_l / n.max(1.0)).sqrt();
-    let rms_r = (sum_sq_r / n.max(1.0)).sqrt();
-
-    let linear_to_db = |val: f32| -> f32 {
-        if val <= 1e-5 { -90.0 } else { (20.0 * val.log10()).clamp(-90.0, 6.0) }
-    };
-
-    let meter = AudioFrameMeter {
-        peak_db_left: linear_to_db(max_peak_l),
-        peak_db_right: linear_to_db(max_peak_r),
-        rms_db_left: linear_to_db(rms_l),
-        rms_db_right: linear_to_db(rms_r),
-    };
-
-    (stereo_output, meter)
+    mix_audio_sources_for_frame(comp, frame, sample_rate, buffer_size, None)
 }
 
 /// Keyframe data point generated from audio amplitude analysis
@@ -200,7 +141,7 @@ mod tests {
         let comp = Composition::new("c1".into(), "Comp 1".into(), 1920, 1080, 30, 300);
         let (buf, meter) = mix_audio_for_frame(&comp, 0, 44100, 512);
         assert_eq!(buf.len(), 1024);
-        assert_eq!(meter.peak_db_left, -90.0);
+        assert!(meter.peak_db_left < -100.0, "silent comp should have very low peak");
     }
 }
 
@@ -404,8 +345,8 @@ pub fn mix_audio_sources_for_frame(
     frame: u32,
     sample_rate: u32,
     buffer_size: usize,
-    // Optional per-layer (gain_db, pan_percent) overrides indexed by layer order
-    mixer: Option<&[(f32, f32)]>,
+    // Optional per-layer mixer overrides indexed by layer order
+    mixer: Option<&[crate::app_state::MixerChannel]>,
 ) -> (Vec<f32>, AudioFrameMeter) {
     use std::collections::HashMap;
     use std::sync::Mutex;
@@ -435,11 +376,26 @@ pub fn mix_audio_sources_for_frame(
         };
         let mut gain = 10.0f32.powf(gain_db / 20.0);
         let mut pan = 0.0f32;
+        let mut is_muted = false;
         if let Some(mix) = mixer {
-            if let Some((mg, mp)) = mix.get(layer_idx) {
-                gain *= 10.0f32.powf(*mg / 20.0);
-                pan = (*mp / 100.0).clamp(-1.0, 1.0);
+            if let Some(ch) = mix.get(layer_idx) {
+                gain *= 10.0f32.powf(ch.gain_db / 20.0);
+                pan = (ch.pan / 100.0).clamp(-1.0, 1.0);
+                is_muted = ch.mute;
             }
+        }
+        // Solo logic: if any channel in the mixer is soloed, mute non-soloed channels
+        if let Some(mix) = mixer {
+            let any_soloed = mix.iter().any(|ch| ch.solo);
+            if any_soloed {
+                let is_soloed = mix.get(layer_idx).is_some_and(|ch| ch.solo);
+                if !is_soloed {
+                    is_muted = true;
+                }
+            }
+        }
+        if is_muted {
+            gain = 0.0;
         }
         let time_start = (frame.saturating_sub(layer.in_frame)) as f32 / fps;
 
@@ -506,6 +462,8 @@ pub fn mix_audio_sources_for_frame(
     let rms_l = (sum_sq_l / buffer_size.max(1) as f32).sqrt();
     let rms_r = (sum_sq_r / buffer_size.max(1) as f32).sqrt();
 
+    // Silence clamps to -120 dBFS (20·log10(1e-6)); the keyframe mapper and
+    // meter displays treat anything below -90 dB as digital silence.
     let to_db = |v: f32| 20.0 * v.max(1e-6).log10();
     (
         stereo_output,

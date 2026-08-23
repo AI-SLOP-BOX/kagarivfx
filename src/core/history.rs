@@ -1,3 +1,5 @@
+use std::collections::VecDeque;
+
 use crate::core::timeline::Project;
 use crate::core::frame_cache;
 
@@ -10,7 +12,7 @@ pub struct HistoryEntry {
 #[derive(Debug, Clone)]
 pub struct ProjectHistory {
     // History stack of Project snapshots with action descriptions
-    stack: Vec<HistoryEntry>,
+    stack: VecDeque<HistoryEntry>,
     current_idx: usize,
     /// Maximum number of undo states retained in memory (default 50).
     max_history_entries: usize,
@@ -47,14 +49,15 @@ impl ProjectHistory {
 
     pub fn new(initial: Project) -> Self {
         let mut hist = Self {
-            stack: vec![HistoryEntry {
-                project: initial,
-                action_name: "Initial State".to_string(),
-            }],
+            stack: VecDeque::new(),
             current_idx: 0,
             max_history_entries: 50,
             approx_bytes: 0,
         };
+        hist.stack.push_back(HistoryEntry {
+            project: initial,
+            action_name: "Initial State".to_string(),
+        });
         hist.recompute_bytes();
         hist
     }
@@ -78,7 +81,7 @@ impl ProjectHistory {
             .map(|e| estimate_project_bytes(&e.project))
             .sum();
         let entry_bytes = estimate_project_bytes(&project);
-        self.stack.push(HistoryEntry {
+        self.stack.push_back(HistoryEntry {
             project,
             action_name: action_name.to_string(),
         });
@@ -86,19 +89,19 @@ impl ProjectHistory {
         self.approx_bytes += entry_bytes;
 
         if self.stack.len() > self.max_history_entries {
-            if let Some(removed) = self.stack.first() {
+            if let Some(removed) = self.stack.front() {
                 self.approx_bytes = self.approx_bytes.saturating_sub(estimate_project_bytes(&removed.project));
             }
-            self.stack.remove(0);
+            self.stack.pop_front();
             self.current_idx = self.current_idx.saturating_sub(1);
         }
 
         // Byte-budget trim: drop oldest states until under the memory ceiling.
         while self.stack.len() > 1 && self.approx_bytes > Self::MAX_HISTORY_BYTES {
-            if let Some(removed) = self.stack.first() {
+            if let Some(removed) = self.stack.front() {
                 self.approx_bytes = self.approx_bytes.saturating_sub(estimate_project_bytes(&removed.project));
             }
-            self.stack.remove(0);
+            self.stack.pop_front();
             self.current_idx = self.current_idx.saturating_sub(1);
         }
 

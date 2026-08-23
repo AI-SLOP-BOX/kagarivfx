@@ -16,29 +16,26 @@ use std::f32::consts::{PI, TAU};
 // ────────────────────────── Sampling Helper ──────────────────────────
 
 /// Clamp-to-edge bilinear RGBA sample from a packed u8 buffer.
+/// Local implementation so this pack does not depend on another module's
+/// internal helper staying public.
 fn sample_bilinear(src: &[u8], w: u32, h: u32, fx: f32, fy: f32, out: &mut [u8; 4]) {
-    if src.len() < (w as usize) * (h as usize) * 4 || w == 0 || h == 0 {
+    if w == 0 || h == 0 || src.is_empty() {
         *out = [0, 0, 0, 0];
         return;
     }
     let x = fx.clamp(0.0, w as f32 - 1.0);
     let y = fy.clamp(0.0, h as f32 - 1.0);
-    let x0 = x.floor() as usize;
-    let y0 = y.floor() as usize;
-    let x1 = (x0 + 1).min(w as usize - 1);
-    let y1 = (y0 + 1).min(h as usize - 1);
+    let x0 = x.floor() as u32;
+    let y0 = y.floor() as u32;
+    let x1 = (x0 + 1).min(w - 1);
+    let y1 = (y0 + 1).min(h - 1);
     let tx = x - x0 as f32;
     let ty = y - y0 as f32;
-    let idx = |xx: usize, yy: usize| (yy * w as usize + xx) * 4;
-
+    let idx = |xx: u32, yy: u32| ((yy * w + xx) * 4) as usize;
     for c in 0..4 {
-        let p00 = src[idx(x0, y0) + c] as f32;
-        let p10 = src[idx(x1, y0) + c] as f32;
-        let p01 = src[idx(x0, y1) + c] as f32;
-        let p11 = src[idx(x1, y1) + c] as f32;
-        let top = p00 + (p10 - p00) * tx;
-        let bot = p01 + (p11 - p01) * tx;
-        out[c] = (top + (bot - top) * ty).round().clamp(0.0, 255.0) as u8;
+        let top = src[idx(x0, y0) + c] as f32 * (1.0 - tx) + src[idx(x1, y0) + c] as f32 * tx;
+        let bot = src[idx(x0, y1) + c] as f32 * (1.0 - tx) + src[idx(x1, y1) + c] as f32 * tx;
+        out[c] = (top * (1.0 - ty) + bot * ty).round().clamp(0.0, 255.0) as u8;
     }
 }
 
@@ -476,7 +473,7 @@ mod tests {
         assert_eq!(out, [0, 0, 0, 255]);
 
         // Horizontal midpoint between black and white columns.
-        let mut bw = vec![0u8; 2 * 1 * 4];
+        let mut bw = vec![0u8; 2 * 4];
         bw[0..4].copy_from_slice(&[0, 0, 0, 255]);
         bw[4..8].copy_from_slice(&[200, 200, 200, 255]);
         sample_bilinear(&bw, 2, 1, 0.5, 0.0, &mut out);

@@ -1,5 +1,6 @@
 use eframe::egui;
 use crate::AfterEffectsApp;
+use crate::ui::theme::colors;
 
 pub fn draw_audio_mixer(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
     ui.heading("Multi-Track Audio Mixer");
@@ -10,7 +11,7 @@ pub fn draw_audio_mixer(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
     // ── Ensure channel state vec is sized correctly ──
     // Grow or shrink to match layer count without reallocating unnecessarily.
     if app.audio_mixer_channels.len() != layer_count {
-        app.audio_mixer_channels.resize(layer_count, (0.0_f32, 0.0_f32));
+        app.audio_mixer_channels.resize(layer_count, Default::default());
     }
 
     let comp_name = app.history.current().active_composition().name.clone();
@@ -34,12 +35,38 @@ pub fn draw_audio_mixer(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
                         ui.label(egui::RichText::new(name).small());
                         ui.add_space(4.0);
 
-                        // gain_db slider ── app field, zero ctx.data_mut ──
-                        let (gain_db, pan) = &mut app.audio_mixer_channels[idx];
-                        ui.add(egui::Slider::new(gain_db, -60.0..=12.0).vertical().suffix(" dB"));
+                        // Mute / Solo buttons
+                        let ch = &mut app.audio_mixer_channels[idx];
+                        ui.horizontal(|ui| {
+                            let mute_color = if ch.mute {
+                                colors::ACCENT_RED
+                            } else {
+                                colors::TEXT_MUTED
+                            };
+                            if ui.add(egui::Button::new(
+                                egui::RichText::new("M").strong().color(mute_color)
+                            ).min_size(egui::vec2(24.0, 18.0))).clicked() {
+                                ch.mute = !ch.mute;
+                            }
+                            let solo_color = if ch.solo {
+                                colors::ACCENT_YELLOW
+                            } else {
+                                colors::TEXT_MUTED
+                            };
+                            if ui.add(egui::Button::new(
+                                egui::RichText::new("S").strong().color(solo_color)
+                            ).min_size(egui::vec2(24.0, 18.0))).clicked() {
+                                ch.solo = !ch.solo;
+                            }
+                        });
 
                         ui.add_space(4.0);
-                        ui.add(egui::Slider::new(pan, -100.0..=100.0));
+
+                        // gain_db slider
+                        ui.add(egui::Slider::new(&mut ch.gain_db, -60.0..=12.0).vertical().suffix(" dB"));
+
+                        ui.add_space(4.0);
+                        ui.add(egui::Slider::new(&mut ch.pan, -100.0..=100.0));
                         ui.label(egui::RichText::new("Pan").small());
                     });
                     ui.separator();
@@ -52,18 +79,18 @@ pub fn draw_audio_mixer(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
                     let (meter_h, meter_w) = (140.0, 12.0);
                     for level in [app.audio_meter.0, app.audio_meter.1] {
                         let (rect, _) = ui.allocate_exact_size(egui::vec2(meter_w, meter_h), egui::Sense::hover());
-                        ui.painter().rect_filled(rect, 2.0, egui::Color32::from_gray(20));
+                        ui.painter().rect_filled(rect, 2.0, colors::BG_DEEPEST);
                         let filled = (rect.height() * level.clamp(0.0, 1.0)).min(rect.height());
                         let bar = egui::Rect::from_min_size(
                             egui::pos2(rect.left(), rect.bottom() - filled),
                             egui::vec2(rect.width(), filled),
                         );
                         let color = if level > 0.95 {
-                            egui::Color32::from_rgb(230, 70, 70)
+                            colors::ACCENT_RED
                         } else if level > 0.7 {
-                            egui::Color32::from_rgb(240, 200, 60)
+                            colors::ACCENT_YELLOW
                         } else {
-                            egui::Color32::from_rgb(80, 220, 120)
+                            colors::ACCENT_GREEN
                         };
                         ui.painter().rect_filled(bar, 1.0, color);
                         ui.add_space(2.0);

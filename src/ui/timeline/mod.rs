@@ -5,6 +5,7 @@ pub mod layers;
 use eframe::egui;
 use crate::AfterEffectsApp;
 use crate::core::timeline::{BlendMode, LabelColor, LayerType, TrackMatteMode};
+use crate::ui::theme::colors;
 use utils::{get_kfs, maybe_snap_frame};
 use header::draw_timeline_header;
 use layers::{draw_prop_row, draw_prop_row_ext};
@@ -112,10 +113,10 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                     if total_frames > 0 {
                         let b_norm = beat_frame as f32 / total_frames as f32;
                         let bx = bar_rect.left() + b_norm * bar_rect.width();
-                        ui.painter().line_segment(
-                            [egui::pos2(bx, bar_rect.top()), egui::pos2(bx, bar_rect.bottom())],
-                            egui::Stroke::new(1.0, egui::Color32::from_rgba_unmultiplied(255, 220, 0, 150)),
-                        );
+                                ui.painter().line_segment(
+                                    [egui::pos2(bx, bar_rect.top()), egui::pos2(bx, bar_rect.bottom())],
+                                    egui::Stroke::new(1.0, colors::ACCENT_YELLOW),
+                                );
                     }
                     beat_frame += beat_interval;
                 }
@@ -238,8 +239,8 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                         egui::pos2(ruler_rect.left() + norm_in * ruler_rect.width(), ruler_rect.top() + 2.0),
                         egui::pos2(ruler_rect.left() + norm_out * ruler_rect.width(), ruler_rect.bottom() - 2.0),
                     );
-                    ui.painter().rect_filled(wa_rect, 2.0, egui::Color32::from_rgba_unmultiplied(80, 160, 240, 100));
-                    ui.painter().rect_stroke(wa_rect, 2.0, egui::Stroke::new(1.0, egui::Color32::from_rgb(100, 180, 255)));
+                    ui.painter().rect_filled(wa_rect, 2.0, colors::TIMELINE_SELECTION);
+                    ui.painter().rect_stroke(wa_rect, 2.0, egui::Stroke::new(1.0, colors::BORDER_ACTIVE));
                 }
 
                 // Ruler Ticks
@@ -266,7 +267,7 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                 if (0.0..=1.0).contains(&playhead_norm) {
                     ui.painter().line_segment(
                         [egui::pos2(playhead_x, ruler_rect.top()), egui::pos2(playhead_x, ruler_rect.bottom() + 300.0)],
-                        egui::Stroke::new(1.5, egui::Color32::from_rgb(0, 160, 255)),
+                        egui::Stroke::new(1.5, colors::TIMELINE_PLAYHEAD),
                     );
                 }
 
@@ -342,6 +343,10 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
             // ── Scrollable Layer Rows & Property Tracks ──
             let zoom_span = (total_frames as f32 / app.timeline_zoom.max(0.01)).max(10.0) as u32;
             let start_frame = current_frame.saturating_sub(zoom_span / 2).min(total_frames.saturating_sub(zoom_span));
+            // Capture effect drag info before closure to avoid borrow conflicts
+            let drag_info = app.dragging_effect.clone();
+            // Collect pending effect drops to apply after the closure
+            let mut pending_effect_drops: Vec<(usize, String, usize)> = Vec::new();
 
             egui::ScrollArea::vertical().max_height(200.0).show(ui, |ui| {
                 let layers_len = comp.layers.len();
@@ -661,6 +666,27 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                                     if click_resp.drag_stopped() || (app.dragging_layer.is_some() && !click_resp.dragged()) {
                                         // Drag ended — clear state (row index moved with the pointer)
                                         app.dragging_layer = None;
+                                    }
+
+                                    // ── Effect drop zone: drag from Effects & Presets library ──
+                                    if let Some((ref effect_name, preset_idx)) = drag_info {
+                                        if click_resp.hovered() {
+                                            // Visual drop indicator: blue glow on the layer row
+                                            let row_rect = click_resp.rect;
+                                            ui.painter().rect_stroke(
+                                                row_rect, 4.0,
+                                                egui::Stroke::new(2.0, egui::Color32::from_rgb(0, 180, 255))
+                                            );
+                                            ui.painter().rect_filled(
+                                                row_rect, 4.0,
+                                                egui::Color32::from_rgba_premultiplied(0, 100, 255, 25)
+                                            );
+                                        }
+                                        // Collect effect on drop (apply after loop to avoid borrow conflicts)
+                                        if click_resp.drag_stopped() && click_resp.hovered() {
+                                            pending_effect_drops.push((i, effect_name.clone(), preset_idx));
+                                            app.dragging_effect = None;
+                                        }
                                     }
 
                                     if click_resp.clicked() {
@@ -1082,6 +1108,23 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                     }
                 }
             });
+
+            // ── Apply pending effect drops (after layer loop to avoid borrow conflicts) ──
+            if !pending_effect_drops.is_empty() {
+                let presets = crate::ui::effects_controls::get_all_effect_presets();
+                for (layer_idx, effect_name, preset_idx) in pending_effect_drops {
+                    if let Some(preset) = presets.get(preset_idx) {
+                        let comp = temp_project.active_composition_mut();
+                        if layer_idx < comp.layers.len() {
+                            let effect = (preset.create_fn)(comp.layers[layer_idx].effects.len());
+                            comp.layers[layer_idx].effects.push(effect);
+                            project_changed = true;
+                            app.toasts.info(format!("Applied '{}' to '{}'", effect_name, comp.layers[layer_idx].name));
+                        }
+                    }
+                }
+                app.dragging_effect = None;
+            }
 
             // ── AE Timeline Bottom Controls Bar (Toggle Switches / Modes F4) ──
             ui.add_space(2.0);

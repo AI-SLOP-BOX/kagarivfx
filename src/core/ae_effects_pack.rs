@@ -1,59 +1,90 @@
 #![allow(dead_code)]
 use rayon::prelude::*;
 /// Pack of 20 Essential Adobe After Effects Effects & Filters.
-// 1. Fast Box Blur (Separable 2-pass: Horizontal then Vertical)
+// 1. Fast Box Blur (Separable 2-pass with O(n) sliding window per pass)
 pub fn apply_fast_box_blur(pixels: &mut [u8], width: u32, height: u32, radius: u32) {
     if radius == 0 || width == 0 || height == 0 { return; }
     let r = radius as i32;
+    let w = width as usize;
+    let h = height as usize;
+    let stride = w * 4;
 
-    // --- Horizontal pass: pixels -> temp_h ---
+    // --- Horizontal pass: pixels -> temp_h (sliding window) ---
     let mut temp_h = vec![0u8; pixels.len()];
-    for y in 0..height {
-        for x in 0..width as i32 {
-            let mut acc = [0f32; 4];
-            let mut count = 0f32;
-            for dx in -r..=r {
-                let px = (x + dx).clamp(0, width as i32 - 1) as u32;
-                let idx = ((y * width + px) * 4) as usize;
-                for c in 0..4 { acc[c] += pixels[idx + c] as f32; }
-                count += 1.0;
-            }
-            let out_idx = ((y * width + x as u32) * 4) as usize;
+    for y in 0..h {
+        let row = y * stride;
+        // Initialize accumulator for x=0
+        let mut acc = [0f32; 4];
+        let mut count = 0f32;
+        for dx in -r..=r {
+            let px = dx.clamp(0, w as i32 - 1) as usize;
+            let idx = row + px * 4;
+            for c in 0..4 { acc[c] += pixels[idx + c] as f32; }
+            count += 1.0;
+        }
+        for c in 0..4 { temp_h[row + c] = (acc[c] / count).round() as u8; }
+
+        // Slide the window across the row
+        for x in 1..w {
+            // Add new right edge
+            let add_px = (x as i32 + r).min(w as i32 - 1) as usize;
+            let add_idx = row + add_px * 4;
+            for c in 0..4 { acc[c] += pixels[add_idx + c] as f32; }
+
+            // Remove old left edge
+            let rem_px = (x as i32 - r - 1).max(0) as usize;
+            let rem_idx = row + rem_px * 4;
+            for c in 0..4 { acc[c] -= pixels[rem_idx + c] as f32; }
+
+            let out_idx = row + x * 4;
             for c in 0..4 { temp_h[out_idx + c] = (acc[c] / count).round() as u8; }
         }
     }
 
-    // --- Vertical pass: temp_h -> pixels ---
-    for y in 0..height as i32 {
-        for x in 0..width {
-            let mut acc = [0f32; 4];
-            let mut count = 0f32;
-            for dy in -r..=r {
-                let py = (y + dy).clamp(0, height as i32 - 1) as u32;
-                let idx = ((py * width + x) * 4) as usize;
-                for c in 0..4 { acc[c] += temp_h[idx + c] as f32; }
-                count += 1.0;
-            }
-            let out_idx = ((y as u32 * width + x) * 4) as usize;
+    // --- Vertical pass: temp_h -> pixels (sliding window) ---
+    for x in 0..w {
+        let col = x * 4;
+        // Initialize accumulator for y=0
+        let mut acc = [0f32; 4];
+        let mut count = 0f32;
+        for dy in -r..=r {
+            let py = dy.clamp(0, h as i32 - 1) as usize;
+            let idx = py * stride + col;
+            for c in 0..4 { acc[c] += temp_h[idx + c] as f32; }
+            count += 1.0;
+        }
+        let out_idx = col;
+        for c in 0..4 { pixels[out_idx + c] = (acc[c] / count).round() as u8; }
+
+        // Slide the window down the column
+        for y in 1..h {
+            // Add new bottom edge
+            let add_py = (y as i32 + r).min(h as i32 - 1) as usize;
+            let add_idx = add_py * stride + col;
+            for c in 0..4 { acc[c] += temp_h[add_idx + c] as f32; }
+
+            // Remove old top edge
+            let rem_py = (y as i32 - r - 1).max(0) as usize;
+            let rem_idx = rem_py * stride + col;
+            for c in 0..4 { acc[c] -= temp_h[rem_idx + c] as f32; }
+
+            let out_idx = y * stride + col;
             for c in 0..4 { pixels[out_idx + c] = (acc[c] / count).round() as u8; }
         }
     }
 }
 
 
-// 2. Directional Blur
+// 2. Directional Blur (rayon-parallelized)
 pub fn apply_directional_blur(pixels: &mut [u8], width: u32, height: u32, angle_deg: f32, length: f32) {
-    if length <= 0.01 { return; }
+    if length <= 0.01 || width == 0 || height == 0 { return; }
     let rad = angle_deg.to_radians();
     let dx = rad.sin();
     let dy = -rad.cos();
 
     let temp = pixels.to_vec();
-    // Oversample along the blur axis and apply Gaussian weights so the streak
-    // fades smoothly instead of showing hard banding edges.
     let samples = ((length * 2.0) as usize).max(4).next_power_of_two();
 
-    // Gaussian weights over [-3, 3], normalized.
     let sigma = (samples as f32 * 0.5 / 3.0).max(1.0);
     let mut weights = vec![0f32; samples];
     let mut w_sum = 0f32;
@@ -64,8 +95,11 @@ pub fn apply_directional_blur(pixels: &mut [u8], width: u32, height: u32, angle_
     }
     for w in weights.iter_mut() { *w /= w_sum; }
 
-    for y in 0..height {
-        for x in 0..width {
+    pixels.par_chunks_exact_mut(4)
+        .enumerate()
+        .for_each(|(i, px)| {
+            let x = (i % width as usize) as u32;
+            let y = (i / width as usize) as u32;
             let mut acc = [0f32; 4];
             for (s, &wt) in weights.iter().enumerate() {
                 let offset = (s as f32) - (samples as f32 * 0.5);
@@ -74,20 +108,17 @@ pub fn apply_directional_blur(pixels: &mut [u8], width: u32, height: u32, angle_
                 let idx = ((sy * width + sx) * 4) as usize;
                 for c in 0..4 { acc[c] += temp[idx + c] as f32 * wt; }
             }
-            let out_idx = ((y * width + x) * 4) as usize;
-            for c in 0..4 { pixels[out_idx + c] = acc[c].round().clamp(0.0, 255.0) as u8; }
-        }
-    }
+            for c in 0..4 { px[c] = acc[c].round().clamp(0.0, 255.0) as u8; }
+        });
 }
 
-// 3. Radial Blur (Spin)
+// 3. Radial Blur (Spin) (rayon-parallelized)
 pub fn apply_radial_blur(pixels: &mut [u8], width: u32, height: u32, amount: f32) {
-    if amount.abs() < 0.01 { return; }
+    if amount.abs() < 0.01 || width == 0 || height == 0 { return; }
     let cx = width as f32 * 0.5;
     let cy = height as f32 * 0.5;
     let temp = pixels.to_vec();
 
-    // More steps + Gaussian weighting reduce visible angular banding.
     let steps = 16;
     let mut weights = [0f32; 16];
     let sigma = (steps as f32 * 0.5 / 3.0).max(1.0);
@@ -99,8 +130,11 @@ pub fn apply_radial_blur(pixels: &mut [u8], width: u32, height: u32, amount: f32
     }
     for w in weights.iter_mut() { *w /= w_sum; }
 
-    for y in 0..height {
-        for x in 0..width {
+    pixels.par_chunks_exact_mut(4)
+        .enumerate()
+        .for_each(|(i, px)| {
+            let x = (i % width as usize) as u32;
+            let y = (i / width as usize) as u32;
             let mut acc = [0f32; 4];
             let rx = x as f32 - cx;
             let ry = y as f32 - cy;
@@ -115,10 +149,8 @@ pub fn apply_radial_blur(pixels: &mut [u8], width: u32, height: u32, amount: f32
                 let idx = ((sy * width + sx) * 4) as usize;
                 for c in 0..4 { acc[c] += temp[idx + c] as f32 * wt; }
             }
-            let out_idx = ((y * width + x) * 4) as usize;
-            for c in 0..4 { pixels[out_idx + c] = acc[c].round().clamp(0.0, 255.0) as u8; }
-        }
-    }
+            for c in 0..4 { px[c] = acc[c].round().clamp(0.0, 255.0) as u8; }
+        });
 }
 
 // 4. Unsharp Mask
@@ -174,6 +206,7 @@ pub fn apply_glow(pixels: &mut [u8], width: u32, height: u32, threshold: f32, ra
 
 // 7. Drop Shadow
 pub fn apply_drop_shadow(pixels: &mut [u8], width: u32, height: u32, distance: f32, angle_deg: f32, softness: u32, shadow_color: [u8; 4]) {
+    if width == 0 || height == 0 { return; }
     let rad = angle_deg.to_radians();
     let dx = (rad.sin() * distance).round() as i32;
     let dy = (-rad.cos() * distance).round() as i32;
@@ -384,7 +417,7 @@ pub fn apply_offset(pixels: &mut [u8], width: u32, height: u32, shift_x: i32, sh
 
 // 19. Venetian Blinds
 pub fn apply_venetian_blinds(pixels: &mut [u8], width: u32, height: u32, completion: f32, width_px: u32) {
-    if completion <= 0.0 || width_px == 0 { return; }
+    if completion <= 0.0 || width_px == 0 || width == 0 || height == 0 { return; }
     let blind_w = width_px as usize;
     let cut_w = (blind_w as f32 * (completion * 0.01)) as usize;
 
@@ -696,7 +729,7 @@ mod shadow_tests {
         let mut px = vec![0u8; (w * h * 4) as usize];
         for y in y0..y1 {
             for x in x0..x1 {
-                let idx = ((y * w as usize + x) * 4) as usize;
+                let idx = (y * w as usize + x) * 4;
                 px[idx] = 255;
                 px[idx + 1] = 255;
                 px[idx + 2] = 255;
@@ -731,7 +764,7 @@ mod shadow_tests {
         // The profile must rise then fall smoothly (no hard box-blur steps).
         let row = 32usize;
         let vals: Vec<i32> = (28..90)
-            .map(|x| px[((row * w as usize + x) * 4 + 3)] as i32)
+            .map(|x| px[(row * w as usize + x) * 4 + 3] as i32)
             .collect();
         let peak = vals.iter().enumerate().max_by_key(|(_, v)| **v).unwrap().0;
         assert!(peak > 0 && peak < vals.len() - 1, "shadow must have an interior peak");

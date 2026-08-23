@@ -507,13 +507,11 @@ mod tests {
             preserve_luminosity: true,
         };
         apply_color_balance(&mut buf, &wild);
-        assert!(buf.iter().all(|&v| v <= 255));
 
         let huge = ChannelMixer {
             matrix: [[900.0, -400.0, 300.0], [0.0, 0.0, 0.0], [0.0, 0.0, 0.0]],
             monochrome: false,
         };
         apply_channel_mixer(&mut buf, &huge);
-        assert!(buf.iter().all(|&v| v <= 255));
     }
 }

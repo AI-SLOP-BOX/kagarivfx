@@ -1,5 +1,6 @@
 use eframe::egui;
 use crate::AfterEffectsApp;
+use crate::ui::theme::colors;
 
 pub fn draw_minimap(
     app: &mut AfterEffectsApp,
@@ -18,8 +19,8 @@ pub fn draw_minimap(
     let (rect, response) = ui.allocate_exact_size(egui::vec2(map_w, map_h), egui::Sense::click_and_drag());
 
     // Dark Map Background & Border
-    ui.painter().rect_filled(rect, 4.0, egui::Color32::from_rgba_unmultiplied(14, 18, 24, 230));
-    ui.painter().rect_stroke(rect, 4.0, egui::Stroke::new(1.0, egui::Color32::from_rgb(0, 160, 255)));
+    ui.painter().rect_filled(rect, 4.0, colors::HUD_BG);
+    ui.painter().rect_stroke(rect, 4.0, egui::Stroke::new(1.0, colors::ACCENT_BLUE));
 
     let scale_x = map_w / comp_w;
     let scale_y = map_h / comp_h;
@@ -50,7 +51,7 @@ pub fn draw_minimap(
     let view_h = (map_h * 0.75).clamp(15.0, map_h);
     let view_rect = egui::Rect::from_center_size(focus_center, egui::vec2(view_w, view_h));
 
-    ui.painter().rect_stroke(view_rect, 2.0, egui::Stroke::new(1.5, egui::Color32::from_rgb(0, 220, 255)));
+    ui.painter().rect_stroke(view_rect, 2.0, egui::Stroke::new(1.5, colors::ACCENT_CYAN));
 
     // Handle Minimap Click / Layer Selection Interaction
     if response.clicked() {

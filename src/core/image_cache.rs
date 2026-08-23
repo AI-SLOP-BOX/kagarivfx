@@ -126,9 +126,4 @@ mod robustness_tests {
         let _ = std::fs::remove_file(&bad);
     }
 
-    #[test]
-    fn test_dimension_limit_constant_is_sane() {
-        assert!(ImageCache::MAX_IMAGE_PIXELS >= 1920 * 1080, "must allow HD");
-        assert!(ImageCache::MAX_IMAGE_PIXELS <= 16384 * 16384 * 4, "must cap memory");
-    }
 }

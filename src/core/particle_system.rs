@@ -377,25 +377,37 @@ impl ParticleSystem {
 
                     match e.blend_mode {
                         1 => {
-                            // Additive blending
+                            // Additive blending: add premultiplied source to destination
+                            let dst_a = buffer[idx+3] as f32 / 255.0;
                             let dr = buffer[idx] as f32 / 255.0 + src_r;
                             let dg = buffer[idx+1] as f32 / 255.0 + src_g;
                             let db = buffer[idx+2] as f32 / 255.0 + src_b;
-                            let da = buffer[idx+3] as f32 / 255.0 + pixel_a;
+                            let da = (dst_a + pixel_a).min(1.0);
                             buffer[idx] = (dr.min(1.0) * 255.0) as u8;
                             buffer[idx+1] = (dg.min(1.0) * 255.0) as u8;
                             buffer[idx+2] = (db.min(1.0) * 255.0) as u8;
-                            buffer[idx+3] = (da.min(1.0) * 255.0) as u8;
+                            buffer[idx+3] = (da * 255.0) as u8;
                         }
                         2 => {
-                            // Screen blending
-                            let dr = 1.0 - (1.0 - buffer[idx] as f32 / 255.0) * (1.0 - src_r);
-                            let dg = 1.0 - (1.0 - buffer[idx+1] as f32 / 255.0) * (1.0 - src_g);
-                            let db = 1.0 - (1.0 - buffer[idx+2] as f32 / 255.0) * (1.0 - src_b);
-                            buffer[idx] = (dr.min(1.0) * 255.0) as u8;
-                            buffer[idx+1] = (dg.min(1.0) * 255.0) as u8;
-                            buffer[idx+2] = (db.min(1.0) * 255.0) as u8;
-                            buffer[idx+3] = 255;
+                            // Screen blending: unpremultiply source, apply screen, re-premultiply
+                            let dst_r = buffer[idx] as f32 / 255.0;
+                            let dst_g = buffer[idx+1] as f32 / 255.0;
+                            let dst_b = buffer[idx+2] as f32 / 255.0;
+                            let dst_a = buffer[idx+3] as f32 / 255.0;
+                            let sa = pixel_a;
+                            let sr = if sa > 0.001 { r } else { 0.0 };
+                            let sg = if sa > 0.001 { g } else { 0.0 };
+                            let sb = if sa > 0.001 { b } else { 0.0 };
+                            let out_a = sa + dst_a * (1.0 - sa);
+                            if out_a > 0.001 {
+                                let out_r = (sr * sa + (1.0 - sa) * dst_r * dst_a + sa * (1.0 - dst_a) * sr) / out_a;
+                                let out_g = (sg * sa + (1.0 - sa) * dst_g * dst_a + sa * (1.0 - dst_a) * sg) / out_a;
+                                let out_b = (sb * sa + (1.0 - sa) * dst_b * dst_a + sa * (1.0 - dst_a) * sb) / out_a;
+                                buffer[idx] = (out_r.clamp(0.0, 1.0) * 255.0) as u8;
+                                buffer[idx+1] = (out_g.clamp(0.0, 1.0) * 255.0) as u8;
+                                buffer[idx+2] = (out_b.clamp(0.0, 1.0) * 255.0) as u8;
+                                buffer[idx+3] = (out_a.clamp(0.0, 1.0) * 255.0) as u8;
+                            }
                         }
                         _ => {
                             // Normal alpha blending

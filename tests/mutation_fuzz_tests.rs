@@ -50,7 +50,7 @@ fn fuzz_mutated_project_json_never_panics() {
     let seed = seed_project_json();
     let mut rng = Rng(0xDEADBEEF);
 
-    for round in 0..500 {
+    for _round in 0..500 {
         let mut bytes = seed.clone().into_bytes();
         let mutations = 1 + rng.below(8);
         for _ in 0..mutations {
@@ -110,7 +110,7 @@ fn fuzz_expression_scripts_never_crash_or_hang() {
     ];
 
     let mut rng = Rng(0xCAFEBABE);
-    for round in 0..800 {
+    for _round in 0..800 {
         let parts = 2 + rng.below(12);
         let mut script = String::new();
         for _ in 0..parts {
@@ -132,7 +132,7 @@ fn fuzz_deeply_nested_json_arrays() {
         for _ in 0..depth {
             payload.push('[');
         }
-        payload.push_str("]");
+        payload.push(']');
         for _ in 0..depth {
             payload.push(']');
         }

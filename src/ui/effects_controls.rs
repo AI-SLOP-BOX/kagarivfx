@@ -969,6 +969,70 @@ pub fn draw_effect_type_ui(
             draw_prop(ui, current_frame, project_changed, next_frame,
                 "Take Alpha", take_alpha, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=5.0)); });
         }
+        // ── Effects migrated from ExtEffect (UI deferred) ──
+        EffectType::WaveWarp { wave_height, wave_width, speed, direction_deg, .. } => {
+            draw_prop(ui, current_frame, project_changed, next_frame, "Wave Height", wave_height, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=200.0)); });
+            draw_prop(ui, current_frame, project_changed, next_frame, "Wave Width", wave_width, |ui, v| { ui.add(egui::Slider::new(v, 1.0..=500.0)); });
+            draw_prop(ui, current_frame, project_changed, next_frame, "Speed", speed, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=20.0)); });
+            draw_prop(ui, current_frame, project_changed, next_frame, "Direction", direction_deg, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=360.0).suffix("°")); });
+        }
+        EffectType::CcLens { convergence, zoom } => {
+            draw_prop(ui, current_frame, project_changed, next_frame, "Convergence", convergence, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=200.0)); });
+            draw_prop(ui, current_frame, project_changed, next_frame, "Zoom", zoom, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=5.0)); });
+        }
+        EffectType::PolarCoordinates { interpolation, .. } => {
+            draw_prop(ui, current_frame, project_changed, next_frame, "Interpolation", interpolation, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=100.0).suffix("%")); });
+        }
+        EffectType::OpticsCompensation { field_of_view_deg, zoom, .. } => {
+            draw_prop(ui, current_frame, project_changed, next_frame, "FOV", field_of_view_deg, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=180.0).suffix("°")); });
+            draw_prop(ui, current_frame, project_changed, next_frame, "Zoom", zoom, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=5.0)); });
+        }
+        EffectType::LightSweep { direction_deg, sweep_intensity, edge_intensity, .. } => {
+            draw_prop(ui, current_frame, project_changed, next_frame, "Direction", direction_deg, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=360.0).suffix("°")); });
+            draw_prop(ui, current_frame, project_changed, next_frame, "Sweep Intensity", sweep_intensity, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=1.0)); });
+            draw_prop(ui, current_frame, project_changed, next_frame, "Edge Intensity", edge_intensity, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=1.0)); });
+        }
+        EffectType::RadialFastBlur { amount, .. } => {
+            draw_prop(ui, current_frame, project_changed, next_frame, "Amount", amount, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=1.0)); });
+        }
+        EffectType::BendIt { top_offset, bottom_offset } => {
+            draw_prop(ui, current_frame, project_changed, next_frame, "Top Offset", top_offset, |ui, v| { ui.add(egui::Slider::new(v, -50.0..=50.0).suffix(" px")); });
+            draw_prop(ui, current_frame, project_changed, next_frame, "Bottom Offset", bottom_offset, |ui, v| { ui.add(egui::Slider::new(v, -50.0..=50.0).suffix(" px")); });
+        }
+        EffectType::Tiler { scale_percent, .. } => {
+            draw_prop(ui, current_frame, project_changed, next_frame, "Scale", scale_percent, |ui, v| { ui.add(egui::Slider::new(v, 10.0..=500.0).suffix("%")); });
+        }
+        EffectType::ColorBalance { .. } | EffectType::ChannelMixer { .. } => {
+            ui.label("Parameter UI deferred");
+        }
+        EffectType::Tritone { shadow_color, mid_color, highlight_color } => {
+            // Color pickers for 3-tone mapping
+            let sc_before = shadow_color.clone();
+            if let Some(nf) = draw_property_ui(current_frame, ui, "Shadow Color", shadow_color, |ui, val| {
+                ui.color_edit_button_rgb(val);
+            }) { *next_frame = Some(nf); }
+            if sc_before != *shadow_color { *project_changed = true; }
+
+            let mc_before = mid_color.clone();
+            if let Some(nf) = draw_property_ui(current_frame, ui, "Mid Color", mid_color, |ui, val| {
+                ui.color_edit_button_rgb(val);
+            }) { *next_frame = Some(nf); }
+            if mc_before != *mid_color { *project_changed = true; }
+
+            let hc_before = highlight_color.clone();
+            if let Some(nf) = draw_property_ui(current_frame, ui, "Highlight Color", highlight_color, |ui, val| {
+                ui.color_edit_button_rgb(val);
+            }) { *next_frame = Some(nf); }
+            if hc_before != *highlight_color { *project_changed = true; }
+        }
+        EffectType::MatteChoker { choke_amount, gray_level } => {
+            draw_prop(ui, current_frame, project_changed, next_frame, "Choke Amount", choke_amount, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=50.0)); });
+            draw_prop(ui, current_frame, project_changed, next_frame, "Gray Level", gray_level, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=1.0)); });
+        }
+        EffectType::VenetianBlinds { completion, width } => {
+            draw_prop(ui, current_frame, project_changed, next_frame, "Completion", completion, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=100.0).suffix("%")); });
+            draw_prop(ui, current_frame, project_changed, next_frame, "Width", width, |ui, v| { ui.add(egui::Slider::new(v, 2.0..=100.0).suffix(" px")); });
+        }
     }
 }
 

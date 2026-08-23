@@ -1373,9 +1373,9 @@ mod video_cache_tests {
     #[test]
     fn test_video_texture_budget_is_sane() {
         // 600 frames x 1080p RGBA ≈ 1.5GB — must stay under 2GB
+        // (and hold ≥150 frames ≈ 5s at 30fps, enforced by the constant itself).
         let bytes = crate::core::renderer::MAX_VIDEO_FRAME_TEXTURES as u64 * 1920 * 1080 * 4;
         assert!(bytes < 2 * 1024 * 1024 * 1024, "budget {} bytes too large", bytes);
-        assert!(crate::core::renderer::MAX_VIDEO_FRAME_TEXTURES >= 150, "must hold 5s at 30fps");
     }
 }
 

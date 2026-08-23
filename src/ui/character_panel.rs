@@ -3,6 +3,7 @@
 use eframe::egui;
 use crate::AfterEffectsApp;
 use crate::core::timeline::{Composition, LayerType};
+use crate::ui::theme::colors;
 
 pub fn draw_character_panel(
     app: &mut AfterEffectsApp,
@@ -17,7 +18,7 @@ pub fn draw_character_panel(
             ui.label(
                 egui::RichText::new("Character & Paragraph")
                     .strong()
-                    .color(egui::Color32::from_rgb(255, 200, 100)),
+                    .color(colors::ACCENT_YELLOW),
             );
             ui.weak("— AE Text Formatting");
         });
@@ -127,7 +128,7 @@ pub fn draw_character_panel(
                     });
                     ui.add_space(6.0);
                     ui.group(|ui| {
-                        ui.label(egui::RichText::new("✨ One-Tap Motion Presets").strong().color(egui::Color32::from_rgb(0, 200, 255)));
+                        ui.label(egui::RichText::new("✨ One-Tap Motion Presets").strong().color(colors::ACCENT_CYAN));
                         ui.horizontal(|ui| {
                             if ui.button("⌨ Typewriter").on_hover_text("Reveal characters one by one").clicked() {
                                 let mut anim = crate::core::text_animator::TextAnimatorSettings::default();

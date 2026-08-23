@@ -103,6 +103,7 @@ pub mod text_animator_advanced;
 pub mod particle_forces;
 pub mod color_correction;
 pub mod effect_registry_ext;
+pub mod effect_presets;
 
 
 

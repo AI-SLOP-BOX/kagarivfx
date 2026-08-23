@@ -65,17 +65,112 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                 let comp = temp_project.active_composition_mut();
                 if let Some(idx) = app.selected_layer_idx {
                     if idx < comp.layers.len() {
+                        // Capture drag info before borrowing layer
+                        let drag_info = app.dragging_effect.clone();
                         let layer = &mut comp.layers[idx];
                         ui.label(egui::RichText::new(format!("Layer: {}", layer.name)).strong().color(egui::Color32::from_rgb(0, 200, 255)));
                         ui.add_space(4.0);
 
-                        if layer.effects.is_empty() {
-                            ui.weak("No effects applied to this layer. Drag an effect from 'Effects & Presets' tab.");
+                        // Drop zone for effects
+                        if let Some((ref effect_name, _)) = drag_info {
+                            let drop_rect = ui.allocate_ui_with_layout(
+                                egui::vec2(ui.available_width(), 40.0),
+                                egui::Layout::top_down(egui::Align::Center),
+                                |ui| {
+                                    ui.label(egui::RichText::new(format!("Drop '{}' here", effect_name)).small().color(egui::Color32::from_rgb(0, 180, 255)));
+                                }
+                            ).response;
+                            ui.painter().rect_filled(
+                                drop_rect.rect, 4.0,
+                                egui::Color32::from_rgba_premultiplied(0, 100, 255, 30)
+                            );
+                            ui.painter().rect_stroke(
+                                drop_rect.rect, 4.0,
+                                egui::Stroke::new(1.5, egui::Color32::from_rgb(0, 180, 255))
+                            );
+                            // Apply on drop
+                            let is_hovered = ui.rect_contains_pointer(drop_rect.rect);
+                            if is_hovered && ui.input(|i| i.pointer.any_released()) {
+                                let presets = crate::ui::effects_controls::get_all_effect_presets();
+                                if let Some(preset) = presets.iter().find(|p| p.name == effect_name) {
+                                    let effect = (preset.create_fn)(layer.effects.len());
+                                    layer.effects.push(effect);
+                                    project_changed = true;
+                                    app.toasts.info(format!("Applied '{}' to '{}'", effect_name, layer.name));
+                                }
+                                app.dragging_effect = None;
+                            }
+                        }
+
+                        if layer.effects.is_empty() && drag_info.is_none() {
+                            ui.weak("No effects applied. Drag an effect from 'Effects & Presets' tab.");
                         } else {
                             for (e_idx, fx) in layer.effects.iter_mut().enumerate() {
                                 ui.collapsing(format!("fx {} - {}", e_idx + 1, fx.name), |ui| {
                                     ui.checkbox(&mut fx.enabled, "Enabled (fx)");
+                                    // Save individual effect as preset
+                                    if ui.small_button("💾 Save as Preset").clicked() {
+                                        let preset = crate::core::effect_presets::EffectPreset::from_effect(
+                                            fx, fx.name.clone()
+                                        );
+                                        let preset_dir = crate::core::effect_presets::default_preset_dir();
+                                        let _ = std::fs::create_dir_all(&preset_dir);
+                                        let filename = format!("{}.aevfx-preset.json",
+                                            fx.name.replace(' ', "_").to_lowercase());
+                                        let path = preset_dir.join(&filename);
+                                        match preset.save_to_file(&path) {
+                                            Ok(()) => {
+                                                app.toasts.info(format!("Preset saved: {}", filename));
+                                            }
+                                            Err(e) => {
+                                                app.toasts.error(format!("Failed to save preset: {}", e));
+                                            }
+                                        }
+                                    }
                                 });
+                            }
+                            // Load preset button
+                            ui.add_space(4.0);
+                            ui.separator();
+                            if ui.button("📂 Load Preset from File...").clicked() {
+                                if let Some(path) = rfd::FileDialog::new()
+                                    .add_filter("Effect Preset", &["json", "aevfx-preset"])
+                                    .pick_file()
+                                {
+                                    match crate::core::effect_presets::EffectPreset::load_from_file(&path) {
+                                        Ok(preset) => {
+                                            preset.apply_to_layer(layer);
+                                            project_changed = true;
+                                            app.toasts.info(format!("Loaded preset: {}", preset.name));
+                                        }
+                                        Err(e) => {
+                                            app.toasts.error(format!("Failed to load preset: {}", e));
+                                        }
+                                    }
+                                }
+                            }
+                            // Show saved presets from default directory
+                            let preset_dir = crate::core::effect_presets::default_preset_dir();
+                            if preset_dir.is_dir() {
+                                let presets = crate::core::effect_presets::discover_presets_in_dir(&preset_dir);
+                                if !presets.is_empty() {
+                                    ui.collapsing(format!("📦 Saved Presets ({})", presets.len()), |ui| {
+                                        for (name, path) in &presets {
+                                            if ui.selectable_label(false, format!("▶ {}", name)).clicked() {
+                                                match crate::core::effect_presets::EffectPreset::load_from_file(path) {
+                                                    Ok(preset) => {
+                                                        preset.apply_to_layer(layer);
+                                                        project_changed = true;
+                                                        app.toasts.info(format!("Loaded: {}", name));
+                                                    }
+                                                    Err(e) => {
+                                                        app.toasts.error(format!("Failed: {}", e));
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    });
+                                }
                             }
                         }
                     } else { ui.weak("Select a layer."); }
@@ -267,8 +362,24 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                             .collect();
                         if matching.is_empty() { continue; }
                         ui.collapsing(format!("{} ({})", cat, matching.len()), |ui| {
-                            for p in matching {
-                                if ui.button(p.button_label).clicked() {
+                            for (pi, p) in matching.iter().enumerate() {
+                                let preset_idx = presets.iter().position(|pp| std::ptr::eq(pp, *p)).unwrap_or(pi);
+                                let resp = ui.add(egui::Button::new(
+                                    egui::RichText::new(format!("⠿ {}", p.button_label)).small()
+                                ).min_size(egui::vec2(ui.available_width(), 20.0)));
+
+                                // Drag detection
+                                if resp.drag_started() {
+                                    app.dragging_effect = Some((p.name.to_string(), preset_idx));
+                                }
+
+                                // Clear drag state when drag ends (if not applied)
+                                if resp.drag_stopped() {
+                                    app.dragging_effect = None;
+                                }
+
+                                // Click fallback (still works for quick apply)
+                                if resp.clicked() {
                                     let comp = temp_project.active_composition_mut();
                                     if idx < comp.layers.len() {
                                         let effect = (p.create_fn)(comp.layers[idx].effects.len());
@@ -276,6 +387,17 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                                         project_changed = true;
                                     }
                                 }
+
+                                // Visual drag feedback
+                                if resp.dragged() {
+                                    ui.painter().rect_filled(
+                                        resp.rect, 2.0,
+                                        egui::Color32::from_rgba_premultiplied(0, 120, 255, 40)
+                                    );
+                                }
+
+                                // Tooltip with drag hint
+                                resp.on_hover_text("Click to apply • Drag to layer in timeline");
                             }
                         });
                     }

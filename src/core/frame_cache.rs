@@ -313,12 +313,10 @@ mod tests {
 #[cfg(test)]
 mod memory_bound_tests {
     use super::*;
-    use std::sync::atomic::{AtomicU64, Ordering};
+    use std::sync::atomic::Ordering;
 
     /// Isolated version bump for tests: uses a test-local counter so we don't
     /// disturb the global version used by other caches.
-    
-
     fn with_isolated_version<F: FnOnce()>(f: F) {
         let saved = GLOBAL_CACHE_VERSION.load(Ordering::SeqCst);
         f();

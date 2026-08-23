@@ -1123,9 +1123,10 @@ pub fn render_frame_to_pixels(comp: &Composition, frame: u32, width: u32, height
         }
 
         // Phase 2.6: 3D light shading for 3D layers.
-        // Lambertian diffuse from each active light in the composition.
+        // Phong shading with material properties (ambient, diffuse, specular, emission).
         if layer.is_3d {
-            let mut shade = 0.35f32; // ambient floor
+            let mat = &layer.material;
+            let mut shade = mat.ambient; // ambient floor from material
             for light in &comp.lights {
                 let lpos = light.position.evaluate(effective_frame);
                 let lx = cx - lpos[0];
@@ -1135,9 +1136,23 @@ pub fn render_frame_to_pixels(comp: &Composition, frame: u32, width: u32, height
                 // N·L with flat normal facing the camera (+z)
                 let ndotl = (lz / dist).max(0.0);
                 let attenuation = (light.intensity / 100.0) / (1.0 + dist / 1000.0);
-                shade += ndotl * attenuation;
+                // Diffuse component
+                shade += ndotl * attenuation * mat.diffuse;
+                // Specular component (Blinn-Phong approximation)
+                if mat.specular > 0.01 {
+                    // Half-vector between view direction (+z) and light direction
+                    let hx = 0.0;
+                    let hy = 0.0;
+                    let hz = 1.0 + lz / dist;
+                    let h_len = (hx * hx + hy * hy + hz * hz).sqrt().max(0.001);
+                    let ndoth = (hz / h_len).max(0.0);
+                    let spec = ndoth.powf(mat.specular_exponent) * attenuation * mat.specular;
+                    shade += spec;
+                }
             }
-            shade = shade.clamp(0.0, 2.0);
+            // Emission adds constant self-illumination
+            shade += mat.emission;
+            shade = shade.clamp(0.0, 3.0);
             if (shade - 1.0).abs() > 0.01 {
                 for px_chunk in layer_buf.chunks_exact_mut(4) {
                     px_chunk[0] = ((px_chunk[0] as f32 * shade).min(255.0)) as u8;
@@ -1701,8 +1716,6 @@ mod tests {
 
     #[test]
     fn test_precomp_respects_layer_scale() {
-        use crate::core::timeline::ShapeType;
-
         // Sub-comp: full-frame red solid
         let mut sub = Composition::new("sub".to_string(), "Sub".to_string(), 64, 64, 30, 30);
         let solid = Layer::new("bg".to_string(), "Red".to_string(), LayerType::Solid { color: [1.0, 0.0, 0.0, 1.0] }, 30);

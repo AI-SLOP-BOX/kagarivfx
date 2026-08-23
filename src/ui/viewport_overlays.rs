@@ -2,6 +2,7 @@
 
 use eframe::egui;
 use crate::AfterEffectsApp;
+use crate::ui::theme::colors;
 
 pub fn draw_viewport_overlays(
     ui: &mut egui::Ui,
@@ -19,7 +20,7 @@ pub fn draw_viewport_overlays(
     // ── Grid Overlay ──
     if app.show_grid {
         let grid_step = draw_w / 16.0;
-        let grid_stroke = egui::Stroke::new(0.5, egui::Color32::from_rgba_unmultiplied(255, 255, 255, 30));
+        let grid_stroke = egui::Stroke::new(0.5, colors::GRID_LINE);
         let mut gx = origin_x + grid_step;
         while gx < origin_x + draw_w {
             ui.painter().line_segment([egui::pos2(gx, origin_y), egui::pos2(gx, origin_y + draw_h)], grid_stroke);
@@ -39,7 +40,7 @@ pub fn draw_viewport_overlays(
             let layer = &comp.layers[idx];
             if let Some(kfs) = layer.transform.position.keyframes() {
                 if kfs.len() >= 2 {
-                    let path_stroke = egui::Stroke::new(1.5, egui::Color32::from_rgb(0, 200, 255));
+                    let path_stroke = egui::Stroke::new(1.5, colors::MOTION_PATH);
                     let mut prev_pt = None;
                     for kf in kfs {
                         let pos_x = kf.value[0];
@@ -56,7 +57,7 @@ pub fn draw_viewport_overlays(
                         prev_pt = Some(p);
 
                         // Keyframe Anchor Point Marker (📍)
-                        ui.painter().circle_filled(p, 4.0, egui::Color32::from_rgb(255, 200, 0));
+                        ui.painter().circle_filled(p, 4.0, colors::KEYFRAME_DOT);
                         ui.painter().circle_stroke(p, 4.0, egui::Stroke::new(1.0, egui::Color32::BLACK));
                     }
                 }
@@ -66,7 +67,7 @@ pub fn draw_viewport_overlays(
 
     // ── Action & Title Safe Guides Overlay ──
     if app.show_guides {
-        let guide_stroke = egui::Stroke::new(1.0, egui::Color32::from_rgb(0, 200, 230));
+        let guide_stroke = egui::Stroke::new(1.0, colors::GUIDE_LINE);
         let cx = origin_x + draw_w * 0.5;
         let cy = origin_y + draw_h * 0.5;
 
@@ -89,7 +90,7 @@ pub fn draw_viewport_overlays(
 
     // ── HUD Overlay Badges ──
     let backend_text = if rendered_gpu { "[GPU] WGPU Acceleration" } else { "[CPU] Software Canvas" };
-    let backend_color = if rendered_gpu { egui::Color32::from_rgb(40, 160, 100) } else { egui::Color32::from_rgb(180, 120, 40) };
+    let backend_color = if rendered_gpu { colors::ACCENT_GREEN } else { colors::ACCENT_ORANGE };
     
     // Top Left Performance & FPS HUD Overlay
     let dt = ctx.input(|i| i.stable_dt.max(0.001));
@@ -117,14 +118,14 @@ pub fn draw_viewport_overlays(
         egui::pos2(origin_x + 10.0, origin_y + 10.0),
         egui::vec2(320.0, 24.0),
     );
-    ui.painter().rect_filled(fps_rect, 4.0, egui::Color32::from_rgba_unmultiplied(15, 22, 32, 220));
+    ui.painter().rect_filled(fps_rect, 4.0, colors::HUD_BG);
     let stroke_c = if render_ms > 33.3 {
-        egui::Color32::from_rgb(255, 100, 80) // Red warning for < 30fps
+        colors::FPS_BAD
     } else {
-        egui::Color32::from_rgb(0, 200, 255) // Blue neon
+        colors::FPS_GOOD
     };
     ui.painter().rect_stroke(fps_rect, 4.0, egui::Stroke::new(1.0, stroke_c));
-    ui.painter().text(fps_rect.center(), egui::Align2::CENTER_CENTER, fps_text, egui::FontId::monospace(10.5), egui::Color32::from_rgb(200, 235, 255));
+    ui.painter().text(fps_rect.center(), egui::Align2::CENTER_CENTER, fps_text, egui::FontId::monospace(10.5), colors::HUD_TEXT);
 
     // Top Right Engine Badge
     let badge_rect = egui::Rect::from_min_size(
@@ -153,14 +154,14 @@ pub fn draw_viewport_overlays(
                 egui::pos2(origin_x + 10.0, origin_y + draw_h - 34.0),
                 egui::vec2(status_str.len() as f32 * 6.8 + 20.0, 24.0),
             );
-            ui.painter().rect_filled(status_rect, 4.0, egui::Color32::from_rgba_unmultiplied(15, 20, 30, 220));
-            ui.painter().rect_stroke(status_rect, 4.0, egui::Stroke::new(1.0, egui::Color32::from_rgb(70, 140, 240)));
+            ui.painter().rect_filled(status_rect, 4.0, colors::HUD_BG);
+            ui.painter().rect_stroke(status_rect, 4.0, egui::Stroke::new(1.0, colors::BORDER_ACTIVE));
             ui.painter().text(
                 status_rect.center(),
                 egui::Align2::CENTER_CENTER,
                 status_str,
                 egui::FontId::proportional(11.0),
-                egui::Color32::from_rgb(200, 220, 255),
+                colors::HUD_STATUS_TEXT,
             );
         }
     }
@@ -178,18 +179,18 @@ pub fn draw_viewport_overlays(
 
                 // X-Axis (Red)
                 let x_end = egui::pos2(rx + 65.0, ry);
-                ui.painter().line_segment([center, x_end], egui::Stroke::new(2.5, egui::Color32::from_rgb(240, 70, 70)));
-                ui.painter().text(egui::pos2(x_end.x + 8.0, x_end.y), egui::Align2::LEFT_CENTER, "X", egui::FontId::proportional(12.0), egui::Color32::from_rgb(240, 70, 70));
+                ui.painter().line_segment([center, x_end], egui::Stroke::new(2.5, colors::GIZMO_X));
+                ui.painter().text(egui::pos2(x_end.x + 8.0, x_end.y), egui::Align2::LEFT_CENTER, "X", egui::FontId::proportional(12.0), colors::GIZMO_X);
 
                 // Y-Axis (Green)
                 let y_end = egui::pos2(rx, ry + 65.0);
-                ui.painter().line_segment([center, y_end], egui::Stroke::new(2.5, egui::Color32::from_rgb(60, 220, 80)));
-                ui.painter().text(egui::pos2(y_end.x, y_end.y + 8.0), egui::Align2::CENTER_TOP, "Y", egui::FontId::proportional(12.0), egui::Color32::from_rgb(60, 220, 80));
+                ui.painter().line_segment([center, y_end], egui::Stroke::new(2.5, colors::GIZMO_Y));
+                ui.painter().text(egui::pos2(y_end.x, y_end.y + 8.0), egui::Align2::CENTER_TOP, "Y", egui::FontId::proportional(12.0), colors::GIZMO_Y);
 
                 // Z-Axis (Blue Diagonal)
                 let z_end = egui::pos2(rx - 45.0, ry + 45.0);
-                ui.painter().line_segment([center, z_end], egui::Stroke::new(2.5, egui::Color32::from_rgb(60, 150, 255)));
-                ui.painter().text(egui::pos2(z_end.x - 8.0, z_end.y + 4.0), egui::Align2::RIGHT_TOP, "Z", egui::FontId::proportional(12.0), egui::Color32::from_rgb(60, 150, 255));
+                ui.painter().line_segment([center, z_end], egui::Stroke::new(2.5, colors::GIZMO_Z));
+                ui.painter().text(egui::pos2(z_end.x - 8.0, z_end.y + 4.0), egui::Align2::RIGHT_TOP, "Z", egui::FontId::proportional(12.0), colors::GIZMO_Z);
 
                 // 8-Point Bounding Box Transform Handles
                 let scale = s_layer.transform.scale.evaluate(current_frame);
@@ -207,7 +208,7 @@ pub fn draw_viewport_overlays(
                 ];
 
                 let bbox_rect = egui::Rect::from_center_size(center, egui::vec2(hw * 2.0, hh * 2.0));
-                ui.painter().rect_stroke(bbox_rect, 0.0, egui::Stroke::new(1.5, egui::Color32::from_rgb(0, 180, 255)));
+                ui.painter().rect_stroke(bbox_rect, 0.0, egui::Stroke::new(1.5, colors::BBOX_STROKE));
 
                 let hover_pos = ctx.input(|i| i.pointer.hover_pos());
 
@@ -216,8 +217,8 @@ pub fn draw_viewport_overlays(
                     let is_hovered = dist <= 14.0;
 
                     let h_size = if is_hovered { 12.0 } else { 7.0 };
-                    let fill_c = if is_hovered { egui::Color32::from_rgb(255, 230, 100) } else { egui::Color32::WHITE };
-                    let stroke_c = if is_hovered { egui::Color32::from_rgb(255, 100, 0) } else { egui::Color32::from_rgb(0, 120, 255) };
+                    let fill_c = if is_hovered { colors::HANDLE_HOVER_FILL } else { colors::HANDLE_NORMAL };
+                    let stroke_c = if is_hovered { colors::HANDLE_HOVER_STROKE } else { colors::BORDER_ACTIVE };
 
                     let h_rect = egui::Rect::from_center_size(hp, egui::vec2(h_size, h_size));
                     ui.painter().rect_filled(h_rect, 1.0, fill_c);
@@ -229,10 +230,10 @@ pub fn draw_viewport_overlays(
                 let is_center_hovered = center_dist <= 14.0;
                 let c_radius = if is_center_hovered { 8.0 } else { 5.0 };
 
-                ui.painter().circle_filled(center, c_radius, egui::Color32::from_rgb(255, 215, 0));
+                ui.painter().circle_filled(center, c_radius, colors::CENTER_DOT);
                 ui.painter().circle_stroke(center, c_radius, egui::Stroke::new(1.5, egui::Color32::BLACK));
                 if is_center_hovered {
-                    ui.painter().circle_stroke(center, 30.0, egui::Stroke::new(1.5, egui::Color32::from_rgb(60, 140, 255)));
+                    ui.painter().circle_stroke(center, 30.0, egui::Stroke::new(1.5, colors::CENTER_HOVER_RING));
                 }
 
                 // ── Vector Mask Bezier Tangents & Path Overlay ──
@@ -248,7 +249,7 @@ pub fn draw_viewport_overlays(
                             ui.painter().rect_filled(
                                 egui::Rect::from_center_size(v_pos, egui::vec2(7.0, 7.0)),
                                 1.0,
-                                egui::Color32::from_rgb(255, 200, 0),
+                                colors::KEYFRAME_DOT,
                             );
                             ui.painter().rect_stroke(
                                 egui::Rect::from_center_size(v_pos, egui::vec2(7.0, 7.0)),
@@ -264,14 +265,14 @@ pub fn draw_viewport_overlays(
                     if let Some(ptr) = hover_pos {
                         let hud_pos = egui::pos2(ptr.x + 16.0, ptr.y + 16.0);
                         let hud_rect = egui::Rect::from_min_size(hud_pos, egui::vec2(130.0, 22.0));
-                        ui.painter().rect_filled(hud_rect, 4.0, egui::Color32::from_rgba_unmultiplied(10, 15, 25, 220));
-                        ui.painter().rect_stroke(hud_rect, 4.0, egui::Stroke::new(1.0, egui::Color32::from_rgb(0, 200, 255)));
+                        ui.painter().rect_filled(hud_rect, 4.0, colors::HUD_BG);
+                        ui.painter().rect_stroke(hud_rect, 4.0, egui::Stroke::new(1.0, colors::HUD_STROKE));
                         ui.painter().text(
                             hud_rect.center(),
                             egui::Align2::CENTER_CENTER,
                             format!("Scale: ({:.0}%, {:.0}%)", scale[0], scale[1]),
                             egui::FontId::monospace(10.0),
-                            egui::Color32::from_rgb(200, 240, 255),
+                            colors::HUD_TEXT,
                         );
                     }
                 }
@@ -282,41 +283,41 @@ pub fn draw_viewport_overlays(
                     // Red X-Axis Line
                     ui.painter().line_segment(
                         [center, egui::pos2(center.x + axis_len, center.y)],
-                        egui::Stroke::new(2.5, egui::Color32::from_rgb(255, 60, 80)),
+                        egui::Stroke::new(2.5, colors::GIZMO_X),
                     );
                     ui.painter().text(
                         egui::pos2(center.x + axis_len + 8.0, center.y),
                         egui::Align2::LEFT_CENTER,
                         "X",
                         egui::FontId::monospace(11.0),
-                        egui::Color32::from_rgb(255, 60, 80),
+                        colors::GIZMO_X,
                     );
 
                         // Green Y-Axis Line
                         ui.painter().line_segment(
                             [center, egui::pos2(center.x, center.y - axis_len)],
-                            egui::Stroke::new(2.5, egui::Color32::from_rgb(60, 230, 90)),
+                            egui::Stroke::new(2.5, colors::GIZMO_Y),
                         );
                         ui.painter().text(
                             egui::pos2(center.x, center.y - axis_len - 8.0),
                             egui::Align2::CENTER_BOTTOM,
                             "Y",
                             egui::FontId::monospace(11.0),
-                            egui::Color32::from_rgb(60, 230, 90),
+                            colors::GIZMO_Y,
                         );
 
                         // Blue Z-Axis Line (Diagonal Depth)
                         let z_end = egui::pos2(center.x - axis_len * 0.6, center.y + axis_len * 0.6);
                         ui.painter().line_segment(
                             [center, z_end],
-                            egui::Stroke::new(2.5, egui::Color32::from_rgb(40, 160, 255)),
+                            egui::Stroke::new(2.5, colors::GIZMO_Z),
                         );
                         ui.painter().text(
                             egui::pos2(z_end.x - 8.0, z_end.y + 4.0),
                             egui::Align2::RIGHT_TOP,
                             "Z",
                             egui::FontId::monospace(11.0),
-                            egui::Color32::from_rgb(40, 160, 255),
+                            colors::GIZMO_Z,
                         );
                     }
                 }
@@ -331,23 +332,23 @@ pub fn draw_viewport_overlays(
 
         ui.painter().line_segment(
             [egui::pos2(wipe_x, origin_y), egui::pos2(wipe_x, origin_y + draw_h)],
-            egui::Stroke::new(2.5, egui::Color32::from_rgb(100, 220, 255)),
+            egui::Stroke::new(2.5, colors::ACCENT_CYAN),
         );
-        ui.painter().circle_filled(handle_center, 10.0, egui::Color32::from_rgb(100, 220, 255));
+        ui.painter().circle_filled(handle_center, 10.0, colors::ACCENT_CYAN);
         ui.painter().circle_stroke(handle_center, 10.0, egui::Stroke::new(1.5, egui::Color32::WHITE));
         ui.painter().text(
             egui::pos2(wipe_x - 15.0, origin_y + 15.0),
             egui::Align2::RIGHT_TOP,
             "[Snap A]",
             egui::FontId::proportional(11.0),
-            egui::Color32::from_rgb(100, 220, 255),
+            colors::ACCENT_CYAN,
         );
         ui.painter().text(
             egui::pos2(wipe_x + 15.0, origin_y + 15.0),
             egui::Align2::LEFT_TOP,
             "[Live Frame]",
             egui::FontId::proportional(11.0),
-            egui::Color32::from_rgb(255, 200, 100),
+            colors::ACCENT_ORANGE,
         );
 
         let handle_rect = egui::Rect::from_center_size(handle_center, egui::vec2(24.0, draw_h.max(24.0)));

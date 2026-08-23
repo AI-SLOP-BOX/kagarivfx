@@ -1,5 +1,6 @@
 use eframe::egui;
 use crate::AfterEffectsApp;
+use crate::ui::theme::colors;
 
 pub fn draw_comp_settings_dialog(app: &mut AfterEffectsApp, ctx: &egui::Context) {
     if !app.show_comp_settings {
@@ -71,7 +72,7 @@ pub fn draw_comp_settings_dialog(app: &mut AfterEffectsApp, ctx: &egui::Context)
 
             ui.add_space(6.0);
             ui.group(|ui| {
-                ui.label(egui::RichText::new("📱 One-Tap Smart SNS Reframer").strong().color(egui::Color32::from_rgb(0, 200, 255)));
+                ui.label(egui::RichText::new("📱 One-Tap Smart SNS Reframer").strong().color(colors::ACCENT_CYAN));
                 ui.small("Auto-remap layer positions to new Aspect Ratio:");
                 ui.horizontal(|ui| {
                     if ui.button("📱 Shorts 9:16").on_hover_text("Vertical (1080 x 1920) for TikTok/Reels/Shorts").clicked() {

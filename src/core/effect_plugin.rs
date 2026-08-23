@@ -194,6 +194,19 @@ impl RenderEffectPlugin for EnumEffectPlugin {
             EffectType::CompoundBlur { .. } => "Compound Blur",
             EffectType::Minimax { .. } => "Minimax",
             EffectType::ShiftChannels { .. } => "Shift Channels",
+            EffectType::WaveWarp { .. } => "Wave Warp",
+            EffectType::CcLens { .. } => "CC Lens",
+            EffectType::PolarCoordinates { .. } => "Polar Coordinates",
+            EffectType::OpticsCompensation { .. } => "Optics Compensation",
+            EffectType::ColorBalance { .. } => "Color Balance",
+            EffectType::ChannelMixer { .. } => "Channel Mixer",
+            EffectType::LightSweep { .. } => "CC Light Sweep",
+            EffectType::RadialFastBlur { .. } => "CC Radial Fast Blur",
+            EffectType::BendIt { .. } => "CC Bend It",
+            EffectType::Tiler { .. } => "CC Tiler",
+            EffectType::Tritone { .. } => "Tritone",
+            EffectType::MatteChoker { .. } => "Matte Choker",
+            EffectType::VenetianBlinds { .. } => "Venetian Blinds",
         }
     }
 
@@ -233,6 +246,19 @@ impl RenderEffectPlugin for EnumEffectPlugin {
             EffectType::CompoundBlur { .. } => "compound_blur",
             EffectType::Minimax { .. } => "minimax",
             EffectType::ShiftChannels { .. } => "shift_channels",
+            EffectType::WaveWarp { .. } => "wave_warp",
+            EffectType::CcLens { .. } => "cc_lens",
+            EffectType::PolarCoordinates { .. } => "polar_coordinates",
+            EffectType::OpticsCompensation { .. } => "optics_compensation",
+            EffectType::ColorBalance { .. } => "color_balance",
+            EffectType::ChannelMixer { .. } => "channel_mixer",
+            EffectType::LightSweep { .. } => "light_sweep",
+            EffectType::RadialFastBlur { .. } => "radial_fast_blur",
+            EffectType::BendIt { .. } => "bend_it",
+            EffectType::Tiler { .. } => "tiler",
+            EffectType::Tritone { .. } => "tritone",
+            EffectType::MatteChoker { .. } => "matte_choker",
+            EffectType::VenetianBlinds { .. } => "venetian_blinds",
         }
     }
 

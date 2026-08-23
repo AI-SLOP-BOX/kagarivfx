@@ -3,6 +3,7 @@ use std::sync::Mutex;
 use std::time::Instant;
 
 use crate::AfterEffectsApp;
+use crate::ui::theme::colors;
 
 const START_TIME_ID: &str = "render_queue_export_start";
 const CANCEL_CONFIRM_ID: &str = "render_queue_cancel_confirm";
@@ -84,9 +85,9 @@ pub fn draw_render_queue_panel(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
     let path_id = egui::Id::new("render_queue_output_path");
 
     let frame = egui::Frame::none()
-        .fill(egui::Color32::from_rgb(20, 24, 32))
+        .fill(colors::BG_DARK)
         .inner_margin(egui::Margin::same(8.0))
-        .stroke(egui::Stroke::new(1.0, egui::Color32::from_rgb(45, 55, 75)));
+        .stroke(egui::Stroke::new(1.0, colors::BORDER_SUBTLE));
 
     frame.show(ui, |ui| {
         let (status_text, status_color) = if app.is_exporting {

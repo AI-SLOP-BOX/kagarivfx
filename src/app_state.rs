@@ -4,6 +4,25 @@ use std::sync::mpsc::Receiver;
 use crate::{ExportEvent, TrackerEvent, ViewportMode};
 use crate::core::timeline::Project;
 
+/// Mixer channel state for the audio mixer panel.
+#[derive(Debug, Clone, Copy)]
+pub struct MixerChannel {
+    /// Gain in dB (-60..+12)
+    pub gain_db: f32,
+    /// Pan position (-100 left .. 0 center .. +100 right)
+    pub pan: f32,
+    /// Mute toggle — when true, this channel is silenced in the mix
+    pub mute: bool,
+    /// Solo toggle — when any channel is soloed, only soloed channels are heard
+    pub solo: bool,
+}
+
+impl Default for MixerChannel {
+    fn default() -> Self {
+        Self { gain_db: 0.0, pan: 0.0, mute: false, solo: false }
+    }
+}
+
 /// Playback domain state: transport, current frame, work area bounds, volume.
 #[derive(Debug, Clone)]
 pub struct PlaybackDomainState {
@@ -165,6 +184,9 @@ pub struct AfterEffectsApp {
     /// Selected keyframes: (layer_idx, property key, frame).
     pub selected_keyframes: std::collections::HashSet<(usize, String, u32)>,
     pub drag_tx: Option<DragTransaction>,
+    /// Effect being dragged from the Effects & Presets library.
+    /// Stores (effect_name, create_fn_index) while dragging, None otherwise.
+    pub dragging_effect: Option<(String, usize)>,
     #[cfg(feature = "wgpu")]
     pub renderer: Option<crate::core::renderer::WgpuRenderer>,
     #[cfg(feature = "wgpu")]
@@ -248,7 +270,7 @@ pub struct AfterEffectsApp {
     pub effects_search_query: String,
     pub project_search_query: String,
     pub cc_libraries_search: String,
-    pub audio_mixer_channels: Vec<(f32, f32)>,
+    pub audio_mixer_channels: Vec<MixerChannel>,
     /// Synced audio playback for AV preview (gui builds with an audio device).
     #[cfg(feature = "gui")]
     pub audio_playback: Option<crate::core::audio_playback::AudioPlayback>,
@@ -294,6 +316,7 @@ impl Default for AfterEffectsApp {
             selected_layers: vec![1].into_iter().collect(),
             selected_keyframes: std::collections::HashSet::new(),
             drag_tx: None,
+            dragging_effect: None,
             #[cfg(feature = "wgpu")]
             renderer: None,
             #[cfg(feature = "wgpu")]
@@ -561,9 +584,9 @@ impl eframe::App for AfterEffectsApp {
         crate::ui::timeline::draw(self, ctx, &mut current_frame, total_frames);
 
         let status_frame = egui::Frame::none()
-            .fill(egui::Color32::from_rgb(20, 20, 20))
+            .fill(crate::ui::theme::colors::BG_DARKEST)
             .inner_margin(egui::Margin::symmetric(8.0, 3.0))
-            .stroke(egui::Stroke::new(1.0, egui::Color32::from_rgb(38, 38, 38)));
+            .stroke(egui::Stroke::new(1.0, crate::ui::theme::colors::BORDER_SUBTLE));
 
         egui::TopBottomPanel::bottom("ae_status_bar")
             .frame(status_frame)
@@ -572,9 +595,9 @@ impl eframe::App for AfterEffectsApp {
                 ui.horizontal(|ui| {
                     ui.style_mut().spacing.item_spacing.x = 6.0;
                     let (gpu_label, gpu_color) = if self.gpu_rendered {
-                        ("● Metal GPU Render Engine", egui::Color32::from_rgb(0, 200, 120))
+                        ("● Metal GPU Render Engine", crate::ui::theme::colors::ACCENT_GREEN)
                     } else {
-                        ("○ CPU Software Renderer", egui::Color32::from_rgb(180, 140, 50))
+                        ("○ CPU Software Renderer", crate::ui::theme::colors::ACCENT_ORANGE)
                     };
                     ui.label(egui::RichText::new(gpu_label).small().color(gpu_color));
                     ui.separator();
@@ -585,14 +608,14 @@ impl eframe::App for AfterEffectsApp {
                         "TC: {:02}:{:02}:{:02}:{:02}",
                         cf / (fps * 3600), (cf / fps) / 60 % 60,
                         (cf / fps) % 60, cf % fps
-                    )).monospace().small().color(egui::Color32::from_rgb(255, 234, 0)));
+                    )).monospace().small().color(crate::ui::theme::colors::ACCENT_YELLOW));
                     ui.separator();
-                    ui.label(egui::RichText::new(format!("Frame: {} / {}", cf, total_frames)).small().color(egui::Color32::from_gray(200)));
+                    ui.label(egui::RichText::new(format!("Frame: {} / {}", cf, total_frames)).small().color(crate::ui::theme::colors::TEXT_SECONDARY));
                     ui.separator();
-                    ui.label(egui::RichText::new("16-bpc | Rec.709").small().color(egui::Color32::from_gray(180)));
+                    ui.label(egui::RichText::new("16-bpc | Rec.709").small().color(crate::ui::theme::colors::TEXT_MUTED));
                     ui.separator();
                     let cached_cnt = (0..total_frames).filter(|&f| self.frame_cache.is_cached(f)).count();
-                    ui.label(egui::RichText::new(format!("RAM Preview: {}/{} frames cached", cached_cnt, total_frames)).small().color(egui::Color32::from_gray(180)));
+                    ui.label(egui::RichText::new(format!("RAM Preview: {}/{} frames cached", cached_cnt, total_frames)).small().color(crate::ui::theme::colors::TEXT_MUTED));
                     ui.separator();
                     // Selection summary: layers + keyframes
                     let kf_count = self.selected_keyframes.len();
@@ -601,13 +624,13 @@ impl eframe::App for AfterEffectsApp {
                         ui.label(
                             egui::RichText::new(format!("{} keyframes selected (, . move | Del delete | Cmd+C/V)", kf_count))
                                 .small()
-                                .color(egui::Color32::from_rgb(255, 200, 80)),
+                                .color(crate::ui::theme::colors::ACCENT_ORANGE),
                         );
                     } else if layer_count > 0 {
                         ui.label(
                             egui::RichText::new(format!("{} layer{} selected", layer_count, if layer_count > 1 { "s" } else { "" }))
                                 .small()
-                                .color(egui::Color32::from_rgb(0, 180, 255)),
+                                .color(crate::ui::theme::colors::ACCENT_BLUE),
                         );
                     }
                     let pointer_pos = ctx.pointer_hover_pos().unwrap_or(egui::pos2(960.0, 540.0));

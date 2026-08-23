@@ -21,10 +21,11 @@ pub enum ActiveTool {
 
 #[allow(dead_code)]
 pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
+    use crate::ui::theme::colors;
     let frame = egui::Frame::none()
-        .fill(egui::Color32::from_rgb(26, 26, 26))
+        .fill(colors::BG_DARK)
         .inner_margin(egui::Margin::symmetric(8.0, 4.0))
-        .stroke(egui::Stroke::new(1.0, egui::Color32::from_rgb(45, 45, 45)));
+        .stroke(egui::Stroke::new(1.0, colors::BORDER_SUBTLE));
 
     egui::TopBottomPanel::top("ae_toolbar")
         .frame(frame)
@@ -60,11 +61,11 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
 
                 for (tool, svg, tooltip) in tools {
                     let is_selected = app.active_tool == tool;
-                    let accent = egui::Color32::from_rgb(0, 160, 240);
-                    let tint = if is_selected { accent } else { egui::Color32::from_rgb(190, 190, 190) };
+                    let accent = colors::ACCENT_BLUE;
+                    let tint = if is_selected { accent } else { colors::TEXT_SECONDARY };
 
                     let (rect, resp) = ui.allocate_exact_size(egui::vec2(24.0, 24.0), egui::Sense::click());
-                    let fill = if is_selected { egui::Color32::from_rgb(35, 48, 66) } else { egui::Color32::TRANSPARENT };
+                    let fill = if is_selected { colors::BG_HOVER } else { egui::Color32::TRANSPARENT };
                     ui.painter().rect_filled(rect, 4.0, fill);
                     if is_selected {
                         ui.painter().rect_stroke(rect, 4.0, egui::Stroke::new(1.0, accent));
@@ -99,7 +100,7 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
                 ui.add_space(4.0);
 
                 // AE Workspace Layout Switcher Pill Buttons
-                ui.label(egui::RichText::new("Workspace:").small().color(egui::Color32::from_gray(160)));
+                ui.label(egui::RichText::new("Workspace:").small().color(colors::TEXT_SECONDARY));
                 for (name, l_idx, r_idx) in [
                     ("Default", 0, 0),
                     ("Learn", 0, 4),
@@ -122,7 +123,7 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
                 crate::ui::align_hud::draw_alignment_hud(app, ui);
 
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    if ui.button(egui::RichText::new("🚀 Render Queue (Cmd+M)").strong().color(egui::Color32::from_rgb(255, 200, 80)))
+                    if ui.button(egui::RichText::new("🚀 Render Queue (Cmd+M)").strong().color(colors::ACCENT_YELLOW))
                         .clicked()
                     {
                         app.show_export_dialog = true;

@@ -140,7 +140,7 @@ mod tests {
     /// 8x2 image: left half black column marker at x=0, right half white.
     fn marker_image() -> Vec<u8> {
         let mut v = Vec::new();
-        for y in 0..2u32 {
+        for _y in 0..2u32 {
             for x in 0..8u32 {
                 let c = if x == 0 { 0 } else { 255 };
                 v.extend_from_slice(&[c, c, c, 255]);
@@ -168,10 +168,10 @@ mod tests {
         };
         let out = apply_displacement_map(&img, &refmap, 8, 2, &options);
         // Destination x=4 samples source x≈8 → clamped to edge (white).
-        let px4 = &out[(0 * 8 + 4) * 4..(0 * 8 + 4) * 4 + 3];
+        let px4 = &out[4 * 4..4 * 4 + 3];
         assert!(px4.iter().all(|&c| c == 255), "edge clamp fills with white");
         // Destination x=7 also samples the clamped right edge.
-        let px7 = &out[(0 * 8 + 7) * 4..(0 * 8 + 7) * 4 + 3];
+        let px7 = &out[7 * 4..7 * 4 + 3];
         assert!(px7.iter().all(|&c| c == 255));
     }
 
@@ -192,7 +192,7 @@ mod tests {
         };
         let out = apply_displacement_map(&img, &refmap, 8, 2, &options);
         // Destination x=4 wraps to source x=0 → black marker reappears.
-        let px4 = out[(0 * 8 + 4) * 4];
+        let px4 = out[4 * 4];
         assert_eq!(px4, 0, "wrapped sample must show the black marker");
     }
 

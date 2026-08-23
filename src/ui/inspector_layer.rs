@@ -177,6 +177,47 @@ pub fn draw_layer_transforms(
                         *project_changed = true;
                     }
                 });
+
+                // ── 3D Material Options ──
+                ui.separator();
+                ui.label(egui::RichText::new("🎨 Material Options").small().strong().color(egui::Color32::from_rgb(255, 200, 0)));
+
+                ui.horizontal(|ui| {
+                    ui.label("Ambient:");
+                    if ui.add(egui::Slider::new(&mut layer.material.ambient, 0.0..=1.0).step_by(0.01)).changed() {
+                        *project_changed = true;
+                    }
+                });
+                ui.horizontal(|ui| {
+                    ui.label("Diffuse:");
+                    if ui.add(egui::Slider::new(&mut layer.material.diffuse, 0.0..=1.0).step_by(0.01)).changed() {
+                        *project_changed = true;
+                    }
+                });
+                ui.horizontal(|ui| {
+                    ui.label("Specular:");
+                    if ui.add(egui::Slider::new(&mut layer.material.specular, 0.0..=1.0).step_by(0.01)).changed() {
+                        *project_changed = true;
+                    }
+                });
+                ui.horizontal(|ui| {
+                    ui.label("Specular Exp:");
+                    if ui.add(egui::DragValue::new(&mut layer.material.specular_exponent).speed(1.0).range(1.0..=256.0)).changed() {
+                        *project_changed = true;
+                    }
+                });
+                ui.horizontal(|ui| {
+                    ui.label("Emission:");
+                    if ui.add(egui::Slider::new(&mut layer.material.emission, 0.0..=1.0).step_by(0.01)).changed() {
+                        *project_changed = true;
+                    }
+                });
+                ui.horizontal(|ui| {
+                    ui.label("Metalness:");
+                    if ui.add(egui::Slider::new(&mut layer.material.metalness, 0.0..=1.0).step_by(0.01)).changed() {
+                        *project_changed = true;
+                    }
+                });
             }
         }
 

@@ -1,5 +1,6 @@
 use eframe::egui;
 use crate::AfterEffectsApp;
+use crate::ui::theme::colors;
 
 /// Startup crash-recovery prompt: offers to restore the latest autosave snapshot.
 pub fn draw_recovery_dialog(app: &mut AfterEffectsApp, ctx: &egui::Context) {
@@ -15,7 +16,7 @@ pub fn draw_recovery_dialog(app: &mut AfterEffectsApp, ctx: &egui::Context) {
         .default_width(380.0)
         .show(ctx, |ui| {
             ui.horizontal(|ui| {
-                ui.label(egui::RichText::new("⚠").size(28.0).color(egui::Color32::from_rgb(255, 190, 60)));
+                ui.label(egui::RichText::new("⚠").size(28.0).color(colors::ACCENT_ORANGE));
                 ui.vertical(|ui| {
                     ui.label(egui::RichText::new("前回のセッションが異常終了した可能性があります").strong());
                     ui.label("リカバリースナップショットが見つかりました。");

@@ -1,5 +1,6 @@
 use eframe::egui;
 use crate::AfterEffectsApp;
+use crate::ui::theme::colors;
 
 pub fn draw_audio_panel(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
     ui.heading("Audio Levels & Panning");
@@ -58,7 +59,7 @@ pub fn draw_audio_panel(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
 
         ui.add_space(8.0);
         ui.separator();
-        ui.label(egui::RichText::new("✨ Audio-to-Motion Reactive Bind").strong().color(egui::Color32::from_rgb(0, 200, 255)));
+        ui.label(egui::RichText::new("✨ Audio-to-Motion Reactive Bind").strong().color(colors::ACCENT_CYAN));
         ui.horizontal(|ui| {
             if ui.button("🎵 Bind to Scale (Kick)").on_hover_text("Pulse Scale on audio bass peaks").clicked() {
                 let mut temp_proj = app.history.current().clone();

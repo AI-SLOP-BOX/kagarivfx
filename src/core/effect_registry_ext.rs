@@ -370,9 +370,9 @@ mod tests {
     fn test_serde_roundtrip_preserves_params() {
         for e in sample_effects() {
             let json = serde_json::to_string(&e).unwrap_or_default();
-            let back: ExtEffect = serde_json::from_str(&json).unwrap_or_else(|_| {
-                // Fall back to a sentinel that will fail the equality check below.
-                ExtEffect::BendIt { top_offset: f32::NAN, bottom_offset: 0.0 }
+            let back: ExtEffect = serde_json::from_str(&json).unwrap_or(ExtEffect::BendIt {
+                top_offset: f32::NAN,
+                bottom_offset: 0.0,
             });
             assert_eq!(&back, &e, "{} roundtrip mismatch", e.type_id());
         }

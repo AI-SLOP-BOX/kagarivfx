@@ -611,7 +611,18 @@ pub struct Camera3D {
     pub focus_distance: f32,
     pub aperture: f32,
     pub transform: Transform3D,
+    /// Depth of Field toggle
+    #[serde(default)]
+    pub dof_enabled: bool,
+    /// Maximum blur radius in pixels for out-of-focus areas (1–64)
+    #[serde(default = "default_dof_max_blur")]
+    pub dof_max_blur: f32,
+    /// Iris shape: 0=circle, 3=triangle, 5=pentagon, 6=hexagon, 8=octagon
+    #[serde(default)]
+    pub dof_iris_sides: u32,
 }
+
+fn default_dof_max_blur() -> f32 { 16.0 }
 
 impl Default for Camera3D {
     fn default() -> Self {
@@ -622,6 +633,40 @@ impl Default for Camera3D {
             focus_distance: 1000.0,
             aperture: 2.8,
             transform: Transform3D::default(),
+            dof_enabled: false,
+            dof_max_blur: 16.0,
+            dof_iris_sides: 0,
+        }
+    }
+}
+
+// ─── 3D Material Options (AE-style material properties) ─────────────────────
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MaterialOptions {
+    /// Ambient light contribution (0.0–1.0). Default 0.3.
+    pub ambient: f32,
+    /// Diffuse (Lambertian) reflection intensity (0.0–1.0). Default 0.8.
+    pub diffuse: f32,
+    /// Specular highlight intensity (0.0–1.0). Default 0.5.
+    pub specular: f32,
+    /// Specular highlight sharpness / exponent (1–256). Higher = tighter highlight.
+    pub specular_exponent: f32,
+    /// Emissive self-illumination (0.0–1.0). Default 0.0.
+    pub emission: f32,
+    /// Metalness for PBR-like shading (0.0 = dielectric, 1.0 = metal). Default 0.0.
+    pub metalness: f32,
+}
+
+impl Default for MaterialOptions {
+    fn default() -> Self {
+        Self {
+            ambient: 0.3,
+            diffuse: 0.8,
+            specular: 0.5,
+            specular_exponent: 32.0,
+            emission: 0.0,
+            metalness: 0.0,
         }
     }
 }
@@ -798,6 +843,71 @@ pub enum EffectType {
         take_blue: Animatable<f32>,
         take_alpha: Animatable<f32>,
     },
+    // ── Effects migrated from ExtEffect (effect_registry_ext) ──
+    WaveWarp {
+        wave_height: Animatable<f32>,
+        wave_width: Animatable<f32>,
+        speed: Animatable<f32>,
+        direction_deg: Animatable<f32>,
+        wave_type: u8,
+        pinning: u8,
+    },
+    CcLens {
+        convergence: Animatable<f32>,
+        zoom: Animatable<f32>,
+    },
+    PolarCoordinates {
+        to_polar: bool,
+        interpolation: Animatable<f32>,
+    },
+    OpticsCompensation {
+        field_of_view_deg: Animatable<f32>,
+        reverse: bool,
+        zoom: Animatable<f32>,
+    },
+    ColorBalance {
+        shadows: [f32; 3],
+        midtones: [f32; 3],
+        highlights: [f32; 3],
+        preserve_luminosity: bool,
+    },
+    ChannelMixer {
+        matrix: [[f32; 3]; 3],
+        monochrome: bool,
+    },
+    LightSweep {
+        direction_deg: Animatable<f32>,
+        center: Animatable<f32>,
+        width: Animatable<f32>,
+        sweep_intensity: Animatable<f32>,
+        edge_intensity: Animatable<f32>,
+    },
+    RadialFastBlur {
+        amount: Animatable<f32>,
+        samples: u32,
+    },
+    BendIt {
+        top_offset: Animatable<f32>,
+        bottom_offset: Animatable<f32>,
+    },
+    Tiler {
+        scale_percent: Animatable<f32>,
+        mirror: bool,
+    },
+    // ── Effects from ae_effects_pack not yet wired ──
+    Tritone {
+        shadow_color: Animatable<[f32; 3]>,
+        mid_color: Animatable<[f32; 3]>,
+        highlight_color: Animatable<[f32; 3]>,
+    },
+    MatteChoker {
+        choke_amount: Animatable<f32>,
+        gray_level: Animatable<f32>,
+    },
+    VenetianBlinds {
+        completion: Animatable<f32>,
+        width: Animatable<f32>,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -906,6 +1016,9 @@ pub struct Layer {
     pub is_3d: bool,
     pub transform_3d: Transform3D,
     
+    #[serde(default)]
+    pub material: MaterialOptions,
+
     // ── AE Blend Mode ──
     pub blend_mode: BlendMode,
 
@@ -968,6 +1081,7 @@ impl Layer {
             trackers: Vec::new(),
             is_3d: false,
             transform_3d: Transform3D::default(),
+            material: MaterialOptions::default(),
             blend_mode: BlendMode::Normal,
             is_adjustment_layer: is_adj,
             is_guide_layer: false,

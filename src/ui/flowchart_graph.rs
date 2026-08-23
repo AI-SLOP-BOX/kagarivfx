@@ -1,5 +1,6 @@
 use eframe::egui;
 use crate::core::timeline::{Composition, LayerType};
+use crate::ui::theme::colors;
 
 
 
@@ -12,7 +13,7 @@ pub fn draw_node_graph_panel(
 ) {
     ui.group(|ui: &mut egui::Ui| {
         ui.horizontal(|ui: &mut egui::Ui| {
-            ui.label(egui::RichText::new("🕸 Hybrid Node Graph View").strong().color(egui::Color32::from_rgb(0, 200, 255)));
+            ui.label(egui::RichText::new("🕸 Hybrid Node Graph View").strong().color(colors::ACCENT_CYAN));
             ui.weak("— Visual Pipeline & Layer Dependencies");
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui: &mut egui::Ui| {
                 if ui.button("❌ Close Node View (Tab)").clicked() {
@@ -28,15 +29,15 @@ pub fn draw_node_graph_panel(
         );
 
         // Draw Dark Canvas Grid
-        ui.painter().rect_filled(rect, 4.0, egui::Color32::from_rgb(20, 24, 30));
-        ui.painter().rect_stroke(rect, 4.0, egui::Stroke::new(1.0, egui::Color32::from_rgb(45, 55, 70)));
+        ui.painter().rect_filled(rect, 4.0, colors::BG_DEEPEST);
+        ui.painter().rect_stroke(rect, 4.0, egui::Stroke::new(1.0, colors::BORDER_MEDIUM));
 
         let grid_size = 20.0;
         let mut gx = rect.left();
         while gx < rect.right() {
             ui.painter().line_segment(
                 [egui::pos2(gx, rect.top()), egui::pos2(gx, rect.bottom())],
-                egui::Stroke::new(0.5, egui::Color32::from_rgba_unmultiplied(255, 255, 255, 12)),
+                egui::Stroke::new(0.5, colors::GRID_LINE),
             );
             gx += grid_size;
         }
@@ -49,7 +50,7 @@ pub fn draw_node_graph_panel(
                 egui::Align2::CENTER_CENTER,
                 "No layers in active composition",
                 egui::FontId::proportional(12.0),
-                egui::Color32::from_gray(120),
+                colors::TEXT_MUTED,
             );
             return;
         }
@@ -94,7 +95,7 @@ pub fn draw_node_graph_panel(
                     }
 
                     for win in wire_pts.windows(2) {
-                        ui.painter().line_segment([win[0], win[1]], egui::Stroke::new(2.0, egui::Color32::from_rgb(0, 160, 255)));
+                        ui.painter().line_segment([win[0], win[1]], egui::Stroke::new(2.0, colors::ACCENT_BLUE));
                     }
                 }
             }
@@ -109,15 +110,15 @@ pub fn draw_node_graph_panel(
             let node_rect = egui::Rect::from_min_size(pos, egui::vec2(node_w, node_h));
 
             let bg_c = if is_selected {
-                egui::Color32::from_rgb(0, 110, 200)
+                colors::BG_ACTIVE
             } else {
-                egui::Color32::from_rgb(32, 38, 48)
+                colors::BG_DARK
             };
 
             let stroke_c = if is_selected {
-                egui::Color32::from_rgb(100, 200, 255)
+                colors::ACCENT_CYAN
             } else {
-                egui::Color32::from_rgb(60, 75, 95)
+                colors::BORDER_STRONG
             };
 
             ui.painter().rect_filled(node_rect, 4.0, bg_c);
@@ -150,7 +151,7 @@ pub fn draw_node_graph_panel(
                 egui::Align2::LEFT_CENTER,
                 title_text,
                 egui::FontId::proportional(11.0),
-                if is_selected { egui::Color32::WHITE } else { egui::Color32::from_gray(210) },
+                if is_selected { colors::HANDLE_NORMAL } else { colors::TEXT_PRIMARY },
             );
 
             // Handle Node Click Selection

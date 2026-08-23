@@ -2,6 +2,7 @@ use eframe::egui;
 use crate::core::property::Animatable;
 use crate::core::keyframe::{Keyframe, InterpolationType, BezierControlPoint};
 use crate::core::timeline::Expression;
+use crate::ui::theme::colors;
 
 pub fn draw_easy_ease_button<T: Clone>(ui: &mut egui::Ui, property: &mut Animatable<T>, project_changed: &mut bool) {
     ui.horizontal(|ui| {
@@ -43,7 +44,7 @@ pub fn draw_easy_ease_button<T: Clone>(ui: &mut egui::Ui, property: &mut Animata
                     ui.horizontal(|ui| {
                         // Draw mini bezier thumbnail rect
                         let (rect, _) = ui.allocate_exact_size(egui::vec2(24.0, 16.0), egui::Sense::hover());
-                        ui.painter().rect_filled(rect, 2.0, egui::Color32::from_gray(30));
+                        ui.painter().rect_filled(rect, 2.0, colors::BG_DEEPEST);
 
                         let pts = preset.control_points();
                         let p0 = egui::pos2(rect.left() + 2.0, rect.bottom() - 2.0);
@@ -61,7 +62,7 @@ pub fn draw_easy_ease_button<T: Clone>(ui: &mut egui::Ui, property: &mut Animata
                             curve_pts.push(egui::pos2(x, y));
                         }
                         for window in curve_pts.windows(2) {
-                            ui.painter().line_segment([window[0], window[1]], egui::Stroke::new(1.5, egui::Color32::from_rgb(0, 200, 255)));
+                            ui.painter().line_segment([window[0], window[1]], egui::Stroke::new(1.5, colors::ACCENT_CYAN));
                         }
 
                         if ui.button(label).on_hover_text(desc).clicked() {
@@ -154,7 +155,7 @@ pub fn draw_expression_selector(ui: &mut egui::Ui, label: &str, expr_opt: &mut O
             Some(Expression::TimeDriver { multiplier, offset }) => format!("time * {} + {}", multiplier, offset),
             Some(Expression::LoopOut) => "loopOut()".to_string(),
             Some(Expression::PingPong) => "loopOut(\"pingpong\")".to_string(),
-            Some(Expression::Raw(s)) => s.clone(),
+            Some(Expression::Raw(s)) => format!("Custom: {}...", &s[..s.len().min(20)]),
             None => "None".to_string(),
         };
 
@@ -168,26 +169,51 @@ pub fn draw_expression_selector(ui: &mut egui::Ui, label: &str, expr_opt: &mut O
                 ui.selectable_value(expr_opt, Some(Expression::TimeDriver { multiplier: 30.0, offset: 0.0 }), "Time Spin (30°/s)");
                 ui.selectable_value(expr_opt, Some(Expression::LoopOut), "loopOut(\"cycle\")");
                 ui.selectable_value(expr_opt, Some(Expression::PingPong), "loopOut(\"pingpong\")");
+                ui.selectable_value(expr_opt, Some(Expression::Raw("value".into())), "Custom Script...");
             });
 
-        // 🌀 Expression Pickwhip button (@)
+        // Expression Pickwhip button (@)
         if ui.button("🌀").on_hover_text("Expression Pickwhip (@): Pick property to auto-generate script expression").clicked() {
             *expr_opt = Some(Expression::Wiggle { frequency: 3.0, amplitude: 25.0 });
             *project_changed = true;
-        }
-
-        // ⚠️ Script Error Inspector Warning
-        if let Some(Expression::Raw(s)) = expr_opt {
-            if s.contains("error") || s.contains("SyntaxError") {
-                ui.label(egui::RichText::new("⚠️ Script Error: Line 1: Unexpected token").small().color(egui::Color32::YELLOW))
-                    .on_hover_text("Expression disabled due to script evaluation error.");
-            }
         }
 
         if before != *expr_opt {
             *project_changed = true;
         }
     });
+
+    // Inline script editor for Raw expressions
+    if let Some(Expression::Raw(script)) = expr_opt {
+        ui.indent(format!("expr_editor_{}", label), |ui| {
+            ui.horizontal(|ui| {
+                ui.label(egui::RichText::new("📝").small());
+                let _script_before = script.clone();
+                if ui.add(
+                    egui::TextEdit::singleline(script)
+                        .code_editor()
+                        .desired_width(f32::INFINITY)
+                        .hint_text("// Rhai expression script...")
+                ).changed() {
+                    *project_changed = true;
+                }
+
+                // Test button
+                if ui.button("▶").on_hover_text("Test expression at current frame").clicked() {
+                    // Will be handled by caller
+                }
+            });
+
+            // Script error indicator
+            if script.contains("error") || script.is_empty() {
+                if script.is_empty() {
+                    ui.label(egui::RichText::new("⚠️ Empty expression").small().color(colors::ACCENT_YELLOW));
+                } else {
+                    ui.label(egui::RichText::new("⚠️ Script error detected").small().color(colors::ACCENT_RED));
+                }
+            }
+        });
+    }
 }
 
 pub fn draw_property_ui<T: Clone + crate::core::property::Interpolate + PartialEq + std::fmt::Debug + 'static>(

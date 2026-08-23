@@ -1,5 +1,6 @@
 use eframe::egui;
 use std::time::{Duration, Instant};
+use crate::ui::theme::colors;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ToastLevel {
@@ -10,9 +11,9 @@ pub enum ToastLevel {
 
 pub fn toast_color(level: &ToastLevel) -> egui::Color32 {
     match level {
-        ToastLevel::Info => egui::Color32::from_rgb(0, 180, 255),
-        ToastLevel::Warning => egui::Color32::from_rgb(255, 165, 0),
-        ToastLevel::Error => egui::Color32::from_rgb(255, 60, 60),
+        ToastLevel::Info => colors::ACCENT_BLUE,
+        ToastLevel::Warning => colors::ACCENT_ORANGE,
+        ToastLevel::Error => colors::ACCENT_RED,
     }
 }
 
@@ -79,7 +80,7 @@ impl ToastManager {
                         let remaining_ratio = (1.0 - elapsed / toast.duration.as_secs_f32()).clamp(0.0, 1.0);
 
                         egui::Frame::window(ui.style())
-                            .fill(egui::Color32::from_rgb(28, 28, 28))
+                            .fill(colors::BG_DEEPEST)
                             .stroke(egui::Stroke::new(1.0, accent))
                             .rounding(egui::Rounding::same(4.0))
                             .inner_margin(egui::Margin::symmetric(12.0, 8.0))
@@ -92,7 +93,7 @@ impl ToastManager {
                                         ToastLevel::Error => "❌",
                                     };
                                     ui.label(egui::RichText::new(icon).strong().color(accent));
-                                    ui.label(egui::RichText::new(&toast.message).small().color(egui::Color32::WHITE));
+                                    ui.label(egui::RichText::new(&toast.message).small().color(colors::TEXT_ON_ACCENT));
                                 });
                                 // Progress bar line
                                 let (rect, _) = ui.allocate_exact_size(egui::vec2(ui.available_width() * remaining_ratio, 2.0), egui::Sense::hover());

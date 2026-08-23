@@ -537,6 +537,21 @@ thread_local! {
         register_comp_types(&mut e);
         e
     };
+
+    /// Cached engine for loop-enabled expressions with array `+` operator.
+    static LOOP_ENGINE: Engine = {
+        let mut e = build_engine();
+        // AE semantics: [x, y] + [x2, y2] is element-wise (Rhai default concatenates)
+        e.register_fn("+", |a: Array, b: Array| -> Array {
+            let n = a.len().max(b.len());
+            (0..n).map(|i| {
+                let av = a.get(i).and_then(|d| d.as_float().ok()).unwrap_or(0.0);
+                let bv = b.get(i).and_then(|d| d.as_float().ok()).unwrap_or(0.0);
+                Dynamic::from_float(av + bv)
+            }).collect()
+        });
+        e
+    };
 }
 
 /// Preprocessed loop values exposed to Raw scripts that call loopOut()/loopIn().
@@ -578,8 +593,8 @@ pub fn eval_f32_with_loops(
     loops: LoopVals,
 ) -> f32 {
     let rewritten = preprocess_loop_script(script);
-    let engine = build_engine();
     let time = frame as f64 / fps.max(1) as f64;
+    LOOP_ENGINE.with(|engine| {
     let mut scope = Scope::new();
     scope.push("time", time);
     scope.push("frame", frame as i64);
@@ -601,6 +616,7 @@ pub fn eval_f32_with_loops(
             base
         }
     }
+    })
 }
 
 /// Evaluate a v2 Raw script with loop values available.
@@ -612,8 +628,8 @@ pub fn eval_v2_with_loops(
     loops: LoopVals,
 ) -> [f32; 2] {
     let rewritten = preprocess_loop_script(script);
-    let mut engine = build_engine();
     let time = frame as f64 / fps.max(1) as f64;
+    LOOP_ENGINE.with(|engine| {
     let mut scope = Scope::new();
     scope.push("time", time);
     scope.push("frame", frame as i64);
@@ -628,16 +644,6 @@ pub fn eval_v2_with_loops(
     scope.push("__loop_out_pingpong", loop_arr(loops.out_pingpong, loops.in_pingpong));
     scope.push("__loop_in_cycle", loop_arr(loops.in_cycle, loops.out_cycle));
     scope.push("__loop_in_pingpong", loop_arr(loops.in_pingpong, loops.out_pingpong));
-
-    // AE semantics: [x, y] + [x2, y2] is element-wise (Rhai default concatenates)
-    engine.register_fn("+", |a: Array, b: Array| -> Array {
-        let n = a.len().max(b.len());
-        (0..n).map(|i| {
-            let av = a.get(i).and_then(|d| d.as_float().ok()).unwrap_or(0.0);
-            let bv = b.get(i).and_then(|d| d.as_float().ok()).unwrap_or(0.0);
-            Dynamic::from_float(av + bv)
-        }).collect()
-    });
 
     match engine.eval_with_scope::<Dynamic>(&mut scope, &rewritten) {
         Ok(val) => {
@@ -659,6 +665,7 @@ pub fn eval_v2_with_loops(
             base
         }
     }
+    })
 }
 
 #[cfg(test)]
@@ -712,7 +719,6 @@ mod tests {
 
 #[cfg(test)]
 mod tests_comp_context {
-    use super::*;
     use crate::core::timeline::{Composition, Layer, LayerType, Expression};
     use crate::core::property::Animatable;
 
@@ -751,7 +757,6 @@ mod tests_comp_context {
 
 #[cfg(test)]
 mod tests_comp_extras {
-    use super::*;
     use crate::core::timeline::{Composition, Layer, LayerType, Expression};
     use crate::core::property::Animatable;
 

@@ -667,18 +667,6 @@ pub fn handle_global_shortcuts(
     });
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_format_shortcut_cross_platform() {
-        let sc = format_shortcut("Z", true, true, false);
-        assert!(sc.contains("Z"));
-        assert!(sc.contains("Shift"));
-    }
-}
-
 /// Moves a keyframe within an animatable track (used by batch keyframe nudging).
 fn move_kf_in<T: Clone + crate::core::property::Interpolate>(
     anim: &mut crate::core::property::Animatable<T>,
@@ -698,5 +686,17 @@ fn move_kf_in<T: Clone + crate::core::property::Interpolate>(
 fn delete_kf_at<T: Clone>(anim: &mut crate::core::property::Animatable<T>, frame: u32) {
     if let Some(kfs) = anim.keyframes_mut() {
         kfs.retain(|k| k.frame != frame);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_format_shortcut_cross_platform() {
+        let sc = format_shortcut("Z", true, true, false);
+        assert!(sc.contains("Z"));
+        assert!(sc.contains("Shift"));
     }
 }

@@ -1,6 +1,7 @@
 use eframe::egui;
 use crate::core::timeline::Composition;
 use crate::ui::inspector_property::draw_property_ui;
+use crate::ui::theme::colors;
 
 pub fn draw_camera_settings(
     ui: &mut egui::Ui,
@@ -33,6 +34,48 @@ pub fn draw_camera_settings(
             ui.add(egui::Slider::new(&mut cam.aperture, 0.95..=22.0).prefix("f/"));
             if ap_before != cam.aperture { *project_changed = true; }
         });
+
+        // ── Depth of Field ──
+        ui.separator();
+        ui.label(egui::RichText::new("🎯 Depth of Field").small().strong().color(colors::ACCENT_CYAN));
+
+        ui.horizontal(|ui| {
+            ui.label("DOF Enabled:");
+            if ui.checkbox(&mut cam.dof_enabled, "").changed() {
+                *project_changed = true;
+            }
+        });
+
+        if cam.dof_enabled {
+            ui.horizontal(|ui| {
+                ui.label("Max Blur Radius:");
+                if ui.add(egui::Slider::new(&mut cam.dof_max_blur, 1.0..=64.0).suffix(" px")).changed() {
+                    *project_changed = true;
+                }
+            });
+
+            ui.horizontal(|ui| {
+                ui.label("Iris Shape:");
+                let iris_before = cam.dof_iris_sides;
+                egui::ComboBox::from_id_salt("iris_shape")
+                    .selected_text(match cam.dof_iris_sides {
+                        0 => "Circle",
+                        3 => "Triangle",
+                        5 => "Pentagon",
+                        6 => "Hexagon",
+                        8 => "Octagon",
+                        _ => "Circle",
+                    })
+                    .show_ui(ui, |ui| {
+                        ui.selectable_value(&mut cam.dof_iris_sides, 0, "Circle");
+                        ui.selectable_value(&mut cam.dof_iris_sides, 3, "Triangle");
+                        ui.selectable_value(&mut cam.dof_iris_sides, 5, "Pentagon");
+                        ui.selectable_value(&mut cam.dof_iris_sides, 6, "Hexagon");
+                        ui.selectable_value(&mut cam.dof_iris_sides, 8, "Octagon");
+                    });
+                if iris_before != cam.dof_iris_sides { *project_changed = true; }
+            });
+        }
 
         ui.label("Camera Transform:");
         let cam_pos_before = cam.transform.position.clone();

@@ -3,6 +3,7 @@
 use eframe::egui;
 use crate::AfterEffectsApp;
 use crate::core::timeline::LayerType;
+use crate::ui::theme::colors;
 
 pub fn draw_camera_3d_viewport(
     ui: &mut egui::Ui,
@@ -58,7 +59,7 @@ pub fn draw_camera_3d_viewport(
     // Draw a wireframe floor grid in 3D
     let grid_n = 6;
     let grid_step = comp_w / grid_n as f32;
-    let grid_color = egui::Color32::from_rgba_unmultiplied(60, 80, 120, 80);
+    let grid_color = colors::GRID_LINE;
     for gx in 0..=grid_n {
         let x = gx as f32 * grid_step - comp_w * 0.5 + cx_world;
         let p0 = project_3d(x, comp_h, 0.0);
@@ -82,7 +83,7 @@ pub fn draw_camera_3d_viewport(
     for i in 0..4 {
         ui.painter().line_segment(
             [corners[i], corners[(i + 1) % 4]],
-            egui::Stroke::new(1.5, egui::Color32::from_rgb(60, 130, 240)),
+            egui::Stroke::new(1.5, colors::ACCENT_BLUE),
         );
     }
 
@@ -117,15 +118,15 @@ pub fn draw_camera_3d_viewport(
         ui.painter().rect_filled(bbox, 3.0, color);
         ui.painter().rect_stroke(bbox, 3.0, egui::Stroke::new(1.0,
             if Some(li) == app.selected_layer_idx {
-                egui::Color32::from_rgb(100, 220, 255)
+                colors::ACCENT_CYAN
             } else {
-                egui::Color32::from_rgba_unmultiplied(255, 255, 255, 60)
+                colors::GRID_LINE
             }
         ));
         ui.painter().text(egui::pos2(center.x, bbox.top() - 10.0),
             egui::Align2::CENTER_CENTER, &layer.name,
             egui::FontId::proportional(10.0),
-            egui::Color32::from_rgba_unmultiplied(200, 220, 255, 180));
+            colors::HUD_TEXT);
     }
 
     // 3D Camera HUD overlay
@@ -133,10 +134,10 @@ pub fn draw_camera_3d_viewport(
         egui::pos2(rect.left() + 10.0, rect.bottom() - 38.0),
         egui::vec2(250.0, 28.0),
     );
-    ui.painter().rect_filled(hud, 4.0, egui::Color32::from_rgba_unmultiplied(15, 20, 35, 220));
-    ui.painter().rect_stroke(hud, 4.0, egui::Stroke::new(1.0, egui::Color32::from_rgb(60, 100, 200)));
+    ui.painter().rect_filled(hud, 4.0, colors::HUD_BG);
+    ui.painter().rect_stroke(hud, 4.0, egui::Stroke::new(1.0, colors::HUD_STROKE));
     ui.painter().text(hud.center(), egui::Align2::CENTER_CENTER,
         format!("[3D CAMERA] Yaw: {:.1}°  Pitch: {:.1}°  Z: {:.0}", yaw_deg, pitch_deg, zoom),
         egui::FontId::proportional(11.0),
-        egui::Color32::from_rgb(140, 200, 255));
+        colors::HUD_STATUS_TEXT);
 }

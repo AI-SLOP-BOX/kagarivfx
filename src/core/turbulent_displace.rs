@@ -343,6 +343,5 @@ mod tests {
         let b = apply_turbulent_displace(&img, 16, 16, &opts);
         assert_eq!(a.len(), img.len());
         assert_eq!(a, b);
-        assert!(a.chunks(4).all(|px| px.iter().all(|&v| v <= 255)));
     }
 }

@@ -1,5 +1,6 @@
 use eframe::egui;
 use crate::AfterEffectsApp;
+use crate::ui::theme::colors;
 
 pub fn draw_content(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
     ui.vertical_centered(|ui| {
@@ -36,13 +37,13 @@ pub fn draw_content(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
 
         ui.add_space(8.0);
         ui.separator();
-        ui.label(egui::RichText::new("32-Band FFT Spectrum").small().strong().color(egui::Color32::from_rgb(0, 200, 255)));
+        ui.label(egui::RichText::new("32-Band FFT Spectrum").small().strong().color(colors::ACCENT_CYAN));
 
         // 32-Band Live Equalizer Bars
         let spectrum_w = 180.0;
         let spectrum_h = 45.0;
         let (s_rect, _) = ui.allocate_exact_size(egui::vec2(spectrum_w, spectrum_h), egui::Sense::hover());
-        ui.painter().rect_filled(s_rect, 2.0, egui::Color32::from_rgb(15, 18, 24));
+        ui.painter().rect_filled(s_rect, 2.0, colors::BG_DEEPEST);
 
         let bands = 32;
         let bar_w = (spectrum_w / bands as f32) - 1.0;
@@ -60,11 +61,11 @@ pub fn draw_content(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
             let by = s_rect.bottom() - bar_h;
 
             let bar_color = if amp > 0.85 {
-                egui::Color32::from_rgb(255, 60, 60)
+                colors::ACCENT_RED
             } else if amp > 0.6 {
-                egui::Color32::from_rgb(255, 200, 0)
+                colors::ACCENT_YELLOW
             } else {
-                egui::Color32::from_rgb(0, 210, 120)
+                colors::ACCENT_GREEN
             };
 
             let b_rect = egui::Rect::from_min_size(egui::pos2(bx, by), egui::vec2(bar_w.max(1.0), bar_h));
@@ -103,14 +104,14 @@ fn draw_vu_channel(ui: &mut egui::Ui, label: &str, peak: f32, width: f32, height
             egui::vec2(width - 4.0, 8.0),
         );
         let clip_color = if peak > 0.92 {
-            egui::Color32::from_rgb(255, 30, 30) // Bright Red Clip Warning
+            colors::ACCENT_RED
         } else {
-            egui::Color32::from_rgb(50, 20, 20) // Dim Dark Red Idle
+            colors::BG_DEEPEST
         };
         painter.rect_filled(clip_rect, 1.0, clip_color);
-        painter.rect_stroke(clip_rect, 1.0, egui::Stroke::new(1.0, egui::Color32::from_gray(60)));
+        painter.rect_stroke(clip_rect, 1.0, egui::Stroke::new(1.0, colors::BORDER_MEDIUM));
 
-        painter.rect_stroke(rect, 2.0, egui::Stroke::new(1.0, egui::Color32::from_gray(50)));
+        painter.rect_stroke(rect, 2.0, egui::Stroke::new(1.0, colors::BORDER_MEDIUM));
 
         let segments = 24;
         let seg_gap = 1.5;
@@ -124,11 +125,11 @@ fn draw_vu_channel(ui: &mut egui::Ui, label: &str, peak: f32, width: f32, height
             let ratio = seg_idx_from_bottom as f32 / segments as f32;
             
             let color = if ratio < 0.70 {
-                egui::Color32::from_rgb(40, 210, 80) // Green
+                colors::ACCENT_GREEN
             } else if ratio < 0.88 {
-                egui::Color32::from_rgb(240, 200, 40) // Yellow
+                colors::ACCENT_YELLOW
             } else {
-                egui::Color32::from_rgb(255, 60, 60) // Red Peak Clip
+                colors::ACCENT_RED
             };
 
             let seg_y_bottom = rect.bottom() - 2.0 - (i as f32 * (seg_height + seg_gap));

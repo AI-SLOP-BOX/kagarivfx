@@ -12,28 +12,25 @@
 /// bilinear sampling semantics consistent with Part 27.
 // ────────────────────────── Sampling Helper ──────────────────────────
 fn sample_bilinear(src: &[u8], w: u32, h: u32, fx: f32, fy: f32, out: &mut [u8; 4]) {
-    if src.len() < (w as usize) * (h as usize) * 4 || w == 0 || h == 0 {
+    // Local implementation so this pack does not depend on another module's
+    // internal helper staying public.
+    if w == 0 || h == 0 || src.is_empty() {
         *out = [0, 0, 0, 0];
         return;
     }
     let x = fx.clamp(0.0, w as f32 - 1.0);
     let y = fy.clamp(0.0, h as f32 - 1.0);
-    let x0 = x.floor() as usize;
-    let y0 = y.floor() as usize;
-    let x1 = (x0 + 1).min(w as usize - 1);
-    let y1 = (y0 + 1).min(h as usize - 1);
+    let x0 = x.floor() as u32;
+    let y0 = y.floor() as u32;
+    let x1 = (x0 + 1).min(w - 1);
+    let y1 = (y0 + 1).min(h - 1);
     let tx = x - x0 as f32;
     let ty = y - y0 as f32;
-    let idx = |xx: usize, yy: usize| (yy * w as usize + xx) * 4;
-
+    let idx = |xx: u32, yy: u32| ((yy * w + xx) * 4) as usize;
     for c in 0..4 {
-        let p00 = src[idx(x0, y0) + c] as f32;
-        let p10 = src[idx(x1, y0) + c] as f32;
-        let p01 = src[idx(x0, y1) + c] as f32;
-        let p11 = src[idx(x1, y1) + c] as f32;
-        let top = p00 + (p10 - p00) * tx;
-        let bot = p01 + (p11 - p01) * tx;
-        out[c] = (top + (bot - top) * ty).round().clamp(0.0, 255.0) as u8;
+        let top = src[idx(x0, y0) + c] as f32 * (1.0 - tx) + src[idx(x1, y0) + c] as f32 * tx;
+        let bot = src[idx(x0, y1) + c] as f32 * (1.0 - tx) + src[idx(x1, y1) + c] as f32 * tx;
+        out[c] = (top * (1.0 - ty) + bot * ty).round().clamp(0.0, 255.0) as u8;
     }
 }
 
@@ -369,7 +366,7 @@ mod tests {
         // Centre column must brighten; far-left column must stay identical.
         let mid = ((16 * 32 + 16) * 4) as usize;
         assert!(img[mid] > before[mid], "band centre should brighten");
-        let left = ((16 * 32 + 0) * 4) as usize;
+        let left = ((16 * 32) * 4) as usize;
         assert_eq!(img[left], before[left], "outside band must be untouched");
     }
 
@@ -404,8 +401,8 @@ mod tests {
         apply_cc_bend_it_pro(&mut img, 20, 20, 5.0, -5.0);
         // Sampling is src = dst + shift:
         // Top row (+5): destination (6,0) shows source (11,0).
-        let top_after = ((0 * 20 + 6) * 4) as usize;
-        let top_src = ((0 * 20 + 11) * 4) as usize;
+        let top_after = (6 * 4) as usize;
+        let top_src = (11 * 4) as usize;
         assert!((img[top_after] as i32 - before[top_src] as i32).abs() <= 1,
             "top row must shift by +5px");
         // Bottom row (-5): destination (14,19) shows source (9,19).
@@ -429,7 +426,7 @@ mod tests {
         let mut b = gradient(16, 16);
         apply_cc_tiler_pro(&mut b, 16, 16, 400.0, TileEdgeMode::Mirror);
         // Mirror tiles are symmetric about tile boundaries: row 0 equals row 7 mirrored.
-        let (r0, r7) = ((0 * 16 + 0) * 4, (7 * 16 + 0) * 4);
+        let (r0, r7) = (0usize, (7 * 16) * 4);
         assert_eq!(b[r0], b[r7]);
     }
 
@@ -455,7 +452,7 @@ mod tests {
         let halo = ((16 * 32 + 21) * 4) as usize;
         assert!(img[halo] > before[halo], "halo should receive bloom");
         // Far corner barely affected.
-        let far = ((1 * 32 + 1) * 4) as usize;
+        let far = ((32 + 1) * 4) as usize;
         assert!(img[far] <= before[far] + 30);
     }
 
