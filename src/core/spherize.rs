@@ -99,11 +99,89 @@ pub fn apply_spherize(
 mod tests {
     use super::*;
 
+    fn radial_gradient(w: u32, h: u32) -> Vec<u8> {
+        let mut v = Vec::with_capacity((w * h * 4) as usize);
+        let cx = w as f32 * 0.5;
+        let cy = h as f32 * 0.5;
+        let max_r = ((cx * cx + cy * cy).sqrt()).max(1.0);
+        for y in 0..h {
+            for x in 0..w {
+                let d = (((x as f32 - cx).powi(2) + (y as f32 - cy).powi(2)).sqrt() / max_r * 255.0) as u8;
+                v.extend_from_slice(&[d, d, d, 255]);
+            }
+        }
+        v
+    }
+
     #[test]
     fn test_spherize_buffer_size() {
         let pixels = vec![255u8; 64]; // 4x4
         let options = SpherizeOptions::default_for_size(4.0, 4.0);
         let out = apply_spherize(&pixels, 4, 4, &options);
         assert_eq!(out.len(), 64);
+    }
+
+    #[test]
+    fn test_centre_pixel_invariant_with_aligned_center() {
+        // Even size: geometric centre coincides exactly with pixel (16,16).
+        let img = radial_gradient(32, 32);
+        let options = SpherizeOptions {
+            radius: 10.0,
+            center: [16.0, 16.0],
+            refractive_index: 1.5,
+        };
+        let out = apply_spherize(&img, 32, 32, &options);
+        let c = ((16 * 32 + 16) * 4) as usize;
+        assert_eq!(out[c], img[c], "exact centre must be unmoved");
+    }
+
+    #[test]
+    fn test_outside_radius_is_untouched() {
+        let img = radial_gradient(32, 32);
+        let options = SpherizeOptions {
+            radius: 8.0,
+            center: [16.0, 16.0],
+            refractive_index: 1.5,
+        };
+        let out = apply_spherize(&img, 32, 32, &options);
+        // Corner pixels are far outside the lens.
+        for (x, y) in [(0u32, 0u32), (31, 0), (0, 31), (31, 31)] {
+            let i = ((y * 32 + x) * 4) as usize;
+            assert_eq!(out[i], img[i], "corner ({x},{y}) must pass through");
+            assert_eq!(out[i + 3], 255);
+        }
+    }
+
+    #[test]
+    fn test_higher_refractive_index_changes_interior() {
+        let img = radial_gradient(32, 32);
+        let mk = |n: f32| {
+            let options = SpherizeOptions { radius: 12.0, center: [16.0, 16.0], refractive_index: n };
+            apply_spherize(&img, 32, 32, &options)
+        };
+        let n1 = mk(1.0);
+        let n3 = mk(3.0);
+        assert_ne!(n1, n3, "refractive index must alter the interior warp");
+        // Exterior must remain identical between the two.
+        let corner = ((2 * 32 + 2) * 4) as usize;
+        assert_eq!(n1[corner], n3[corner]);
+    }
+
+    #[test]
+    fn test_zero_radius_is_identity() {
+        let img = radial_gradient(16, 16);
+        let options = SpherizeOptions { radius: 0.0, ..SpherizeOptions::default_for_size(16.0, 16.0) };
+        let out = apply_spherize(&img, 16, 16, &options);
+        assert_eq!(out, img);
+    }
+
+    #[test]
+    fn test_deterministic_and_bounded() {
+        let img = radial_gradient(24, 24);
+        let options = SpherizeOptions::default_for_size(24.0, 24.0);
+        let a = apply_spherize(&img, 24, 24, &options);
+        let b = apply_spherize(&img, 24, 24, &options);
+        assert_eq!(a, b);
+        assert!(a.chunks(4).all(|px| px.iter().all(|&v| v <= 255)));
     }
 }

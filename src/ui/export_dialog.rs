@@ -156,6 +156,27 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
                         .color(egui::Color32::from_gray(160)));
                 }
 
+                // Resolution scale
+                let res_scale_id = egui::Id::new("ae_export_res_scale");
+                let mut res_scale = ctx.data_mut(|d| {
+                    *d.get_temp_mut_or_insert_with(res_scale_id, || 1.0f32)
+                });
+                ui.horizontal(|ui| {
+                    ui.label("Resolution:");
+                    let orig_w = comp.width;
+                    let orig_h = comp.height;
+                    for (label, scale) in [("Full", 1.0), ("Half", 0.5), ("Third", 1.0/3.0), ("Quarter", 0.25)] {
+                        if ui.selectable_label((res_scale - scale).abs() < 0.01, label).clicked() {
+                            res_scale = scale;
+                            ctx.data_mut(|d| d.insert_temp(res_scale_id, res_scale));
+                        }
+                        ui.separator();
+                    }
+                    if res_scale != 1.0 {
+                        ui.label(format!("{}x{}", (orig_w as f32 * res_scale) as u32, (orig_h as f32 * res_scale) as u32));
+                    }
+                });
+
                 // Codec selection
                 ui.horizontal(|ui| {
                     ui.label("Video Codec:");
@@ -203,11 +224,20 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
                             2 => crate::core::ffmpeg_export::VideoCodec::ProRes4444,
                             _ => crate::core::ffmpeg_export::VideoCodec::H264,
                         };
+                        // Re-read from egui temp storage: the picker above lives in a
+                        // sibling scope, so the value must be fetched by Id here.
+                        let res_scale = ctx.data_mut(|d| {
+                            *d.get_temp_mut_or_insert_with(egui::Id::new("ae_export_res_scale"), || 1.0f32)
+                        });
+
+                        let render_w = ((comp.width as f32 * res_scale) as u32).max(2);
+
+                        let render_h = ((comp.height as f32 * res_scale) as u32).max(2);
                         let config = crate::core::ffmpeg_export::ExportConfig {
                             audio_wav,
                             output_path: output_path.clone(),
-                            width: comp.width,
-                            height: comp.height,
+                            width: render_w,
+                            height: render_h,
                             fps: comp.fps,
                             total_frames: total_frames.max(1),
                             codec,

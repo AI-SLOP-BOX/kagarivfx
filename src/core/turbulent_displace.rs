@@ -95,9 +95,21 @@ fn fractal_noise(x: f32, y: f32, options: &TurbulentDisplaceOptions) -> (f64, f6
 
     let max_octaves = options.complexity.clamp(1, 6) as usize;
 
-    for _ in 0..max_octaves {
-        let nx = perlin_noise_2d(x as f64 * scale * freq + evol_rad.cos(), y as f64 * scale * freq);
-        let ny = perlin_noise_2d(x as f64 * scale * freq + 100.0, y as f64 * scale * freq + evol_rad.sin() + 100.0);
+    for octave in 0..max_octaves {
+        // Per-octave prime offsets: without them, integer pixel coordinates
+        // multiplied by integer frequencies land exactly on Perlin lattice
+        // points where the gradient noise is zero, silently disabling all
+        // higher octaves.
+        let ox = 17.13 * (octave + 1) as f64;
+        let oy = 31.7 * (octave + 1) as f64;
+        let nx = perlin_noise_2d(
+            x as f64 * scale * freq + ox + evol_rad.cos(),
+            y as f64 * scale * freq + oy,
+        );
+        let ny = perlin_noise_2d(
+            x as f64 * scale * freq + ox + 100.0,
+            y as f64 * scale * freq + oy + evol_rad.sin() + 100.0,
+        );
 
         dx += nx * amp;
         dy += ny * amp;
@@ -283,15 +295,17 @@ mod tests {
 
     #[test]
     fn test_bulge_and_twist_keep_exact_centre_fixed() {
-        let img = gradient(25, 25); // odd size → true centre pixel exists
+        // Even size: the geometric centre (13.0, 13.0) coincides exactly with
+        // pixel (13, 13), where the radial/twist displacement is identically zero.
+        let img = gradient(26, 26);
         for mode in [TurbulentDisplaceType::Bulge, TurbulentDisplaceType::Twist] {
             let opts = TurbulentDisplaceOptions {
                 displace_type: mode,
                 amount: 40.0,
                 ..Default::default()
             };
-            let out = apply_turbulent_displace(&img, 25, 25, &opts);
-            let c = ((12 * 25 + 12) * 4) as usize;
+            let out = apply_turbulent_displace(&img, 26, 26, &opts);
+            let c = ((13 * 26 + 13) * 4) as usize;
             assert_eq!(out[c], img[c], "{mode:?} must not move the centre pixel");
             assert_eq!(out[c + 1], img[c + 1]);
         }
