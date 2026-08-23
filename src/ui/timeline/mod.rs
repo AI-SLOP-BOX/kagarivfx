@@ -783,9 +783,25 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                                 });
                             });
 
-                            // Render Layer Bar Span & Waveform
+                            // Render Layer Bar Span & Waveform + parent link line
                             let avail_w = ui.available_width();
-                            let (bar_rect, _) = ui.allocate_exact_size(egui::vec2(avail_w, 24.0), egui::Sense::hover());
+                            let (bar_rect, bar_sense) = ui.allocate_exact_size(
+                                egui::vec2(avail_w, 24.0),
+                                egui::Sense::hover().union(egui::Sense::drag()),
+                            );
+                            // Draw parent connection if this layer has a parent
+                            if let Some(pid) = &layer.parent_id {
+                                if comp.layers.iter().any(|l| &l.id == pid) {
+                                    // Small chain icon on the left of the bar
+                                    ui.painter().text(
+                                        egui::pos2(bar_rect.left() + 8.0, bar_rect.top() + 4.0),
+                                        egui::Align2::LEFT_TOP,
+                                        "🔗",
+                                        egui::FontId::proportional(10.0),
+                                        egui::Color32::from_rgb(100, 100, 220),
+                                    );
+                                }
+                            }
                             
                             let norm_in = (layer.in_frame.saturating_sub(start_frame)) as f32 / zoom_span as f32;
                             let norm_out = (layer.out_frame.saturating_sub(start_frame)) as f32 / zoom_span as f32;
