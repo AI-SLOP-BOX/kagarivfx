@@ -376,7 +376,9 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                          || name.contains("Threshold") || name.contains("Light Sweep")
                          || name.contains("Night") || name.contains("Vision")
                          { "Stylize" }
-                    else if name.contains("Noise") || name.contains("Fractal") { "Generate & Simulation" }
+                    else if name.contains("Noise") || name.contains("Fractal")
+                         || name.contains("Star") || name.contains("Lightning")
+                         || name.contains("Fire") { "Generate & Simulation" }
                     else if name.contains("Wipe") { "Transition" }
                     else { "Other" }
                 }

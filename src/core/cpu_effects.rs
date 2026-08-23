@@ -584,6 +584,34 @@ fn apply_one(
             use crate::core::ae_effects_pack_v17::apply_emboss;
             apply_emboss(pixels, width, height, angle_deg.evaluate(frame), depth.evaluate(frame));
         }
+        EffectType::StarField { num_stars, depth_speed } => {
+            use crate::core::ae_effects_pack_v18::apply_star_field;
+            apply_star_field(
+                pixels,
+                width,
+                height,
+                num_stars.evaluate(frame).round().clamp(1.0, 2000.0) as u32,
+                depth_speed.evaluate(frame),
+                frame as f32 / 30.0,
+            );
+        }
+        EffectType::LightningArc { start_x, start_y, end_x, end_y, seed, glow } => {
+            use crate::core::ae_effects_pack_v18::apply_lightning_arc;
+            let start = [
+                start_x.evaluate(frame).clamp(0.0, 1.0) * width as f32,
+                start_y.evaluate(frame).clamp(0.0, 1.0) * height as f32,
+            ];
+            let end = [
+                end_x.evaluate(frame).clamp(0.0, 1.0) * width as f32,
+                end_y.evaluate(frame).clamp(0.0, 1.0) * height as f32,
+            ];
+            let bolt_seed = seed.evaluate(frame).round().clamp(0.0, 99999.0) as u32 ^ frame;
+            apply_lightning_arc(pixels, width, height, start, end, bolt_seed, glow.evaluate(frame));
+        }
+        EffectType::FireAutomaton { intensity } => {
+            use crate::core::ae_effects_pack_v18::apply_fire_automaton;
+            apply_fire_automaton(pixels, width, height, intensity.evaluate(frame));
+        }
     }
 }
 
@@ -1086,5 +1114,53 @@ mod tests {
                 assert!(px[i] < 16, "uniform image must have no sobel edges (got {})", px[i]);
             }
         }
+    }
+
+    #[test]
+    fn test_simulation_pack_determinism_and_noop() {
+        let base = solid_layer(8, 8, 90, 140, 200);
+
+        // Fire with zero intensity is a no-op.
+        let mut px = base.clone();
+        apply_layer_effects(
+            &mut px, 8, 8,
+            &[effect("fire", EffectType::FireAutomaton { intensity: Animatable::new_constant(0.0) })],
+            0,
+        );
+        assert_eq!(px, base, "zero-intensity fire must be a no-op");
+
+        // Star field is deterministic for a given frame.
+        let run_stars = || {
+            let mut px = base.clone();
+            apply_layer_effects(
+                &mut px, 8, 8,
+                &[effect("stars", EffectType::StarField {
+                    num_stars: Animatable::new_constant(20.0),
+                    depth_speed: Animatable::new_constant(1.0),
+                })],
+                5,
+            );
+            px
+        };
+        assert_eq!(run_stars(), run_stars(), "star field must be deterministic");
+
+        // Lightning is deterministic per frame as well.
+        let run_bolt = || {
+            let mut px = base.clone();
+            apply_layer_effects(
+                &mut px, 8, 8,
+                &[effect("bolt", EffectType::LightningArc {
+                    start_x: Animatable::new_constant(0.1),
+                    start_y: Animatable::new_constant(0.1),
+                    end_x: Animatable::new_constant(0.9),
+                    end_y: Animatable::new_constant(0.9),
+                    seed: Animatable::new_constant(42.0),
+                    glow: Animatable::new_constant(1.0),
+                })],
+                7,
+            );
+            px
+        };
+        assert_eq!(run_bolt(), run_bolt(), "lightning must be deterministic");
     }
 }

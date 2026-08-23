@@ -887,6 +887,54 @@ pub fn get_all_effect_presets() -> &'static [EffectPreset] {
                 enabled: true,
             },
         },
+        EffectPreset {
+            name: "Star Field",
+            button_label: "+ Star Field",
+            search_key: "star field space stars parallax night sky generate",
+            id_prefix: "stars",
+            create_fn: |idx| Effect {
+                id: format!("stars_{}", idx),
+                name: "Star Field".to_string(),
+                effect_type: EffectType::StarField {
+                    num_stars: Animatable::new_constant(150.0),
+                    depth_speed: Animatable::new_constant(1.0),
+                },
+                enabled: true,
+            },
+        },
+        EffectPreset {
+            name: "Lightning",
+            button_label: "+ Lightning",
+            search_key: "lightning bolt electric storm arc thunder",
+            id_prefix: "bolt",
+            create_fn: |idx| Effect {
+                id: format!("bolt_{}", idx),
+                name: "Lightning".to_string(),
+                effect_type: EffectType::LightningArc {
+                    start_x: Animatable::new_constant(0.2),
+                    start_y: Animatable::new_constant(0.0),
+                    end_x: Animatable::new_constant(0.7),
+                    end_y: Animatable::new_constant(1.0),
+                    seed: Animatable::new_constant(3.0),
+                    glow: Animatable::new_constant(1.5),
+                },
+                enabled: true,
+            },
+        },
+        EffectPreset {
+            name: "Fire",
+            button_label: "+ Fire",
+            search_key: "fire flame burn cellular combustion heat",
+            id_prefix: "firefx",
+            create_fn: |idx| Effect {
+                id: format!("firefx_{}", idx),
+                name: "Fire".to_string(),
+                effect_type: EffectType::FireAutomaton {
+                    intensity: Animatable::new_constant(2.0),
+                },
+                enabled: true,
+            },
+        },
     ]
 }
 
@@ -1549,6 +1597,21 @@ pub fn draw_effect_type_ui(
         EffectType::Emboss { angle_deg, depth } => {
             draw_prop(ui, current_frame, project_changed, next_frame, "Angle", angle_deg, |ui, v| { ui.add(egui::Slider::new(v, -180.0..=180.0).suffix("°")); });
             draw_prop(ui, current_frame, project_changed, next_frame, "Depth", depth, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=10.0)); });
+        }
+        EffectType::StarField { num_stars, depth_speed } => {
+            draw_prop(ui, current_frame, project_changed, next_frame, "Stars", num_stars, |ui, v| { ui.add(egui::Slider::new(v, 1.0..=2000.0)); });
+            draw_prop(ui, current_frame, project_changed, next_frame, "Depth Speed", depth_speed, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=10.0)); });
+        }
+        EffectType::LightningArc { start_x, start_y, end_x, end_y, seed, glow } => {
+            draw_prop(ui, current_frame, project_changed, next_frame, "Start X", start_x, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=1.0)); });
+            draw_prop(ui, current_frame, project_changed, next_frame, "Start Y", start_y, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=1.0)); });
+            draw_prop(ui, current_frame, project_changed, next_frame, "End X", end_x, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=1.0)); });
+            draw_prop(ui, current_frame, project_changed, next_frame, "End Y", end_y, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=1.0)); });
+            draw_prop(ui, current_frame, project_changed, next_frame, "Seed", seed, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=9999.0)); });
+            draw_prop(ui, current_frame, project_changed, next_frame, "Glow", glow, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=5.0)); });
+        }
+        EffectType::FireAutomaton { intensity } => {
+            draw_prop(ui, current_frame, project_changed, next_frame, "Intensity", intensity, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=10.0)); });
         }
     }
 }

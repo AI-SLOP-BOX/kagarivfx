@@ -232,6 +232,9 @@ impl RenderEffectPlugin for EnumEffectPlugin {
             EffectType::Mosaic { .. } => "Mosaic",
             EffectType::TiltShift { .. } => "Tilt Shift",
             EffectType::Emboss { .. } => "Emboss",
+            EffectType::StarField { .. } => "Star Field",
+            EffectType::LightningArc { .. } => "Lightning",
+            EffectType::FireAutomaton { .. } => "Fire",
         }
     }
 
@@ -309,6 +312,9 @@ impl RenderEffectPlugin for EnumEffectPlugin {
             EffectType::Mosaic { .. } => "mosaic",
             EffectType::TiltShift { .. } => "tilt_shift",
             EffectType::Emboss { .. } => "emboss",
+            EffectType::StarField { .. } => "star_field",
+            EffectType::LightningArc { .. } => "lightning_arc",
+            EffectType::FireAutomaton { .. } => "fire_automaton",
         }
     }
 

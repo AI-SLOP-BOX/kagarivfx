@@ -1029,6 +1029,24 @@ pub enum EffectType {
         angle_deg: Animatable<f32>,
         depth: Animatable<f32>,
     },
+    /// Parallax star field generator.
+    StarField {
+        num_stars: Animatable<f32>,
+        depth_speed: Animatable<f32>,
+    },
+    /// Procedural lightning bolt between two normalized points.
+    LightningArc {
+        start_x: Animatable<f32>,
+        start_y: Animatable<f32>,
+        end_x: Animatable<f32>,
+        end_y: Animatable<f32>,
+        seed: Animatable<f32>,
+        glow: Animatable<f32>,
+    },
+    /// Cellular-automaton fire rising from the bottom edge.
+    FireAutomaton {
+        intensity: Animatable<f32>,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
