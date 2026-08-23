@@ -856,9 +856,19 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                             );
 
                             let fill_c = if app.selected_layer_idx == Some(i) {
-                                colors::ACCENT_BLUE
+                                let [r, g, b] = layer.label.to_rgb();
+                                egui::Color32::from_rgb(
+                                    (r * 255.0) as u8,
+                                    (g * 255.0) as u8,
+                                    (b * 255.0) as u8,
+                                )
                             } else {
-                                egui::Color32::from_rgb(50, 70, 100)
+                                let [r, g, b] = layer.label.to_rgb();
+                                egui::Color32::from_rgb(
+                                    (r * 120.0) as u8,
+                                    (g * 120.0) as u8,
+                                    (b * 120.0) as u8,
+                                )
                             };
 
                             ui.painter().rect_filled(layer_rect, 2.0, fill_c);
