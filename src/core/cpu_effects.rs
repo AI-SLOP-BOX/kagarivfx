@@ -520,6 +520,37 @@ fn apply_one(
             use crate::core::ae_effects_pack_v2::apply_radial_wipe;
             apply_radial_wipe(pixels, width, height, completion.evaluate(frame));
         }
+        EffectType::FilmEmulation { lift, gamma, gain, hue_shift_deg } => {
+            use crate::core::ae_effects_pack_v20::apply_film_emulation;
+            apply_film_emulation(
+                pixels,
+                lift.evaluate(frame),
+                gamma.evaluate(frame).max(0.01),
+                gain.evaluate(frame).max(0.0),
+                hue_shift_deg.evaluate(frame),
+            );
+        }
+        EffectType::GodRays { sun_x, sun_y, samples, decay, weight } => {
+            use crate::core::ae_effects_pack_v25::apply_god_rays;
+            let sun = [
+                sun_x.evaluate(frame).clamp(0.0, 1.0) * width as f32,
+                sun_y.evaluate(frame).clamp(0.0, 1.0) * height as f32,
+            ];
+            apply_god_rays(
+                pixels,
+                width,
+                height,
+                sun,
+                samples.evaluate(frame).round().clamp(1.0, 64.0) as u32,
+                decay.evaluate(frame).clamp(0.5, 1.0),
+                weight.evaluate(frame).max(0.0),
+            );
+        }
+        EffectType::RadialBlurZoom { amount } => {
+            use crate::core::ae_effects_pack_v11::apply_radial_blur_zoom;
+            let center = [width as f32 * 0.5, height as f32 * 0.5];
+            apply_radial_blur_zoom(pixels, width, height, center, amount.evaluate(frame));
+        }
     }
 }
 
@@ -925,5 +956,62 @@ mod tests {
             0,
         );
         assert_eq!(px, base, "0% radial wipe must be a no-op");
+    }
+
+    #[test]
+    fn test_grade_light_pack() {
+        let base = solid_layer(8, 8, 90, 140, 200);
+
+        // Neutral ASC CDL grade must stay within rounding distance of identity.
+        let mut px = base.clone();
+        apply_layer_effects(
+            &mut px, 8, 8,
+            &[effect("film", EffectType::FilmEmulation {
+                lift: Animatable::new_constant(0.0),
+                gamma: Animatable::new_constant(1.0),
+                gain: Animatable::new_constant(1.0),
+                hue_shift_deg: Animatable::new_constant(0.0),
+            })],
+            0,
+        );
+        for (out, inp) in px.chunks_exact(4).zip(base.chunks_exact(4)) {
+            assert!((out[0] as i32 - inp[0] as i32).abs() <= 2, "R drift {}", out[0]);
+            assert!((out[1] as i32 - inp[1] as i32).abs() <= 2, "G drift {}", out[1]);
+            assert!((out[2] as i32 - inp[2] as i32).abs() <= 2, "B drift {}", out[2]);
+        }
+
+        // God rays with zero weight adds no light.
+        let mut px = base.clone();
+        apply_layer_effects(
+            &mut px, 8, 8,
+            &[effect("rays", EffectType::GodRays {
+                sun_x: Animatable::new_constant(0.5),
+                sun_y: Animatable::new_constant(0.0),
+                samples: Animatable::new_constant(8.0),
+                decay: Animatable::new_constant(0.9),
+                weight: Animatable::new_constant(0.0),
+            })],
+            0,
+        );
+        assert_eq!(px, base, "zero-weight god rays must be a no-op");
+
+        // Zero-amount zoom blur must be a no-op.
+        let mut px = base.clone();
+        apply_layer_effects(
+            &mut px, 8, 8,
+            &[effect("zb", EffectType::RadialBlurZoom { amount: Animatable::new_constant(0.0) })],
+            0,
+        );
+        assert_eq!(px, base, "zero-amount zoom blur must be a no-op");
+
+        // Positive zoom blur must keep the centre bright on a uniform image.
+        let mut px = vec![255u8; 16 * 16 * 4];
+        apply_layer_effects(
+            &mut px, 16, 16,
+            &[effect("zb", EffectType::RadialBlurZoom { amount: Animatable::new_constant(40.0) })],
+            0,
+        );
+        let center = ((8 * 16 + 8) * 4) as usize;
+        assert!(px[center] > 0, "zoom blur keeps centre bright");
     }
 }

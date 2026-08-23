@@ -986,6 +986,25 @@ pub enum EffectType {
     RadialWipe {
         completion: Animatable<f32>,
     },
+    /// ASC CDL film emulation: lift/gamma/gain grade + YCbCr hue rotation.
+    FilmEmulation {
+        lift: Animatable<f32>,
+        gamma: Animatable<f32>,
+        gain: Animatable<f32>,
+        hue_shift_deg: Animatable<f32>,
+    },
+    /// Volumetric light scattering from a sun position (normalized 0..1).
+    GodRays {
+        sun_x: Animatable<f32>,
+        sun_y: Animatable<f32>,
+        samples: Animatable<f32>,
+        decay: Animatable<f32>,
+        weight: Animatable<f32>,
+    },
+    /// Centre zoom motion blur.
+    RadialBlurZoom {
+        amount: Animatable<f32>,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

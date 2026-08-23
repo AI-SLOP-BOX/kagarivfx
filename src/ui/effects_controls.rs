@@ -766,6 +766,55 @@ pub fn get_all_effect_presets() -> &'static [EffectPreset] {
                 enabled: true,
             },
         },
+        EffectPreset {
+            name: "Film Emulation",
+            button_label: "+ Film Emulation",
+            search_key: "film emulation kodak fuji cdl lift gamma gain grade look",
+            id_prefix: "filmem",
+            create_fn: |idx| Effect {
+                id: format!("filmem_{}", idx),
+                name: "Film Emulation".to_string(),
+                effect_type: EffectType::FilmEmulation {
+                    lift: Animatable::new_constant(0.0),
+                    gamma: Animatable::new_constant(1.0),
+                    gain: Animatable::new_constant(1.0),
+                    hue_shift_deg: Animatable::new_constant(0.0),
+                },
+                enabled: true,
+            },
+        },
+        EffectPreset {
+            name: "God Rays",
+            button_label: "+ God Rays",
+            search_key: "god rays volumetric light sun scattering beams",
+            id_prefix: "godrays",
+            create_fn: |idx| Effect {
+                id: format!("godrays_{}", idx),
+                name: "God Rays".to_string(),
+                effect_type: EffectType::GodRays {
+                    sun_x: Animatable::new_constant(0.5),
+                    sun_y: Animatable::new_constant(0.0),
+                    samples: Animatable::new_constant(24.0),
+                    decay: Animatable::new_constant(0.95),
+                    weight: Animatable::new_constant(0.6),
+                },
+                enabled: true,
+            },
+        },
+        EffectPreset {
+            name: "Zoom Blur",
+            button_label: "+ Zoom Blur",
+            search_key: "zoom blur radial motion speed warp center",
+            id_prefix: "zblur",
+            create_fn: |idx| Effect {
+                id: format!("zblur_{}", idx),
+                name: "Zoom Blur".to_string(),
+                effect_type: EffectType::RadialBlurZoom {
+                    amount: Animatable::new_constant(20.0),
+                },
+                enabled: true,
+            },
+        },
     ]
 }
 
@@ -1391,6 +1440,22 @@ pub fn draw_effect_type_ui(
         }
         EffectType::RadialWipe { completion } => {
             draw_prop(ui, current_frame, project_changed, next_frame, "Completion", completion, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=100.0).suffix("%")); });
+        }
+        EffectType::FilmEmulation { lift, gamma, gain, hue_shift_deg } => {
+            draw_prop(ui, current_frame, project_changed, next_frame, "Lift", lift, |ui, v| { ui.add(egui::Slider::new(v, -0.5..=0.5)); });
+            draw_prop(ui, current_frame, project_changed, next_frame, "Gamma", gamma, |ui, v| { ui.add(egui::Slider::new(v, 0.1..=3.0)); });
+            draw_prop(ui, current_frame, project_changed, next_frame, "Gain", gain, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=3.0)); });
+            draw_prop(ui, current_frame, project_changed, next_frame, "Hue Shift", hue_shift_deg, |ui, v| { ui.add(egui::Slider::new(v, -180.0..=180.0).suffix("°")); });
+        }
+        EffectType::GodRays { sun_x, sun_y, samples, decay, weight } => {
+            draw_prop(ui, current_frame, project_changed, next_frame, "Sun X", sun_x, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=1.0)); });
+            draw_prop(ui, current_frame, project_changed, next_frame, "Sun Y", sun_y, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=1.0)); });
+            draw_prop(ui, current_frame, project_changed, next_frame, "Samples", samples, |ui, v| { ui.add(egui::Slider::new(v, 1.0..=64.0)); });
+            draw_prop(ui, current_frame, project_changed, next_frame, "Decay", decay, |ui, v| { ui.add(egui::Slider::new(v, 0.5..=1.0)); });
+            draw_prop(ui, current_frame, project_changed, next_frame, "Weight", weight, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=2.0)); });
+        }
+        EffectType::RadialBlurZoom { amount } => {
+            draw_prop(ui, current_frame, project_changed, next_frame, "Amount", amount, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=100.0)); });
         }
     }
 }
