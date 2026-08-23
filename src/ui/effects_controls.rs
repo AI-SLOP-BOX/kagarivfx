@@ -563,6 +563,22 @@ pub fn get_all_effect_presets() -> &'static [EffectPreset] {
                 enabled: true,
             },
         },
+        EffectPreset {
+            name: "Glow",
+            button_label: "+ Glow (Pro)",
+            search_key: "glow bloom threshold bleed stylize light",
+            id_prefix: "glowpro",
+            create_fn: |idx| Effect {
+                id: format!("glowpro_{}", idx),
+                name: "Glow".to_string(),
+                effect_type: EffectType::GlowPro {
+                    threshold: Animatable::new_constant(0.7),
+                    radius: Animatable::new_constant(4.0),
+                    intensity: Animatable::new_constant(1.0),
+                },
+                enabled: true,
+            },
+        },
     ]
 }
 
@@ -1052,8 +1068,46 @@ pub fn draw_effect_type_ui(
         EffectType::Tiler { scale_percent, .. } => {
             draw_prop(ui, current_frame, project_changed, next_frame, "Scale", scale_percent, |ui, v| { ui.add(egui::Slider::new(v, 10.0..=500.0).suffix("%")); });
         }
-        EffectType::ColorBalance { .. } | EffectType::ChannelMixer { .. } => {
-            ui.label("Parameter UI deferred");
+        EffectType::ColorBalance { shadows, midtones, highlights, preserve_luminosity } => {
+            // Plain (non-Animatable) fields: edit in place, flag project change.
+            for (label, band) in [("Shadows", shadows), ("Midtones", midtones), ("Highlights", highlights)] {
+                ui.small(label);
+                ui.horizontal(|ui| {
+                    for (i, cname) in ["R", "G", "B"].iter().enumerate() {
+                        ui.label(*cname);
+                        if ui
+                            .add(egui::DragValue::new(&mut band[i]).speed(1.0).range(-100.0..=100.0))
+                            .changed()
+                        {
+                            *project_changed = true;
+                        }
+                    }
+                });
+            }
+            if ui.checkbox(preserve_luminosity, "Preserve Luminosity").changed() {
+                *project_changed = true;
+            }
+        }
+        EffectType::ChannelMixer { matrix, monochrome } => {
+            ui.label("Output ← Input (%)");
+            egui::Grid::new("channel_mixer_grid").num_columns(4).show(ui, |ui| {
+                let names = ["R", "G", "B"];
+                for (r, row) in matrix.iter_mut().enumerate() {
+                    ui.label(format!("←{}", names[r]));
+                    for v in row.iter_mut() {
+                        if ui
+                            .add(egui::DragValue::new(v).speed(1.0).range(-200.0..=200.0))
+                            .changed()
+                        {
+                            *project_changed = true;
+                        }
+                    }
+                    ui.end_row();
+                }
+            });
+            if ui.checkbox(monochrome, "Monochrome").changed() {
+                *project_changed = true;
+            }
         }
         EffectType::Tritone { shadow_color, mid_color, highlight_color } => {
             // Color pickers for 3-tone mapping
@@ -1095,6 +1149,11 @@ pub fn draw_effect_type_ui(
             draw_prop(ui, current_frame, project_changed, next_frame, "Hue", hue_deg, |ui, v| { ui.add(egui::Slider::new(v, -180.0..=180.0).suffix("°")); });
             draw_prop(ui, current_frame, project_changed, next_frame, "Saturation", saturation, |ui, v| { ui.add(egui::Slider::new(v, -100.0..=100.0)); });
             draw_prop(ui, current_frame, project_changed, next_frame, "Lightness", lightness, |ui, v| { ui.add(egui::Slider::new(v, -100.0..=100.0)); });
+        }
+        EffectType::GlowPro { threshold, radius, intensity } => {
+            draw_prop(ui, current_frame, project_changed, next_frame, "Threshold", threshold, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=1.0)); });
+            draw_prop(ui, current_frame, project_changed, next_frame, "Radius", radius, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=128.0).suffix(" px")); });
+            draw_prop(ui, current_frame, project_changed, next_frame, "Intensity", intensity, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=4.0)); });
         }
     }
 }

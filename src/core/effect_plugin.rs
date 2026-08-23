@@ -210,6 +210,7 @@ impl RenderEffectPlugin for EnumEffectPlugin {
             EffectType::Vibrance { .. } => "Vibrance",
             EffectType::WhiteBalance { .. } => "White Balance",
             EffectType::HslAdjust { .. } => "HSL Adjust",
+            EffectType::GlowPro { .. } => "Glow",
         }
     }
 
@@ -265,6 +266,7 @@ impl RenderEffectPlugin for EnumEffectPlugin {
             EffectType::Vibrance { .. } => "vibrance",
             EffectType::WhiteBalance { .. } => "white_balance",
             EffectType::HslAdjust { .. } => "hsl_adjust",
+            EffectType::GlowPro { .. } => "glow_pro",
         }
     }
 
@@ -341,6 +343,13 @@ impl RenderEffectPlugin for EnumEffectPlugin {
                 params.glow_radius = radius.evaluate(frame);
                 params.glow_intensity = intensity.evaluate(frame) / 100.0;
                 params.glow_color = color.evaluate(frame);
+            }
+            EffectType::GlowPro { threshold, radius, intensity } => {
+                // Reuse the GPU glow/bloom path; white tint comes from the default.
+                params.glow_enabled = 1;
+                params.glow_threshold = threshold.evaluate(frame).clamp(0.0, 1.0);
+                params.glow_radius = radius.evaluate(frame);
+                params.glow_intensity = (intensity.evaluate(frame) / 4.0).clamp(0.0, 1.0);
             }
             EffectType::MeshWarp { top_left, top_right, bottom_left, bottom_right } => {
                 params.meshwarp_enabled = 1;

@@ -921,6 +921,12 @@ pub enum EffectType {
         saturation: Animatable<f32>,
         lightness: Animatable<f32>,
     },
+    /// Threshold bloom glow (AE Glow): bright pixels bleed outwards.
+    GlowPro {
+        threshold: Animatable<f32>,
+        radius: Animatable<f32>,
+        intensity: Animatable<f32>,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

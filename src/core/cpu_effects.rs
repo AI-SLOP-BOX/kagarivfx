@@ -416,6 +416,17 @@ fn apply_one(
                 lightness: lightness.evaluate(frame),
             });
         }
+        EffectType::GlowPro { threshold, radius, intensity } => {
+            use crate::core::ae_effects_pack_v28::apply_glow_pro;
+            apply_glow_pro(
+                pixels,
+                width,
+                height,
+                threshold.evaluate(frame),
+                radius.evaluate(frame).round().clamp(0.0, 128.0) as u32,
+                intensity.evaluate(frame),
+            );
+        }
     }
 }
 
@@ -608,5 +619,39 @@ mod tests {
             0,
         );
         assert!(red[0] < red[1].max(red[2]), "180° rotation must move red toward cyan");
+    }
+
+    #[test]
+    fn test_glow_pro_bleeds_bright_pixels() {
+        // Dark 8x8 buffer with a single white pixel: glow must spread brightness.
+        let mut px = vec![0u8; 8 * 8 * 4];
+        for p in px.chunks_exact_mut(4) { p[3] = 255; }
+        let cx = ((4 * 8 + 4) * 4) as usize;
+        px[cx] = 255; px[cx + 1] = 255; px[cx + 2] = 255;
+
+        apply_layer_effects(
+            &mut px, 8, 8,
+            &[effect("glow", EffectType::GlowPro {
+                threshold: Animatable::new_constant(0.5),
+                radius: Animatable::new_constant(2.0),
+                intensity: Animatable::new_constant(1.5),
+            })],
+            0,
+        );
+        let neighbor = ((4 * 8 + 6) * 4) as usize;
+        assert!(px[neighbor] > 0, "glow did not bleed to neighbor pixel");
+        // Zero intensity must be a no-op.
+        let mut idle = solid_layer(4, 4, 200, 200, 200);
+        let before = idle.clone();
+        apply_layer_effects(
+            &mut idle, 4, 4,
+            &[effect("glow", EffectType::GlowPro {
+                threshold: Animatable::new_constant(0.5),
+                radius: Animatable::new_constant(4.0),
+                intensity: Animatable::new_constant(0.0),
+            })],
+            0,
+        );
+        assert_eq!(idle, before, "zero-intensity glow must be a no-op");
     }
 }
