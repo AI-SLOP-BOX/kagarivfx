@@ -298,6 +298,10 @@ pub struct AfterEffectsApp {
     pub script_console_output: Option<Vec<String>>,
     pub script_console_history: Option<Vec<String>>,
     pub script_console_command: String,
+    /// Color management settings
+    pub color_space_idx: usize,
+    pub bit_depth_idx: usize,
+    pub display_sim_idx: usize,
 }
 
 #[cfg(feature = "gui")]
@@ -414,6 +418,9 @@ impl Default for AfterEffectsApp {
             script_console_output: None,
             script_console_history: None,
             script_console_command: String::new(),
+            color_space_idx: 0,
+            bit_depth_idx: 2,
+            display_sim_idx: 0,
         }
     }
 }
