@@ -71,6 +71,104 @@ pub fn draw_tracker_panel(app: &mut AfterEffectsApp, ui: &mut egui::Ui, current_
                 }
             });
 
+            // ── Perspective Corner Pin (4-point) tracking ──
+            ui.add_space(8.0);
+            ui.separator();
+            ui.label(
+                egui::RichText::new("Perspective Corner Pin (4-point)")
+                    .strong()
+                    .color(colors::ACCENT_CYAN),
+            );
+            ui.label("Corners = Tracker 1..4 in order: TL, TR, BR, BL.");
+            let quad_conf_id = egui::Id::new("aevfx_quad_conf");
+            if let Some(prev) = ui.memory(|m| m.data.get_temp::<String>(quad_conf_id)) {
+                ui.label(
+                    egui::RichText::new(format!("Last run lock quality: {prev}"))
+                        .small()
+                        .color(colors::ACCENT_GREEN),
+                );
+            }
+            if ui
+                .add_enabled(
+                    tracker_count >= 4,
+                    egui::Button::new("Analyze Quad (Work Area)"),
+                )
+                .on_disabled_hover_text("Add at least 4 tracker points first")
+                .clicked()
+            {
+                let wa_out = app.work_area_out.unwrap_or_else(|| {
+                    app.history
+                        .current()
+                        .active_composition()
+                        .duration_frames
+                        .saturating_sub(1)
+                });
+                let mut ran = false;
+                let mut avg = 0.0f32;
+                let mut frames = 0u32;
+                if wa_out > current_frame {
+                    app.modify_project(|p| {
+                        let comp = p.active_composition_mut();
+                        // 1) Seed rectangle from the four trackers at the start frame.
+                        let Some(layer0) = comp.layers.get(idx) else { return };
+                        if layer0.trackers.len() < 4 {
+                            return;
+                        }
+                        let src_rect: [[f32; 2]; 4] = {
+                            let mut r = [[0.0f32; 2]; 4];
+                            for (s, rslot) in r.iter_mut().enumerate() {
+                                *rslot = layer0.trackers[s].position.evaluate(current_frame);
+                            }
+                            r
+                        };
+                        // 2) Track all four corners over the work area.
+                        let track =
+                            crate::core::tracker_engine::TrackerEngine::analyze_quad_track(
+                                comp,
+                                idx,
+                                [0, 1, 2, 3],
+                                current_frame,
+                                wa_out,
+                            );
+                        avg = crate::core::tracker_engine::quad_track_confidence(
+                            &track,
+                            src_rect,
+                        )
+                        .iter()
+                        .sum::<f32>()
+                            / track.frames.len().max(1) as f32;
+                        frames = track.frames.len() as u32;
+                        // 3) Bake per-corner keyframes back onto the trackers.
+                        let Some(layer) = comp.layers.get_mut(idx) else { return };
+                        for slot in 0..4usize {
+                            let kfs: Vec<crate::core::keyframe::Keyframe<[f32; 2]>> = track
+                                .frames
+                                .iter()
+                                .zip(&track.corners)
+                                .map(|(f, c)| {
+                                    crate::core::keyframe::Keyframe::new(
+                                        *f,
+                                        c[slot],
+                                        crate::core::keyframe::InterpolationType::Linear,
+                                    )
+                                })
+                                .collect();
+                            layer.trackers[slot].position =
+                                crate::core::property::Animatable::Animated(kfs);
+                        }
+                        ran = true;
+                    });
+                }
+                if ran {
+                    crate::core::frame_cache::bump_version();
+                    let pct = format!("{:.0}% over {} frames", avg * 100.0, frames);
+                    ui.memory_mut(|m| m.data.insert_temp(quad_conf_id, pct.clone()));
+                    app.toasts.info(format!("Quad tracking complete — avg lock {pct}"));
+                } else {
+                    app.toasts.error("Nothing to analyze: extend the work area past the playhead");
+                }
+            }
+
             ui.horizontal(|ui| {
                 if ui.button("◀◀ 1f").on_hover_text("Analyze 1 Frame Backward").clicked() && current_frame > 0 {
                     let f = current_frame - 1;

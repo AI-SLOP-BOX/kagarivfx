@@ -61,5 +61,6 @@ pub mod camera_dof_hud;
 pub mod precompose_dialog;
 pub mod recovery_dialog;
 pub mod panel_animation;
+pub mod custom_widgets;
 
 

@@ -286,7 +286,7 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                                     if app.tracker_rx.is_some() {
                                         ui.spinner();
                                         ui.small("Analyzing...");
-                                    } else if ui.button("Analyze Forward >").clicked() {
+                                    } else if crate::ui::custom_widgets::ae_button(ui, "Analyze Forward >").clicked() {
                                         trigger_async_track = true;
                                     }
                                 });

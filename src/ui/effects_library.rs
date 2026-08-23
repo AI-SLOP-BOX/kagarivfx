@@ -374,9 +374,10 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                         ui.collapsing(format!("{} ({})", cat, matching.len()), |ui| {
                             for (pi, p) in matching.iter().enumerate() {
                                 let preset_idx = presets.iter().position(|pp| std::ptr::eq(pp, *p)).unwrap_or(pi);
-                                let resp = ui.add(egui::Button::new(
-                                    egui::RichText::new(format!("⠿ {}", p.button_label)).small()
-                                ).min_size(egui::vec2(ui.available_width(), 20.0)));
+                                let resp = crate::ui::custom_widgets::ae_button(
+                                    ui,
+                                    &format!("⠿ {}", p.button_label)
+                                );
 
                                 // Drag detection
                                 if resp.drag_started() {
@@ -612,5 +613,9 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                 app.current_frame = cf;
                 *current_frame = cf;
             }
+
+            // Particle layers get their emitter inspector inline in this panel
+            // so every emitter knob is reachable without extra state plumbing.
+            crate::ui::effects_controls::draw_particle_emitter_controls(app, ui);
         });
 }
