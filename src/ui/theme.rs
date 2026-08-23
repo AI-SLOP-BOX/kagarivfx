@@ -98,7 +98,67 @@ pub mod layout {
 }
 
 /// Configure fonts for professional appearance.
+/// Loads system fonts on macOS (SF Pro, Menlo) for AE-quality typography.
 fn configure_fonts(ctx: &egui::Context) {
+    let mut fonts = egui::FontDefinitions::default();
+
+    // Load macOS system fonts for professional appearance
+    #[cfg(target_os = "macos")]
+    {
+        let sf_pro_paths = [
+            "/System/Library/Fonts/SFCompact.ttf",
+            "/System/Library/Fonts/SFNS.ttf",
+            "/Library/Fonts/SF-Pro-Display-Regular.otf",
+            "/System/Library/Fonts/Helvetica.ttc",
+        ];
+        let menlo_paths = [
+            "/System/Library/Fonts/Menlo.ttc",
+            "/System/Library/Fonts/Menlo-Regular.ttc",
+        ];
+
+        // Try to load a proportional font (SF Pro → Helvetica fallback)
+        let mut loaded_prop = false;
+        for path in &sf_pro_paths {
+            if let Ok(data) = std::fs::read(path) {
+                fonts.font_data.insert(
+                    "SFPro".to_string(),
+                    egui::FontData::from_owned(data),
+                );
+                fonts.families
+                    .entry(egui::FontFamily::Proportional)
+                    .or_default()
+                    .insert(0, "SFPro".to_string());
+                loaded_prop = true;
+                break;
+            }
+        }
+        if !loaded_prop {
+            log::info!("Using egui default proportional font (system fonts not found)");
+        }
+
+        // Try to load a monospace font (Menlo)
+        let mut loaded_mono = false;
+        for path in &menlo_paths {
+            if let Ok(data) = std::fs::read(path) {
+                fonts.font_data.insert(
+                    "Menlo".to_string(),
+                    egui::FontData::from_owned(data),
+                );
+                fonts.families
+                    .entry(egui::FontFamily::Monospace)
+                    .or_default()
+                    .insert(0, "Menlo".to_string());
+                loaded_mono = true;
+                break;
+            }
+        }
+        if !loaded_mono {
+            log::info!("Using egui default monospace font (Menlo not found)");
+        }
+    }
+
+    ctx.set_fonts(fonts);
+
     ctx.style_mut(|style| {
         style.text_styles.insert(
             egui::TextStyle::Body,

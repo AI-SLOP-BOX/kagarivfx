@@ -583,6 +583,91 @@ pub fn apply_white_balance(pixels: &mut [u8], wb: &WhiteBalance) {
     }
 }
 
+// ── HSL Adjust ─────────────────────────────────────────────────────────────
+
+/// Lumetri-style three-way adjustment: hue rotation in degrees, saturation
+/// gain (−100..100 mapped onto ×0..×2 around 1.0) and lightness shift
+/// (−100..100 → ±0.5 additive).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct HslAdjust {
+    /// Hue rotation in degrees (wraps).
+    pub hue_deg: f32,
+    /// Saturation slider −100..100.
+    pub saturation: f32,
+    /// Lightness slider −100..100.
+    pub lightness: f32,
+}
+
+impl Default for HslAdjust {
+    fn default() -> Self {
+        Self { hue_deg: 0.0, saturation: 0.0, lightness: 0.0 }
+    }
+}
+
+/// RGB (0..1) → HSL (h in degrees 0..360, s/l in 0..1).
+fn rgb_to_hsl(r: f32, g: f32, b: f32) -> (f32, f32, f32) {
+    let max = r.max(g).max(b);
+    let min = r.min(g).min(b);
+    let l = (max + min) * 0.5;
+    let d = max - min;
+    if d < 1e-6 {
+        return (0.0, 0.0, l);
+    }
+    let s = if l > 0.5 { d / (2.0 - max - min) } else { d / (max + min) };
+    let h = if (max - r).abs() < 1e-6 {
+        ((g - b) / d).rem_euclid(6.0)
+    } else if (max - g).abs() < 1e-6 {
+        (b - r) / d + 2.0
+    } else {
+        (r - g) / d + 4.0
+    };
+    (h * 60.0, s, l)
+}
+
+/// HSL → RGB (writes 0..1 triple).
+fn hsl_to_rgb(h: f32, s: f32, l: f32, out: &mut [f32; 3]) {
+    if s <= 1e-6 {
+        *out = [l, l, l];
+        return;
+    }
+    let c = (1.0 - (2.0 * l - 1.0).abs()) * s;
+    let hp = h.rem_euclid(360.0) / 60.0;
+    let x = c * (1.0 - (hp % 2.0 - 1.0).abs());
+    let sector = (hp.floor() as i32).rem_euclid(6);
+    let (r1, g1, b1) = match sector {
+        0 => (c, x, 0.0),
+        1 => (x, c, 0.0),
+        2 => (0.0, c, x),
+        3 => (0.0, x, c),
+        4 => (x, 0.0, c),
+        _ => (c, 0.0, x),
+    };
+    let m = l - c * 0.5;
+    *out = [r1 + m, g1 + m, b1 + m];
+}
+
+pub fn apply_hsl_adjust(pixels: &mut [u8], adj: &HslAdjust) {
+    let sat_mul = 1.0 + (adj.saturation / 100.0).clamp(-1.0, 1.0);
+    let l_shift = (adj.lightness / 100.0).clamp(-1.0, 1.0) * 0.5;
+    if adj.hue_deg.abs() < 1e-3 && (sat_mul - 1.0).abs() < 1e-6 && l_shift.abs() < 1e-6 {
+        return;
+    }
+    for px in pixels.chunks_exact_mut(4) {
+        let r = px[0] as f32 / 255.0;
+        let g = px[1] as f32 / 255.0;
+        let b = px[2] as f32 / 255.0;
+        let (mut h, mut s, mut l) = rgb_to_hsl(r, g, b);
+        h = (h + adj.hue_deg).rem_euclid(360.0);
+        s = (s * sat_mul).clamp(0.0, 1.0);
+        l = (l + l_shift).clamp(0.0, 1.0);
+        let mut rgb = [0.0f32; 3];
+        hsl_to_rgb(h, s, l, &mut rgb);
+        for (c, slot) in rgb.iter().zip(px.iter_mut().take(3)) {
+            *slot = (c.clamp(0.0, 1.0) * 255.0).round() as u8;
+        }
+    }
+}
+
 #[cfg(test)]
 mod vibrance_wb_tests {
     use super::*;
@@ -666,5 +751,50 @@ mod vibrance_wb_tests {
         let mut neutral = base.clone();
         apply_white_balance(&mut neutral, &WhiteBalance::default());
         assert_eq!(neutral, base);
+    }
+
+    #[test]
+    fn test_hsl_identity_at_defaults() {
+        let src = solid(8, 8, [200, 90, 30, 255]);
+        let mut img = src.clone();
+        apply_hsl_adjust(&mut img, &HslAdjust::default());
+        assert_eq!(img, src);
+    }
+
+    #[test]
+    fn test_hsl_full_desaturation_grays_out() {
+        let mut img = solid(4, 4, [200, 40, 40, 255]);
+        apply_hsl_adjust(&mut img, &HslAdjust { saturation: -100.0, ..Default::default() });
+        assert_eq!(img[0], img[1], "R==G");
+        assert_eq!(img[1], img[2], "G==B");
+    }
+
+    #[test]
+    fn test_hsl_hue_rotation_moves_red_to_cyan_family() {
+        // Pure red rotated +180° lands in the cyan family (low R, high G+B).
+        let mut img = solid(2, 2, [255, 0, 0, 255]);
+        apply_hsl_adjust(&mut img, &HslAdjust { hue_deg: 180.0, ..Default::default() });
+        assert!(img[0] < 60, "R dropped: {}", img[0]);
+        assert!(img[1] > 180 && img[2] > 180, "G/B high: {:?}", &img[..3]);
+        // Rotation wraps: +360° returns to the original hue.
+        let mut wrapped = solid(2, 2, [255, 0, 0, 255]);
+        apply_hsl_adjust(&mut wrapped, &HslAdjust { hue_deg: 360.0, ..Default::default() });
+        assert!(wrapped[0] > 230 && wrapped[1] < 25, "wrap keeps red: {:?}", &wrapped[..3]);
+    }
+
+    #[test]
+    fn test_hsl_lightness_extremes_and_determinism() {
+        let run = |light: f32| {
+            let mut img = solid(4, 4, [120, 120, 120, 255]);
+            apply_hsl_adjust(&mut img, &HslAdjust { lightness: light, ..Default::default() });
+            img
+        };
+        let bright = run(100.0);
+        assert!(bright[0] > 240, "+100 lightness → near white: {}", bright[0]);
+        let dark = run(-100.0);
+        assert!(dark[0] < 15, "-100 lightness → near black: {}", dark[0]);
+        assert_eq!(run(20.0), run(20.0), "deterministic");
+        // Empty buffer safe.
+        apply_hsl_adjust(&mut [], &HslAdjust { hue_deg: 90.0, saturation: 50.0, lightness: 10.0 });
     }
 }

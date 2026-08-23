@@ -17,7 +17,7 @@ use crate::core::ae_effects_pack_v28::{
     apply_radial_fast_blur, LightSweepParams, TileEdgeMode,
 };
 use crate::core::color_correction::{
-    apply_channel_mixer, apply_color_balance, apply_curves, apply_vibrance,
+    apply_channel_mixer, apply_color_balance, apply_curves, apply_hsl_adjust, apply_vibrance,
     apply_white_balance, ChannelCurves, ColorBalance, ChannelMixer, ToneCurve,
 };
 
@@ -149,6 +149,15 @@ pub enum ExtEffect {
         #[serde(default)]
         tint: f32,
     },
+    /// Hue rotation / saturation / lightness three-way.
+    HslAdjust {
+        #[serde(default)]
+        hue_deg: f32,
+        #[serde(default)]
+        saturation: f32,
+        #[serde(default)]
+        lightness: f32,
+    },
 }
 
 fn d50() -> f32 { 50.0 }
@@ -186,6 +195,7 @@ impl ExtEffect {
             ExtEffect::GlowPro { .. } => "glow_pro",
             ExtEffect::Vibrance { .. } => "vibrance",
             ExtEffect::WhiteBalance { .. } => "white_balance",
+            ExtEffect::HslAdjust { .. } => "hsl_adjust",
         }
     }
 
@@ -206,6 +216,7 @@ impl ExtEffect {
             ExtEffect::GlowPro { .. } => "Glow",
             ExtEffect::Vibrance { .. } => "Vibrance",
             ExtEffect::WhiteBalance { .. } => "White Balance",
+            ExtEffect::HslAdjust { .. } => "HSL Adjust",
         }
     }
 
@@ -224,7 +235,8 @@ impl ExtEffect {
             | ExtEffect::ColorBalance { .. }
             | ExtEffect::ChannelMixer { .. }
             | ExtEffect::Vibrance { .. }
-            | ExtEffect::WhiteBalance { .. } => "Color Correction",
+            | ExtEffect::WhiteBalance { .. }
+            | ExtEffect::HslAdjust { .. } => "Color Correction",
         }
     }
 
@@ -330,6 +342,16 @@ impl ExtEffect {
                     },
                 );
             }
+            ExtEffect::HslAdjust { hue_deg, saturation, lightness } => {
+                apply_hsl_adjust(
+                    pixels,
+                    &crate::core::color_correction::HslAdjust {
+                        hue_deg: *hue_deg,
+                        saturation: *saturation,
+                        lightness: *lightness,
+                    },
+                );
+            }
         }
     }
 }
@@ -367,6 +389,7 @@ mod tests {
             ExtEffect::GlowPro { threshold: 0.5, radius: 3, intensity: 0.9 },
             ExtEffect::Vibrance { amount: 40.0 },
             ExtEffect::WhiteBalance { temperature: 30.0, tint: -10.0 },
+            ExtEffect::HslAdjust { hue_deg: 45.0, saturation: 25.0, lightness: -8.0 },
         ]
     }
 
