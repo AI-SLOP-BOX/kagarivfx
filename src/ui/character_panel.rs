@@ -4,6 +4,7 @@ use eframe::egui;
 use crate::AfterEffectsApp;
 use crate::core::timeline::{Composition, LayerType};
 use crate::ui::theme::colors;
+use crate::ui::custom_widgets;
 
 pub fn draw_character_panel(
     app: &mut AfterEffectsApp,
@@ -130,7 +131,7 @@ pub fn draw_character_panel(
                     ui.group(|ui| {
                         ui.label(egui::RichText::new("✨ One-Tap Motion Presets").strong().color(colors::ACCENT_CYAN));
                         ui.horizontal(|ui| {
-                            if ui.button("⌨ Typewriter").on_hover_text("Reveal characters one by one").clicked() {
+                            if custom_widgets::ae_button(ui, "⌨ Typewriter").on_hover_text("Reveal characters one by one").clicked() {
                                 let mut anim = crate::core::text_animator::TextAnimatorSettings::default();
                                 anim.enabled = true;
                                 anim.opacity = 0.0;
@@ -140,7 +141,7 @@ pub fn draw_character_panel(
                                 layer.text_animator = Some(anim);
                                 project_changed = true;
                             }
-                            if ui.button("💥 Word Pop").on_hover_text("Bounce text up character by character").clicked() {
+                            if custom_widgets::ae_button(ui, "💥 Word Pop").on_hover_text("Bounce text up character by character").clicked() {
                                 let mut anim = crate::core::text_animator::TextAnimatorSettings::default();
                                 anim.enabled = true;
                                 anim.position_offset = [0.0, 50.0];
@@ -151,7 +152,7 @@ pub fn draw_character_panel(
                             }
                         });
                         ui.horizontal(|ui| {
-                            if ui.button("🌊 Wave Tracking").on_hover_text("Expand text letter-spacing smoothly").clicked() {
+                            if custom_widgets::ae_button(ui, "🌊 Wave Tracking").on_hover_text("Expand text letter-spacing smoothly").clicked() {
                                 let mut anim = crate::core::text_animator::TextAnimatorSettings::default();
                                 anim.enabled = true;
                                 anim.tracking = 25.0;
@@ -159,7 +160,7 @@ pub fn draw_character_panel(
                                 layer.text_animator = Some(anim);
                                 project_changed = true;
                             }
-                            if ui.button("🌟 Neon Pulse").on_hover_text("Pulsating opacity and tracking wave").clicked() {
+                            if custom_widgets::ae_button(ui, "🌟 Neon Pulse").on_hover_text("Pulsating opacity and tracking wave").clicked() {
                                 let mut anim = crate::core::text_animator::TextAnimatorSettings::default();
                                 anim.enabled = true;
                                 anim.opacity = 0.2;
@@ -273,7 +274,7 @@ pub fn draw_animation_presets(
     let presets = ["Fade In", "Slide In Left", "Slide In Right", "Slide In Up", "Scale Up"];
     ui.horizontal_wrapped(|ui| {
         for preset in presets {
-            if ui.small_button(preset).clicked() {
+            if custom_widgets::ae_button(ui, preset).clicked() {
                 if let Some(idx) = app.selected_layer_idx {
                     crate::ui::character_panel::apply_text_preset(app, preset, idx, current_frame, duration_frames);
                 }

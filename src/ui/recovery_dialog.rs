@@ -1,6 +1,7 @@
 use eframe::egui;
 use crate::AfterEffectsApp;
 use crate::ui::theme::colors;
+use crate::ui::custom_widgets;
 
 /// Startup crash-recovery prompt: offers to restore the latest autosave snapshot.
 pub fn draw_recovery_dialog(app: &mut AfterEffectsApp, ctx: &egui::Context) {
@@ -30,7 +31,7 @@ pub fn draw_recovery_dialog(app: &mut AfterEffectsApp, ctx: &egui::Context) {
 
             ui.add_space(12.0);
             ui.horizontal(|ui| {
-                if ui.button(egui::RichText::new("✅ 復元する").strong()).clicked() {
+                if custom_widgets::ae_button_accent(ui, "✅ 復元する").clicked() {
                     if let Some(project) = app.autosave.load_latest_recovery() {
                         app.history = crate::core::history::ProjectHistory::new(project);
                         crate::core::frame_cache::bump_version();
@@ -39,7 +40,7 @@ pub fn draw_recovery_dialog(app: &mut AfterEffectsApp, ctx: &egui::Context) {
                     app.show_recovery_dialog = false;
                     app.autosave.clear_recovery();
                 }
-                if ui.button("🗑 破棄して新規開始").clicked() {
+                if custom_widgets::ae_button(ui, "🗑 破棄して新規開始").clicked() {
                     app.autosave.clear_recovery();
                     app.show_recovery_dialog = false;
                 }

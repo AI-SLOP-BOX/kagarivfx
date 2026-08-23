@@ -1,6 +1,7 @@
 use eframe::egui;
 use crate::AfterEffectsApp;
 use crate::ui::theme::colors;
+use crate::ui::custom_widgets;
 
 pub fn draw_transport_panel(app: &mut AfterEffectsApp, ui: &mut egui::Ui, current_frame: &mut u32, total_frames: u32) {
     ui.heading("Preview / Time Controls");
@@ -31,17 +32,8 @@ pub fn draw_transport_panel(app: &mut AfterEffectsApp, ui: &mut egui::Ui, curren
         } else {
             (SVG_PLAY, "Play (Space)")
         };
-        let play_btn = egui::Button::new(
-            egui::RichText::new(format!("{} {}", if app.is_playing { "⏸" } else { "▶" }, label))
-                .strong()
-                .color(egui::Color32::WHITE),
-        )
-        .fill(if app.is_playing {
-            egui::Color32::from_rgb(60, 60, 30)
-        } else {
-            colors::BG_PRESSED
-        });
-        if ui.add(play_btn).on_hover_text(label).clicked() {
+        let play_label = if app.is_playing { "⏸ Pause" } else { "▶ Play (Space)" };
+        if custom_widgets::ae_button_accent(ui, play_label).on_hover_text(label).clicked() {
             app.is_playing = !app.is_playing;
         }
 

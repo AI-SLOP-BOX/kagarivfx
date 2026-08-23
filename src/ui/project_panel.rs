@@ -2,6 +2,7 @@ use eframe::egui;
 use crate::AfterEffectsApp;
 use crate::core::timeline::{ProjectItem, ProjectItemType, Layer, LayerType};
 use crate::ui::theme::colors;
+use crate::ui::custom_widgets;
 
 pub fn draw(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
     ui.heading("Project");
@@ -67,11 +68,11 @@ pub fn draw(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
     let mut add_folder_requested = false;
 
     ui.horizontal(|ui| {
-        if ui.button("+ New Comp").on_hover_text("Create New Composition").clicked() {
+        if custom_widgets::ae_button(ui, "+ New Comp").on_hover_text("Create New Composition").clicked() {
             add_comp_requested = true;
         }
 
-        if ui.button("+ Import File...").clicked() {
+        if custom_widgets::ae_button(ui, "+ Import File...").clicked() {
             if let Some(path) = rfd::FileDialog::new()
                 .add_filter("Media Footage", &["png", "jpg", "jpeg", "webp", "wav", "mp3", "mp4"])
                 .pick_file()
@@ -80,7 +81,7 @@ pub fn draw(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
             }
         }
 
-        if ui.button("+ New Folder").clicked() {
+        if custom_widgets::ae_button(ui, "+ New Folder").clicked() {
             add_folder_requested = true;
         }
     });
@@ -172,7 +173,7 @@ pub fn draw(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
                 }
 
                 ui.add_space(4.0);
-                if ui.button("Add to Active Comp").clicked() {
+                if custom_widgets::ae_button(ui, "Add to Active Comp").clicked() {
                     add_to_timeline_item = Some(item.clone());
                 }
             });

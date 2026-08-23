@@ -4,6 +4,7 @@ use std::time::Instant;
 
 use crate::AfterEffectsApp;
 use crate::ui::theme::colors;
+use crate::ui::custom_widgets;
 
 const START_TIME_ID: &str = "render_queue_export_start";
 const CANCEL_CONFIRM_ID: &str = "render_queue_cancel_confirm";
@@ -31,8 +32,7 @@ pub fn draw_render_queue_panel(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
     let comp = app.history.current().active_composition();
 
     ui.horizontal(|ui| {
-        if ui
-            .add_enabled(!app.is_exporting, egui::Button::new("⚡ Render All Queue (Cmd+M)"))
+        if custom_widgets::ae_button_accent(ui, "⚡ Render All Queue (Cmd+M)")
             .on_hover_text("Start rendering active queue items")
             .clicked()
         {
@@ -55,16 +55,14 @@ pub fn draw_render_queue_panel(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
             // Always show the export dialog for detailed settings
             app.show_export_dialog = true;
         }
-        if ui
-            .add_enabled(!app.is_exporting, egui::Button::new("+ Add Active Comp"))
-            .on_disabled_hover_text("Cannot modify queue while exporting")
+        if custom_widgets::ae_button(ui, "+ Add Active Comp")
+            .on_hover_text("Cannot modify queue while exporting")
             .clicked()
         {
             app.render_queue_items.push(comp.name.clone());
         }
-        if ui
-            .add_enabled(!app.is_exporting, egui::Button::new("Clear Queue"))
-            .on_disabled_hover_text("Cannot clear queue while exporting")
+        if custom_widgets::ae_button(ui, "Clear Queue")
+            .on_hover_text("Cannot clear queue while exporting")
             .clicked()
         {
             app.render_queue_items.clear();
@@ -242,17 +240,17 @@ pub fn draw_render_queue_panel(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
                             .small()
                             .color(egui::Color32::YELLOW),
                     );
-                    if ui.button("Yes, Cancel").clicked() {
+                    if custom_widgets::ae_button(ui, "Yes, Cancel").clicked() {
                         if let Some(flag) = &app.export_cancel_flag {
                             flag.store(true, std::sync::atomic::Ordering::Relaxed);
                             log::info!("Render cancelled by user");
                         }
                         ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new(CANCEL_CONFIRM_ID), false));
                     }
-                    if ui.button("Keep Rendering").clicked() {
+                    if custom_widgets::ae_button(ui, "Keep Rendering").clicked() {
                         ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new(CANCEL_CONFIRM_ID), false));
                     }
-                } else if ui.button("■ Cancel Render").clicked() {
+                } else if custom_widgets::ae_button(ui, "■ Cancel Render").clicked() {
                     ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new(CANCEL_CONFIRM_ID), true));
                 }
             });

@@ -3,11 +3,12 @@ use crate::core::property::Animatable;
 use crate::core::keyframe::{Keyframe, InterpolationType, BezierControlPoint};
 use crate::core::timeline::Expression;
 use crate::ui::theme::colors;
+use crate::ui::custom_widgets;
 
 pub fn draw_easy_ease_button<T: Clone>(ui: &mut egui::Ui, property: &mut Animatable<T>, project_changed: &mut bool) {
     ui.horizontal(|ui| {
         ui.add_space(20.0);
-        if ui.button("Easy Ease (F9)").on_hover_text("Symmetrical Bezier Ease (F9)").clicked() {
+        if custom_widgets::ae_button(ui, "Easy Ease (F9)").on_hover_text("Symmetrical Bezier Ease (F9)").clicked() {
             if let Animatable::Animated(ref mut keyframes) = property {
                 let coords = crate::core::keyframe::EasePreset::Standard.control_points();
                 for kf in keyframes {
@@ -83,7 +84,7 @@ pub fn draw_easy_ease_button<T: Clone>(ui: &mut egui::Ui, property: &mut Animata
             });
 
         // Physics Spring Bounce Auto Generator Button
-        if ui.button("⚽ Physics Spring").on_hover_text("Apply Physics-based Overshoot & Spring Dynamics").clicked() {
+        if custom_widgets::ae_button(ui, "⚽ Physics Spring").on_hover_text("Apply Physics-based Overshoot & Spring Dynamics").clicked() {
             if let Animatable::Animated(ref mut keyframes) = property {
                 let spring_bezier = [0.175, 0.885, 0.32, 1.275]; // Elastic Overshoot Control Points
                 for kf in keyframes {
@@ -98,7 +99,7 @@ pub fn draw_easy_ease_button<T: Clone>(ui: &mut egui::Ui, property: &mut Animata
         }
 
         // ⏸ Hold Keyframe Mode (Cmd+Opt+H) Button
-        if ui.button("⏸ Hold").on_hover_text("Toggle Toggle Hold Keyframe (Cmd+Opt+H): Values step discretely at keyframes").clicked() {
+        if custom_widgets::ae_button(ui, "⏸ Hold").on_hover_text("Toggle Toggle Hold Keyframe (Cmd+Opt+H): Values step discretely at keyframes").clicked() {
             if let Animatable::Animated(ref mut keyframes) = property {
                 for kf in keyframes {
                     kf.interpolation = InterpolationType::Hold;
@@ -108,7 +109,7 @@ pub fn draw_easy_ease_button<T: Clone>(ui: &mut egui::Ui, property: &mut Animata
         }
 
         // 📈 Linear Keyframe Mode Button
-        if ui.button("📈 Linear").on_hover_text("Linear Keyframe: Values interpolate smoothly at constant speed").clicked() {
+        if custom_widgets::ae_button(ui, "📈 Linear").on_hover_text("Linear Keyframe: Values interpolate smoothly at constant speed").clicked() {
             if let Animatable::Animated(ref mut keyframes) = property {
                 for kf in keyframes {
                     kf.interpolation = InterpolationType::Linear;
@@ -118,7 +119,7 @@ pub fn draw_easy_ease_button<T: Clone>(ui: &mut egui::Ui, property: &mut Animata
         }
 
         // ⏩ Keyframe Time Compress (2x Speed / 50% Duration)
-        if ui.button("⏩ 2x Speed").on_hover_text("Compress keyframe duration by 50%").clicked() {
+        if custom_widgets::ae_button(ui, "⏩ 2x Speed").on_hover_text("Compress keyframe duration by 50%").clicked() {
             if let Animatable::Animated(ref mut keyframes) = property {
                 if let Some(first_kf) = keyframes.first() {
                     let start_f = first_kf.frame;
@@ -132,7 +133,7 @@ pub fn draw_easy_ease_button<T: Clone>(ui: &mut egui::Ui, property: &mut Animata
         }
 
         // ⏪ Keyframe Time Stretch (0.5x Speed / 200% Duration)
-        if ui.button("⏪ 0.5x Speed").on_hover_text("Stretch keyframe duration by 200%").clicked() {
+        if custom_widgets::ae_button(ui, "⏪ 0.5x Speed").on_hover_text("Stretch keyframe duration by 200%").clicked() {
             if let Animatable::Animated(ref mut keyframes) = property {
                 if let Some(first_kf) = keyframes.first() {
                     let start_f = first_kf.frame;
@@ -173,7 +174,7 @@ pub fn draw_expression_selector(ui: &mut egui::Ui, label: &str, expr_opt: &mut O
             });
 
         // Expression Pickwhip button (@)
-        if ui.button("🌀").on_hover_text("Expression Pickwhip (@): Pick property to auto-generate script expression").clicked() {
+        if custom_widgets::ae_icon_button(ui, "🌀", "Expression Pickwhip (@): Pick property to auto-generate script expression").clicked() {
             *expr_opt = Some(Expression::Wiggle { frequency: 3.0, amplitude: 25.0 });
             *project_changed = true;
         }
@@ -199,7 +200,7 @@ pub fn draw_expression_selector(ui: &mut egui::Ui, label: &str, expr_opt: &mut O
                 }
 
                 // Test button
-                if ui.button("▶").on_hover_text("Test expression at current frame").clicked() {
+                if custom_widgets::ae_icon_button(ui, "▶", "Test expression at current frame").clicked() {
                     // Will be handled by caller
                 }
             });
@@ -229,7 +230,7 @@ pub fn draw_property_ui<T: Clone + crate::core::property::Interpolate + PartialE
         
         let has_keyframes = property.keyframes().is_some();
         if has_keyframes
-            && ui.small_button("◀").on_hover_text("Jump to Previous Keyframe (J)").clicked() {
+            && custom_widgets::ae_icon_button(ui, "◀", "Jump to Previous Keyframe (J)").clicked() {
                 if let Some(kfs) = property.keyframes() {
                     if let Some(target) = kfs.iter().rev().find(|k| k.frame < current_frame) {
                         next_frame = Some(target.frame);
@@ -238,7 +239,7 @@ pub fn draw_property_ui<T: Clone + crate::core::property::Interpolate + PartialE
             }
 
         let stopwatch_btn = if has_keyframes { "[K]" } else { "[+]" };
-        if ui.small_button(stopwatch_btn).on_hover_text(if has_keyframes { "Disable Keyframes" } else { "Enable Keyframes / Add Keyframe" }).clicked() {
+        if custom_widgets::ae_button(ui, stopwatch_btn).on_hover_text(if has_keyframes { "Disable Keyframes" } else { "Enable Keyframes / Add Keyframe" }).clicked() {
             if has_keyframes {
                 let current_val = property.evaluate(current_frame);
                 *property = Animatable::Constant(current_val);
@@ -251,7 +252,7 @@ pub fn draw_property_ui<T: Clone + crate::core::property::Interpolate + PartialE
         }
 
         if has_keyframes {
-            if ui.small_button("▶").on_hover_text("Jump to Next Keyframe (K)").clicked() {
+            if custom_widgets::ae_icon_button(ui, "▶", "Jump to Next Keyframe (K)").clicked() {
                 if let Some(kfs) = property.keyframes() {
                     if let Some(target) = kfs.iter().find(|k| k.frame > current_frame) {
                         next_frame = Some(target.frame);

@@ -1,6 +1,7 @@
 use eframe::egui;
 use crate::AfterEffectsApp;
 use crate::ui::theme::colors;
+use crate::ui::custom_widgets;
 
 pub fn draw_audio_panel(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
     ui.heading("Audio Levels & Panning");
@@ -61,7 +62,7 @@ pub fn draw_audio_panel(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
         ui.separator();
         ui.label(egui::RichText::new("✨ Audio-to-Motion Reactive Bind").strong().color(colors::ACCENT_CYAN));
         ui.horizontal(|ui| {
-            if ui.button("🎵 Bind to Scale (Kick)").on_hover_text("Pulse Scale on audio bass peaks").clicked() {
+            if custom_widgets::ae_button_accent(ui, "🎵 Bind to Scale (Kick)").on_hover_text("Pulse Scale on audio bass peaks").clicked() {
                 let mut temp_proj = app.history.current().clone();
                 let comp_mut = temp_proj.active_composition_mut();
                 if idx < comp_mut.layers.len() {
@@ -74,7 +75,7 @@ pub fn draw_audio_panel(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
                     app.toasts.info(format!("Bound Audio Bass to {} Scale", layer_name));
                 }
             }
-            if ui.button("🌟 Bind to Glow Pulse").on_hover_text("Pulsate Glow Intensity on audio peaks").clicked() {
+            if custom_widgets::ae_button_accent(ui, "🌟 Bind to Glow Pulse").on_hover_text("Pulsate Glow Intensity on audio peaks").clicked() {
                 let mut temp_proj = app.history.current().clone();
                 let comp_mut = temp_proj.active_composition_mut();
                 if idx < comp_mut.layers.len() {

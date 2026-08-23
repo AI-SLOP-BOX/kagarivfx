@@ -1,6 +1,7 @@
 use eframe::egui;
 use crate::AfterEffectsApp;
 use crate::ui::theme::colors;
+use crate::ui::custom_widgets;
 
 pub fn draw_tracker_panel(app: &mut AfterEffectsApp, ui: &mut egui::Ui, current_frame: u32) {
     ui.heading("Tracker");
@@ -28,7 +29,7 @@ pub fn draw_tracker_panel(app: &mut AfterEffectsApp, ui: &mut egui::Ui, current_
             ui.add_space(4.0);
             // ── Tracker point management ──
             ui.label(format!("Tracker points: {}", tracker_count));
-            if ui.button("+ Add Tracker Point").on_hover_text("Add a track point at the playhead position").clicked() {
+            if custom_widgets::ae_button_accent(ui, "+ Add Tracker Point").on_hover_text("Add a track point at the playhead position").clicked() {
                 let pos = layer_pos_at_head;
                 let tp = crate::core::timeline::TrackerPoint {
                     id: format!("tracker_{}", tracker_count),
@@ -52,7 +53,7 @@ pub fn draw_tracker_panel(app: &mut AfterEffectsApp, ui: &mut egui::Ui, current_
             }
 
             ui.horizontal(|ui| {
-                if ui.button("Analyze Forward (Work Area)").on_hover_text("Track the feature through the work area using real SAD matching + subpixel refinement").clicked() {
+                if custom_widgets::ae_button(ui, "Analyze Forward (Work Area)").on_hover_text("Track the feature through the work area using real SAD matching + subpixel refinement").clicked() {
                     let wa_out = app.work_area_out.unwrap_or_else(|| {
                         app.history.current().active_composition().duration_frames.saturating_sub(1)
                     });
@@ -170,14 +171,14 @@ pub fn draw_tracker_panel(app: &mut AfterEffectsApp, ui: &mut egui::Ui, current_
             }
 
             ui.horizontal(|ui| {
-                if ui.button("◀◀ 1f").on_hover_text("Analyze 1 Frame Backward").clicked() && current_frame > 0 {
+                if custom_widgets::ae_button(ui, "◀◀ 1f").on_hover_text("Analyze 1 Frame Backward").clicked() && current_frame > 0 {
                     let f = current_frame - 1;
                     app.modify_project(|p| {
                         let comp = p.active_composition_mut();
                         crate::core::tracker_engine::TrackerEngine::analyze_track_cancellable(comp, idx, 0, f.saturating_sub(1), f, None);
                     });
                 }
-                if ui.button("1f ▶▶").on_hover_text("Analyze 1 Frame Forward").clicked() {
+                if custom_widgets::ae_button(ui, "1f ▶▶").on_hover_text("Analyze 1 Frame Forward").clicked() {
                     let total = app.history.current().active_composition().duration_frames;
                     let f = (current_frame + 1).min(total.saturating_sub(1));
                     app.modify_project(|p| {
@@ -192,7 +193,7 @@ pub fn draw_tracker_panel(app: &mut AfterEffectsApp, ui: &mut egui::Ui, current_
             ui.label("Apply:");
 
             ui.horizontal(|ui| {
-                if ui.button("Reset Track").on_hover_text("Remove all tracked keyframes from this tracker").clicked() {
+                if custom_widgets::ae_button(ui, "Reset Track").on_hover_text("Remove all tracked keyframes from this tracker").clicked() {
                     app.modify_project(|p| {
                         let comp = p.active_composition_mut();
                         if let Some(tp) = comp.layers.get_mut(idx) {
@@ -203,7 +204,7 @@ pub fn draw_tracker_panel(app: &mut AfterEffectsApp, ui: &mut egui::Ui, current_
                     });
                     app.toasts.info("Tracker keyframes reset");
                 }
-                if ui.button("Apply to Position").on_hover_text("Bake tracker motion into a target layer's position (pick below)").clicked() {
+                if custom_widgets::ae_button(ui, "Apply to Position").on_hover_text("Bake tracker motion into a target layer's position (pick below)").clicked() {
                     app.toasts.info("Select the target layer in 'Apply to Layer' dropdown");
                 }
             });
@@ -220,7 +221,7 @@ pub fn draw_tracker_panel(app: &mut AfterEffectsApp, ui: &mut egui::Ui, current_
                     }
                 });
             if let Some(target_idx) = app.tracker_apply_target {
-                if ui.button("Apply Motion → Target").clicked() {
+                if custom_widgets::ae_button_accent(ui, "Apply Motion → Target").clicked() {
                     app.modify_project(|p| {
                         let comp = p.active_composition_mut();
                         crate::core::tracker_engine::TrackerEngine::apply_tracker_to_target(comp, idx, 0, target_idx, true, false);
@@ -233,7 +234,7 @@ pub fn draw_tracker_panel(app: &mut AfterEffectsApp, ui: &mut egui::Ui, current_
             ui.separator();
             ui.label(egui::RichText::new("✨ AI Auto-Mask & Roto Generator").strong().color(colors::ACCENT_CYAN));
             ui.horizontal(|ui| {
-                if ui.button("🎯 Auto-Generate Mask").on_hover_text("Auto-create 4-vertex Bezier Mask around tracked feature").clicked() {
+                if custom_widgets::ae_button_accent(ui, "🎯 Auto-Generate Mask").on_hover_text("Auto-create 4-vertex Bezier Mask around tracked feature").clicked() {
                     let mut temp_proj = app.history.current().clone();
                     let comp_mut = temp_proj.active_composition_mut();
                     if idx < comp_mut.layers.len() {

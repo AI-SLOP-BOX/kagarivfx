@@ -1,6 +1,7 @@
 use eframe::egui;
 use crate::AfterEffectsApp;
 use crate::ui::theme::colors;
+use crate::ui::custom_widgets;
 
 pub fn draw_comp_settings_dialog(app: &mut AfterEffectsApp, ctx: &egui::Context) {
     if !app.show_comp_settings {
@@ -75,17 +76,17 @@ pub fn draw_comp_settings_dialog(app: &mut AfterEffectsApp, ctx: &egui::Context)
                 ui.label(egui::RichText::new("📱 One-Tap Smart SNS Reframer").strong().color(colors::ACCENT_CYAN));
                 ui.small("Auto-remap layer positions to new Aspect Ratio:");
                 ui.horizontal(|ui| {
-                    if ui.button("📱 Shorts 9:16").on_hover_text("Vertical (1080 x 1920) for TikTok/Reels/Shorts").clicked() {
+                    if custom_widgets::ae_button(ui, "📱 Shorts 9:16").on_hover_text("Vertical (1080 x 1920) for TikTok/Reels/Shorts").clicked() {
                         let old_w = comp.width;
                         let old_h = comp.height;
                         comp.resize_and_remap(1080, 1920, old_w, old_h);
                     }
-                    if ui.button("🔳 Square 1:1").on_hover_text("Square (1080 x 1080) for Instagram Feed").clicked() {
+                    if custom_widgets::ae_button(ui, "🔳 Square 1:1").on_hover_text("Square (1080 x 1080) for Instagram Feed").clicked() {
                         let old_w = comp.width;
                         let old_h = comp.height;
                         comp.resize_and_remap(1080, 1080, old_w, old_h);
                     }
-                    if ui.button("🎬 Cinema 21:9").on_hover_text("Ultrawide Cinematic (2560 x 1080)").clicked() {
+                    if custom_widgets::ae_button(ui, "🎬 Cinema 21:9").on_hover_text("Ultrawide Cinematic (2560 x 1080)").clicked() {
                         let old_w = comp.width;
                         let old_h = comp.height;
                         comp.resize_and_remap(2560, 1080, old_w, old_h);
@@ -181,11 +182,11 @@ pub fn draw_comp_settings_dialog(app: &mut AfterEffectsApp, ctx: &egui::Context)
             let mut should_close = false;
 
             ui.horizontal(|ui| {
-                if ui.button("OK").clicked() {
+                if custom_widgets::ae_button_accent(ui, "OK").clicked() {
                     should_commit = true;
                     should_close = true;
                 }
-                if ui.button("Cancel").clicked() {
+                if custom_widgets::ae_button(ui, "Cancel").clicked() {
                     should_close = true;
                 }
             });

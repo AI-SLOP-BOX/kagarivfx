@@ -1,4 +1,5 @@
 use eframe::egui;
+use crate::ui::custom_widgets;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum ActiveTool {
@@ -111,8 +112,7 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
                     ("Audio", 0, 7),
                     ("Libraries", 0, 20),
                 ] {
-                    let is_active = app.left_tab_idx == l_idx && app.right_tab_idx == r_idx;
-                    if ui.selectable_label(is_active, name).clicked() {
+                    if custom_widgets::ae_icon_button(ui, name, name).clicked() {
                         app.left_tab_idx = l_idx;
                         app.right_tab_idx = r_idx;
                     }
@@ -123,8 +123,7 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
                 crate::ui::align_hud::draw_alignment_hud(app, ui);
 
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    if ui.button(egui::RichText::new("🚀 Render Queue (Cmd+M)").strong().color(colors::ACCENT_YELLOW))
-                        .clicked()
+                    if custom_widgets::ae_button_accent(ui, "Render Queue (Cmd+M)").clicked()
                     {
                         app.show_export_dialog = true;
                     }
