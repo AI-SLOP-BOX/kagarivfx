@@ -824,3 +824,39 @@ mod directional_radial_tests {
         assert_eq!(px, orig);
     }
 }
+
+// ── Camera Shake ──
+/// Applies procedural camera shake to a position value.
+/// Returns offset [dx, dy] for the given time.
+pub fn camera_shake(time_sec: f32, intensity: f32, speed_hz: f32, seed: u64) -> [f32; 2] {
+    let t = time_sec * speed_hz;
+    let s = seed as f32;
+    let dx = (t * 1.7 + s).sin() * 0.6 + (t * 3.3 + s * 1.7).sin() * 0.4;
+    let dy = (t * 2.1 + s * 2.3).sin() * 0.5 + (t * 4.7 + s * 0.9).sin() * 0.5;
+    [dx * intensity, dy * intensity]
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn test_camera_shake_is_deterministic() {
+        let a1 = super::camera_shake(5.0, 10.0, 8.0, 42);
+        let a2 = super::camera_shake(5.0, 10.0, 8.0, 42);
+        assert_eq!(a1[0], a2[0]);
+        assert_eq!(a1[1], a2[1]);
+    }
+
+    #[test]
+    fn test_camera_shake_varies_with_seed() {
+        let a = super::camera_shake(5.0, 10.0, 8.0, 42);
+        let b = super::camera_shake(5.0, 10.0, 8.0, 99);
+        assert!(a != b, "different seeds must produce different shake");
+    }
+
+    #[test]
+    fn test_camera_shake_zero_intensity() {
+        let a = super::camera_shake(5.0, 0.0, 8.0, 42);
+        assert_eq!(a[0], 0.0);
+        assert_eq![a[1], 0.0];
+    }
+}
