@@ -427,6 +427,45 @@ fn apply_one(
                 intensity.evaluate(frame),
             );
         }
+        EffectType::CrtScanlines { line_spacing, intensity } => {
+            use crate::core::ae_effects_pack_v12::apply_crt_scanlines;
+            apply_crt_scanlines(
+                pixels,
+                width,
+                height,
+                line_spacing.evaluate(frame).round().clamp(1.0, 200.0) as u32,
+                intensity.evaluate(frame),
+            );
+        }
+        EffectType::Vortex { radius, angle_deg } => {
+            use crate::core::ae_effects_pack_v13::apply_vortex_distortion;
+            let cx = width as f32 * 0.5;
+            let cy = height as f32 * 0.5;
+            apply_vortex_distortion(
+                pixels,
+                width,
+                height,
+                [cx, cy],
+                radius.evaluate(frame).max(1.0),
+                angle_deg.evaluate(frame),
+            );
+        }
+        EffectType::HeatDistortion { strength, speed } => {
+            use crate::core::ae_effects_pack_v13::apply_heat_distortion;
+            let time = frame as f32 / 30.0 * speed.evaluate(frame);
+            apply_heat_distortion(pixels, width, height, time, strength.evaluate(frame));
+        }
+        EffectType::RainRipples { drop_count, wave_strength } => {
+            use crate::core::ae_effects_pack_v12::apply_rain_ripples;
+            apply_rain_ripples(
+                pixels,
+                width,
+                height,
+                frame,
+                drop_count.evaluate(frame).round().clamp(0.0, 100.0) as u32,
+                wave_strength.evaluate(frame),
+            );
+        }
     }
 }
 
@@ -653,5 +692,48 @@ mod tests {
             0,
         );
         assert_eq!(idle, before, "zero-intensity glow must be a no-op");
+    }
+
+    #[test]
+    fn test_stylize_distort_pack_noops_and_effects() {
+        // Zero-strength / zero-angle settings must be exact no-ops.
+        let base = solid_layer(8, 8, 90, 140, 200);
+
+        let mut px = base.clone();
+        apply_layer_effects(
+            &mut px, 8, 8,
+            &[effect("heat", EffectType::HeatDistortion {
+                strength: Animatable::new_constant(0.0),
+                speed: Animatable::new_constant(1.0),
+            })],
+            0,
+        );
+        assert_eq!(px, base, "zero-strength heat must be a no-op");
+
+        let mut px = base.clone();
+        apply_layer_effects(
+            &mut px, 8, 8,
+            &[effect("vortex", EffectType::Vortex {
+                radius: Animatable::new_constant(50.0),
+                angle_deg: Animatable::new_constant(0.0),
+            })],
+            0,
+        );
+        assert_eq!(px, base, "zero-angle vortex must be a no-op");
+
+        // CRT scanlines must darken even rows only.
+        let mut px = base.clone();
+        apply_layer_effects(
+            &mut px, 8, 8,
+            &[effect("crt", EffectType::CrtScanlines {
+                line_spacing: Animatable::new_constant(2.0),
+                intensity: Animatable::new_constant(0.5),
+            })],
+            0,
+        );
+        let row0 = (px[0] as u32 + px[4] as u32) / 2;
+        let row1 = ((px[(1 * 8 * 4)] as u32) + px[(1 * 8 * 4) + 4] as u32) / 2;
+        assert_eq!(row0, 45, "row 0 (y%2==0) darkened to 50%");
+        assert_eq!(row1, 140, "row 1 untouched");
     }
 }

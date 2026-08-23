@@ -579,6 +579,66 @@ pub fn get_all_effect_presets() -> &'static [EffectPreset] {
                 enabled: true,
             },
         },
+        EffectPreset {
+            name: "CRT Scanlines",
+            button_label: "+ CRT Scanlines",
+            search_key: "crt scanlines tv retro vhs screen",
+            id_prefix: "crt",
+            create_fn: |idx| Effect {
+                id: format!("crt_{}", idx),
+                name: "CRT Scanlines".to_string(),
+                effect_type: EffectType::CrtScanlines {
+                    line_spacing: Animatable::new_constant(3.0),
+                    intensity: Animatable::new_constant(0.4),
+                },
+                enabled: true,
+            },
+        },
+        EffectPreset {
+            name: "Vortex Distortion",
+            button_label: "+ Vortex",
+            search_key: "vortex spiral swirl twist distort",
+            id_prefix: "vortex",
+            create_fn: |idx| Effect {
+                id: format!("vortex_{}", idx),
+                name: "Vortex Distortion".to_string(),
+                effect_type: EffectType::Vortex {
+                    radius: Animatable::new_constant(300.0),
+                    angle_deg: Animatable::new_constant(120.0),
+                },
+                enabled: true,
+            },
+        },
+        EffectPreset {
+            name: "Heat Distortion",
+            button_label: "+ Heat Distortion",
+            search_key: "heat haze shimmer thermal turbulence fire",
+            id_prefix: "heat",
+            create_fn: |idx| Effect {
+                id: format!("heat_{}", idx),
+                name: "Heat Distortion".to_string(),
+                effect_type: EffectType::HeatDistortion {
+                    strength: Animatable::new_constant(6.0),
+                    speed: Animatable::new_constant(1.0),
+                },
+                enabled: true,
+            },
+        },
+        EffectPreset {
+            name: "Rain Ripples",
+            button_label: "+ Rain Ripples",
+            search_key: "rain water drop ripple wave puddle",
+            id_prefix: "rainrip",
+            create_fn: |idx| Effect {
+                id: format!("rainrip_{}", idx),
+                name: "Rain Ripples".to_string(),
+                effect_type: EffectType::RainRipples {
+                    drop_count: Animatable::new_constant(12.0),
+                    wave_strength: Animatable::new_constant(3.0),
+                },
+                enabled: true,
+            },
+        },
     ]
 }
 
@@ -1154,6 +1214,22 @@ pub fn draw_effect_type_ui(
             draw_prop(ui, current_frame, project_changed, next_frame, "Threshold", threshold, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=1.0)); });
             draw_prop(ui, current_frame, project_changed, next_frame, "Radius", radius, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=128.0).suffix(" px")); });
             draw_prop(ui, current_frame, project_changed, next_frame, "Intensity", intensity, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=4.0)); });
+        }
+        EffectType::CrtScanlines { line_spacing, intensity } => {
+            draw_prop(ui, current_frame, project_changed, next_frame, "Line Spacing", line_spacing, |ui, v| { ui.add(egui::Slider::new(v, 1.0..=50.0).suffix(" px")); });
+            draw_prop(ui, current_frame, project_changed, next_frame, "Intensity", intensity, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=1.0)); });
+        }
+        EffectType::Vortex { radius, angle_deg } => {
+            draw_prop(ui, current_frame, project_changed, next_frame, "Radius", radius, |ui, v| { ui.add(egui::Slider::new(v, 1.0..=2000.0).suffix(" px")); });
+            draw_prop(ui, current_frame, project_changed, next_frame, "Angle", angle_deg, |ui, v| { ui.add(egui::Slider::new(v, -720.0..=720.0).suffix("°")); });
+        }
+        EffectType::HeatDistortion { strength, speed } => {
+            draw_prop(ui, current_frame, project_changed, next_frame, "Strength", strength, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=30.0)); });
+            draw_prop(ui, current_frame, project_changed, next_frame, "Speed", speed, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=5.0).suffix("×")); });
+        }
+        EffectType::RainRipples { drop_count, wave_strength } => {
+            draw_prop(ui, current_frame, project_changed, next_frame, "Drop Count", drop_count, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=100.0)); });
+            draw_prop(ui, current_frame, project_changed, next_frame, "Wave Strength", wave_strength, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=20.0)); });
         }
     }
 }

@@ -294,6 +294,10 @@ pub struct AfterEffectsApp {
     /// Panel animation states for smooth open/close transitions
     pub inspector_animation: crate::ui::panel_animation::PanelAnimation,
     pub effects_animation: crate::ui::panel_animation::PanelAnimation,
+    /// Scripting console state
+    pub script_console_output: Option<Vec<String>>,
+    pub script_console_history: Option<Vec<String>>,
+    pub script_console_command: String,
 }
 
 #[cfg(feature = "gui")]
@@ -407,6 +411,9 @@ impl Default for AfterEffectsApp {
             lazy_evaluator: crate::core::render_pipeline::LazyFrameEvaluator::new(),
             inspector_animation: crate::ui::panel_animation::PanelAnimation::new(true),
             effects_animation: crate::ui::panel_animation::PanelAnimation::new(true),
+            script_console_output: None,
+            script_console_history: None,
+            script_console_command: String::new(),
         }
     }
 }

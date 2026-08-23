@@ -927,6 +927,26 @@ pub enum EffectType {
         radius: Animatable<f32>,
         intensity: Animatable<f32>,
     },
+    /// CRT scanline TV distortion.
+    CrtScanlines {
+        line_spacing: Animatable<f32>,
+        intensity: Animatable<f32>,
+    },
+    /// Attenuated spiral vortex around the layer centre.
+    Vortex {
+        radius: Animatable<f32>,
+        angle_deg: Animatable<f32>,
+    },
+    /// Rising thermal turbulence; time advances with `speed` per second.
+    HeatDistortion {
+        strength: Animatable<f32>,
+        speed: Animatable<f32>,
+    },
+    /// Water drop / rain ripple ring displacement.
+    RainRipples {
+        drop_count: Animatable<f32>,
+        wave_strength: Animatable<f32>,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

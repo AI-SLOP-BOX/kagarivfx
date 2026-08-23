@@ -211,6 +211,10 @@ impl RenderEffectPlugin for EnumEffectPlugin {
             EffectType::WhiteBalance { .. } => "White Balance",
             EffectType::HslAdjust { .. } => "HSL Adjust",
             EffectType::GlowPro { .. } => "Glow",
+            EffectType::CrtScanlines { .. } => "CRT Scanlines",
+            EffectType::Vortex { .. } => "Vortex Distortion",
+            EffectType::HeatDistortion { .. } => "Heat Distortion",
+            EffectType::RainRipples { .. } => "Rain Ripples",
         }
     }
 
@@ -267,6 +271,10 @@ impl RenderEffectPlugin for EnumEffectPlugin {
             EffectType::WhiteBalance { .. } => "white_balance",
             EffectType::HslAdjust { .. } => "hsl_adjust",
             EffectType::GlowPro { .. } => "glow_pro",
+            EffectType::CrtScanlines { .. } => "crt_scanlines",
+            EffectType::Vortex { .. } => "vortex_distortion",
+            EffectType::HeatDistortion { .. } => "heat_distortion",
+            EffectType::RainRipples { .. } => "rain_ripples",
         }
     }
 
