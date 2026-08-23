@@ -2,6 +2,7 @@ use eframe::egui;
 use crate::core::timeline::{Layer, LayerType};
 use crate::core::text_animator::{SelectorShape, TextAnimatorSettings};
 use crate::ui::inspector_property::{draw_property_ui, draw_easy_ease_button, draw_expression_selector};
+use crate::ui::theme::colors;
 
 pub fn draw_layer_transforms(
     ui: &mut egui::Ui,
@@ -144,7 +145,7 @@ pub fn draw_layer_transforms(
             draw_expression_selector(ui, "opacity", &mut layer.transform.opacity_expression, project_changed);
             if layer.is_3d {
                 ui.separator();
-                ui.label(egui::RichText::new("🧊 3D Spatial Transform").small().strong().color(egui::Color32::from_rgb(0, 200, 255)));
+                ui.label(egui::RichText::new("🧊 3D Spatial Transform").small().strong().color(colors::ACCENT_CYAN));
                 
                 let mut pos3d = layer.transform_3d.position.evaluate(current_frame);
                 ui.horizontal(|ui| {
@@ -180,7 +181,7 @@ pub fn draw_layer_transforms(
 
                 // ── 3D Material Options ──
                 ui.separator();
-                ui.label(egui::RichText::new("🎨 Material Options").small().strong().color(egui::Color32::from_rgb(255, 200, 0)));
+                ui.label(egui::RichText::new("🎨 Material Options").small().strong().color(colors::ACCENT_YELLOW));
 
                 ui.horizontal(|ui| {
                     ui.label("Ambient:");

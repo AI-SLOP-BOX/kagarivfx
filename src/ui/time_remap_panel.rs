@@ -1,5 +1,6 @@
 use eframe::egui;
 use crate::AfterEffectsApp;
+use crate::ui::theme::colors;
 
 pub fn draw_time_remap_panel(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
     ui.heading("Time Stretch & Time Remapping");
@@ -32,7 +33,7 @@ pub fn draw_time_remap_panel(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
         }
 
         ui.add_space(6.0);
-        ui.label(egui::RichText::new("🔄 Auto Loop Expressions").small().strong().color(egui::Color32::from_rgb(0, 200, 255)));
+        ui.label(egui::RichText::new("🔄 Auto Loop Expressions").small().strong().color(colors::ACCENT_CYAN));
         ui.horizontal(|ui| {
             if ui.button("🔁 Loop Cycle").on_hover_text("Attach loopOut(\"cycle\") for continuous repeat").clicked() {
                 let mut temp_proj = app.history.current().clone();

@@ -91,7 +91,7 @@ pub fn draw_render_queue_panel(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
 
     frame.show(ui, |ui| {
         let (status_text, status_color) = if app.is_exporting {
-            ("Rendering", egui::Color32::from_rgb(80, 200, 120))
+            ("Rendering", colors::ACCENT_GREEN)
         } else {
             ("Queued", egui::Color32::YELLOW)
         };
@@ -106,7 +106,7 @@ pub fn draw_render_queue_panel(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
             ui.label(
                 egui::RichText::new(format!("Item {}", queue_pos))
                     .strong()
-                    .color(egui::Color32::from_rgb(0, 180, 255)),
+                    .color(colors::TEXT_ACCENT),
             );
             ui.label(format!("Comp: {}", comp.name));
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
@@ -226,7 +226,7 @@ pub fn draw_render_queue_panel(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
                 );
                 if let Some(status) = &app.export_status {
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        ui.label(egui::RichText::new(status).small().color(egui::Color32::from_rgb(140, 200, 255)));
+                        ui.label(egui::RichText::new(status).small().color(colors::HUD_STATUS_TEXT));
                     });
                 }
             });

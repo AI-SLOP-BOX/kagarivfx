@@ -1,5 +1,6 @@
 use eframe::egui;
 use crate::AfterEffectsApp;
+use crate::ui::theme::colors;
 
 pub struct PaletteCommand {
     pub name: &'static str,
@@ -282,7 +283,7 @@ pub fn draw_command_palette(app: &mut AfterEffectsApp, ctx: &egui::Context) {
                         let is_selected = idx == app.command_palette_selected_idx;
                         
                         let bg_color = if is_selected {
-                            egui::Color32::from_rgb(0, 120, 215)
+                            colors::BG_ACTIVE
                         } else {
                             egui::Color32::TRANSPARENT
                         };
@@ -296,12 +297,12 @@ pub fn draw_command_palette(app: &mut AfterEffectsApp, ctx: &egui::Context) {
                             ui.horizontal(|ui| {
                                 let category_text = egui::RichText::new(format!("[{}] ", cmd.category))
                                     .small()
-                                    .color(if is_selected { egui::Color32::WHITE } else { egui::Color32::from_gray(160) });
+                                    .color(if is_selected { egui::Color32::WHITE } else { colors::TEXT_SECONDARY });
                                 ui.label(category_text);
 
                                 let name_text = egui::RichText::new(cmd.name)
                                     .strong()
-                                    .color(if is_selected { egui::Color32::WHITE } else { egui::Color32::from_gray(220) });
+                                    .color(if is_selected { egui::Color32::WHITE } else { colors::TEXT_PRIMARY });
                                 let item_resp = ui.selectable_label(is_selected, name_text);
 
                                 if item_resp.clicked() {

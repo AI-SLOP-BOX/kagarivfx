@@ -158,6 +158,56 @@ pub fn generate_audio_spectrum_bands(
         .collect()
 }
 
+// ── Spectrogram ───────────────────────────────────────────────────────────
+
+/// Renders a scrolling spectrogram heatmap from band history.
+///
+/// `history` is ordered oldest → newest; the NEWEST frame occupies the
+/// rightmost column and frequency runs bottom (band 0) → top. Colour ramps
+/// from `color_low` to `color_high` by amplitude. Pixels without history data
+/// are left untouched so callers can pre-fill a background.
+pub fn render_spectrogram(
+    buffer: &mut [u8],
+    width: u32,
+    height: u32,
+    history: &[Vec<f32>],
+    color_low: [u8; 3],
+    color_high: [u8; 3],
+) {
+    if width == 0 || height == 0 || buffer.len() < (width as usize) * (height as usize) * 4 {
+        return;
+    }
+    let Some(cols) = history.len().checked_sub(1) else {
+        return;
+    };
+    let w = width as usize;
+    let h = height as usize;
+
+    for x in 0..w {
+        // Right-align: newest column at x = w−1.
+        let src_col = cols.checked_sub(w - 1 - x);
+        let Some(frame_bands) = src_col.and_then(|ci| history.get(ci)) else {
+            continue;
+        };
+        if frame_bands.is_empty() {
+            continue;
+        }
+        for y in 0..h {
+            // Bottom row = first band.
+            let t_band = 1.0 - y as f32 / (h - 1).max(1) as f32;
+            let band = ((t_band * frame_bands.len() as f32) as usize).min(frame_bands.len() - 1);
+            let amp = frame_bands[band].clamp(0.0, 1.0);
+            let idx = (y * w + x) * 4;
+            for c in 0..3 {
+                let lo = color_low[c] as f32;
+                buffer[idx + c] =
+                    (lo + (color_high[c] as f32 - lo) * amp).round().clamp(0.0, 255.0) as u8;
+            }
+            buffer[idx + 3] = 255;
+        }
+    }
+}
+
 // ── Beat / Onset Detection ─────────────────────────────────────────────────
 
 /// Energy-flux beat detector over successive PCM windows.

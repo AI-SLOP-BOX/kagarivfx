@@ -88,20 +88,37 @@ impl TrackerEngine {
             return Some(pos);
         }
 
-        // Reference patch from the CURRENT frame around the tracker position
-        let mut ref_patch = vec![0u8; feature * feature * 4];
-        for py in 0..feature {
-            for px in 0..feature {
-                let sx = cx - half as i32 + px as i32;
-                let sy = cy - half as i32 + py as i32;
-                if sx < 0 || sy < 0 || sx >= img_w as i32 || sy >= img_h as i32 {
-                    continue;
+        // Reference patch: prefer the tracker's persistent template when one
+        // of matching size is stored (appearance-locked tracking), otherwise
+        // slice the current frame around the position as before.
+        let template_len = feature * feature * 4;
+        let ref_patch: Vec<u8> = match tracker
+            .reference_pattern
+            .as_deref()
+            .filter(|t| t.len() == template_len)
+        {
+            // Stored patterns are normalised 0..1 floats — quantise to u8.
+            Some(stored) => stored
+                .iter()
+                .map(|&f| (f.clamp(0.0, 1.0) * 255.0).round() as u8)
+                .collect(),
+            None => {
+                let mut patch = vec![0u8; template_len];
+                for py in 0..feature {
+                    for px in 0..feature {
+                        let sx = cx - half as i32 + px as i32;
+                        let sy = cy - half as i32 + py as i32;
+                        if sx < 0 || sy < 0 || sx >= img_w as i32 || sy >= img_h as i32 {
+                            continue;
+                        }
+                        let src = ((sy * img_w as i32 + sx) * 4) as usize;
+                        let dst = (py * feature + px) * 4;
+                        patch[dst..dst + 4].copy_from_slice(&curr_img[src..src + 4]);
+                    }
                 }
-                let src = ((sy * img_w as i32 + sx) * 4) as usize;
-                let dst = (py * feature + px) * 4;
-                ref_patch[dst..dst + 4].copy_from_slice(&curr_img[src..src + 4]);
+                patch
             }
-        }
+        };
 
         let search_radius = (tracker.search_size as i32).clamp(2, 64);
         let [bx, by] = compute_sad_match(
@@ -404,6 +421,57 @@ pub fn match_confidence(min_sad: f32, second_min_sad: f32) -> f32 {
         if min_sad <= 1e-9 { return 1.0; } else { return 0.0; }
     }
     (min_sad / second_min_sad).clamp(0.0, 1.0)
+}
+
+/// Extracts a `feature`×`feature` RGBA patch centred at integer (cx,cy) —
+/// used to seed a tracker's persistent reference pattern
+/// ([`crate::core::timeline::TrackerPoint::reference_pattern`]).
+/// Out-of-bounds centres yield None.
+pub fn extract_patch(
+    frame: &[u8],
+    img_w: u32,
+    img_h: u32,
+    cx: i32,
+    cy: i32,
+    feature: usize,
+) -> Option<Vec<u8>> {
+    let half = (feature / 2) as i32;
+    if feature == 0 || half > cx || half > cy {
+        return None;
+    }
+    let max_x = cx + (feature as i32 - 1 - half);
+    let max_y = cy + (feature as i32 - 1 - half);
+    if max_x >= img_w as i32
+        || max_y >= img_h as i32
+        || frame.len() < img_w as usize * img_h as usize * 4
+    {
+        return None;
+    }
+    let mut patch = vec![0u8; feature * feature * 4];
+    for py in 0..feature {
+        for px in 0..feature {
+            let sx = cx - half + px as i32;
+            let sy = cy - half + py as i32;
+            let src = ((sy * img_w as i32 + sx) * 4) as usize;
+            let dst = (py * feature + px) * 4;
+            patch[dst..dst + 4].copy_from_slice(&frame[src..src + 4]);
+        }
+    }
+    Some(patch)
+}
+
+/// Blends the current appearance into a persistent template by `blend`
+/// (0 = frozen, 1 = fully adopt current). Mismatched lengths are ignored.
+/// Slow blends (e.g. 0.05/frame) track gradual appearance drift while
+/// resisting one-frame occlusions.
+pub fn blend_template(template: &mut [u8], current: &[u8], blend: f32) {
+    let b = blend.clamp(0.0, 1.0);
+    if b <= 0.0 || template.len() != current.len() {
+        return;
+    }
+    for (t, &c) in template.iter_mut().zip(current.iter()) {
+        *t = (*t as f32 * (1.0 - b) + c as f32 * b).round().clamp(0.0, 255.0) as u8;
+    }
 }
 
 // ── Four-point perspective tracking (AE Perspective Corner Pin workflow) ──
@@ -841,6 +909,86 @@ mod quad_track_tests {
         assert!(
             quad_track_confidence(&bad, RECT).iter().all(|&c| c == 0.0),
             "flipped quad must score zero"
+        );
+    }
+
+    #[test]
+    fn test_extract_patch_exact_pixels_and_oob() {
+        let mut frame = vec![7u8; 16 * 16 * 4];
+        // Stamp a red pixel at (5,5).
+        let idx = ((5 * 16 + 5) * 4) as usize;
+        frame[idx] = 250;
+        frame[idx + 1] = 10;
+        frame[idx + 2] = 10;
+        let patch = extract_patch(&frame, 16, 16, 5, 5, 3).expect("in-bounds");
+        assert_eq!(patch.len(), 3 * 3 * 4);
+        // Centre of the 3×3 patch is the red pixel.
+        assert_eq!(&patch[16..20], &[250, 10, 10, 7]);
+        // Corners remain background.
+        assert_eq!(patch[0], 7);
+        // Fully out of bounds rejected.
+        assert!(extract_patch(&frame, 16, 16, 15, 15, 3).is_none());
+        assert!(extract_patch(&frame, 16, 16, -1, 5, 3).is_none());
+    }
+
+    #[test]
+    fn test_blend_template_semantics() {
+        let mut tmpl = vec![100u8, 200];
+        // Frozen.
+        blend_template(&mut tmpl, &[0, 0], 0.0);
+        assert_eq!(tmpl, vec![100, 200]);
+        // Half-way toward current.
+        blend_template(&mut tmpl, &[0, 0], 0.5);
+        assert_eq!(tmpl, vec![50, 100]);
+        // Full adopt.
+        blend_template(&mut tmpl, &[90, 90], 1.0);
+        assert_eq!(tmpl, vec![90, 90]);
+        // Length mismatch ignored.
+        let mut keep = vec![1u8];
+        blend_template(&mut keep, &[9, 9, 9], 1.0);
+        assert_eq!(keep, vec![1]);
+    }
+
+    #[test]
+    fn test_persistent_template_follows_appearance_not_local_pixels() {
+        // Gray field; an 8×8 checker sits centred at (40,32). The tracker is
+        // seeded ON FLAT GRAY but carries the checker as its persistent
+        // template — it must slide to the checker, not stay put.
+        let w = 64usize;
+        let h = 64usize;
+        let mut frame = vec![30u8; w * h * 4];
+        for dy in 0..8usize {
+            for dx in 0..8usize {
+                let v = if (dx + dy) % 2 == 0 { 240 } else { 15 };
+                let idx = ((28 + dy) * w + 36 + dx) * 4;
+                frame[idx] = v;
+                frame[idx + 1] = v;
+                frame[idx + 2] = v;
+                frame[idx + 3] = 255;
+            }
+        }
+
+        let template: Vec<f32> = extract_patch(&frame, 64, 64, 40, 32, 8)
+            .expect("template in bounds")
+            .iter()
+            .map(|&b| b as f32 / 255.0)
+            .collect();
+        let mut layer = QLayer::new("l".into(), "L".into(), QLayerType::Null, 30);
+        layer.trackers.push(crate::core::timeline::TrackerPoint {
+            id: "t".into(),
+            name: "T".into(),
+            position: Animatable::new_constant([20.0, 32.0]),
+            search_size: 30.0,
+            feature_size: 8.0,
+            reference_pattern: Some(template),
+        });
+
+        let result =
+            TrackerEngine::track_next_frame_pixels(&layer, 0, 0, &frame, &frame.clone(), 64, 64);
+        let new_pos = result.expect("match found");
+        assert!(
+            (new_pos[0] - 40.0).abs() < 2.0 && (new_pos[1] - 32.0).abs() < 2.0,
+            "tracker must lock onto the templated checker: {new_pos:?}"
         );
     }
 }

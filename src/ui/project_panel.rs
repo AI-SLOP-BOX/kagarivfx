@@ -1,6 +1,7 @@
 use eframe::egui;
 use crate::AfterEffectsApp;
 use crate::core::timeline::{ProjectItem, ProjectItemType, Layer, LayerType};
+use crate::ui::theme::colors;
 
 pub fn draw(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
     ui.heading("Project");
@@ -25,10 +26,10 @@ pub fn draw(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
                 ui.horizontal(|ui| {
                     // Render miniature preview square box
                     let (thumb_rect, _) = ui.allocate_exact_size(egui::vec2(44.0, 32.0), egui::Sense::hover());
-                    ui.painter().rect_filled(thumb_rect, 2.0, egui::Color32::from_gray(30));
-                    ui.painter().rect_stroke(thumb_rect, 2.0, egui::Stroke::new(1.0, egui::Color32::from_gray(70)));
+                    ui.painter().rect_filled(thumb_rect, 2.0, colors::BG_DARK);
+                    ui.painter().rect_stroke(thumb_rect, 2.0, egui::Stroke::new(1.0, colors::BORDER_STRONG));
                     let center = thumb_rect.center();
-                    ui.painter().text(center, egui::Align2::CENTER_CENTER, "🎞", egui::FontId::monospace(14.0), egui::Color32::from_rgb(0, 180, 255));
+                    ui.painter().text(center, egui::Align2::CENTER_CENTER, "🎞", egui::FontId::monospace(14.0), colors::TEXT_ACCENT);
 
                     ui.vertical(|ui| {
                         ui.label(egui::RichText::new(&item.name).strong().size(13.0));

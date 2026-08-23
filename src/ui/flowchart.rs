@@ -1,6 +1,7 @@
 use eframe::egui;
 use crate::AfterEffectsApp;
 use crate::core::timeline::{Composition, LayerType};
+use crate::ui::theme::colors;
 
 #[allow(dead_code)]
 pub fn draw_flowchart_view(
@@ -13,7 +14,7 @@ pub fn draw_flowchart_view(
             ui.label(
                 egui::RichText::new("Comp & Layer Flowchart View (Shift+F3)")
                     .strong()
-                    .color(egui::Color32::from_rgb(100, 220, 255)),
+                    .color(colors::ACCENT_CYAN),
             );
             ui.weak("— Visual Graph of Compositions, Layer Hierarchies & Mattes");
         });
@@ -26,11 +27,11 @@ pub fn draw_flowchart_view(
         );
 
         let painter = ui.painter();
-        painter.rect_filled(rect, 4.0, egui::Color32::from_rgb(18, 18, 24));
-        painter.rect_stroke(rect, 4.0, egui::Stroke::new(1.0, egui::Color32::from_gray(50)));
+        painter.rect_filled(rect, 4.0, colors::BG_DEEPEST);
+        painter.rect_stroke(rect, 4.0, egui::Stroke::new(1.0, colors::BORDER_MEDIUM));
 
         // Grid Background
-        let grid_color = egui::Color32::from_rgba_unmultiplied(255, 255, 255, 12);
+        let grid_color = colors::GRID_LINE;
         let step = 30.0;
         let mut x = rect.left();
         while x < rect.right() {
@@ -96,7 +97,7 @@ pub fn draw_flowchart_view(
             };
 
             let stroke_color = if is_selected {
-                egui::Color32::from_rgb(100, 220, 255)
+                colors::ACCENT_CYAN
             } else {
                 egui::Color32::from_gray(120)
             };
@@ -152,7 +153,7 @@ pub fn draw_flowchart_view(
                         let parent_pos = node_positions[p_idx];
                         painter.line_segment(
                             [npos, parent_pos],
-                            egui::Stroke::new(1.8, egui::Color32::from_rgb(255, 200, 60)),
+                            egui::Stroke::new(1.8, colors::TIMELINE_KEYFRAME),
                         );
                     }
                 }

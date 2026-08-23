@@ -1,5 +1,6 @@
 use eframe::egui;
 use crate::AfterEffectsApp;
+use crate::ui::theme::colors;
 
 pub fn draw_tracker_panel(app: &mut AfterEffectsApp, ui: &mut egui::Ui, current_frame: u32) {
     ui.heading("Tracker");
@@ -46,7 +47,7 @@ pub fn draw_tracker_panel(app: &mut AfterEffectsApp, ui: &mut egui::Ui, current_
                 ui.label(
                     egui::RichText::new("Note: pixel tracking needs a Video or Image layer; others extrapolate transform velocity.")
                         .small()
-                        .color(egui::Color32::from_rgb(240, 200, 90)),
+                        .color(colors::ACCENT_YELLOW),
                 );
             }
 
@@ -132,7 +133,7 @@ pub fn draw_tracker_panel(app: &mut AfterEffectsApp, ui: &mut egui::Ui, current_
 
             ui.add_space(8.0);
             ui.separator();
-            ui.label(egui::RichText::new("✨ AI Auto-Mask & Roto Generator").strong().color(egui::Color32::from_rgb(0, 200, 255)));
+            ui.label(egui::RichText::new("✨ AI Auto-Mask & Roto Generator").strong().color(colors::ACCENT_CYAN));
             ui.horizontal(|ui| {
                 if ui.button("🎯 Auto-Generate Mask").on_hover_text("Auto-create 4-vertex Bezier Mask around tracked feature").clicked() {
                     let mut temp_proj = app.history.current().clone();

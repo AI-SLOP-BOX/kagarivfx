@@ -1,5 +1,6 @@
 use eframe::egui;
 use crate::AfterEffectsApp;
+use crate::ui::theme::colors;
 
 pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut u32) {
     egui::SidePanel::right("right_panel")
@@ -68,7 +69,7 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                         // Capture drag info before borrowing layer
                         let drag_info = app.dragging_effect.clone();
                         let layer = &mut comp.layers[idx];
-                        ui.label(egui::RichText::new(format!("Layer: {}", layer.name)).strong().color(egui::Color32::from_rgb(0, 200, 255)));
+                        ui.label(egui::RichText::new(format!("Layer: {}", layer.name)).strong().color(colors::ACCENT_CYAN));
                         ui.add_space(4.0);
 
                         // Drop zone for effects
@@ -77,16 +78,16 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                                 egui::vec2(ui.available_width(), 40.0),
                                 egui::Layout::top_down(egui::Align::Center),
                                 |ui| {
-                                    ui.label(egui::RichText::new(format!("Drop '{}' here", effect_name)).small().color(egui::Color32::from_rgb(0, 180, 255)));
+                                    ui.label(egui::RichText::new(format!("Drop '{}' here", effect_name)).small().color(colors::TEXT_ACCENT));
                                 }
                             ).response;
                             ui.painter().rect_filled(
                                 drop_rect.rect, 4.0,
-                                egui::Color32::from_rgba_premultiplied(0, 100, 255, 30)
+                                colors::TIMELINE_SELECTION
                             );
                             ui.painter().rect_stroke(
                                 drop_rect.rect, 4.0,
-                                egui::Stroke::new(1.5, egui::Color32::from_rgb(0, 180, 255))
+                                egui::Stroke::new(1.5, colors::TEXT_ACCENT)
                             );
                             // Apply on drop
                             let is_hovered = ui.rect_contains_pointer(drop_rect.rect);
@@ -392,7 +393,7 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                                 if resp.dragged() {
                                     ui.painter().rect_filled(
                                         resp.rect, 2.0,
-                                        egui::Color32::from_rgba_premultiplied(0, 120, 255, 40)
+                                        colors::TIMELINE_SELECTION
                                     );
                                 }
 
@@ -405,7 +406,7 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
 
                 ui.label("Add Effect to Selected Layer:");
                 ui.group(|ui| {
-                    ui.label(egui::RichText::new("AI Motion VFX Auto-Generator").strong().color(egui::Color32::from_rgb(0, 200, 255)));
+                    ui.label(egui::RichText::new("AI Motion VFX Auto-Generator").strong().color(colors::ACCENT_CYAN));
                     ui.small("Enter prompt to auto-build VFX graph:");
                     ui.horizontal(|ui| {
                         ui.add(egui::TextEdit::singleline(&mut app.effects_search_query).hint_text("e.g. Cyberpunk Neon Glow"));
@@ -535,12 +536,12 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
             if let Some(app_name) = &app.connected_app {
                 ui.horizontal(|ui| {
                     ui.label("Status:");
-                    ui.colored_label(egui::Color32::from_rgb(50, 220, 50), format!("[ONLINE] Connected to {}", app_name));
+                    ui.colored_label(colors::ACCENT_GREEN, format!("[ONLINE] Connected to {}", app_name));
                 });
             } else {
                 ui.horizontal(|ui| {
                     ui.label("Status:");
-                    ui.colored_label(egui::Color32::from_rgb(220, 100, 100), "[OFFLINE] Listening on 127.0.0.1:9000");
+                    ui.colored_label(colors::ACCENT_RED, "[OFFLINE] Listening on 127.0.0.1:9000");
                 });
             }
             ui.add_space(8.0);
