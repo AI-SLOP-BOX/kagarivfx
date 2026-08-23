@@ -53,7 +53,7 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: u32) 
                 }
             }
             ui.separator();
-            ui.small(egui::RichText::new("Composition Flow: Main Comp > Active Layer").color(egui::Color32::from_gray(140)));
+            ui.small(egui::RichText::new("Composition Flow: Main Comp > Active Layer").color(colors::TEXT_SECONDARY));
         });
         ui.separator();
 

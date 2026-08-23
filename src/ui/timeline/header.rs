@@ -1,6 +1,7 @@
 use eframe::egui;
 use crate::core::timeline::{Composition, Layer, LayerType, ShapeType};
 use crate::core::property::Animatable;
+use crate::ui::theme::colors;
 
 pub struct TimelineHeaderState<'a> {
     pub is_playing: &'a mut bool,
@@ -30,7 +31,7 @@ pub fn draw_timeline_header(
         let hours = mins / 60;
         let tc_str = format!("{:02}:{:02}:{:02}:{:02}", hours, mins % 60, secs % 60, sub_f);
 
-        ui.label(egui::RichText::new(format!("TC: {}", tc_str)).strong().color(egui::Color32::from_rgb(255, 234, 0)));
+        ui.label(egui::RichText::new(format!("TC: {}", tc_str)).strong().color(colors::ACCENT_YELLOW));
         ui.add_space(4.0);
         ui.add(egui::DragValue::new(current_frame).range(0..=total_frames).prefix("Frame: ").suffix(format!(" / {}", total_frames)))
             .on_hover_text("Click or Drag to set current frame timecode");

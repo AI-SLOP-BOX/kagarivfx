@@ -188,7 +188,7 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
             ui.horizontal(|ui| {
                 ui.allocate_ui(egui::vec2(left_pane_w, 18.0), |ui| {
                     ui.horizontal(|ui| {
-                        ui.label(egui::RichText::new("Source Name | Mode | TrkMat | Parent & Link | Switches").small().strong().color(egui::Color32::from_gray(160)));
+                        ui.label(egui::RichText::new("Source Name | Mode | TrkMat | Parent & Link | Switches").small().strong().color(colors::TEXT_SECONDARY));
 
                         if ui.selectable_label(app.global_shy_active, "Shy").on_hover_text("Hide / Show All Marked Shy Layers").clicked() {
                             app.global_shy_active = !app.global_shy_active;
@@ -378,7 +378,7 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                         ui.horizontal(|ui| {
                             ui.allocate_ui(egui::vec2(left_pane_w, 24.0), |ui| {
                                 ui.horizontal(|ui| {
-                                    ui.label(egui::RichText::new(format!("{:02}", i + 1)).small().strong().color(egui::Color32::from_gray(140)));
+                                    ui.label(egui::RichText::new(format!("{:02}", i + 1)).small().strong().color(colors::TEXT_SECONDARY));
                                     ui.add_space(2.0);
 
                                     // ── Layer type icon ──
@@ -396,7 +396,7 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                                             crate::core::timeline::LayerType::Particle { .. } => "✦",
                                         
                                         };
-                                        ui.label(egui::RichText::new(type_icon).small().color(egui::Color32::from_gray(160)));
+                                        ui.label(egui::RichText::new(type_icon).small().color(colors::TEXT_SECONDARY));
                                     }
                                     ui.add_space(1.0);
 
@@ -1140,7 +1140,7 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                     app.show_switches_pane = !app.show_switches_pane;
                 }
                 ui.separator();
-                ui.small(egui::RichText::new("AE Standard Timeline 1:1 Parity Mode").color(egui::Color32::from_gray(140)));
+                ui.small(egui::RichText::new("AE Standard Timeline 1:1 Parity Mode").color(colors::TEXT_SECONDARY));
             });
 
             if let Some((a, b)) = swap_request {

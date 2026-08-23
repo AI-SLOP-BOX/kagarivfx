@@ -1,5 +1,6 @@
 use eframe::egui;
 use crate::AfterEffectsApp;
+use crate::ui::theme::colors;
 
 pub fn draw_marker_panel(app: &mut AfterEffectsApp, ui: &mut egui::Ui, current_frame: u32) {
     ui.heading("Composition Markers");
@@ -46,7 +47,7 @@ pub fn draw_marker_panel(app: &mut AfterEffectsApp, ui: &mut egui::Ui, current_f
                 ui.end_row();
 
                 for (m_idx, marker) in markers_list.iter().enumerate() {
-                    ui.label(egui::RichText::new(format!("{}", marker.frame)).monospace().color(egui::Color32::from_rgb(0, 200, 255)));
+                    ui.label(egui::RichText::new(format!("{}", marker.frame)).monospace().color(colors::ACCENT_CYAN));
                     ui.label(&marker.label);
                     ui.horizontal(|ui| {
                         if ui.small_button("⏩ Jump").on_hover_text("Jump Playhead to this marker frame").clicked() {
