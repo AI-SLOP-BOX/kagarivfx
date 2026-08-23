@@ -120,6 +120,85 @@ pub fn resolve_bounds_collision(
     hit
 }
 
+/// Resolves an elastic collision between two soft-sphere particles of equal
+/// mass. On overlap the pair is separated symmetrically along the contact
+/// normal and normal-relative velocity is reflected with `restitution`
+/// (0 = perfectly inelastic, 1 = perfectly elastic).
+///
+/// Returns true when a collision was resolved this call.
+#[allow(clippy::too_many_arguments)]
+pub fn resolve_particle_collision(
+    pos_a: &mut [f32; 2],
+    vel_a: &mut [f32; 2],
+    pos_b: &mut [f32; 2],
+    vel_b: &mut [f32; 2],
+    radius_sum: f32,
+    restitution: f32,
+) -> bool {
+    if radius_sum <= 0.0 {
+        return false;
+    }
+    let dx = pos_b[0] - pos_a[0];
+    let dy = pos_b[1] - pos_a[1];
+    let dist_sq = dx * dx + dy * dy;
+    if dist_sq >= radius_sum * radius_sum {
+        return false;
+    }
+
+    // Contact normal; degenerate coincident particles split along +X.
+    let dist = dist_sq.sqrt();
+    let (nx, ny) = if dist > 1e-6 {
+        (dx / dist, dy / dist)
+    } else {
+        (1.0, 0.0)
+    };
+
+    // Symmetric positional correction.
+    let overlap = radius_sum - dist;
+    let half = overlap * 0.5;
+    pos_a[0] -= nx * half;
+    pos_a[1] -= ny * half;
+    pos_b[0] += nx * half;
+    pos_b[1] += ny * half;
+
+    // Impulse along the normal for approaching pairs only.
+    let rvx = vel_b[0] - vel_a[0];
+    let rvy = vel_b[1] - vel_a[1];
+    let vn = rvx * nx + rvy * ny;
+    if vn < 0.0 {
+        let e = restitution.clamp(0.0, 1.0);
+        let j = -(1.0 + e) * vn * 0.5; // equal masses
+        vel_a[0] -= nx * j;
+        vel_a[1] -= ny * j;
+        vel_b[0] += nx * j;
+        vel_b[1] += ny * j;
+    }
+    true
+}
+
+/// Convenience O(n²) pass applying [`resolve_particle_collision`] to every
+/// pair sharing a uniform `radius` (diameter per particle). Suitable for the
+/// few-hundred-particle counts typical of AE-style emitters.
+pub fn resolve_pairwise_collisions(
+    positions: &mut [[f32; 2]],
+    velocities: &mut [[f32; 2]],
+    diameter: f32,
+    restitution: f32,
+) -> u32 {
+    let n = positions.len().min(velocities.len());
+    let mut hits = 0u32;
+    for i in 0..n {
+        let (p_head, p_tail) = positions.split_at_mut(i + 1);
+        let (v_head, v_tail) = velocities.split_at_mut(i + 1);
+        for (bp, bv) in p_tail.iter_mut().zip(v_tail.iter_mut()) {
+            if resolve_particle_collision(&mut p_head[i], &mut v_head[i], bp, bv, diameter, restitution) {
+                hits += 1;
+            }
+        }
+    }
+    hits
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -218,5 +297,85 @@ mod tests {
         let json = serde_json::to_string(&c).unwrap_or_default();
         let back: LifeCurve = serde_json::from_str(&json).unwrap_or_default();
         assert_eq!(c, back);
+    }
+
+    #[test]
+    fn test_head_on_elastic_collision_swaps_velocities() {
+        // Equal masses, restitution 1: velocities exchange exactly.
+        let mut pa = [40.0, 50.0];
+        let mut va = [30.0, 0.0];
+        let mut pb = [60.0, 50.0];
+        let mut vb = [-30.0, 0.0];
+        assert!(resolve_particle_collision(&mut pa, &mut va, &mut pb, &mut vb, 24.0, 1.0));
+        assert!((va[0] + 30.0).abs() < 1e-4, "a takes b's velocity: {}", va[0]);
+        assert!((vb[0] - 30.0).abs() < 1e-4, "b takes a's velocity: {}", vb[0]);
+        // Particles separated to contact distance.
+        let dist = (pb[0] - pa[0]).hypot(pb[1] - pa[1]);
+        assert!((dist - 24.0).abs() < 1e-3, "post distance {dist}");
+    }
+
+    #[test]
+    fn test_inelastic_collision_kills_relative_normal_velocity() {
+        let mut pa = [10.0, 10.0];
+        let mut va = [20.0, 0.0];
+        let mut pb = [26.0, 10.0];
+        let mut vb = [0.0, 0.0];
+        assert!(resolve_particle_collision(&mut pa, &mut va, &mut pb, &mut vb, 20.0, 0.0));
+        let vn_after = (vb[0] - va[0]) * 1.0 + (vb[1] - va[1]) * 0.0;
+        assert!(vn_after.abs() < 1e-4, "normal relative velocity must vanish");
+        // Both move right together afterwards (momentum conserved).
+        assert!(va[0] > 5.0 && vb[0] > 5.0);
+    }
+
+    #[test]
+    fn test_separating_pair_is_untouched() {
+        // Already separating along the normal → no impulse.
+        let mut pa = [0.0, 0.0];
+        let mut va = [-10.0, 0.0];
+        let mut pb = [8.0, 0.0]; // overlapping
+        let mut vb = [10.0, 0.0];
+        assert!(resolve_particle_collision(&mut pa, &mut va, &mut pb, &mut vb, 12.0, 1.0));
+        // Positions still separated, velocities unchanged.
+        assert_eq!(va, [-10.0, 0.0]);
+        assert_eq!(vb, [10.0, 0.0]);
+    }
+
+    #[test]
+    fn test_far_apart_and_degenerate_inputs() {
+        let mut pa = [0.0, 0.0];
+        let mut va = [1.0, 1.0];
+        let mut pb = [100.0, 100.0];
+        let mut vb = [-1.0, -1.0];
+        assert!(!resolve_particle_collision(&mut pa, &mut va, &mut pb, &mut vb, 10.0, 0.8));
+        assert_eq!(pa, [0.0, 0.0]);
+        // Zero radius is always false.
+        assert!(!resolve_particle_collision(&mut pa, &mut va, &mut pb, &mut vb, 0.0, 1.0));
+        // Coincident particles split cleanly without NaN.
+        let mut qa = [50.0, 50.0];
+        let mut qva = [0.0, 0.0];
+        let mut qb = [50.0, 50.0];
+        let mut qvb = [0.0, 0.0];
+        assert!(resolve_particle_collision(&mut qa, &mut qva, &mut qb, &mut qvb, 8.0, 1.0));
+        assert!(qa[0].is_finite() && qb[0].is_finite());
+        assert!((qb[0] - qa[0]).abs() >= 7.9);
+    }
+
+    #[test]
+    fn test_pairwise_batch_counts_and_resolves() {
+        // Three particles in a row, first one slams into the middle one.
+        let mut pos = vec![[0.0, 0.0], [15.0, 0.0], [90.0, 0.0]];
+        let mut vel = vec![[50.0, 0.0], [0.0, 0.0], [0.0, 0.0]];
+        let hits = resolve_pairwise_collisions(&mut pos, &mut vel, 16.0, 0.9);
+        assert_eq!(hits, 1, "only the close pair collides");
+        // Momentum conserved along x.
+        let total_before = 50.0;
+        let total_after = vel[0][0] + vel[1][0];
+        assert!((total_after - total_before).abs() < 1e-3);
+        // Third particle untouched.
+        assert_eq!(vel[2], [0.0, 0.0]);
+        // Empty input safe.
+        let mut ep: Vec<[f32; 2]> = vec![];
+        let mut ev: Vec<[f32; 2]> = vec![];
+        assert_eq!(resolve_pairwise_collisions(&mut ep, &mut ev, 4.0, 1.0), 0);
     }
 }

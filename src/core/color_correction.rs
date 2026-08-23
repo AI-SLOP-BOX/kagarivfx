@@ -515,3 +515,156 @@ mod tests {
         apply_channel_mixer(&mut buf, &huge);
     }
 }
+
+// ── Vibrance ───────────────────────────────────────────────────────────────
+
+/// Vibrance: boosts saturation of muted pixels far more than saturated ones
+/// and partially protects warm skin-tone hues. `amount` spans −100..100
+/// (negative desaturates).
+pub fn apply_vibrance(pixels: &mut [u8], amount: f32) {
+    let amt = (amount / 100.0).clamp(-1.0, 1.0);
+    if amt == 0.0 || pixels.is_empty() {
+        return;
+    }
+    for px in pixels.chunks_exact_mut(4) {
+        let r = px[0] as f32 / 255.0;
+        let g = px[1] as f32 / 255.0;
+        let b = px[2] as f32 / 255.0;
+        let max = r.max(g).max(b);
+        let min = r.min(g).min(b);
+        // 0..1 saturation proxy (chroma relative to intensity).
+        let sat = (max - min) / (max + 1e-6);
+        // Skin-tone guard applies to boosts only; desaturation is uniform so
+        // negative amounts behave like a straightforward saturation pull.
+        let boost = if amt >= 0.0 {
+            amt * (1.0 - sat) * (1.0 - 0.5 * if r > g && g >= b { 1.0f32 } else { 0.0 })
+        } else {
+            amt
+        };
+        if boost.abs() < 1e-6 {
+            continue;
+        }
+        let luma = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+        let k = 1.0 + boost;
+        for (c, slot) in [r, g, b].iter().zip(px.iter_mut().take(3)) {
+            let v = luma + (c - luma) * k;
+            *slot = (v.clamp(0.0, 1.0) * 255.0).round() as u8;
+        }
+    }
+}
+
+// ── White Balance ──────────────────────────────────────────────────────────
+
+/// Temperature/Tint white-balance sliders (−100..100 each).
+/// Positive temperature warms (R↑ B↓); positive tint shifts magenta (G↓).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct WhiteBalance {
+    pub temperature: f32,
+    pub tint: f32,
+}
+
+impl Default for WhiteBalance {
+    fn default() -> Self {
+        Self { temperature: 0.0, tint: 0.0 }
+    }
+}
+
+pub fn apply_white_balance(pixels: &mut [u8], wb: &WhiteBalance) {
+    let t = (wb.temperature / 100.0).clamp(-1.0, 1.0) * 0.25;
+    let gshift = -(wb.tint / 100.0).clamp(-1.0, 1.0) * 0.20;
+    if (t == 0.0 && gshift == 0.0) || pixels.is_empty() {
+        return;
+    }
+    let gains = [1.0 + t, 1.0 + gshift, 1.0 - t];
+    for px in pixels.chunks_exact_mut(4) {
+        for (c, gain) in gains.iter().enumerate() {
+            px[c] = ((px[c] as f32 * gain).clamp(0.0, 255.0)) as u8;
+        }
+    }
+}
+
+#[cfg(test)]
+mod vibrance_wb_tests {
+    use super::*;
+
+    fn solid(w: u32, h: u32, rgba: [u8; 4]) -> Vec<u8> {
+        let mut v = Vec::with_capacity((w * h * 4) as usize);
+        for _ in 0..w * h {
+            v.extend_from_slice(&rgba);
+        }
+        v
+    }
+
+    #[test]
+    fn test_vibrance_leaves_gray_unchanged() {
+        // Pure gray has zero chroma: boosting vibrance must not shift it.
+        let mut img = solid(8, 8, [128, 128, 128, 255]);
+        let before = img.clone();
+        apply_vibrance(&mut img, 100.0);
+        assert_eq!(img, before, "gray must survive max vibrance");
+    }
+
+    #[test]
+    fn test_vibrance_boosts_muted_more_than_saturated() {
+        // Muted teal vs fully saturated red.
+        let mut img = vec![80u8, 120, 130, 255, 255, 0, 0, 255];
+        let before = img.clone();
+        apply_vibrance(&mut img, 60.0);
+        let muted_drift = (img[0] as i32 - before[0] as i32).abs()
+            + (img[1] as i32 - before[1] as i32).abs()
+            + (img[2] as i32 - before[2] as i32).abs();
+        let sat_drift = (img[4] as i32 - before[4] as i32).abs()
+            + (img[5] as i32 - before[5] as i32).abs()
+            + (img[6] as i32 - before[6] as i32).abs();
+        assert!(
+            muted_drift > sat_drift,
+            "muted {muted_drift} must move more than saturated {sat_drift}"
+        );
+    }
+
+    #[test]
+    fn test_negative_vibrance_desaturates_and_zero_is_identity() {
+        let mut img = solid(4, 4, [200, 40, 40, 255]);
+        apply_vibrance(&mut img, -90.0);
+        let spread = img[0].max(img[1]) - img[0].min(img[1]);
+        assert!(spread < 120, "spread should shrink, got {}", spread);
+
+        let mut id = solid(4, 4, [200, 40, 40, 255]);
+        apply_vibrance(&mut id, 0.0);
+        assert_eq!(id, solid(4, 4, [200, 40, 40, 255]));
+    }
+
+    #[test]
+    fn test_vibrance_deterministic_and_safe() {
+        let run = || {
+            let mut img = solid(16, 16, [90, 140, 200, 255]);
+            apply_vibrance(&mut img, 45.0);
+            img
+        };
+        assert_eq!(run(), run());
+        apply_vibrance(&mut [], 50.0); // empty buffer safe
+    }
+
+    #[test]
+    fn test_white_balance_warms_and_cools() {
+        let base = solid(4, 4, [128, 128, 128, 255]);
+
+        let mut warm = base.clone();
+        apply_white_balance(&mut warm, &WhiteBalance { temperature: 80.0, tint: 0.0 });
+        assert!(warm[0] > 128, "warm raises R: {}", warm[0]);
+        assert!(warm[2] < 128, "warm lowers B: {}", warm[2]);
+        assert_eq!(warm[1], 128, "tint 0 keeps G");
+
+        let mut cool = base.clone();
+        apply_white_balance(&mut cool, &WhiteBalance { temperature: -80.0, tint: 0.0 });
+        assert!(cool[0] < 128 && cool[2] > 128);
+
+        let mut mag = base.clone();
+        apply_white_balance(&mut mag, &WhiteBalance { temperature: 0.0, tint: 60.0 });
+        assert!(mag[1] < 128, "positive tint reduces G (magenta)");
+
+        let mut neutral = base.clone();
+        apply_white_balance(&mut neutral, &WhiteBalance::default());
+        assert_eq!(neutral, base);
+    }
+}

@@ -9,7 +9,7 @@
 use serde::{Serialize, Deserialize};
 
 use crate::core::particle_forces::{
-    apply_drag, resolve_bounds_collision, wind_with_gust, LifeCurve,
+    apply_drag, resolve_bounds_collision, resolve_pairwise_collisions, wind_with_gust, LifeCurve,
 };
 
 /// Emitter shape type.
@@ -123,6 +123,12 @@ pub struct ParticleEmitter {
     /// Tangential velocity retention on collision (0..1).
     #[serde(default)]
     pub surface_friction: f32,
+    /// Particle-vs-particle soft-sphere collisions (O(n²) per update step).
+    #[serde(default)]
+    pub particle_collisions: bool,
+    /// Contact diameter for particle-vs-particle collisions (px).
+    #[serde(default = "default_particle_diameter")]
+    pub particle_diameter: f32,
 }
 
 impl Default for ParticleEmitter {
@@ -159,8 +165,14 @@ impl Default for ParticleEmitter {
             collision_bounds: [0.0, 0.0, 1920.0, 1080.0],
             restitution: 0.5,
             surface_friction: 0.9,
+            particle_collisions: false,
+            particle_diameter: 8.0,
         }
     }
+}
+
+fn default_particle_diameter() -> f32 {
+    8.0
 }
 
 /// State of a single alive particle.
@@ -327,6 +339,24 @@ impl ParticleSystem {
             // Interpolate size and opacity over lifetime
             let t = 1.0 - (p.life / p.max_life);
             p.size = size_start + (size_end - size_start) * t;
+        }
+
+        // Particle-vs-particle collisions (uniform contact diameter).
+        if self.emitter.particle_collisions && self.particles.len() > 1 {
+            let mut pos: Vec<[f32; 2]> = self.particles.iter().map(|p| [p.x, p.y]).collect();
+            let mut vel: Vec<[f32; 2]> = self.particles.iter().map(|p| [p.vx, p.vy]).collect();
+            resolve_pairwise_collisions(
+                &mut pos,
+                &mut vel,
+                self.emitter.particle_diameter.max(0.1),
+                restitution,
+            );
+            for (p, (np, nv)) in self.particles.iter_mut().zip(pos.into_iter().zip(vel)) {
+                p.x = np[0];
+                p.y = np[1];
+                p.vx = nv[0];
+                p.vy = nv[1];
+            }
         }
 
         // Remove dead particles
@@ -735,5 +765,59 @@ mod tests {
             assert_eq!(pa.vx, pb.vx);
             assert_eq!(pa.vy, pb.vy);
         }
+    }
+}
+
+#[cfg(test)]
+mod particle_collision_tests {
+    use super::*;
+    use crate::core::particle_forces::LifeCurve as LC;
+
+    fn headon_system() -> ParticleSystem {
+        let mut emitter = ParticleEmitter {
+            rate: 0.0, // no emission — inject manually
+            gravity: [0.0, 0.0],
+            wind: [0.0, 0.0],
+            drag: 0.0,
+            turbulence: 0.0,
+            collision_enabled: false,
+            particle_collisions: true,
+            particle_diameter: 10.0,
+            restitution: 1.0,
+            ..Default::default()
+        };
+        emitter.gravity_curve = LC::constant(1.0);
+        let mut sys = ParticleSystem::new(emitter);
+        sys.particles.push(Particle {
+            x: 46.0, y: 50.0, vx: 30.0, vy: 0.0,
+            life: 5.0, max_life: 5.0, size: 4.0, rotation: 0.0, angular_velocity: 0.0,
+        });
+        sys.particles.push(Particle {
+            x: 54.0, y: 50.0, vx: -30.0, vy: 0.0,
+            life: 5.0, max_life: 5.0, size: 4.0, rotation: 0.0, angular_velocity: 0.0,
+        });
+        sys
+    }
+
+    #[test]
+    fn test_system_resolves_particle_particle_collision() {
+        let mut sys = headon_system();
+        sys.update(0.016, 0.0, 0.0);
+        let (a, b) = (&sys.particles[0], &sys.particles[1]);
+        // Elastic exchange: each took the other's velocity.
+        assert!((a.vx + 30.0).abs() < 1e-3, "a.vx {}", a.vx);
+        assert!((b.vx - 30.0).abs() < 1e-3, "b.vx {}", b.vx);
+        // Separated to at least the contact diameter.
+        let dist = (b.x - a.x).hypot(b.y - a.y);
+        assert!(dist >= 9.9, "post distance {dist}");
+    }
+
+    #[test]
+    fn test_flag_off_leaves_overlapping_pair_alone() {
+        let mut sys = headon_system();
+        sys.emitter.particle_collisions = false;
+        let before = (sys.particles[0].vx, sys.particles[1].vx);
+        sys.update(0.016, 0.0, 0.0);
+        assert_eq!(sys.particles[0].vx, before.0, "flag off → untouched");
     }
 }

@@ -406,6 +406,221 @@ pub fn match_confidence(min_sad: f32, second_min_sad: f32) -> f32 {
     (min_sad / second_min_sad).clamp(0.0, 1.0)
 }
 
+// ── Four-point perspective tracking (AE Perspective Corner Pin workflow) ──
+
+/// Per-frame positions of the four tracked corner features.
+///
+/// Corner order matches AE: [top_left, top_right, bottom_right, bottom_left].
+/// Positions after the first analysed frame are produced by single-step
+/// tracking (the same convention as [`TrackerEngine::analyze_track`]).
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct QuadTrackData {
+    pub frames: Vec<u32>,
+    pub corners: Vec<[[f32; 2]; 4]>,
+}
+
+/// Solves the 3×3 planar homography H mapping `from` → `to` via the Direct
+/// Linear Transform with h33 normalised to 1. Returns None when the point
+/// configuration is degenerate (duplicates or collinear corners).
+pub fn compute_homography(
+    from: [[f32; 2]; 4],
+    to: [[f32; 2]; 4],
+) -> Option<[[f64; 3]; 3]> {
+    let mut a = [[0.0f64; 8]; 8];
+    let mut b = [0.0f64; 8];
+    for i in 0..4 {
+        let [x, y] = [from[i][0] as f64, from[i][1] as f64];
+        let [u, v] = [to[i][0] as f64, to[i][1] as f64];
+        let r1 = i * 2;
+        let r2 = r1 + 1;
+        a[r1] = [-x, -y, -1.0, 0.0, 0.0, 0.0, u * x, u * y];
+        b[r1] = -u;
+        a[r2] = [0.0, 0.0, 0.0, -x, -y, -1.0, v * x, v * y];
+        b[r2] = -v;
+    }
+
+    // Gaussian elimination with partial pivoting.
+    for col in 0..8 {
+        let pivot_row = (col..8)
+            .max_by(|&l, &r| {
+                a[l][col].abs().partial_cmp(&a[r][col].abs()).unwrap_or(std::cmp::Ordering::Equal)
+            })
+            .unwrap_or(col);
+        if a[pivot_row][col].abs() < 1e-10 {
+            return None;
+        }
+        a.swap(col, pivot_row);
+        b.swap(col, pivot_row);
+        for row in (col + 1)..8 {
+            let factor = a[row][col] / a[col][col];
+            let pivot = a[col]; // owned copy: avoids aliasing borrows below
+            for (ac, bc) in a[row][col..].iter_mut().zip(pivot[col..].iter()) {
+                *ac -= factor * bc;
+            }
+            b[row] -= factor * b[col];
+        }
+    }
+
+    // Back substitution.
+    let mut h = [0.0f64; 8];
+    for row in (0..8).rev() {
+        let sum: f64 = a[row][row + 1..]
+            .iter()
+            .zip(h[row + 1..].iter())
+            .map(|(&av, &hv)| av * hv)
+            .sum();
+        h[row] = (b[row] - sum) / a[row][row];
+    }
+
+    let result = [
+        [h[0], h[1], h[2]],
+        [h[3], h[4], h[5]],
+        [h[6], h[7], 1.0],
+    ];
+
+    // Residual validation: the linear system can be solvable even when no
+    // true homography exists (e.g. two source corners mapped to one target).
+    // Reject any solution that does not reproduce the correspondences.
+    for (f, t) in from.iter().zip(to.iter()) {
+        let m = apply_homography(&result, *f);
+        if !m[0].is_finite()
+            || !m[1].is_finite()
+            || (m[0] - t[0]).abs() > 1e-2
+            || (m[1] - t[1]).abs() > 1e-2
+        {
+            return None;
+        }
+    }
+
+    Some(result)
+}
+
+/// Applies a 3×3 homography to a 2D point. Points mapping through w≈0
+/// (infinity) return f32::MAX components.
+pub fn apply_homography(h: &[[f64; 3]; 3], p: [f32; 2]) -> [f32; 2] {
+    let [x, y] = [p[0] as f64, p[1] as f64];
+    let w = h[2][0] * x + h[2][1] * y + h[2][2];
+    if w.abs() < 1e-12 {
+        return [f32::MAX, f32::MAX];
+    }
+    [
+        ((h[0][0] * x + h[0][1] * y + h[0][2]) / w) as f32,
+        ((h[1][0] * x + h[1][1] * y + h[1][2]) / w) as f32,
+    ]
+}
+
+impl TrackerEngine {
+    /// Tracks four corner features over a frame range for perspective
+    /// corner-pin workflows. Every referenced tracker index must exist on the
+    /// layer, otherwise the result is empty.
+    pub fn analyze_quad_track(
+        comp: &Composition,
+        layer_idx: usize,
+        tracker_indices: [usize; 4],
+        start_frame: u32,
+        end_frame: u32,
+    ) -> QuadTrackData {
+        let mut out = QuadTrackData::default();
+        let Some(layer) = comp.layers.get(layer_idx) else {
+            return out;
+        };
+        if tracker_indices.iter().any(|&i| i >= layer.trackers.len()) {
+            return out;
+        }
+        let fps = comp.fps;
+        for f in start_frame..=end_frame {
+            let mut frame_corners = [[0.0f32; 2]; 4];
+            for (slot, &ti) in tracker_indices.iter().enumerate() {
+                frame_corners[slot] = Self::track_next_frame(layer, fps, ti, f.saturating_sub(1))
+                    .unwrap_or_else(|| layer.trackers[ti].position.evaluate(f));
+            }
+            out.frames.push(f);
+            out.corners.push(frame_corners);
+        }
+        out
+    }
+}
+
+/// Computes per-frame homographies mapping `source_rect` onto each tracked
+/// quad. Degenerate frames yield None entries.
+pub fn quad_homographies(
+    track: &QuadTrackData,
+    source_rect: [[f32; 2]; 4],
+) -> Vec<Option<[[f64; 3]; 3]>> {
+    track
+        .corners
+        .iter()
+        .map(|quad| compute_homography(source_rect, *quad))
+        .collect()
+}
+
+/// Removes single-frame position spikes from a tracked quad. A corner sample
+/// that jumps more than `max_jump` pixels from BOTH neighbours is replaced by
+/// their midpoint. Motion-free tracks pass through unchanged.
+pub fn smooth_quad_track(track: &QuadTrackData, max_jump: f32) -> QuadTrackData {
+    let n = track.frames.len();
+    if n < 3 || max_jump <= 0.0 {
+        return track.clone();
+    }
+    let mut out = track.clone();
+    for corner in 0..4 {
+        for i in 1..n - 1 {
+            let prev = track.corners[i - 1][corner];
+            let cur = track.corners[i][corner];
+            let next = track.corners[i + 1][corner];
+            let d_prev = (cur[0] - prev[0]).hypot(cur[1] - prev[1]);
+            let d_next = (next[0] - cur[0]).hypot(next[1] - cur[1]);
+            if d_prev > max_jump && d_next > max_jump {
+                out.corners[i][corner] = [
+                    (prev[0] + next[0]) * 0.5,
+                    (prev[1] + next[1]) * 0.5,
+                ];
+            }
+        }
+    }
+    out
+}
+
+/// Per-frame tracking quality in 0..1: how well the tracked quad preserves the
+/// source rectangle's area and convexity. Flipped or collapsed quads (failed
+/// SAD matches) score near zero.
+pub fn quad_track_confidence(
+    track: &QuadTrackData,
+    source_rect: [[f32; 2]; 4],
+) -> Vec<f32> {
+    fn signed_area(quad: &[[f32; 2]; 4]) -> f32 {
+        let mut sum = 0.0;
+        for i in 0..4 {
+            let a = quad[i];
+            let b = quad[(i + 1) % 4];
+            sum += a[0] * b[1] - b[0] * a[1];
+        }
+        sum * 0.5
+    }
+
+    let src_area = signed_area(&source_rect).abs().max(1e-6);
+    track
+        .corners
+        .iter()
+        .map(|quad| {
+            let area = signed_area(quad);
+            if area <= 0.0 {
+                return 0.0; // flipped / self-intersecting → lost lock
+            }
+            let ratio = area / src_area;
+            let area_score = if ratio >= 1.0 { 1.0 / ratio } else { ratio };
+            let e01 = (quad[1][0] - quad[0][0]).hypot(quad[1][1] - quad[0][1]);
+            let e32 = (quad[2][0] - quad[3][0]).hypot(quad[2][1] - quad[3][1]);
+            let e12 = (quad[2][0] - quad[1][0]).hypot(quad[2][1] - quad[1][1]);
+            let e03 = (quad[3][0] - quad[0][0]).hypot(quad[3][1] - quad[0][1]);
+            let r1 = if e01.max(e32) > 1e-6 { e01.min(e32) / e01.max(e32) } else { 0.0 };
+            let r2 = if e12.max(e03) > 1e-6 { e12.min(e03) / e12.max(e03) } else { 0.0 };
+            let shape_score = (r1 + r2) * 0.5;
+            (area_score * 0.7 + shape_score * 0.3).clamp(0.0, 1.0)
+        })
+        .collect()
+}
+
 #[cfg(test)]
 mod subpixel_tests {
     use super::*;
@@ -508,5 +723,124 @@ mod pixel_tracking_tests {
         });
         let r = TrackerEngine::track_next_frame_pixels(&layer, 0, 0, &f, &f.clone(), 64, 64).unwrap();
         assert!((r[0] - 20.0).abs() < 0.6 && (r[1] - 32.0).abs() < 0.6, "{:?}", r);
+    }
+}
+
+#[cfg(test)]
+mod quad_track_tests {
+    use super::*;
+    use crate::core::property::Animatable;
+    use crate::core::timeline::{Composition as QComp, Layer as QLayer, LayerType as QLayerType};
+
+    const RECT: [[f32; 2]; 4] = [[0.0, 0.0], [100.0, 0.0], [100.0, 100.0], [0.0, 100.0]];
+
+    #[test]
+    fn test_identity_homography_is_identity() {
+        let h = compute_homography(RECT, RECT).expect("identity solvable");
+        for (r, row) in h.iter().enumerate() {
+            for (c, val) in row.iter().enumerate() {
+                let expected = if r == c { 1.0 } else { 0.0 };
+                assert!((val - expected).abs() < 1e-9, "H[{r}][{c}]={val}");
+            }
+        }
+    }
+
+    #[test]
+    fn test_translation_homography_maps_interior_point() {
+        let to: [[f32; 2]; 4] = RECT.map(|p| [p[0] + 25.0, p[1] - 15.0]);
+        let h = compute_homography(RECT, to).expect("translation solvable");
+        let m = apply_homography(&h, [60.0, 60.0]);
+        assert!((m[0] - 85.0).abs() < 1e-3 && (m[1] - 45.0).abs() < 1e-3, "{m:?}");
+    }
+
+    #[test]
+    fn test_perspective_maps_corners_and_rejects_degenerate() {
+        let dst = [[12.0f32, 5.0], [70.0, 0.0], [84.0, 62.0], [4.0, 58.0]];
+        let h = compute_homography(RECT, dst).expect("perspective solvable");
+        for (s, d) in RECT.iter().zip(dst.iter()) {
+            let m = apply_homography(&h, *s);
+            assert!((m[0] - d[0]).abs() < 1e-3 && (m[1] - d[1]).abs() < 1e-3, "{m:?} vs {d:?}");
+        }
+        let bad = [[0.0, 0.0], [0.0, 0.0], [84.0, 62.0], [4.0, 58.0]];
+        assert!(compute_homography(RECT, bad).is_none(), "duplicates degenerate");
+    }
+
+    #[test]
+    fn test_analyze_quad_tracks_all_four_corners() {
+        let mut comp = QComp::new("c".into(), "Q".into(), 320, 240, 30, 30);
+        let mut layer = QLayer::new("l".into(), "L".into(), QLayerType::Null, 30);
+        let base: [[f32; 2]; 4] = [[40.0, 30.0], [280.0, 30.0], [280.0, 210.0], [40.0, 210.0]];
+        for (i, b) in base.iter().enumerate() {
+            let kfs = (0..=10u32)
+                .map(|f| Keyframe::new(f, [b[0] + f as f32, b[1] - f as f32], InterpolationType::Linear))
+                .collect();
+            let mut tp = crate::core::timeline::TrackerPoint::new(format!("t{i}"), format!("T{i}"), *b);
+            tp.position = Animatable::Animated(kfs);
+            layer.trackers.push(tp);
+        }
+        comp.layers.push(layer);
+
+        let track = TrackerEngine::analyze_quad_track(&comp, 0, [0, 1, 2, 3], 0, 10);
+        assert_eq!(track.frames.len(), 11);
+        // Synthetic single-step convention: frame 5 carries frame-4 state (+4, −4).
+        let q5 = track.corners[5];
+        for (b, t) in base.iter().zip(q5.iter()) {
+            assert!((t[0] - (b[0] + 4.0)).abs() < 1e-4, "{t:?} vs {b:?}");
+            assert!((t[1] - (b[1] - 4.0)).abs() < 1e-4);
+        }
+        let hs = quad_homographies(&track, base);
+        assert_eq!(hs.len(), 11);
+        let centre = apply_homography(hs[5].as_ref().expect("frame 5 H"), [160.0, 120.0]);
+        assert!(centre[0] > 160.0 && centre[1] < 120.0, "centre follows motion: {centre:?}");
+
+        // Bad indices → empty.
+        assert!(TrackerEngine::analyze_quad_track(&comp, 0, [0, 1, 2, 9], 0, 5).frames.is_empty());
+        assert!(TrackerEngine::analyze_quad_track(&comp, 7, [0; 4], 0, 5).frames.is_empty());
+    }
+
+    #[test]
+    fn test_smooth_quad_track_removes_spikes_only() {
+        // Uniform diagonal motion with one 40px spike at frame 3.
+        let mut track = QuadTrackData::default();
+        for f in 0..8u32 {
+            let off = f as f32 * 2.0 + if f == 3 { 40.0 } else { 0.0 };
+            track.frames.push(f);
+            track.corners.push([[10.0 + off, 20.0 - off]; 4]);
+        }
+        let smoothed = smooth_quad_track(&track, 10.0);
+        // Spike frame replaced by neighbour midpoint.
+        let c = smoothed.corners[3][0];
+        assert!((c[0] - 16.0).abs() < 1e-4, "spike x {c:?}");
+        // Clean frames untouched.
+        assert_eq!(smoothed.corners[2][0], track.corners[2][0]);
+        // Short/degenerate inputs pass through unchanged.
+        assert_eq!(smooth_quad_track(&QuadTrackData::default(), 10.0), QuadTrackData::default());
+    }
+
+    #[test]
+    fn test_confidence_scores_lock_quality() {
+        // Rigid translated rectangle keeps near-perfect lock.
+        let mut good = QuadTrackData::default();
+        for f in 0..5u32 {
+            good.frames.push(f);
+            let o = f as f32;
+            good.corners.push([
+                [10.0 + o, 10.0],
+                [110.0 + o, 10.0],
+                [110.0 + o, 110.0],
+                [10.0 + o, 110.0],
+            ]);
+        }
+        let conf = quad_track_confidence(&good, RECT);
+        assert!(conf.iter().all(|&c| c > 0.95), "rigid motion: {conf:?}");
+
+        // Flipped quad (corner crossing) → zero confidence.
+        let mut bad = QuadTrackData::default();
+        bad.frames.push(0);
+        bad.corners.push([[0.0, 0.0], [100.0, 0.0], [0.0, 100.0], [100.0, 100.0]]);
+        assert!(
+            quad_track_confidence(&bad, RECT).iter().all(|&c| c == 0.0),
+            "flipped quad must score zero"
+        );
     }
 }

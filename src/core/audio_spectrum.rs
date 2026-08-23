@@ -158,6 +158,130 @@ pub fn generate_audio_spectrum_bands(
         .collect()
 }
 
+// ── Beat / Onset Detection ─────────────────────────────────────────────────
+
+/// Energy-flux beat detector over successive PCM windows.
+///
+/// Feeds one analysis window per call (e.g. every frame at comp fps). A beat
+/// fires when the window RMS rises above `threshold_mult` × its own rolling
+/// mean AND at least `min_interval_frames` have passed since the last hit.
+#[derive(Debug, Clone)]
+pub struct BeatDetector {
+    history: Vec<f32>,
+    capacity: usize,
+    threshold_mult: f32,
+    min_interval_frames: u32,
+    frames_since_beat: u32,
+    last_intervals: Vec<f32>,
+}
+
+impl Default for BeatDetector {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl BeatDetector {
+    /// 43-frame rolling window (~1.4 s at 30 fps), 1.35× mean threshold,
+    /// minimum 6 frames between beats (≈300 BPM ceiling).
+    pub fn new() -> Self {
+        Self {
+            history: Vec::with_capacity(43),
+            capacity: 43,
+            threshold_mult: 1.35,
+            min_interval_frames: 6,
+            frames_since_beat: u32::MAX,
+            last_intervals: Vec::new(),
+        }
+    }
+
+    pub fn with_sensitivity(mut self, threshold_mult: f32) -> Self {
+        self.threshold_mult = threshold_mult.clamp(1.05, 4.0);
+        self
+    }
+
+    fn rms(pcm: &[f32]) -> f32 {
+        if pcm.is_empty() {
+            return 0.0;
+        }
+        let sum: f32 = pcm.iter().map(|s| s * s).sum();
+        (sum / pcm.len() as f32).sqrt()
+    }
+
+    /// Feed one window of mono PCM; returns true on an onset this call.
+    pub fn detect(&mut self, pcm: &[f32]) -> bool {
+        let energy = Self::rms(pcm);
+        let mean = if self.history.is_empty() {
+            energy
+        } else {
+            self.history.iter().sum::<f32>() / self.history.len() as f32
+        };
+
+        // Keep the rolling buffer bounded.
+        if self.history.len() == self.capacity {
+            self.history.remove(0);
+        }
+        self.history.push(energy);
+
+        self.frames_since_beat = self.frames_since_beat.saturating_add(1);
+        let rising = energy > mean * self.threshold_mult && energy > 1e-4;
+        let spaced = self.frames_since_beat >= self.min_interval_frames;
+        if rising && spaced {
+            if let Some(last) = self.frames_since_beat_checked() {
+                self.last_intervals.push(last as f32);
+                if self.last_intervals.len() > 16 {
+                    self.last_intervals.remove(0);
+                }
+            }
+            self.frames_since_beat = 0;
+            true
+        } else {
+            false
+        }
+    }
+
+    fn frames_since_beat_checked(&self) -> Option<u32> {
+        if self.frames_since_beat == u32::MAX || self.frames_since_beat == 0 {
+            None
+        } else {
+            Some(self.frames_since_beat)
+        }
+    }
+
+    /// Median inter-beat interval → BPM estimate using the caller's feed rate.
+    /// Returns 0.0 until ≥3 beats have been observed.
+    pub fn bpm_estimate(&self, fps: u32) -> f32 {
+        if self.last_intervals.len() < 3 || fps == 0 {
+            return 0.0;
+        }
+        let mut sorted = self.last_intervals.clone();
+        sorted.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+        let median = sorted[sorted.len() / 2];
+        if median <= 0.0 {
+            return 0.0;
+        }
+        (fps as f32 / median) * 60.0
+    }
+
+    /// 0..1 confidence that recent material is rhythmic (low interval spread).
+    pub fn rhythm_confidence(&self) -> f32 {
+        if self.last_intervals.len() < 3 {
+            return 0.0;
+        }
+        let mean = self.last_intervals.iter().sum::<f32>() / self.last_intervals.len() as f32;
+        if mean <= 0.0 {
+            return 0.0;
+        }
+        let var = self
+            .last_intervals
+            .iter()
+            .map(|d| (d - mean) * (d - mean))
+            .sum::<f32>()
+            / self.last_intervals.len() as f32;
+        (1.0 - (var.sqrt() / mean)).clamp(0.0, 1.0)
+    }
+}
+
 /// Peak-envelope waveform points for the "Audio Waveform" display.
 /// Each point is the max absolute amplitude of its chunk (0..1).
 pub fn extract_waveform(pcm: &[f32], num_points: u32) -> Vec<f32> {
@@ -385,5 +509,77 @@ mod tests {
         assert!(peak_val > 0.5);
         assert!(after_val > 0.01, "release smoothing must not snap to zero instantly");
         assert!(after_val < peak_val, "value must be falling");
+    }
+}
+
+#[cfg(test)]
+mod beat_tests {
+    use super::*;
+
+    fn sine_window(freq: f32, sr: u32, amp: f32) -> Vec<f32> {
+        let n = (sr / 30) as usize; // one 30fps frame worth
+        (0..n)
+            .map(|i| (std::f32::consts::TAU * freq * i as f32 / sr as f32).sin() * amp)
+            .collect()
+    }
+
+    #[test]
+    fn test_silence_never_beats() {
+        let mut det = BeatDetector::new();
+        let quiet = vec![0.0f32; 1024];
+        for _ in 0..120 {
+            assert!(!det.detect(&quiet), "silence must not trigger");
+        }
+    }
+
+    #[test]
+    fn test_constant_tone_settles_to_no_beats() {
+        let mut det = BeatDetector::new();
+        let tone = sine_window(440.0, 44100, 0.8);
+        let mut hits = 0;
+        for i in 0..90 {
+            if det.detect(&tone) && i > 2 {
+                hits += 1;
+            }
+        }
+        assert!(hits <= 1, "constant tone must settle, got {hits} hits");
+    }
+
+    #[test]
+    fn test_pulsed_amplitude_triggers_periodic_beats() {
+        // 2 Hz amplitude gate at 30 fps → beat every 15 frames.
+        let loud = sine_window(220.0, 44100, 0.9);
+        let soft = sine_window(220.0, 44100, 0.05);
+        let mut det = BeatDetector::new().with_sensitivity(1.25);
+        let period = 15u32;
+        let mut hit_frames = Vec::new();
+        for f in 0..180 {
+            let win = if f % period < 3 { &loud } else { &soft };
+            if det.detect(win) {
+                hit_frames.push(f);
+            }
+        }
+        assert!(hit_frames.len() >= 6, "pulses should produce beats: {hit_frames:?}");
+        // Intervals between successive hits cluster around the pulse period.
+        let intervals: Vec<f32> = hit_frames.windows(2).map(|w| (w[1] - w[0]) as f32).collect();
+        let mean = intervals.iter().sum::<f32>() / intervals.len() as f32;
+        assert!(
+            (mean - period as f32).abs() < period as f32 * 0.5,
+            "mean interval {mean} vs expected ~{period}"
+        );
+        // BPM estimate lands near 120 (2 Hz × 60).
+        let bpm = det.bpm_estimate(30);
+        assert!((100.0..=145.0).contains(&bpm), "bpm {bpm} out of range");
+        assert!(det.rhythm_confidence() > 0.5, "periodic pulses are rhythmic");
+    }
+
+    #[test]
+    fn test_bpm_and_confidence_guards() {
+        let det = BeatDetector::new();
+        assert_eq!(det.bpm_estimate(30), 0.0, "no beats yet");
+        assert_eq!(det.rhythm_confidence(), 0.0);
+        // Sensitivity builder clamps.
+        let tight = BeatDetector::new().with_sensitivity(99.0);
+        assert!((tight.threshold_mult - 4.0).abs() < 1e-6);
     }
 }

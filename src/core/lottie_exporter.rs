@@ -1,6 +1,8 @@
 #![allow(dead_code)]
 use serde_json::{json, Value};
-use crate::core::timeline::{Composition, Layer, LayerType, BlendMode, ShapeType, TrackMatteMode};
+use crate::core::timeline::{
+    Composition, Layer, LayerType, BlendMode, ShapeType, TrackMatteMode, Project,
+};
 use crate::core::mask::{Mask, MaskMode};
 use crate::core::mask::MaskPath;
 use crate::core::keyframe::{Keyframe, InterpolationType};
@@ -151,7 +153,8 @@ fn layer_type_code(lt: &LayerType) -> (i32, Value) {
         LayerType::Image { .. } => (2, json!({ "refId": "asset_0" })),
         LayerType::Null => (3, json!({})),
         LayerType::Text { .. } => (5, json!({})),
-        _ => (4, json!({})), // Shape / PreComp / others default to shape
+        LayerType::PreComp { comp_id } => (0, json!({ "refId": comp_id })),
+        _ => (4, json!({})), // Shape / others default to shape
     }
 }
 
@@ -324,6 +327,12 @@ fn serialize_layer(layer: &Layer, comp: &Composition, index: usize, is_matte_sou
         for (k, v) in extra.as_object().cloned().unwrap_or_default() {
             obj.insert(k, v);
         }
+        // Precomp placeholders carry the containing comp's dimensions so
+        // players can size the referenced composition slot.
+        if matches!(layer.layer_type, LayerType::PreComp { .. }) {
+            obj.insert("w".into(), json!(comp.width));
+            obj.insert("h".into(), json!(comp.height));
+        }
         if layer.motion_blur {
             obj.insert("mb".into(), json!(1));
         }
@@ -377,6 +386,100 @@ impl LottieExporter {
 
         serde_json::to_string_pretty(&lottie_json).unwrap_or_default()
     }
+}
+
+// ───────────────────── Project / Precomp Tree Export ─────────────────────
+
+/// Flattens every composition reachable from the project (top-level list plus
+/// nested `sub_compositions`, depth-first).
+fn flatten_comps(project: &Project) -> Vec<&Composition> {
+    let mut out = Vec::new();
+    let mut stack: Vec<&Composition> = project.compositions.iter().collect();
+    while let Some(c) = stack.pop() {
+        for sub in &c.sub_compositions {
+            stack.push(sub);
+        }
+        out.push(c);
+    }
+    out
+}
+
+fn serialize_comp_layers(comp: &Composition) -> Vec<Value> {
+    comp.layers
+        .iter()
+        .enumerate()
+        .map(|(i, layer)| {
+            let is_source = comp
+                .layers
+                .get(i + 1)
+                .is_some_and(|next| !matches!(next.track_matte, TrackMatteMode::None));
+            serialize_layer(layer, comp, i, is_source)
+        })
+        .collect()
+}
+
+/// Exports the active composition together with every precomp it references
+/// (transitively) as bodymovin assets. Precomp layers become `ty:0` slots
+/// pointing at their asset id; unreferenced comps are omitted; missing
+/// references keep their placeholder but emit no asset.
+pub fn export_project_to_json(project: &Project) -> String {
+    let Some(root) = project.compositions.get(project.active_composition_idx) else {
+        return json!({ "error": "no active composition" }).to_string();
+    };
+
+    let all = flatten_comps(project);
+    let mut emitted: Vec<String> = vec![root.id.clone()];
+    let mut assets: Vec<Value> = Vec::new();
+
+    let mut queue: Vec<String> = root
+        .layers
+        .iter()
+        .filter_map(|l| match &l.layer_type {
+            LayerType::PreComp { comp_id } => Some(comp_id.clone()),
+            _ => None,
+        })
+        .collect();
+
+    while let Some(id) = queue.pop() {
+        if emitted.iter().any(|e| e == &id) {
+            continue;
+        }
+        if let Some(c) = all.iter().find(|c| c.id == id) {
+            emitted.push(id.clone());
+            assets.push(json!({
+                "id": c.id,
+                "nm": c.name,
+                "fr": c.fps,
+                "ip": 0,
+                "op": c.duration_frames,
+                "w": c.width,
+                "h": c.height,
+                "layers": serialize_comp_layers(c),
+            }));
+            for l in &c.layers {
+                if let LayerType::PreComp { comp_id } = &l.layer_type {
+                    queue.push(comp_id.clone());
+                }
+            }
+        }
+    }
+
+    // Root layers reuse the same serializer as assets.
+    let layers = serialize_comp_layers(root);
+    let lottie_json = json!({
+        "v": "5.7.4",
+        "fr": root.fps,
+        "ip": 0,
+        "op": root.duration_frames,
+        "w": root.width,
+        "h": root.height,
+        "nm": root.name,
+        "ddd": 0,
+        "bg": hex_color(&root.background_color),
+        "assets": assets,
+        "layers": layers,
+    });
+    serde_json::to_string_pretty(&lottie_json).unwrap_or_default()
 }
 
 // ─────────────────────── Lottie / Bodymovin Import ───────────────────────
@@ -761,6 +864,12 @@ impl LottieImporter {
     }
 
     fn from_value(v: &Value) -> Option<Composition> {
+        Self::parse_comp(v, None)
+    }
+
+    /// Builds one Composition from a bodymovin comp/asset object.
+    /// `id_override` lets asset entries keep their published bodymovin id.
+    fn parse_comp(v: &Value, id_override: Option<&str>) -> Option<Composition> {
         let layers_src = v.get("layers")?.as_array()?;
         let fps = v.get("fr").and_then(Value::as_f64).unwrap_or(30.0).round().max(1.0) as u32;
         let ip = v.get("ip").and_then(Value::as_f64).unwrap_or(0.0).max(0.0);
@@ -769,15 +878,11 @@ impl LottieImporter {
         let width = v.get("w").and_then(Value::as_u64).unwrap_or(1920).clamp(1, 16384) as u32;
         let height = v.get("h").and_then(Value::as_u64).unwrap_or(1080).clamp(1, 16384) as u32;
         let name = v.get("nm").and_then(Value::as_str).unwrap_or("Lottie Import");
+        let comp_id = id_override
+            .map(str::to_string)
+            .unwrap_or_else(|| format!("lottie_{}", name.replace(' ', "_")));
 
-        let mut comp = Composition::new(
-            format!("lottie_{}", name.replace(' ', "_")),
-            name.to_string(),
-            width,
-            height,
-            fps,
-            duration,
-        );
+        let mut comp = Composition::new(comp_id, name.to_string(), width, height, fps, duration);
         comp.background_color =
             hex_to_rgba(v.get("bg").and_then(Value::as_str).unwrap_or("#000000"));
 
@@ -811,6 +916,14 @@ impl LottieImporter {
                     }, duration),
                     None => Layer::new(id, lname, LayerType::Null, duration),
                 },
+                0 => {
+                    let ref_id = lj
+                        .get("refId")
+                        .and_then(Value::as_str)
+                        .unwrap_or("missing_precomp")
+                        .to_string();
+                    Layer::new(id, lname, LayerType::PreComp { comp_id: ref_id }, duration)
+                }
                 _ => Layer::new(id, lname, LayerType::Null, duration),
             };
 
@@ -848,6 +961,28 @@ impl LottieImporter {
         }
 
         Some(comp)
+    }
+
+    /// Imports a full bodymovin project: the root composition plus every
+    /// precomp asset, preserving `ty:0` references as [`LayerType::PreComp`].
+    pub fn import_project_from_str(json: &str) -> Option<crate::core::timeline::Project> {
+        let v: Value = serde_json::from_str(json).ok()?;
+        let mut comps = vec![Self::parse_comp(&v, None)?];
+        if let Some(assets) = v.get("assets").and_then(Value::as_array) {
+            for a in assets {
+                if a.get("layers").and_then(Value::as_array).is_some() {
+                    let id = a.get("id").and_then(Value::as_str);
+                    if let Some(c) = Self::parse_comp(a, id) {
+                        comps.push(c);
+                    }
+                }
+            }
+        }
+        Some(crate::core::timeline::Project {
+            compositions: comps,
+            active_composition_idx: 0,
+            assets: Vec::new(),
+        })
     }
 }
 
@@ -1180,7 +1315,7 @@ mod tests {
         assert_eq!(comp.name, "Rot");
         assert_eq!(comp.fps, 30);
         assert_eq!(comp.duration_frames, 20);
-        assert_eq!(comp.background_color[0] > 0.0, true);
+        assert!(comp.background_color[0] > 0.0, "background colour imported");
         assert_eq!(comp.layers.len(), 1);
         let layer = &comp.layers[0];
         match &layer.layer_type {
@@ -1274,5 +1409,119 @@ mod tests {
         } else {
             panic!("expected constant mask vertices");
         }
+    }
+
+    #[test]
+    fn test_export_project_with_precomp_tree() {
+        use crate::core::timeline::Project;
+        // B: nested comp with one shape; C: deeper comp referenced from B.
+        let mut b = Composition::new("B".into(), "NestedB".into(), 100, 100, 24, 30);
+        b.layers.push(Layer::new("bs".into(), "BShape".into(), LayerType::Shape {
+            shape_type: ShapeType::Ellipse {
+                width: Animatable::new_constant(20.0),
+                height: Animatable::new_constant(20.0),
+            },
+            color: [1.0, 0.0, 0.0, 1.0],
+            stroke_color: [0.0; 4],
+            stroke_width: 0.0,
+        }, 30));
+        let mut c = Composition::new("C".into(), "DeepC".into(), 80, 80, 24, 30);
+        c.layers.push(Layer::new("cl".into(), "CNull".into(), LayerType::Null, 30));
+        b.sub_compositions.push(c);
+        b.layers.push(Layer::new("bpc".into(), "ToC".into(), LayerType::PreComp { comp_id: "C".into() }, 30));
+
+        let mut a = Composition::new("A".into(), "Root".into(), 400, 300, 24, 60);
+        a.layers.push(Layer::new("apc".into(), "ToB".into(), LayerType::PreComp { comp_id: "B".into() }, 60));
+        a.layers.push(Layer::new("as".into(), "ASolid".into(), LayerType::Solid { color: [1.0; 4] }, 60));
+
+        let project = Project {
+            compositions: vec![a, b],
+            active_composition_idx: 0,
+            assets: Vec::new(),
+        };
+
+        let v: Value = serde_json::from_str(&export_project_to_json(&project)).unwrap();
+        // Root precomp slot.
+        let root_pc = &v["layers"][0];
+        assert_eq!(root_pc["ty"], 0, "precomp layer type");
+        assert_eq!(root_pc["refId"], "B");
+        assert_eq!(root_pc["w"], 400, "slot sized to containing comp");
+        // Both referenced comps emitted as assets (transitively through B→C).
+        let assets = v["assets"].as_array().unwrap();
+        assert_eq!(assets.len(), 2, "B and C must both be assets");
+        let ids: Vec<&str> = assets.iter().filter_map(|a| a["id"].as_str()).collect();
+        assert!(ids.contains(&"B") && ids.contains(&"C"), "ids {ids:?}");
+        let b_asset = assets.iter().find(|a| a["id"] == "B").unwrap();
+        assert_eq!(b_asset["layers"][0]["ty"], 4, "shape inside asset");
+        assert_eq!(
+            b_asset["layers"].as_array().unwrap().iter()
+                .find(|l| l["refId"] == "C").map(|l| l["ty"].clone()),
+            Some(json!(0)),
+            "nested precomp slot inside asset B"
+        );
+
+        // Missing reference degrades gracefully: no crash, no phantom asset.
+        let mut a2 = Composition::new("A2".into(), "R2".into(), 10, 10, 24, 5);
+        a2.layers.push(Layer::new("x".into(), "Ghost".into(), LayerType::PreComp { comp_id: "NOPE".into() }, 5));
+        let p2 = Project { compositions: vec![a2], active_composition_idx: 0, assets: Vec::new() };
+        let v2: Value = serde_json::from_str(&export_project_to_json(&p2)).unwrap();
+        assert_eq!(v2["layers"][0]["ty"], 0);
+        assert_eq!(v2["assets"].as_array().unwrap().len(), 0);
+
+        // Empty project → error payload, no panic.
+        let empty = Project { compositions: vec![], active_composition_idx: 0, assets: Vec::new() };
+        assert!(export_project_to_json(&empty).contains("error"));
+    }
+
+    #[test]
+    fn test_project_roundtrip_through_precomp_export() {
+        use crate::core::timeline::Project;
+        let mut b = Composition::new("B".into(), "NestedB".into(), 100, 100, 24, 30);
+        b.layers.push(Layer::new("bs".into(), "BShape".into(), LayerType::Shape {
+            shape_type: ShapeType::Ellipse {
+                width: Animatable::new_constant(20.0),
+                height: Animatable::new_constant(20.0),
+            },
+            color: [1.0, 0.0, 0.0, 1.0],
+            stroke_color: [0.0; 4],
+            stroke_width: 0.0,
+        }, 30));
+        let mut c = Composition::new("C".into(), "DeepC".into(), 80, 80, 24, 30);
+        c.layers.push(Layer::new("cl".into(), "CNull".into(), LayerType::Null, 30));
+        b.sub_compositions.push(c);
+        b.layers.push(Layer::new("bpc".into(), "ToC".into(), LayerType::PreComp { comp_id: "C".into() }, 30));
+
+        let mut a = Composition::new("A".into(), "Root".into(), 400, 300, 24, 60);
+        a.layers.push(Layer::new("apc".into(), "ToB".into(), LayerType::PreComp { comp_id: "B".into() }, 60));
+        let project = Project {
+            compositions: vec![a, b],
+            active_composition_idx: 0,
+            assets: Vec::new(),
+        };
+
+        let exported = export_project_to_json(&project);
+        let back = LottieImporter::import_project_from_str(&exported)
+            .expect("project roundtrip parses");
+        // Root + B + C all present; root is active.
+        assert_eq!(back.compositions.len(), 3);
+        assert_eq!(back.active_composition_idx, 0);
+        let root = &back.compositions[0];
+        assert_eq!(root.name, "Root"); // bodymovin roots carry a name, not an id
+        // Root's precomp slot points at imported asset B.
+        match &root.layers[0].layer_type {
+            LayerType::PreComp { comp_id } => assert_eq!(comp_id, "B"),
+            other => panic!("expected precomp, got {other:?}"),
+        }
+        // Asset B kept its bodymovin id and nested precomp reference to C.
+        let b_back = back.compositions.iter().find(|c| c.id == "B").expect("asset B");
+        match &b_back.layers[1].layer_type {
+            LayerType::PreComp { comp_id } => assert_eq!(comp_id, "C"),
+            other => panic!("expected nested precomp in B, got {other:?}"),
+        }
+        assert!(back.compositions.iter().any(|c| c.id == "C"), "deep asset C imported");
+
+        // Single-comp importer still ignores assets gracefully.
+        let single = LottieImporter::import_from_str(&exported).expect("single-comp import");
+        assert_eq!(single.name, "Root");
     }
 }

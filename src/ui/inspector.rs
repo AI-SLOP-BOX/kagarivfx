@@ -5,6 +5,7 @@ use crate::core::property::Animatable;
 use crate::core::keyframe::{InterpolationType, BezierControlPoint};
 use crate::core::tracker_engine::TrackerEngine;
 use crate::ui::inspector_property::draw_property_ui;
+use crate::ui::theme::colors;
 
 pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut u32) {
     // ── Non-blocking Async Motion Tracker Event Receiver ──
@@ -77,7 +78,7 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
             // ── Multi-Layer Selection Batch Controls ──
             if app.selected_layers.len() > 1 {
                 ui.horizontal(|ui| {
-                    ui.label(egui::RichText::new(format!("Multi-Selection: {} Layers", app.selected_layers.len())).strong().color(egui::Color32::from_rgb(120, 180, 255)));
+                    ui.label(egui::RichText::new(format!("Multi-Selection: {} Layers", app.selected_layers.len())).strong().color(colors::TEXT_ACCENT));
                 });
                 ui.separator();
                 ui.label("Batch Operations:");

@@ -3,6 +3,7 @@
 use eframe::egui;
 use crate::AfterEffectsApp;
 use crate::core::timeline::{Layer, LayerType};
+use crate::ui::theme::colors;
 use crate::core::text_animator::TextAnimatorEngine;
 
 pub fn draw_software_canvas(
@@ -140,7 +141,7 @@ pub fn draw_software_canvas(
                     let h = (scale[1] / 100.0) * 140.0 * (draw_h / comp_h);
                     let comp_rect = egui::Rect::from_center_size(egui::pos2(rx, ry), egui::vec2(w, h));
                     ui.painter().rect_filled(comp_rect, 6.0, layer_color);
-                    ui.painter().rect_stroke(comp_rect, 6.0, egui::Stroke::new(2.0, egui::Color32::from_rgb(220, 100, 250)));
+                    ui.painter().rect_stroke(comp_rect, 6.0, egui::Stroke::new(2.0, colors::ACCENT_PURPLE));
                     ui.painter().text(
                         comp_rect.center(),
                         egui::Align2::CENTER_CENTER,
@@ -253,7 +254,7 @@ pub fn draw_software_canvas(
 
                     let is_selected_layer = Some(li) == app.selected_layer_idx;
                     let line_color = if is_selected_layer {
-                        egui::Color32::from_rgb(255, 180, 50)
+                        colors::ACCENT_YELLOW
                     } else {
                         egui::Color32::from_rgba_unmultiplied(255, 180, 50, 100)
                     };
@@ -278,13 +279,13 @@ pub fn draw_software_canvas(
                             let is_hovered = ui.rect_contains_pointer(v_rect);
                             let handle_color = if is_hovered { egui::Color32::YELLOW } else { egui::Color32::WHITE };
                             ui.painter().rect_filled(v_rect, 1.0, handle_color);
-                            ui.painter().rect_stroke(v_rect, 1.0, egui::Stroke::new(1.2, egui::Color32::from_rgb(255, 100, 0)));
+                            ui.painter().rect_stroke(v_rect, 1.0, egui::Stroke::new(1.2, colors::HANDLE_HOVER_STROKE));
                             ui.painter().text(
                                 egui::pos2(screen_pt.x + 8.0, screen_pt.y - 8.0),
                                 egui::Align2::LEFT_BOTTOM,
                                 format!("V{}", v_idx + 1),
                                 egui::FontId::proportional(10.0),
-                                egui::Color32::from_rgb(255, 200, 100),
+                                colors::HANDLE_HOVER_FILL,
                             );
                         }
                     }

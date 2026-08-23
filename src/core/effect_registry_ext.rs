@@ -17,8 +17,8 @@ use crate::core::ae_effects_pack_v28::{
     apply_radial_fast_blur, LightSweepParams, TileEdgeMode,
 };
 use crate::core::color_correction::{
-    apply_channel_mixer, apply_color_balance, apply_curves, ChannelCurves, ColorBalance,
-    ChannelMixer, ToneCurve,
+    apply_channel_mixer, apply_color_balance, apply_curves, apply_vibrance,
+    apply_white_balance, ChannelCurves, ColorBalance, ChannelMixer, ToneCurve,
 };
 
 /// Serializable extended effect. All parameters are plain values; animation
@@ -137,6 +137,18 @@ pub enum ExtEffect {
         #[serde(default = "d1")]
         intensity: f32,
     },
+    /// Saturation boost protecting skin tones (−100..100).
+    Vibrance {
+        #[serde(default = "dhalf")]
+        amount: f32,
+    },
+    /// Temperature/Tint white balance (−100..100 each).
+    WhiteBalance {
+        #[serde(default)]
+        temperature: f32,
+        #[serde(default)]
+        tint: f32,
+    },
 }
 
 fn d50() -> f32 { 50.0 }
@@ -172,6 +184,8 @@ impl ExtEffect {
             ExtEffect::BendIt { .. } => "bend_it",
             ExtEffect::Tiler { .. } => "tiler",
             ExtEffect::GlowPro { .. } => "glow_pro",
+            ExtEffect::Vibrance { .. } => "vibrance",
+            ExtEffect::WhiteBalance { .. } => "white_balance",
         }
     }
 
@@ -190,6 +204,8 @@ impl ExtEffect {
             ExtEffect::BendIt { .. } => "CC Bend It",
             ExtEffect::Tiler { .. } => "CC Tiler",
             ExtEffect::GlowPro { .. } => "Glow",
+            ExtEffect::Vibrance { .. } => "Vibrance",
+            ExtEffect::WhiteBalance { .. } => "White Balance",
         }
     }
 
@@ -206,7 +222,9 @@ impl ExtEffect {
             ExtEffect::RadialFastBlur { .. } => "Blur & Sharpen",
             ExtEffect::Curves { .. }
             | ExtEffect::ColorBalance { .. }
-            | ExtEffect::ChannelMixer { .. } => "Color Correction",
+            | ExtEffect::ChannelMixer { .. }
+            | ExtEffect::Vibrance { .. }
+            | ExtEffect::WhiteBalance { .. } => "Color Correction",
         }
     }
 
@@ -300,6 +318,18 @@ impl ExtEffect {
             ExtEffect::GlowPro { threshold, radius, intensity } => {
                 apply_glow_pro(pixels, width, height, *threshold, *radius, *intensity);
             }
+            ExtEffect::Vibrance { amount } => {
+                apply_vibrance(pixels, *amount);
+            }
+            ExtEffect::WhiteBalance { temperature, tint } => {
+                apply_white_balance(
+                    pixels,
+                    &crate::core::color_correction::WhiteBalance {
+                        temperature: *temperature,
+                        tint: *tint,
+                    },
+                );
+            }
         }
     }
 }
@@ -335,6 +365,8 @@ mod tests {
             ExtEffect::BendIt { top_offset: 4.0, bottom_offset: -4.0 },
             ExtEffect::Tiler { scale_percent: 250.0, mirror: true },
             ExtEffect::GlowPro { threshold: 0.5, radius: 3, intensity: 0.9 },
+            ExtEffect::Vibrance { amount: 40.0 },
+            ExtEffect::WhiteBalance { temperature: 30.0, tint: -10.0 },
         ]
     }
 
