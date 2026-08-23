@@ -281,20 +281,76 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
             });
             ui.menu_button("Effect", |ui| {
                 ui.menu_button("Blur & Sharpen", |ui| {
-                    if ui.button("Gaussian Blur").clicked() { ui.close_menu(); }
+                    if ui.button("Gaussian Blur").clicked() {
+                        apply_effect_by_name(app, "Gaussian Blur");
+                        ui.close_menu();
+                    }
+                    if ui.button("Directional Blur").clicked() {
+                        apply_effect_by_name(app, "Directional Blur");
+                        ui.close_menu();
+                    }
+                    if ui.button("Radial Blur").clicked() {
+                        apply_effect_by_name(app, "Radial Blur");
+                        ui.close_menu();
+                    }
+                    if ui.button("Sharpen").clicked() {
+                        apply_effect_by_name(app, "Sharpen");
+                        ui.close_menu();
+                    }
                 });
                 ui.menu_button("Color Correction", |ui| {
-                    if ui.button("Color Tint").clicked() { ui.close_menu(); }
-                    if ui.button("Levels").clicked() { ui.close_menu(); }
-                    if ui.button("Hue/Saturation").clicked() { ui.close_menu(); }
+                    if ui.button("Color Tint").clicked() {
+                        apply_effect_by_name(app, "Color Tint");
+                        ui.close_menu();
+                    }
+                    if ui.button("Levels").clicked() {
+                        apply_effect_by_name(app, "Levels");
+                        ui.close_menu();
+                    }
+                    if ui.button("Hue/Saturation").clicked() {
+                        apply_effect_by_name(app, "Hue/Saturation");
+                        ui.close_menu();
+                    }
+                    if ui.button("Vibrance").clicked() {
+                        apply_effect_by_name(app, "Vibrance");
+                        ui.close_menu();
+                    }
                 });
                 ui.menu_button("Stylize", |ui| {
-                    if ui.button("Glow").clicked() { ui.close_menu(); }
-                    if ui.button("Vignette").clicked() { ui.close_menu(); }
+                    if ui.button("Glow").clicked() {
+                        apply_effect_by_name(app, "Glow");
+                        ui.close_menu();
+                    }
+                    if ui.button("Vignette").clicked() {
+                        apply_effect_by_name(app, "Vignette");
+                        ui.close_menu();
+                    }
+                    if ui.button("Film Grain").clicked() {
+                        apply_effect_by_name(app, "Film Grain");
+                        ui.close_menu();
+                    }
+                    if ui.button("Drop Shadow").clicked() {
+                        apply_effect_by_name(app, "Drop Shadow");
+                        ui.close_menu();
+                    }
                 });
                 ui.menu_button("Distort", |ui| {
-                    if ui.button("Mesh Warp").clicked() { ui.close_menu(); }
-                    if ui.button("Chromatic Aberration").clicked() { ui.close_menu(); }
+                    if ui.button("Twirl").clicked() {
+                        apply_effect_by_name(app, "Twirl");
+                        ui.close_menu();
+                    }
+                    if ui.button("Bulge").clicked() {
+                        apply_effect_by_name(app, "Bulge");
+                        ui.close_menu();
+                    }
+                    if ui.button("Mesh Warp").clicked() {
+                        apply_effect_by_name(app, "Mesh Warp");
+                        ui.close_menu();
+                    }
+                    if ui.button("Chromatic Aberration").clicked() {
+                        apply_effect_by_name(app, "Chromatic Aberration");
+                        ui.close_menu();
+                    }
                 });
             });
             ui.menu_button("Animation", |ui| {
@@ -389,4 +445,143 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
     // 📦 Pre-Compose Dialog (Cmd+Shift+C)
     crate::ui::precompose_dialog::draw_precompose_dialog(app, ctx);
     crate::ui::recovery_dialog::draw_recovery_dialog(app, ctx);
+}
+
+fn apply_effect_by_name(app: &mut crate::AfterEffectsApp, effect_name: &str) {
+    if let Some(idx) = app.selected_layer_idx {
+        let comp = app.history.current_mut().active_composition_mut();
+        if idx < comp.layers.len() {
+            let layer = &mut comp.layers[idx];
+            let len = layer.effects.len();
+            let effect = match effect_name {
+                "Gaussian Blur" => crate::core::timeline::Effect {
+                    id: format!("blur_{}", len), name: "Gaussian Blur".to_string(),
+                    effect_type: crate::core::timeline::EffectType::GaussianBlur {
+                        blur_radius: crate::core::property::Animatable::new_constant(5.0),
+                    }, enabled: true,
+                },
+                "Directional Blur" => crate::core::timeline::Effect {
+                    id: format!("dirblur_{}", len), name: "Directional Blur".to_string(),
+                    effect_type: crate::core::timeline::EffectType::DirectionalBlur {
+                        angle: crate::core::property::Animatable::new_constant(0.0),
+                        length: crate::core::property::Animatable::new_constant(10.0),
+                    }, enabled: true,
+                },
+                "Radial Blur" => crate::core::timeline::Effect {
+                    id: format!("radblur_{}", len), name: "Radial Blur".to_string(),
+                    effect_type: crate::core::timeline::EffectType::RadialBlur {
+                        amount: crate::core::property::Animatable::new_constant(10.0),
+                    }, enabled: true,
+                },
+                "Sharpen" => crate::core::timeline::Effect {
+                    id: format!("sharp_{}", len), name: "Sharpen".to_string(),
+                    effect_type: crate::core::timeline::EffectType::Sharpen {
+                        amount: crate::core::property::Animatable::new_constant(50.0),
+                    }, enabled: true,
+                },
+                "Color Tint" => crate::core::timeline::Effect {
+                    id: format!("tint_{}", len), name: "Color Tint".to_string(),
+                    effect_type: crate::core::timeline::EffectType::ColorTint {
+                        color: crate::core::property::Animatable::new_constant([1.0, 0.2, 0.4, 1.0]),
+                        intensity: crate::core::property::Animatable::new_constant(1.0),
+                    }, enabled: true,
+                },
+                "Levels" => crate::core::timeline::Effect {
+                    id: format!("levels_{}", len), name: "Levels".to_string(),
+                    effect_type: crate::core::timeline::EffectType::Levels {
+                        input_black: crate::core::property::Animatable::new_constant(0.0),
+                        input_white: crate::core::property::Animatable::new_constant(255.0),
+                        gamma: crate::core::property::Animatable::new_constant(1.0),
+                        output_black: crate::core::property::Animatable::new_constant(0.0),
+                        output_white: crate::core::property::Animatable::new_constant(255.0),
+                    }, enabled: true,
+                },
+                "Hue/Saturation" => crate::core::timeline::Effect {
+                    id: format!("hs_{}", len), name: "Hue/Saturation".to_string(),
+                    effect_type: crate::core::timeline::EffectType::HueSaturation {
+                        hue_shift: crate::core::property::Animatable::new_constant(0.0),
+                        saturation: crate::core::property::Animatable::new_constant(0.0),
+                        lightness: crate::core::property::Animatable::new_constant(0.0),
+                    }, enabled: true,
+                },
+                "Vibrance" => crate::core::timeline::Effect {
+                    id: format!("vib_{}", len), name: "Vibrance".to_string(),
+                    effect_type: crate::core::timeline::EffectType::Vibrance {
+                        amount: crate::core::property::Animatable::new_constant(50.0),
+                    }, enabled: true,
+                },
+                "Glow" => crate::core::timeline::Effect {
+                    id: format!("glow_{}", len), name: "Glow".to_string(),
+                    effect_type: crate::core::timeline::EffectType::Glow {
+                        threshold: crate::core::property::Animatable::new_constant(60.0),
+                        radius: crate::core::property::Animatable::new_constant(10.0),
+                        intensity: crate::core::property::Animatable::new_constant(1.0),
+                        color: crate::core::property::Animatable::new_constant([1.0, 1.0, 1.0, 1.0]),
+                    }, enabled: true,
+                },
+                "Vignette" => crate::core::timeline::Effect {
+                    id: format!("vig_{}", len), name: "Vignette".to_string(),
+                    effect_type: crate::core::timeline::EffectType::Vignette {
+                        intensity: crate::core::property::Animatable::new_constant(0.5),
+                        roundness: crate::core::property::Animatable::new_constant(0.5),
+                        feather: crate::core::property::Animatable::new_constant(0.5),
+                        color: crate::core::property::Animatable::new_constant([0.0, 0.0, 0.0, 1.0]),
+                    }, enabled: true,
+                },
+                "Film Grain" => crate::core::timeline::Effect {
+                    id: format!("grain_{}", len), name: "Film Grain".to_string(),
+                    effect_type: crate::core::timeline::EffectType::FilmGrain {
+                        intensity: crate::core::property::Animatable::new_constant(0.1),
+                        grain_size: 2.0,
+                        color_film: false,
+                    }, enabled: true,
+                },
+                "Drop Shadow" => crate::core::timeline::Effect {
+                    id: format!("ds_{}", len), name: "Drop Shadow".to_string(),
+                    effect_type: crate::core::timeline::EffectType::DropShadow {
+                        color: crate::core::property::Animatable::new_constant([0.0, 0.0, 0.0, 1.0]),
+                        opacity: crate::core::property::Animatable::new_constant(75.0),
+                        direction: crate::core::property::Animatable::new_constant(120.0),
+                        distance: crate::core::property::Animatable::new_constant(5.0),
+                        softness: crate::core::property::Animatable::new_constant(5.0),
+                    }, enabled: true,
+                },
+                "Twirl" => crate::core::timeline::Effect {
+                    id: format!("twirl_{}", len), name: "Twirl".to_string(),
+                    effect_type: crate::core::timeline::EffectType::Twirl {
+                        angle: crate::core::property::Animatable::new_constant(50.0),
+                        radius: crate::core::property::Animatable::new_constant(100.0),
+                    }, enabled: true,
+                },
+                "Bulge" => crate::core::timeline::Effect {
+                    id: format!("bulge_{}", len), name: "Bulge".to_string(),
+                    effect_type: crate::core::timeline::EffectType::Bulge {
+                        amount: crate::core::property::Animatable::new_constant(50.0),
+                        radius: crate::core::property::Animatable::new_constant(100.0),
+                    }, enabled: true,
+                },
+                "Mesh Warp" => crate::core::timeline::Effect {
+                    id: format!("meshwarp_{}", len), name: "Mesh Warp".to_string(),
+                    effect_type: crate::core::timeline::EffectType::MeshWarp {
+                        top_left: crate::core::property::Animatable::new_constant([0.0, 0.0]),
+                        top_right: crate::core::property::Animatable::new_constant([1.0, 0.0]),
+                        bottom_left: crate::core::property::Animatable::new_constant([0.0, 1.0]),
+                        bottom_right: crate::core::property::Animatable::new_constant([1.0, 1.0]),
+                    }, enabled: true,
+                },
+                "Chromatic Aberration" => crate::core::timeline::Effect {
+                    id: format!("ca_{}", len), name: "Chromatic Aberration".to_string(),
+                    effect_type: crate::core::timeline::EffectType::ChromaticAberration {
+                        shift_r: crate::core::property::Animatable::new_constant(5.0),
+                        shift_b: crate::core::property::Animatable::new_constant(-5.0),
+                        edge_falloff: crate::core::property::Animatable::new_constant(0.5),
+                    }, enabled: true,
+                },
+                _ => return,
+            };
+            layer.effects.push(effect);
+            crate::core::frame_cache::bump_version();
+            app.toasts.info(format!("Added '{}' effect", effect_name));
+        }
+    }
 }

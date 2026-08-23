@@ -57,6 +57,20 @@ pub fn handle_global_shortcuts(
             app.is_playing = !app.is_playing;
         }
 
+        // ── Tool Switching Shortcuts (AE standard) ──
+        // Only when no modifier keys are pressed and text is not focused
+        if allow_single_key && !cmd && !shift && !i.modifiers.alt {
+            if i.key_pressed(Key::V) { app.active_tool = crate::ui::toolbar::ActiveTool::Selection; }
+            if i.key_pressed(Key::H) { app.active_tool = crate::ui::toolbar::ActiveTool::Hand; }
+            if i.key_pressed(Key::Z) { app.active_tool = crate::ui::toolbar::ActiveTool::Zoom; }
+            if i.key_pressed(Key::W) { app.active_tool = crate::ui::toolbar::ActiveTool::Rotation; }
+            if i.key_pressed(Key::Y) { app.active_tool = crate::ui::toolbar::ActiveTool::AnchorPoint; }
+            if i.key_pressed(Key::Q) { app.active_tool = crate::ui::toolbar::ActiveTool::Rectangle; }
+            if i.key_pressed(Key::G) { app.active_tool = crate::ui::toolbar::ActiveTool::Pen; }
+            if i.key_pressed(Key::T) { app.active_tool = crate::ui::toolbar::ActiveTool::Text; }
+            if i.key_pressed(Key::C) { app.active_tool = crate::ui::toolbar::ActiveTool::Camera3D; }
+        }
+
         // B → Set Work Area Start, N → Set Work Area End (single-key)
         if allow_single_key && i.key_pressed(Key::B) && !cmd {
             app.work_area_in = Some(*current_frame);
