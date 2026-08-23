@@ -908,6 +908,19 @@ pub enum EffectType {
         completion: Animatable<f32>,
         width: Animatable<f32>,
     },
+    // ── Lumetri Basic Correction (Vibrance / WB / HSL Secondary) ──
+    Vibrance {
+        amount: Animatable<f32>,
+    },
+    WhiteBalance {
+        temperature: Animatable<f32>,
+        tint: Animatable<f32>,
+    },
+    HslAdjust {
+        hue_deg: Animatable<f32>,
+        saturation: Animatable<f32>,
+        lightness: Animatable<f32>,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

@@ -398,6 +398,24 @@ fn apply_one(
         EffectType::VenetianBlinds { completion, width: blind_width } => {
             pack::apply_venetian_blinds(pixels, width, height, completion.evaluate(frame), blind_width.evaluate(frame).max(1.0) as u32);
         }
+        EffectType::Vibrance { amount } => {
+            crate::core::color_correction::apply_vibrance(pixels, amount.evaluate(frame));
+        }
+        EffectType::WhiteBalance { temperature, tint } => {
+            use crate::core::color_correction::{apply_white_balance, WhiteBalance};
+            apply_white_balance(pixels, &WhiteBalance {
+                temperature: temperature.evaluate(frame),
+                tint: tint.evaluate(frame),
+            });
+        }
+        EffectType::HslAdjust { hue_deg, saturation, lightness } => {
+            use crate::core::color_correction::{apply_hsl_adjust, HslAdjust};
+            apply_hsl_adjust(pixels, &HslAdjust {
+                hue_deg: hue_deg.evaluate(frame),
+                saturation: saturation.evaluate(frame),
+                lightness: lightness.evaluate(frame),
+            });
+        }
     }
 }
 
@@ -513,5 +531,82 @@ mod tests {
         assert_eq!(px[new_idx], 255, "red channel at shifted position");
         // Original position should now be transparent (or at least not red).
         assert_eq!(px[idx], 0, "original position cleared after offset");
+    }
+
+    #[test]
+    fn test_vibrance_boosts_chroma_but_not_gray() {
+        let mut gray = solid_layer(4, 4, 128, 128, 128);
+        apply_layer_effects(
+            &mut gray, 4, 4,
+            &[effect("vib", EffectType::Vibrance { amount: Animatable::new_constant(100.0) })],
+            0,
+        );
+        assert_eq!(
+            (gray[0], gray[1], gray[2]),
+            (128, 128, 128),
+            "zero-chroma pixels must survive max vibrance"
+        );
+
+        let mut colored = solid_layer(4, 4, 90, 140, 200);
+        let before = colored.clone();
+        apply_layer_effects(
+            &mut colored, 4, 4,
+            &[effect("vib", EffectType::Vibrance { amount: Animatable::new_constant(80.0) })],
+            0,
+        );
+        assert_ne!(&colored[0..3], &before[0..3], "chroma must shift under vibrance");
+    }
+
+    #[test]
+    fn test_white_balance_warms_and_cools() {
+        let mut warm = solid_layer(4, 4, 120, 120, 120);
+        apply_layer_effects(
+            &mut warm, 4, 4,
+            &[effect("wb", EffectType::WhiteBalance {
+                temperature: Animatable::new_constant(100.0),
+                tint: Animatable::new_constant(0.0),
+            })],
+            0,
+        );
+        assert!(warm[0] > warm[2], "positive temperature must push R above B");
+
+        let mut cool = solid_layer(4, 4, 120, 120, 120);
+        apply_layer_effects(
+            &mut cool, 4, 4,
+            &[effect("wb", EffectType::WhiteBalance {
+                temperature: Animatable::new_constant(-100.0),
+                tint: Animatable::new_constant(0.0),
+            })],
+            0,
+        );
+        assert!(cool[2] > cool[0], "negative temperature must push B above R");
+    }
+
+    #[test]
+    fn test_hsl_adjust_neutral_noop_and_hue_rotation() {
+        let mut px = solid_layer(4, 4, 90, 140, 200);
+        let before = px.clone();
+        apply_layer_effects(
+            &mut px, 4, 4,
+            &[effect("hsl", EffectType::HslAdjust {
+                hue_deg: Animatable::new_constant(0.0),
+                saturation: Animatable::new_constant(0.0),
+                lightness: Animatable::new_constant(0.0),
+            })],
+            0,
+        );
+        assert_eq!(px, before, "neutral HSL must be a no-op");
+
+        let mut red = solid_layer(4, 4, 255, 40, 40);
+        apply_layer_effects(
+            &mut red, 4, 4,
+            &[effect("hsl", EffectType::HslAdjust {
+                hue_deg: Animatable::new_constant(180.0),
+                saturation: Animatable::new_constant(0.0),
+                lightness: Animatable::new_constant(0.0),
+            })],
+            0,
+        );
+        assert!(red[0] < red[1].max(red[2]), "180° rotation must move red toward cyan");
     }
 }

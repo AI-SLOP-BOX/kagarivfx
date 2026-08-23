@@ -5,10 +5,123 @@ use crate::core::timeline::{Effect, EffectType};
 
 const CB_EFFECT: &str = "Lumetri Color Balance";
 const VIG_EFFECT: &str = "Lumetri Vignette";
+const WB_EFFECT: &str = "Lumetri White Balance";
+const VIB_EFFECT: &str = "Lumetri Vibrance";
+const HSL_EFFECT: &str = "Lumetri HSL Adjust";
 
 /// (shadows RGB, midtones RGB, highlights RGB, preserve_luminosity)
 type ThreeWay = ([f32; 3], [f32; 3], [f32; 3], bool);
 type LookPreset<'n> = (&'n str, [f32; 3], [f32; 3], [f32; 3]);
+/// (temperature, tint), each −100..100.
+type WbPair = (f32, f32);
+/// (hue_deg −180..180, saturation −100..100, lightness −100..100).
+type HslTriple = (f32, f32, f32);
+
+fn read_single_f32(app: &AfterEffectsApp, effect_name: &str, field: fn(&EffectType) -> Option<f32>) -> Option<f32> {
+    let idx = app.selected_layer_idx?;
+    let comp = app.history.current().active_composition();
+    let layer = comp.layers.get(idx)?;
+    let e = layer.effects.iter().find(|e| e.name == effect_name)?;
+    field(&e.effect_type)
+}
+
+fn read_wb(app: &AfterEffectsApp) -> Option<WbPair> {
+    let idx = app.selected_layer_idx?;
+    let comp = app.history.current().active_composition();
+    let layer = comp.layers.get(idx)?;
+    match &layer.effects.iter().find(|e| e.name == WB_EFFECT)?.effect_type {
+        EffectType::WhiteBalance { temperature, tint } => {
+            Some((temperature.evaluate(0), tint.evaluate(0)))
+        }
+        _ => None,
+    }
+}
+
+fn read_hsl(app: &AfterEffectsApp) -> Option<HslTriple> {
+    let idx = app.selected_layer_idx?;
+    let comp = app.history.current().active_composition();
+    let layer = comp.layers.get(idx)?;
+    match &layer.effects.iter().find(|e| e.name == HSL_EFFECT)?.effect_type {
+        EffectType::HslAdjust { hue_deg, saturation, lightness } => {
+            Some((hue_deg.evaluate(0), saturation.evaluate(0), lightness.evaluate(0)))
+        }
+        _ => None,
+    }
+}
+
+/// Inserts or updates a single-`Animatable<f32>` Lumetri effect on the selected layer.
+fn write_single_f32(
+    app: &mut AfterEffectsApp,
+    effect_name: &'static str,
+    id_prefix: &'static str,
+    value: f32,
+    make: fn(crate::core::property::Animatable<f32>) -> EffectType,
+) {
+    let Some(idx) = app.selected_layer_idx else { return };
+    app.modify_project(move |p| {
+        let comp = p.active_composition_mut();
+        let Some(layer) = comp.layers.get_mut(idx) else { return };
+        let build = || make(crate::core::property::Animatable::new_constant(value));
+        if let Some(e) = layer.effects.iter_mut().find(|e| e.name == effect_name) {
+            e.enabled = true;
+            e.effect_type = build();
+            return;
+        }
+        layer.effects.push(Effect {
+            id: format!("{id_prefix}_{}", layer.effects.len()),
+            name: effect_name.into(),
+            effect_type: build(),
+            enabled: true,
+        });
+    });
+}
+
+fn write_wb(app: &mut AfterEffectsApp, temperature: f32, tint: f32) {
+    let Some(idx) = app.selected_layer_idx else { return };
+    app.modify_project(move |p| {
+        let comp = p.active_composition_mut();
+        let Some(layer) = comp.layers.get_mut(idx) else { return };
+        let make = || EffectType::WhiteBalance {
+            temperature: crate::core::property::Animatable::new_constant(temperature),
+            tint: crate::core::property::Animatable::new_constant(tint),
+        };
+        if let Some(e) = layer.effects.iter_mut().find(|e| e.name == WB_EFFECT) {
+            e.enabled = true;
+            e.effect_type = make();
+            return;
+        }
+        layer.effects.push(Effect {
+            id: format!("lumetri_wb_{}", layer.effects.len()),
+            name: WB_EFFECT.into(),
+            effect_type: make(),
+            enabled: true,
+        });
+    });
+}
+
+fn write_hsl(app: &mut AfterEffectsApp, hue_deg: f32, saturation: f32, lightness: f32) {
+    let Some(idx) = app.selected_layer_idx else { return };
+    app.modify_project(move |p| {
+        let comp = p.active_composition_mut();
+        let Some(layer) = comp.layers.get_mut(idx) else { return };
+        let make = || EffectType::HslAdjust {
+            hue_deg: crate::core::property::Animatable::new_constant(hue_deg),
+            saturation: crate::core::property::Animatable::new_constant(saturation),
+            lightness: crate::core::property::Animatable::new_constant(lightness),
+        };
+        if let Some(e) = layer.effects.iter_mut().find(|e| e.name == HSL_EFFECT) {
+            e.enabled = true;
+            e.effect_type = make();
+            return;
+        }
+        layer.effects.push(Effect {
+            id: format!("lumetri_hsl_{}", layer.effects.len()),
+            name: HSL_EFFECT.into(),
+            effect_type: make(),
+            enabled: true,
+        });
+    });
+}
 
 /// Reads the live three-way values from the selected layer, if present.
 fn read_cb(app: &AfterEffectsApp) -> Option<ThreeWay> {
@@ -451,6 +564,105 @@ pub fn draw_lumetri_color(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
             if ui.small_button("Remove Vignette").clicked() {
                 remove_effect(app, app.selected_layer_idx.unwrap_or(0), VIG_EFFECT);
             }
+        });
+
+        // --- 6. Basic Correction (Live): WB / Vibrance / HSL ---
+        ui.collapsing("Basic Correction (Live)", |ui| {
+            ui.label(
+                egui::RichText::new("Sliders create/update effects on the selected layer.")
+                    .small()
+                    .color(colors::TEXT_MUTED),
+            );
+
+            // ── White Balance (Temperature / Tint) ──
+            ui.small("White Balance");
+            let mut wb = read_wb(app).unwrap_or((0.0, 0.0));
+            let mut ch_wb = false;
+            ui.horizontal(|ui| {
+                ui.label("Temperature:");
+                ch_wb |= ui
+                    .add(egui::Slider::new(&mut wb.0, -100.0..=100.0))
+                    .changed();
+            });
+            ui.horizontal(|ui| {
+                ui.label("Tint:");
+                ch_wb |= ui.add(egui::Slider::new(&mut wb.1, -100.0..=100.0)).changed();
+            });
+            if ch_wb {
+                write_wb(app, wb.0, wb.1);
+            }
+            if ui.small_button("Remove WB").clicked() {
+                remove_effect(app, app.selected_layer_idx.unwrap_or(0), WB_EFFECT);
+            }
+
+            ui.separator();
+
+            // ── Vibrance ──
+            ui.small("Vibrance");
+            let mut vib = read_single_f32(app, VIB_EFFECT, |et| match et {
+                EffectType::Vibrance { amount } => Some(amount.evaluate(0)),
+                _ => None,
+            })
+            .unwrap_or(0.0);
+            if ui
+                .add(egui::Slider::new(&mut vib, -100.0..=100.0))
+                .changed()
+            {
+                write_single_f32(app, VIB_EFFECT, "lumetri_vib", vib, |a| {
+                    EffectType::Vibrance { amount: a }
+                });
+            }
+            if ui.small_button("Remove Vibrance").clicked() {
+                remove_effect(app, app.selected_layer_idx.unwrap_or(0), VIB_EFFECT);
+            }
+
+            ui.separator();
+
+            // ── HSL Adjust ──
+            ui.small("HSL Adjust");
+            let mut hsl = read_hsl(app).unwrap_or((0.0, 0.0, 0.0));
+            let mut ch_hsl = false;
+            ui.horizontal(|ui| {
+                ui.label("Hue:");
+                ch_hsl |= ui
+                    .add(egui::Slider::new(&mut hsl.0, -180.0..=180.0).suffix("°"))
+                    .changed();
+            });
+            ui.horizontal(|ui| {
+                ui.label("Saturation:");
+                ch_hsl |= ui
+                    .add(egui::Slider::new(&mut hsl.1, -100.0..=100.0))
+                    .changed();
+            });
+            ui.horizontal(|ui| {
+                ui.label("Lightness:");
+                ch_hsl |= ui
+                    .add(egui::Slider::new(&mut hsl.2, -100.0..=100.0))
+                    .changed();
+            });
+            if ch_hsl {
+                write_hsl(app, hsl.0, hsl.1, hsl.2);
+            }
+            ui.horizontal(|ui| {
+                if ui.small_button("Reset HSL").clicked() {
+                    write_hsl(app, 0.0, 0.0, 0.0);
+                }
+                if ui.small_button("Remove HSL").clicked() {
+                    remove_effect(app, app.selected_layer_idx.unwrap_or(0), HSL_EFFECT);
+                }
+            });
+
+            ui.separator();
+            ui.horizontal(|ui| {
+                if ui.small_button("Neutral Reset All").clicked() {
+                    write_wb(app, 0.0, 0.0);
+                    write_single_f32(app, VIB_EFFECT, "lumetri_vib", 0.0, |a| {
+                        EffectType::Vibrance { amount: a }
+                    });
+                    write_hsl(app, 0.0, 0.0, 0.0);
+                    app.toasts.info("Basic Correction reset");
+                }
+            });
         });
     });
 }

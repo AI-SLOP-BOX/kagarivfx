@@ -207,6 +207,9 @@ impl RenderEffectPlugin for EnumEffectPlugin {
             EffectType::Tritone { .. } => "Tritone",
             EffectType::MatteChoker { .. } => "Matte Choker",
             EffectType::VenetianBlinds { .. } => "Venetian Blinds",
+            EffectType::Vibrance { .. } => "Vibrance",
+            EffectType::WhiteBalance { .. } => "White Balance",
+            EffectType::HslAdjust { .. } => "HSL Adjust",
         }
     }
 
@@ -259,6 +262,9 @@ impl RenderEffectPlugin for EnumEffectPlugin {
             EffectType::Tritone { .. } => "tritone",
             EffectType::MatteChoker { .. } => "matte_choker",
             EffectType::VenetianBlinds { .. } => "venetian_blinds",
+            EffectType::Vibrance { .. } => "vibrance",
+            EffectType::WhiteBalance { .. } => "white_balance",
+            EffectType::HslAdjust { .. } => "hsl_adjust",
         }
     }
 

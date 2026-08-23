@@ -1035,6 +1035,19 @@ pub fn draw_effect_type_ui(
             draw_prop(ui, current_frame, project_changed, next_frame, "Completion", completion, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=100.0).suffix("%")); });
             draw_prop(ui, current_frame, project_changed, next_frame, "Width", width, |ui, v| { ui.add(egui::Slider::new(v, 2.0..=100.0).suffix(" px")); });
         }
+        // ── Lumetri Basic Correction ──
+        EffectType::Vibrance { amount } => {
+            draw_prop(ui, current_frame, project_changed, next_frame, "Amount", amount, |ui, v| { ui.add(egui::Slider::new(v, -100.0..=100.0)); });
+        }
+        EffectType::WhiteBalance { temperature, tint } => {
+            draw_prop(ui, current_frame, project_changed, next_frame, "Temperature", temperature, |ui, v| { ui.add(egui::Slider::new(v, -100.0..=100.0)); });
+            draw_prop(ui, current_frame, project_changed, next_frame, "Tint", tint, |ui, v| { ui.add(egui::Slider::new(v, -100.0..=100.0)); });
+        }
+        EffectType::HslAdjust { hue_deg, saturation, lightness } => {
+            draw_prop(ui, current_frame, project_changed, next_frame, "Hue", hue_deg, |ui, v| { ui.add(egui::Slider::new(v, -180.0..=180.0).suffix("°")); });
+            draw_prop(ui, current_frame, project_changed, next_frame, "Saturation", saturation, |ui, v| { ui.add(egui::Slider::new(v, -100.0..=100.0)); });
+            draw_prop(ui, current_frame, project_changed, next_frame, "Lightness", lightness, |ui, v| { ui.add(egui::Slider::new(v, -100.0..=100.0)); });
+        }
     }
 }
 
