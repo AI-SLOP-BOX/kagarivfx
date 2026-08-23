@@ -1,5 +1,6 @@
 use eframe::egui;
 use crate::ExportEvent;
+use crate::ui::theme::colors;
 
 pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
     // ── Non-blocking Channel Event Receiver ──
@@ -153,7 +154,7 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
                     };
                     ui.label(egui::RichText::new(format!("Estimated file size: ~{}", size_text))
                         .small()
-                        .color(egui::Color32::from_gray(160)));
+                        .color(colors::TEXT_SECONDARY));
                 }
 
                 // Resolution scale
