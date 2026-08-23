@@ -1378,3 +1378,15 @@ mod video_cache_tests {
         assert!(crate::core::renderer::MAX_VIDEO_FRAME_TEXTURES >= 150, "must hold 5s at 30fps");
     }
 }
+
+// ── GPU Compositing Pipeline (future) ──
+// The full GPU compositing pipeline would:
+// 1. Upload each layer's rasterized content as a separate texture
+// 2. Use the composite.wgsl compute shader to blend all layers on GPU
+// 3. Apply effects as fragment shader passes between blends
+// 4. Output directly to the display texture without CPU roundtrip
+//
+// Current status: layers are composited on CPU by software_renderer.rs,
+// then the result is uploaded as a single texture via WgpuRenderer.
+// The GPU path handles UI rendering, video frame textures, text textures,
+// and RAM preview ring buffers.

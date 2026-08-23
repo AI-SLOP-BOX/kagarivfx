@@ -837,7 +837,7 @@ pub fn camera_shake(time_sec: f32, intensity: f32, speed_hz: f32, seed: u64) -> 
 }
 
 #[cfg(test)]
-mod tests {
+mod camera_shake_tests {
     #[test]
     fn test_camera_shake_is_deterministic() {
         let a1 = super::camera_shake(5.0, 10.0, 8.0, 42);
@@ -857,6 +857,6 @@ mod tests {
     fn test_camera_shake_zero_intensity() {
         let a = super::camera_shake(5.0, 0.0, 8.0, 42);
         assert_eq!(a[0], 0.0);
-        assert_eq![a[1], 0.0];
+        assert_eq!(a[1], 0.0);
     }
 }

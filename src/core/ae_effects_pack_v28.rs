@@ -387,14 +387,15 @@ mod tests {
     fn test_radial_fast_blur_preserves_center_and_size() {
         let mut img = gradient(24, 24);
         let before = img.clone();
-        apply_radial_fast_blur(&mut img, 24, 24, [11.5, 11.5], 0.5, 8);
+        // Integer-aligned centre: every radial sample lands exactly on the
+        // same pixel, so that pixel must be bit-identical.
+        apply_radial_fast_blur(&mut img, 24, 24, [12.0, 12.0], 0.5, 8);
         assert_eq!(img.len(), before.len());
-        // Centre pixel samples itself every iteration → unchanged.
-        let c = ((11 * 24 + 11) * 4) as usize;
+        let c = ((12 * 24 + 12) * 4) as usize;
         assert_eq!(img[c], before[c]);
         // Zero amount is identity.
         let mut id = before.clone();
-        apply_radial_fast_blur(&mut id, 24, 24, [11.5, 11.5], 0.0, 8);
+        apply_radial_fast_blur(&mut id, 24, 24, [12.0, 12.0], 0.0, 8);
         assert_eq!(id, before);
     }
 
@@ -403,12 +404,22 @@ mod tests {
         let mut img = gradient(20, 20);
         let before = img.clone();
         apply_cc_bend_it_pro(&mut img, 20, 20, 5.0, -5.0);
-        // Top row shifted right by 5: pixel (0,0) now shows original x=-5 → clamped edge.
-        // Bottom row shifted left by 5: pixel (19,19) shows original x=24 → clamped edge.
-        // Middle row (t=0.5, eased=0.5) shift ≈ 0 → nearly unchanged.
+        // Sampling is src = dst + shift:
+        // Top row (+5): destination (6,0) shows source (11,0).
+        let top_after = ((0 * 20 + 6) * 4) as usize;
+        let top_src = ((0 * 20 + 11) * 4) as usize;
+        assert!((img[top_after] as i32 - before[top_src] as i32).abs() <= 1,
+            "top row must shift by +5px");
+        // Bottom row (-5): destination (14,19) shows source (9,19).
+        let bot_after = ((19 * 20 + 14) * 4) as usize;
+        let bot_src = ((19 * 20 + 9) * 4) as usize;
+        assert!((img[bot_after] as i32 - before[bot_src] as i32).abs() <= 1,
+            "bottom row must shift by -5px");
+        // Middle row eased shift ≈ ±0.4px on a ~12.75 level/px gradient → small drift.
         let mid_before = ((10 * 20 + 10) * 4) as usize;
         let mid_after = ((10 * 20 + 10) * 4) as usize;
-        assert!((img[mid_after] as i32 - before[mid_before] as i32).abs() <= 2);
+        assert!((img[mid_after] as i32 - before[mid_before] as i32).abs() <= 8,
+            "middle row must move far less than the edges");
     }
 
     #[test]

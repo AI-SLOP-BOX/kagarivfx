@@ -97,10 +97,12 @@ pub mod ae_effects_pack_v24;
 pub mod ae_effects_pack_v25;
 pub mod ae_effects_pack_v26;
 pub mod ae_effects_pack_v27;
+pub mod ae_effects_pack_v28;
 pub mod temporal_denoise;
 pub mod text_animator_advanced;
 pub mod particle_forces;
 pub mod color_correction;
+pub mod effect_registry_ext;
 
 
 
