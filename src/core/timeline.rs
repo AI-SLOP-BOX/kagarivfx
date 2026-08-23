@@ -947,6 +947,20 @@ pub enum EffectType {
         drop_count: Animatable<f32>,
         wave_strength: Animatable<f32>,
     },
+    /// Fisheye lens bulge distortion (−strength = pincushion).
+    Fisheye {
+        strength: Animatable<f32>,
+    },
+    /// Barrel (+k1) / pincushion (−k1) lens correction with k2 term.
+    LensCorrection {
+        k1: Animatable<f32>,
+        k2: Animatable<f32>,
+    },
+    /// Deterministic digital block glitch displacement.
+    GlitchDisplacement {
+        seed: Animatable<f32>,
+        amount: Animatable<f32>,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

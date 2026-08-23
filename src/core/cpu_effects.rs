@@ -466,6 +466,24 @@ fn apply_one(
                 wave_strength.evaluate(frame),
             );
         }
+        EffectType::Fisheye { strength } => {
+            use crate::core::ae_effects_pack_v21::apply_fisheye;
+            apply_fisheye(pixels, width, height, strength.evaluate(frame));
+        }
+        EffectType::LensCorrection { k1, k2 } => {
+            use crate::core::ae_effects_pack_v21::apply_barrel_correction;
+            apply_barrel_correction(pixels, width, height, k1.evaluate(frame), k2.evaluate(frame));
+        }
+        EffectType::GlitchDisplacement { seed, amount } => {
+            use crate::core::ae_effects_pack_v13::apply_glitch_displacement;
+            apply_glitch_displacement(
+                pixels,
+                width,
+                height,
+                seed.evaluate(frame).round().clamp(0.0, 99999.0) as u32,
+                amount.evaluate(frame),
+            );
+        }
     }
 }
 
@@ -735,5 +753,40 @@ mod tests {
         let row1 = ((px[(1 * 8 * 4)] as u32) + px[(1 * 8 * 4) + 4] as u32) / 2;
         assert_eq!(row0, 45, "row 0 (y%2==0) darkened to 50%");
         assert_eq!(row1, 90, "odd rows untouched");
+    }
+
+    #[test]
+    fn test_distort_pack_neutral_settings_are_noops() {
+        let base = solid_layer(8, 8, 90, 140, 200);
+
+        let mut px = base.clone();
+        apply_layer_effects(
+            &mut px, 8, 8,
+            &[effect("fish", EffectType::Fisheye { strength: Animatable::new_constant(0.0) })],
+            0,
+        );
+        assert_eq!(px, base, "zero-strength fisheye must be a no-op");
+
+        let mut px = base.clone();
+        apply_layer_effects(
+            &mut px, 8, 8,
+            &[effect("lc", EffectType::LensCorrection {
+                k1: Animatable::new_constant(0.0),
+                k2: Animatable::new_constant(0.0),
+            })],
+            0,
+        );
+        assert_eq!(px, base, "k1=k2=0 lens correction must be identity");
+
+        let mut px = base.clone();
+        apply_layer_effects(
+            &mut px, 8, 8,
+            &[effect("glitch", EffectType::GlitchDisplacement {
+                seed: Animatable::new_constant(1.0),
+                amount: Animatable::new_constant(0.0),
+            })],
+            0,
+        );
+        assert_eq!(px, base, "zero-amount glitch must be a no-op");
     }
 }

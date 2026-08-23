@@ -639,6 +639,50 @@ pub fn get_all_effect_presets() -> &'static [EffectPreset] {
                 enabled: true,
             },
         },
+        EffectPreset {
+            name: "Fisheye",
+            button_label: "+ Fisheye",
+            search_key: "fisheye lens bulge round gopro distort",
+            id_prefix: "fisheye",
+            create_fn: |idx| Effect {
+                id: format!("fisheye_{}", idx),
+                name: "Fisheye".to_string(),
+                effect_type: EffectType::Fisheye {
+                    strength: Animatable::new_constant(0.35),
+                },
+                enabled: true,
+            },
+        },
+        EffectPreset {
+            name: "Lens Correction",
+            button_label: "+ Lens Correction",
+            search_key: "lens correction barrel pincushion camera fix k1 k2",
+            id_prefix: "lenscorr",
+            create_fn: |idx| Effect {
+                id: format!("lenscorr_{}", idx),
+                name: "Lens Correction".to_string(),
+                effect_type: EffectType::LensCorrection {
+                    k1: Animatable::new_constant(0.0),
+                    k2: Animatable::new_constant(0.0),
+                },
+                enabled: true,
+            },
+        },
+        EffectPreset {
+            name: "Glitch Displacement",
+            button_label: "+ Glitch",
+            search_key: "glitch digital block displacement datamosh vhs error",
+            id_prefix: "glitch",
+            create_fn: |idx| Effect {
+                id: format!("glitch_{}", idx),
+                name: "Glitch Displacement".to_string(),
+                effect_type: EffectType::GlitchDisplacement {
+                    seed: Animatable::new_constant(7.0),
+                    amount: Animatable::new_constant(2.0),
+                },
+                enabled: true,
+            },
+        },
     ]
 }
 
@@ -1230,6 +1274,17 @@ pub fn draw_effect_type_ui(
         EffectType::RainRipples { drop_count, wave_strength } => {
             draw_prop(ui, current_frame, project_changed, next_frame, "Drop Count", drop_count, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=100.0)); });
             draw_prop(ui, current_frame, project_changed, next_frame, "Wave Strength", wave_strength, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=20.0)); });
+        }
+        EffectType::Fisheye { strength } => {
+            draw_prop(ui, current_frame, project_changed, next_frame, "Strength (− = pincushion)", strength, |ui, v| { ui.add(egui::Slider::new(v, -1.0..=1.0)); });
+        }
+        EffectType::LensCorrection { k1, k2 } => {
+            draw_prop(ui, current_frame, project_changed, next_frame, "K1 (Barrel + / Pincushion −)", k1, |ui, v| { ui.add(egui::Slider::new(v, -0.5..=0.5)); });
+            draw_prop(ui, current_frame, project_changed, next_frame, "K2", k2, |ui, v| { ui.add(egui::Slider::new(v, -0.5..=0.5)); });
+        }
+        EffectType::GlitchDisplacement { seed, amount } => {
+            draw_prop(ui, current_frame, project_changed, next_frame, "Seed", seed, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=9999.0)); });
+            draw_prop(ui, current_frame, project_changed, next_frame, "Amount", amount, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=10.0)); });
         }
     }
 }

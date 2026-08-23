@@ -215,6 +215,9 @@ impl RenderEffectPlugin for EnumEffectPlugin {
             EffectType::Vortex { .. } => "Vortex Distortion",
             EffectType::HeatDistortion { .. } => "Heat Distortion",
             EffectType::RainRipples { .. } => "Rain Ripples",
+            EffectType::Fisheye { .. } => "Fisheye",
+            EffectType::LensCorrection { .. } => "Lens Correction",
+            EffectType::GlitchDisplacement { .. } => "Glitch Displacement",
         }
     }
 
@@ -275,6 +278,9 @@ impl RenderEffectPlugin for EnumEffectPlugin {
             EffectType::Vortex { .. } => "vortex_distortion",
             EffectType::HeatDistortion { .. } => "heat_distortion",
             EffectType::RainRipples { .. } => "rain_ripples",
+            EffectType::Fisheye { .. } => "fisheye",
+            EffectType::LensCorrection { .. } => "lens_correction",
+            EffectType::GlitchDisplacement { .. } => "glitch_displacement",
         }
     }
 
