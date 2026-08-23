@@ -135,6 +135,27 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
                 });
                 ui.separator();
 
+                // Estimated file size
+                {
+                    let codec_id = egui::Id::new("ae_export_codec");
+                    let codec_idx = ctx.data_mut(|d| *d.get_temp_mut_or_insert_with(codec_id, || 0usize));
+                    let bitrate_mbps = match codec_idx {
+                        1 => 147.0, // ProRes 422
+                        2 => 330.0, // ProRes 4444
+                        _ => 10.0,   // H.264
+                    };
+                    let duration_sec = total_frames as f32 / comp.fps.max(1) as f32;
+                    let est_mb = bitrate_mbps * duration_sec / 8.0;
+                    let size_text = if est_mb > 1024.0 {
+                        format!("{:.1} GB", est_mb / 1024.0)
+                    } else {
+                        format!("{:.0} MB", est_mb)
+                    };
+                    ui.label(egui::RichText::new(format!("Estimated file size: ~{}", size_text))
+                        .small()
+                        .color(egui::Color32::from_gray(160)));
+                }
+
                 // Codec selection
                 ui.horizontal(|ui| {
                     ui.label("Video Codec:");

@@ -255,6 +255,28 @@ impl Default for ChannelMixer {
     }
 }
 
+/// 256-bin luma histogram (Rec.709) for scopes / Lumetri displays.
+pub fn compute_luma_histogram(pixels: &[u8]) -> [u32; 256] {
+    let mut bins = [0u32; 256];
+    for px in pixels.chunks_exact(4) {
+        let l = rec709_luma(px[0] as f32, px[1] as f32, px[2] as f32);
+        let bin = l.round().clamp(0.0, 255.0) as usize;
+        bins[bin] += 1;
+    }
+    bins
+}
+
+/// Per-channel RGB histograms `[r_bins, g_bins, b_bins]` for parade scopes.
+pub fn compute_rgb_histograms(pixels: &[u8]) -> [[u32; 256]; 3] {
+    let mut out = [[0u32; 256]; 3];
+    for px in pixels.chunks_exact(4) {
+        for c in 0..3 {
+            out[c][px[c] as usize] += 1;
+        }
+    }
+    out
+}
+
 /// Apply the Channel Mixer to an RGBA8 buffer.
 pub fn apply_channel_mixer(pixels: &mut [u8], mixer: &ChannelMixer) {
     if pixels.is_empty() {
@@ -443,6 +465,36 @@ mod tests {
         apply_color_balance(&mut empty, &ColorBalance::default());
         apply_channel_mixer(&mut empty, &ChannelMixer::default());
         assert!(empty.is_empty());
+    }
+
+    #[test]
+    fn test_luma_histogram_counts_every_pixel() {
+        // Two pixels: pure red (luma ≈ 54) and mid gray (128).
+        let mut buf = Vec::new();
+        buf.extend_from_slice(&[255, 0, 0, 255]);
+        buf.extend_from_slice(&[128, 128, 128, 255]);
+        let h = compute_luma_histogram(&buf);
+        let total: u32 = h.iter().sum();
+        assert_eq!(total, 2);
+        assert!(h[54] >= 1 || h[55] >= 1, "red luma bin missing");
+        assert!(h[128] == 1, "gray bin missing");
+        assert_eq!(compute_luma_histogram(&[]), [0u32; 256]);
+    }
+
+    #[test]
+    fn test_rgb_histograms_separate_channels() {
+        let mut buf = Vec::new();
+        buf.extend_from_slice(&[10, 200, 30, 255]);
+        buf.extend_from_slice(&[20, 210, 40, 255]);
+        let [r, g, b] = compute_rgb_histograms(&buf);
+        assert_eq!(r[10], 1);
+        assert_eq!(r[20], 1);
+        assert_eq!(g[200], 1);
+        assert_eq!(g[210], 1);
+        assert_eq!(b[30], 1);
+        assert_eq!(b[40], 1);
+        let total_r: u32 = r.iter().sum();
+        assert_eq!(total_r, 2);
     }
 
     #[test]
