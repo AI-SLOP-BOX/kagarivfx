@@ -83,8 +83,8 @@ fn perlin_noise_2d(x: f64, y: f64) -> f64 {
     lerp(v, x1, x2)
 }
 
-/// Computes multi-octave 2D Perlin Fractal Noise vector for displacement.
-fn compute_turbulent_offset(x: f32, y: f32, options: &TurbulentDisplaceOptions) -> (f32, f32) {
+/// Raw multi-octave Perlin fractal components (pre-displacement-mode).
+fn fractal_noise(x: f32, y: f32, options: &TurbulentDisplaceOptions) -> (f64, f64) {
     let scale = (options.size.max(1.0) as f64) * 0.005;
     let evol_rad = (options.evolution_deg as f64).to_radians();
 
@@ -105,8 +105,52 @@ fn compute_turbulent_offset(x: f32, y: f32, options: &TurbulentDisplaceOptions) 
         amp *= 0.5;
         freq *= 2.0;
     }
+    (dx, dy)
+}
 
-    ( (dx * options.amount as f64) as f32, (dy * options.amount as f64) as f32 )
+/// Computes the displacement vector for one pixel according to the selected
+/// displacement mode:
+///
+/// * [`TurbulentDisplaceType::Turbulent`] — independent x/y noise offsets.
+/// * [`TurbulentDisplaceType::Bulge`] — radial push away from (or toward,
+///   negative noise) the frame centre along the centre→pixel direction.
+/// * [`TurbulentDisplaceType::Twist`] — angular swirl around the centre with
+///   linear radial falloff (strongest at the centre).
+fn compute_turbulent_offset(
+    x: f32,
+    y: f32,
+    width: u32,
+    height: u32,
+    options: &TurbulentDisplaceOptions,
+) -> (f32, f32) {
+    let (ndx, ndy) = fractal_noise(x, y, options);
+    let amount = options.amount as f64;
+
+    match options.displace_type {
+        TurbulentDisplaceType::Turbulent => ((ndx * amount) as f32, (ndy * amount) as f32),
+        TurbulentDisplaceType::Bulge => {
+            let cx = width as f64 * 0.5;
+            let cy = height as f64 * 0.5;
+            let rx = x as f64 - cx;
+            let ry = y as f64 - cy;
+            let r = (rx * rx + ry * ry).sqrt().max(1e-6);
+            let mag = (ndx.abs() + ndy.abs()) * 0.5 * amount;
+            ((rx / r * mag) as f32, (ry / r * mag) as f32)
+        }
+        TurbulentDisplaceType::Twist => {
+            let cx = width as f64 * 0.5;
+            let cy = height as f64 * 0.5;
+            let rx = x as f64 - cx;
+            let ry = y as f64 - cy;
+            let half_diag = ((cx * cx + cy * cy).sqrt()).max(1.0);
+            let r_norm = ((rx * rx + ry * ry).sqrt() / half_diag).clamp(0.0, 1.0);
+            let ang = ndx * 0.05 * amount * (1.0 - r_norm);
+            let (cos_a, sin_a) = (ang.cos(), ang.sin());
+            let rot_x = rx * cos_a - ry * sin_a;
+            let rot_y = rx * sin_a + ry * cos_a;
+            ((rot_x - rx) as f32, (rot_y - ry) as f32)
+        }
+    }
 }
 
 /// Applies real-time Perlin Fractal Noise Turbulent Displacement to RGBA buffer.
@@ -127,7 +171,7 @@ pub fn apply_turbulent_displace(
 
     for y in 0..height {
         for x in 0..width {
-            let (dx, dy) = compute_turbulent_offset(x as f32, y as f32, options);
+            let (dx, dy) = compute_turbulent_offset(x as f32, y as f32, width, height, options);
 
             let src_x = (x as f32 + dx).clamp(0.0, w_f32 - 1.0);
             let src_y = (y as f32 + dy).clamp(0.0, h_f32 - 1.0);
@@ -168,11 +212,123 @@ pub fn apply_turbulent_displace(
 mod tests {
     use super::*;
 
+    fn gradient(w: u32, h: u32) -> Vec<u8> {
+        let mut v = Vec::with_capacity((w * h * 4) as usize);
+        for y in 0..h {
+            for x in 0..w {
+                v.push(((x * 255) / w.max(1)) as u8);
+                v.push(((y * 255) / h.max(1)) as u8);
+                v.push(128);
+                v.push(255);
+            }
+        }
+        v
+    }
+
     #[test]
     fn test_perlin_turbulent_displace_buffer_size() {
         let pixels = vec![255u8; 64]; // 4x4 RGBA
         let options = TurbulentDisplaceOptions::default();
         let out = apply_turbulent_displace(&pixels, 4, 4, &options);
         assert_eq!(out.len(), 64);
+    }
+
+    #[test]
+    fn test_perlin_noise_is_deterministic_and_bounded() {
+        for i in 0..200 {
+            let x = i as f64 * 0.37;
+            let y = i as f64 * 0.71;
+            let a = perlin_noise_2d(x, y);
+            let b = perlin_noise_2d(x, y);
+            assert_eq!(a, b, "perlin must be deterministic");
+            assert!((-1.5..=1.5).contains(&a), "perlin out of range: {a}");
+        }
+    }
+
+    #[test]
+    fn test_zero_amount_is_identity_for_all_modes() {
+        let img = gradient(16, 16);
+        for mode in [
+            TurbulentDisplaceType::Turbulent,
+            TurbulentDisplaceType::Bulge,
+            TurbulentDisplaceType::Twist,
+        ] {
+            let opts = TurbulentDisplaceOptions { amount: 0.0, displace_type: mode, ..Default::default() };
+            let out = apply_turbulent_displace(&img, 16, 16, &opts);
+            assert_eq!(out, img, "{mode:?} with amount 0 must be identity");
+        }
+    }
+
+    #[test]
+    fn test_displacement_modes_produce_different_images() {
+        let img = gradient(24, 24);
+        let mut results = Vec::new();
+        for mode in [
+            TurbulentDisplaceType::Turbulent,
+            TurbulentDisplaceType::Bulge,
+            TurbulentDisplaceType::Twist,
+        ] {
+            let opts = TurbulentDisplaceOptions {
+                displace_type: mode,
+                amount: 30.0,
+                size: 60.0,
+                ..Default::default()
+            };
+            results.push(apply_turbulent_displace(&img, 24, 24, &opts));
+        }
+        assert_ne!(results[0], results[1], "turbulent vs bulge must differ");
+        assert_ne!(results[0], results[2], "turbulent vs twist must differ");
+        assert_ne!(results[1], results[2], "bulge vs twist must differ");
+    }
+
+    #[test]
+    fn test_bulge_and_twist_keep_exact_centre_fixed() {
+        let img = gradient(25, 25); // odd size → true centre pixel exists
+        for mode in [TurbulentDisplaceType::Bulge, TurbulentDisplaceType::Twist] {
+            let opts = TurbulentDisplaceOptions {
+                displace_type: mode,
+                amount: 40.0,
+                ..Default::default()
+            };
+            let out = apply_turbulent_displace(&img, 25, 25, &opts);
+            let c = ((12 * 25 + 12) * 4) as usize;
+            assert_eq!(out[c], img[c], "{mode:?} must not move the centre pixel");
+            assert_eq!(out[c + 1], img[c + 1]);
+        }
+    }
+
+    #[test]
+    fn test_evolution_animates_output() {
+        let img = gradient(20, 20);
+        let mk = |evol: f32| {
+            let opts = TurbulentDisplaceOptions { evolution_deg: evol, amount: 20.0, ..Default::default() };
+            apply_turbulent_displace(&img, 20, 20, &opts)
+        };
+        let e0 = mk(0.0);
+        let e90 = mk(90.0);
+        assert_ne!(e0, e90, "evolution must change the displacement field");
+    }
+
+    #[test]
+    fn test_complexity_adds_octave_detail() {
+        let img = gradient(20, 20);
+        let mk = |c: u32| {
+            let opts = TurbulentDisplaceOptions { complexity: c, amount: 25.0, ..Default::default() };
+            apply_turbulent_displace(&img, 20, 20, &opts)
+        };
+        let c1 = mk(1);
+        let c4 = mk(4);
+        assert_ne!(c1, c4, "more octaves must alter the result");
+    }
+
+    #[test]
+    fn test_output_stays_within_buffer_bounds_and_deterministic() {
+        let img = gradient(16, 16);
+        let opts = TurbulentDisplaceOptions { amount: 100.0, size: 30.0, complexity: 6, ..Default::default() };
+        let a = apply_turbulent_displace(&img, 16, 16, &opts);
+        let b = apply_turbulent_displace(&img, 16, 16, &opts);
+        assert_eq!(a.len(), img.len());
+        assert_eq!(a, b);
+        assert!(a.chunks(4).all(|px| px.iter().all(|&v| v <= 255)));
     }
 }

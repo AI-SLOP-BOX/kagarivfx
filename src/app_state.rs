@@ -256,6 +256,8 @@ pub struct AfterEffectsApp {
     pub audio_meter: (f32, f32),
     /// Whether the last viewport render used GPU (updated each frame by viewport)
     pub gpu_rendered: bool,
+    /// Layer index being renamed (inline edit), None = not renaming
+    pub renaming_layer: Option<usize>,
     /// Tracker panel: target layer index for Apply Motion.
     pub tracker_apply_target: Option<usize>,
     /// Real render queue entries (composition names awaiting export).
@@ -364,6 +366,7 @@ impl Default for AfterEffectsApp {
             audio_playback: crate::core::audio_playback::AudioPlayback::new().ok(),
             audio_meter: (0.0, 0.0),
             gpu_rendered: false,
+            renaming_layer: None,
             tracker_apply_target: None,
             render_queue_items: Vec::new(),
             camera_view_layout: 0,

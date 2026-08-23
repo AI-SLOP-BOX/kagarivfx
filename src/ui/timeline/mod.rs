@@ -614,6 +614,20 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                                     
                                     ui.style_mut().visuals.override_text_color = Some(text_color);
                                     let click_resp = ui.selectable_label(is_selected, &layer.name);
+                                    if click_resp.double_clicked() {
+                                        app.renaming_layer = Some(i);
+                                    }
+                                    if app.renaming_layer == Some(i) {
+                                        let mut name_buf = layer.name.clone();
+                                        let rename_resp = ui.text_edit_singleline(&mut name_buf);
+                                        if rename_resp.lost_focus() || ui.input(|inp| inp.key_pressed(egui::Key::Enter)) {
+                                            if !name_buf.is_empty() && name_buf != layer.name {
+                                                layer.name = name_buf;
+                                                project_changed = true;
+                                            }
+                                            app.renaming_layer = None;
+                                        }
+                                    }
 
                                     // ── Drag & drop reordering (live, AE-style) ──
                                     if click_resp.dragged() && app.dragging_layer.is_none() {
