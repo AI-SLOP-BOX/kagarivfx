@@ -213,7 +213,25 @@ fn sample_layer_color(local_pos_in: vec2<f32>, tc_in: vec2<f32>, blur_extend: f3
         // return fully transparent so fs_main's alpha check discards this quad.
         c = vec4<f32>(0.0, 0.0, 0.0, 0.0);
     }
-    // ── Vignette: darkened edges ──
+    // ── Levels: in_black/gamma/in_white adjustment ──
+    if (layer.levels_enabled == 1u) {
+        let range = max(layer.levels_in_white - layer.levels_in_black, 0.001);
+        var r = (c.r - layer.levels_in_black) / range;
+        var g = (c.g - layer.levels_in_black) / range;
+        var b = (c.b - layer.levels_in_black) / range;
+        // Gamma
+        let inv_gamma = 1.0 / max(layer.levels_gamma, 0.01);
+        r = pow(max(r, 0.0), inv_gamma);
+        g = pow(max(g, 0.0), inv_gamma);
+        b = pow(max(b, 0.0), inv_gamma);
+        // Out black/white mapping
+        let out_range = layer.levels_out_white - layer.levels_out_black;
+        c.r = clamp(layer.levels_out_black + r * out_range, 0.0, 1.0);
+        c.g = clamp(layer.levels_out_black + g * out_range, 0.0, 1.0);
+        c.b = clamp(layer.levels_out_black + b * out_range, 0.0, 1.0);
+    }
+
+    /// ── Vignette: darkened edges ──
     if (layer.effect_vignette_enabled == 1u) {
         let center_uv = vec2<f32>(0.5, 0.5);
         let d = distance(local_pos, center_uv) * 2.0;
