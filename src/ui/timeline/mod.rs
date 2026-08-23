@@ -73,13 +73,27 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
 
                 if total_frames > 0 {
                     let frame_w = bar_rect.width() / total_frames as f32;
-                    for f in 0..total_frames {
-                        if app.frame_cache.is_cached(f) {
-                            let f_rect = egui::Rect::from_min_size(
-                                egui::pos2(bar_rect.left() + f as f32 * frame_w, bar_rect.top()),
-                                egui::vec2(frame_w.max(1.0), bar_height),
-                            );
-                            ui.painter().rect_filled(f_rect, 0.0, egui::Color32::from_rgb(0, 180, 80));
+                    // Vertex-count safety: coalesce consecutive cached frames
+                    // into ONE rect per run instead of one painter call per frame
+                    // (a 10k-frame comp would otherwise emit 10k quads every frame).
+                    let mut run_start: Option<u32> = None;
+                    for f in 0..=total_frames {
+                        let cached = f < total_frames && app.frame_cache.is_cached(f);
+                        if cached && run_start.is_none() {
+                            run_start = Some(f);
+                        } else if !cached {
+                            if let Some(s) = run_start.take() {
+                                let x = bar_rect.left() + s as f32 * frame_w;
+                                let w = ((f - s) as f32 * frame_w).max(1.0);
+                                ui.painter().rect_filled(
+                                    egui::Rect::from_min_size(
+                                        egui::pos2(x, bar_rect.top()),
+                                        egui::vec2(w, bar_height),
+                                    ),
+                                    0.0,
+                                    egui::Color32::from_rgb(0, 180, 80),
+                                );
+                            }
                         }
                     }
                 }
@@ -88,7 +102,11 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                 let comp_mut = app.history.current_mut().active_composition_mut();
 
                 // 🥁 Real-time Beat Detection Transients Lines (Every 15 frames simulated beat)
-                let beat_interval = 15;
+                let mut beat_interval = 15u32;
+                // Cap transient line count for long comps (~200 lines max).
+                while total_frames / beat_interval > 200 && beat_interval < total_frames.max(1) {
+                    beat_interval *= 2;
+                }
                 let mut beat_frame = 0;
                 while beat_frame <= total_frames {
                     if total_frames > 0 {

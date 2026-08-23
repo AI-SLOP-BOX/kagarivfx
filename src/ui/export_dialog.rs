@@ -96,7 +96,7 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
 
             ui.add_space(10.0);
             if app.is_exporting {
-                ctx.request_repaint(); // Smooth UI progress bar updates without freezing
+                ctx.request_repaint_after(std::time::Duration::from_millis(100)); // Throttled: progress bar needs ~10fps, not 60+
                 ui.label("Rendering composition in background thread...");
                 ui.add(egui::ProgressBar::new(app.export_progress).show_percentage());
                 if let Some(ref status) = app.export_status {

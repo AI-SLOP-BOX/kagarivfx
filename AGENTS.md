@@ -86,3 +86,5 @@ cargo run --features cli --bin aevfx -- frame --project test_project.json --fram
 - Layer compositing is sequential (bottom-up blend order)
 - No real-time GPU effects processing (effects run on CPU)
 - Puppet tool, roto brush, paint tools are UI stubs only
+
+---

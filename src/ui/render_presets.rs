@@ -51,3 +51,25 @@ pub fn draw_render_presets(_app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
         log::info!("Saved custom render output preset");
     }
 }
+
+
+/// Common export presets for quick selection.
+pub const EXPORT_PRESETS: &[(&str, &str, u32, u32, f32, &str)] = &[
+    ("YouTube 1080p", "mp4", 1920, 1080, 30.0, "h264"),
+    ("YouTube 4K", "mp4", 3840, 2160, 30.0, "h264"),
+    ("Instagram Square", "mp4", 1080, 1080, 30.0, "h264"),
+    ("ProRes Master", "mov", 1920, 1080, 30.0, "prores422"),
+    ("GIF Loop", "gif", 480, 270, 15.0, "gif"),
+];
+
+/// Renders the export presets as selectable buttons.
+pub fn draw_export_preset_selector(ui: &mut egui::Ui, selected: &mut usize) {
+    ui.label("Quick Presets:");
+    ui.horizontal_wrapped(|ui| {
+        for (i, (name, _, _, _, _, _)) in EXPORT_PRESETS.iter().enumerate() {
+            if ui.selectable_label(*selected == i, *name).clicked() {
+                *selected = i;
+            }
+        }
+    });
+}
