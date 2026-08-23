@@ -515,6 +515,54 @@ pub fn get_all_effect_presets() -> &'static [EffectPreset] {
                 enabled: true,
             },
         },
+        // ── Lumetri Basic Correction ──
+        // NOTE: names must match the constants in src/ui/lumetri_color.rs so the
+        // live sliders in that panel keep driving these same effects.
+        EffectPreset {
+            name: "Vibrance",
+            button_label: "+ Vibrance",
+            search_key: "vibrance saturation skin tone lumetri basic correction",
+            id_prefix: "lum_vib",
+            create_fn: |idx| Effect {
+                id: format!("lum_vib_{}", idx),
+                name: "Lumetri Vibrance".to_string(),
+                effect_type: EffectType::Vibrance {
+                    amount: Animatable::new_constant(25.0),
+                },
+                enabled: true,
+            },
+        },
+        EffectPreset {
+            name: "White Balance",
+            button_label: "+ White Balance",
+            search_key: "white balance temperature tint kelvin lumetri basic correction",
+            id_prefix: "lum_wb",
+            create_fn: |idx| Effect {
+                id: format!("lum_wb_{}", idx),
+                name: "Lumetri White Balance".to_string(),
+                effect_type: EffectType::WhiteBalance {
+                    temperature: Animatable::new_constant(0.0),
+                    tint: Animatable::new_constant(0.0),
+                },
+                enabled: true,
+            },
+        },
+        EffectPreset {
+            name: "HSL Adjust",
+            button_label: "+ HSL Adjust",
+            search_key: "hsl hue saturation lightness secondary lumetri basic correction",
+            id_prefix: "lum_hsl",
+            create_fn: |idx| Effect {
+                id: format!("lum_hsl_{}", idx),
+                name: "Lumetri HSL Adjust".to_string(),
+                effect_type: EffectType::HslAdjust {
+                    hue_deg: Animatable::new_constant(0.0),
+                    saturation: Animatable::new_constant(0.0),
+                    lightness: Animatable::new_constant(0.0),
+                },
+                enabled: true,
+            },
+        },
     ]
 }
 
