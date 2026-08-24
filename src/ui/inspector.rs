@@ -134,6 +134,13 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
             if let Some(idx) = app.selected_layer_idx {
                 let comp = temp_project.active_composition_mut();
                 if idx < comp.layers.len() {
+                    // Cache a comp snapshot for the inline expression Test button
+                    // (thisComp.* context), rebuilt each frame while inspector is open.
+                    let snap = std::sync::Arc::new(
+                        crate::core::expression_engine::build_comp_snapshot(comp, *current_frame),
+                    );
+                    ctx.data_mut(|d| d.insert_temp(egui::Id::new("ae_expr_comp_snap"), snap));
+
                     // ── Safe Parent selector logic ──
                     let other_layers: Vec<(String, String)> = comp.layers.iter()
                         .enumerate()

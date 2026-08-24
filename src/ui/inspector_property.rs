@@ -251,7 +251,15 @@ pub fn draw_expression_selector(
                     }
                     if custom_widgets::ae_icon_button(ui, "▶", "Test expression at current frame").clicked() {
                         if let (Some(cf), Some(fps)) = (current_frame, fps) {
-                            let result = test_expression_inline(script, cf, fps);
+                            let snap = ui.ctx().data(|d| {
+                                d.get_temp::<std::sync::Arc<crate::core::expression_engine::CompSnapshot>>(
+                                    egui::Id::new("ae_expr_comp_snap"),
+                                )
+                            });
+                            let result = match snap {
+                                Some(snap) => test_expression_with_comp(script, cf, fps, &snap),
+                                None => test_expression_inline(script, cf, fps),
+                            };
                             ui.ctx().data_mut(|d| {
                                 d.insert_temp(egui::Id::new(("expr_test_result", label)), result);
                             });
@@ -401,4 +409,17 @@ pub fn draw_property_ui<T: Clone + crate::core::property::Interpolate + PartialE
     });
 
     next_frame
+}
+
+fn test_expression_with_comp(
+    script: &str,
+    frame: u32,
+    fps: u32,
+    snap: &crate::core::expression_engine::CompSnapshot,
+) -> String {
+    let base_v2 = [0.0f32, 0.0];
+    let result = crate::core::expression_engine::eval_v2_with_comp(
+        script, base_v2, frame, fps, snap, None,
+    );
+    format!("({:.2}, {:.2})", result[0], result[1])
 }
