@@ -13,6 +13,7 @@ pub mod property;
 pub mod render_pipeline;
 pub mod renderer;
 pub mod timeline;
+pub mod stabilizer;
 pub mod tracker_engine;
 pub mod mask;
 pub mod color_science;

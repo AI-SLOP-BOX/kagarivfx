@@ -403,6 +403,24 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
                         }
                         ui.close_menu();
                     }
+                    if ui.add(egui::Button::new("🎯 Stabilize Motion (from Track)")).on_hover_text("Bake counter-movement position keyframes from the layer's first tracker").clicked() {
+                        if let Some(idx) = app.selected_layer_idx {
+                            let mut baked_count = 0usize;
+                            app.modify_project(|p| {
+                                if let Some(l) = p.active_composition_mut().layers.get_mut(idx) {
+                                    baked_count = crate::core::stabilizer::stabilize_layer(l);
+                                }
+                            });
+                            if baked_count > 0 {
+                                app.toasts.info(format!("Stabilized: {} position keyframes baked", baked_count));
+                            } else {
+                                app.toasts.error("Layer has no tracked data — run the Tracker first");
+                            }
+                        } else {
+                            app.toasts.info("Select a layer first");
+                        }
+                        ui.close_menu();
+                    }
                     if ui.add(egui::Button::new("Freeze Frame at Playhead")).clicked() {
                         let frame = app.current_frame;
                         if let Some(idx) = app.selected_layer_idx {
@@ -470,7 +488,7 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
                         }
                         ui.close_menu();
                     }
-                    if ui.add(egui::Button::new("Time Stretch ×0.5 (Fast)").shortcut_text("Cmd+Shift+K")).clicked() {
+                    if ui.add(egui::Button::new("Time Stretch ×0.5 (Fast)")).clicked() {
                         if let Some(idx) = app.selected_layer_idx {
                             app.modify_project(move |p| {
                                 if let Some(l) = p.active_composition_mut().layers.get_mut(idx) {
