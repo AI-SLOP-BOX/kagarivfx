@@ -596,9 +596,9 @@ pub fn handle_global_shortcuts(
         }
 
         // Cmd+[ → Send Backward, Cmd+] → Bring Forward (layer stacking order)
-        if cmd && (i.key_pressed(Key::BracketLeft) || i.key_pressed(Key::BracketRight)) {
+        if cmd && (i.key_pressed(Key::OpenBracket) || i.key_pressed(Key::CloseBracket)) {
             if let Some(idx) = app.selected_layer_idx {
-                let forward = i.key_pressed(Key::BracketRight);
+                let forward = i.key_pressed(Key::CloseBracket);
                 let len = app.history.current().active_composition().layers.len();
                 let target = if forward {
                     (idx + 1 < len).then_some(idx + 1)
