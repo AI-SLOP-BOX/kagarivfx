@@ -8,6 +8,7 @@ pub fn draw_layer_transforms(
     ui: &mut egui::Ui,
     layer: &mut Layer,
     current_frame: u32,
+    fps: u32,
     project_changed: &mut bool,
     next_frame: &mut Option<u32>,
 ) {
@@ -86,22 +87,8 @@ pub fn draw_layer_transforms(
             });
 
             if val_before != layer.transform.anchor_point { *project_changed = true; }
-            // Anchor point expression
-            {
-                let mut expr_enabled = layer.transform.anchor_point_expression.is_some();
-                ui.horizontal(|ui| {
-                    let toggle = ui.checkbox(&mut expr_enabled, "⭯ Expression").changed();
-                    if toggle {
-                        layer.transform.anchor_point_expression = if expr_enabled {
-                            Some(crate::core::timeline::Expression::Raw("value".into()))
-                        } else { None };
-                        *project_changed = true;
-                    }
-                });
-                if let Some(crate::core::timeline::Expression::Raw(script)) = &mut layer.transform.anchor_point_expression {
-                    ui.add(egui::TextEdit::singleline(script).code_editor().desired_width(280.0));
-                }
-            }
+            // Anchor point expression (same rich editor as other properties)
+            draw_expression_selector(ui, "anchor", &mut layer.transform.anchor_point_expression, project_changed, Some(current_frame), Some(fps));
 
             ui.separator();
             let pos_before = layer.transform.position.clone();
@@ -112,7 +99,7 @@ pub fn draw_layer_transforms(
                 });
             }) { *next_frame = Some(nf); }
             draw_easy_ease_button(ui, &mut layer.transform.position, project_changed);
-            draw_expression_selector(ui, "position", &mut layer.transform.position_expression, project_changed);
+            draw_expression_selector(ui, "position", &mut layer.transform.position_expression, project_changed, Some(current_frame), Some(fps));
             if pos_before != layer.transform.position { *project_changed = true; }
 
             ui.separator();
@@ -124,7 +111,7 @@ pub fn draw_layer_transforms(
                 });
             }) { *next_frame = Some(nf); }
             draw_easy_ease_button(ui, &mut layer.transform.scale, project_changed);
-            draw_expression_selector(ui, "scale", &mut layer.transform.scale_expression, project_changed);
+            draw_expression_selector(ui, "scale", &mut layer.transform.scale_expression, project_changed, Some(current_frame), Some(fps));
             if scale_before != layer.transform.scale { *project_changed = true; }
 
             ui.separator();
@@ -133,7 +120,7 @@ pub fn draw_layer_transforms(
                 ui.add(egui::Slider::new(val, -360.0..=360.0).suffix("°"));
             }) { *next_frame = Some(nf); }
             draw_easy_ease_button(ui, &mut layer.transform.rotation, project_changed);
-            draw_expression_selector(ui, "rotation", &mut layer.transform.rotation_expression, project_changed);
+            draw_expression_selector(ui, "rotation", &mut layer.transform.rotation_expression, project_changed, Some(current_frame), Some(fps));
             if rot_before != layer.transform.rotation { *project_changed = true; }
 
             // ── Auto-Orient (AE parity): rotation follows motion path ──
@@ -187,7 +174,7 @@ pub fn draw_layer_transforms(
                 ui.add(egui::Slider::new(val, 0.0..=100.0).suffix("%"));
             }) { *next_frame = Some(nf); }
             draw_easy_ease_button(ui, &mut layer.transform.opacity, project_changed);
-            draw_expression_selector(ui, "opacity", &mut layer.transform.opacity_expression, project_changed);
+            draw_expression_selector(ui, "opacity", &mut layer.transform.opacity_expression, project_changed, Some(current_frame), Some(fps));
             if layer.is_3d {
                 ui.separator();
                 ui.label(egui::RichText::new("🧊 3D Spatial Transform").small().strong().color(colors::ACCENT_CYAN));

@@ -148,7 +148,14 @@ pub fn draw_easy_ease_button<T: Clone>(ui: &mut egui::Ui, property: &mut Animata
     });
 }
 
-pub fn draw_expression_selector(ui: &mut egui::Ui, label: &str, expr_opt: &mut Option<Expression>, project_changed: &mut bool) {
+pub fn draw_expression_selector(
+    ui: &mut egui::Ui,
+    label: &str,
+    expr_opt: &mut Option<Expression>,
+    project_changed: &mut bool,
+    current_frame: Option<u32>,
+    fps: Option<u32>,
+) {
     ui.horizontal(|ui| {
         ui.small("Expression: ");
         let expr_text = match expr_opt {
@@ -185,35 +192,98 @@ pub fn draw_expression_selector(ui: &mut egui::Ui, label: &str, expr_opt: &mut O
     });
 
     // Inline script editor for Raw expressions
+    let mut remove_requested = false;
     if let Some(Expression::Raw(script)) = expr_opt {
         ui.indent(format!("expr_editor_{}", label), |ui| {
-            ui.horizontal(|ui| {
-                ui.label(egui::RichText::new("📝").small());
-                let _script_before = script.clone();
-                if ui.add(
-                    egui::TextEdit::singleline(script)
-                        .code_editor()
-                        .desired_width(f32::INFINITY)
-                        .hint_text("// Rhai expression script...")
-                ).changed() {
-                    *project_changed = true;
-                }
+            // Script editor (multiline)
+            let editor_id = ui.make_persistent_id(format!("expr_textedit_{}", label));
+            let response = ui.add(
+                egui::TextEdit::multiline(script)
+                    .code_editor()
+                    .desired_width(f32::INFINITY)
+                    .desired_rows(3)
+                    .hint_text("// Rhai expression script...")
+                    .id(editor_id),
+            );
+            if response.changed() {
+                *project_changed = true;
+            }
 
-                // Test button
-                if custom_widgets::ae_icon_button(ui, "▶", "Test expression at current frame").clicked() {
-                    // Will be handled by caller
-                }
+            ui.add_space(2.0);
+
+            // ── Toolbar: Presets / Validate / Test ──
+            ui.horizontal(|ui| {
+                // Preset dropdown
+                let presets = [
+                    ("wiggle(4, 30)", "Wiggle"),
+                    ("loopOut(\"cycle\")", "Loop"),
+                    ("loopOut(\"pingpong\")", "PingPong"),
+                    ("value * 2", "Double"),
+                    ("time * 100", "Time×100"),
+                    ("Math.sin(time * 3) * 50", "Sine"),
+                    ("posterizeTime(12); value", "12fps"),
+                ];
+                let preset_id = ui.make_persistent_id(format!("expr_presets_{}", label));
+                egui::ComboBox::from_id_salt(preset_id)
+                    .selected_text("Presets ▾")
+                    .width(80.0)
+                    .show_ui(ui, |ui| {
+                        for (expr, lbl) in presets {
+                            if ui.selectable_label(false, lbl).clicked() {
+                                *script = expr.to_string();
+                                *project_changed = true;
+                            }
+                        }
+                    });
+
+                // Live syntax validation badge
+                let engine = crate::core::expression_engine::build_engine();
+                let validation = crate::core::expression_engine::validate_script(&engine, script);
+                let (icon, color, tip) = match &validation {
+                    Ok(()) => ("✓", colors::ACCENT_GREEN, "Script is valid".to_string()),
+                    Err(e) => ("✗", colors::ACCENT_RED, e.clone()),
+                };
+                ui.label(egui::RichText::new(icon).small().color(color)).on_hover_text(tip);
+
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    if custom_widgets::ae_icon_button(ui, "✕", "Remove expression").clicked() {
+                        remove_requested = true;
+                    }
+                    if custom_widgets::ae_icon_button(ui, "▶", "Test expression at current frame").clicked() {
+                        if let (Some(cf), Some(fps)) = (current_frame, fps) {
+                            let result = test_expression_inline(script, cf, fps);
+                            ui.ctx().data_mut(|d| {
+                                d.insert_temp(egui::Id::new(("expr_test_result", label)), result);
+                            });
+                        }
+                    }
+                });
             });
 
-            // Script error indicator
-            if script.contains("error") || script.is_empty() {
-                if script.is_empty() {
-                    ui.label(egui::RichText::new("⚠️ Empty expression").small().color(colors::ACCENT_YELLOW));
-                } else {
-                    ui.label(egui::RichText::new("⚠️ Script error detected").small().color(colors::ACCENT_RED));
-                }
+            // Show test result
+            let test_result = ui.ctx().data(|d| {
+                d.get_temp::<String>(egui::Id::new(("expr_test_result", label)))
+            });
+            if let Some(result) = test_result {
+                ui.label(egui::RichText::new(format!("→ {}", result)).small().monospace().color(colors::TEXT_ACCENT));
             }
         });
+    }
+    if remove_requested {
+        *expr_opt = None;
+        *project_changed = true;
+    }
+}
+
+fn test_expression_inline(script: &str, frame: u32, fps: u32) -> String {
+    let engine = crate::core::expression_engine::build_engine();
+    let (result, diag) = crate::core::expression_engine::eval_v2_with_diagnostics(
+        &engine, script, [0.0, 0.0], frame, fps,
+    );
+    if let Some(err) = diag {
+        format!("Error: {}", err)
+    } else {
+        format!("({:.2}, {:.2})", result[0], result[1])
     }
 }
 

@@ -331,7 +331,7 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                     ui.add_space(8.0);
 
                     // Transform Section (Conditional on 3D Layer status)
-                    crate::ui::inspector_layer::draw_layer_transforms(ui, layer, *current_frame, &mut project_changed, &mut next_frame);
+                    crate::ui::inspector_layer::draw_layer_transforms(ui, layer, *current_frame, comp.fps, &mut project_changed, &mut next_frame);
                     
                     ui.add_space(8.0);
                     
