@@ -379,6 +379,7 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: u32) 
         );
 
         // ── Interactive Layer & Mask Drag ──────────────────────────
+        let mut pen_commit = false;
         if let Some(pointer_pos) = viewport_response.interact_pointer_pos() {
             let comp_px = (pointer_pos.x - origin_x) / draw_w * comp_w;
             let comp_py = (pointer_pos.y - origin_y) / draw_h * comp_h;
@@ -625,6 +626,26 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: u32) 
                 }
             }
 
+            // ── Pen tool: click adds mask vertices; Enter/double-click commits ──
+            if app.active_tool == crate::ui::toolbar::ActiveTool::Pen {
+                if viewport_response.clicked() {
+                    app.pen_points.push([comp_px, comp_py]);
+                }
+                let enter = ui.input(|i| i.key_pressed(egui::Key::Enter));
+                let escape = ui.input(|i| i.key_pressed(egui::Key::Escape));
+                if viewport_response.double_clicked() && !app.pen_points.is_empty() {
+                    // Double-click pushes a duplicate point — drop it before commit
+                    app.pen_points.pop();
+                    pen_commit = true;
+                }
+                if enter && app.pen_points.len() >= 3 {
+                    pen_commit = true;
+                }
+                if escape {
+                    app.pen_points.clear();
+                }
+            }
+
             if viewport_response.drag_stopped() {
                 // ── Q tool: click/drag on canvas creates a rectangle shape ──
                 if app.active_tool == crate::ui::toolbar::ActiveTool::Rectangle {
@@ -697,6 +718,35 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: u32) 
                 app.viewport_drag_state = None;
                 app.viewport_mask_drag_state = None;
                 app.viewport_scale_drag = None;
+            }
+        }
+
+        // ── Pen tool: draw in-progress mask path ──
+        if app.active_tool == crate::ui::toolbar::ActiveTool::Pen && !app.pen_points.is_empty() {
+            let painter = ui.painter();
+            let pen_stroke = egui::Stroke::new(1.5, crate::ui::theme::colors::ACCENT_CYAN);
+            let to_screen = |v: [f32; 2]| {
+                egui::pos2(origin_x + v[0] / comp_w * draw_w, origin_y + v[1] / comp_h * draw_h)
+            };
+            for pair in app.pen_points.windows(2) {
+                painter.line_segment([to_screen(pair[0]), to_screen(pair[1])], pen_stroke);
+            }
+            // Closing segment preview back to the first point
+            if app.pen_points.len() >= 3 {
+                let first = app.pen_points[0];
+                let last = *app.pen_points.last().unwrap();
+                painter.line_segment(
+                    [to_screen(last), to_screen(first)],
+                    egui::Stroke::new(1.0, crate::ui::theme::colors::ACCENT_CYAN.linear_multiply(0.4)),
+                );
+            }
+            for p in &app.pen_points {
+                let sp = to_screen(*p);
+                painter.circle_filled(sp, 3.5, crate::ui::theme::colors::ACCENT_CYAN);
+                painter.circle_stroke(sp, 3.5, egui::Stroke::new(1.0, egui::Color32::BLACK));
+            }
+            if viewport_response.hovered() {
+                ui.output_mut(|o| o.cursor_icon = egui::CursorIcon::Crosshair);
             }
         }
 
@@ -849,6 +899,56 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: u32) 
                     ui.selectable_value(&mut app.viewport_fast_preview, 3, "Wireframe");
                 });
         });
+
+        // ── Pen tool commit: turn collected points into a mask on the selected layer ──
+        if pen_commit && app.pen_points.len() >= 3 {
+            let target_layer = match app.selected_layer_idx {
+                Some(idx) => idx,
+                None => {
+                    // No layer selected: create a host solid for the mask
+                    let (n, dur) = {
+                        let c = app.history.current().active_composition();
+                        (c.layers.len(), c.duration_frames)
+                    };
+                    let mut solid = crate::core::timeline::Layer::new(
+                        format!("solid_{}", n),
+                        format!("Mask Solid {}", n + 1),
+                        crate::core::timeline::LayerType::Solid { color: [0.8, 0.8, 0.8, 1.0] },
+                        dur,
+                    );
+                    solid.transform.position = crate::core::property::Animatable::new_constant([comp_w * 0.5, comp_h * 0.5]);
+                    let comp_mut = app.history.current_mut().active_composition_mut();
+                    comp_mut.layers.push(solid);
+                    let new_idx = comp_mut.layers.len() - 1;
+                    app.selected_layer_idx = Some(new_idx);
+                    new_idx
+                }
+            };
+            let pts = std::mem::take(&mut app.pen_points);
+            let comp_mut = app.history.current_mut().active_composition_mut();
+            if let Some(layer) = comp_mut.layers.get_mut(target_layer) {
+                let mask_id = layer.masks.len();
+                layer.masks.push(crate::core::mask::Mask {
+                    id: format!("pen_mask_{}_{}", layer.id, mask_id),
+                    name: format!("Mask {}", mask_id + 1),
+                    enabled: true,
+                    mode: crate::core::mask::MaskMode::Add,
+                    path: crate::core::mask::MaskPath {
+                        vertices: crate::core::property::Animatable::new_constant(pts.clone()),
+                        tangents: None,
+                        is_closed: true,
+                    },
+                    feather: crate::core::property::Animatable::new_constant(0.0),
+                    opacity: crate::core::property::Animatable::new_constant(100.0),
+                    expansion: crate::core::property::Animatable::new_constant(0.0),
+                    inverted: false,
+                });
+            }
+            crate::core::frame_cache::bump_version();
+            app.toasts.info(format!("Pen mask created ({} points)", pts.len()));
+        } else if pen_commit {
+            app.pen_points.clear();
+        }
     });
 
     draw_inline_text_editor(app, ctx, current_frame);

@@ -245,6 +245,8 @@ pub struct AfterEffectsApp {
     pub viewport_scale_drag: Option<(usize, [f32; 2], f32)>,
     /// Layer index whose text is being edited inline from the viewport (double-click)
     pub inline_text_edit_layer: Option<usize>,
+    /// Pen tool: in-progress mask vertices in composition coordinates
+    pub pen_points: Vec<[f32; 2]>,
     pub selected_property: Option<String>,
     pub show_export_dialog: bool,
     pub export_status: Option<String>,
@@ -382,6 +384,7 @@ impl Default for AfterEffectsApp {
             viewport_mask_drag_state: None,
             viewport_scale_drag: None,
             inline_text_edit_layer: None,
+            pen_points: Vec::new(),
             selected_property: None,
             show_export_dialog: false,
             export_status: None,
