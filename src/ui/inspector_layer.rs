@@ -646,6 +646,66 @@ pub fn draw_layer_type_specs(
         }
 
         ui.separator();
+        // ── Shape Repeater (AE Contents > Repeater parity) ──
+        ui.collapsing("⧉ Shape Repeater", |ui| {
+            if layer.shape_repeater.is_none() {
+                if ui.button("+ Add Repeater").on_hover_text("Duplicate the shape N times with cumulative offsets").clicked() {
+                    layer.shape_repeater = Some(crate::core::shape_repeater::ShapeRepeaterOptions::default());
+                    *project_changed = true;
+                }
+            } else if let Some(rep) = &mut layer.shape_repeater {
+                ui.horizontal(|ui| {
+                    ui.label("Copies:");
+                    let mut copies_i = rep.copies as i32;
+                    if ui.add(egui::DragValue::new(&mut copies_i).range(1..=500).speed(1)).changed() {
+                        rep.copies = copies_i.max(1) as u32;
+                        *project_changed = true;
+                    }
+                });
+                ui.horizontal(|ui| {
+                    ui.label("Offset:");
+                    if ui.add(egui::DragValue::new(&mut rep.offset).range(-100.0..=100.0).speed(0.1)).changed() {
+                        *project_changed = true;
+                    }
+                });
+                ui.horizontal(|ui| {
+                    ui.label("Position Offset:");
+                    if ui.add(egui::DragValue::new(&mut rep.position_offset[0]).speed(1.0).prefix("X ")).changed()
+                        || ui.add(egui::DragValue::new(&mut rep.position_offset[1]).speed(1.0).prefix("Y ")).changed() {
+                        *project_changed = true;
+                    }
+                });
+                ui.horizontal(|ui| {
+                    ui.label("Scale /copy %:");
+                    if ui.add(egui::DragValue::new(&mut rep.scale_offset[0]).range(0.05..=5.0).speed(0.01).suffix("×")).changed()
+                        || ui.add(egui::DragValue::new(&mut rep.scale_offset[1]).range(0.05..=5.0).speed(0.01).suffix("×")).changed() {
+                        *project_changed = true;
+                    }
+                });
+                ui.horizontal(|ui| {
+                    ui.label("Rotation /copy:");
+                    if ui.add(egui::DragValue::new(&mut rep.rotation_offset_deg).speed(1.0).suffix("°")).changed() {
+                        *project_changed = true;
+                    }
+                });
+                ui.horizontal(|ui| {
+                    ui.label("Opacity fade:");
+                    if ui.add(egui::Slider::new(&mut rep.start_opacity, 0.0..=1.0).suffix("%")).changed()
+                        || ui.add(egui::Slider::new(&mut rep.end_opacity, 0.0..=1.0).suffix("%")).changed() {
+                        *project_changed = true;
+                    }
+                });
+                if ui.checkbox(&mut rep.composite_below, "Composite below").changed() {
+                    *project_changed = true;
+                }
+                if ui.button("🗑 Remove Repeater").clicked() {
+                    layer.shape_repeater = None;
+                    *project_changed = true;
+                }
+            }
+        });
+
+        ui.separator();
         ui.collapsing("Trim Paths Animator", |ui| {
             if layer.trim_paths.is_none() {
                 if ui.button("+ Add Trim Paths").clicked() {
