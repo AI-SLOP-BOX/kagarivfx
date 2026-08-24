@@ -14,7 +14,7 @@ pub fn draw_prop_row(
     on_move: Option<&mut dyn FnMut(u32, u32)>,
 ) -> Option<u32> {
     draw_prop_row_ext(ui, label, kfs, current_frame, start_frame, zoom_span, left_pane_w,
-        &std::collections::HashSet::new(), "", on_move, None)
+        &std::collections::HashSet::new(), "", on_move, None, None)
 }
 
 /// Extended version with keyframe selection support.
@@ -38,10 +38,14 @@ pub fn draw_prop_row_ext(
     // (prop_key, frame, shift_held, cmd_ctrl_held). Use this to toggle
     // selection in app state.
     mut on_select: Option<&mut dyn FnMut(&'static str, u32, bool, bool)>,
+    // Optional callback when a keyframe is right-clicked: caller attaches the
+    // context menu to the returned response with mutable access to the track.
+    mut on_menu: Option<&mut dyn FnMut(&'static str, u32, &egui::Response)>,
 ) -> Option<u32> {
     let mut requested_frame = None;
     let mut pending_move: Option<(u32, u32)> = None;
     let mut pending_select: Option<(&'static str, u32, bool, bool)> = None;
+    let mut pending_menu: Option<(&'static str, u32, egui::Response)> = None;
 
     ui.horizontal(|ui| {
         ui.allocate_ui(egui::vec2(left_pane_w, 18.0), |ui| {
@@ -75,17 +79,20 @@ pub fn draw_prop_row_ext(
                 let kf_y = rect.center().y;
                 let is_selected = selected_kfs.contains(&(prop_key.to_string(), kf_frame));
                 match draw_keyframe_tick(ui, kf_x, kf_y, true, current_frame, kf_frame, Some(interpolation), is_selected) {
-                    KeyframeTickResult::Clicked { shift, cmd } => {
+                    (KeyframeTickResult::Clicked { shift, cmd }, _resp) => {
                         requested_frame = Some(kf_frame);
                         pending_select = Some((prop_key, kf_frame, shift, cmd));
                     }
-                    KeyframeTickResult::Dragged { new_frame } => {
+                    (KeyframeTickResult::RightClicked, resp) => {
+                        pending_menu = Some((prop_key, kf_frame, resp));
+                    }
+                    (KeyframeTickResult::Dragged { new_frame }, _resp) => {
                         requested_frame = Some(new_frame);
                         if new_frame != kf_frame {
                             pending_move = Some((kf_frame, new_frame));
                         }
                     }
-                    KeyframeTickResult::None => {}
+                    (KeyframeTickResult::None, _resp) => {}
                 }
             }
         }
@@ -102,6 +109,11 @@ pub fn draw_prop_row_ext(
         if let Some((pk, f, sh, cm)) = pending_select.take() {
             if let Some(ref mut cb) = on_select {
                 cb(pk, f, sh, cm);
+            }
+        }
+        if let Some((pk, f, resp)) = pending_menu.take() {
+            if let Some(ref mut cb) = on_menu {
+                cb(pk, f, &resp);
             }
         }
     });

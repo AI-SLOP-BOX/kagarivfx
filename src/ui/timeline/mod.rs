@@ -1068,6 +1068,9 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                                 // Collect selection toggles first; apply to app after the
                                 // row borrows end (app and layer cannot borrow together).
                                 let mut select_requests: Vec<(&'static str, u32, bool, bool)> = Vec::new();
+                                // Right-click menu commands: (prop_key, frame, action)
+                                // 0=Linear 1=EasyEase 2=ToggleHold 3=TimeReverse 4=Delete
+                                let mut kf_menu_cmds: Vec<(&'static str, u32, u8)> = Vec::new();
 
                                 {
                                     let t = &mut layer.transform;
@@ -1080,35 +1083,128 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                                     let show_transform_rows = reveal_mode != "Anchor Point";
                                     let kf_only = reveal_mode == "Keyframed";
 
+                                    macro_rules! kf_menu_cb {
+                                        () => {
+                                            Some(&mut |_pk: &'static str, f: u32, resp: &egui::Response| {
+                                                resp.context_menu(|ui| {
+                                                    ui.set_min_width(190.0);
+                                                    if ui.button("⬤ Linear Interpolation").clicked() { kf_menu_cmds.push((_pk, f, 0)); ui.close_menu(); }
+                                                    if ui.button("◆ Easy Ease (F9)").clicked() { kf_menu_cmds.push((_pk, f, 1)); ui.close_menu(); }
+                                                    if ui.button("⬛ Toggle Hold Keyframe").clicked() { kf_menu_cmds.push((_pk, f, 2)); ui.close_menu(); }
+                                                    ui.separator();
+                                                    if ui.button("⇄ Time-Reverse Keyframes").clicked() { kf_menu_cmds.push((_pk, f, 3)); ui.close_menu(); }
+                                                    if ui.button("🗑 Delete Keyframe (Del)").clicked() { kf_menu_cmds.push((_pk, f, 4)); ui.close_menu(); }
+                                                });
+                                            })
+                                        };
+                                    }
+
                                     if show_transform_rows && (!kf_only || !pos_kfs.is_empty()) {
                                         draw_prop_row_ext(ui, "  ⏱ Position", &pos_kfs, current_frame, start_frame, zoom_span, left_pane_w,
                                             &prop_sel, "position",
                                             Some(&mut |old_f, new_f| { move_kf(&mut t.position, old_f, new_f); *moved = true; }),
-                                            Some(&mut |pk, f, shift, cmd| select_requests.push((pk, f, shift, cmd))));
+                                            Some(&mut |pk, f, shift, cmd| select_requests.push((pk, f, shift, cmd))),
+                                            kf_menu_cb!());
                                     }
                                     if show_transform_rows && (!kf_only || !scale_kfs.is_empty()) {
                                         draw_prop_row_ext(ui, "  ⏱ Scale", &scale_kfs, current_frame, start_frame, zoom_span, left_pane_w,
                                             &prop_sel, "scale",
                                             Some(&mut |old_f, new_f| { move_kf(&mut t.scale, old_f, new_f); *moved = true; }),
-                                            Some(&mut |pk, f, shift, cmd| select_requests.push((pk, f, shift, cmd))));
+                                            Some(&mut |pk, f, shift, cmd| select_requests.push((pk, f, shift, cmd))),
+                                            kf_menu_cb!());
                                     }
                                     if show_transform_rows && (!kf_only || !rot_kfs.is_empty()) {
                                         draw_prop_row_ext(ui, "  ⏱ Rotation", &rot_kfs, current_frame, start_frame, zoom_span, left_pane_w,
                                             &prop_sel, "rotation",
                                             Some(&mut |old_f, new_f| { move_kf(&mut t.rotation, old_f, new_f); *moved = true; }),
-                                            Some(&mut |pk, f, shift, cmd| select_requests.push((pk, f, shift, cmd))));
+                                            Some(&mut |pk, f, shift, cmd| select_requests.push((pk, f, shift, cmd))),
+                                            kf_menu_cb!());
                                     }
                                     if show_transform_rows && (!kf_only || !op_kfs.is_empty()) {
                                         draw_prop_row_ext(ui, "  ⏱ Opacity", &op_kfs, current_frame, start_frame, zoom_span, left_pane_w,
                                             &prop_sel, "opacity",
                                             Some(&mut |old_f, new_f| { move_kf(&mut t.opacity, old_f, new_f); *moved = true; }),
-                                            Some(&mut |pk, f, shift, cmd| select_requests.push((pk, f, shift, cmd))));
+                                            Some(&mut |pk, f, shift, cmd| select_requests.push((pk, f, shift, cmd))),
+                                            kf_menu_cb!());
                                     }
                                     if reveal_mode == "Anchor Point" {
                                         let ap_kfs = get_kfs(&t.anchor_point);
                                         draw_prop_row(ui, "  ⏱ Anchor Point", &ap_kfs, current_frame, start_frame, zoom_span, left_pane_w,
                                             Some(&mut |old_f, new_f| { move_kf(&mut t.anchor_point, old_f, new_f); *moved = true; }));
                                     }
+                                }
+
+                                // ── Apply keyframe context-menu commands ──
+                                fn set_kf_interp<T: Clone>(
+                                    anim: &mut crate::core::property::Animatable<T>,
+                                    frames: &[u32],
+                                    mode: u8,
+                                ) {
+                                    use crate::core::keyframe::{BezierControlPoint, InterpolationType};
+                                    if let Some(kfs) = anim.keyframes_mut() {
+                                        for kf in kfs.iter_mut() {
+                                            if !frames.contains(&kf.frame) { continue; }
+                                            kf.interpolation = match mode {
+                                                0 => InterpolationType::Linear,
+                                                1 => InterpolationType::Bezier {
+                                                    outgoing: BezierControlPoint { influence: 0.333, speed: 0.0 },
+                                                    incoming: BezierControlPoint { influence: 0.333, speed: 0.0 },
+                                                    custom_bezier: Some([0.333, 0.0, 0.333, 1.0]),
+                                                },
+                                                2 => if matches!(kf.interpolation, InterpolationType::Hold) {
+                                                    InterpolationType::Linear
+                                                } else {
+                                                    InterpolationType::Hold
+                                                },
+                                                _ => kf.interpolation.clone(),
+                                            };
+                                        }
+                                    }
+                                }
+                                fn reverse_track<T: Clone>(anim: &mut crate::core::property::Animatable<T>) {
+                                    if let Some(kfs) = anim.keyframes_mut() {
+                                        if kfs.len() < 2 { return; }
+                                        let first = kfs.first().map(|k| k.frame).unwrap_or(0);
+                                        let last = kfs.last().map(|k| k.frame).unwrap_or(0);
+                                        for kf in kfs.iter_mut() { kf.frame = first + last - kf.frame; }
+                                        kfs.sort_by_key(|k| k.frame);
+                                    }
+                                }
+                                fn delete_track_kf<T: Clone>(anim: &mut crate::core::property::Animatable<T>, frame: u32) {
+                                    if let Some(kfs) = anim.keyframes_mut() {
+                                        kfs.retain(|k| k.frame != frame);
+                                    }
+                                }
+                                for (pk, f, cmd) in kf_menu_cmds {
+                                    let t = &mut layer.transform;
+                                    let sel_frames: Vec<u32> = app.selected_keyframes.iter()
+                                        .filter(|(li, p, _)| *li == i && p == pk)
+                                        .map(|(_, _, fr)| *fr)
+                                        .collect();
+                                    match pk {
+                                        "position" => match cmd {
+                                            3 => reverse_track(&mut t.position),
+                                            4 => delete_track_kf(&mut t.position, f),
+                                            m => set_kf_interp(&mut t.position, &if sel_frames.is_empty() { vec![f] } else { sel_frames }, m),
+                                        },
+                                        "scale" => match cmd {
+                                            3 => reverse_track(&mut t.scale),
+                                            4 => delete_track_kf(&mut t.scale, f),
+                                            m => set_kf_interp(&mut t.scale, &if sel_frames.is_empty() { vec![f] } else { sel_frames }, m),
+                                        },
+                                        "rotation" => match cmd {
+                                            3 => reverse_track(&mut t.rotation),
+                                            4 => delete_track_kf(&mut t.rotation, f),
+                                            m => set_kf_interp(&mut t.rotation, &if sel_frames.is_empty() { vec![f] } else { sel_frames }, m),
+                                        },
+                                        "opacity" => match cmd {
+                                            3 => reverse_track(&mut t.opacity),
+                                            4 => delete_track_kf(&mut t.opacity, f),
+                                            m => set_kf_interp(&mut t.opacity, &if sel_frames.is_empty() { vec![f] } else { sel_frames }, m),
+                                        },
+                                        _ => {}
+                                    }
+                                    project_changed = true;
                                 }
 
                                 for (pk, f, shift, cmd) in select_requests {

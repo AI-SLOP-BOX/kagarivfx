@@ -37,6 +37,8 @@ pub enum KeyframeTickResult {
     /// Tick was clicked. Carries modifier state so the caller can implement
     /// multi-select toggling (shift/cmd-click).
     Clicked { shift: bool, cmd: bool },
+    /// Tick was right-clicked (context menu trigger).
+    RightClicked,
     /// Tick was dragged to a new frame.
     Dragged { new_frame: u32 },
 }
@@ -51,7 +53,7 @@ pub fn draw_keyframe_tick(
     kf_frame: u32,
     _interpolation: Option<crate::core::keyframe::InterpolationType>,
     is_selected: bool,
-) -> KeyframeTickResult {
+) -> (KeyframeTickResult, egui::Response) {
     let size = if is_sub_prop { 5.0 } else { 7.0 };
     let rect = egui::Rect::from_center_size(egui::pos2(x, y), egui::vec2(size * 2.0 + 4.0, size * 2.0 + 4.0));
     let color = if is_selected {
@@ -101,18 +103,21 @@ pub fn draw_keyframe_tick(
     }
 
     let response = ui.allocate_rect(rect, egui::Sense::click_and_drag());
+    if response.secondary_clicked() {
+        return (KeyframeTickResult::RightClicked, response);
+    }
     if response.clicked() {
         *current_frame = kf_frame;
         let mods = ui.input(|i| i.modifiers);
-        return KeyframeTickResult::Clicked { shift: mods.shift, cmd: mods.command || mods.ctrl };
+        return (KeyframeTickResult::Clicked { shift: mods.shift, cmd: mods.command || mods.ctrl }, response);
     }
     if response.dragged() {
         let delta = response.drag_delta().x;
         let step = (delta / 8.0).round() as i32;
         if step != 0 {
             let new_f = (kf_frame as i64 + step as i64).clamp(0, u32::MAX as i64) as u32;
-            return KeyframeTickResult::Dragged { new_frame: new_f };
+            return (KeyframeTickResult::Dragged { new_frame: new_f }, response);
         }
     }
-    KeyframeTickResult::None
+    (KeyframeTickResult::None, response)
 }
