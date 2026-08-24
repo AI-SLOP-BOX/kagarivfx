@@ -210,6 +210,11 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
                     app.show_export_dialog = true;
                     ui.close_menu();
                 }
+                if ui.button("⚡ Quick Export Active Comp").on_hover_text("Export the active composition to MP4 with current settings (no dialog)").clicked() {
+                    let comp_name = app.history.current().active_composition().name.clone();
+                    crate::ui::export_dialog::start_comp_export(app, ctx, &comp_name);
+                    ui.close_menu();
+                }
                 ui.separator();
                 if ui.button("Exit").clicked() {
                     ctx.send_viewport_cmd(egui::ViewportCommand::Close);
