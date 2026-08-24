@@ -248,6 +248,8 @@ pub struct AfterEffectsApp {
     pub orbit_drag_start: Option<eframe::egui::Pos2>,
     pub active_tool: crate::ui::toolbar::ActiveTool,
     pub viewport_drag_state: Option<(usize, [f32; 2], eframe::egui::Pos2)>,
+    /// One-shot request: frame this comp-space bbox (min,max) in the viewport.
+    pub viewport_focus_bbox: Option<([f32; 2], [f32; 2])>,
     pub viewport_mask_drag_state: Option<(usize, usize, usize, [f32; 2], eframe::egui::Pos2)>,
     /// Corner-handle scale drag: (layer_idx, start_scale, start_pointer_distance)
     pub viewport_scale_drag: Option<(usize, [f32; 2], f32)>,
@@ -402,6 +404,7 @@ impl Default for AfterEffectsApp {
             orbit_drag_start: None,
             active_tool: crate::ui::toolbar::ActiveTool::default(),
             viewport_drag_state: None,
+            viewport_focus_bbox: None,
             viewport_mask_drag_state: None,
             viewport_scale_drag: None,
             viewport_multi_drag: None,

@@ -166,6 +166,28 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: u32) 
 
         let comp = app.history.current().active_composition();
         let aspect = comp.width as f32 / comp.height as f32;
+
+        // ── One-shot bbox focus request (Shift+Z with selection) ──
+        if let Some((bmin, bmax)) = app.viewport_focus_bbox.take() {
+            let cw = comp.width as f32;
+            let ch = comp.height as f32;
+            let bw = (bmax[0] - bmin[0]).max(1.0);
+            let bh = (bmax[1] - bmin[1]).max(1.0);
+            // Base fit layout at mag 1.0 to obtain comp->pixel scale.
+            let (_, _, bw_px, _) = crate::ui::viewport_state::compute_draw_layout_pan(rect, aspect, 1.0, egui::Vec2::ZERO);
+            let s = (bw_px / cw).max(f32::EPSILON);
+            let m = (((rect.width() * 0.85) / (bw * s)).min((rect.height() * 0.85) / (bh * s))).clamp(0.05, 8.0);
+            let (fx, fy, fw_px, fh_px) =
+                crate::ui::viewport_state::compute_draw_layout_pan(rect, aspect, m, egui::Vec2::ZERO);
+            let cx = (bmin[0] + bmax[0]) * 0.5;
+            let cy = (bmin[1] + bmax[1]) * 0.5;
+            app.viewport_mag_ratio = m;
+            app.viewport_pan = egui::vec2(
+                rect.center().x - (fx + cx * (fw_px / cw)),
+                rect.center().y - (fy + cy * (fh_px / ch)),
+            );
+        }
+
         let (origin_x, origin_y, draw_w, draw_h) =
             crate::ui::viewport_state::compute_draw_layout_pan(rect, aspect, app.viewport_mag_ratio, app.viewport_pan);
         let draw_rect = egui::Rect::from_min_size(

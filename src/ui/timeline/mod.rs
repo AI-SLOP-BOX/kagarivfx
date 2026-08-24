@@ -299,7 +299,29 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                     ui.painter().add(egui::Shape::convex_polygon(tri, colors::TIMELINE_PLAYHEAD, egui::Stroke::NONE));
                 }
 
-                if !wa_drag_active && (ruler_response.clicked() || ruler_response.dragged()) {
+                // ── Ctrl/Cmd+drag on ruler: rubber-band Work Area definition ──
+                let cmd_mod = ui.input(|i| i.modifiers.command);
+                if !wa_drag_active && cmd_mod && ruler_response.dragged() {
+                    if let Some(pos) = ruler_response.interact_pointer_pos() {
+                        let norm = ((pos.x - ruler_rect.left()) / ruler_rect.width()).clamp(0.0, 1.0);
+                        let raw_f = start_frame + (norm * zoom_span as f32).round() as u32;
+                        let drag_id = egui::Id::new("wa_rubber_start");
+                        let anchor_f = ui.ctx().data_mut(|d| {
+                            let cur = d.get_temp::<u32>(drag_id);
+                            if cur.is_none() { d.insert_temp(drag_id, raw_f); }
+                            cur
+                        });
+                        if let Some(s) = anchor_f {
+                            app.work_area_in = Some(s.min(raw_f));
+                            app.work_area_out = Some(s.max(raw_f).saturating_add(1));
+                        }
+                    }
+                }
+                if ruler_response.drag_stopped() {
+                    ui.ctx().data_mut(|d| d.remove_temp::<u32>(egui::Id::new("wa_rubber_start")));
+                }
+
+                if !wa_drag_active && !cmd_mod && (ruler_response.clicked() || ruler_response.dragged()) {
                     if let Some(pos) = ruler_response.interact_pointer_pos() {
                         let norm = ((pos.x - ruler_rect.left()) / ruler_rect.width()).clamp(0.0, 1.0);
                         let raw_f = start_frame + (norm * zoom_span as f32).round() as u32;

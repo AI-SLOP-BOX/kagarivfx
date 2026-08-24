@@ -78,10 +78,42 @@ pub fn handle_global_shortcuts(
             app.active_tool = crate::ui::toolbar::ActiveTool::Text;
         }
 
-        // Shift+Z → Viewport zoom to fit (AE parity)
+        // Shift+Z → Viewport zoom to fit / to selected layers' bbox (AE parity)
         if shift && !cmd && i.key_pressed(Key::Z) {
-            app.viewport_mag_ratio = 0.0; // 0.0 = fit mode
-            app.viewport_pan = egui::Vec2::ZERO;
+            let mut bbox_request: Option<([f32; 2], [f32; 2])> = None;
+            if !app.selected_layers.is_empty() || app.selected_layer_idx.is_some() {
+                let comp = app.history.current().active_composition();
+                let cf = *current_frame;
+                let idxs: Vec<usize> = if app.selected_layers.is_empty() {
+                    app.selected_layer_idx.into_iter().collect()
+                } else {
+                    let mut v: Vec<usize> = app.selected_layers.iter().copied().collect();
+                    v.sort();
+                    v
+                };
+                let mut min = [f32::MAX; 2];
+                let mut max = [f32::MIN; 2];
+                for &li in &idxs {
+                    let Some(l) = comp.layers.get(li) else { continue };
+                    let (pos, _, _, _) = comp.resolve_world_transform(l, cf);
+                    let bs = l.bounding_size();
+                    let sc = l.transform.scale.evaluate(cf);
+                    let hx = bs[0] * sc[0].abs() * 0.005;
+                    let hy = bs[1] * sc[1].abs() * 0.005;
+                    min[0] = min[0].min(pos[0] - hx); min[1] = min[1].min(pos[1] - hy);
+                    max[0] = max[0].max(pos[0] + hx); max[1] = max[1].max(pos[1] + hy);
+                }
+                if max[0] > min[0] && max[1] > min[1] {
+                    bbox_request = Some((min, max));
+                }
+            }
+            match bbox_request {
+                Some(b) => app.viewport_focus_bbox = Some(b),
+                None => {
+                    app.viewport_mag_ratio = 0.0;
+                    app.viewport_pan = egui::Vec2::ZERO;
+                }
+            }
         }
         // Cmd+0 → Viewport zoom to fit (AE standard)
         if cmd && i.key_pressed(Key::Num0) {
