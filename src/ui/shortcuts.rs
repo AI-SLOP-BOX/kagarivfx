@@ -929,6 +929,14 @@ pub fn handle_global_shortcuts(
             app.is_playing = true;
         }
 
+        // ── Cmd+Alt+← → Breadcrumb Back (previous composition) ──
+        if cmd && i.modifiers.alt && i.key_pressed(Key::ArrowLeft) && !app.comp_nav_stack.is_empty() {
+            if let Some(prev) = app.comp_nav_stack.pop() {
+                app.history.current_mut().active_composition_idx = prev;
+                crate::core::frame_cache::bump_version();
+            }
+        }
+
         // ── Ctrl+Shift+K → Toggle Motion Sketch ──
         if cmd && shift && i.key_pressed(Key::K) {
             app.motion_sketch_active = !app.motion_sketch_active;

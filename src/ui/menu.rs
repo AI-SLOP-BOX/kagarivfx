@@ -411,6 +411,38 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
                             ui.close_menu();
                         }
                     }
+                    if ui.button("Fit to Comp Width").clicked() {
+                        if let Some(idx) = app.selected_layer_idx {
+                            let cw = app.history.current().active_composition().width as f32;
+                            app.modify_project(move |p| {
+                                if let Some(l) = p.active_composition_mut().layers.get_mut(idx) {
+                                    let bs = l.bounding_size();
+                                    if bs[0] > 1.0 {
+                                        let s = cw / bs[0] * 100.0;
+                                        l.transform.scale = crate::core::property::Animatable::new_constant([s, s]);
+                                    }
+                                }
+                            });
+                            app.toasts.info("Fit to Comp Width");
+                            ui.close_menu();
+                        }
+                    }
+                    if ui.button("Fit to Comp Height").clicked() {
+                        if let Some(idx) = app.selected_layer_idx {
+                            let ch = app.history.current().active_composition().height as f32;
+                            app.modify_project(move |p| {
+                                if let Some(l) = p.active_composition_mut().layers.get_mut(idx) {
+                                    let bs = l.bounding_size();
+                                    if bs[1] > 1.0 {
+                                        let s = ch / bs[1] * 100.0;
+                                        l.transform.scale = crate::core::property::Animatable::new_constant([s, s]);
+                                    }
+                                }
+                            });
+                            app.toasts.info("Fit to Comp Height");
+                            ui.close_menu();
+                        }
+                    }
                     if ui.button("Flip Horizontal").clicked() {
                         if let Some(idx) = app.selected_layer_idx {
                             let cf = app.current_frame;

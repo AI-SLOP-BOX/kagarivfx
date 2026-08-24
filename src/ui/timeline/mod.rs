@@ -838,6 +838,50 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                                             project_changed = true;
                                             ui.close_menu();
                                         }
+                                        // ── Audio fades (Audio layers only) ──
+                                        if matches!(layer.layer_type, crate::core::timeline::LayerType::Audio { .. }) {
+                                            ui.separator();
+                                            const FADE_F: u32 = 10;
+                                            if ui.button("🔉 Add 10-frame Audio Fade In").clicked() {
+                                                if let crate::core::timeline::LayerType::Audio { volume, .. } = &mut layer.layer_type {
+                                                    let base = volume.evaluate(*current_frame);
+                                                    let start_f = layer.in_frame;
+                                                    let end_f = (start_f + FADE_F).min(layer.out_frame);
+                                                    let mut kfs: Vec<crate::core::keyframe::Keyframe<f32>> = vec![
+                                                        crate::core::keyframe::Keyframe::new(start_f, 0.0, crate::core::keyframe::InterpolationType::Linear),
+                                                        crate::core::keyframe::Keyframe::new(end_f.max(start_f + 1), base, crate::core::keyframe::InterpolationType::Linear),
+                                                    ];
+                                                    if let Some(old) = volume.keyframes() {
+                                                        for k in old { if k.frame > end_f { kfs.push(k.clone()); } }
+                                                    }
+                                                    kfs.sort_by_key(|k| k.frame);
+                                                    *volume = crate::core::property::Animatable::Animated(kfs);
+                                                }
+                                                project_changed = true;
+                                                app.toasts.info("Audio fade-in added");
+                                                ui.close_menu();
+                                            }
+                                            if ui.button("🔉 Add 10-frame Audio Fade Out").clicked() {
+                                                if let crate::core::timeline::LayerType::Audio { volume, .. } = &mut layer.layer_type {
+                                                    let base = volume.evaluate(*current_frame);
+                                                    let end_f = layer.out_frame.saturating_sub(1);
+                                                    let start_f = end_f.saturating_sub(FADE_F).max(layer.in_frame);
+                                                    let mut kfs: Vec<crate::core::keyframe::Keyframe<f32>> = vec![
+                                                        crate::core::keyframe::Keyframe::new(end_f, 0.0, crate::core::keyframe::InterpolationType::Linear),
+                                                        crate::core::keyframe::Keyframe::new(start_f, base, crate::core::keyframe::InterpolationType::Linear),
+                                                    ];
+                                                    if let Some(old) = volume.keyframes() {
+                                                        for k in old { if k.frame < start_f { kfs.push(k.clone()); } }
+                                                    }
+                                                    kfs.sort_by_key(|k| k.frame);
+                                                    *volume = crate::core::property::Animatable::Animated(kfs);
+                                                }
+                                                project_changed = true;
+                                                app.toasts.info("Audio fade-out added");
+                                                ui.close_menu();
+                                            }
+                                        }
+
                                         ui.separator();
                                         let any_disabled = layer.effects.iter().any(|e| !e.enabled);
                                         let fx_label = if any_disabled { "✅ Enable All Effects" } else { "🚫 Disable All Effects" };
