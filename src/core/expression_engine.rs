@@ -345,6 +345,9 @@ pub struct LayerSnapshot {
     pub scale: [f64; 2],
     pub rotation: f64,
     pub opacity: f64,
+    /// Effect name -> param label -> evaluated value at the snapshot frame.
+    /// Vec2 params are stored as "X"/"Y" entries.
+    pub effects: std::collections::HashMap<String, std::collections::HashMap<String, f64>>,
 }
 
 /// Snapshot of the whole composition, exposed to Rhai as `thisComp`.
@@ -363,6 +366,7 @@ impl CompSnapshot {
             scale: [100.0, 100.0],
             rotation: 0.0,
             opacity: 100.0,
+            effects: Default::default(),
         })
     }
 
@@ -393,6 +397,15 @@ fn register_comp_types(engine: &mut Engine) {
 
     engine.register_type::<CompSnapshot>()
         .register_fn("layer", |c: &mut CompSnapshot, name: &str| c.layer(name));
+
+    engine.register_fn("effect_param",
+        |l: &mut LayerSnapshot, effect: &str, param: &str| -> f64 {
+            l.effects
+                .get(effect)
+                .and_then(|m| m.get(param))
+                .copied()
+                .unwrap_or(f64::NAN)
+        });
 }
 
 thread_local! {
@@ -424,6 +437,34 @@ fn build_comp_snapshot_uncached(comp: &crate::core::timeline::Composition, frame
     let fps = comp.fps;
     let mut layers = std::collections::HashMap::new();
     for l in &comp.layers {
+        let mut fx_map: std::collections::HashMap<String, std::collections::HashMap<String, f64>> =
+            std::collections::HashMap::new();
+        if l.effects_enabled {
+            for eff in &l.effects {
+                if !eff.enabled {
+                    continue;
+                }
+                let mut params = std::collections::HashMap::new();
+                for (label, pref) in eff.effect_type.animatable_params_ref() {
+                    match pref {
+                        crate::core::effect_params::ParamRefRef::Scalar(a) => {
+                            params.insert(label.to_string(), a.evaluate(frame) as f64);
+                        }
+                        crate::core::effect_params::ParamRefRef::Vec2(a) => {
+                            let v = a.evaluate(frame);
+                            params.insert(format!("{} X", label), v[0] as f64);
+                            params.insert(format!("{} Y", label), v[1] as f64);
+                            params.insert(label.to_string(), v[0] as f64);
+                        }
+                        crate::core::effect_params::ParamRefRef::Vec4Color(a) => {
+                            let v = a.evaluate(frame);
+                            params.insert(label.to_string(), (v[0] + v[1] + v[2]).max(v[3]) as f64);
+                        }
+                    }
+                }
+                fx_map.insert(eff.name.clone(), params);
+            }
+        }
         let snap = LayerSnapshot {
             position: [
                 l.transform.eval_position(frame, fps)[0] as f64,
@@ -435,6 +476,7 @@ fn build_comp_snapshot_uncached(comp: &crate::core::timeline::Composition, frame
             ],
             rotation: l.transform.eval_rotation(frame, fps) as f64,
             opacity: l.transform.eval_opacity(frame, fps) as f64,
+            effects: fx_map,
         };
         layers.insert(l.name.clone(), snap.clone());
         if l.id != l.name && !layers.contains_key(&l.id) {
@@ -739,6 +781,39 @@ mod tests_comp_context {
         let driver = comp.layers.iter().find(|l| l.name == driver_name).unwrap();
         let (pos, _, _, _) = comp.resolve_world_transform(driver, 0);
         assert!((pos[0] - 52.0).abs() < 0.01, "expected 52.0, got {}", pos[0]);
+    }
+
+    #[test]
+    fn test_effect_param_bridge_cross_layer() {
+        use crate::core::timeline::Effect;
+        let mut comp = Composition::new("c".into(), "Comp".into(), 100, 100, 30, 30);
+        let mut src = Layer::new("s1".into(), "Source".into(), LayerType::Solid { color: [0.0; 4] }, 30);
+        // Animated Gaussian blur radius: 5 at frame 0, 15 at frame 10.
+        src.effects.push(Effect {
+            id: "fx_test_blur".into(),
+            enabled: true,
+            name: "Blur".into(),
+            effect_type: crate::core::timeline::EffectType::GaussianBlur {
+                blur_radius: Animatable::new_animated(vec![
+                    crate::core::keyframe::Keyframe::new(0, 5.0, crate::core::keyframe::InterpolationType::Linear),
+                    crate::core::keyframe::Keyframe::new(10, 15.0, crate::core::keyframe::InterpolationType::Linear),
+                ]),
+            },
+        });
+        comp.layers.push(src);
+        let mut drv = Layer::new("d1".into(), "Driver".into(), LayerType::Null, 30);
+        drv.transform.position_expression = Some(Expression::Raw(
+            "let b = thisComp.layer(\"Source\").effect_param(\"Blur\", \"Blur Radius\"); [b * 10.0, 0.0]".into(),
+        ));
+        comp.layers.push(drv);
+
+        let snap_f0 = crate::core::expression_engine::build_comp_snapshot(&comp, 0);
+        assert!((snap_f0.layers["Source"].effects["Blur"]["Blur Radius"] - 5.0).abs() < 0.01,
+            "snapshot should carry effect value");
+
+        let layer_f10 = &comp.layers[1];
+        let (pos, _, _, _) = comp.resolve_world_transform(layer_f10, 10);
+        assert!((pos[0] - 150.0).abs() < 0.05, "expected 150.0 (15*10), got {}", pos[0]);
     }
 
     #[test]
