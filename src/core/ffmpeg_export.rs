@@ -524,6 +524,7 @@ pub fn start_png_sequence_export<F>(
     width: u32,
     height: u32,
     total_frames: u32,
+    first_index: u32,
     tx: Sender<ExportEvent>,
     cancel_flag: std::sync::Arc<std::sync::atomic::AtomicBool>,
     mut render_frame: F,
@@ -535,7 +536,9 @@ pub fn start_png_sequence_export<F>(
             return;
         }
         let last = total_frames.saturating_sub(1);
-        for f in 0..total_frames {
+        for i in 0..total_frames {
+            // Absolute frame number (work-area offset aware) for file naming.
+            let f = i + first_index;
             if cancel_flag.load(Ordering::SeqCst) {
                 let _ = tx.send(ExportEvent::Error("Export canceled".to_string()));
                 return;
@@ -546,9 +549,9 @@ pub fn start_png_sequence_export<F>(
                 let _ = tx.send(ExportEvent::Error(format!("Failed writing {}: {}", path.display(), e)));
                 return;
             }
-            if f % 2 == 0 || f == last {
+            if i % 2 == 0 || i == last {
                 let _ = tx.send(ExportEvent::Progress(
-                    (f + 1) as f32 / total_frames.max(1) as f32,
+                    (i + 1) as f32 / total_frames.max(1) as f32,
                     format!("Frame {} / {} → {}", f + 1, total_frames, path.display()),
                 ));
             }

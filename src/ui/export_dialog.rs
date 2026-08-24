@@ -9,7 +9,18 @@ pub fn start_comp_export(app: &mut crate::AfterEffectsApp, ctx: &egui::Context, 
         app.toasts.error(format!("Queue comp not found: {}", comp_name));
         return;
     };
-    let total_frames = comp.duration_frames;
+    let comp_total = comp.duration_frames;
+    // Range mode: 0 = Entire Comp, 1 = Work Area (falls back to Entire when unset)
+    let range_mode = ctx.data_mut(|d| *d.get_temp_mut_or_insert_with(egui::Id::new("ae_export_range"), || 0u8));
+    let (frame_offset, total_frames) = if range_mode == 1
+        && (app.work_area_in.is_some() || app.work_area_out.is_some())
+    {
+        let s = app.work_area_in.unwrap_or(0);
+        let e = app.work_area_out.unwrap_or(comp_total.saturating_sub(1));
+        (s, e.saturating_sub(s).max(1))
+    } else {
+        (0u32, comp_total)
+    };
 
     app.is_exporting = true;
     app.export_progress = 0.0;
@@ -57,11 +68,17 @@ pub fn start_comp_export(app: &mut crate::AfterEffectsApp, ctx: &egui::Context, 
             render_w,
             render_h,
             total_frames.max(1),
+            frame_offset,
             tx_ui,
             cancel_flag,
             move |frame| {
                 crate::core::software_renderer::render_frame_to_pixels(
-                    &comp, frame, render_w, render_h, 0.0, 0,
+                    &comp,
+                    frame + frame_offset,
+                    render_w,
+                    render_h,
+                    0.0,
+                    0,
                 )
             },
         );
@@ -109,7 +126,7 @@ pub fn start_comp_export(app: &mut crate::AfterEffectsApp, ctx: &egui::Context, 
         let _ = crate::core::ffmpeg_export::start_export_cancelable(config, tx_ff, cancel_flag, move |frame| {
             crate::core::software_renderer::render_frame_to_pixels(
                 &comp,
-                frame,
+                frame + frame_offset,
                 comp.width,
                 comp.height,
                 0.0,
@@ -209,10 +226,21 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
             ui.separator();
 
             let comp = app.history.current().active_composition();
-            let total_frames = comp.duration_frames;
+            let comp_total = comp.duration_frames;
+            // Display range length when Work Area mode is active.
+            let range_mode = ctx.data_mut(|d| *d.get_temp_mut_or_insert_with(egui::Id::new("ae_export_range"), || 0u8));
+            let shown_total = if range_mode == 1
+                && (app.work_area_in.is_some() || app.work_area_out.is_some())
+            {
+                let s = app.work_area_in.unwrap_or(0);
+                let e = app.work_area_out.unwrap_or(comp_total.saturating_sub(1));
+                e.saturating_sub(s).max(1)
+            } else {
+                comp_total
+            };
 
             ui.label(format!("Composition: {} x {}", comp.width, comp.height));
-            ui.label(format!("Total Duration: {} frames", total_frames));
+            ui.label(format!("Total Duration: {} frames", shown_total));
 
             ui.add_space(8.0);
 
@@ -306,7 +334,7 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
                         2 => 330.0, // ProRes 4444
                         _ => 10.0,   // H.264
                     };
-                    let duration_sec = total_frames as f32 / comp.fps.max(1) as f32;
+                    let duration_sec = shown_total as f32 / comp.fps.max(1) as f32;
                     let est_mb = bitrate_mbps * duration_sec / 8.0;
                     let size_text = if est_mb > 1024.0 {
                         format!("{:.1} GB", est_mb / 1024.0)
@@ -346,6 +374,22 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
                     ui.selectable_value(&mut app.export_codec_idx, 1, "ProRes 422");
                     ui.selectable_value(&mut app.export_codec_idx, 2, "ProRes 4444");
                     ui.selectable_value(&mut app.export_codec_idx, 3, "PNG Sequence");
+                });
+                ui.horizontal(|ui| {
+                    ui.label("Range:");
+                    let mut range_mode = ctx.data_mut(|d| *d.get_temp_mut_or_insert_with(egui::Id::new("ae_export_range"), || 0u8));
+                    let has_wa = app.work_area_in.is_some() || app.work_area_out.is_some();
+                    let mut changed = ui.radio_value(&mut range_mode, 0u8, "Entire Comp").changed();
+                    changed |= ui.add_enabled(
+                        has_wa,
+                        egui::RadioButton::new(range_mode == 1, "Work Area"),
+                    ).on_disabled_hover_text("Set a work area first (B / N)").changed();
+                    if !has_wa && range_mode == 1 {
+                        range_mode = 0;
+                    }
+                    if changed {
+                        ctx.data_mut(|d| d.insert_temp(egui::Id::new("ae_export_range"), range_mode));
+                    }
                 });
 
                 ui.horizontal(|ui| {
