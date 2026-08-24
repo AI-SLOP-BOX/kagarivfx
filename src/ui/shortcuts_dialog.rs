@@ -57,7 +57,7 @@ pub fn draw_shortcuts_dialog(app: &mut AfterEffectsApp, ctx: &egui::Context) {
                             ("Y", "Pan Behind / Anchor Point Tool"),
                             ("Q", "Shape Tool (Rectangle / Ellipse)"),
                             ("G", "Pen / Vector Bezier Path Tool"),
-                            ("T", "Text Tool (in viewport)"),
+                            ("Cmd + T", "Text Tool (in viewport)"),
                             ("C", "3D Camera Tool"),
                             ("Cmd + S", "Save Project (overwrite current path)"),
                             ("Cmd + N", "New Composition (1920×1080 @ 30fps)"),
