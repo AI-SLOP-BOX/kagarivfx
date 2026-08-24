@@ -402,8 +402,16 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: u32) 
                 }
             }
 
-            // Navigation tools (Hand / Zoom) must not move layers
-            if viewport_response.drag_started() && !matches!(app.active_tool, crate::ui::toolbar::ActiveTool::Hand | crate::ui::toolbar::ActiveTool::Zoom) {
+            // Navigation tools (Hand / Zoom) must not move layers;
+            // creation tools (Rectangle / Pen / Text / Brush / CloneStamp /
+            // Eraser / RotoBrush / PuppetPin) have no viewport handlers yet.
+            let tool_creates_or_navigates = !matches!(
+                app.active_tool,
+                crate::ui::toolbar::ActiveTool::Selection
+                    | crate::ui::toolbar::ActiveTool::Rotation
+                    | crate::ui::toolbar::ActiveTool::AnchorPoint
+            );
+            if viewport_response.drag_started() && !tool_creates_or_navigates {
                 // ── Transactional Drag: capture pre-drag snapshot ONCE ──
                 app.begin_drag("Viewport Transform");
 
@@ -618,6 +626,39 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: u32) 
             }
 
             if viewport_response.drag_stopped() {
+                // ── Q tool: click/drag on canvas creates a rectangle shape ──
+                if app.active_tool == crate::ui::toolbar::ActiveTool::Rectangle {
+                    let cx = ((pointer_pos.x - origin_x) / draw_w * comp_w).clamp(0.0, comp_w);
+                    let cy = ((pointer_pos.y - origin_y) / draw_h * comp_h).clamp(0.0, comp_h);
+                    let (n, dur) = {
+                        let c = app.history.current().active_composition();
+                        (c.layers.len(), c.duration_frames)
+                    };
+                    let mut shape_layer = crate::core::timeline::Layer::new(
+                        format!("shape_{}", n),
+                        format!("Rectangle {}", n + 1),
+                        crate::core::timeline::LayerType::Shape {
+                            shape_type: crate::core::timeline::ShapeType::Rectangle {
+                                width: crate::core::property::Animatable::new_constant(220.0),
+                                height: crate::core::property::Animatable::new_constant(160.0),
+                                corner_radius: crate::core::property::Animatable::new_constant(0.0),
+                            },
+                            color: [0.25, 0.55, 1.0, 1.0],
+                            stroke_color: [1.0, 1.0, 1.0, 1.0],
+                            stroke_width: 0.0,
+                        },
+                        dur,
+                    );
+                    shape_layer.transform.position = crate::core::property::Animatable::new_constant([cx, cy]);
+                    let comp_mut = app.history.current_mut().active_composition_mut();
+                    comp_mut.layers.push(shape_layer);
+                    let new_idx = comp_mut.layers.len() - 1;
+                    app.selected_layer_idx = Some(new_idx);
+                    app.selected_layers.clear();
+                    app.selected_layers.insert(new_idx);
+                    crate::core::frame_cache::bump_version();
+                    app.toasts.info("Rectangle created (Q tool)");
+                }
                 let was_dragging = app.viewport_drag_state.is_some()
                     || app.viewport_mask_drag_state.is_some()
                     || app.viewport_scale_drag.is_some();
