@@ -501,9 +501,39 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: u32) 
                         }
                     }
                     if let Some(idx) = hit_idx {
-                        let pos_now = comp_state.layers[idx].transform.position.evaluate(current_frame);
-                        app.viewport_drag_state = Some((idx, pos_now, pointer_pos));
-                        app.selected_layer_idx = Some(idx);
+                        let shift_held = ui.input(|i| i.modifiers.shift);
+                        // ── Selection bookkeeping (syncs timeline multi-select) ──
+                        if shift_held {
+                            if !app.selected_layers.insert(idx) {
+                                app.selected_layers.remove(&idx);
+                            }
+                            app.selected_layer_idx = Some(idx);
+                        } else if !app.selected_layers.contains(&idx) {
+                            app.selected_layers.clear();
+                            app.selected_layers.insert(idx);
+                            app.selected_layer_idx = Some(idx);
+                        }
+
+                        // ── Group drag: hit layer part of a multi-selection → move all together ──
+                        if app.active_tool == crate::ui::toolbar::ActiveTool::Selection && app.selected_layers.len() > 1 && app.selected_layers.contains(&idx) {
+                            let starts: Vec<(usize, [f32; 2])> = app.selected_layers.iter()
+                                .filter_map(|&li| {
+                                    let l = comp_state.layers.get(li)?;
+                                    if l.locked { return None; }
+                                    Some((li, l.transform.position.evaluate(current_frame)))
+                                })
+                                .collect();
+                            if starts.len() > 1 {
+                                app.viewport_multi_drag = Some((starts, pointer_pos));
+                                app.viewport_drag_state = None;
+                            } else {
+                                let pos_now = comp_state.layers[idx].transform.position.evaluate(current_frame);
+                                app.viewport_drag_state = Some((idx, pos_now, pointer_pos));
+                            }
+                        } else {
+                            let pos_now = comp_state.layers[idx].transform.position.evaluate(current_frame);
+                            app.viewport_drag_state = Some((idx, pos_now, pointer_pos));
+                        }
                     } else {
                         app.viewport_drag_state = None;
                     }
@@ -556,6 +586,19 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: u32) 
                                     }
                                 }
                             }
+                        }
+                    }
+                } else if let Some((starts, start_ptr)) = app.viewport_multi_drag.clone() {
+                    // Group move: every selected layer follows the pointer delta
+                    let delta_x = (pointer_pos.x - start_ptr.x) / draw_w * comp_w;
+                    let delta_y = (pointer_pos.y - start_ptr.y) / draw_h * comp_h;
+                    let comp_mut = app.history.current_mut().active_composition_mut();
+                    for (li, start_pos) in &starts {
+                        if let Some(layer) = comp_mut.layers.get_mut(*li) {
+                            layer.transform.position = crate::core::property::Animatable::new_constant([
+                                start_pos[0] + delta_x,
+                                start_pos[1] + delta_y,
+                            ]);
                         }
                     }
                 } else if let Some((drag_idx, start_pos, start_ptr)) = app.viewport_drag_state {
@@ -710,7 +753,8 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: u32) 
                 }
                 let was_dragging = app.viewport_drag_state.is_some()
                     || app.viewport_mask_drag_state.is_some()
-                    || app.viewport_scale_drag.is_some();
+                    || app.viewport_scale_drag.is_some()
+                    || app.viewport_multi_drag.is_some();
                 if was_dragging {
                     // Commit the single Undo entry for the entire drag gesture
                     app.commit_drag();
@@ -718,6 +762,7 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: u32) 
                 app.viewport_drag_state = None;
                 app.viewport_mask_drag_state = None;
                 app.viewport_scale_drag = None;
+                app.viewport_multi_drag = None;
             }
         }
 
@@ -943,6 +988,7 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: u32) 
                     opacity: crate::core::property::Animatable::new_constant(100.0),
                     expansion: crate::core::property::Animatable::new_constant(0.0),
                     inverted: false,
+                    wiggle: None,
                 });
             }
             crate::core::frame_cache::bump_version();
