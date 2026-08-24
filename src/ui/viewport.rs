@@ -703,7 +703,18 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: u32) 
                             _ => {
                                 match &mut layer.transform.position {
                                     Animatable::Constant(ref mut pos) => {
-                                        *pos = new_pos;
+                                        if app.motion_sketch_active && app.is_playing {
+                                            // Motion Sketch: promote Constant → Animated with frame-0 + current
+                                            let old_pos = *pos;
+                                            let mut kfs = vec![
+                                                crate::core::keyframe::Keyframe::new(0, old_pos, crate::core::keyframe::InterpolationType::Linear),
+                                                crate::core::keyframe::Keyframe::new(current_frame, new_pos, crate::core::keyframe::InterpolationType::Linear),
+                                            ];
+                                            kfs.sort_by_key(|k| k.frame);
+                                            layer.transform.position = Animatable::Animated(kfs);
+                                        } else {
+                                            *pos = new_pos;
+                                        }
                                     }
                                     Animatable::Animated(ref mut keyframes) => {
                                         let existing_idx = keyframes.iter().position(|kf| kf.frame == current_frame);

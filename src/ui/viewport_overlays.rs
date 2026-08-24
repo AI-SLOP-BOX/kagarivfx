@@ -245,6 +245,17 @@ pub fn draw_viewport_overlays(
         }
     }
 
+    // ── Motion Sketch Recording Badge ──
+    if app.motion_sketch_active {
+        let ms_rect = egui::Rect::from_min_size(
+            egui::pos2(origin_x + 10.0, origin_y + 40.0),
+            egui::vec2(180.0, 22.0),
+        );
+        ui.painter().rect_filled(ms_rect, 4.0, egui::Color32::from_rgba_premultiplied(50, 10, 10, 220));
+        ui.painter().rect_stroke(ms_rect, 4.0, egui::Stroke::new(1.0, colors::ACCENT_RED));
+        ui.painter().text(ms_rect.center(), egui::Align2::CENTER_CENTER, "● MOTION SKETCH", egui::FontId::proportional(11.0), colors::ACCENT_RED);
+    }
+
     // Bottom Left Selection HUD Status
     if let Some(s_idx) = app.selected_layer_idx {
         let comp = app.history.current().active_composition();

@@ -36,6 +36,7 @@ pub fn draw_shortcuts_dialog(app: &mut AfterEffectsApp, ctx: &egui::Context) {
                             ("Cmd + Alt + Shift + Y", "Create New Null Object Layer"),
                             ("Cmd + Alt + Y", "Create New Adjustment Layer"),
                             ("Cmd + Shift + C", "Pre-Compose Selected Layers"),
+                            ("Cmd + Shift + K", "Toggle Motion Sketch (record position while playing)"),
                             ("Cmd + D", "Duplicate Selected Layer"),
                             ("Cmd + Shift + D", "Split Layer at Current Time"),
                             ("F9", "Easy Ease Keyframes (with Bezier Presets)"),

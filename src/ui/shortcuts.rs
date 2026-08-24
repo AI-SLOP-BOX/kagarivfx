@@ -55,6 +55,10 @@ pub fn handle_global_shortcuts(
         // Space → Play / Pause RAM Preview (single-key: suppressed while typing)
         if allow_single_key && i.key_pressed(Key::Space) {
             app.is_playing = !app.is_playing;
+            if !app.is_playing && app.motion_sketch_active {
+                app.motion_sketch_active = false;
+                app.toasts.info("Motion Sketch OFF");
+            }
         }
 
         // ── Tool Switching Shortcuts (AE standard) ──
@@ -858,6 +862,17 @@ pub fn handle_global_shortcuts(
         // ── Numpad 0 → RAM Preview (force work-area pre-render + play) ──
         if allow_single_key && i.key_pressed(Key::Num0) && !app.is_playing {
             app.is_playing = true;
+        }
+
+        // ── Ctrl+Shift+K → Toggle Motion Sketch ──
+        if cmd && shift && i.key_pressed(Key::K) {
+            app.motion_sketch_active = !app.motion_sketch_active;
+            if app.motion_sketch_active {
+                app.is_playing = true;
+                app.toasts.info("Motion Sketch ON — drag layer to record position");
+            } else {
+                app.toasts.info("Motion Sketch OFF");
+            }
         }
 
         // Shift+F3 → Toggle Graph Editor / Tracks Mode

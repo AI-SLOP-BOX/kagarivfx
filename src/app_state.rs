@@ -256,6 +256,8 @@ pub struct AfterEffectsApp {
     pub inline_text_edit_layer: Option<usize>,
     /// Pen tool: in-progress mask vertices in composition coordinates
     pub pen_points: Vec<[f32; 2]>,
+    /// Motion Sketch: records position keyframes while playing + dragging.
+    pub motion_sketch_active: bool,
     pub selected_property: Option<String>,
     pub show_export_dialog: bool,
     pub export_status: Option<String>,
@@ -401,6 +403,7 @@ impl Default for AfterEffectsApp {
             rect_drag_start: None,
             inline_text_edit_layer: None,
             pen_points: Vec::new(),
+            motion_sketch_active: false,
             selected_property: None,
             show_export_dialog: false,
             export_status: None,
@@ -625,6 +628,7 @@ impl eframe::App for AfterEffectsApp {
                     } else {
                         // Stop at the end when looping is off
                         self.is_playing = false;
+                        self.motion_sketch_active = false;
                         wa_end
                     }
                 } else {
@@ -636,6 +640,7 @@ impl eframe::App for AfterEffectsApp {
                         wa_end.saturating_sub(1)
                     } else {
                         self.is_playing = false;
+                        self.motion_sketch_active = false;
                         wa_start
                     }
                 } else {
