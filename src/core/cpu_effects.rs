@@ -612,6 +612,27 @@ fn apply_one(
             use crate::core::ae_effects_pack_v18::apply_fire_automaton;
             apply_fire_automaton(pixels, width, height, intensity.evaluate(frame));
         }
+        EffectType::LumaKeyRange { low_threshold, high_threshold, invert } => {
+            use crate::core::ae_effects_pack_v16::apply_luma_key_range;
+            apply_luma_key_range(
+                pixels,
+                low_threshold.evaluate(frame).round().clamp(0.0, 255.0) as u8,
+                high_threshold.evaluate(frame).round().clamp(0.0, 255.0) as u8,
+                *invert,
+            );
+        }
+        EffectType::Halftone { cell_size } => {
+            use crate::core::ae_effects_pack_v14::apply_halftone_screen;
+            apply_halftone_screen(pixels, width, height, cell_size.evaluate(frame).round().clamp(2.0, 64.0) as u32);
+        }
+        EffectType::Solarize { threshold } => {
+            use crate::core::ae_effects_pack_v14::apply_solarize_effect;
+            apply_solarize_effect(pixels, threshold.evaluate(frame).round().clamp(0.0, 255.0) as u8);
+        }
+        EffectType::PixelSort { threshold } => {
+            use crate::core::ae_effects_pack_v14::apply_pixel_sort_glitch;
+            apply_pixel_sort_glitch(pixels, width, height, threshold.evaluate(frame).round().clamp(0.0, 255.0) as u8);
+        }
     }
 }
 
@@ -1162,5 +1183,47 @@ mod tests {
             px
         };
         assert_eq!(run_bolt(), run_bolt(), "lightning must be deterministic");
+    }
+
+    #[test]
+    fn test_key_stylize_pack() {
+        let base = solid_layer(8, 8, 90, 140, 200);
+        // Rec.601-ish integer luma of the base colour.
+        let luma_of_base = 131u32;
+
+        // Solarize with threshold 255 never triggers — identity.
+        let mut px = base.clone();
+        apply_layer_effects(
+            &mut px, 8, 8,
+            &[effect("sol", EffectType::Solarize { threshold: Animatable::new_constant(255.0) })],
+            0,
+        );
+        assert_eq!(px, base, "solarize above all values must be a no-op");
+
+        // Luma key non-inverted: pixels inside the band become transparent.
+        let mut px = base.clone();
+        apply_layer_effects(
+            &mut px, 8, 8,
+            &[effect("lk", EffectType::LumaKeyRange {
+                low_threshold: Animatable::new_constant((luma_of_base - 10) as f32),
+                high_threshold: Animatable::new_constant((luma_of_base + 10) as f32),
+                invert: false,
+            })],
+            0,
+        );
+        assert_eq!(px[3], 0, "in-band pixel must key to transparent");
+
+        // Inverted: pixels outside the band become transparent instead.
+        let mut px = base.clone();
+        apply_layer_effects(
+            &mut px, 8, 8,
+            &[effect("lk", EffectType::LumaKeyRange {
+                low_threshold: Animatable::new_constant(0.0),
+                high_threshold: Animatable::new_constant(50.0),
+                invert: true,
+            })],
+            0,
+        );
+        assert_eq!(px[3], 0, "out-of-band pixel must key when inverted");
     }
 }

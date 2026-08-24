@@ -935,6 +935,64 @@ pub fn get_all_effect_presets() -> &'static [EffectPreset] {
                 enabled: true,
             },
         },
+        EffectPreset {
+            name: "Luma Key Range",
+            button_label: "+ Luma Key Range",
+            search_key: "luma key range luminance matte extract transparency",
+            id_prefix: "lumakey",
+            create_fn: |idx| Effect {
+                id: format!("lumakey_{}", idx),
+                name: "Luma Key Range".to_string(),
+                effect_type: EffectType::LumaKeyRange {
+                    low_threshold: Animatable::new_constant(40.0),
+                    high_threshold: Animatable::new_constant(220.0),
+                    invert: false,
+                },
+                enabled: true,
+            },
+        },
+        EffectPreset {
+            name: "Halftone",
+            button_label: "+ Halftone",
+            search_key: "halftone dot screen print newspaper comic",
+            id_prefix: "half",
+            create_fn: |idx| Effect {
+                id: format!("half_{}", idx),
+                name: "Halftone".to_string(),
+                effect_type: EffectType::Halftone {
+                    cell_size: Animatable::new_constant(6.0),
+                },
+                enabled: true,
+            },
+        },
+        EffectPreset {
+            name: "Solarize",
+            button_label: "+ Solarize",
+            search_key: "solarize invert threshold sabattier negative",
+            id_prefix: "sol",
+            create_fn: |idx| Effect {
+                id: format!("sol_{}", idx),
+                name: "Solarize".to_string(),
+                effect_type: EffectType::Solarize {
+                    threshold: Animatable::new_constant(128.0),
+                },
+                enabled: true,
+            },
+        },
+        EffectPreset {
+            name: "Pixel Sort",
+            button_label: "+ Pixel Sort",
+            search_key: "pixel sort glitch columns datamosh aesthetic",
+            id_prefix: "pixsort",
+            create_fn: |idx| Effect {
+                id: format!("pixsort_{}", idx),
+                name: "Pixel Sort".to_string(),
+                effect_type: EffectType::PixelSort {
+                    threshold: Animatable::new_constant(140.0),
+                },
+                enabled: true,
+            },
+        },
     ]
 }
 
@@ -1612,6 +1670,22 @@ pub fn draw_effect_type_ui(
         }
         EffectType::FireAutomaton { intensity } => {
             draw_prop(ui, current_frame, project_changed, next_frame, "Intensity", intensity, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=10.0)); });
+        }
+        EffectType::LumaKeyRange { low_threshold, high_threshold, invert } => {
+            draw_prop(ui, current_frame, project_changed, next_frame, "Low Threshold", low_threshold, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=255.0)); });
+            draw_prop(ui, current_frame, project_changed, next_frame, "High Threshold", high_threshold, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=255.0)); });
+            if ui.checkbox(invert, "Invert").changed() {
+                *project_changed = true;
+            }
+        }
+        EffectType::Halftone { cell_size } => {
+            draw_prop(ui, current_frame, project_changed, next_frame, "Cell Size", cell_size, |ui, v| { ui.add(egui::Slider::new(v, 2.0..=64.0).suffix(" px")); });
+        }
+        EffectType::Solarize { threshold } => {
+            draw_prop(ui, current_frame, project_changed, next_frame, "Threshold", threshold, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=255.0)); });
+        }
+        EffectType::PixelSort { threshold } => {
+            draw_prop(ui, current_frame, project_changed, next_frame, "Threshold", threshold, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=255.0)); });
         }
     }
 }

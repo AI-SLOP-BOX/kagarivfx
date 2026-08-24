@@ -235,6 +235,10 @@ impl RenderEffectPlugin for EnumEffectPlugin {
             EffectType::StarField { .. } => "Star Field",
             EffectType::LightningArc { .. } => "Lightning",
             EffectType::FireAutomaton { .. } => "Fire",
+            EffectType::LumaKeyRange { .. } => "Luma Key Range",
+            EffectType::Halftone { .. } => "Halftone",
+            EffectType::Solarize { .. } => "Solarize",
+            EffectType::PixelSort { .. } => "Pixel Sort",
         }
     }
 
@@ -315,6 +319,10 @@ impl RenderEffectPlugin for EnumEffectPlugin {
             EffectType::StarField { .. } => "star_field",
             EffectType::LightningArc { .. } => "lightning_arc",
             EffectType::FireAutomaton { .. } => "fire_automaton",
+            EffectType::LumaKeyRange { .. } => "luma_key_range",
+            EffectType::Halftone { .. } => "halftone",
+            EffectType::Solarize { .. } => "solarize",
+            EffectType::PixelSort { .. } => "pixel_sort",
         }
     }
 

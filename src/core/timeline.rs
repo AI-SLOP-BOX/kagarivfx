@@ -1047,6 +1047,24 @@ pub enum EffectType {
     FireAutomaton {
         intensity: Animatable<f32>,
     },
+    /// Luminance-range key — pixels outside the luma band become transparent.
+    LumaKeyRange {
+        low_threshold: Animatable<f32>,
+        high_threshold: Animatable<f32>,
+        invert: bool,
+    },
+    /// Halftone dot screen rasterization.
+    Halftone {
+        cell_size: Animatable<f32>,
+    },
+    /// Solar inversion of bright values above a threshold.
+    Solarize {
+        threshold: Animatable<f32>,
+    },
+    /// Column-wise pixel sorting glitch.
+    PixelSort {
+        threshold: Animatable<f32>,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
