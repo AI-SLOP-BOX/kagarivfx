@@ -260,6 +260,26 @@
 ### Remaining Gaps (Priority Order)
 1. **GPU mask compositing** — shader.wgsl/renderer.rs (your zone); masks are CPU-only; viewport shows HUD warning
 2. **Spatial bezier handles** on motion path (AE shows control points on the path overlay)
-3. **Keyframe value numeric editing** from graph editor (click → popup to type exact value)
-4. **Extend slip/ripple to effect keyframes** (currently only transform tracks)
+3. **Keyframe value numeric editing** from graph editor (click → popup to type exact value) ✅ done (4fc5b75)
+4. **Extend slip/ripple to effect keyframes** (currently only transform tracks) ✅ done (1fa7278)
 5. **Effect timeline rows** for remaining ~60 unregistered EffectType variants in effect_params.rs
+
+---
+
+## Session Update (2026-08-24, ox-alpha): 2 more orphaned modules wired end-to-end → commit `3d17136`
+
+### Corner Pin (`src/core/corner_pin.rs` was orphaned)
+- `EffectType::CornerPin { top_left, top_right, bottom_right, bottom_left }` (all `Animatable<[f32; 2]>`, layer-pixel space)
+- CPU dispatch in `cpu_effects::apply_one` → visible in preview/export/CPU fallback automatically
+- Keyframeable rows registered in `effect_params.rs`; GPU display-name + id `"corner_pin"` in `effect_plugin.rs`
+- UI: Distort menu entry (defaults to comp size), effects library preset "+ Corner Pin", X/Y drag pin editors in Effect Controls
+- Tests: content-shift, degenerate-quad passthrough, determinism
+
+### Rove Across Time (`src/core/spatial_keyframe.rs` was orphaned)
+- Command Palette → "Keyframe Assistant: Rove Across Time (Position)"
+- Slides interior position keyframes along time for constant path velocity (AE semantics); one undo unit via `modify_project()`
+
+### Housekeeping
+- Fixed pre-existing clippy warnings (unused_parens / identity_op) in cpu_effects tests → clippy --all-features is at zero again
+- Full suite: 482 passed / 0 failed at commit time
+- Still orphaned (need software_renderer/compositor integration, currently your dirty zone): echo_effect, set_matte, difference_matte, light_transmission, frame_blending, shape_modifiers, stroke_modifier, typography_engine, vfx_graph_compiler
