@@ -62,12 +62,11 @@ struct GlobalsUniform {
     lut_mode: u32,
 }
 
-/// Compile-time proof that LayerUniform is non-zero-sized, so the two
-/// `NonZeroU64::new(...)` calls during bind-group setup can never panic.
-const LAYER_UNIFORM_SIZE: u64 = {
-    assert!(std::mem::size_of::<LayerUniform>() > 0);
-    std::mem::size_of::<LayerUniform>() as u64
-};
+/// Compile-time proof that LayerUniform is non-zero-sized, embedded directly
+/// into bind-group setup — no runtime unwrap needed anywhere.
+const LAYER_UNIFORM_SIZE: std::num::NonZeroU64 =
+    std::num::NonZeroU64::new(std::mem::size_of::<LayerUniform>() as u64)
+        .expect("LayerUniform holds f32 fields and can never be zero-sized");
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
@@ -359,9 +358,7 @@ impl WgpuRenderer {
                     ty: wgpu::BindingType::Buffer {
                         ty: wgpu::BufferBindingType::Uniform,
                         has_dynamic_offset: true, // Enable dynamic uniform offsets
-                        min_binding_size: Some(
-                            std::num::NonZeroU64::new(LAYER_UNIFORM_SIZE).unwrap(),
-                        ),
+                        min_binding_size: Some(LAYER_UNIFORM_SIZE),
                     },
                     count: None,
                 }],
@@ -407,9 +404,7 @@ impl WgpuRenderer {
                 resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
                     buffer: &layer_buffer,
                     offset: 0,
-                    size: Some(
-                        std::num::NonZeroU64::new(LAYER_UNIFORM_SIZE).unwrap(),
-                    ),
+                    size: Some(LAYER_UNIFORM_SIZE),
                 }),
             }],
             label: Some("layer_bind_group"),
