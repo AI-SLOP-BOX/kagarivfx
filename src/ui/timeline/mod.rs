@@ -1071,6 +1071,8 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                                 // Right-click menu commands: (prop_key, frame, action)
                                 // 0=Linear 1=EasyEase 2=ToggleHold 3=TimeReverse 4=Delete
                                 let mut kf_menu_cmds: Vec<(&'static str, u32, u8)> = Vec::new();
+                                // Marquee box-select results: (prop_key, boxed frames)
+                                let mut box_selects: Vec<(&'static str, Vec<u32>)> = Vec::new();
 
                                 {
                                     let t = &mut layer.transform;
@@ -1104,28 +1106,32 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                                             &prop_sel, "position",
                                             Some(&mut |old_f, new_f| { move_kf(&mut t.position, old_f, new_f); *moved = true; }),
                                             Some(&mut |pk, f, shift, cmd| select_requests.push((pk, f, shift, cmd))),
-                                            kf_menu_cb!());
+                                            kf_menu_cb!(),
+                                            Some(&mut |pk, frames: Vec<u32>, _add: bool| box_selects.push((pk, frames))));
                                     }
                                     if show_transform_rows && (!kf_only || !scale_kfs.is_empty()) {
                                         draw_prop_row_ext(ui, "  ⏱ Scale", &scale_kfs, current_frame, start_frame, zoom_span, left_pane_w,
                                             &prop_sel, "scale",
                                             Some(&mut |old_f, new_f| { move_kf(&mut t.scale, old_f, new_f); *moved = true; }),
                                             Some(&mut |pk, f, shift, cmd| select_requests.push((pk, f, shift, cmd))),
-                                            kf_menu_cb!());
+                                            kf_menu_cb!(),
+                                            Some(&mut |pk, frames: Vec<u32>, _add: bool| box_selects.push((pk, frames))));
                                     }
                                     if show_transform_rows && (!kf_only || !rot_kfs.is_empty()) {
                                         draw_prop_row_ext(ui, "  ⏱ Rotation", &rot_kfs, current_frame, start_frame, zoom_span, left_pane_w,
                                             &prop_sel, "rotation",
                                             Some(&mut |old_f, new_f| { move_kf(&mut t.rotation, old_f, new_f); *moved = true; }),
                                             Some(&mut |pk, f, shift, cmd| select_requests.push((pk, f, shift, cmd))),
-                                            kf_menu_cb!());
+                                            kf_menu_cb!(),
+                                            Some(&mut |pk, frames: Vec<u32>, _add: bool| box_selects.push((pk, frames))));
                                     }
                                     if show_transform_rows && (!kf_only || !op_kfs.is_empty()) {
                                         draw_prop_row_ext(ui, "  ⏱ Opacity", &op_kfs, current_frame, start_frame, zoom_span, left_pane_w,
                                             &prop_sel, "opacity",
                                             Some(&mut |old_f, new_f| { move_kf(&mut t.opacity, old_f, new_f); *moved = true; }),
                                             Some(&mut |pk, f, shift, cmd| select_requests.push((pk, f, shift, cmd))),
-                                            kf_menu_cb!());
+                                            kf_menu_cb!(),
+                                            Some(&mut |pk, frames: Vec<u32>, _add: bool| box_selects.push((pk, frames))));
                                     }
                                     if reveal_mode == "Anchor Point" {
                                         let ap_kfs = get_kfs(&t.anchor_point);
@@ -1205,6 +1211,14 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                                         _ => {}
                                     }
                                     project_changed = true;
+                                }
+
+                                // ── Apply marquee box-selects ──
+                                for (pk, frames) in box_selects {
+                                    for f in frames {
+                                        app.selected_keyframes.insert((i, pk.to_string(), f));
+                                    }
+                                    project_changed = false;
                                 }
 
                                 for (pk, f, shift, cmd) in select_requests {

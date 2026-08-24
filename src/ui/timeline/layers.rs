@@ -14,7 +14,7 @@ pub fn draw_prop_row(
     on_move: Option<&mut dyn FnMut(u32, u32)>,
 ) -> Option<u32> {
     draw_prop_row_ext(ui, label, kfs, current_frame, start_frame, zoom_span, left_pane_w,
-        &std::collections::HashSet::new(), "", on_move, None, None)
+        &std::collections::HashSet::new(), "", on_move, None, None, None)
 }
 
 /// Extended version with keyframe selection support.
@@ -41,11 +41,20 @@ pub fn draw_prop_row_ext(
     // Optional callback when a keyframe is right-clicked: caller attaches the
     // context menu to the returned response with mutable access to the track.
     mut on_menu: Option<&mut dyn FnMut(&'static str, u32, &egui::Response)>,
+    // Optional callback when Shift+drag box-selects keyframes on this row.
+    // Carries the frames inside the marquee and whether the existing
+    // selection should be kept (additive).
+    mut on_box_select: Option<&mut dyn FnMut(&'static str, Vec<u32>, bool)>,
 ) -> Option<u32> {
     let mut requested_frame = None;
     let mut pending_move: Option<(u32, u32)> = None;
     let mut pending_select: Option<(&'static str, u32, bool, bool)> = None;
     let mut pending_menu: Option<(&'static str, u32, egui::Response)> = None;
+    let mut pending_box: Option<(Vec<u32>, bool)> = None;
+
+    // Marquee state persists across frames of an active Shift+drag.
+    let marquee_id = egui::Id::new(("kf_marquee", prop_key));
+    let mut marquee_origin: Option<egui::Pos2> = ui.ctx().data_mut(|d| d.get_temp::<egui::Pos2>(marquee_id));
 
     ui.horizontal(|ui| {
         ui.allocate_ui(egui::vec2(left_pane_w, 18.0), |ui| {
@@ -69,6 +78,52 @@ pub fn draw_prop_row_ext(
                 let target_f = start_frame + (norm * zoom_span as f32).round() as u32;
                 *current_frame = target_f;
                 requested_frame = Some(target_f);
+            }
+        }
+
+        // ── Shift+Drag marquee box-select over keyframe ticks (AE parity) ──
+        if response.drag_started() && ui.input(|i| i.modifiers.shift) {
+            marquee_origin = response.interact_pointer_pos();
+            ui.ctx().data_mut(|d| d.insert_temp(marquee_id, marquee_origin));
+        }
+
+        let mut marquee_rect: Option<egui::Rect> = None;
+        if response.dragged() && marquee_origin.is_some() {
+            if let Some(origin) = marquee_origin {
+                if let Some(cur) = response.interact_pointer_pos() {
+                    let r = egui::Rect::from_two_pos(origin, cur);
+                    // Only treat as marquee when dragging mostly horizontally
+                    // inside this row; otherwise it's a playhead scrub.
+                    if (r.width() > 6.0 || r.height().abs() > 2.0) && r.height() < 60.0 {
+                        marquee_rect = Some(r);
+                        ui.ctx().request_repaint();
+                    }
+                }
+            }
+        } else if marquee_origin.is_some() && !response.dragged() && !response.drag_started() {
+            ui.ctx().data_mut(|d| d.remove::<egui::Pos2>(marquee_id));
+            marquee_origin = None;
+        }
+
+        if let Some(r) = marquee_rect {
+            // Translucent selection rectangle + border
+            ui.painter().rect_filled(r, 2.0, crate::ui::theme::colors::TIMELINE_SELECTION);
+            ui.painter().rect_stroke(r, 2.0, egui::Stroke::new(1.0, crate::ui::theme::colors::BORDER_ACTIVE));
+
+            let mut boxed: Vec<u32> = Vec::new();
+            for &(kf_frame, _) in kfs {
+                let norm = (kf_frame - start_frame) as f32 / zoom_span as f32;
+                let kf_x = rect.left() + norm * rect.width();
+                if kf_x >= r.left() && kf_x <= r.right() {
+                    boxed.push(kf_frame);
+                }
+            }
+            if response.drag_stopped() {
+                if !boxed.is_empty() {
+                    pending_box = Some((boxed, true));
+                }
+                ui.ctx().data_mut(|d| d.remove::<egui::Pos2>(marquee_id));
+                marquee_origin = None;
             }
         }
 
@@ -114,6 +169,11 @@ pub fn draw_prop_row_ext(
         if let Some((pk, f, resp)) = pending_menu.take() {
             if let Some(ref mut cb) = on_menu {
                 cb(pk, f, &resp);
+            }
+        }
+        if let Some((frames, additive)) = pending_box.take() {
+            if let Some(ref mut cb) = on_box_select {
+                cb(prop_key, frames, additive);
             }
         }
     });
