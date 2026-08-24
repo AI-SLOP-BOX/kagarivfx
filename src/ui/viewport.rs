@@ -748,15 +748,19 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: u32) 
             if viewport_response.drag_stopped() {
                 // ── Q tool: click/drag on canvas creates a rectangle shape ──
                 if app.active_tool == crate::ui::toolbar::ActiveTool::Rectangle {
-                    let cx = ((pointer_pos.x - origin_x) / draw_w * comp_w).clamp(0.0, comp_w);
-                    let cy = ((pointer_pos.y - origin_y) / draw_h * comp_h).clamp(0.0, comp_h);
                     // Compute shape dimensions from drag (fallback to 220×160 if no drag)
-                    let (sw, sh) = if let Some(start) = app.rect_drag_start.take() {
+                    let (cx, cy, sw, sh) = if let Some(start) = app.rect_drag_start.take() {
+                        let mid_x = (pointer_pos.x + start.x) / 2.0;
+                        let mid_y = (pointer_pos.y + start.y) / 2.0;
+                        let cx = ((mid_x - origin_x) / draw_w * comp_w).clamp(0.0, comp_w);
+                        let cy = ((mid_y - origin_y) / draw_h * comp_h).clamp(0.0, comp_h);
                         let dx = ((pointer_pos.x - start.x) / draw_w * comp_w).abs().max(4.0);
                         let dy = ((pointer_pos.y - start.y) / draw_h * comp_h).abs().max(4.0);
-                        (dx, dy)
+                        (cx, cy, dx, dy)
                     } else {
-                        (220.0, 160.0)
+                        let cx = ((pointer_pos.x - origin_x) / draw_w * comp_w).clamp(0.0, comp_w);
+                        let cy = ((pointer_pos.y - origin_y) / draw_h * comp_h).clamp(0.0, comp_h);
+                        (cx, cy, 220.0, 160.0)
                     };
                     let (n, dur) = {
                         let c = app.history.current().active_composition();

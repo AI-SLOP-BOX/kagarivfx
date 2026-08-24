@@ -297,32 +297,13 @@ pub fn handle_global_shortcuts(
                 crate::core::frame_cache::bump_version();
         }
 
-        // ── Cmd+A: select all keyframes of the selected layer ──
+        // ── Cmd+A: select all layers (AE parity) ──
         if cmd && !shift && i.key_pressed(Key::A) {
-            if let Some(idx) = app.selected_layer_idx {
-                let project = app.history.current();
-                if let Some(comp) = project.active_composition().layers.get(idx) {
-                    let t = &comp.transform;
-                    app.selected_keyframes.clear();
-                    let mut add = |pk: &str, frames: Vec<u32>| {
-                        for f in frames {
-                            app.selected_keyframes.insert((idx, pk.to_string(), f));
-                        }
-                    };
-                    // Per-type iteration (Vec2 and scalar tracks differ)
-                    if let Some(kfs) = t.position.keyframes() {
-                        add("position", kfs.iter().map(|k| k.frame).collect());
-                    }
-                    if let Some(kfs) = t.scale.keyframes() {
-                        add("scale", kfs.iter().map(|k| k.frame).collect());
-                    }
-                    if let Some(kfs) = t.rotation.keyframes() {
-                        add("rotation", kfs.iter().map(|k| k.frame).collect());
-                    }
-                    if let Some(kfs) = t.opacity.keyframes() {
-                        add("opacity", kfs.iter().map(|k| k.frame).collect());
-                    }
-                }
+            let count = app.history.current().active_composition().layers.len();
+            app.selected_layers.clear();
+            app.selected_layer_idx = Some(count.saturating_sub(1));
+            for i in 0..count {
+                app.selected_layers.insert(i);
             }
         }
 
