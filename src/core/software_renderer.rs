@@ -924,7 +924,14 @@ pub fn render_frame_to_pixels(comp: &Composition, frame: u32, width: u32, height
                     return;
                 }
 
-                if let Some((tw, th, text_pixels)) = rasterizer.rasterize_text_formatted(&family_name, &text_str, fs, text_color, tk, ld, 0.0, alignment) {
+                // Enabled Text Animator takes precedence: per-character transforms
+                let maybe_text = if let Some(anim) = layer.text_animator.as_ref().filter(|a| a.enabled) {
+                    let lead = layer.text_formatting.as_ref().map(|tf| tf.leading).unwrap_or(1.2);
+                    rasterizer.rasterize_text_animated(&family_name, &text_str, fs, text_color, tk, lead, 0.0, alignment, anim)
+                } else {
+                    rasterizer.rasterize_text_formatted(&family_name, &text_str, fs, text_color, tk, ld, 0.0, alignment)
+                };
+                if let Some((tw, th, text_pixels)) = maybe_text {
                     let text_w = tw as i32;
                     let text_h = th as i32;
                     let origin_x = (cx - tw as f32 * 0.5) as i32;
