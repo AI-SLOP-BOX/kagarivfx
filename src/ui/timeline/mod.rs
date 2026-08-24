@@ -1079,6 +1079,38 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                                             for m in layer.markers.iter_mut() {
                                                 m.frame = (m.frame as i64 + shift as i64).clamp(0, u32::MAX as i64) as u32;
                                             }
+                                            // Slip effect keyframes too
+                                            use crate::core::effect_params::ParamRef;
+                                            for effect in layer.effects.iter_mut() {
+                                                for (_, param) in effect.effect_type.animatable_params() {
+                                                    match param {
+                                                        ParamRef::Scalar(anim) => {
+                                                            if let Some(kfs) = anim.keyframes_mut() {
+                                                                for kf in kfs.iter_mut() {
+                                                                    kf.frame = (kf.frame as i64 + shift as i64).clamp(0, u32::MAX as i64) as u32;
+                                                                }
+                                                                kfs.sort_by_key(|k| k.frame);
+                                                            }
+                                                        }
+                                                        ParamRef::Vec2(anim) => {
+                                                            if let Some(kfs) = anim.keyframes_mut() {
+                                                                for kf in kfs.iter_mut() {
+                                                                    kf.frame = (kf.frame as i64 + shift as i64).clamp(0, u32::MAX as i64) as u32;
+                                                                }
+                                                                kfs.sort_by_key(|k| k.frame);
+                                                            }
+                                                        }
+                                                        ParamRef::Vec4Color(anim) => {
+                                                            if let Some(kfs) = anim.keyframes_mut() {
+                                                                for kf in kfs.iter_mut() {
+                                                                    kf.frame = (kf.frame as i64 + shift as i64).clamp(0, u32::MAX as i64) as u32;
+                                                                }
+                                                                kfs.sort_by_key(|k| k.frame);
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
                                         } else {
                                             // Slide: move the whole bar
                                             let span = layer.out_frame - layer.in_frame;
