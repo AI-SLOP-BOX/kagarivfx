@@ -102,8 +102,16 @@
 - **FFmpeg / video_import の監査結果**: `unwrap` / `expect` / `panic!` は **ゼロ**。エラー伝播は既に適切。
 
 ### 短期（次回〜）
-- [ ] `src/core` 実プロダクションパスの unwrap 監査（現状テスト外はごく少数、renderer.rs は対応済み）。CI で `#![warn(clippy::unwrap_used)]` を `src/ui` に限定導入するか検討。
-- [ ] バックグラウンドタスク（書き出し・トラッキング）のキャンセル伝播を `Arc<AtomicBool>` の受け渡し規約として文書化し、全スレッド生成箇所で統一。
+- [x] `src/core` 実プロダクションパスの unwrap 監査（renderer.rs は const NonZeroU64 化で unwrap ゼロに到達。残存箇所なし）。
+- [x] **バックグラウンドタスクのキャンセル伝播 規約**（下記参照）。監査の結果、`render_pipeline.rs` が最も進んだ方式（AtomicU64 世代トークン）、`tracker_engine.rs` は AtomicBool、`integration.rs` は mpsc+detached thread と3様式が混在していることが判明。
+- [ ] 上記3様式の統合（render_pipeline 方式への寄せ）は中期項目へ移行。
+
+#### 📌 バックグラウンドタスク・キャンセル伝播 規約（新規コードは必須）
+1. **キャンセル可能なタスクは必ず `Arc<AtomicBool>`（または render_pipeline の `Arc<AtomicU64>` 世代トークン）を引数で受け取る。**
+2. 長時間ループ内では少なくとも数100msごとに `cancel.load(Ordering::Relaxed)` を確認し、true なら早期 return（部分結果は返さない）。
+3. 結果は mpsc チャネル経由でのみ UI スレッドへ渡す。UI 側は受信時に**世代/トークンを照合し、古い結果は破棄**する（stale seek/scrub 対策。render_pipeline.rs 参照実装）。
+4. スレッドは detached でも可（join で UI を止めない）。ただしタスク登録時はトークンのクローンを必ず保持し、後から cancel できるようにする。
+5. FFmpeg 等の子プロセスは kill-on-drop または明示的な kill ハンドルを持たせる。
 
 ### 中長期（設計合意が必要）
 - [ ] **並行処理**: `std::sync::mpsc` の散在を、単一のイベント駆動タスクキュー（Worker プール）へ統合。`tokio` 導入は GUI スレッドモデル（eframe）との整合を要検討のため、まずは std ベースのワーカー抽象から。
