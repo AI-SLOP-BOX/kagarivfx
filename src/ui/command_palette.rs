@@ -350,6 +350,38 @@ pub fn get_all_commands() -> Vec<PaletteCommand> {
             }),
         },
         PaletteCommand {
+            name: "Tool: Puppet Pin",
+            category: "Tools",
+            shortcut_hint: "Cmd+P",
+            action: Box::new(|app| {
+                app.active_tool = crate::ui::toolbar::ActiveTool::PuppetPin;
+                app.toasts.info("Puppet Pin tool — click viewport to place pins");
+            }),
+        },
+        PaletteCommand {
+            name: "Layer: Add Puppet Pin at Center",
+            category: "Animation",
+            shortcut_hint: "",
+            action: Box::new(|app| {
+                if let Some(idx) = app.selected_layer_idx {
+                    let center = app.history.current().active_composition()
+                        .layers.get(idx)
+                        .map(|l| l.transform.position.evaluate(app.current_frame))
+                        .unwrap_or([0.0, 0.0]);
+                    let proj = app.history.current_mut().active_composition_mut();
+                    if let Some(l) = proj.layers.get_mut(idx) {
+                        let n = l.puppet_pins.len() + 1;
+                        l.puppet_pins.push(crate::core::timeline::PuppetPin::new(
+                            format!("pin_{}", n), format!("Pin {}", n), center,
+                        ));
+                        app.toasts.info(format!("Puppet pin {} added", n));
+                    }
+                } else {
+                    app.toasts.info("Select a layer first");
+                }
+            }),
+        },
+        PaletteCommand {
             name: "File: Save Project",
             category: "File",
             shortcut_hint: "Cmd+S",

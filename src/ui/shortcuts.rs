@@ -72,6 +72,7 @@ pub fn handle_global_shortcuts(
             if i.key_pressed(Key::Q) { app.active_tool = crate::ui::toolbar::ActiveTool::Rectangle; }
             if i.key_pressed(Key::G) { app.active_tool = crate::ui::toolbar::ActiveTool::Pen; }
             if i.key_pressed(Key::C) { app.active_tool = crate::ui::toolbar::ActiveTool::Camera3D; }
+            if cmd && i.key_pressed(Key::P) { app.active_tool = crate::ui::toolbar::ActiveTool::PuppetPin; }
         }
         // Cmd+T → Text tool (bare T reveals Opacity, AE parity)
         if cmd && !shift && i.key_pressed(Key::T) {
