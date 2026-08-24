@@ -519,7 +519,7 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
                             let mut baked_count = 0usize;
                             app.modify_project(|p| {
                                 if let Some(l) = p.active_composition_mut().layers.get_mut(idx) {
-                                    baked_count = crate::core::stabilizer::stabilize_layer(l);
+                                    baked_count = crate::core::stabilizer::stabilize_layer_smoothed(l, 2);
                                 }
                             });
                             if baked_count > 0 {
