@@ -46,6 +46,27 @@ pub fn snap_to_layer_edges(frame: u32, exclude_idx: usize, comp: &crate::core::t
     best
 }
 
+pub fn collect_all_kf_frames(comp: &crate::core::timeline::Composition) -> Vec<u32> {
+    let mut frames = Vec::new();
+    for layer in &comp.layers {
+        if let Some(kfs) = layer.transform.position.keyframes() {
+            for kf in kfs { frames.push(kf.frame); }
+        }
+        if let Some(kfs) = layer.transform.scale.keyframes() {
+            for kf in kfs { frames.push(kf.frame); }
+        }
+        if let Some(kfs) = layer.transform.rotation.keyframes() {
+            for kf in kfs { frames.push(kf.frame); }
+        }
+        if let Some(kfs) = layer.transform.opacity.keyframes() {
+            for kf in kfs { frames.push(kf.frame); }
+        }
+    }
+    frames.sort();
+    frames.dedup();
+    frames
+}
+
 /// Interaction result of a single keyframe tick.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum KeyframeTickResult {

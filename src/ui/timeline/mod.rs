@@ -507,6 +507,7 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                 let parent_choices: Vec<(String, String)> = comp.layers.iter().map(|l| (l.id.clone(), l.name.clone())).collect();
                 let parent_choices_ref = &parent_choices;
                 let layer_edges: Vec<(u32, u32)> = comp.layers.iter().map(|l| (l.in_frame, l.out_frame)).collect();
+                let all_kf_frames: Vec<u32> = crate::ui::timeline::utils::collect_all_kf_frames(comp);
                 for i in 0..layers_len {
                     // Safe index access (.get_mut(i))
                     if let Some(layer) = comp.layers.get_mut(i) {
@@ -1413,7 +1414,7 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                                             Some(&mut |pk, f, shift, cmd| select_requests.push((pk, f, shift, cmd))),
                                             kf_menu_cb!(),
                                             Some(&mut |pk, frames: Vec<u32>, _add: bool| box_selects.push((pk, frames))),
-                                            Some(&mut |pk, dragged_f, delta| group_moves.push((pk, dragged_f, delta))));
+                                            Some(&mut |pk, dragged_f, delta| group_moves.push((pk, dragged_f, delta))), &all_kf_frames);
                                     }
                                     if show_transform_rows && (!kf_only || !scale_kfs.is_empty()) {
                                         draw_prop_row_ext(ui, "  ⏱ Scale", &scale_kfs, current_frame, start_frame, zoom_span, left_pane_w,
@@ -1422,7 +1423,7 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                                             Some(&mut |pk, f, shift, cmd| select_requests.push((pk, f, shift, cmd))),
                                             kf_menu_cb!(),
                                             Some(&mut |pk, frames: Vec<u32>, _add: bool| box_selects.push((pk, frames))),
-                                            Some(&mut |pk, dragged_f, delta| group_moves.push((pk, dragged_f, delta))));
+                                            Some(&mut |pk, dragged_f, delta| group_moves.push((pk, dragged_f, delta))), &all_kf_frames);
                                     }
                                     if show_transform_rows && (!kf_only || !rot_kfs.is_empty()) {
                                         draw_prop_row_ext(ui, "  ⏱ Rotation", &rot_kfs, current_frame, start_frame, zoom_span, left_pane_w,
@@ -1431,7 +1432,7 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                                             Some(&mut |pk, f, shift, cmd| select_requests.push((pk, f, shift, cmd))),
                                             kf_menu_cb!(),
                                             Some(&mut |pk, frames: Vec<u32>, _add: bool| box_selects.push((pk, frames))),
-                                            Some(&mut |pk, dragged_f, delta| group_moves.push((pk, dragged_f, delta))));
+                                            Some(&mut |pk, dragged_f, delta| group_moves.push((pk, dragged_f, delta))), &all_kf_frames);
                                     }
                                     if show_transform_rows && (!kf_only || !op_kfs.is_empty()) {
                                         draw_prop_row_ext(ui, "  ⏱ Opacity", &op_kfs, current_frame, start_frame, zoom_span, left_pane_w,
@@ -1440,7 +1441,7 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                                             Some(&mut |pk, f, shift, cmd| select_requests.push((pk, f, shift, cmd))),
                                             kf_menu_cb!(),
                                             Some(&mut |pk, frames: Vec<u32>, _add: bool| box_selects.push((pk, frames))),
-                                            Some(&mut |pk, dragged_f, delta| group_moves.push((pk, dragged_f, delta))));
+                                            Some(&mut |pk, dragged_f, delta| group_moves.push((pk, dragged_f, delta))), &all_kf_frames);
                                     }
                                     if reveal_mode == "Anchor Point" {
                                         let ap_kfs = get_kfs(&t.anchor_point);

@@ -17,7 +17,7 @@ pub fn draw_prop_row(
     on_move: Option<&mut dyn FnMut(u32, u32)>,
 ) -> Option<u32> {
     draw_prop_row_ext(ui, label, kfs, current_frame, start_frame, zoom_span, left_pane_w,
-        &std::collections::HashSet::new(), "", on_move, None, None, None, None)
+        &std::collections::HashSet::new(), "", on_move, None, None, None, None, &[])
 }
 
 /// Extended version with keyframe selection support.
@@ -51,6 +51,7 @@ pub fn draw_prop_row_ext(
     // Optional callback when a SELECTED keyframe is dragged and other
     // selected keyframes should follow: (prop_key, dragged_frame, delta_frames).
     mut on_group_move: Option<&mut dyn FnMut(&'static str, u32, i32)>,
+    snap_to: &[u32],
 ) -> Option<u32> {
     let mut requested_frame = None;
     let mut pending_move: Option<(u32, u32)> = None;
@@ -149,12 +150,28 @@ pub fn draw_prop_row_ext(
                         pending_menu = Some((prop_key, kf_frame, resp));
                     }
                     (KeyframeTickResult::Dragged { new_frame }, _resp) => {
-                        requested_frame = Some(new_frame);
-                        if new_frame != kf_frame {
-                            pending_move = Some((kf_frame, new_frame));
+                        // Snap dragged keyframe to nearby keyframes on other properties
+                        let snapped = if !snap_to.is_empty() {
+                            let threshold = 4u32;
+                            let mut best = new_frame;
+                            let mut best_dist = threshold + 1;
+                            for &candidate in snap_to {
+                                let dist = (new_frame as i32 - candidate as i32).unsigned_abs();
+                                if dist < best_dist {
+                                    best_dist = dist;
+                                    best = candidate;
+                                }
+                            }
+                            best
+                        } else {
+                            new_frame
+                        };
+                        requested_frame = Some(snapped);
+                        if snapped != kf_frame {
+                            pending_move = Some((kf_frame, snapped));
                             // Selected keyframes travel with the dragged one (AE group move)
                             if is_selected && selected_kfs.len() > 1 {
-                                let delta = new_frame as i64 - kf_frame as i64;
+                                let delta = snapped as i64 - kf_frame as i64;
                                 let clamped = delta.clamp(i32::MIN as i64, i32::MAX as i64) as i32;
                                 pending_group = Some((prop_key, kf_frame, clamped));
                             }
