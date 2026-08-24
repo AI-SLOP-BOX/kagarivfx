@@ -1065,6 +1065,31 @@ pub enum EffectType {
     PixelSort {
         threshold: Animatable<f32>,
     },
+    /// Pinch (amount > 0) / punch (amount < 0) polar distortion around centre.
+    PinchPunch {
+        radius: Animatable<f32>,
+        amount: Animatable<f32>,
+    },
+    /// Horizontal scanline jitter glitch.
+    ScanlineGlitch {
+        jitter_amount: Animatable<f32>,
+        seed: Animatable<f32>,
+    },
+    /// Glass edge bevel with specular refraction on layer borders.
+    GlassEdgeBevel {
+        bevel_size: Animatable<f32>,
+        refraction: Animatable<f32>,
+    },
+    /// Sharpen along an arbitrary direction.
+    DirectionalSharpen {
+        angle_deg: Animatable<f32>,
+        strength: Animatable<f32>,
+    },
+    /// Spherical glass-ball refraction lens.
+    RefractionLens {
+        radius: Animatable<f32>,
+        ior: Animatable<f32>,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

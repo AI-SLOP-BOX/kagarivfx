@@ -239,6 +239,11 @@ impl RenderEffectPlugin for EnumEffectPlugin {
             EffectType::Halftone { .. } => "Halftone",
             EffectType::Solarize { .. } => "Solarize",
             EffectType::PixelSort { .. } => "Pixel Sort",
+            EffectType::PinchPunch { .. } => "Pinch / Punch",
+            EffectType::ScanlineGlitch { .. } => "Scanline Glitch",
+            EffectType::GlassEdgeBevel { .. } => "Glass Edge Bevel",
+            EffectType::DirectionalSharpen { .. } => "Directional Sharpen",
+            EffectType::RefractionLens { .. } => "Refraction Lens",
         }
     }
 
@@ -323,6 +328,11 @@ impl RenderEffectPlugin for EnumEffectPlugin {
             EffectType::Halftone { .. } => "halftone",
             EffectType::Solarize { .. } => "solarize",
             EffectType::PixelSort { .. } => "pixel_sort",
+            EffectType::PinchPunch { .. } => "pinch_punch",
+            EffectType::ScanlineGlitch { .. } => "scanline_glitch",
+            EffectType::GlassEdgeBevel { .. } => "glass_edge_bevel",
+            EffectType::DirectionalSharpen { .. } => "directional_sharpen",
+            EffectType::RefractionLens { .. } => "refraction_lens",
         }
     }
 

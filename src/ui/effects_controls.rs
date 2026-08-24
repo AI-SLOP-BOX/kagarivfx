@@ -993,6 +993,81 @@ pub fn get_all_effect_presets() -> &'static [EffectPreset] {
                 enabled: true,
             },
         },
+        EffectPreset {
+            name: "Pinch / Punch",
+            button_label: "+ Pinch / Punch",
+            search_key: "pinch punch polar distort squeeze bubble",
+            id_prefix: "pinch",
+            create_fn: |idx| Effect {
+                id: format!("pinch_{}", idx),
+                name: "Pinch / Punch".to_string(),
+                effect_type: EffectType::PinchPunch {
+                    radius: Animatable::new_constant(300.0),
+                    amount: Animatable::new_constant(0.8),
+                },
+                enabled: true,
+            },
+        },
+        EffectPreset {
+            name: "Scanline Glitch",
+            button_label: "+ Scanline Glitch",
+            search_key: "scanline glitch jitter vhs signal noise rows",
+            id_prefix: "sglitch",
+            create_fn: |idx| Effect {
+                id: format!("sglitch_{}", idx),
+                name: "Scanline Glitch".to_string(),
+                effect_type: EffectType::ScanlineGlitch {
+                    jitter_amount: Animatable::new_constant(8.0),
+                    seed: Animatable::new_constant(5.0),
+                },
+                enabled: true,
+            },
+        },
+        EffectPreset {
+            name: "Glass Edge Bevel",
+            button_label: "+ Glass Edge Bevel",
+            search_key: "glass edge bevel refraction specular frame border",
+            id_prefix: "gbevel",
+            create_fn: |idx| Effect {
+                id: format!("gbevel_{}", idx),
+                name: "Glass Edge Bevel".to_string(),
+                effect_type: EffectType::GlassEdgeBevel {
+                    bevel_size: Animatable::new_constant(12.0),
+                    refraction: Animatable::new_constant(0.6),
+                },
+                enabled: true,
+            },
+        },
+        EffectPreset {
+            name: "Directional Sharpen",
+            button_label: "+ Directional Sharpen",
+            search_key: "directional sharpen angle motion enhance detail",
+            id_prefix: "dsharp",
+            create_fn: |idx| Effect {
+                id: format!("dsharp_{}", idx),
+                name: "Directional Sharpen".to_string(),
+                effect_type: EffectType::DirectionalSharpen {
+                    angle_deg: Animatable::new_constant(45.0),
+                    strength: Animatable::new_constant(1.5),
+                },
+                enabled: true,
+            },
+        },
+        EffectPreset {
+            name: "Refraction Lens",
+            button_label: "+ Refraction Lens",
+            search_key: "refraction lens glass ball sphere ior crystal ball",
+            id_prefix: "refrac",
+            create_fn: |idx| Effect {
+                id: format!("refrac_{}", idx),
+                name: "Refraction Lens".to_string(),
+                effect_type: EffectType::RefractionLens {
+                    radius: Animatable::new_constant(150.0),
+                    ior: Animatable::new_constant(1.4),
+                },
+                enabled: true,
+            },
+        },
     ]
 }
 
@@ -1686,6 +1761,26 @@ pub fn draw_effect_type_ui(
         }
         EffectType::PixelSort { threshold } => {
             draw_prop(ui, current_frame, project_changed, next_frame, "Threshold", threshold, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=255.0)); });
+        }
+        EffectType::PinchPunch { radius, amount } => {
+            draw_prop(ui, current_frame, project_changed, next_frame, "Radius", radius, |ui, v| { ui.add(egui::Slider::new(v, 1.0..=2000.0).suffix(" px")); });
+            draw_prop(ui, current_frame, project_changed, next_frame, "Amount (+pinch / −punch)", amount, |ui, v| { ui.add(egui::Slider::new(v, -2.0..=2.0)); });
+        }
+        EffectType::ScanlineGlitch { jitter_amount, seed } => {
+            draw_prop(ui, current_frame, project_changed, next_frame, "Jitter", jitter_amount, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=50.0).suffix(" px")); });
+            draw_prop(ui, current_frame, project_changed, next_frame, "Seed", seed, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=9999.0)); });
+        }
+        EffectType::GlassEdgeBevel { bevel_size, refraction } => {
+            draw_prop(ui, current_frame, project_changed, next_frame, "Bevel Size", bevel_size, |ui, v| { ui.add(egui::Slider::new(v, 1.0..=64.0).suffix(" px")); });
+            draw_prop(ui, current_frame, project_changed, next_frame, "Refraction", refraction, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=3.0)); });
+        }
+        EffectType::DirectionalSharpen { angle_deg, strength } => {
+            draw_prop(ui, current_frame, project_changed, next_frame, "Angle", angle_deg, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=360.0).suffix("°")); });
+            draw_prop(ui, current_frame, project_changed, next_frame, "Strength", strength, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=5.0)); });
+        }
+        EffectType::RefractionLens { radius, ior } => {
+            draw_prop(ui, current_frame, project_changed, next_frame, "Radius", radius, |ui, v| { ui.add(egui::Slider::new(v, 1.0..=2000.0).suffix(" px")); });
+            draw_prop(ui, current_frame, project_changed, next_frame, "IOR", ior, |ui, v| { ui.add(egui::Slider::new(v, 1.0..=3.0)); });
         }
     }
 }

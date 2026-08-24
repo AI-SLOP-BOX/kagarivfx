@@ -633,6 +633,47 @@ fn apply_one(
             use crate::core::ae_effects_pack_v14::apply_pixel_sort_glitch;
             apply_pixel_sort_glitch(pixels, width, height, threshold.evaluate(frame).round().clamp(0.0, 255.0) as u8);
         }
+        EffectType::PinchPunch { radius, amount } => {
+            use crate::core::ae_effects_pack_v15::apply_pinch_punch_distortion;
+            let center = [width as f32 * 0.5, height as f32 * 0.5];
+            apply_pinch_punch_distortion(
+                pixels,
+                width,
+                height,
+                center,
+                radius.evaluate(frame).max(1.0),
+                amount.evaluate(frame),
+            );
+        }
+        EffectType::ScanlineGlitch { jitter_amount, seed } => {
+            use crate::core::ae_effects_pack_v15::apply_scanline_glitch_jitter;
+            apply_scanline_glitch_jitter(
+                pixels,
+                width,
+                height,
+                jitter_amount.evaluate(frame),
+                seed.evaluate(frame).round().clamp(0.0, 99999.0) as u32 ^ frame,
+            );
+        }
+        EffectType::GlassEdgeBevel { bevel_size, refraction } => {
+            use crate::core::ae_effects_pack_v12::apply_glass_edge_bevel;
+            apply_glass_edge_bevel(
+                pixels,
+                width,
+                height,
+                bevel_size.evaluate(frame).round().clamp(1.0, 128.0) as u32,
+                refraction.evaluate(frame),
+            );
+        }
+        EffectType::DirectionalSharpen { angle_deg, strength } => {
+            use crate::core::ae_effects_pack_v15::apply_directional_sharpen;
+            apply_directional_sharpen(pixels, width, height, angle_deg.evaluate(frame), strength.evaluate(frame));
+        }
+        EffectType::RefractionLens { radius, ior } => {
+            use crate::core::ae_effects_pack_v16::apply_spherical_refraction_lens;
+            let center = [width as f32 * 0.5, height as f32 * 0.5];
+            apply_spherical_refraction_lens(pixels, width, height, center, radius.evaluate(frame).max(1.0), ior.evaluate(frame));
+        }
     }
 }
 
@@ -1225,5 +1266,43 @@ mod tests {
             0,
         );
         assert_eq!(px[3], 0, "out-of-band pixel must key when inverted");
+    }
+
+    #[test]
+    fn test_distort_pack2_neutral_settings_are_noops() {
+        let base = solid_layer(8, 8, 90, 140, 200);
+
+        let mut px = base.clone();
+        apply_layer_effects(
+            &mut px, 8, 8,
+            &[effect("pinch", EffectType::PinchPunch {
+                radius: Animatable::new_constant(50.0),
+                amount: Animatable::new_constant(0.0),
+            })],
+            0,
+        );
+        assert_eq!(px, base, "zero-amount pinch/punch must be a no-op");
+
+        let mut px = base.clone();
+        apply_layer_effects(
+            &mut px, 8, 8,
+            &[effect("sg", EffectType::ScanlineGlitch {
+                jitter_amount: Animatable::new_constant(0.0),
+                seed: Animatable::new_constant(1.0),
+            })],
+            0,
+        );
+        assert_eq!(px, base, "zero-jitter scanline glitch must be a no-op");
+
+        let mut px = base.clone();
+        apply_layer_effects(
+            &mut px, 8, 8,
+            &[effect("dsh", EffectType::DirectionalSharpen {
+                angle_deg: Animatable::new_constant(45.0),
+                strength: Animatable::new_constant(0.0),
+            })],
+            0,
+        );
+        assert_eq!(px, base, "zero-strength directional sharpen must be a no-op");
     }
 }
