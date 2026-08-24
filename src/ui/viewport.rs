@@ -103,6 +103,41 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: u32) 
             if ui.input(|i| i.pointer.middle_down()) {
                 app.active_tool = crate::ui::toolbar::ActiveTool::Hand;
             }
+
+            // ── Hand tool drag pans the view ──
+            if app.active_tool == crate::ui::toolbar::ActiveTool::Hand {
+                let delta = viewport_response.drag_delta();
+                app.viewport_pan.x += delta.x;
+                app.viewport_pan.y += delta.y;
+            }
+
+            // ── Zoom tool: click zooms in 2x at pointer, Alt-click out ──
+            if app.active_tool == crate::ui::toolbar::ActiveTool::Zoom {
+                if viewport_response.clicked() || viewport_response.secondary_clicked() {
+                    let zoom_in = !ui.input(|i| i.modifiers.alt) && !viewport_response.secondary_clicked();
+                    let factor = if zoom_in { 2.0 } else { 0.5 };
+                    let current = if app.viewport_mag_ratio == 0.0 { 1.0 } else { app.viewport_mag_ratio };
+                    let new_mag = (current * factor).clamp(0.05, 8.0);
+                    if let Some(pointer) = viewport_response.interact_pointer_pos() {
+                        let aspect2 = app.history.current().active_composition().width as f32
+                            / app.history.current().active_composition().height as f32;
+                        let mut fw = rect.width();
+                        let mut fh = fw / aspect2;
+                        if fh > rect.height() { fh = rect.height(); fw = fh * aspect2; }
+                        let center = rect.center();
+                        let content = egui::vec2(
+                            (pointer.x - center.x) / (fw * current),
+                            (pointer.y - center.y) / (fh * current),
+                        );
+                        app.viewport_pan.x += content.x * fw * (current - new_mag);
+                        app.viewport_pan.y += content.y * fh * (current - new_mag);
+                    }
+                    app.viewport_mag_ratio = new_mag;
+                }
+                if viewport_response.hovered() {
+                    ui.output_mut(|o| o.cursor_icon = egui::CursorIcon::ZoomIn);
+                }
+            }
         }
 
         // Render background
@@ -367,7 +402,8 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: u32) 
                 }
             }
 
-            if viewport_response.drag_started() {
+            // Navigation tools (Hand / Zoom) must not move layers
+            if viewport_response.drag_started() && !matches!(app.active_tool, crate::ui::toolbar::ActiveTool::Hand | crate::ui::toolbar::ActiveTool::Zoom) {
                 // ── Transactional Drag: capture pre-drag snapshot ONCE ──
                 app.begin_drag("Viewport Transform");
 
