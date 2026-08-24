@@ -63,6 +63,7 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                 work_area_out: &mut app.work_area_out,
                 expanded_layers: &mut app.expanded_layers,
                 fit_to_selection: &mut app.timeline_fit_to_selection,
+                fit_all: &mut app.timeline_fit_all,
             };
 
             // Access live project mutably without per-frame cloning
@@ -75,16 +76,19 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                 // ── Fit to Selection: zoom timeline to selected layers' time range ──
                 if app.timeline_fit_to_selection {
                     app.timeline_fit_to_selection = false;
-                    let sel = &app.selected_layers;
-                    if !sel.is_empty() {
-                        let comp = app.history.current().active_composition();
+                    let comp = app.history.current().active_composition();
+                    let layers = if app.timeline_fit_all {
+                        comp.layers.iter().enumerate().collect::<Vec<_>>()
+                    } else {
+                        let sel = &app.selected_layers;
+                        comp.layers.iter().enumerate().filter(|(i, _)| sel.contains(i)).collect::<Vec<_>>()
+                    };
+                    if !layers.is_empty() {
                         let mut min_f = u32::MAX;
                         let mut max_f = 0u32;
-                        for &idx in sel {
-                            if let Some(layer) = comp.layers.get(idx) {
-                                min_f = min_f.min(layer.in_frame);
-                                max_f = max_f.max(layer.out_frame);
-                            }
+                        for &(_, layer) in &layers {
+                            min_f = min_f.min(layer.in_frame);
+                            max_f = max_f.max(layer.out_frame);
                         }
                         if max_f > min_f {
                             let span = (max_f - min_f).max(10);
@@ -92,6 +96,7 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                             app.timeline_view_start = min_f;
                         }
                     }
+                    app.timeline_fit_all = false;
                 }
             }
 

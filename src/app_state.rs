@@ -216,6 +216,7 @@ pub struct AfterEffectsApp {
     pub otio_path: String,
     pub expanded_layers: std::collections::HashSet<usize>,
     pub timeline_fit_to_selection: bool,
+    pub timeline_fit_all: bool,
     /// Index of the layer currently being drag-reordered in the timeline.
     pub dragging_layer: Option<usize>,
     pub show_grid: bool,
@@ -373,6 +374,7 @@ impl Default for AfterEffectsApp {
             otio_path: "timeline.otio.json".to_string(),
             expanded_layers: std::collections::HashSet::new(),
             timeline_fit_to_selection: false,
+            timeline_fit_all: false,
             show_grid: false,
             show_guides: true,
             show_handles: true,

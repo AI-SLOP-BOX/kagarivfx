@@ -15,6 +15,7 @@ pub struct TimelineHeaderState<'a> {
     pub work_area_out: &'a mut Option<u32>,
     pub expanded_layers: &'a mut HashSet<usize>,
     pub fit_to_selection: &'a mut bool,
+    pub fit_all: &'a mut bool,
 }
 
 pub fn draw_timeline_header(
@@ -84,6 +85,10 @@ pub fn draw_timeline_header(
         }
         if ui.button("Fit Sel").on_hover_text("Fit Timeline to Selected Layers' time range").clicked() {
             *state.fit_to_selection = true;
+        }
+        if ui.button("Fit All").on_hover_text("Fit Timeline to show all layers' time range").clicked() {
+            *state.fit_to_selection = true;
+            *state.fit_all = true;
         }
         if ui.button("Clear WA").on_hover_text("Clear Work Area (In/Out)").clicked() {
             *state.work_area_in = None;
