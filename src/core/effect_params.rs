@@ -155,22 +155,55 @@ impl EffectType {
             EffectType::Vibrance { amount } => push!("Amount", amount, Scalar),
             EffectType::WhiteBalance { .. } => {}
             EffectType::HslAdjust { .. } => {}
-            EffectType::GlowPro { .. } => {}
-            EffectType::CrtScanlines { .. } => {}
-            EffectType::Vortex { .. } => {}
-            EffectType::HeatDistortion { .. } => {}
-            EffectType::RainRipples { .. } => {}
-            EffectType::Fisheye { .. } => {}
-            EffectType::LensCorrection { .. } => {}
-            EffectType::GlitchDisplacement { .. } => {}
-            EffectType::MatteChokeSpread { .. } => {}
-            EffectType::AlphaFeather { .. } => {}
+            EffectType::GlowPro { threshold, radius, intensity, .. } => {
+                push!("Threshold", threshold, Scalar);
+                push!("Radius", radius, Scalar);
+                push!("Intensity", intensity, Scalar);
+            }
+            EffectType::CrtScanlines { line_spacing, intensity, .. } => {
+                push!("Line Spacing", line_spacing, Scalar);
+                push!("Intensity", intensity, Scalar);
+            }
+            EffectType::Vortex { radius, angle_deg, .. } => {
+                push!("Radius", radius, Scalar);
+                push!("Angle", angle_deg, Scalar);
+            }
+            EffectType::HeatDistortion { strength, speed, .. } => {
+                push!("Strength", strength, Scalar);
+                push!("Speed", speed, Scalar);
+            }
+            EffectType::RainRipples { drop_count, wave_strength, .. } => {
+                push!("Drop Count", drop_count, Scalar);
+                push!("Wave Strength", wave_strength, Scalar);
+            }
+            EffectType::Fisheye { strength, .. } => push!("Strength", strength, Scalar),
+            EffectType::LensCorrection { k1, k2, .. } => {
+                push!("K1", k1, Scalar);
+                push!("K2", k2, Scalar);
+            }
+            EffectType::GlitchDisplacement { seed, amount, .. } => {
+                push!("Seed", seed, Scalar);
+                push!("Amount", amount, Scalar);
+            }
+            EffectType::MatteChokeSpread { radius, .. } => push!("Radius", radius, Scalar),
+            EffectType::AlphaFeather { radius, .. } => push!("Radius", radius, Scalar),
             EffectType::AlphaFromLuminance { .. } => {}
-            EffectType::NightVision { .. } => {}
-            EffectType::IrisWipe { .. } => {}
-            EffectType::RadialWipe { .. } => {}
-            EffectType::FilmEmulation { .. } => {}
-            EffectType::GodRays { .. } => {}
+            EffectType::NightVision { amplification, .. } => push!("Amplification", amplification, Scalar),
+            EffectType::IrisWipe { completion, .. } => push!("Completion", completion, Scalar),
+            EffectType::RadialWipe { completion, .. } => push!("Completion", completion, Scalar),
+            EffectType::FilmEmulation { lift, gamma, gain, hue_shift_deg, .. } => {
+                push!("Lift", lift, Scalar);
+                push!("Gamma", gamma, Scalar);
+                push!("Gain", gain, Scalar);
+                push!("Hue Shift", hue_shift_deg, Scalar);
+            }
+            EffectType::GodRays { sun_x, sun_y, samples, decay, weight, .. } => {
+                push!("Sun X", sun_x, Scalar);
+                push!("Sun Y", sun_y, Scalar);
+                push!("Samples", samples, Scalar);
+                push!("Decay", decay, Scalar);
+                push!("Weight", weight, Scalar);
+            }
             EffectType::RadialBlurZoom { amount } => push!("Zoom Amount", amount, Scalar),
             // ── Newly registered effects (session 3) ──
             EffectType::BevelAlpha { depth, light_angle_deg } => {
@@ -398,22 +431,55 @@ impl EffectType {
             EffectType::Vibrance { amount } => push!("Amount", amount, Scalar),
             EffectType::WhiteBalance { .. } => {}
             EffectType::HslAdjust { .. } => {}
-            EffectType::GlowPro { .. } => {}
-            EffectType::CrtScanlines { .. } => {}
-            EffectType::Vortex { .. } => {}
-            EffectType::HeatDistortion { .. } => {}
-            EffectType::RainRipples { .. } => {}
-            EffectType::Fisheye { .. } => {}
-            EffectType::LensCorrection { .. } => {}
-            EffectType::GlitchDisplacement { .. } => {}
-            EffectType::MatteChokeSpread { .. } => {}
-            EffectType::AlphaFeather { .. } => {}
+            EffectType::GlowPro { threshold, radius, intensity, .. } => {
+                push!("Threshold", threshold, Scalar);
+                push!("Radius", radius, Scalar);
+                push!("Intensity", intensity, Scalar);
+            }
+            EffectType::CrtScanlines { line_spacing, intensity, .. } => {
+                push!("Line Spacing", line_spacing, Scalar);
+                push!("Intensity", intensity, Scalar);
+            }
+            EffectType::Vortex { radius, angle_deg, .. } => {
+                push!("Radius", radius, Scalar);
+                push!("Angle", angle_deg, Scalar);
+            }
+            EffectType::HeatDistortion { strength, speed, .. } => {
+                push!("Strength", strength, Scalar);
+                push!("Speed", speed, Scalar);
+            }
+            EffectType::RainRipples { drop_count, wave_strength, .. } => {
+                push!("Drop Count", drop_count, Scalar);
+                push!("Wave Strength", wave_strength, Scalar);
+            }
+            EffectType::Fisheye { strength, .. } => push!("Strength", strength, Scalar),
+            EffectType::LensCorrection { k1, k2, .. } => {
+                push!("K1", k1, Scalar);
+                push!("K2", k2, Scalar);
+            }
+            EffectType::GlitchDisplacement { seed, amount, .. } => {
+                push!("Seed", seed, Scalar);
+                push!("Amount", amount, Scalar);
+            }
+            EffectType::MatteChokeSpread { radius, .. } => push!("Radius", radius, Scalar),
+            EffectType::AlphaFeather { radius, .. } => push!("Radius", radius, Scalar),
             EffectType::AlphaFromLuminance { .. } => {}
-            EffectType::NightVision { .. } => {}
-            EffectType::IrisWipe { .. } => {}
-            EffectType::RadialWipe { .. } => {}
-            EffectType::FilmEmulation { .. } => {}
-            EffectType::GodRays { .. } => {}
+            EffectType::NightVision { amplification, .. } => push!("Amplification", amplification, Scalar),
+            EffectType::IrisWipe { completion, .. } => push!("Completion", completion, Scalar),
+            EffectType::RadialWipe { completion, .. } => push!("Completion", completion, Scalar),
+            EffectType::FilmEmulation { lift, gamma, gain, hue_shift_deg, .. } => {
+                push!("Lift", lift, Scalar);
+                push!("Gamma", gamma, Scalar);
+                push!("Gain", gain, Scalar);
+                push!("Hue Shift", hue_shift_deg, Scalar);
+            }
+            EffectType::GodRays { sun_x, sun_y, samples, decay, weight, .. } => {
+                push!("Sun X", sun_x, Scalar);
+                push!("Sun Y", sun_y, Scalar);
+                push!("Samples", samples, Scalar);
+                push!("Decay", decay, Scalar);
+                push!("Weight", weight, Scalar);
+            }
             EffectType::RadialBlurZoom { amount } => push!("Zoom Amount", amount, Scalar),
             EffectType::BevelAlpha { depth, light_angle_deg } => {
                 push!("Depth", depth, Scalar);
