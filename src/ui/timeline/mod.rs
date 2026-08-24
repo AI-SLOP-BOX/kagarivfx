@@ -850,6 +850,24 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                                             pending_split_layer = Some(i);
                                             ui.close_menu();
                                         }
+                                        ui.separator();
+                                        if ui.button("Into ← Set In-Point to Current Time (I)").clicked() {
+                                            layer.in_frame = *current_frame;
+                                            if layer.in_frame >= layer.out_frame {
+                                                layer.out_frame = layer.in_frame + 1;
+                                            }
+                                            project_changed = true;
+                                            ui.close_menu();
+                                        }
+                                        if ui.button("→ Set Out-Point to Current Time (O)").clicked() {
+                                            layer.out_frame = *current_frame;
+                                            if layer.out_frame <= layer.in_frame {
+                                                layer.in_frame = layer.out_frame.saturating_sub(1);
+                                            }
+                                            project_changed = true;
+                                            ui.close_menu();
+                                        }
+                                        ui.separator();
                                         if ui.button("📍 Add Layer Marker at Playhead").clicked() {
                                             pending_layer_marker = Some(i);
                                             ui.close_menu();
