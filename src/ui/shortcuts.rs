@@ -415,12 +415,13 @@ pub fn handle_global_shortcuts(
             }
         }
 
-        // Cmd+Z → Undo, Cmd+Shift+Z → Redo
-        if cmd && !shift && i.key_pressed(Key::Z) {
+        if cmd && !shift && i.key_pressed(Key::Z) && app.history.can_undo() {
             app.history.undo();
+            app.toasts.info("Undo");
         }
-        if cmd && shift && i.key_pressed(Key::Z) {
+        if cmd && shift && i.key_pressed(Key::Z) && app.history.can_redo() {
             app.history.redo();
+            app.toasts.info("Redo");
         }
 
         // Cmd+N → New Composition
