@@ -1462,6 +1462,53 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                                     }
                                 }
 
+                            // ── Effect keyframe rows (draw_prop_row_ext for selection + snap) ──
+                            for effect in layer.effects.iter_mut() {
+                                let fx_name = effect.name.clone();
+                                let moved = &mut project_changed;
+                                use crate::core::effect_params::ParamRef;
+                                for (label, param) in effect.effect_type.animatable_params() {
+                                    let prop_key_str = format!("fx_{}_{}", fx_name, label);
+                                    let prop_key: &'static str = Box::leak(prop_key_str.into_boxed_str());
+                                    let row_label = format!("  [{}] {}", fx_name, label);
+                                    match param {
+                                        ParamRef::Scalar(anim) => {
+                                            let kfs = get_kfs(anim);
+                                            draw_prop_row_ext(ui, &row_label, &kfs, current_frame, start_frame, zoom_span, left_pane_w,
+                                                &prop_sel, prop_key,
+                                                Some(&mut |old_f, new_f| { move_kf(anim, old_f, new_f); *moved = true; }),
+                                                Some(&mut |pk, f, shift, cmd| select_requests.push((pk, f, shift, cmd))),
+                                                kf_menu_cb!(),
+                                                Some(&mut |pk, frames: Vec<u32>, _add: bool| box_selects.push((pk, frames))),
+                                                Some(&mut |pk, dragged_f, delta| group_moves.push((pk, dragged_f, delta))),
+                                                &all_kf_frames);
+                                        }
+                                        ParamRef::Vec2(anim) => {
+                                            let kfs = get_kfs(anim);
+                                            draw_prop_row_ext(ui, &row_label, &kfs, current_frame, start_frame, zoom_span, left_pane_w,
+                                                &prop_sel, prop_key,
+                                                Some(&mut |old_f, new_f| { move_kf(anim, old_f, new_f); *moved = true; }),
+                                                Some(&mut |pk, f, shift, cmd| select_requests.push((pk, f, shift, cmd))),
+                                                kf_menu_cb!(),
+                                                Some(&mut |pk, frames: Vec<u32>, _add: bool| box_selects.push((pk, frames))),
+                                                Some(&mut |pk, dragged_f, delta| group_moves.push((pk, dragged_f, delta))),
+                                                &all_kf_frames);
+                                        }
+                                        ParamRef::Vec4Color(anim) => {
+                                            let kfs = get_kfs(anim);
+                                            draw_prop_row_ext(ui, &row_label, &kfs, current_frame, start_frame, zoom_span, left_pane_w,
+                                                &prop_sel, prop_key,
+                                                Some(&mut |old_f, new_f| { move_kf(anim, old_f, new_f); *moved = true; }),
+                                                Some(&mut |pk, f, shift, cmd| select_requests.push((pk, f, shift, cmd))),
+                                                kf_menu_cb!(),
+                                                Some(&mut |pk, frames: Vec<u32>, _add: bool| box_selects.push((pk, frames))),
+                                                Some(&mut |pk, dragged_f, delta| group_moves.push((pk, dragged_f, delta))),
+                                                &all_kf_frames);
+                                        }
+                                    }
+                                }
+                            }
+
                                 // ── Apply keyframe context-menu commands ──
                                 fn set_kf_interp<T: Clone>(
                                     anim: &mut crate::core::property::Animatable<T>,
@@ -1618,37 +1665,6 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                                         *moved_m = true;
                                     }));
                                 let _ = m_idx;
-                            }
-
-                            // Effect properties are fully keyframeable: each row
-                            // gets a mutator bound to its own Animatable track.
-                            // Param enumeration is centralized in core::effect_params
-                            // so new effect variants automatically gain rows when
-                            // registered there (no UI-side match to maintain).
-                            for effect in layer.effects.iter_mut() {
-                                let fx_name = effect.name.clone();
-                                let moved = &mut project_changed;
-                                use crate::core::effect_params::ParamRef;
-                                for (label, param) in effect.effect_type.animatable_params() {
-                                    let row_label = format!("  [{}] {}", fx_name, label);
-                                    match param {
-                                        ParamRef::Scalar(anim) => {
-                                            let kfs = get_kfs(anim);
-                                            draw_prop_row(ui, &row_label, &kfs, current_frame, start_frame, zoom_span, left_pane_w,
-                                                Some(&mut |old_f, new_f| { move_kf(anim, old_f, new_f); *moved = true; }));
-                                        }
-                                        ParamRef::Vec2(anim) => {
-                                            let kfs = get_kfs(anim);
-                                            draw_prop_row(ui, &row_label, &kfs, current_frame, start_frame, zoom_span, left_pane_w,
-                                                Some(&mut |old_f, new_f| { move_kf(anim, old_f, new_f); *moved = true; }));
-                                        }
-                                        ParamRef::Vec4Color(anim) => {
-                                            let kfs = get_kfs(anim);
-                                            draw_prop_row(ui, &row_label, &kfs, current_frame, start_frame, zoom_span, left_pane_w,
-                                                Some(&mut |old_f, new_f| { move_kf(anim, old_f, new_f); *moved = true; }));
-                                        }
-                                    }
-                                }
                             }
                         }
                     }
