@@ -42,14 +42,15 @@ pub fn draw_font_picker(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
         if ui.button("Apply to Selected Text").on_hover_text("Writes the family into the selected text layer's formatting").clicked() {
             if let Some(idx) = app.selected_layer_idx {
                 let fam = families[selected].clone();
-                let comp = app.history.current_mut().active_composition_mut();
-                if let Some(layer) = comp.layers.get_mut(idx) {
-                    layer
-                        .text_formatting
-                        .get_or_insert_with(crate::core::timeline::TextFormatting::default)
-                        .font_family = fam.clone();
+                {
+                    let comp = app.history.current_mut().active_composition_mut();
+                    if let Some(layer) = comp.layers.get_mut(idx) {
+                        layer
+                            .text_formatting
+                            .get_or_insert_with(crate::core::timeline::TextFormatting::default)
+                            .font_family = fam.clone();
+                    }
                 }
-                drop(comp);
                 crate::core::frame_cache::bump_version();
                 app.toasts.info(format!("Font set to {}", fam));
             } else {
