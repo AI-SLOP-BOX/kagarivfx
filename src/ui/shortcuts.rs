@@ -604,6 +604,71 @@ pub fn handle_global_shortcuts(
             }
         }
 
+        // ── Cmd+Shift+D → Split Selected Layer at Playhead (AE parity) ──
+        if cmd && shift && i.key_pressed(Key::D) {
+            if let Some(sel_idx) = app.selected_layer_idx {
+                let cur = *current_frame;
+                let mut split_done = false;
+                app.modify_project(|p| {
+                    let comp = p.active_composition_mut();
+                    let len = comp.layers.len();
+                    if let Some(l) = comp.layers.get_mut(sel_idx) {
+                        let orig_out = l.out_frame;
+                        if cur > l.in_frame && cur < orig_out {
+                            l.out_frame = cur;
+                            let mut tail = l.clone();
+                            tail.id = format!("{}_split_{}", tail.id, len);
+                            tail.name = format!("{} split", tail.name);
+                            tail.in_frame = cur;
+                            tail.out_frame = orig_out;
+                            comp.layers.insert(sel_idx + 1, tail);
+                            split_done = true;
+                        }
+                    }
+                });
+                if split_done {
+                    app.toasts.info(format!("Split layer at frame {}", cur));
+                    crate::core::frame_cache::bump_version();
+                } else {
+                    app.toasts.error("Split point must be inside the layer's duration");
+                }
+            } else {
+                app.toasts.info("Select a layer first");
+            }
+        }
+
+        // ── Cmd+Alt+T → Toggle Time Remapping on selected layer (AE parity) ──
+        if cmd && i.modifiers.alt && !shift && i.key_pressed(Key::T) {
+            if let Some(sel_idx) = app.selected_layer_idx {
+                let mut enabled = false;
+                app.modify_project(|p| {
+                    let dur = p.active_composition().duration_frames;
+                    let comp = p.active_composition_mut();
+                    if let Some(l) = comp.layers.get_mut(sel_idx) {
+                        if l.time_remap.is_some() {
+                            l.time_remap = None;
+                        } else {
+                            // Linear source-time map across the layer's span:
+                            // value = source frame offset relative to in-point.
+                            let span = l.out_frame.saturating_sub(l.in_frame).max(1);
+                            l.time_remap = Some(crate::core::property::Animatable::new_animated(vec![
+                                crate::core::keyframe::Keyframe::new(0, 0.0f32, crate::core::keyframe::InterpolationType::Linear),
+                                crate::core::keyframe::Keyframe::new(dur.max(1), span as f32, crate::core::keyframe::InterpolationType::Linear),
+                            ]));
+                            enabled = true;
+                        }
+                    }
+                });
+                if enabled {
+                    app.toasts.info("Time Remapping enabled");
+                } else {
+                    app.toasts.info("Time Remapping disabled");
+                }
+            } else {
+                app.toasts.info("Select a layer first");
+            }
+        }
+
         // Cmd+Shift+C → Pre-Compose Selected Layers
         if cmd && shift && i.key_pressed(Key::C) {
             let mut temp_project = app.history.current().clone();
