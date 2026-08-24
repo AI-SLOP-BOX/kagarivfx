@@ -792,6 +792,11 @@ pub fn handle_global_shortcuts(
         if allow_single_key && i.key_pressed(Key::Num0) && !app.is_playing {
             app.is_playing = true;
         }
+
+        // Shift+F3 → Toggle Graph Editor / Tracks Mode
+        if i.key_pressed(Key::F3) && shift {
+            app.show_graph_editor = !app.show_graph_editor;
+        }
     });
 }
 
