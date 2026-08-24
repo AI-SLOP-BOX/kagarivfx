@@ -38,12 +38,13 @@ pub fn apply_layer_effects(
     height: u32,
     effects: &[Effect],
     frame: u32,
+    fps: u32,
 ) {
     for effect in effects {
         if !effect.enabled {
             continue;
         }
-        apply_one(pixels, width, height, &effect.effect_type, frame);
+        apply_one(pixels, width, height, &effect.effect_type, frame, fps);
     }
 }
 
@@ -53,6 +54,7 @@ fn apply_one(
     height: u32,
     effect_type: &EffectType,
     frame: u32,
+    fps: u32,
 ) {
     use crate::core::ae_effects_pack as pack;
 
@@ -316,7 +318,7 @@ fn apply_one(
                 wave_height: wave_height.evaluate(frame),
                 wave_width: wave_width.evaluate(frame),
                 speed: speed.evaluate(frame),
-                time: frame as f32 / 30.0,
+                time: frame as f32 / fps.max(1) as f32,
                 direction_deg: direction_deg.evaluate(frame),
                 wave_type: match wave_type {
                     1 => WaveType::Triangle,
@@ -462,7 +464,7 @@ fn apply_one(
         }
         EffectType::HeatDistortion { strength, speed } => {
             use crate::core::ae_effects_pack_v13::apply_heat_distortion;
-            let time = frame as f32 / 30.0 * speed.evaluate(frame);
+            let time = frame as f32 / fps.max(1) as f32 * speed.evaluate(frame);
             apply_heat_distortion(pixels, width, height, time, strength.evaluate(frame));
         }
         EffectType::RainRipples { drop_count, wave_strength } => {
@@ -602,7 +604,7 @@ fn apply_one(
                 height,
                 num_stars.evaluate(frame).round().clamp(1.0, 2000.0) as u32,
                 depth_speed.evaluate(frame),
-                frame as f32 / 30.0,
+                frame as f32 / fps.max(1) as f32,
             );
         }
         EffectType::LightningArc { start_x, start_y, end_x, end_y, seed, glow } => {
@@ -744,7 +746,7 @@ fn apply_one(
         }
         EffectType::PerlinFlow { scale } => {
             use crate::core::ae_effects_pack_v16::apply_perlin_flow_noise;
-            apply_perlin_flow_noise(pixels, width, height, frame as f32 / 30.0, scale.evaluate(frame).max(0.01));
+            apply_perlin_flow_noise(pixels, width, height, frame as f32 / fps.max(1) as f32, scale.evaluate(frame).max(0.01));
         }
         EffectType::FbmTurbulence { octaves, amplitude } => {
             use crate::core::ae_effects_pack_v18::apply_fbm_turbulence;
@@ -754,7 +756,7 @@ fn apply_one(
                 height,
                 octaves.evaluate(frame).round().clamp(1.0, 8.0) as u32,
                 amplitude.evaluate(frame),
-                frame as f32 / 30.0,
+                frame as f32 / fps.max(1) as f32,
             );
         }
     }
@@ -785,7 +787,7 @@ mod tests {
         apply_layer_effects(
             &mut px, 4, 4,
             &[effect("inv", EffectType::Invert { invert_alpha: false })],
-            0,
+            0, 30,
         );
         assert_eq!(px[0], 255 - 100);
         assert_eq!(px[1], 255 - before);
@@ -797,7 +799,7 @@ mod tests {
         apply_layer_effects(
             &mut px, 8, 8,
             &[effect("post", EffectType::Posterize { levels: Animatable::new_constant(2.0) })],
-            0,
+            0, 30,
         );
         // With 2 levels, each channel becomes either 0 or 255.
         for &c in &[px[0], px[1], px[2]] {
@@ -811,7 +813,7 @@ mod tests {
         apply_layer_effects(
             &mut px, 8, 8,
             &[effect("thr", EffectType::Threshold { threshold: Animatable::new_constant(128.0) })],
-            0,
+            0, 30,
         );
         for p in px.chunks_exact(4) {
             let luma = (p[0] as u32 * 299 + p[1] as u32 * 587 + p[2] as u32 * 114) / 1000;
@@ -834,6 +836,7 @@ mod tests {
             &mut px, 8, 8,
             &[effect("blur", EffectType::GaussianBlur { blur_radius: Animatable::new_constant(3.0) })],
             0,
+        30,
         );
         // Center stays bright, a near neighbor should now be non-zero (spread).
         assert!(px[cx] > 0);
@@ -846,7 +849,7 @@ mod tests {
         let mut px = solid_layer(4, 4, 100, 100, 100);
         let mut eff = effect("inv", EffectType::Invert { invert_alpha: false });
         eff.enabled = false;
-        apply_layer_effects(&mut px, 4, 4, &[eff], 0);
+        apply_layer_effects(&mut px, 4, 4, &[eff], 0, 30);
         assert_eq!(px[0], 100);
     }
 
@@ -866,6 +869,7 @@ mod tests {
                 shift_y: Animatable::new_constant(0.0),
             })],
             0,
+        30,
         );
         // After toroidal shift right by 2, red pixel moved from (4,4) to (6,4).
         let new_idx = ((4 * 8 + 6) * 4) as usize;
@@ -881,6 +885,7 @@ mod tests {
             &mut gray, 4, 4,
             &[effect("vib", EffectType::Vibrance { amount: Animatable::new_constant(100.0) })],
             0,
+        30,
         );
         assert_eq!(
             (gray[0], gray[1], gray[2]),
@@ -894,6 +899,7 @@ mod tests {
             &mut colored, 4, 4,
             &[effect("vib", EffectType::Vibrance { amount: Animatable::new_constant(80.0) })],
             0,
+        30,
         );
         assert_ne!(&colored[0..3], &before[0..3], "chroma must shift under vibrance");
     }
@@ -908,6 +914,7 @@ mod tests {
                 tint: Animatable::new_constant(0.0),
             })],
             0,
+        30,
         );
         assert!(warm[0] > warm[2], "positive temperature must push R above B");
 
@@ -919,6 +926,7 @@ mod tests {
                 tint: Animatable::new_constant(0.0),
             })],
             0,
+        30,
         );
         assert!(cool[2] > cool[0], "negative temperature must push B above R");
     }
@@ -935,6 +943,7 @@ mod tests {
                 lightness: Animatable::new_constant(0.0),
             })],
             0,
+        30,
         );
         assert_eq!(px, before, "neutral HSL must be a no-op");
 
@@ -947,6 +956,7 @@ mod tests {
                 lightness: Animatable::new_constant(0.0),
             })],
             0,
+        30,
         );
         assert!(red[0] < red[1].max(red[2]), "180° rotation must move red toward cyan");
     }
@@ -967,6 +977,7 @@ mod tests {
                 intensity: Animatable::new_constant(1.5),
             })],
             0,
+        30,
         );
         let neighbor = ((4 * 8 + 6) * 4) as usize;
         assert!(px[neighbor] > 0, "glow did not bleed to neighbor pixel");
@@ -981,6 +992,7 @@ mod tests {
                 intensity: Animatable::new_constant(0.0),
             })],
             0,
+        30,
         );
         assert_eq!(idle, before, "zero-intensity glow must be a no-op");
     }
@@ -998,6 +1010,7 @@ mod tests {
                 speed: Animatable::new_constant(1.0),
             })],
             0,
+        30,
         );
         assert_eq!(px, base, "zero-strength heat must be a no-op");
 
@@ -1009,6 +1022,7 @@ mod tests {
                 angle_deg: Animatable::new_constant(0.0),
             })],
             0,
+        30,
         );
         assert_eq!(px, base, "zero-angle vortex must be a no-op");
 
@@ -1021,6 +1035,7 @@ mod tests {
                 intensity: Animatable::new_constant(0.5),
             })],
             0,
+        30,
         );
         let row0 = (px[0] as u32 + px[4] as u32) / 2;
         let row1 = (px[32] as u32 + px[36] as u32) / 2;
@@ -1037,6 +1052,7 @@ mod tests {
             &mut px, 8, 8,
             &[effect("fish", EffectType::Fisheye { strength: Animatable::new_constant(0.0) })],
             0,
+        30,
         );
         assert_eq!(px, base, "zero-strength fisheye must be a no-op");
 
@@ -1048,6 +1064,7 @@ mod tests {
                 k2: Animatable::new_constant(0.0),
             })],
             0,
+        30,
         );
         assert_eq!(px, base, "k1=k2=0 lens correction must be identity");
 
@@ -1059,6 +1076,7 @@ mod tests {
                 amount: Animatable::new_constant(0.0),
             })],
             0,
+        30,
         );
         assert_eq!(px, base, "zero-amount glitch must be a no-op");
     }
@@ -1083,6 +1101,7 @@ mod tests {
                 expand: false,
             })],
             0,
+        30,
         );
         let corner = (8 + 1) * 4;
         assert_eq!(px[corner + 3], 0, "choke must erode the alpha corner");
@@ -1096,6 +1115,7 @@ mod tests {
                 expand: true,
             })],
             0,
+        30,
         );
         assert_eq!(px[(8 * 4) + 3], 255, "spread must dilate alpha outward");
 
@@ -1107,6 +1127,7 @@ mod tests {
             &mut px, 2, 1,
             &[effect("luma", EffectType::AlphaFromLuminance { invert: false })],
             0,
+        30,
         );
         assert_eq!(px[3], 255, "white luma must become full alpha");
         assert_eq!(px[7], 0, "black luma must become zero alpha");
@@ -1118,6 +1139,7 @@ mod tests {
             &mut px, 2, 1,
             &[effect("lumainv", EffectType::AlphaFromLuminance { invert: true })],
             0,
+        30,
         );
         assert_eq!(px[3], 0, "inverted white must become transparent");
         assert_eq!(px[7], 255, "inverted black must become opaque");
@@ -1131,6 +1153,7 @@ mod tests {
             &mut px, 4, 4,
             &[effect("nv", EffectType::NightVision { amplification: Animatable::new_constant(2.0) })],
             0,
+        30,
         );
         for p in px.chunks_exact(4) {
             assert!(p[1] >= p[0] && p[1] >= p[2], "green channel must dominate");
@@ -1141,6 +1164,7 @@ mod tests {
             &mut again, 4, 4,
             &[effect("nv", EffectType::NightVision { amplification: Animatable::new_constant(2.0) })],
             0,
+        30,
         );
         assert_eq!(px, again, "night vision must be deterministic per frame");
 
@@ -1151,6 +1175,7 @@ mod tests {
             &mut px, 8, 8,
             &[effect("iris", EffectType::IrisWipe { completion: Animatable::new_constant(0.0) })],
             0,
+        30,
         );
         assert_eq!(px, base, "0% iris wipe must be a no-op");
 
@@ -1160,6 +1185,7 @@ mod tests {
             &mut px, 8, 8,
             &[effect("rad", EffectType::RadialWipe { completion: Animatable::new_constant(0.0) })],
             0,
+        30,
         );
         assert_eq!(px, base, "0% radial wipe must be a no-op");
     }
@@ -1179,6 +1205,7 @@ mod tests {
                 hue_shift_deg: Animatable::new_constant(0.0),
             })],
             0,
+        30,
         );
         for (out, inp) in px.chunks_exact(4).zip(base.chunks_exact(4)) {
             assert!((out[0] as i32 - inp[0] as i32).abs() <= 2, "R drift {}", out[0]);
@@ -1198,6 +1225,7 @@ mod tests {
                 weight: Animatable::new_constant(0.0),
             })],
             0,
+        30,
         );
         assert_eq!(px, base, "zero-weight god rays must be a no-op");
 
@@ -1207,6 +1235,7 @@ mod tests {
             &mut px, 8, 8,
             &[effect("zb", EffectType::RadialBlurZoom { amount: Animatable::new_constant(0.0) })],
             0,
+        30,
         );
         assert_eq!(px, base, "zero-amount zoom blur must be a no-op");
 
@@ -1216,6 +1245,7 @@ mod tests {
             &mut px, 16, 16,
             &[effect("zb", EffectType::RadialBlurZoom { amount: Animatable::new_constant(40.0) })],
             0,
+        30,
         );
         let center = ((8 * 16 + 8) * 4) as usize;
         assert!(px[center] > 0, "zoom blur keeps centre bright");
@@ -1230,6 +1260,7 @@ mod tests {
             &mut px, 8, 8,
             &[effect("med", EffectType::MedianFilter { radius: Animatable::new_constant(2.0) })],
             0,
+        30,
         );
         assert_eq!(px, base, "median of uniform image is identity");
 
@@ -1242,6 +1273,7 @@ mod tests {
                 block_h: Animatable::new_constant(1.0),
             })],
             0,
+        30,
         );
         assert_eq!(px, base, "1x1 mosaic is identity");
 
@@ -1252,6 +1284,7 @@ mod tests {
             &mut px, 8, 8,
             &[effect("sobel", EffectType::SobelEdges { invert: false })],
             0,
+        30,
         );
         for y in 1..7usize {
             for x in 1..7usize {
@@ -1271,6 +1304,7 @@ mod tests {
             &mut px, 8, 8,
             &[effect("fire", EffectType::FireAutomaton { intensity: Animatable::new_constant(0.0) })],
             0,
+        30,
         );
         assert_eq!(px, base, "zero-intensity fire must be a no-op");
 
@@ -1284,6 +1318,7 @@ mod tests {
                     depth_speed: Animatable::new_constant(1.0),
                 })],
                 5,
+            30,
             );
             px
         };
@@ -1303,6 +1338,7 @@ mod tests {
                     glow: Animatable::new_constant(1.0),
                 })],
                 7,
+            30,
             );
             px
         };
@@ -1321,6 +1357,7 @@ mod tests {
             &mut px, 8, 8,
             &[effect("sol", EffectType::Solarize { threshold: Animatable::new_constant(255.0) })],
             0,
+        30,
         );
         assert_eq!(px, base, "solarize above all values must be a no-op");
 
@@ -1334,6 +1371,7 @@ mod tests {
                 invert: false,
             })],
             0,
+        30,
         );
         assert_eq!(px[3], 0, "in-band pixel must key to transparent");
 
@@ -1347,6 +1385,7 @@ mod tests {
                 invert: true,
             })],
             0,
+        30,
         );
         assert_eq!(px[3], 0, "out-of-band pixel must key when inverted");
     }
@@ -1363,6 +1402,7 @@ mod tests {
                 amount: Animatable::new_constant(0.0),
             })],
             0,
+        30,
         );
         assert_eq!(px, base, "zero-amount pinch/punch must be a no-op");
 
@@ -1374,6 +1414,7 @@ mod tests {
                 seed: Animatable::new_constant(1.0),
             })],
             0,
+        30,
         );
         assert_eq!(px, base, "zero-jitter scanline glitch must be a no-op");
 
@@ -1385,6 +1426,7 @@ mod tests {
                 strength: Animatable::new_constant(0.0),
             })],
             0,
+        30,
         );
         assert_eq!(px, base, "zero-strength directional sharpen must be a no-op");
     }
@@ -1403,6 +1445,7 @@ mod tests {
                 high_color: Animatable::new_constant([1.0, 0.0, 0.0]),
             })],
             0,
+        30,
         );
         for p in px.chunks_exact(4) {
             assert_eq!(p[0], 255, "flat gradient map R");
@@ -1420,6 +1463,7 @@ mod tests {
                 intensity: Animatable::new_constant(0.0),
             })],
             0,
+        30,
         );
         assert_eq!(px, base, "zero-intensity light leak must be a no-op");
     }
@@ -1438,13 +1482,14 @@ mod tests {
                 opacity: Animatable::new_constant(0.0),
             })],
             0,
+        30,
         );
         assert_eq!(px, base, "zero-opacity reflection must be a no-op");
 
         // Perlin flow and FBM turbulence are deterministic per frame.
         let run = |et: EffectType| {
             let mut px = base.clone();
-            apply_layer_effects(&mut px, 8, 8, &[effect("gen", et)], 3);
+            apply_layer_effects(&mut px, 8, 8, &[effect("gen", et)], 3, 30);
             px
         };
         let p1 = run(EffectType::PerlinFlow { scale: Animatable::new_constant(4.0) });

@@ -73,7 +73,7 @@ fn render_precomp_layers_inner(_comp: &Composition, precomp_comp: &Composition, 
 
         if matches!(layer.layer_type, LayerType::AdjustmentLayer) {
             if !layer.effects.is_empty() {
-                crate::core::cpu_effects::apply_layer_effects(&mut buffer, width, height, &layer.effects, effective_frame);
+                crate::core::cpu_effects::apply_layer_effects(&mut buffer, width, height, &layer.effects, effective_frame, precomp_comp.fps);
             }
             continue;
         }
@@ -224,7 +224,7 @@ fn render_precomp_layers_inner(_comp: &Composition, precomp_comp: &Composition, 
             }
         }
 
-        crate::core::cpu_effects::apply_layer_effects(&mut layer_buf, bw, bh, &layer.effects, effective_frame);
+        crate::core::cpu_effects::apply_layer_effects(&mut layer_buf, bw, bh, &layer.effects, effective_frame, precomp_comp.fps);
 
         // Composite onto buffer
         for ly in 0..bh {
@@ -566,7 +566,7 @@ pub fn render_frame_to_pixels(comp: &Composition, frame: u32, width: u32, height
                 let mut mask_inverted = false;
                 for mask in &layer.masks {
                     if mask.enabled && mask.mode != crate::core::mask::MaskMode::None {
-                        mask_vertices = mask.path.to_polygon(frame, 16);
+                        mask_vertices = wiggle_polygon(mask, mask.path.to_polygon(frame, 16), frame as f32 / comp.fps.max(1) as f32);
                         mask_feather = mask.feather.evaluate(frame);
                         mask_inverted = mask.inverted;
                         break;
@@ -618,7 +618,7 @@ pub fn render_frame_to_pixels(comp: &Composition, frame: u32, width: u32, height
         // Adjustment Layer: apply effects to the composite below
         if matches!(layer.layer_type, LayerType::AdjustmentLayer) {
             if !layer.effects.is_empty() {
-                crate::core::cpu_effects::apply_layer_effects(&mut buffer, width, height, &layer.effects, effective_frame);
+                crate::core::cpu_effects::apply_layer_effects(&mut buffer, width, height, &layer.effects, effective_frame, comp.fps);
             }
             layer_idx += 1;
             continue;
@@ -768,7 +768,7 @@ pub fn render_frame_to_pixels(comp: &Composition, frame: u32, width: u32, height
             ps.render(&mut buffer, width, height, effective_frame as f32 * dt);
 
             // Apply the layer's CPU effect stack to the full frame
-            crate::core::cpu_effects::apply_layer_effects(&mut buffer, width, height, &layer.effects, effective_frame);
+            crate::core::cpu_effects::apply_layer_effects(&mut buffer, width, height, &layer.effects, effective_frame, comp.fps);
             continue;
         }
 
@@ -1143,7 +1143,7 @@ pub fn render_frame_to_pixels(comp: &Composition, frame: u32, width: u32, height
         }
 
         // Phase 2: apply the layer's CPU effect stack.
-        crate::core::cpu_effects::apply_layer_effects(&mut layer_buf, bw, bh, &layer.effects, effective_frame);
+        crate::core::cpu_effects::apply_layer_effects(&mut layer_buf, bw, bh, &layer.effects, effective_frame, comp.fps);
 
         // Phase 2.5: velocity-based motion blur (AE-style shutter angle).
         // Computes the layer's positional velocity across neighboring frames and
@@ -1499,6 +1499,20 @@ fn fract(x: f32) -> f32 {
 }
 
 /// Calculate the shortest distance from point (px, py) to the polygon boundary.
+/// Apply optional Wiggle Paths deformation to a sampled mask polygon.
+fn wiggle_polygon(mask: &crate::core::mask::Mask, pts: Vec<[f32; 2]>, time_sec: f32) -> Vec<[f32; 2]> {
+    match &mask.wiggle {
+        Some(w) if w.size > 0.001 && pts.len() >= 3 => {
+            let verts: Vec<crate::core::mask::MaskVertex> = pts.iter()
+                .map(|p| crate::core::mask::MaskVertex::new(p[0], p[1]))
+                .collect();
+            crate::core::wiggle_paths::apply_wiggle_paths(&verts, time_sec, w)
+                .into_iter().map(|v| v.position).collect()
+        }
+        _ => pts,
+    }
+}
+
 fn distance_to_polygon(px: f32, py: f32, verts: &[[f32; 2]]) -> f32 {
     let mut min_dist = f32::INFINITY;
     let n = verts.len();
@@ -1918,7 +1932,7 @@ mod tests {
             enabled: true,
         }];
 
-        cpu_effects::apply_layer_effects(&mut buf, 16, 16, &effects, 0);
+        cpu_effects::apply_layer_effects(&mut buf, 16, 16, &effects, 0, 30);
 
         // The twirl should have moved the red pixel away from (8,10).
         let orig_val = ((px_y * 16 + px_x) * 4) as usize;
