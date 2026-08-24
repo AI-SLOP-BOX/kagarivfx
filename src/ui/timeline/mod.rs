@@ -1038,6 +1038,21 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                                 if body_resp.dragged() {
                                     let delta_frames =
                                         (body_resp.drag_delta().x / bar_rect.width() * zoom_span as f32).round() as i32;
+                                    // ── Vertical drag → reorder layers in stack ──
+                                    let row_h = 26.0f32;
+                                    let y_delta_key = egui::Id::new(("body_y_accum", i, layer.id.as_str()));
+                                    let y_accum: f32 = ui.ctx().data_mut(|d| *d.get_temp_mut_or_insert_with(y_delta_key, || 0.0f32));
+                                    let new_accum = y_accum + body_resp.drag_delta().y;
+                                    let row_offset = (new_accum / row_h).trunc() as i32;
+                                    if row_offset != 0 {
+                                        let target = (i as i32 - row_offset).clamp(0, layers_len as i32 - 1) as usize;
+                                        if target != i {
+                                            swap_request = Some((i, target));
+                                        }
+                                        ui.ctx().data_mut(|d| d.insert_temp(y_delta_key, new_accum - row_offset as f32 * row_h));
+                                    } else {
+                                        ui.ctx().data_mut(|d| d.insert_temp(y_delta_key, new_accum));
+                                    }
                                     if delta_frames != 0 {
                                         let alt_held = ui.input(|inp| inp.modifiers.alt);
                                         if alt_held {
