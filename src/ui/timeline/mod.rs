@@ -1072,22 +1072,43 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                                 {
                                     let t = &mut layer.transform;
                                     let moved = &mut project_changed;
-                                    draw_prop_row_ext(ui, "  ⏱ Position", &pos_kfs, current_frame, start_frame, zoom_span, left_pane_w,
-                                        &prop_sel, "position",
-                                        Some(&mut |old_f, new_f| { move_kf(&mut t.position, old_f, new_f); *moved = true; }),
-                                        Some(&mut |pk, f, shift, cmd| select_requests.push((pk, f, shift, cmd))));
-                                    draw_prop_row_ext(ui, "  ⏱ Scale", &scale_kfs, current_frame, start_frame, zoom_span, left_pane_w,
-                                        &prop_sel, "scale",
-                                        Some(&mut |old_f, new_f| { move_kf(&mut t.scale, old_f, new_f); *moved = true; }),
-                                        Some(&mut |pk, f, shift, cmd| select_requests.push((pk, f, shift, cmd))));
-                                    draw_prop_row_ext(ui, "  ⏱ Rotation", &rot_kfs, current_frame, start_frame, zoom_span, left_pane_w,
-                                        &prop_sel, "rotation",
-                                        Some(&mut |old_f, new_f| { move_kf(&mut t.rotation, old_f, new_f); *moved = true; }),
-                                        Some(&mut |pk, f, shift, cmd| select_requests.push((pk, f, shift, cmd))));
-                                    draw_prop_row_ext(ui, "  ⏱ Opacity", &op_kfs, current_frame, start_frame, zoom_span, left_pane_w,
-                                        &prop_sel, "opacity",
-                                        Some(&mut |old_f, new_f| { move_kf(&mut t.opacity, old_f, new_f); *moved = true; }),
-                                        Some(&mut |pk, f, shift, cmd| select_requests.push((pk, f, shift, cmd))));
+                                    // ── U / UU / A reveal modes (AE parity) ──
+                                    // "Keyframed"   -> only properties that have keyframes
+                                    // "Anchor Point"-> anchor point track only
+                                    // otherwise     -> all four transform rows
+                                    let reveal_mode = app.selected_property.clone().unwrap_or_default();
+                                    let show_transform_rows = reveal_mode != "Anchor Point";
+                                    let kf_only = reveal_mode == "Keyframed";
+
+                                    if show_transform_rows && (!kf_only || !pos_kfs.is_empty()) {
+                                        draw_prop_row_ext(ui, "  ⏱ Position", &pos_kfs, current_frame, start_frame, zoom_span, left_pane_w,
+                                            &prop_sel, "position",
+                                            Some(&mut |old_f, new_f| { move_kf(&mut t.position, old_f, new_f); *moved = true; }),
+                                            Some(&mut |pk, f, shift, cmd| select_requests.push((pk, f, shift, cmd))));
+                                    }
+                                    if show_transform_rows && (!kf_only || !scale_kfs.is_empty()) {
+                                        draw_prop_row_ext(ui, "  ⏱ Scale", &scale_kfs, current_frame, start_frame, zoom_span, left_pane_w,
+                                            &prop_sel, "scale",
+                                            Some(&mut |old_f, new_f| { move_kf(&mut t.scale, old_f, new_f); *moved = true; }),
+                                            Some(&mut |pk, f, shift, cmd| select_requests.push((pk, f, shift, cmd))));
+                                    }
+                                    if show_transform_rows && (!kf_only || !rot_kfs.is_empty()) {
+                                        draw_prop_row_ext(ui, "  ⏱ Rotation", &rot_kfs, current_frame, start_frame, zoom_span, left_pane_w,
+                                            &prop_sel, "rotation",
+                                            Some(&mut |old_f, new_f| { move_kf(&mut t.rotation, old_f, new_f); *moved = true; }),
+                                            Some(&mut |pk, f, shift, cmd| select_requests.push((pk, f, shift, cmd))));
+                                    }
+                                    if show_transform_rows && (!kf_only || !op_kfs.is_empty()) {
+                                        draw_prop_row_ext(ui, "  ⏱ Opacity", &op_kfs, current_frame, start_frame, zoom_span, left_pane_w,
+                                            &prop_sel, "opacity",
+                                            Some(&mut |old_f, new_f| { move_kf(&mut t.opacity, old_f, new_f); *moved = true; }),
+                                            Some(&mut |pk, f, shift, cmd| select_requests.push((pk, f, shift, cmd))));
+                                    }
+                                    if reveal_mode == "Anchor Point" {
+                                        let ap_kfs = get_kfs(&t.anchor_point);
+                                        draw_prop_row(ui, "  ⏱ Anchor Point", &ap_kfs, current_frame, start_frame, zoom_span, left_pane_w,
+                                            Some(&mut |old_f, new_f| { move_kf(&mut t.anchor_point, old_f, new_f); *moved = true; }));
+                                    }
                                 }
 
                                 for (pk, f, shift, cmd) in select_requests {
