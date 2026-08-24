@@ -240,6 +240,8 @@ pub struct AfterEffectsApp {
     pub active_tool: crate::ui::toolbar::ActiveTool,
     pub viewport_drag_state: Option<(usize, [f32; 2], eframe::egui::Pos2)>,
     pub viewport_mask_drag_state: Option<(usize, usize, usize, [f32; 2], eframe::egui::Pos2)>,
+    /// Corner-handle scale drag: (layer_idx, start_scale, start_pointer_distance)
+    pub viewport_scale_drag: Option<(usize, [f32; 2], f32)>,
     pub selected_property: Option<String>,
     pub show_export_dialog: bool,
     pub export_status: Option<String>,
@@ -374,6 +376,7 @@ impl Default for AfterEffectsApp {
             active_tool: crate::ui::toolbar::ActiveTool::default(),
             viewport_drag_state: None,
             viewport_mask_drag_state: None,
+            viewport_scale_drag: None,
             selected_property: None,
             show_export_dialog: false,
             export_status: None,

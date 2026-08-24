@@ -389,8 +389,41 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: u32) 
                 } else {
                     app.viewport_mask_drag_state = None;
 
+                    // 1b. Corner handles of the selected layer → scale drag (Selection tool)
+                    use crate::ui::toolbar::ActiveTool;
+                    let mut scale_hit = false;
+                    if app.active_tool == ActiveTool::Selection {
+                        if let Some(sel) = app.selected_layer_idx {
+                            if sel < comp_state.layers.len() && !comp_state.layers[sel].locked {
+                                let l = &comp_state.layers[sel];
+                                if l.is_active(current_frame) {
+                                    let pos = l.transform.position.evaluate(current_frame);
+                                    let scl = l.transform.scale.evaluate(current_frame);
+                                    let cx = origin_x + (pos[0] / comp_w) * draw_w;
+                                    let cy = origin_y + (pos[1] / comp_h) * draw_h;
+                                    let sxw = (scl[0].abs() * 0.6) / comp_w * draw_w;
+                                    let syh = (scl[1].abs() * 0.6) / comp_h * draw_h;
+                                    for hx in [cx - sxw, cx + sxw] {
+                                        for hy in [cy - syh, cy + syh] {
+                                            let d2 = (pointer_pos.x - hx).powi(2) + (pointer_pos.y - hy).powi(2);
+                                            if d2 <= 100.0 {
+                                                let dist = ((pointer_pos.x - cx).powi(2) + (pointer_pos.y - cy).powi(2)).sqrt().max(1.0);
+                                                app.viewport_scale_drag = Some((sel, scl, dist));
+                                                app.viewport_drag_state = None;
+                                                scale_hit = true;
+                                                break;
+                                            }
+                                        }
+                                        if scale_hit { break; }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
                     // 2. Fallback to Layer translation/rotation drag
-                    let mut hit_idx: Option<usize> = None;
+                    if !scale_hit {
+                        let mut hit_idx: Option<usize> = None;
                     for (i, layer) in comp_state.layers.iter().enumerate().rev() {
                         let l: &Layer = layer;
                         if !l.is_active(current_frame) || l.locked { continue; }
@@ -410,6 +443,7 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: u32) 
                     } else {
                         app.viewport_drag_state = None;
                     }
+                    }
                 }
             }
 
@@ -428,6 +462,35 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: u32) 
                                 start_vertex_pos[1] + delta_y,
                             ];
                             mask.path.set_vertex_at_frame(current_frame, v_idx, new_pos);
+                        }
+                    }
+                } else if let Some((drag_idx, start_scale, start_dist)) = app.viewport_scale_drag {
+                    // Corner-handle scale: distance from layer center drives uniform scale
+                    let comp_state = app.history.current().active_composition();
+                    if drag_idx < comp_state.layers.len() {
+                        let l = &comp_state.layers[drag_idx];
+                        let pos = l.transform.position.evaluate(current_frame);
+                        let cx = origin_x + (pos[0] / comp_w) * draw_w;
+                        let cy = origin_y + (pos[1] / comp_h) * draw_h;
+                        let cur_dist = ((pointer_pos.x - cx).powi(2) + (pointer_pos.y - cy).powi(2)).sqrt().max(1.0);
+                        let factor = (cur_dist / start_dist).clamp(0.05, 50.0);
+                        let new_scl = [start_scale[0] * factor, start_scale[1] * factor];
+
+                        drop(comp_state);
+                        let comp_mut = app.history.current_mut().active_composition_mut();
+                        if drag_idx < comp_mut.layers.len() {
+                            let layer = &mut comp_mut.layers[drag_idx];
+                            match &mut layer.transform.scale {
+                                Animatable::Constant(ref mut s) => *s = new_scl,
+                                Animatable::Animated(ref mut kfs) => {
+                                    if let Some(kf) = kfs.iter_mut().find(|k| k.frame == current_frame) {
+                                        kf.value = new_scl;
+                                    } else {
+                                        kfs.push(crate::core::keyframe::Keyframe::new(current_frame, new_scl, crate::core::keyframe::InterpolationType::Linear));
+                                        kfs.sort_by_key(|k| k.frame);
+                                    }
+                                }
+                            }
                         }
                     }
                 } else if let Some((drag_idx, start_pos, start_ptr)) = app.viewport_drag_state {
@@ -500,13 +563,50 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: u32) 
 
             if viewport_response.drag_stopped() {
                 let was_dragging = app.viewport_drag_state.is_some()
-                    || app.viewport_mask_drag_state.is_some();
+                    || app.viewport_mask_drag_state.is_some()
+                    || app.viewport_scale_drag.is_some();
                 if was_dragging {
                     // Commit the single Undo entry for the entire drag gesture
                     app.commit_drag();
                 }
                 app.viewport_drag_state = None;
                 app.viewport_mask_drag_state = None;
+                app.viewport_scale_drag = None;
+            }
+        }
+
+        // ── Selected-layer transform box + corner scale handles (Selection tool) ──
+        if app.show_handles && app.active_tool == crate::ui::toolbar::ActiveTool::Selection {
+            if let Some(sel) = app.selected_layer_idx {
+                let comp_state = app.history.current().active_composition();
+                if sel < comp_state.layers.len() {
+                    let l = &comp_state.layers[sel];
+                    if l.is_active(current_frame) {
+                        let pos = l.transform.position.evaluate(current_frame);
+                        let scl = l.transform.scale.evaluate(current_frame);
+                        let cx = origin_x + (pos[0] / comp_w) * draw_w;
+                        let cy = origin_y + (pos[1] / comp_h) * draw_h;
+                        let sxw = (scl[0].abs() * 0.6) / comp_w * draw_w;
+                        let syh = (scl[1].abs() * 0.6) / comp_h * draw_h;
+                        let box_rect = egui::Rect::from_min_size(
+                            egui::pos2(cx - sxw, cy - syh),
+                            egui::vec2(sxw * 2.0, syh * 2.0),
+                        );
+                        let painter = ui.painter();
+                        let box_stroke = egui::Stroke::new(1.0, crate::ui::theme::colors::HANDLE_NORMAL);
+                        // Edges
+                        painter.rect_stroke(box_rect, 0.0, box_stroke);
+                        // Corner squares (scale handles)
+                        let handle_fill = crate::ui::theme::colors::ACCENT_BLUE;
+                        for hx in [box_rect.left(), box_rect.right()] {
+                            for hy in [box_rect.top(), box_rect.bottom()] {
+                                let hr = egui::Rect::from_center_size(egui::pos2(hx, hy), egui::vec2(7.0, 7.0));
+                                painter.rect_filled(hr, 1.5, handle_fill);
+                                painter.rect_stroke(hr, 1.5, egui::Stroke::new(1.0, egui::Color32::BLACK));
+                            }
+                        }
+                    }
+                }
             }
         }
 
