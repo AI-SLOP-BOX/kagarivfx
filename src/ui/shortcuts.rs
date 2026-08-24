@@ -352,6 +352,44 @@ pub fn handle_global_shortcuts(
                     "opacity" => t.opacity.keyframes()
                         .and_then(|k| k.iter().find(|k| k.frame == frame))
                         .and_then(|k| serde_json::to_value(k).ok()),
+                    _ if pk.starts_with("fx_") => {
+                        // Effect keyframe: find the effect + param and serialize
+                        let parts: Vec<&str> = pk.strip_prefix("fx_").unwrap_or("").splitn(2, '_').collect();
+                        if parts.len() == 2 {
+                            let fx_name = parts[0];
+                            let param_label = parts[1];
+                            if let Some(effect) = comp.effects.iter().find(|e| e.name == fx_name) {
+                                use crate::core::effect_params::ParamRefRef;
+                                let mut found_json = None;
+                                for (label, param) in effect.effect_type.animatable_params_ref() {
+                                    if label == param_label {
+                                        match param {
+                                            ParamRefRef::Scalar(anim) => {
+                                                if let Some(kfs) = anim.keyframes() {
+                                                    found_json = kfs.iter().find(|k| k.frame == frame)
+                                                        .and_then(|k| serde_json::to_value(k).ok());
+                                                }
+                                            }
+                                            ParamRefRef::Vec2(anim) => {
+                                                if let Some(kfs) = anim.keyframes() {
+                                                    found_json = kfs.iter().find(|k| k.frame == frame)
+                                                        .and_then(|k| serde_json::to_value(k).ok());
+                                                }
+                                            }
+                                            ParamRefRef::Vec4Color(anim) => {
+                                                if let Some(kfs) = anim.keyframes() {
+                                                    found_json = kfs.iter().find(|k| k.frame == frame)
+                                                        .and_then(|k| serde_json::to_value(k).ok());
+                                                }
+                                            }
+                                        }
+                                        break;
+                                    }
+                                }
+                                found_json
+                            } else { None }
+                        } else { None }
+                    }
                     _ => None,
                 };
                 if let Some(v) = kf_json {
@@ -392,6 +430,34 @@ pub fn handle_global_shortcuts(
                     "scale" => paste_into!(t.scale, [f32; 2], value_json),
                     "rotation" => paste_into!(t.rotation, f32, value_json),
                     "opacity" => paste_into!(t.opacity, f32, value_json),
+                    _ if pk.starts_with("fx_") => {
+                        // Paste into effect param
+                        let stripped = pk.strip_prefix("fx_").unwrap_or("");
+                        let parts: Vec<&str> = stripped.splitn(2, '_').collect();
+                        if parts.len() == 2 {
+                            let fx_name = parts[0];
+                            let param_label = parts[1];
+                            if let Some(effect) = layer.effects.iter_mut().find(|e| e.name == fx_name) {
+                                use crate::core::effect_params::ParamRef;
+                                for (label, param) in effect.effect_type.animatable_params() {
+                                    if label == param_label {
+                                        match param {
+                                            ParamRef::Scalar(anim) => {
+                                                paste_into!(anim, f32, value_json);
+                                            }
+                                            ParamRef::Vec2(anim) => {
+                                                paste_into!(anim, [f32; 2], value_json);
+                                            }
+                                            ParamRef::Vec4Color(anim) => {
+                                                paste_into!(anim, [f32; 4], value_json);
+                                            }
+                                        }
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                    }
                     _ => {}
                 }
             }

@@ -1372,7 +1372,6 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                             let rot_kfs = get_kfs(&layer.transform.rotation);
                             let op_kfs = get_kfs(&layer.transform.opacity);
 
-                            {
                                 // Keyframes selected for this layer: (prop_key, frame)
                                 let prop_sel: std::collections::HashSet<(String, u32)> = app
                                     .selected_keyframes
@@ -1387,6 +1386,23 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                                 // Right-click menu commands: (prop_key, frame, action)
                                 // 0=Linear 1=EasyEase 2=ToggleHold 3=TimeReverse 4=Delete
                                 let mut kf_menu_cmds: Vec<(&'static str, u32, u8)> = Vec::new();
+
+                                macro_rules! kf_menu_cb {
+                                    () => {
+                                        Some(&mut |_pk: &'static str, f: u32, resp: &egui::Response| {
+                                            resp.context_menu(|ui| {
+                                                ui.set_min_width(190.0);
+                                                if ui.button("⬤ Linear Interpolation").clicked() { kf_menu_cmds.push((_pk, f, 0)); ui.close_menu(); }
+                                                if ui.button("◆ Easy Ease (F9)").clicked() { kf_menu_cmds.push((_pk, f, 1)); ui.close_menu(); }
+                                                if ui.button("⬛ Toggle Hold Keyframe").clicked() { kf_menu_cmds.push((_pk, f, 2)); ui.close_menu(); }
+                                                ui.separator();
+                                                if ui.button("⇄ Time-Reverse Keyframes").clicked() { kf_menu_cmds.push((_pk, f, 3)); ui.close_menu(); }
+                                                if ui.button("🗑 Delete Keyframe (Del)").clicked() { kf_menu_cmds.push((_pk, f, 4)); ui.close_menu(); }
+                                            });
+                                        })
+                                    };
+                                }
+
                                 // Marquee box-select results: (prop_key, boxed frames)
                                 let mut box_selects: Vec<(&'static str, Vec<u32>)> = Vec::new();
                                 // Group keyframe moves: (prop_key, dragged_frame, delta)
@@ -1402,22 +1418,6 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                                     let reveal_mode = app.selected_property.clone().unwrap_or_default();
                                     let show_transform_rows = reveal_mode != "Anchor Point";
                                     let kf_only = reveal_mode == "Keyframed";
-
-                                    macro_rules! kf_menu_cb {
-                                        () => {
-                                            Some(&mut |_pk: &'static str, f: u32, resp: &egui::Response| {
-                                                resp.context_menu(|ui| {
-                                                    ui.set_min_width(190.0);
-                                                    if ui.button("⬤ Linear Interpolation").clicked() { kf_menu_cmds.push((_pk, f, 0)); ui.close_menu(); }
-                                                    if ui.button("◆ Easy Ease (F9)").clicked() { kf_menu_cmds.push((_pk, f, 1)); ui.close_menu(); }
-                                                    if ui.button("⬛ Toggle Hold Keyframe").clicked() { kf_menu_cmds.push((_pk, f, 2)); ui.close_menu(); }
-                                                    ui.separator();
-                                                    if ui.button("⇄ Time-Reverse Keyframes").clicked() { kf_menu_cmds.push((_pk, f, 3)); ui.close_menu(); }
-                                                    if ui.button("🗑 Delete Keyframe (Del)").clicked() { kf_menu_cmds.push((_pk, f, 4)); ui.close_menu(); }
-                                                });
-                                            })
-                                        };
-                                    }
 
                                     if show_transform_rows && (!kf_only || !pos_kfs.is_empty()) {
                                         draw_prop_row_ext(ui, "  ⏱ Position", &pos_kfs, current_frame, start_frame, zoom_span, left_pane_w,
@@ -1583,7 +1583,6 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                                     }
                                     project_changed = false; // selection alone is not a project edit
                                 }
-                            }
 
                             // ── Time Remap row (when enabled) ──
                             if let Some(remap) = layer.time_remap.as_mut() {
