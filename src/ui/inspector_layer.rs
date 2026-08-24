@@ -301,6 +301,32 @@ pub fn draw_layer_transforms(
             }
         });
 
+        // 🏷 Label Color picker (AE standard track color)
+        ui.collapsing("🏷 Label Color", |ui| {
+            ui.horizontal(|ui| {
+                use crate::core::timeline::LabelColor;
+                for color in [
+                    LabelColor::None, LabelColor::Red, LabelColor::Yellow,
+                    LabelColor::Aqua, LabelColor::Pink, LabelColor::Lavender,
+                    LabelColor::Peach, LabelColor::Sea, LabelColor::Blue,
+                    LabelColor::Purple,
+                ] {
+                    let rgb = color.to_rgb();
+                    let c32 = egui::Color32::from_rgb(
+                        (rgb[0] * 255.0) as u8, (rgb[1] * 255.0) as u8, (rgb[2] * 255.0) as u8,
+                    );
+                    let btn = ui.add(egui::Button::new("  ").fill(c32).min_size(egui::vec2(18.0, 18.0)));
+                    if btn.clicked() && layer.label != color {
+                        layer.label = color;
+                        *project_changed = true;
+                    }
+                    if layer.label == color {
+                        ui.painter().rect_stroke(btn.rect, 2.0, egui::Stroke::new(2.0, egui::Color32::WHITE));
+                    }
+                }
+            });
+        });
+
         // 🎨 Layer Styles (Drop Shadow & Stroke) UI Controls
         ui.collapsing("🎨 Layer Styles", |ui| {
             let ds = &mut layer.style.drop_shadow;

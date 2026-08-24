@@ -27,7 +27,8 @@ pub fn draw_shortcuts_dialog(app: &mut AfterEffectsApp, ctx: &egui::Context) {
 
                         let shortcuts = [
                             ("Cmd + K / Ctrl + K", "✨ Open Command Palette (Fuzzy Search Everything)"),
-                            ("Tab", "🕸 Toggle Hybrid Node Graph / Timeline Dual View"),
+                            ("Tab / Shift+Tab", "Cycle Selected Layer Down / Up"),
+                            ("0 (Numpad)", "RAM Preview (Force Work Area Pre-Render)"),
                             ("Double-Click Layer", "✏ Open Canvas Inline Quick Numeric Editor"),
                             ("Shift + Drag", "🎯 15° Rotation Snap / Orthogonal Axis Movement"),
                             ("Cmd + Y", "Create New Solid Layer"),

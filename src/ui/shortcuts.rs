@@ -727,6 +727,26 @@ pub fn handle_global_shortcuts(
                 }
             }
         }
+
+        // ── Tab / Shift+Tab → Cycle selected layer down / up (AE parity) ──
+        if allow_single_key && i.key_pressed(Key::Tab) {
+            let count = app.history.current().active_composition().layers.len();
+            if count > 0 {
+                let next = if shift {
+                    app.selected_layer_idx.map_or(count - 1, |i| i.saturating_sub(1))
+                } else {
+                    app.selected_layer_idx.map_or(0, |i| (i + 1).min(count - 1))
+                };
+                app.selected_layer_idx = Some(next);
+                app.selected_layers.clear();
+                app.selected_layers.insert(next);
+            }
+        }
+
+        // ── Numpad 0 → RAM Preview (force work-area pre-render + play) ──
+        if allow_single_key && i.key_pressed(Key::Num0) && !app.is_playing {
+            app.is_playing = true;
+        }
     });
 }
 
