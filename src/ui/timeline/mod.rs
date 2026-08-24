@@ -47,6 +47,8 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
             let mut pending_ripple: Option<(usize, u32, i64)> = None;
             // Double-clicked PreComp layer: comp_id to open
             let mut pending_open_comp: Option<String> = None;
+            // Ruler menu: new comp duration
+            let mut pending_duration: Option<u32> = None;
 
             let mut header_state = header::TimelineHeaderState {
                 is_playing: &mut app.is_playing,
@@ -336,6 +338,31 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                         *current_frame = maybe_snap_frame(raw_f, app.snap_to_keyframes, comp);
                     }
                 }
+
+                // ── Ruler context menu (AE parity) ──
+                ruler_response.context_menu(|ui| {
+                    if ui.button("🔍 Zoom to Work Area").clicked() {
+                        let w_in = app.work_area_in.unwrap_or(0);
+                        let w_out = app.work_area_out.unwrap_or(total_frames).max(w_in + 1);
+                        let span = (w_out - w_in).max(10);
+                        app.timeline_zoom = (total_frames as f32 / span as f32).clamp(0.1, 20.0);
+                        app.timeline_view_start = w_in;
+                        ui.close_menu();
+                    }
+                    if ui.button("⏱ Set Comp Duration to Work Area End").clicked() {
+                        let w_out = app.work_area_out.unwrap_or(total_frames);
+                        if w_out > 0 && w_out <= total_frames {
+                            pending_duration = Some(w_out);
+                            app.toasts.info(format!("Comp duration set to {} frames", w_out));
+                        }
+                        ui.close_menu();
+                    }
+                    if ui.button("↺ Reset Work Area to Full Comp").clicked() {
+                        app.work_area_in = None;
+                        app.work_area_out = None;
+                        ui.close_menu();
+                    }
+                });
 
                 // ⌨️ B / N Keyboard Shortcuts for Work Area In / Out
                 if ui.input(|i| i.key_pressed(egui::Key::B)) {
@@ -1460,6 +1487,12 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                         .collect();
                     project_changed = true;
                 }
+            }
+
+            // ── Ruler menu: apply new comp duration ──
+            if let Some(dur) = pending_duration {
+                temp_project.active_composition_mut().duration_frames = dur;
+                project_changed = true;
             }
 
             // ── Open nested composition on PreComp double-click ──
