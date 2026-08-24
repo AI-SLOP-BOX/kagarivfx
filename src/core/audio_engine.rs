@@ -476,6 +476,51 @@ pub fn mix_audio_sources_for_frame(
     )
 }
 
+/// Energy-based onset (beat) detection over a WAV file.
+/// Returns comp-frame indices where transients occur, sorted & deduped.
+pub fn detect_beat_frames(path: &std::path::Path, total_frames: u32, fps: f32) -> Vec<u32> {
+    let Ok(buf) = AudioBuffer::load_wav(path) else { return Vec::new() };
+    if buf.samples.is_empty() || total_frames == 0 || fps <= 0.0 {
+        return Vec::new();
+    }
+    // ~10 ms hop energy envelope (mono mix)
+    let hop = ((buf.sample_rate as f32 * 0.01) as usize).max(1);
+    let ch = buf.channels.max(1) as usize;
+    let mut energies: Vec<f32> = Vec::with_capacity(buf.samples.len() / hop + 1);
+    let mut i = 0;
+    while i < buf.samples.len() {
+        let end = (i + hop * ch).min(buf.samples.len());
+        let n = ((end - i) / ch).max(1);
+        let sum: f32 = buf.samples[i..end].iter().enumerate().map(|(k, s)| if k % ch == 0 { *s } else { 0.0 }).sum::<f32>()
+            + buf.samples[i..end].iter().enumerate().map(|(k, s)| if k % ch == 1 { *s } else { 0.0 }).sum::<f32>();
+        energies.push((sum / (2.0 * n as f32)).abs());
+        i += hop * ch;
+    }
+    if energies.len() < 3 {
+        return Vec::new();
+    }
+    // Onset = positive energy flux; adaptive threshold from local mean
+    let win = 30usize; // ~0.3 s
+    let mut beats: Vec<u32> = Vec::new();
+    for h in 1..energies.len() {
+        let flux = energies[h] - energies[h - 1];
+        if flux <= 0.0 {
+            continue;
+        }
+        let lo = h.saturating_sub(win);
+        let hi = (h + win).min(energies.len());
+        let local_mean: f32 = energies[lo..hi].iter().sum::<f32>() / (hi - lo) as f32;
+        if flux > local_mean * 1.5 && flux > 0.01 {
+            let sec = h as f32 * 0.01;
+            let frame = (sec * fps).round() as u32;
+            if frame < total_frames && beats.last() != Some(&frame) {
+                beats.push(frame);
+            }
+        }
+    }
+    beats
+}
+
 #[cfg(test)]
 mod multitrack_tests {
     use super::*;
@@ -543,5 +588,65 @@ mod multitrack_tests {
         let _ = Keyframe::new(0, 0.0f32, crate::core::keyframe::InterpolationType::Linear);
 
         let _ = std::fs::remove_dir_all(&dir);
+    }
+}
+
+#[cfg(test)]
+mod beat_tests {
+    use super::*;
+
+    fn write_test_wav(path: &std::path::Path, sr: u32, clicks_at_sec: &[f32]) {
+        let total = (sr as f32 * 2.0) as usize;
+        let mut samples = vec![0i16; total];
+        for &t in clicks_at_sec {
+            let idx = (t * sr as f32) as usize;
+            let click_len = sr as usize / 50;
+            for k in 0..click_len {
+                if idx + k < total {
+                    samples[idx + k] = ((k as f32 / click_len as f32) * 30000.0) as i16;
+                }
+            }
+        }
+        // Minimal 44-byte RIFF/WAVE header, mono 16-bit
+        let data_len = (samples.len() * 2) as u32;
+        let mut bytes: Vec<u8> = Vec::with_capacity(44 + data_len as usize);
+        bytes.extend_from_slice(b"RIFF");
+        bytes.extend_from_slice(&(36 + data_len).to_le_bytes());
+        bytes.extend_from_slice(b"WAVEfmt ");
+        bytes.extend_from_slice(&16u32.to_le_bytes());
+        bytes.extend_from_slice(&1u16.to_le_bytes()); // PCM
+        bytes.extend_from_slice(&1u16.to_le_bytes()); // mono
+        bytes.extend_from_slice(&sr.to_le_bytes());
+        bytes.extend_from_slice(&(sr * 2).to_le_bytes()); // byte rate
+        bytes.extend_from_slice(&2u16.to_le_bytes()); // block align
+        bytes.extend_from_slice(&16u16.to_le_bytes()); // bits
+        bytes.extend_from_slice(b"data");
+        bytes.extend_from_slice(&data_len.to_le_bytes());
+        for s in samples { bytes.extend_from_slice(&s.to_le_bytes()); }
+        std::fs::write(path, bytes).unwrap();
+    }
+
+    #[test]
+    fn test_detect_beat_frames_finds_clicks() {
+        let dir = std::env::temp_dir().join("aevfx_beat_test");
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("clicks.wav");
+        write_test_wav(&path, 44100, &[0.2, 0.8, 1.4]);
+        let beats = detect_beat_frames(&path, 60, 30.0);
+        assert!(beats.contains(&6), "expected onset near frame 6, got {:?}", beats);
+        assert!(beats.contains(&24), "expected onset near frame 24, got {:?}", beats);
+        assert!(beats.len() >= 3 && beats.len() <= 12, "sane beat count, got {:?}", beats);
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn test_detect_beat_frames_silence_is_empty() {
+        let dir = std::env::temp_dir().join("aevfx_beat_test");
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("silence.wav");
+        write_test_wav(&path, 22050, &[]);
+        let beats = detect_beat_frames(&path, 60, 30.0);
+        assert!(beats.is_empty(), "silence should have no beats, got {:?}", beats);
+        let _ = std::fs::remove_file(&path);
     }
 }

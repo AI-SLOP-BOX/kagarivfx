@@ -113,23 +113,44 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                 // Render Timeline Markers & Beat Detection Transients
                 let comp_mut = app.history.current_mut().active_composition_mut();
 
-                // 🥁 Real-time Beat Detection Transients Lines (Every 15 frames simulated beat)
-                let mut beat_interval = 15u32;
-                // Cap transient line count for long comps (~200 lines max).
-                while total_frames / beat_interval > 200 && beat_interval < total_frames.max(1) {
-                    beat_interval *= 2;
-                }
-                let mut beat_frame = 0;
-                while beat_frame <= total_frames {
-                    if total_frames > 0 {
-                        let b_norm = beat_frame as f32 / total_frames as f32;
-                        let bx = bar_rect.left() + b_norm * bar_rect.width();
-                                ui.painter().line_segment(
-                                    [egui::pos2(bx, bar_rect.top()), egui::pos2(bx, bar_rect.bottom())],
-                                    egui::Stroke::new(1.0, colors::ACCENT_YELLOW),
+                // 🥁 Real beat-detection transient lines from the comp's audio
+                // sources (energy-flux onsets, cached per audio file).
+                let audio_paths: Vec<String> = comp_mut.layers.iter().filter_map(|l| match &l.layer_type {
+                    LayerType::Audio { path, .. } => Some(path.clone()),
+                    LayerType::Video { audio_wav: Some(w), .. } => Some(w.clone()),
+                    _ => None,
+                }).collect();
+                let fps_now = comp_mut.fps.max(1) as f32;
+                let mut beat_frames: Vec<u32> = Vec::new();
+                for ap in &audio_paths {
+                    let key = egui::Id::new(("beat_frames", ap.as_str()));
+                    let frames: std::sync::Arc<Vec<u32>> = ui.ctx().data_mut(|d| {
+                        d.get_temp::<std::sync::Arc<Vec<u32>>>(key)
+                            .unwrap_or_else(|| {
+                                let v = crate::core::audio_engine::detect_beat_frames(
+                                    std::path::Path::new(ap), total_frames, fps_now,
                                 );
-                    }
-                    beat_frame += beat_interval;
+                                let arc = std::sync::Arc::new(v);
+                                d.insert_temp(key, arc.clone());
+                                arc
+                            })
+                    });
+                    beat_frames.extend(frames.iter().copied());
+                }
+                beat_frames.sort_unstable();
+                beat_frames.dedup();
+                // Cap drawn lines to keep painter calls bounded (~200)
+                if beat_frames.len() > 200 {
+                    let keep = beat_frames.len() / 200;
+                    beat_frames = beat_frames.into_iter().step_by(keep).collect();
+                }
+                for bf in &beat_frames {
+                    let b_norm = *bf as f32 / total_frames.max(1) as f32;
+                    let bx = bar_rect.left() + b_norm * bar_rect.width();
+                    ui.painter().line_segment(
+                        [egui::pos2(bx, bar_rect.top()), egui::pos2(bx, bar_rect.bottom())],
+                        egui::Stroke::new(1.0, colors::ACCENT_YELLOW),
+                    );
                 }
 
                 for marker in &comp_mut.markers {
