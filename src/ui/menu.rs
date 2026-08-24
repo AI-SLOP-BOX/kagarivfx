@@ -141,6 +141,29 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
                     }
                     ui.close_menu();
                 }
+                if ui.button("Import Image...").clicked() {
+                    if let Some(path) = rfd::FileDialog::new()
+                        .add_filter("Image Files", &["png", "jpg", "jpeg", "bmp", "tga", "webp"])
+                        .pick_file()
+                    {
+                        let src = path.to_string_lossy().to_string();
+                        let name = path.file_stem().map(|s| s.to_string_lossy().to_string())
+                            .unwrap_or_else(|| "image".to_string());
+                        app.modify_project(|p| {
+                            let layer_count = p.compositions.len();
+                            let comp = p.active_composition_mut();
+                            let layer = crate::core::timeline::Layer::new(
+                                format!("img_{}", layer_count),
+                                name.clone(),
+                                crate::core::timeline::LayerType::Image { path: src.clone() },
+                                comp.duration_frames,
+                            );
+                            comp.layers.push(layer);
+                        });
+                        app.toasts.info(format!("Imported image: {}", name));
+                    }
+                    ui.close_menu();
+                }
                 if ui.button("Export MLT XML (Shotcut / Kdenlive)...").clicked() {
                     if let Some(path) = rfd::FileDialog::new()
                         .add_filter("MLT XML", &["xml", "mlt"])
@@ -405,6 +428,84 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
                         ui.close_menu();
                     }
                 });
+                ui.menu_button("Arrange", |ui| {
+                    let len = app.history.current().active_composition().layers.len();
+                    let Some(i) = app.selected_layer_idx else {
+                        ui.label("Select a layer first");
+                        return;
+                    };
+                    if ui.button("Bring to Front").clicked() {
+                        app.modify_project(move |p| {
+                            let comp = p.active_composition_mut();
+                            if i < comp.layers.len() && comp.layers.len() > 1 {
+                                let l = comp.layers.remove(i);
+                                comp.layers.push(l);
+                            }
+                        });
+                        app.selected_layer_idx = if i < len { Some(len - 1) } else { app.selected_layer_idx };
+                        crate::core::frame_cache::bump_version();
+                        ui.close_menu();
+                    }
+                    if ui.add(egui::Button::new("Bring Forward").shortcut_text("Cmd+]")).clicked() {
+                        if i + 1 < len {
+                            app.modify_project(move |p| {
+                                let comp = p.active_composition_mut();
+                                if i + 1 < comp.layers.len() {
+                                    comp.layers.swap(i, i + 1);
+                                }
+                            });
+                            app.selected_layer_idx = Some(i + 1);
+                            crate::core::frame_cache::bump_version();
+                        }
+                        ui.close_menu();
+                    }
+                    if ui.add(egui::Button::new("Send Backward").shortcut_text("Cmd+[")).clicked() {
+                        if i > 0 {
+                            app.modify_project(move |p| {
+                                let comp = p.active_composition_mut();
+                                if i < comp.layers.len() {
+                                    comp.layers.swap(i - 1, i);
+                                }
+                            });
+                            app.selected_layer_idx = Some(i - 1);
+                            crate::core::frame_cache::bump_version();
+                        }
+                        ui.close_menu();
+                    }
+                    if ui.button("Send to Back").clicked() {
+                        app.modify_project(move |p| {
+                            let comp = p.active_composition_mut();
+                            if i < comp.layers.len() && comp.layers.len() > 1 {
+                                let l = comp.layers.remove(i);
+                                comp.layers.insert(0, l);
+                            }
+                        });
+                        app.selected_layer_idx = if i < len { Some(0) } else { app.selected_layer_idx };
+                        crate::core::frame_cache::bump_version();
+                        ui.close_menu();
+                    }
+                });
+                ui.separator();
+                if ui.button("Un-Solo All Layers").clicked() {
+                    app.modify_project(|p| {
+                        for l in p.active_composition_mut().layers.iter_mut() {
+                            l.solo = false;
+                        }
+                    });
+                    crate::core::frame_cache::bump_version();
+                    app.toasts.info("All layers un-soloed");
+                    ui.close_menu();
+                }
+                if ui.button("Unlock All Layers").clicked() {
+                    app.modify_project(|p| {
+                        for l in p.active_composition_mut().layers.iter_mut() {
+                            l.locked = false;
+                        }
+                    });
+                    crate::core::frame_cache::bump_version();
+                    app.toasts.info("All layers unlocked");
+                    ui.close_menu();
+                }
                 ui.separator();
                 if ui.add(egui::Button::new("Pre-Compose...").shortcut_text("Cmd+Shift+C")).clicked() {
                     ui.close_menu();
