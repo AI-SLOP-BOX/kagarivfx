@@ -1196,6 +1196,41 @@ pub fn render_frame_to_pixels(comp: &Composition, frame: u32, width: u32, height
             }
         }
 
+        // Phase 2.65: AE Layer Styles (Drop Shadow / Outer Glow / Stroke)
+        {
+            let st = &layer.style;
+            let to_rgba8 = |c: [f32; 4]| [
+                (c[0].clamp(0.0, 1.0) * 255.0) as u8,
+                (c[1].clamp(0.0, 1.0) * 255.0) as u8,
+                (c[2].clamp(0.0, 1.0) * 255.0) as u8,
+                (c[3].clamp(0.0, 1.0) * 255.0) as u8,
+            ];
+            if st.drop_shadow.enabled {
+                crate::core::ae_effects_pack::apply_drop_shadow(
+                    &mut layer_buf, bw, bh,
+                    st.drop_shadow.distance,
+                    st.drop_shadow.angle,
+                    (st.drop_shadow.size.round() as u32).max(1),
+                    to_rgba8(st.drop_shadow.color),
+                );
+            }
+            if st.outer_glow.enabled {
+                crate::core::ae_effects_pack::apply_glow(
+                    &mut layer_buf, bw, bh,
+                    1.0,
+                    (st.outer_glow.size.round() as u32).max(1),
+                    (st.outer_glow.opacity / 50.0).clamp(0.0, 2.0),
+                );
+            }
+            if st.stroke.enabled {
+                crate::core::ae_effects_pack_v2::apply_stroke_effect(
+                    &mut layer_buf, bw, bh,
+                    to_rgba8(st.stroke.color),
+                    (st.stroke.size.round() as u32).max(1),
+                );
+            }
+        }
+
         // Phase 2.7: depth-of-field defocus for 3D layers.
         if ld.dof_blur >= 1.0 {
             crate::core::ae_effects_pack::apply_gaussian_blur(
