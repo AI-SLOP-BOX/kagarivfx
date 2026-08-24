@@ -343,15 +343,19 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
                         crate::core::frame_cache::bump_version();
                         ui.close_menu();
                     }
-
-                    if ui.add(egui::Button::new("Adjustment Layer").shortcut_text("Cmd+Alt+Y")).clicked() {
-                        let total_frames = app.history.current().active_composition().duration_frames;
-                        let comp_mut = app.history.current_mut().active_composition_mut();
-                        let id = format!("layer_{}", comp_mut.layers.len());
-                        let name = format!("Adjustment Layer {}", comp_mut.layers.len());
-                        let layer = crate::core::timeline::Layer::new_adjustment(id, name, total_frames);
-                        comp_mut.add_layer(layer);
+                    if ui.button("Light").on_hover_text("Adds a 3D light to the composition").clicked() {
+                        let n = app.history.current().active_composition().lights.len();
+                        let mut light = crate::core::timeline::Light3D::default();
+                        let nanos = std::time::SystemTime::now()
+                            .duration_since(std::time::UNIX_EPOCH)
+                            .map(|d| d.subsec_nanos())
+                            .unwrap_or(0);
+                        light.id = format!("light_{}_{nanos}", n);
+                        light.name = format!("Light {}", n + 1);
+                        let name = light.name.clone();
+                        app.history.current_mut().active_composition_mut().lights.push(light);
                         crate::core::frame_cache::bump_version();
+                        app.toasts.info(format!("Added {}", name));
                         ui.close_menu();
                     }
                 });
@@ -601,7 +605,20 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
                 });
             });
             ui.menu_button("Animation", |ui| {
-                if ui.add(egui::Button::new("Easy Ease").shortcut_text("F9")).clicked() { ui.close_menu(); }
+                if ui.add(egui::Button::new("Easy Ease").shortcut_text("F9")).clicked() {
+                    if let Some(idx) = app.selected_layer_idx {
+                        app.modify_project(move |p| {
+                            if let Some(l) = p.active_composition_mut().layers.get_mut(idx) {
+                                l.easy_ease_transform();
+                            }
+                        });
+                        crate::core::frame_cache::bump_version();
+                        app.toasts.info("Easy Ease applied to transform keyframes");
+                    } else {
+                        app.toasts.info("Select a layer first");
+                    }
+                    ui.close_menu();
+                }
                 if ui.button("Sequence Layers...").on_hover_text("Arrange selected layers to play one after another").clicked() {
                     app.show_sequence_layers = true;
                     ui.close_menu();

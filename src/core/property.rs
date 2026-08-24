@@ -1,4 +1,4 @@
-use crate::core::keyframe::{solve_bezier_eased_time, InterpolationType, Keyframe};
+use crate::core::keyframe::{solve_bezier_eased_time, BezierControlPoint, InterpolationType, Keyframe};
 use serde::{Deserialize, Serialize};
 
 pub trait Interpolate: Clone {
@@ -51,6 +51,24 @@ impl<T: Clone> Animatable<T> {
         match self {
             Animatable::Constant(_) => None,
             Animatable::Animated(keyframes) => Some(keyframes),
+        }
+    }
+
+    /// AE "Easy Ease" (F9): give every keyframe smooth bezier handles
+    /// (influence 1/3, zero speed on both sides). Constants and animations
+    /// with fewer than two keyframes are left untouched.
+    pub fn easy_ease(&mut self) {
+        if let Some(kfs) = self.keyframes_mut() {
+            if kfs.len() < 2 {
+                return;
+            }
+            for kf in kfs.iter_mut() {
+                kf.interpolation = InterpolationType::Bezier {
+                    outgoing: BezierControlPoint { influence: 0.333, speed: 0.0 },
+                    incoming: BezierControlPoint { influence: 0.333, speed: 0.0 },
+                    custom_bezier: None,
+                };
+            }
         }
     }
 
