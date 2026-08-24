@@ -143,6 +143,52 @@ pub fn draw_graph_editor(
                 *project_changed = true;
             }
 
+            ui.add_space(4.0);
+            if ui.button("↘ Ease In").on_hover_text("Flatten incoming tangent — keyframe eases into its value").clicked() {
+                use crate::core::property::Animatable;
+                use crate::core::keyframe::InterpolationType;
+                let ease_in = |interpolation: &mut InterpolationType| {
+                    if let InterpolationType::Bezier { ref mut outgoing, ref mut incoming, ref mut custom_bezier, .. } = *interpolation {
+                        outgoing.influence = 0.0;
+                        outgoing.speed = 0.0;
+                        incoming.influence = 0.333;
+                        incoming.speed = 0.0;
+                        *custom_bezier = Some([0.0, 0.0, 0.33, 1.0]);
+                    }
+                };
+                let active_prop = selected_property.clone().unwrap_or_else(|| "Position X".to_string());
+                match active_prop.as_str() {
+                    "Position X" | "Position Y" => { if let Animatable::Animated(ref mut kfs) = layer.transform.position { for kf in kfs.iter_mut() { ease_in(&mut kf.interpolation); } } }
+                    "Scale X" | "Scale Y" => { if let Animatable::Animated(ref mut kfs) = layer.transform.scale { for kf in kfs.iter_mut() { ease_in(&mut kf.interpolation); } } }
+                    "Rotation" => { if let Animatable::Animated(ref mut kfs) = layer.transform.rotation { for kf in kfs.iter_mut() { ease_in(&mut kf.interpolation); } } }
+                    "Opacity" => { if let Animatable::Animated(ref mut kfs) = layer.transform.opacity { for kf in kfs.iter_mut() { ease_in(&mut kf.interpolation); } } }
+                    _ => {}
+                }
+                *project_changed = true;
+            }
+            if ui.button("↗ Ease Out").on_hover_text("Flatten outgoing tangent — keyframe eases out of its value").clicked() {
+                use crate::core::property::Animatable;
+                use crate::core::keyframe::InterpolationType;
+                let ease_out = |interpolation: &mut InterpolationType| {
+                    if let InterpolationType::Bezier { ref mut outgoing, ref mut incoming, ref mut custom_bezier, .. } = *interpolation {
+                        outgoing.influence = 0.333;
+                        outgoing.speed = 0.0;
+                        incoming.influence = 0.0;
+                        incoming.speed = 0.0;
+                        *custom_bezier = Some([0.67, 0.0, 1.0, 1.0]);
+                    }
+                };
+                let active_prop = selected_property.clone().unwrap_or_else(|| "Position X".to_string());
+                match active_prop.as_str() {
+                    "Position X" | "Position Y" => { if let Animatable::Animated(ref mut kfs) = layer.transform.position { for kf in kfs.iter_mut() { ease_out(&mut kf.interpolation); } } }
+                    "Scale X" | "Scale Y" => { if let Animatable::Animated(ref mut kfs) = layer.transform.scale { for kf in kfs.iter_mut() { ease_out(&mut kf.interpolation); } } }
+                    "Rotation" => { if let Animatable::Animated(ref mut kfs) = layer.transform.rotation { for kf in kfs.iter_mut() { ease_out(&mut kf.interpolation); } } }
+                    "Opacity" => { if let Animatable::Animated(ref mut kfs) = layer.transform.opacity { for kf in kfs.iter_mut() { ease_out(&mut kf.interpolation); } } }
+                    _ => {}
+                }
+                *project_changed = true;
+            }
+
         });
 
         let graph_prop = selected_property.clone().unwrap_or_else(|| "Position X".to_string());
