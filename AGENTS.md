@@ -120,3 +120,4 @@ cat << EOF 形式の複数行ヒアドキュメントは端末統合が入力を
 - **draw_prop_row_ext callbacks**: `(on_move, on_select, on_menu, on_box_select, on_group_move)` — all optional.
 - **GPU renderer has no mask compositing** — masks render CPU-only (export/preview badge warns). If you implement GPU masks in shader.wgsl/renderer.rs, remove the HUD warning in viewport_overlays.rs.
 - **Effect menu apply helper**: `apply_effect_by_name` in menu.rs — extend it when adding Effect menu entries.
+- **Effect timeline rows**: register animatable params in `core/effect_params.rs` (`animatable_params()`). Unregistered variants compile fine but show no keyframe rows in the timeline.
