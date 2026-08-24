@@ -167,6 +167,8 @@ pub struct AfterEffectsApp {
     /// Human-readable timestamp of the recovery snapshot (for the dialog)
     pub recovery_snapshot_time: Option<String>,
     pub is_playing: bool,
+    /// Loop playback at the work area / comp end (Preview panel toggle)
+    pub loop_playback: bool,
     /// Adaptive preview quality: multiplier (0.125..=1.0) applied to the viewport
     /// render width while playing. When frames take longer than the playback
     /// budget, the factor drops so playback stays smooth; it recovers when fast.
@@ -332,6 +334,7 @@ impl Default for AfterEffectsApp {
             recovery_checked: false,
             recovery_snapshot_time: None,
             is_playing: false,
+            loop_playback: true,
             adaptive_preview_factor: 1.0,
             viewport_pan: eframe::egui::Vec2::ZERO,
             preview_render_ema_ms: 0.0,
@@ -602,13 +605,25 @@ impl eframe::App for AfterEffectsApp {
             if self.playback_speed >= 0 {
                 let next = current_frame.saturating_add(speed);
                 current_frame = if next >= wa_end {
-                    if self.work_area_in.is_some() || self.work_area_out.is_some() { wa_start } else { 0 }
+                    if self.loop_playback {
+                        // Wrap to work-area start (or comp start)
+                        if self.work_area_in.is_some() || self.work_area_out.is_some() { wa_start } else { 0 }
+                    } else {
+                        // Stop at the end when looping is off
+                        self.is_playing = false;
+                        wa_end
+                    }
                 } else {
                     next
                 };
             } else {
                 current_frame = if current_frame == wa_start {
-                    wa_end.saturating_sub(1)
+                    if self.loop_playback {
+                        wa_end.saturating_sub(1)
+                    } else {
+                        self.is_playing = false;
+                        wa_start
+                    }
                 } else {
                     current_frame.saturating_sub(speed)
                 };

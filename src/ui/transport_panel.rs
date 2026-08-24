@@ -50,10 +50,8 @@ pub fn draw_transport_panel(app: &mut AfterEffectsApp, ui: &mut egui::Ui, curren
 
     ui.add_space(6.0);
     ui.horizontal(|ui| {
-        let is_loop = ui.ctx().data_mut(|d| *d.get_temp_mut_or_insert_with(egui::Id::new("ae_loop_playback"), || true));
-        let mut loop_val = is_loop;
-        if ui.checkbox(&mut loop_val, "Loop Playback").changed() {
-            ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("ae_loop_playback"), loop_val));
+        if ui.checkbox(&mut app.loop_playback, "Loop Playback").changed() {
+            // Applied live by the playback loop in app_state
         }
 
         let is_audio = ui.ctx().data_mut(|d| *d.get_temp_mut_or_insert_with(egui::Id::new("ae_audio_preview"), || true));
@@ -67,28 +65,18 @@ pub fn draw_transport_panel(app: &mut AfterEffectsApp, ui: &mut egui::Ui, curren
     ui.separator();
 
     ui.label("Preview Quality & Downsampling:");
-    let res_id = egui::Id::new("ae_preview_resolution");
-    let mut res_idx = ui.ctx().data_mut(|d| *d.get_temp_mut_or_insert_with(res_id, || 0));
-
+    // Bound directly to the viewport render-resolution setting used by the GPU path
     egui::ComboBox::from_id_salt("preview_res_combo")
-        .selected_text(match res_idx {
+        .selected_text(match app.viewport_render_resolution {
             0 => "Full (1:1 Resolution)",
             1 => "Half (1/2 Resolution)",
             2 => "Third (1/3 Resolution)",
             _ => "Quarter (1/4 Resolution)",
         })
         .show_ui(ui, |ui| {
-            if ui.selectable_value(&mut res_idx, 0, "Full (1:1 Resolution)").clicked() {
-                ui.ctx().data_mut(|d| d.insert_temp(res_id, res_idx));
-            }
-            if ui.selectable_value(&mut res_idx, 1, "Half (1/2 Resolution)").clicked() {
-                ui.ctx().data_mut(|d| d.insert_temp(res_id, res_idx));
-            }
-            if ui.selectable_value(&mut res_idx, 2, "Third (1/3 Resolution)").clicked() {
-                ui.ctx().data_mut(|d| d.insert_temp(res_id, res_idx));
-            }
-            if ui.selectable_value(&mut res_idx, 3, "Quarter (1/4 Resolution)").clicked() {
-                ui.ctx().data_mut(|d| d.insert_temp(res_id, res_idx));
-            }
+            ui.selectable_value(&mut app.viewport_render_resolution, 0, "Full (1:1 Resolution)");
+            ui.selectable_value(&mut app.viewport_render_resolution, 1, "Half (1/2 Resolution)");
+            ui.selectable_value(&mut app.viewport_render_resolution, 2, "Third (1/3 Resolution)");
+            ui.selectable_value(&mut app.viewport_render_resolution, 3, "Quarter (1/4 Resolution)");
         });
 }
