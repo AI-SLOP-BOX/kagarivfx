@@ -414,7 +414,10 @@ pub fn draw_layer_type_specs(
                     if layer.text_animator.is_none() {
                         layer.text_animator = Some(TextAnimatorSettings::default());
                     }
-                    let anim = layer.text_animator.as_mut().unwrap();
+                    let Some(anim) = layer.text_animator.as_mut() else {
+                        ui.label(egui::RichText::new("Animator unavailable").small().color(colors::TEXT_MUTED));
+                        return;
+                    };
                     let enabled_before = anim.enabled;
                     ui.checkbox(&mut anim.enabled, "Enable Animator");
                     if enabled_before != anim.enabled {

@@ -734,7 +734,8 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: u32) 
             // Closing segment preview back to the first point
             if app.pen_points.len() >= 3 {
                 let first = app.pen_points[0];
-                let last = *app.pen_points.last().unwrap();
+                // len >= 3 makes the last index always valid — no unwrap needed.
+                let last = app.pen_points[app.pen_points.len() - 1];
                 painter.line_segment(
                     [to_screen(last), to_screen(first)],
                     egui::Stroke::new(1.0, crate::ui::theme::colors::ACCENT_CYAN.linear_multiply(0.4)),

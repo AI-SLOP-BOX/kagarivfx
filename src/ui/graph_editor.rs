@@ -72,8 +72,9 @@ pub fn draw_graph_editor(
                 let reverse_v2 = |anim: &mut Animatable<[f32; 2]>| {
                     if let Some(kfs) = anim.keyframes_mut() {
                         if kfs.len() >= 2 {
-                            let first = kfs.first().unwrap().frame;
-                            let last = kfs.last().unwrap().frame;
+                            // len >= 2 guarantees both ends exist; index access keeps this panic-free.
+                            let first = kfs[0].frame;
+                            let last = kfs[kfs.len() - 1].frame;
                             for kf in kfs.iter_mut() {
                                 kf.frame = last - (kf.frame - first);
                             }
@@ -84,8 +85,8 @@ pub fn draw_graph_editor(
                 let reverse_f32 = |anim: &mut Animatable<f32>| {
                     if let Some(kfs) = anim.keyframes_mut() {
                         if kfs.len() >= 2 {
-                            let first = kfs.first().unwrap().frame;
-                            let last = kfs.last().unwrap().frame;
+                            let first = kfs[0].frame;
+                            let last = kfs[kfs.len() - 1].frame;
                             for kf in kfs.iter_mut() {
                                 kf.frame = last - (kf.frame - first);
                             }

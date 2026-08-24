@@ -62,6 +62,13 @@ struct GlobalsUniform {
     lut_mode: u32,
 }
 
+/// Compile-time proof that LayerUniform is non-zero-sized, so the two
+/// `NonZeroU64::new(...)` calls during bind-group setup can never panic.
+const LAYER_UNIFORM_SIZE: u64 = {
+    assert!(std::mem::size_of::<LayerUniform>() > 0);
+    std::mem::size_of::<LayerUniform>() as u64
+};
+
 #[repr(C)]
 #[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
 struct LayerUniform {
@@ -353,8 +360,7 @@ impl WgpuRenderer {
                         ty: wgpu::BufferBindingType::Uniform,
                         has_dynamic_offset: true, // Enable dynamic uniform offsets
                         min_binding_size: Some(
-                            std::num::NonZeroU64::new(std::mem::size_of::<LayerUniform>() as u64)
-                                .unwrap(),
+                            std::num::NonZeroU64::new(LAYER_UNIFORM_SIZE).unwrap(),
                         ),
                     },
                     count: None,
@@ -402,8 +408,7 @@ impl WgpuRenderer {
                     buffer: &layer_buffer,
                     offset: 0,
                     size: Some(
-                        std::num::NonZeroU64::new(std::mem::size_of::<LayerUniform>() as u64)
-                            .unwrap(),
+                        std::num::NonZeroU64::new(LAYER_UNIFORM_SIZE).unwrap(),
                     ),
                 }),
             }],
@@ -1334,7 +1339,8 @@ impl WgpuRenderer {
             });
             *slot = Some(texture.create_view(&wgpu::TextureViewDescriptor::default()));
         }
-        slot.as_ref().unwrap()
+        // Invariant: the slot was just populated above (or already held a view).
+        slot.as_ref().expect("fallback target view was just created")
     }
 }
 

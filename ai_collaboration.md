@@ -89,3 +89,23 @@
 - [ ] Step 2: 既存マスク頂点の選択 & ドラッグ移動（ui）
 - [ ] Step 3: Pen ツールによる新規マスク描画（ui、core の `Mask` 生成 API 利用）
 - [ ] Step 4: ベジェ方向点（ハンドル）編集＋対称/非対称トグル
+
+---
+
+## 🛡️ 堅牢性（Robustness）ロードマップ — コードレビュー対応計画
+
+*2026-08-24 追加。外部コードレビュー（並行処理 / Undo・状態管理 / エラーハンドリング / モジュール分割の4観点）への対応方針。*
+
+### 即時対応（完了）
+- **UI パスの unwrap ゼロ化**: `paragraph_panel` / `scripting_console` / `graph_editor` / `viewport` / `inspector_layer` の計9箇所を let-else・インデックスアクセス（ガード統合）に書き換え。ガード条件と `unwrap()` の分離は将来の編集で不変条件を壊しやすいため、以後は **ガード内で borrow を完結させる** 書き方を標準とする。
+- **renderer.rs の `NonZeroU64::new(...).unwrap()` 2箇所**: `LAYER_UNIFORM_SIZE` 定数（const assert 付き）に集約し、実行時パニックを構造的に不可能化。フォールバック view の `unwrap` は不変条件を明示する `expect` に変更。
+- **FFmpeg / video_import の監査結果**: `unwrap` / `expect` / `panic!` は **ゼロ**。エラー伝播は既に適切。
+
+### 短期（次回〜）
+- [ ] `src/core` 実プロダクションパスの unwrap 監査（現状テスト外はごく少数、renderer.rs は対応済み）。CI で `#![warn(clippy::unwrap_used)]` を `src/ui` に限定導入するか検討。
+- [ ] バックグラウンドタスク（書き出し・トラッキング）のキャンセル伝播を `Arc<AtomicBool>` の受け渡し規約として文書化し、全スレッド生成箇所で統一。
+
+### 中長期（設計合意が必要）
+- [ ] **並行処理**: `std::sync::mpsc` の散在を、単一のイベント駆動タスクキュー（Worker プール）へ統合。`tokio` 導入は GUI スレッドモデル（eframe）との整合を要検討のため、まずは std ベースのワーカー抽象から。
+- [ ] **Undo/Redo**: `ProjectHistory` のフルスナップショット方式は 128MB バイトバジェットで上限管理済み。レイヤー数が数千規模になった場合に備え、Command パターン＋差分適用への移行を評価（互換性維持のため段階導入）。
+- [ ] **モジュール分割**: `AfterEffectsApp` を `TimelineState` / `ViewportState` / `ExportState` 等のサブステートへ分割し、各パネルへは必要最小限の `&mut` スライスのみ渡すレイヤード構成へ。コンフリクト防止（作業ファイル分離）とも相性が良い。

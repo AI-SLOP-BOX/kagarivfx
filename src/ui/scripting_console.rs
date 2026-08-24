@@ -15,8 +15,12 @@ pub fn draw_scripting_console(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
         app.script_console_history = Some(Vec::new());
     }
 
-    let output = app.script_console_output.as_mut().unwrap();
-    let history = app.script_console_history.as_mut().unwrap();
+    let (Some(output), Some(history)) = (
+        app.script_console_output.as_mut(),
+        app.script_console_history.as_mut(),
+    ) else {
+        return;
+    };
 
     crate::ui::custom_widgets::ae_section_header(ui, "Console", "💻");
 
