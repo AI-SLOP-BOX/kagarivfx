@@ -240,6 +240,27 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
                     app.show_export_dialog = true;
                     ui.close_menu();
                 }
+                ui.separator();
+                if ui.button("Save Frame As… (PNG)").on_hover_text("Render the current frame at full resolution and save as PNG").clicked() {
+                    if let Some(path) = rfd::FileDialog::new()
+                        .add_filter("PNG Image", &["png"])
+                        .set_file_name(format!("{}_frame_{}.png",
+                            app.history.current().active_composition().name,
+                            app.current_frame))
+                        .save_file()
+                    {
+                        let comp = app.history.current().active_composition().clone();
+                        let frame = app.current_frame;
+                        let pixels = crate::core::software_renderer::render_frame_to_pixels(
+                            &comp, frame, comp.width, comp.height, 0.0, 0,
+                        );
+                        match image::save_buffer(&path, &pixels, comp.width, comp.height, image::ColorType::Rgba8) {
+                            Ok(_) => app.toasts.info(format!("Frame {} saved to {}", frame, path.display())),
+                            Err(e) => app.toasts.error(format!("Save failed: {}", e)),
+                        }
+                    }
+                    ui.close_menu();
+                }
             });
             ui.menu_button("Layer", |ui| {
                 ui.menu_button("New", |ui| {
