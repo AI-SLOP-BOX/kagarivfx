@@ -374,6 +374,117 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
                         ui.close_menu();
                     }
                 });
+                ui.menu_button("Transform", |ui| {
+                    // Center / Fit / Flip / Reset commands (AE Layer > Transform parity)
+                    if ui.button("Center in Comp").on_hover_text("Move position to the composition center").clicked() {
+                        if let Some(idx) = app.selected_layer_idx {
+                            let (cw, ch) = { let c = app.history.current().active_composition(); (c.width as f32, c.height as f32) };
+                            app.modify_project(move |p| {
+                                if let Some(l) = p.active_composition_mut().layers.get_mut(idx) {
+                                    l.transform.position = crate::core::property::Animatable::new_constant([cw / 2.0, ch / 2.0]);
+                                }
+                            });
+                            app.toasts.info("Centered in Comp");
+                            ui.close_menu();
+                        }
+                    }
+                    if ui.button("Fit to Comp").on_hover_text("Scale so the layer covers the full comp frame").clicked() {
+                        if let Some(idx) = app.selected_layer_idx {
+                            let (cw, ch) = { let c = app.history.current().active_composition(); (c.width as f32, c.height as f32) };
+                            app.modify_project(move |p| {
+                                if let Some(l) = p.active_composition_mut().layers.get_mut(idx) {
+                                    let bs = l.bounding_size();
+                                    if bs[0] > 1.0 && bs[1] > 1.0 {
+                                        let sx = cw / bs[0] * 100.0;
+                                        let sy = ch / bs[1] * 100.0;
+                                        let s = sx.max(sy);
+                                        l.transform.scale = crate::core::property::Animatable::new_constant([s, s]);
+                                        l.transform.position = crate::core::property::Animatable::new_constant([cw / 2.0, ch / 2.0]);
+                                    }
+                                }
+                            });
+                            app.toasts.info("Fit to Comp");
+                            ui.close_menu();
+                        }
+                    }
+                    if ui.button("Flip Horizontal").clicked() {
+                        if let Some(idx) = app.selected_layer_idx {
+                            let cf = app.current_frame;
+                            app.modify_project(move |p| {
+                                if let Some(l) = p.active_composition_mut().layers.get_mut(idx) {
+                                    let s = l.transform.scale.evaluate(cf);
+                                    l.transform.scale = crate::core::property::Animatable::new_constant([-s[0], s[1]]);
+                                }
+                            });
+                            app.toasts.info("Flipped Horizontal");
+                            ui.close_menu();
+                        }
+                    }
+                    if ui.button("Flip Vertical").clicked() {
+                        if let Some(idx) = app.selected_layer_idx {
+                            let cf = app.current_frame;
+                            app.modify_project(move |p| {
+                                if let Some(l) = p.active_composition_mut().layers.get_mut(idx) {
+                                    let s = l.transform.scale.evaluate(cf);
+                                    l.transform.scale = crate::core::property::Animatable::new_constant([s[0], -s[1]]);
+                                }
+                            });
+                            app.toasts.info("Flipped Vertical");
+                            ui.close_menu();
+                        }
+                    }
+                    ui.separator();
+                    if ui.button("Reset Position").clicked() {
+                        if let Some(idx) = app.selected_layer_idx {
+                            let dims = { let c = app.history.current().active_composition(); (c.width as f32, c.height as f32) };
+                            app.modify_project(move |p| {
+                                if let Some(l) = p.active_composition_mut().layers.get_mut(idx) {
+                                    l.transform.position = crate::core::property::Animatable::new_constant([dims.0 / 2.0, dims.1 / 2.0]);
+                                }
+                            });
+                            app.toasts.info("Position reset");
+                            ui.close_menu();
+                        }
+                    }
+                    if ui.button("Reset Scale").clicked() {
+                        if let Some(idx) = app.selected_layer_idx {
+                            app.modify_project(move |p| {
+                                if let Some(l) = p.active_composition_mut().layers.get_mut(idx) {
+                                    l.transform.scale = crate::core::property::Animatable::new_constant([100.0, 100.0]);
+                                }
+                            });
+                            app.toasts.info("Scale reset");
+                            ui.close_menu();
+                        }
+                    }
+                    if ui.button("Reset Rotation").clicked() {
+                        if let Some(idx) = app.selected_layer_idx {
+                            app.modify_project(move |p| {
+                                if let Some(l) = p.active_composition_mut().layers.get_mut(idx) {
+                                    l.transform.rotation = crate::core::property::Animatable::new_constant(0.0);
+                                }
+                            });
+                            app.toasts.info("Rotation reset");
+                            ui.close_menu();
+                        }
+                    }
+                    if ui.button("Reset All Transforms").clicked() {
+                        if let Some(idx) = app.selected_layer_idx {
+                            let dims = { let c = app.history.current().active_composition(); (c.width as f32, c.height as f32) };
+                            app.modify_project(move |p| {
+                                if let Some(l) = p.active_composition_mut().layers.get_mut(idx) {
+                                    l.transform.position = crate::core::property::Animatable::new_constant([dims.0 / 2.0, dims.1 / 2.0]);
+                                    l.transform.scale = crate::core::property::Animatable::new_constant([100.0, 100.0]);
+                                    l.transform.rotation = crate::core::property::Animatable::new_constant(0.0);
+                                    l.transform.opacity = crate::core::property::Animatable::new_constant(100.0);
+                                }
+                            });
+                            crate::core::frame_cache::bump_version();
+                            app.toasts.info("All transforms reset");
+                            ui.close_menu();
+                        }
+                    }
+                });
                 ui.menu_button("Time", |ui| {
                     if ui.add(egui::Button::new("Enable Time Remapping").shortcut_text("Cmd+Alt+T")).clicked() {
                         if let Some(idx) = app.selected_layer_idx {
