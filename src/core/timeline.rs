@@ -1116,6 +1116,21 @@ pub enum EffectType {
     CmykHalftone {
         dot_size: Animatable<f32>,
     },
+    /// Mirror reflection below a horizon line with distance fade.
+    ReflectionMap {
+        reflect_y: Animatable<f32>,
+        fade_dist: Animatable<f32>,
+        opacity: Animatable<f32>,
+    },
+    /// Perlin flow vector noise field (animated).
+    PerlinFlow {
+        scale: Animatable<f32>,
+    },
+    /// Fractal Brownian motion turbulence.
+    FbmTurbulence {
+        octaves: Animatable<f32>,
+        amplitude: Animatable<f32>,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

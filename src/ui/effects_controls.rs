@@ -1144,6 +1144,51 @@ pub fn get_all_effect_presets() -> &'static [EffectPreset] {
                 enabled: true,
             },
         },
+        EffectPreset {
+            name: "Reflection Map",
+            button_label: "+ Reflection Map",
+            search_key: "reflection mirror water floor horizon fade",
+            id_prefix: "reflmap",
+            create_fn: |idx| Effect {
+                id: format!("reflmap_{}", idx),
+                name: "Reflection Map".to_string(),
+                effect_type: EffectType::ReflectionMap {
+                    reflect_y: Animatable::new_constant(200.0),
+                    fade_dist: Animatable::new_constant(150.0),
+                    opacity: Animatable::new_constant(0.6),
+                },
+                enabled: true,
+            },
+        },
+        EffectPreset {
+            name: "Perlin Flow Noise",
+            button_label: "+ Perlin Flow",
+            search_key: "perlin flow noise organic smoke fog generate procedural",
+            id_prefix: "pflow",
+            create_fn: |idx| Effect {
+                id: format!("pflow_{}", idx),
+                name: "Perlin Flow Noise".to_string(),
+                effect_type: EffectType::PerlinFlow {
+                    scale: Animatable::new_constant(4.0),
+                },
+                enabled: true,
+            },
+        },
+        EffectPreset {
+            name: "FBM Turbulence",
+            button_label: "+ FBM Turbulence",
+            search_key: "fbm turbulence fractal brownian octaves displacement clouds",
+            id_prefix: "fbmt",
+            create_fn: |idx| Effect {
+                id: format!("fbmt_{}", idx),
+                name: "FBM Turbulence".to_string(),
+                effect_type: EffectType::FbmTurbulence {
+                    octaves: Animatable::new_constant(4.0),
+                    amplitude: Animatable::new_constant(80.0),
+                },
+                enabled: true,
+            },
+        },
     ]
 }
 
@@ -1892,6 +1937,18 @@ pub fn draw_effect_type_ui(
         }
         EffectType::CmykHalftone { dot_size } => {
             draw_prop(ui, current_frame, project_changed, next_frame, "Dot Size", dot_size, |ui, v| { ui.add(egui::Slider::new(v, 2.0..=32.0).suffix(" px")); });
+        }
+        EffectType::ReflectionMap { reflect_y, fade_dist, opacity } => {
+            draw_prop(ui, current_frame, project_changed, next_frame, "Horizon Y", reflect_y, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=2000.0).suffix(" px")); });
+            draw_prop(ui, current_frame, project_changed, next_frame, "Fade Distance", fade_dist, |ui, v| { ui.add(egui::Slider::new(v, 1.0..=1000.0).suffix(" px")); });
+            draw_prop(ui, current_frame, project_changed, next_frame, "Opacity", opacity, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=1.0)); });
+        }
+        EffectType::PerlinFlow { scale } => {
+            draw_prop(ui, current_frame, project_changed, next_frame, "Scale", scale, |ui, v| { ui.add(egui::Slider::new(v, 0.5..=20.0)); });
+        }
+        EffectType::FbmTurbulence { octaves, amplitude } => {
+            draw_prop(ui, current_frame, project_changed, next_frame, "Octaves", octaves, |ui, v| { ui.add(egui::Slider::new(v, 1.0..=8.0)); });
+            draw_prop(ui, current_frame, project_changed, next_frame, "Amplitude", amplitude, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=255.0)); });
         }
     }
 }

@@ -721,6 +721,32 @@ fn apply_one(
             use crate::core::ae_effects_pack_v16::apply_color_halftone_cmyk;
             apply_color_halftone_cmyk(pixels, width, height, dot_size.evaluate(frame).round().clamp(2.0, 64.0) as u32);
         }
+        EffectType::ReflectionMap { reflect_y, fade_dist, opacity } => {
+            use crate::core::ae_effects_pack_v21::apply_reflection_map;
+            apply_reflection_map(
+                pixels,
+                width,
+                height,
+                reflect_y.evaluate(frame).round().clamp(0.0, 4096.0) as u32,
+                fade_dist.evaluate(frame).max(1.0),
+                opacity.evaluate(frame).clamp(0.0, 1.0),
+            );
+        }
+        EffectType::PerlinFlow { scale } => {
+            use crate::core::ae_effects_pack_v16::apply_perlin_flow_noise;
+            apply_perlin_flow_noise(pixels, width, height, frame as f32 / 30.0, scale.evaluate(frame).max(0.01));
+        }
+        EffectType::FbmTurbulence { octaves, amplitude } => {
+            use crate::core::ae_effects_pack_v18::apply_fbm_turbulence;
+            apply_fbm_turbulence(
+                pixels,
+                width,
+                height,
+                octaves.evaluate(frame).round().clamp(1.0, 8.0) as u32,
+                amplitude.evaluate(frame),
+                frame as f32 / 30.0,
+            );
+        }
     }
 }
 
@@ -1386,5 +1412,43 @@ mod tests {
             0,
         );
         assert_eq!(px, base, "zero-intensity light leak must be a no-op");
+    }
+
+    #[test]
+    fn test_reflection_generate_pack() {
+        let base = solid_layer(8, 8, 128, 128, 128);
+
+        // Zero-opacity reflection is a no-op.
+        let mut px = base.clone();
+        apply_layer_effects(
+            &mut px, 8, 8,
+            &[effect("refl", EffectType::ReflectionMap {
+                reflect_y: Animatable::new_constant(4.0),
+                fade_dist: Animatable::new_constant(50.0),
+                opacity: Animatable::new_constant(0.0),
+            })],
+            0,
+        );
+        assert_eq!(px, base, "zero-opacity reflection must be a no-op");
+
+        // Perlin flow and FBM turbulence are deterministic per frame.
+        let run = |et: EffectType| {
+            let mut px = base.clone();
+            apply_layer_effects(&mut px, 8, 8, &[effect("gen", et)], 3);
+            px
+        };
+        let p1 = run(EffectType::PerlinFlow { scale: Animatable::new_constant(4.0) });
+        let p1b = run(EffectType::PerlinFlow { scale: Animatable::new_constant(4.0) });
+        assert_eq!(p1, p1b, "perlin flow must be deterministic");
+
+        let f1 = run(EffectType::FbmTurbulence {
+            octaves: Animatable::new_constant(3.0),
+            amplitude: Animatable::new_constant(60.0),
+        });
+        let f1b = run(EffectType::FbmTurbulence {
+            octaves: Animatable::new_constant(3.0),
+            amplitude: Animatable::new_constant(60.0),
+        });
+        assert_eq!(f1, f1b, "fbm turbulence must be deterministic");
     }
 }

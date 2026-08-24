@@ -249,6 +249,9 @@ impl RenderEffectPlugin for EnumEffectPlugin {
             EffectType::BevelAlpha { .. } => "Bevel Alpha 3D",
             EffectType::CrossHatch { .. } => "Cross Hatch",
             EffectType::CmykHalftone { .. } => "CMYK Halftone",
+            EffectType::ReflectionMap { .. } => "Reflection Map",
+            EffectType::PerlinFlow { .. } => "Perlin Flow Noise",
+            EffectType::FbmTurbulence { .. } => "FBM Turbulence",
         }
     }
 
@@ -343,6 +346,9 @@ impl RenderEffectPlugin for EnumEffectPlugin {
             EffectType::BevelAlpha { .. } => "bevel_alpha",
             EffectType::CrossHatch { .. } => "cross_hatch",
             EffectType::CmykHalftone { .. } => "cmyk_halftone",
+            EffectType::ReflectionMap { .. } => "reflection_map",
+            EffectType::PerlinFlow { .. } => "perlin_flow",
+            EffectType::FbmTurbulence { .. } => "fbm_turbulence",
         }
     }
 
