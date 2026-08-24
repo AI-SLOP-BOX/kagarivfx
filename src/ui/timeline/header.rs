@@ -69,9 +69,17 @@ pub fn draw_timeline_header(
         )
         .on_hover_text("Timeline zoom (logarithmic, 0.1x - 20.0x)");
         *state.timeline_zoom = 10f32.powf(zoom_log).clamp(0.1, 20.0);
-        if ui.button("Fit").on_hover_text("Fit Timeline (reset zoom & scroll)").clicked() {
-            *state.timeline_zoom = 1.0;
-            *state.timeline_view_start = 0;
+        if ui.button("Fit").on_hover_text("Fit Timeline to Work Area (or full duration)").clicked() {
+            let w_in = *state.work_area_in;
+            let w_out = *state.work_area_out;
+            let span = match (w_in, w_out) {
+                (Some(wi), Some(wo)) => (wo - wi).max(10),
+                (Some(wi), None) => (total_frames - wi).max(10),
+                (None, Some(wo)) => wo.max(10),
+                (None, None) => total_frames,
+            };
+            *state.timeline_zoom = (total_frames as f32 / span as f32).clamp(0.1, 20.0);
+            *state.timeline_view_start = w_in.unwrap_or(0);
         }
         if ui.button("Clear WA").on_hover_text("Clear Work Area (In/Out)").clicked() {
             *state.work_area_in = None;
