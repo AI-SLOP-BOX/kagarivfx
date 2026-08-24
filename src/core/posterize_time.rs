@@ -1,6 +1,7 @@
 #![allow(dead_code)]
 /// Posterize Time Engine: Quantizes frame evaluation timing to match target reduced frame rate (e.g. 12fps stop-motion).
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(default)]
 pub struct PosterizeTimeSettings {
     pub target_fps: f32,
     pub enabled: bool,

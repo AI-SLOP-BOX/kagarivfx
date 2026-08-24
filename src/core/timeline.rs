@@ -1262,6 +1262,10 @@ pub struct Layer {
     #[serde(default)]
     pub auto_orient: crate::core::auto_orient::AutoOrientMode,
 
+    // ── Posterize Time (stop-motion frame quantization) ──
+    #[serde(default)]
+    pub posterize_time: Option<crate::core::posterize_time::PosterizeTimeSettings>,
+
     // ── AE Layer Style System ──
     pub style: LayerStyle,
 
@@ -1322,6 +1326,7 @@ impl Layer {
             masks: Vec::new(),
             markers: Vec::new(),
             auto_orient: crate::core::auto_orient::AutoOrientMode::Off,
+            posterize_time: None,
             style: LayerStyle::default(),
             text_formatting: None,
             text_animator: None,

@@ -428,6 +428,29 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
                         ui.close_menu();
                     }
                     ui.separator();
+                    if ui.button("Posterize Time 12fps (Stop Motion)").on_hover_text("Quantizes layer time to 12fps — toggles off if already enabled").clicked() {
+                        if let Some(idx) = app.selected_layer_idx {
+                            let already = matches!(
+                                app.history.current().active_composition().layers.get(idx).and_then(|l| l.posterize_time.as_ref()),
+                                Some(pt) if pt.enabled
+                            );
+                            app.modify_project(move |p| {
+                                if let Some(l) = p.active_composition_mut().layers.get_mut(idx) {
+                                    l.posterize_time = if already {
+                                        None
+                                    } else {
+                                        Some(crate::core::posterize_time::PosterizeTimeSettings::default())
+                                    };
+                                }
+                            });
+                            crate::core::frame_cache::bump_version();
+                            app.toasts.info(if already { "Posterize Time removed" } else { "Posterize Time: 12fps stop-motion" });
+                        } else {
+                            app.toasts.info("Select a layer first");
+                        }
+                        ui.close_menu();
+                    }
+                    ui.separator();
                     if ui.add(egui::Button::new("Time Stretch ×2 (Slow)")).clicked() {
                         if let Some(idx) = app.selected_layer_idx {
                             app.modify_project(move |p| {

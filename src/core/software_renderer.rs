@@ -60,7 +60,13 @@ fn render_precomp_layers_inner(_comp: &Composition, precomp_comp: &Composition, 
         if !layer.is_active(frame) || !layer.visible { continue; }
         if has_solo && !layer.solo { continue; }
 
-        let effective_frame = layer.remap_frame(frame);
+        let effective_frame = {
+            let f = layer.remap_frame(frame);
+            match &layer.posterize_time {
+                Some(pt) if pt.enabled => crate::core::posterize_time::quantize_frame_posterize(f, precomp_comp.fps, pt),
+                _ => f,
+            }
+        };
         let (pos, scale, rotation, opacity) = precomp_comp.resolve_world_transform(layer, effective_frame);
         let l_opacity = (opacity / 100.0).clamp(0.0, 1.0);
         if l_opacity < 0.001 { continue; }
@@ -529,7 +535,13 @@ pub fn render_frame_to_pixels(comp: &Composition, frame: u32, width: u32, height
                     return LayerRenderData::default(); // skip=true
                 }
 
-                let effective_frame = layer.remap_frame(frame);
+                let effective_frame = {
+                    let f = layer.remap_frame(frame);
+                    match &layer.posterize_time {
+                        Some(pt) if pt.enabled => crate::core::posterize_time::quantize_frame_posterize(f, comp.fps, pt),
+                        _ => f,
+                    }
+                };
                 let (pos, scale, rotation, opacity) = comp.resolve_world_transform(layer, effective_frame);
                 let l_opacity = (opacity / 100.0).clamp(0.0, 1.0);
                 if l_opacity < 0.001 { return LayerRenderData::default(); }
