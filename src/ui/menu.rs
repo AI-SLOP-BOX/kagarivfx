@@ -230,8 +230,18 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
                 }
                 ui.separator();
                 if ui.add(egui::Button::new("Duplicate").shortcut_text("Cmd+D")).clicked() {
-                    // Handled via keyboard shortcut in timeline
-                    app.toasts.info("Select a layer in the Timeline, then press Cmd+D to duplicate");
+                    if let Some(sel_idx) = app.selected_layer_idx {
+                        let comp = app.history.current_mut().active_composition_mut();
+                        if sel_idx < comp.layers.len() {
+                            let mut cloned = comp.layers[sel_idx].clone();
+                            let n = comp.layers.len();
+                            cloned.id = format!("{}_copy_{}", cloned.id, n);
+                            cloned.name = format!("{} copy", cloned.name);
+                            comp.layers.insert(sel_idx + 1, cloned);
+                            crate::core::frame_cache::bump_version();
+                            app.toasts.info("Layer duplicated");
+                        }
+                    }
                     ui.close_menu();
                 }
             });
