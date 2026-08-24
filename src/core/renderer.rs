@@ -775,10 +775,10 @@ impl WgpuRenderer {
                     resolve_target: None,
                     ops: wgpu::Operations {
                         load: wgpu::LoadOp::Clear(wgpu::Color {
-                            r: 0.05,
-                            g: 0.05,
-                            b: 0.08,
-                            a: 1.0,
+                            r: comp.background_color[0].clamp(0.0, 1.0) as f64,
+                            g: comp.background_color[1].clamp(0.0, 1.0) as f64,
+                            b: comp.background_color[2].clamp(0.0, 1.0) as f64,
+                            a: comp.background_color[3].clamp(0.0, 1.0) as f64,
                         }),
                         store: wgpu::StoreOp::Store,
                     },

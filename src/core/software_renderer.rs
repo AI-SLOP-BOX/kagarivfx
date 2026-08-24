@@ -481,13 +481,22 @@ pub fn render_frame_to_pixels(comp: &Composition, frame: u32, width: u32, height
     if size == 0 {
         return Vec::new();
     }
-    // Base composition background: Dark gray
+    // Composition background colour (Comp Settings > Background Color).
+    let (bg_r, bg_g, bg_b, bg_a) = {
+        let bg = comp.background_color;
+        (
+            (bg[0].clamp(0.0, 1.0) * 255.0).round() as u8,
+            (bg[1].clamp(0.0, 1.0) * 255.0).round() as u8,
+            (bg[2].clamp(0.0, 1.0) * 255.0).round() as u8,
+            (bg[3].clamp(0.0, 1.0) * 255.0).round() as u8,
+        )
+    };
     let mut buffer = vec![0u8; size];
-    for p in (0..size).step_by(4) {
-        buffer[p] = 20;     // R
-        buffer[p + 1] = 20; // G
-        buffer[p + 2] = 25; // B
-        buffer[p + 3] = 255; // A
+    for p in buffer.chunks_exact_mut(4) {
+        p[0] = bg_r;
+        p[1] = bg_g;
+        p[2] = bg_b;
+        p[3] = bg_a;
     }
 
     let has_solo = comp.layers.iter().any(|l| l.is_active(frame) && l.solo);
@@ -1873,6 +1882,19 @@ mod tests {
             }
         }
         assert!(non_gray > 0, "FractalNoise should produce varied pixel values");
+    }
+
+    #[test]
+    fn test_background_colour_is_composited() {
+        let mut comp = Composition::new("c1".to_string(), "BgComp".to_string(), 8, 8, 30, 30);
+        comp.background_color = [1.0, 0.0, 0.0, 1.0];
+
+        let pixels = render_frame_to_pixels(&comp, 0, 8, 8, 0.0, 0);
+        assert_eq!(pixels.len(), 8 * 8 * 4);
+        for p in pixels.chunks_exact(4) {
+            assert_eq!(p[0], 255, "background red must fill an empty composition");
+            assert_eq!(p[3], 255, "background alpha must be opaque");
+        }
     }
 
     #[test]
