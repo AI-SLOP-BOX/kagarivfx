@@ -514,3 +514,47 @@ mod tests {
         assert_eq!(cfg.output_path, cfg2.output_path);
     }
 }
+
+/// PNG image-sequence export: renders every frame and writes
+/// `{stem}_{frame:04}.png` into `dir` using the `image` crate.
+#[allow(clippy::too_many_arguments)]
+pub fn start_png_sequence_export<F>(
+    dir: std::path::PathBuf,
+    stem: String,
+    width: u32,
+    height: u32,
+    total_frames: u32,
+    tx: Sender<ExportEvent>,
+    cancel_flag: std::sync::Arc<std::sync::atomic::AtomicBool>,
+    mut render_frame: F,
+) where F: FnMut(u32) -> Vec<u8> + Send + 'static {
+    use std::sync::atomic::Ordering;
+    std::thread::spawn(move || {
+        if let Err(e) = std::fs::create_dir_all(&dir) {
+            let _ = tx.send(ExportEvent::Error(format!("Cannot create dir {}: {}", dir.display(), e)));
+            return;
+        }
+        let last = total_frames.saturating_sub(1);
+        for f in 0..total_frames {
+            if cancel_flag.load(Ordering::SeqCst) {
+                let _ = tx.send(ExportEvent::Error("Export canceled".to_string()));
+                return;
+            }
+            let pixels = render_frame(f);
+            let path = dir.join(format!("{}_{:04}.png", stem, f));
+            if let Err(e) = image::save_buffer(&path, &pixels, width, height, image::ColorType::Rgba8) {
+                let _ = tx.send(ExportEvent::Error(format!("Failed writing {}: {}", path.display(), e)));
+                return;
+            }
+            if f % 2 == 0 || f == last {
+                let _ = tx.send(ExportEvent::Progress(
+                    (f + 1) as f32 / total_frames.max(1) as f32,
+                    format!("Frame {} / {} → {}", f + 1, total_frames, path.display()),
+                ));
+            }
+        }
+        let _ = tx.send(ExportEvent::Finished(format!(
+            "PNG sequence exported: {} frames → {}", total_frames, dir.join(format!("{}_", stem)).display()
+        )));
+    });
+}

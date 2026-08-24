@@ -28,16 +28,52 @@ pub fn start_comp_export(app: &mut crate::AfterEffectsApp, ctx: &egui::Context, 
         None
     };
     let codec_idx = app.export_codec_idx;
-    let codec = match codec_idx {
-        1 => crate::core::ffmpeg_export::VideoCodec::ProRes422,
-        2 => crate::core::ffmpeg_export::VideoCodec::ProRes4444,
-        _ => crate::core::ffmpeg_export::VideoCodec::H264,
-    };
     let res_scale = ctx.data_mut(|d| *d.get_temp_mut_or_insert_with(egui::Id::new("ae_export_res_scale"), || 1.0f32));
 
     let output_path = app.export_output_path.clone();
     let render_w = ((comp.width as f32 * res_scale) as u32).max(2);
     let render_h = ((comp.height as f32 * res_scale) as u32).max(2);
+
+    // ── PNG Sequence branch: bypass FFmpeg, write numbered PNGs directly ──
+    if codec_idx == 3 {
+        if let Some(old_flag) = app.export_cancel_flag.take() {
+            old_flag.store(true, std::sync::atomic::Ordering::SeqCst);
+        }
+        let cancel_flag = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+        app.export_cancel_flag = Some(cancel_flag.clone());
+
+        let out = std::path::PathBuf::from(&output_path);
+        let dir = out.parent().map(|p| p.to_path_buf())
+            .unwrap_or_else(|| std::path::PathBuf::from("."));
+        let stem = out.file_stem()
+            .map(|s| s.to_string_lossy().to_string())
+            .unwrap_or_else(|| comp.name.clone());
+
+        let (tx_ui, rx_ui) = std::sync::mpsc::channel();
+        app.export_rx = Some(rx_ui);
+        crate::core::ffmpeg_export::start_png_sequence_export(
+            dir,
+            stem,
+            render_w,
+            render_h,
+            total_frames.max(1),
+            tx_ui,
+            cancel_flag,
+            move |frame| {
+                crate::core::software_renderer::render_frame_to_pixels(
+                    &comp, frame, render_w, render_h, 0.0, 0,
+                )
+            },
+        );
+        log::info!("Spawned PNG sequence export for {}", app.export_output_path);
+        return;
+    }
+
+    let codec = match codec_idx {
+        1 => crate::core::ffmpeg_export::VideoCodec::ProRes422,
+        2 => crate::core::ffmpeg_export::VideoCodec::ProRes4444,
+        _ => crate::core::ffmpeg_export::VideoCodec::H264,
+    };
     let config = crate::core::ffmpeg_export::ExportConfig {
         audio_wav,
         output_path: output_path.clone(),
@@ -309,6 +345,7 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
                     ui.selectable_value(&mut app.export_codec_idx, 0, "H.264");
                     ui.selectable_value(&mut app.export_codec_idx, 1, "ProRes 422");
                     ui.selectable_value(&mut app.export_codec_idx, 2, "ProRes 4444");
+                    ui.selectable_value(&mut app.export_codec_idx, 3, "PNG Sequence");
                 });
 
                 ui.horizontal(|ui| {
