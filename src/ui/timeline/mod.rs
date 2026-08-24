@@ -38,6 +38,9 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
             });
             let mut pending_precomp_indices: Option<Vec<usize>> = None;
             let mut swap_request: Option<(usize, usize)> = None;
+            // Context-menu actions deferred to after the layer loop (borrow-safe)
+            let mut pending_dup_layer: Option<usize> = None;
+            let mut pending_split_layer: Option<usize> = None;
 
             let mut header_state = header::TimelineHeaderState {
                 is_playing: &mut app.is_playing,
@@ -752,17 +755,12 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                                     }
                                     click_resp.context_menu(|ui| {
                                         if ui.button("✨ Duplicate Layer (Cmd+D)").clicked() {
-                                            let mut dup_layer = layer.clone();
-                                            dup_layer.id = format!("{}_copy", layer.id);
-                                            dup_layer.name = format!("{} Copy", layer.name);
-                                            project_changed = true;
+                                            pending_dup_layer = Some(i);
                                             app.toasts.info("Duplicated selected layer");
                                             ui.close_menu();
                                         }
                                         if ui.button("✂ Split Layer at Current Time (Cmd+Shift+D)").clicked() {
-                                            layer.out_frame = *current_frame;
-                                            project_changed = true;
-                                            app.toasts.info("Split layer at current frame");
+                                            pending_split_layer = Some(i);
                                             ui.close_menu();
                                         }
                                         if ui.button("Pre-Compose Selected... (Cmd+Shift+C)").clicked() {
@@ -1218,6 +1216,48 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                         .map(|i| remap(*i))
                         .collect();
                     project_changed = true;
+                }
+            }
+
+            // ── Context-menu: Duplicate Layer (inserts a clone above the original) ──
+            if let Some(idx) = pending_dup_layer {
+                let layers_len = temp_project.active_composition().layers.len();
+                if idx < layers_len {
+                    let mut cloned = temp_project.active_composition().layers[idx].clone();
+                    cloned.id = format!("{}_copy_{}", cloned.id, layers_len);
+                    cloned.name = format!("{} copy", cloned.name);
+                    temp_project.active_composition_mut().layers.insert(idx + 1, cloned);
+                    app.selected_layer_idx = Some(idx + 1);
+                    app.selected_layers.clear();
+                    app.selected_layers.insert(idx + 1);
+                    project_changed = true;
+                }
+            }
+
+            // ── Context-menu: Split Layer (true split: tail becomes a new layer above) ──
+            if let Some(idx) = pending_split_layer {
+                let cur = *current_frame;
+                let layers_len = temp_project.active_composition().layers.len();
+                if idx < layers_len {
+                    let orig_out = temp_project.active_composition().layers[idx].out_frame;
+                    if cur > temp_project.active_composition().layers[idx].in_frame && cur < orig_out {
+                        // 1) Head keeps [in .. cur)
+                        temp_project.active_composition_mut().layers[idx].out_frame = cur;
+                        // 2) Tail is a fresh layer covering [cur .. out)
+                        let mut tail = temp_project.active_composition().layers[idx].clone();
+                        tail.id = format!("{}_split_{}", tail.id, layers_len);
+                        tail.name = format!("{} split", tail.name);
+                        tail.in_frame = cur;
+                        tail.out_frame = orig_out;
+                        temp_project.active_composition_mut().layers.insert(idx + 1, tail);
+                        app.selected_layer_idx = Some(idx + 1);
+                        app.selected_layers.clear();
+                        app.selected_layers.insert(idx + 1);
+                        project_changed = true;
+                        app.toasts.info(format!("Split layer at frame {}", cur));
+                    } else {
+                        app.toasts.error("Split point must be inside the layer's duration");
+                    }
                 }
             }
 
