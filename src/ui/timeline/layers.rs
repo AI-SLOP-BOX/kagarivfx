@@ -17,7 +17,7 @@ pub fn draw_prop_row(
     on_move: Option<&mut dyn FnMut(u32, u32)>,
 ) -> Option<u32> {
     draw_prop_row_ext(ui, label, kfs, current_frame, start_frame, zoom_span, left_pane_w,
-        &std::collections::HashSet::new(), "", on_move, None, None, None)
+        &std::collections::HashSet::new(), "", on_move, None, None, None, None)
 }
 
 /// Extended version with keyframe selection support.
@@ -48,12 +48,16 @@ pub fn draw_prop_row_ext(
     // Carries the frames inside the marquee and whether the existing
     // selection should be kept (additive).
     mut on_box_select: KfBoxSelCb<'_>,
+    // Optional callback when a SELECTED keyframe is dragged and other
+    // selected keyframes should follow: (prop_key, dragged_frame, delta_frames).
+    mut on_group_move: Option<&mut dyn FnMut(&'static str, u32, i32)>,
 ) -> Option<u32> {
     let mut requested_frame = None;
     let mut pending_move: Option<(u32, u32)> = None;
     let mut pending_select: Option<(&'static str, u32, bool, bool)> = None;
     let mut pending_menu: Option<(&'static str, u32, egui::Response)> = None;
     let mut pending_box: Option<(Vec<u32>, bool)> = None;
+    let mut pending_group: Option<(&'static str, u32, i32)> = None;
 
     // Marquee state persists across frames of an active Shift+drag.
     let marquee_id = egui::Id::new(("kf_marquee", prop_key));
@@ -148,6 +152,12 @@ pub fn draw_prop_row_ext(
                         requested_frame = Some(new_frame);
                         if new_frame != kf_frame {
                             pending_move = Some((kf_frame, new_frame));
+                            // Selected keyframes travel with the dragged one (AE group move)
+                            if is_selected && selected_kfs.len() > 1 {
+                                let delta = new_frame as i64 - kf_frame as i64;
+                                let clamped = delta.clamp(i32::MIN as i64, i32::MAX as i64) as i32;
+                                pending_group = Some((prop_key, kf_frame, clamped));
+                            }
                         }
                     }
                     (KeyframeTickResult::None, _resp) => {}
@@ -177,6 +187,11 @@ pub fn draw_prop_row_ext(
         if let Some((frames, additive)) = pending_box.take() {
             if let Some(ref mut cb) = on_box_select {
                 cb(prop_key, frames, additive);
+            }
+        }
+        if let Some((pk, dragged_f, delta)) = pending_group.take() {
+            if let Some(ref mut cb) = on_group_move {
+                cb(pk, dragged_f, delta);
             }
         }
     });

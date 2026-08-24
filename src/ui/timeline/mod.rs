@@ -1137,6 +1137,8 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                                 let mut kf_menu_cmds: Vec<(&'static str, u32, u8)> = Vec::new();
                                 // Marquee box-select results: (prop_key, boxed frames)
                                 let mut box_selects: Vec<(&'static str, Vec<u32>)> = Vec::new();
+                                // Group keyframe moves: (prop_key, dragged_frame, delta)
+                                let mut group_moves: Vec<(&'static str, u32, i32)> = Vec::new();
 
                                 {
                                     let t = &mut layer.transform;
@@ -1171,7 +1173,8 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                                             Some(&mut |old_f, new_f| { move_kf(&mut t.position, old_f, new_f); *moved = true; }),
                                             Some(&mut |pk, f, shift, cmd| select_requests.push((pk, f, shift, cmd))),
                                             kf_menu_cb!(),
-                                            Some(&mut |pk, frames: Vec<u32>, _add: bool| box_selects.push((pk, frames))));
+                                            Some(&mut |pk, frames: Vec<u32>, _add: bool| box_selects.push((pk, frames))),
+                                            Some(&mut |pk, dragged_f, delta| group_moves.push((pk, dragged_f, delta))));
                                     }
                                     if show_transform_rows && (!kf_only || !scale_kfs.is_empty()) {
                                         draw_prop_row_ext(ui, "  ⏱ Scale", &scale_kfs, current_frame, start_frame, zoom_span, left_pane_w,
@@ -1179,7 +1182,8 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                                             Some(&mut |old_f, new_f| { move_kf(&mut t.scale, old_f, new_f); *moved = true; }),
                                             Some(&mut |pk, f, shift, cmd| select_requests.push((pk, f, shift, cmd))),
                                             kf_menu_cb!(),
-                                            Some(&mut |pk, frames: Vec<u32>, _add: bool| box_selects.push((pk, frames))));
+                                            Some(&mut |pk, frames: Vec<u32>, _add: bool| box_selects.push((pk, frames))),
+                                            Some(&mut |pk, dragged_f, delta| group_moves.push((pk, dragged_f, delta))));
                                     }
                                     if show_transform_rows && (!kf_only || !rot_kfs.is_empty()) {
                                         draw_prop_row_ext(ui, "  ⏱ Rotation", &rot_kfs, current_frame, start_frame, zoom_span, left_pane_w,
@@ -1187,7 +1191,8 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                                             Some(&mut |old_f, new_f| { move_kf(&mut t.rotation, old_f, new_f); *moved = true; }),
                                             Some(&mut |pk, f, shift, cmd| select_requests.push((pk, f, shift, cmd))),
                                             kf_menu_cb!(),
-                                            Some(&mut |pk, frames: Vec<u32>, _add: bool| box_selects.push((pk, frames))));
+                                            Some(&mut |pk, frames: Vec<u32>, _add: bool| box_selects.push((pk, frames))),
+                                            Some(&mut |pk, dragged_f, delta| group_moves.push((pk, dragged_f, delta))));
                                     }
                                     if show_transform_rows && (!kf_only || !op_kfs.is_empty()) {
                                         draw_prop_row_ext(ui, "  ⏱ Opacity", &op_kfs, current_frame, start_frame, zoom_span, left_pane_w,
@@ -1195,7 +1200,8 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                                             Some(&mut |old_f, new_f| { move_kf(&mut t.opacity, old_f, new_f); *moved = true; }),
                                             Some(&mut |pk, f, shift, cmd| select_requests.push((pk, f, shift, cmd))),
                                             kf_menu_cb!(),
-                                            Some(&mut |pk, frames: Vec<u32>, _add: bool| box_selects.push((pk, frames))));
+                                            Some(&mut |pk, frames: Vec<u32>, _add: bool| box_selects.push((pk, frames))),
+                                            Some(&mut |pk, dragged_f, delta| group_moves.push((pk, dragged_f, delta))));
                                     }
                                     if reveal_mode == "Anchor Point" {
                                         let ap_kfs = get_kfs(&t.anchor_point);
@@ -1283,6 +1289,34 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                                         app.selected_keyframes.insert((i, pk.to_string(), f));
                                     }
                                     project_changed = false;
+                                }
+
+                                // ── Group move: selected keyframes follow the dragged one ──
+                                {
+                                    let t = &mut layer.transform;
+                                    for (pk, dragged_f, delta) in group_moves {
+                                        let followers: Vec<u32> = app.selected_keyframes.iter()
+                                            .filter(|(li, p, fr)| *li == i && p == pk && *fr != dragged_f)
+                                            .map(|(_, _, fr)| *fr)
+                                            .collect();
+                                        if followers.is_empty() { continue; }
+                                        let new_frames: Vec<(u32, u32)> = followers.iter()
+                                            .map(|&f| (f, (f as i64 + delta as i64).max(0) as u32))
+                                            .collect();
+                                        macro_rules! shift_track {
+                                            ($anim:expr) => {{
+                                                for (old_f, new_f) in &new_frames { move_kf($anim, *old_f, *new_f); }
+                                                if let Some(kfs) = $anim.keyframes_mut() { kfs.sort_by_key(|k| k.frame); }
+                                            }};
+                                        }
+                                        match pk {
+                                            "position" => shift_track!(&mut t.position),
+                                            "scale" => shift_track!(&mut t.scale),
+                                            "rotation" => shift_track!(&mut t.rotation),
+                                            "opacity" => shift_track!(&mut t.opacity),
+                                            _ => {}
+                                        }
+                                    }
                                 }
 
                                 for (pk, f, shift, cmd) in select_requests {
