@@ -702,6 +702,24 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
                 }
             });
             ui.menu_button("Effect", |ui| {
+                ui.menu_button("Expression Controls", |ui| {
+                    if ui.button("Slider Control").on_hover_text("Keyframeable scalar — drive other layers via effect_param()").clicked() {
+                        apply_effect_by_name(app, "Slider Control");
+                        ui.close_menu();
+                    }
+                    if ui.button("Angle Control").clicked() {
+                        apply_effect_by_name(app, "Angle Control");
+                        ui.close_menu();
+                    }
+                    if ui.button("Point Control").clicked() {
+                        apply_effect_by_name(app, "Point Control");
+                        ui.close_menu();
+                    }
+                    if ui.button("Color Control").clicked() {
+                        apply_effect_by_name(app, "Color Control");
+                        ui.close_menu();
+                    }
+                });
                 ui.menu_button("Blur & Sharpen", |ui| {
                     if ui.button("Gaussian Blur").clicked() {
                         apply_effect_by_name(app, "Gaussian Blur");
@@ -893,6 +911,30 @@ fn apply_effect_by_name(app: &mut crate::AfterEffectsApp, effect_name: &str) {
             let layer = &mut comp.layers[idx];
             let len = layer.effects.len();
             let effect = match effect_name {
+                "Slider Control" => crate::core::timeline::Effect {
+                    id: format!("slider_{}", len), name: "Slider Control".to_string(),
+                    effect_type: crate::core::timeline::EffectType::SliderControl {
+                        value: crate::core::property::Animatable::new_constant(50.0),
+                    }, enabled: true,
+                },
+                "Angle Control" => crate::core::timeline::Effect {
+                    id: format!("angle_{}", len), name: "Angle Control".to_string(),
+                    effect_type: crate::core::timeline::EffectType::AngleControl {
+                        angle_degrees: crate::core::property::Animatable::new_constant(0.0),
+                    }, enabled: true,
+                },
+                "Point Control" => crate::core::timeline::Effect {
+                    id: format!("point_{}", len), name: "Point Control".to_string(),
+                    effect_type: crate::core::timeline::EffectType::PointControl {
+                        point: crate::core::property::Animatable::new_constant([960.0, 540.0]),
+                    }, enabled: true,
+                },
+                "Color Control" => crate::core::timeline::Effect {
+                    id: format!("color_{}", len), name: "Color Control".to_string(),
+                    effect_type: crate::core::timeline::EffectType::ColorControl {
+                        color: crate::core::property::Animatable::new_constant([1.0, 1.0, 1.0, 1.0]),
+                    }, enabled: true,
+                },
                 "Gaussian Blur" => crate::core::timeline::Effect {
                     id: format!("blur_{}", len), name: "Gaussian Blur".to_string(),
                     effect_type: crate::core::timeline::EffectType::GaussianBlur {

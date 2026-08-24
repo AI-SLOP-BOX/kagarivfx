@@ -253,6 +253,10 @@ impl RenderEffectPlugin for EnumEffectPlugin {
             EffectType::ReflectionMap { .. } => "Reflection Map",
             EffectType::PerlinFlow { .. } => "Perlin Flow Noise",
             EffectType::FbmTurbulence { .. } => "FBM Turbulence",
+            EffectType::SliderControl { .. } => "Slider Control",
+            EffectType::AngleControl { .. } => "Angle Control",
+            EffectType::PointControl { .. } => "Point Control",
+            EffectType::ColorControl { .. } => "Color Control",
         }
     }
 
@@ -351,6 +355,10 @@ impl RenderEffectPlugin for EnumEffectPlugin {
             EffectType::ReflectionMap { .. } => "reflection_map",
             EffectType::PerlinFlow { .. } => "perlin_flow",
             EffectType::FbmTurbulence { .. } => "fbm_turbulence",
+            EffectType::SliderControl { .. } => "slider_control",
+            EffectType::AngleControl { .. } => "angle_control",
+            EffectType::PointControl { .. } => "point_control",
+            EffectType::ColorControl { .. } => "color_control",
         }
     }
 

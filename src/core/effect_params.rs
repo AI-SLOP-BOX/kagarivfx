@@ -242,6 +242,10 @@ impl EffectType {
                 push!("Evolution", evolution, Scalar);
             }
             EffectType::GradientMap { .. } => {} // [f32;3] not yet keyframeable
+            EffectType::SliderControl { value } => push!("Value", value, Scalar),
+            EffectType::AngleControl { angle_degrees } => push!("Angle", angle_degrees, Scalar),
+            EffectType::PointControl { point } => push!("Point", point, Vec2),
+            EffectType::ColorControl { color } => push!("Color", color, Color),
             EffectType::Halftone { cell_size } => push!("Cell Size", cell_size, Scalar),
             EffectType::Invert { .. } => {}
             EffectType::LightLeak { pos_x, pos_y, intensity } => {
@@ -517,6 +521,10 @@ impl EffectType {
                 push!("Evolution", evolution, Scalar);
             }
             EffectType::GradientMap { .. } => {}
+            EffectType::SliderControl { value } => push!("Value", value, Scalar),
+            EffectType::AngleControl { angle_degrees } => push!("Angle", angle_degrees, Scalar),
+            EffectType::PointControl { point } => push!("Point", point, Vec2),
+            EffectType::ColorControl { color } => push!("Color", color, Color),
             EffectType::Halftone { cell_size } => push!("Cell Size", cell_size, Scalar),
             EffectType::Invert { .. } => {}
             EffectType::LightLeak { pos_x, pos_y, intensity } => {

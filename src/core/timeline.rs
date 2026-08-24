@@ -1139,6 +1139,19 @@ pub enum EffectType {
         octaves: Animatable<f32>,
         amplitude: Animatable<f32>,
     },
+    // ── Expression Controls (non-rendering utility effects, AE parity) ──
+    SliderControl {
+        value: Animatable<f32>,
+    },
+    AngleControl {
+        angle_degrees: Animatable<f32>,
+    },
+    PointControl {
+        point: Animatable<[f32; 2]>,
+    },
+    ColorControl {
+        color: Animatable<[f32; 4]>,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

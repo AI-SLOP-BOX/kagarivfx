@@ -686,8 +686,7 @@ fn apply_one(
             let center = [width as f32 * 0.5, height as f32 * 0.5];
             apply_spherical_refraction_lens(pixels, width, height, center, radius.evaluate(frame).max(1.0), ior.evaluate(frame));
         }
-        EffectType::GradientMap { low_color, mid_color, high_color } => {
-            use crate::core::ae_effects_pack_v15::apply_gradient_map_color;
+        EffectType::GradientMap { low_color, mid_color, high_color } => {            use crate::core::ae_effects_pack_v15::apply_gradient_map_color;
             let to_c3 = |c: [f32; 3]| [
                 (c[0].clamp(0.0, 1.0) * 255.0).round() as u8,
                 (c[1].clamp(0.0, 1.0) * 255.0).round() as u8,
@@ -759,6 +758,12 @@ fn apply_one(
                 frame as f32 / fps.max(1) as f32,
             );
         }
+        // Expression Controls: non-rendering utility effects (values are read
+        // by the expression engine via effect_param), so CPU pass is a no-op.
+        EffectType::SliderControl { .. } => {}
+        EffectType::AngleControl { .. } => {}
+        EffectType::PointControl { .. } => {}
+        EffectType::ColorControl { .. } => {}
     }
 }
 

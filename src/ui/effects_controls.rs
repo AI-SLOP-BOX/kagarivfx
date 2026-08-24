@@ -2007,6 +2007,30 @@ pub fn draw_effect_type_ui(
             draw_prop(ui, current_frame, project_changed, next_frame, "Octaves", octaves, |ui, v| { ui.add(egui::Slider::new(v, 1.0..=8.0)); });
             draw_prop(ui, current_frame, project_changed, next_frame, "Amplitude", amplitude, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=255.0)); });
         }
+        // ── Expression Controls ──
+        EffectType::SliderControl { value } => {
+            draw_prop(ui, current_frame, project_changed, next_frame, "Value", value, |ui, v| { ui.add(egui::DragValue::new(v).speed(0.1)); });
+        }
+        EffectType::AngleControl { angle_degrees } => {
+            draw_prop(ui, current_frame, project_changed, next_frame, "Angle", angle_degrees, |ui, v| { ui.add(egui::DragValue::new(v).speed(1.0).suffix("°")); });
+        }
+        EffectType::PointControl { point } => {
+            let p_before = point.clone();
+            if let Some(nf) = draw_property_ui(current_frame, ui, "Point", point, |ui, val| {
+                ui.horizontal(|ui| {
+                    ui.add(egui::DragValue::new(&mut val[0]).speed(1.0).prefix("X: "));
+                    ui.add(egui::DragValue::new(&mut val[1]).speed(1.0).prefix("Y: "));
+                });
+            }) { *next_frame = Some(nf); }
+            if p_before != *point { *project_changed = true; }
+        }
+        EffectType::ColorControl { color } => {
+            let c_before = color.clone();
+            if let Some(nf) = draw_property_ui(current_frame, ui, "Color", color, |ui, val| {
+                ui.color_edit_button_rgba_unmultiplied(val);
+            }) { *next_frame = Some(nf); }
+            if c_before != *color { *project_changed = true; }
+        }
     }
 }
 
