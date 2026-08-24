@@ -646,8 +646,11 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: u32) 
                     }
                 } else if let Some((starts, start_ptr)) = app.viewport_multi_drag.clone() {
                     // Group move: every selected layer follows the pointer delta
-                    let delta_x = (pointer_pos.x - start_ptr.x) / draw_w * comp_w;
-                    let delta_y = (pointer_pos.y - start_ptr.y) / draw_h * comp_h;
+                    let mut delta_x = (pointer_pos.x - start_ptr.x) / draw_w * comp_w;
+                    let mut delta_y = (pointer_pos.y - start_ptr.y) / draw_h * comp_h;
+                    if ui.input(|i| i.modifiers.shift) {
+                        if delta_x.abs() >= delta_y.abs() { delta_y = 0.0; } else { delta_x = 0.0; }
+                    }
                     let comp_mut = app.history.current_mut().active_composition_mut();
                     for (li, start_pos) in &starts {
                         if let Some(layer) = comp_mut.layers.get_mut(*li) {
@@ -658,8 +661,12 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: u32) 
                         }
                     }
                 } else if let Some((drag_idx, start_pos, start_ptr)) = app.viewport_drag_state {
-                    let delta_x = (pointer_pos.x - start_ptr.x) / draw_w * comp_w;
-                    let delta_y = (pointer_pos.y - start_ptr.y) / draw_h * comp_h;
+                    let mut delta_x = (pointer_pos.x - start_ptr.x) / draw_w * comp_w;
+                    let mut delta_y = (pointer_pos.y - start_ptr.y) / draw_h * comp_h;
+                    // Shift = axis lock (AE parity): keep the dominant axis only.
+                    if ui.input(|i| i.modifiers.shift) {
+                        if delta_x.abs() >= delta_y.abs() { delta_y = 0.0; } else { delta_x = 0.0; }
+                    }
                     let new_pos = [start_pos[0] + delta_x, start_pos[1] + delta_y];
 
                     let comp_mut = app.history.current_mut().active_composition_mut();
