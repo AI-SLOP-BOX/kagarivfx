@@ -58,6 +58,7 @@ pub mod viewport_inline_editor;
 pub mod viewport_minimap;
 pub mod align_hud;
 pub mod camera_dof_hud;
+pub mod sequence_layers_dialog;
 pub mod precompose_dialog;
 pub mod recovery_dialog;
 pub mod panel_animation;

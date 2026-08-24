@@ -386,7 +386,10 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
             });
             ui.menu_button("Animation", |ui| {
                 if ui.add(egui::Button::new("Easy Ease").shortcut_text("F9")).clicked() { ui.close_menu(); }
-                if ui.button("Keyframe Assistant").clicked() { ui.close_menu(); }
+                if ui.button("Sequence Layers...").on_hover_text("Arrange selected layers to play one after another").clicked() {
+                    app.show_sequence_layers = true;
+                    ui.close_menu();
+                }
             });
             ui.menu_button("View", |ui| {
                 ui.checkbox(&mut app.show_grid, "Show Grid");
@@ -476,6 +479,7 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
     // 📦 Pre-Compose Dialog (Cmd+Shift+C)
     crate::ui::precompose_dialog::draw_precompose_dialog(app, ctx);
     crate::ui::recovery_dialog::draw_recovery_dialog(app, ctx);
+    crate::ui::sequence_layers_dialog::draw_sequence_layers_dialog(app, ctx);
 }
 
 fn apply_effect_by_name(app: &mut crate::AfterEffectsApp, effect_name: &str) {
