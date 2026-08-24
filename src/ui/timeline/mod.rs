@@ -62,6 +62,7 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                 work_area_in: &mut app.work_area_in,
                 work_area_out: &mut app.work_area_out,
                 expanded_layers: &mut app.expanded_layers,
+                fit_to_selection: &mut app.timeline_fit_to_selection,
             };
 
             // Access live project mutably without per-frame cloning
@@ -69,6 +70,28 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                 let comp_mut = app.history.current_mut().active_composition_mut();
                 if draw_timeline_header(&mut header_state, ui, comp_mut, current_frame, total_frames) {
                     project_changed = true;
+                }
+
+                // ── Fit to Selection: zoom timeline to selected layers' time range ──
+                if app.timeline_fit_to_selection {
+                    app.timeline_fit_to_selection = false;
+                    let sel = &app.selected_layers;
+                    if !sel.is_empty() {
+                        let comp = app.history.current().active_composition();
+                        let mut min_f = u32::MAX;
+                        let mut max_f = 0u32;
+                        for &idx in sel {
+                            if let Some(layer) = comp.layers.get(idx) {
+                                min_f = min_f.min(layer.in_frame);
+                                max_f = max_f.max(layer.out_frame);
+                            }
+                        }
+                        if max_f > min_f {
+                            let span = (max_f - min_f).max(10);
+                            app.timeline_zoom = (total_frames as f32 / span as f32).clamp(0.1, 20.0);
+                            app.timeline_view_start = min_f;
+                        }
+                    }
                 }
             }
 
