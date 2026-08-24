@@ -221,6 +221,89 @@ pub fn get_all_commands() -> Vec<PaletteCommand> {
             }),
         },
         PaletteCommand {
+            name: "Layer: Stabilize Motion (from Track)",
+            category: "Animation",
+            shortcut_hint: "",
+            action: Box::new(|app| {
+                if let Some(idx) = app.selected_layer_idx {
+                    let mut baked_count = 0usize;
+                    app.modify_project(|p| {
+                        if let Some(l) = p.active_composition_mut().layers.get_mut(idx) {
+                            baked_count = crate::core::stabilizer::stabilize_layer(l);
+                        }
+                    });
+                    if baked_count > 0 {
+                        crate::core::frame_cache::bump_version();
+                        app.toasts.info(format!("Stabilized: {} position keyframes baked", baked_count));
+                    } else {
+                        app.toasts.error("Layer has no tracked data — run the Tracker first");
+                    }
+                } else {
+                    app.toasts.info("Select a layer first");
+                }
+            }),
+        },
+        PaletteCommand {
+            name: "Layer: Center in Comp",
+            category: "Layer",
+            shortcut_hint: "",
+            action: Box::new(|app| {
+                if let Some(idx) = app.selected_layer_idx {
+                    let dims = { let c = app.history.current().active_composition(); (c.width as f32 / 2.0, c.height as f32 / 2.0) };
+                    app.modify_project(move |p| {
+                        if let Some(l) = p.active_composition_mut().layers.get_mut(idx) {
+                            l.transform.position = crate::core::property::Animatable::new_constant([dims.0, dims.1]);
+                        }
+                    });
+                }
+            }),
+        },
+        PaletteCommand {
+            name: "Layer: Fit to Comp",
+            category: "Layer",
+            shortcut_hint: "",
+            action: Box::new(|app| {
+                if let Some(idx) = app.selected_layer_idx {
+                    let dims = { let c = app.history.current().active_composition(); (c.width as f32, c.height as f32) };
+                    app.modify_project(move |p| {
+                        if let Some(l) = p.active_composition_mut().layers.get_mut(idx) {
+                            let bs = l.bounding_size();
+                            if bs[0] > 1.0 && bs[1] > 1.0 {
+                                let s = (dims.0 / bs[0]).max(dims.1 / bs[1]) * 100.0;
+                                l.transform.scale = crate::core::property::Animatable::new_constant([s, s]);
+                                l.transform.position = crate::core::property::Animatable::new_constant([dims.0 / 2.0, dims.1 / 2.0]);
+                            }
+                        }
+                    });
+                }
+            }),
+        },
+        PaletteCommand {
+            name: "Layer: Flip Horizontal",
+            category: "Layer",
+            shortcut_hint: "",
+            action: Box::new(|app| {
+                if let Some(idx) = app.selected_layer_idx {
+                    let cf = app.current_frame;
+                    app.modify_project(move |p| {
+                        if let Some(l) = p.active_composition_mut().layers.get_mut(idx) {
+                            let s = l.transform.scale.evaluate(cf);
+                            l.transform.scale = crate::core::property::Animatable::new_constant([-s[0], s[1]]);
+                        }
+                    });
+                }
+            }),
+        },
+        PaletteCommand {
+            name: "Export: PNG Image Sequence",
+            category: "File",
+            shortcut_hint: "",
+            action: Box::new(|app| {
+                app.export_codec_idx = 3;
+                app.toasts.info("Codec set to PNG Sequence — open Export to render");
+            }),
+        },
+        PaletteCommand {
             name: "File: Save Project",
             category: "File",
             shortcut_hint: "Cmd+S",
