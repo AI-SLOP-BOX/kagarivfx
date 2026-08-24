@@ -2,6 +2,7 @@ pub mod utils;
 pub mod header;
 pub mod layers;
 pub mod ruler_bar;
+pub mod breadcrumb;
 pub mod precomp_children;
 pub mod pending_actions;
 pub mod keyframe_rows;
@@ -54,6 +55,8 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
             let mut pending_duration: Option<u32> = None;
             // Trim comp to work area: (w_in, w_out)
             let mut pending_trim_work_area: Option<(u32, u32)> = None;
+
+            crate::ui::timeline::breadcrumb::draw_comp_breadcrumb(app, ui);
 
             let mut header_state = header::TimelineHeaderState {
                 is_playing: &mut app.is_playing,

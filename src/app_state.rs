@@ -215,6 +215,9 @@ pub struct AfterEffectsApp {
     pub project_path: String,
     pub otio_path: String,
     pub expanded_layers: std::collections::HashSet<usize>,
+    /// Breadcrumb trail of composition indices visited via PreComp
+    /// double-click navigation (most recent = last). Back = pop.
+    pub comp_nav_stack: Vec<usize>,
     pub timeline_fit_to_selection: bool,
     pub timeline_fit_all: bool,
     /// Index of the layer currently being drag-reordered in the timeline.
@@ -375,6 +378,7 @@ impl Default for AfterEffectsApp {
             project_path: "project.aevfx.json".to_string(),
             otio_path: "timeline.otio.json".to_string(),
             expanded_layers: std::collections::HashSet::new(),
+            comp_nav_stack: Vec::new(),
             timeline_fit_to_selection: false,
             timeline_fit_all: false,
             show_grid: false,

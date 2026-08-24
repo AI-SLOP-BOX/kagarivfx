@@ -102,6 +102,9 @@ fn open_nested_comp(app: &mut AfterEffectsApp, comp_id: &str) {
     let temp_project = app.history.current_mut();
     // First search top-level compositions
     if let Some(c_idx) = temp_project.compositions.iter().position(|c| c.id == comp_id) {
+        if c_idx != temp_project.active_composition_idx {
+            app.comp_nav_stack.push(temp_project.active_composition_idx);
+        }
         temp_project.active_composition_idx = c_idx;
         crate::core::frame_cache::bump_version();
         let name = temp_project.compositions[c_idx].name.clone();
