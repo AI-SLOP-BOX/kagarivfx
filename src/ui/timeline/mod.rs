@@ -41,6 +41,8 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
             // Context-menu actions deferred to after the layer loop (borrow-safe)
             let mut pending_dup_layer: Option<usize> = None;
             let mut pending_split_layer: Option<usize> = None;
+            let mut pending_layer_marker: Option<usize> = None;
+            let mut pending_clear_markers: Option<usize> = None;
 
             let mut header_state = header::TimelineHeaderState {
                 is_playing: &mut app.is_playing,
@@ -763,6 +765,15 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                                             pending_split_layer = Some(i);
                                             ui.close_menu();
                                         }
+                                        if ui.button("📍 Add Layer Marker at Playhead").clicked() {
+                                            pending_layer_marker = Some(i);
+                                            ui.close_menu();
+                                        }
+                                        if !layer.markers.is_empty()
+                                            && ui.button("🧹 Clear Layer Markers").clicked() {
+                                            pending_clear_markers = Some(i);
+                                            ui.close_menu();
+                                        }
                                         if ui.button("Pre-Compose Selected... (Cmd+Shift+C)").clicked() {
                                             let selected_indices: Vec<usize> = if !app.selected_layers.is_empty() {
                                                 let mut s: Vec<usize> = app.selected_layers.iter().copied().collect();
@@ -984,6 +995,22 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                                         project_changed = true;
                                     }
                                 }
+                            }
+
+                            // ── Layer markers: small triangles on the bar (AE parity) ──
+                            for marker in &layer.markers {
+                                if marker.frame < start_frame || marker.frame > start_frame + zoom_span { continue; }
+                                let norm = (marker.frame - start_frame) as f32 / zoom_span as f32;
+                                let mx = layer_rect.left() + norm * layer_rect.width();
+                                let my = layer_rect.top() + 1.0;
+                                let [r, g, b] = marker.color;
+                                let mcol = egui::Color32::from_rgb((r * 255.0) as u8, (g * 255.0) as u8, (b * 255.0) as u8);
+                                let pts = vec![
+                                    egui::pos2(mx, my + 5.0),
+                                    egui::pos2(mx - 4.0, my),
+                                    egui::pos2(mx + 4.0, my),
+                                ];
+                                ui.painter().add(egui::Shape::convex_polygon(pts, mcol, egui::Stroke::NONE));
                             }
 
                             // ── Real waveform for video layers with audio ──
@@ -1347,6 +1374,47 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                         .map(|i| remap(*i))
                         .collect();
                     project_changed = true;
+                }
+            }
+
+            // ── Context-menu: layer markers ──
+            if let Some(idx) = pending_layer_marker {
+                let cur = *current_frame;
+                if let Some(layer) = temp_project.active_composition_mut().layers.get_mut(idx) {
+                    layer.markers.push(crate::core::timeline::TimelineMarker {
+                        frame: cur,
+                        label: format!("Marker {}", layer.markers.len() + 1),
+                        color: [0.95, 0.85, 0.10],
+                    });
+                    project_changed = true;
+                    app.toasts.info(format!("Layer marker at frame {}", cur));
+                }
+            }
+            if let Some(idx) = pending_clear_markers {
+                if let Some(layer) = temp_project.active_composition_mut().layers.get_mut(idx) {
+                    layer.markers.clear();
+                    project_changed = true;
+                }
+            }
+
+            // ── Alt+M: toggle a layer marker on the selected layer at the playhead ──
+            if ui.input(|inp| inp.modifiers.alt && inp.key_pressed(egui::Key::M)) {
+                if let Some(sel_idx) = app.selected_layer_idx {
+                    let cur = *current_frame;
+                    if let Some(layer) = temp_project.active_composition_mut().layers.get_mut(sel_idx) {
+                        if let Some(pos) = layer.markers.iter().position(|m| m.frame == cur) {
+                            layer.markers.remove(pos);
+                            app.toasts.info("Layer marker removed");
+                        } else {
+                            layer.markers.push(crate::core::timeline::TimelineMarker {
+                                frame: cur,
+                                label: format!("Marker {}", layer.markers.len() + 1),
+                                color: [0.95, 0.85, 0.10],
+                            });
+                            app.toasts.info(format!("Layer marker at frame {}", cur));
+                        }
+                        project_changed = true;
+                    }
                 }
             }
 

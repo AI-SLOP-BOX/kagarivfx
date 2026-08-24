@@ -1213,6 +1213,10 @@ pub struct Layer {
     // ── AE Masking System ──
     pub masks: Vec<crate::core::mask::Mask>,
 
+    // ── AE Layer Markers (per-layer comment flags) ──
+    #[serde(default)]
+    pub markers: Vec<TimelineMarker>,
+
     // ── AE Layer Style System ──
     pub style: LayerStyle,
 
@@ -1271,6 +1275,7 @@ impl Layer {
             effects_enabled: true,
             is_collapsed: false,
             masks: Vec::new(),
+            markers: Vec::new(),
             style: LayerStyle::default(),
             text_formatting: None,
             text_animator: None,
