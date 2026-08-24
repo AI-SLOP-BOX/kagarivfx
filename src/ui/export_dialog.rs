@@ -186,12 +186,14 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
                     .selected_text(match app.export_format_preset {
                         0 => "H.264 / MP4 (Standard)",
                         1 => "Apple ProRes 422 HQ (MOV)",
-                        _ => "PNG Image Sequence",
+                        2 => "PNG Image Sequence",
+                        _ => "Lottie / Bodymovin (.json)",
                     })
                     .show_ui(ui, |ui| {
                         ui.selectable_value(&mut app.export_format_preset, 0, "H.264 / MP4 (Standard)");
                         ui.selectable_value(&mut app.export_format_preset, 1, "Apple ProRes 422 HQ (MOV)");
                         ui.selectable_value(&mut app.export_format_preset, 2, "PNG Image Sequence");
+                        ui.selectable_value(&mut app.export_format_preset, 3, "Lottie / Bodymovin (.json)");
                     });
             });
 
@@ -320,7 +322,49 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
 
                 ui.horizontal(|ui| {
                     let active_comp_name = app.history.current().active_composition().name.clone();
-                    if ui.button("Start Async Render").clicked() {
+                    if app.export_format_preset == 3 {
+                        // Lottie: synchronous JSON write — fast, no ffmpeg required.
+                        if ui.button("Export Lottie JSON").clicked() {
+                            let project = app.history.current().clone();
+                            let json = crate::core::lottie_exporter::export_project_to_json(&project);
+                            // The Lottie format cannot carry effects; warn instead of losing them silently.
+                            let effect_count: usize = project
+                                .compositions
+                                .iter()
+                                .flat_map(|c| c.layers.iter())
+                                .map(|l| l.effects.iter().filter(|e| e.enabled).count())
+                                .sum();
+                            let mut path = app.export_output_path.trim().to_string();
+                            if path.is_empty() {
+                                path = format!("{}_lottie", active_comp_name.replace(' ', "_"));
+                            }
+                            if !path.ends_with(".json") {
+                                path.push_str(".json");
+                            }
+                            match std::fs::write(&path, &json) {
+                                Ok(()) => {
+                                    app.export_status =
+                                        Some(format!("Lottie export complete → {}", path));
+                                    app.toasts.info(format!(
+                                        "Lottie exported → {} ({} bytes)",
+                                        path,
+                                        json.len()
+                                    ));
+                                    if effect_count > 0 {
+                                        app.toasts.warning(format!(
+                                            "{} enabled effect(s) are NOT part of Lottie output (format limitation)",
+                                            effect_count
+                                        ));
+                                    }
+                                }
+                                Err(e) => {
+                                    app.export_status =
+                                        Some(format!("Error: Lottie export failed: {}", e));
+                                    app.toasts.error(format!("Lottie export failed: {}", e));
+                                }
+                            }
+                        }
+                    } else if ui.button("Start Async Render").clicked() {
                         start_comp_export(app, ctx, &active_comp_name);
                     }
                     if ui.button("Close").clicked() {
