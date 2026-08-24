@@ -192,5 +192,74 @@
 - **J/K/L semantics changed**: J=prev KF, K=next KF, L=play forward. Don't re-add shuttle J/K.
 - **T key** = Opacity reveal; **Cmd+T** = Text tool. Bare T must not switch tools.
 - **pending_* pattern**: timeline/mod.rs defers mutations out of the row loop (borrow-safe). Follow it for new row-context actions.
-- **draw_prop_row_ext** now takes 4 optional callbacks: on_move, on_select, on_menu, on_box_select, on_group_move.
-- If you add EffectType variants: update `apply_effect_by_name` in menu.rs only if adding to Effect menu; my code has no exhaustive match over EffectType.
+- **draw_prop_row_ext** now takes 5 optional callbacks: on_move, on_select, on_menu, on_box_select, on_group_move.
+- If you add EffectType variants: register animatable params in `core/effect_params.rs` (`animatable_params()`) for timeline rows; update `apply_effect_by_name` in menu.rs for Effect menu.
+
+### What Antigravity Completed (Session 2 — 2026-08-24)
+**8 audit items completed + ~25 additional features/fixes (479 tests pass)**
+
+**Viewport features:**
+- Multi-layer group drag (shift-click → drag moves all selected)
+- Scale corner handles (Selection tool)
+- Checkerboard transparency grid (16px light/dark)
+- Tool cursors: Hand→Grab, Selection→PointingHand, Rotation→ResizeHorizontal, AnchorPoint/Pen→Crosshair, Zoom→ZoomIn/Out
+- Hand tool pans, Zoom tool click-zooms (were falling through to layer move)
+- Double-click text layer opens inline editor
+- Q tool creates rectangles, T tool creates text layers on viewport
+- Pen tool draws mask vertices (G key), commits on Enter/dblclick
+
+**Timeline features:**
+- Duplicate Layer inserts clone (was no-op)
+- Split Layer creates true tail layer (was just trim)
+- U/UU/A reveal modes filter property rows
+- Time Stretch rescales duration + keyframe times
+- Layer bars use label colors (selected=full, unselected=dimmed)
+- Timecode ruler (HH:MM:SS:FF) with overlap thinning
+- Draggable work-area In/Out handles
+- Playhead inverted triangle handle
+- Ruler scrub cursor feedback
+- Alt+drag slip edit on layer bars
+- Shift+drag Out-point ripple edit
+- Layer bar vertical drag reorders in stack (new this session)
+- Layer markers (Alt+M)
+- Double-click PreComp opens nested composition
+- Ruler right-click menu (Zoom to WA, Set Duration, Reset WA)
+- Right-click keyframe context menu (Linear/Easy Ease/Hold/Reverse/Delete)
+- Shift+drag marquee box-select for keyframes
+- Selected keyframes move together (group drag)
+
+**Other UI:**
+- Inspector shows composition dimensions + frame rate (📐 WxH ⏱ fps)
+- Transport panel shows current timecode + frame number
+- Sequence Layers keyframe assistant dialog
+- Effect menu applies 17+ effects to selected layer
+- Graph editor click-to-create keyframes
+- Motion path eased sampling + playhead dot
+- Edit > Duplicate menu now works (was stub toast)
+- Layer > Light creation
+- File > Import Image
+- Composition > Save Frame As PNG
+- Cmd+N new composition, Cmd+S overwrite save
+- Render queue sequential batch FFmpeg export
+- Keyframe navigation: J/K/L, T reveals Opacity
+- Shortcuts dialog + command palette updated
+
+**Core infrastructure:**
+- `core/effect_params.rs` — generic param reflection for ALL EffectType variants (timeline rows auto-generated from `animatable_params()` method; future-proof catch-all)
+- `core/mask.rs` — MaskPath, MaskVertex, MaskMode structs for pen tool masks
+- Status bar pixel color sampling from frame cache
+
+**Files the other AI should NOT touch (Antigravity-owned):**
+- `src/ui/shortcuts.rs`, `src/ui/menu.rs`, `src/ui/viewport.rs`, `src/ui/viewport_overlays.rs`
+- `src/ui/timeline/` (all files), `src/ui/graph_editor.rs`
+- `src/ui/transport_panel.rs`, `src/ui/inspector.rs`, `src/ui/inspector_layer.rs`
+- `src/ui/render_queue.rs`, `src/ui/export_dialog.rs`, `src/ui/shortcuts_dialog.rs`
+- `src/ui/command_palette.rs`, `src/ui/sequence_layers_dialog.rs`
+- `src/app_state.rs`, `src/core/mask.rs`, `src/core/effect_params.rs`
+
+### Remaining Gaps (Priority Order)
+1. **GPU mask compositing** — shader.wgsl/renderer.rs (your zone); masks are CPU-only; viewport shows HUD warning
+2. **Spatial bezier handles** on motion path (AE shows control points on the path overlay)
+3. **Keyframe value numeric editing** from graph editor (click → popup to type exact value)
+4. **Extend slip/ripple to effect keyframes** (currently only transform tracks)
+5. **Effect timeline rows** for remaining ~60 unregistered EffectType variants in effect_params.rs
