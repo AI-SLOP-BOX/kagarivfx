@@ -963,17 +963,46 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                                     let delta_frames =
                                         (body_resp.drag_delta().x / bar_rect.width() * zoom_span as f32).round() as i32;
                                     if delta_frames != 0 {
-                                        let span = layer.out_frame - layer.in_frame;
-                                        let new_in = (layer.in_frame as i32 + delta_frames)
-                                            .clamp(0, (total_frames - span) as i32)
-                                            as u32;
-                                        layer.in_frame = new_in;
-                                        layer.out_frame = new_in + span;
+                                        let alt_held = ui.input(|inp| inp.modifiers.alt);
+                                        if alt_held {
+                                            // ── Slip edit: bar stays, content timing shifts ──
+                                            // Keyframes & markers move opposite the drag so a
+                                            // different moment of the source plays at the same time.
+                                            let shift = -delta_frames;
+                                            for kf in layer.transform.position.keyframes_mut().into_iter().flatten() {
+                                                kf.frame = (kf.frame as i64 + shift as i64).clamp(0, u32::MAX as i64) as u32;
+                                            }
+                                            if let Some(kfs) = layer.transform.position.keyframes_mut() { kfs.sort_by_key(|k| k.frame); }
+                                            for kf in layer.transform.scale.keyframes_mut().into_iter().flatten() {
+                                                kf.frame = (kf.frame as i64 + shift as i64).clamp(0, u32::MAX as i64) as u32;
+                                            }
+                                            if let Some(kfs) = layer.transform.scale.keyframes_mut() { kfs.sort_by_key(|k| k.frame); }
+                                            for kf in layer.transform.rotation.keyframes_mut().into_iter().flatten() {
+                                                kf.frame = (kf.frame as i64 + shift as i64).clamp(0, u32::MAX as i64) as u32;
+                                            }
+                                            if let Some(kfs) = layer.transform.rotation.keyframes_mut() { kfs.sort_by_key(|k| k.frame); }
+                                            for kf in layer.transform.opacity.keyframes_mut().into_iter().flatten() {
+                                                kf.frame = (kf.frame as i64 + shift as i64).clamp(0, u32::MAX as i64) as u32;
+                                            }
+                                            if let Some(kfs) = layer.transform.opacity.keyframes_mut() { kfs.sort_by_key(|k| k.frame); }
+                                            for m in layer.markers.iter_mut() {
+                                                m.frame = (m.frame as i64 + shift as i64).clamp(0, u32::MAX as i64) as u32;
+                                            }
+                                        } else {
+                                            // Slide: move the whole bar
+                                            let span = layer.out_frame - layer.in_frame;
+                                            let new_in = (layer.in_frame as i32 + delta_frames)
+                                                .clamp(0, (total_frames - span) as i32)
+                                                as u32;
+                                            layer.in_frame = new_in;
+                                            layer.out_frame = new_in + span;
+                                        }
                                         project_changed = true;
                                     }
                                 }
                                 if body_resp.hovered() && !in_resp.hovered() && !out_resp.hovered() {
-                                    ui.ctx().set_cursor_icon(egui::CursorIcon::Grab);
+                                    let alt_held = ui.input(|inp| inp.modifiers.alt);
+                                    ui.ctx().set_cursor_icon(if alt_held { egui::CursorIcon::ResizeHorizontal } else { egui::CursorIcon::Grab });
                                 }
                             }
 
