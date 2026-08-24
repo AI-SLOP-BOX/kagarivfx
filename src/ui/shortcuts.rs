@@ -79,6 +79,11 @@ pub fn handle_global_shortcuts(
             app.viewport_mag_ratio = 0.0; // 0.0 = fit mode
             app.viewport_pan = egui::Vec2::ZERO;
         }
+        // Cmd+0 → Viewport zoom to fit (AE standard)
+        if cmd && i.key_pressed(Key::Num0) {
+            app.viewport_mag_ratio = 0.0;
+            app.viewport_pan = egui::Vec2::ZERO;
+        }
 
         // B → Set Work Area Start, N → Set Work Area End (single-key)
         if allow_single_key && i.key_pressed(Key::B) && !cmd {
