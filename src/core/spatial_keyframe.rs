@@ -1,4 +1,8 @@
-#![allow(dead_code)]
+//! Spatial keyframes with Rove Across Time (AE spatial interpolation).
+//!
+//! Wired end-to-end via the Command Palette entry
+//! "Keyframe Assistant: Rove Across Time (Position)", which feeds the
+//! selected layer's position track through [`smooth_keyframe_velocity`].
 use crate::core::keyframe::Keyframe;
 
 /// Spatial keyframe with optional Rove Across Time capability (AE Spatial Interpolation).

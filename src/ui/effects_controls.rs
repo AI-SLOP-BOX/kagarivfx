@@ -163,6 +163,23 @@ pub fn get_all_effect_presets() -> &'static [EffectPreset] {
             },
         },
         EffectPreset {
+            name: "Corner Pin",
+            button_label: "+ Corner Pin",
+            search_key: "corner pin perspective homography screen insert cc power pin",
+            id_prefix: "cornerpin",
+            create_fn: |idx| Effect {
+                id: format!("cornerpin_{}", idx),
+                name: "Corner Pin".to_string(),
+                effect_type: EffectType::CornerPin {
+                    top_left: Animatable::new_constant([0.0, 0.0]),
+                    top_right: Animatable::new_constant([1920.0, 0.0]),
+                    bottom_right: Animatable::new_constant([1920.0, 1080.0]),
+                    bottom_left: Animatable::new_constant([0.0, 1080.0]),
+                },
+                enabled: true,
+            },
+        },
+        EffectPreset {
             name: "Cinematic 3D LUT",
             button_label: "+ Cinematic 3D LUT",
             search_key: "lut",
@@ -1452,6 +1469,46 @@ pub fn draw_effect_type_ui(
                 });
             }) { *next_frame = Some(nf); }
             if br_before != *bottom_right { *project_changed = true; }
+        }
+        EffectType::CornerPin { top_left, top_right, bottom_right, bottom_left } => {
+            let tl_before = top_left.clone();
+            if let Some(nf) = draw_property_ui(current_frame, ui, "Top Left Pin", top_left, |ui, val| {
+                ui.horizontal(|ui| {
+                    ui.add(egui::DragValue::new(&mut val[0]).speed(1.0).prefix("X: "));
+                    ui.add(egui::DragValue::new(&mut val[1]).speed(1.0).prefix("Y: "));
+                });
+            }) { *next_frame = Some(nf); }
+            if tl_before != *top_left { *project_changed = true; }
+
+            let tr_before = top_right.clone();
+            if let Some(nf) = draw_property_ui(current_frame, ui, "Top Right Pin", top_right, |ui, val| {
+                ui.horizontal(|ui| {
+                    ui.add(egui::DragValue::new(&mut val[0]).speed(1.0).prefix("X: "));
+                    ui.add(egui::DragValue::new(&mut val[1]).speed(1.0).prefix("Y: "));
+                });
+            }) { *next_frame = Some(nf); }
+            if tr_before != *top_right { *project_changed = true; }
+
+            let br_before = bottom_right.clone();
+            if let Some(nf) = draw_property_ui(current_frame, ui, "Bottom Right Pin", bottom_right, |ui, val| {
+                ui.horizontal(|ui| {
+                    ui.add(egui::DragValue::new(&mut val[0]).speed(1.0).prefix("X: "));
+                    ui.add(egui::DragValue::new(&mut val[1]).speed(1.0).prefix("Y: "));
+                });
+            }) { *next_frame = Some(nf); }
+            if br_before != *bottom_right { *project_changed = true; }
+
+            let bl_before = bottom_left.clone();
+            if let Some(nf) = draw_property_ui(current_frame, ui, "Bottom Left Pin", bottom_left, |ui, val| {
+                ui.horizontal(|ui| {
+                    ui.add(egui::DragValue::new(&mut val[0]).speed(1.0).prefix("X: "));
+                    ui.add(egui::DragValue::new(&mut val[1]).speed(1.0).prefix("Y: "));
+                });
+            }) { *next_frame = Some(nf); }
+            if bl_before != *bottom_left { *project_changed = true; }
+
+            ui.label(egui::RichText::new("Pin corners in layer pixel space (animatable)").small()
+                .color(crate::ui::theme::colors::TEXT_SECONDARY));
         }
         EffectType::ColorGradeLUT { lut_path, intensity } => {
             ui.horizontal(|ui| {

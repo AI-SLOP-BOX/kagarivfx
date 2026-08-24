@@ -73,6 +73,12 @@ impl EffectType {
                 push!("Bottom Left", bottom_left, Vec2);
                 push!("Bottom Right", bottom_right, Vec2);
             }
+            EffectType::CornerPin { top_left, top_right, bottom_right, bottom_left } => {
+                push!("Top Left", top_left, Vec2);
+                push!("Top Right", top_right, Vec2);
+                push!("Bottom Right", bottom_right, Vec2);
+                push!("Bottom Left", bottom_left, Vec2);
+            }
             EffectType::FilmGrain { intensity, .. } => push!("Grain Intensity", intensity, Scalar),
             EffectType::Twirl { angle, radius } => {
                 push!("Angle", angle, Scalar);

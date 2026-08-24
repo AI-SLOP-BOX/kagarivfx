@@ -870,6 +870,18 @@ fn apply_effect_by_name(app: &mut crate::AfterEffectsApp, effect_name: &str) {
                         bottom_right: crate::core::property::Animatable::new_constant([1.0, 1.0]),
                     }, enabled: true,
                 },
+                "Corner Pin" => {
+                    let (cw, ch) = (comp.width as f32, comp.height as f32);
+                    crate::core::timeline::Effect {
+                        id: format!("cornerpin_{}", len), name: "Corner Pin".to_string(),
+                        effect_type: crate::core::timeline::EffectType::CornerPin {
+                            top_left: crate::core::property::Animatable::new_constant([0.0, 0.0]),
+                            top_right: crate::core::property::Animatable::new_constant([cw, 0.0]),
+                            bottom_right: crate::core::property::Animatable::new_constant([cw, ch]),
+                            bottom_left: crate::core::property::Animatable::new_constant([0.0, ch]),
+                        }, enabled: true,
+                    }
+                }
                 "Chromatic Aberration" => crate::core::timeline::Effect {
                     id: format!("ca_{}", len), name: "Chromatic Aberration".to_string(),
                     effect_type: crate::core::timeline::EffectType::ChromaticAberration {

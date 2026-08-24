@@ -1,5 +1,11 @@
 #![allow(dead_code)]
-/// Corner Pin options matching After Effects Corner Pin effect.
+/// AE Corner Pin: options + 8-DOF homography warp.
+///
+/// Wired end-to-end via `EffectType::CornerPin` (CPU dispatch in
+/// `cpu_effects::apply_one`, keyframeable params in `effect_params`).
+/// `top_left`/`top_right`/`bottom_right`/`bottom_left` are the four pinned
+/// corner positions in layer-buffer pixel space; the identity pin equals
+/// [`CornerPinOptions::default_for_size`].
 #[derive(Debug, Clone)]
 pub struct CornerPinOptions {
     pub top_left: [f32; 2],
@@ -212,5 +218,71 @@ mod tests {
         let out = apply_corner_pin(&pixels, 4, 4, &options);
         assert_eq!(out.len(), 64);
         assert_eq!(out[0], 255);
+    }
+
+    #[test]
+    fn test_corner_pin_shifts_content_by_pin_offset() {
+        // 4x4 image with only the first column opaque red.
+        let mut pixels = vec![0u8; 64];
+        for y in 0..3usize {
+            let i = (y * 4) * 4;
+            pixels[i] = 255;
+            pixels[i + 3] = 255;
+        }
+        // Pin the whole rect shifted +2 px in x.
+        let options = CornerPinOptions {
+            top_left: [2.0, 0.0],
+            top_right: [6.0, 0.0],
+            bottom_right: [6.0, 4.0],
+            bottom_left: [2.0, 4.0],
+        };
+        let out = apply_corner_pin(&pixels, 4, 4, &options);
+
+        // Destination column 2 samples source column 0 → opaque red.
+        for y in 0..3usize {
+            let i = (y * 4 + 2) * 4;
+            assert_eq!(out[i], 255, "red shifted to x=2 at row {}", y);
+            assert_eq!(out[i + 3], 255, "alpha carried to x=2 at row {}", y);
+        }
+        // Destination column 0 is outside the pinned quad → transparent.
+        for y in 0..3usize {
+            let i = (y * 4) * 4;
+            assert_eq!(out[i + 3], 0, "unpinned region cleared at row {}", y);
+        }
+    }
+
+    #[test]
+    fn test_corner_pin_degenerate_quad_is_identity() {
+        let mut pixels = vec![0u8; 64];
+        for i in (0..64).step_by(4) {
+            pixels[i] = 200;
+            pixels[i + 3] = 255;
+        }
+        // All four pins collinear → homography unsolvable → passthrough.
+        let options = CornerPinOptions {
+            top_left: [0.0, 0.0],
+            top_right: [2.0, 0.0],
+            bottom_right: [4.0, 0.0],
+            bottom_left: [1.0, 0.0],
+        };
+        let out = apply_corner_pin(&pixels, 4, 4, &options);
+        assert_eq!(out, pixels);
+    }
+
+    #[test]
+    fn test_corner_pin_deterministic_output() {
+        let mut pixels = vec![0u8; 64];
+        for (i, v) in pixels.iter_mut().enumerate() {
+            *v = (i * 37 % 251) as u8;
+        }
+        let options = CornerPinOptions {
+            top_left: [0.5, 0.5],
+            top_right: [3.5, 0.25],
+            bottom_right: [3.75, 3.5],
+            bottom_left: [0.25, 3.25],
+        };
+        let a = apply_corner_pin(&pixels, 4, 4, &options);
+        let b = apply_corner_pin(&pixels, 4, 4, &options);
+        assert_eq!(a, b);
     }
 }

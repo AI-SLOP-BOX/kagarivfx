@@ -199,6 +199,28 @@ pub fn get_all_commands() -> Vec<PaletteCommand> {
             }),
         },
         PaletteCommand {
+            name: "Keyframe Assistant: Rove Across Time (Position)",
+            category: "Animation",
+            shortcut_hint: "",
+            action: Box::new(|app| {
+                if let Some(idx) = app.selected_layer_idx {
+                    app.modify_project(move |p| {
+                        if let Some(l) = p.active_composition_mut().layers.get_mut(idx) {
+                            if let Some(kfs) = l.transform.position.keyframes_mut() {
+                                if kfs.len() >= 3 {
+                                    // AE roving: interior keyframes slide along time
+                                    // so velocity stays constant across the path.
+                                    let rove: Vec<usize> = (1..kfs.len() - 1).collect();
+                                    crate::core::spatial_keyframe::smooth_keyframe_velocity(kfs, &rove);
+                                }
+                            }
+                        }
+                    });
+                    crate::core::frame_cache::bump_version();
+                }
+            }),
+        },
+        PaletteCommand {
             name: "File: Save Project",
             category: "File",
             shortcut_hint: "Cmd+S",

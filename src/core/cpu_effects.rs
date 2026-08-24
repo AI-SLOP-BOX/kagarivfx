@@ -242,6 +242,16 @@ fn apply_one(
                 bottom_left.evaluate(frame), bottom_right.evaluate(frame),
             );
         }
+        EffectType::CornerPin { top_left, top_right, bottom_right, bottom_left } => {
+            let opts = crate::core::corner_pin::CornerPinOptions {
+                top_left: top_left.evaluate(frame),
+                top_right: top_right.evaluate(frame),
+                bottom_right: bottom_right.evaluate(frame),
+                bottom_left: bottom_left.evaluate(frame),
+            };
+            let out = crate::core::corner_pin::apply_corner_pin(pixels, width, height, &opts);
+            pixels.copy_from_slice(&out);
+        }
         EffectType::ColorGradeLUT { lut_path, intensity } => {
             let _ = intensity.evaluate(frame);
             if !lut_path.is_empty() {
@@ -1013,7 +1023,7 @@ mod tests {
             0,
         );
         let row0 = (px[0] as u32 + px[4] as u32) / 2;
-        let row1 = ((px[(1 * 8 * 4)] as u32) + px[(1 * 8 * 4) + 4] as u32) / 2;
+        let row1 = (px[32] as u32 + px[36] as u32) / 2;
         assert_eq!(row0, 45, "row 0 (y%2==0) darkened to 50%");
         assert_eq!(row1, 90, "odd rows untouched");
     }
@@ -1074,7 +1084,7 @@ mod tests {
             })],
             0,
         );
-        let corner = (1 * 8 + 1) * 4;
+        let corner = (8 + 1) * 4;
         assert_eq!(px[corner + 3], 0, "choke must erode the alpha corner");
 
         // Spread must re-dilate it back.
@@ -1087,10 +1097,10 @@ mod tests {
             })],
             0,
         );
-        assert_eq!(px[(1 * 8 + 0) * 4 + 3], 255, "spread must dilate alpha outward");
+        assert_eq!(px[(8 * 4) + 3], 255, "spread must dilate alpha outward");
 
         // Luma→alpha: white = opaque, black = transparent; invert flips both.
-        let mut px = vec![0u8; 2 * 1 * 4];
+        let mut px = vec![0u8; 2 * 4];
         px[0] = 255; px[1] = 255; px[2] = 255; px[3] = 255;
         px[4] = 0; px[5] = 0; px[6] = 0; px[7] = 255;
         apply_layer_effects(
@@ -1101,7 +1111,7 @@ mod tests {
         assert_eq!(px[3], 255, "white luma must become full alpha");
         assert_eq!(px[7], 0, "black luma must become zero alpha");
 
-        let mut px = vec![0u8; 2 * 1 * 4];
+        let mut px = vec![0u8; 2 * 4];
         px[0] = 255; px[1] = 255; px[2] = 255; px[3] = 255;
         px[4] = 0; px[5] = 0; px[6] = 0; px[7] = 255;
         apply_layer_effects(

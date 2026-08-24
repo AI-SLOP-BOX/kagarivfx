@@ -739,6 +739,14 @@ pub enum EffectType {
         bottom_left: Animatable<[f32; 2]>,
         bottom_right: Animatable<[f32; 2]>,
     },
+    /// AE Corner Pin: 8-DOF homography mapping the layer rectangle onto an
+    /// arbitrary target quadrilateral (screen inserts, perspective billboards).
+    CornerPin {
+        top_left: Animatable<[f32; 2]>,
+        top_right: Animatable<[f32; 2]>,
+        bottom_right: Animatable<[f32; 2]>,
+        bottom_left: Animatable<[f32; 2]>,
+    },
     ColorGradeLUT {
         lut_path: String,
         intensity: Animatable<f32>,
