@@ -674,6 +674,53 @@ fn apply_one(
             let center = [width as f32 * 0.5, height as f32 * 0.5];
             apply_spherical_refraction_lens(pixels, width, height, center, radius.evaluate(frame).max(1.0), ior.evaluate(frame));
         }
+        EffectType::GradientMap { low_color, mid_color, high_color } => {
+            use crate::core::ae_effects_pack_v15::apply_gradient_map_color;
+            let to_c3 = |c: [f32; 3]| [
+                (c[0].clamp(0.0, 1.0) * 255.0).round() as u8,
+                (c[1].clamp(0.0, 1.0) * 255.0).round() as u8,
+                (c[2].clamp(0.0, 1.0) * 255.0).round() as u8,
+            ];
+            apply_gradient_map_color(
+                pixels,
+                to_c3(low_color.evaluate(frame)),
+                to_c3(mid_color.evaluate(frame)),
+                to_c3(high_color.evaluate(frame)),
+            );
+        }
+        EffectType::LightLeak { pos_x, pos_y, intensity } => {
+            use crate::core::ae_effects_pack_v14::apply_light_leak_synth;
+            let pos = [
+                pos_x.evaluate(frame).clamp(0.0, 1.0) * width as f32,
+                pos_y.evaluate(frame).clamp(0.0, 1.0) * height as f32,
+            ];
+            // Warm cinematic leak colour (fixed tint; position/intensity animate).
+            apply_light_leak_synth(pixels, width, height, pos, intensity.evaluate(frame), [255, 180, 90]);
+        }
+        EffectType::BevelAlpha { depth, light_angle_deg } => {
+            use crate::core::ae_effects_pack_v14::apply_bevel_alpha_3d;
+            apply_bevel_alpha_3d(
+                pixels,
+                width,
+                height,
+                depth.evaluate(frame).round().clamp(1.0, 32.0) as u32,
+                light_angle_deg.evaluate(frame),
+            );
+        }
+        EffectType::CrossHatch { line_gap, threshold } => {
+            use crate::core::ae_effects_pack_v17::apply_cross_hatch;
+            apply_cross_hatch(
+                pixels,
+                width,
+                height,
+                line_gap.evaluate(frame).round().clamp(2.0, 64.0) as u32,
+                threshold.evaluate(frame).round().clamp(0.0, 255.0) as u8,
+            );
+        }
+        EffectType::CmykHalftone { dot_size } => {
+            use crate::core::ae_effects_pack_v16::apply_color_halftone_cmyk;
+            apply_color_halftone_cmyk(pixels, width, height, dot_size.evaluate(frame).round().clamp(2.0, 64.0) as u32);
+        }
     }
 }
 
@@ -1304,5 +1351,40 @@ mod tests {
             0,
         );
         assert_eq!(px, base, "zero-strength directional sharpen must be a no-op");
+    }
+
+    #[test]
+    fn test_generate_stylize_pack() {
+        let base = solid_layer(8, 8, 128, 128, 128);
+
+        // A flat single-colour gradient maps every pixel to that colour.
+        let mut px = base.clone();
+        apply_layer_effects(
+            &mut px, 8, 8,
+            &[effect("gm", EffectType::GradientMap {
+                low_color: Animatable::new_constant([1.0, 0.0, 0.0]),
+                mid_color: Animatable::new_constant([1.0, 0.0, 0.0]),
+                high_color: Animatable::new_constant([1.0, 0.0, 0.0]),
+            })],
+            0,
+        );
+        for p in px.chunks_exact(4) {
+            assert_eq!(p[0], 255, "flat gradient map R");
+            assert_eq!(p[1], 0, "flat gradient map G");
+            assert_eq!(p[2], 0, "flat gradient map B");
+        }
+
+        // Zero-intensity light leak must be a no-op.
+        let mut px = base.clone();
+        apply_layer_effects(
+            &mut px, 8, 8,
+            &[effect("leak", EffectType::LightLeak {
+                pos_x: Animatable::new_constant(0.5),
+                pos_y: Animatable::new_constant(0.5),
+                intensity: Animatable::new_constant(0.0),
+            })],
+            0,
+        );
+        assert_eq!(px, base, "zero-intensity light leak must be a no-op");
     }
 }

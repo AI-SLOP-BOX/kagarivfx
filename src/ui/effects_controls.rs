@@ -1068,6 +1068,82 @@ pub fn get_all_effect_presets() -> &'static [EffectPreset] {
                 enabled: true,
             },
         },
+        EffectPreset {
+            name: "Gradient Map",
+            button_label: "+ Gradient Map",
+            search_key: "gradient map shadow mid high ramp duotone tritone colorize",
+            id_prefix: "gradmap",
+            create_fn: |idx| Effect {
+                id: format!("gradmap_{}", idx),
+                name: "Gradient Map".to_string(),
+                effect_type: EffectType::GradientMap {
+                    low_color: Animatable::new_constant([0.1, 0.1, 0.3]),
+                    mid_color: Animatable::new_constant([0.6, 0.3, 0.4]),
+                    high_color: Animatable::new_constant([1.0, 0.9, 0.7]),
+                },
+                enabled: true,
+            },
+        },
+        EffectPreset {
+            name: "Light Leak",
+            button_label: "+ Light Leak",
+            search_key: "light leak flare warm cinematic vintage overlay glow",
+            id_prefix: "leak",
+            create_fn: |idx| Effect {
+                id: format!("leak_{}", idx),
+                name: "Light Leak".to_string(),
+                effect_type: EffectType::LightLeak {
+                    pos_x: Animatable::new_constant(0.85),
+                    pos_y: Animatable::new_constant(0.15),
+                    intensity: Animatable::new_constant(1.2),
+                },
+                enabled: true,
+            },
+        },
+        EffectPreset {
+            name: "Bevel Alpha 3D",
+            button_label: "+ Bevel Alpha 3D",
+            search_key: "bevel alpha 3d inner contour highlight depth emboss edge",
+            id_prefix: "balpha",
+            create_fn: |idx| Effect {
+                id: format!("balpha_{}", idx),
+                name: "Bevel Alpha 3D".to_string(),
+                effect_type: EffectType::BevelAlpha {
+                    depth: Animatable::new_constant(6.0),
+                    light_angle_deg: Animatable::new_constant(135.0),
+                },
+                enabled: true,
+            },
+        },
+        EffectPreset {
+            name: "Cross Hatch",
+            button_label: "+ Cross Hatch",
+            search_key: "cross hatch ink sketch drawing pen lines comic",
+            id_prefix: "xhatch",
+            create_fn: |idx| Effect {
+                id: format!("xhatch_{}", idx),
+                name: "Cross Hatch".to_string(),
+                effect_type: EffectType::CrossHatch {
+                    line_gap: Animatable::new_constant(8.0),
+                    threshold: Animatable::new_constant(140.0),
+                },
+                enabled: true,
+            },
+        },
+        EffectPreset {
+            name: "CMYK Halftone",
+            button_label: "+ CMYK Halftone",
+            search_key: "cmyk halftone print newspaper dots offset press",
+            id_prefix: "cmhk",
+            create_fn: |idx| Effect {
+                id: format!("cmhk_{}", idx),
+                name: "CMYK Halftone".to_string(),
+                effect_type: EffectType::CmykHalftone {
+                    dot_size: Animatable::new_constant(6.0),
+                },
+                enabled: true,
+            },
+        },
     ]
 }
 
@@ -1781,6 +1857,41 @@ pub fn draw_effect_type_ui(
         EffectType::RefractionLens { radius, ior } => {
             draw_prop(ui, current_frame, project_changed, next_frame, "Radius", radius, |ui, v| { ui.add(egui::Slider::new(v, 1.0..=2000.0).suffix(" px")); });
             draw_prop(ui, current_frame, project_changed, next_frame, "IOR", ior, |ui, v| { ui.add(egui::Slider::new(v, 1.0..=3.0)); });
+        }
+        EffectType::GradientMap { low_color, mid_color, high_color } => {
+            let lc_before = low_color.clone();
+            if let Some(nf) = draw_property_ui(current_frame, ui, "Shadow Color", low_color, |ui, val| {
+                ui.color_edit_button_rgb(val);
+            }) { *next_frame = Some(nf); }
+            if lc_before != *low_color { *project_changed = true; }
+
+            let mc_before = mid_color.clone();
+            if let Some(nf) = draw_property_ui(current_frame, ui, "Mid Color", mid_color, |ui, val| {
+                ui.color_edit_button_rgb(val);
+            }) { *next_frame = Some(nf); }
+            if mc_before != *mid_color { *project_changed = true; }
+
+            let hc_before = high_color.clone();
+            if let Some(nf) = draw_property_ui(current_frame, ui, "Highlight Color", high_color, |ui, val| {
+                ui.color_edit_button_rgb(val);
+            }) { *next_frame = Some(nf); }
+            if hc_before != *high_color { *project_changed = true; }
+        }
+        EffectType::LightLeak { pos_x, pos_y, intensity } => {
+            draw_prop(ui, current_frame, project_changed, next_frame, "Position X", pos_x, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=1.0)); });
+            draw_prop(ui, current_frame, project_changed, next_frame, "Position Y", pos_y, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=1.0)); });
+            draw_prop(ui, current_frame, project_changed, next_frame, "Intensity", intensity, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=3.0)); });
+        }
+        EffectType::BevelAlpha { depth, light_angle_deg } => {
+            draw_prop(ui, current_frame, project_changed, next_frame, "Depth", depth, |ui, v| { ui.add(egui::Slider::new(v, 1.0..=32.0).suffix(" px")); });
+            draw_prop(ui, current_frame, project_changed, next_frame, "Light Angle", light_angle_deg, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=360.0).suffix("°")); });
+        }
+        EffectType::CrossHatch { line_gap, threshold } => {
+            draw_prop(ui, current_frame, project_changed, next_frame, "Line Gap", line_gap, |ui, v| { ui.add(egui::Slider::new(v, 2.0..=32.0).suffix(" px")); });
+            draw_prop(ui, current_frame, project_changed, next_frame, "Threshold", threshold, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=255.0)); });
+        }
+        EffectType::CmykHalftone { dot_size } => {
+            draw_prop(ui, current_frame, project_changed, next_frame, "Dot Size", dot_size, |ui, v| { ui.add(egui::Slider::new(v, 2.0..=32.0).suffix(" px")); });
         }
     }
 }

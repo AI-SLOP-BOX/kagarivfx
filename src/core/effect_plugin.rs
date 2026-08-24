@@ -244,6 +244,11 @@ impl RenderEffectPlugin for EnumEffectPlugin {
             EffectType::GlassEdgeBevel { .. } => "Glass Edge Bevel",
             EffectType::DirectionalSharpen { .. } => "Directional Sharpen",
             EffectType::RefractionLens { .. } => "Refraction Lens",
+            EffectType::GradientMap { .. } => "Gradient Map",
+            EffectType::LightLeak { .. } => "Light Leak",
+            EffectType::BevelAlpha { .. } => "Bevel Alpha 3D",
+            EffectType::CrossHatch { .. } => "Cross Hatch",
+            EffectType::CmykHalftone { .. } => "CMYK Halftone",
         }
     }
 
@@ -333,6 +338,11 @@ impl RenderEffectPlugin for EnumEffectPlugin {
             EffectType::GlassEdgeBevel { .. } => "glass_edge_bevel",
             EffectType::DirectionalSharpen { .. } => "directional_sharpen",
             EffectType::RefractionLens { .. } => "refraction_lens",
+            EffectType::GradientMap { .. } => "gradient_map",
+            EffectType::LightLeak { .. } => "light_leak",
+            EffectType::BevelAlpha { .. } => "bevel_alpha",
+            EffectType::CrossHatch { .. } => "cross_hatch",
+            EffectType::CmykHalftone { .. } => "cmyk_halftone",
         }
     }
 

@@ -364,7 +364,8 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                          || name.contains("Balance") || name.contains("Vibrance")
                          || name.contains("HSL") || name.contains("Curve")
                          || name.contains("Channel") || name.contains("Colorama")
-                         || name.contains("Color Space") { "Color Correction" }
+                         || name.contains("Color Space") || name.contains("Gradient")
+                         { "Color Correction" }
                     else if name.contains("Warp") || name.contains("Bulge") || name.contains("Twirl")
                          || name.contains("Offset") || name.contains("Distort")
                          || name.contains("Ripple") || name.contains("Spherize")

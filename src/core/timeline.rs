@@ -1090,6 +1090,32 @@ pub enum EffectType {
         radius: Animatable<f32>,
         ior: Animatable<f32>,
     },
+    /// 3-colour gradient map (shadow / mid / high ramp).
+    GradientMap {
+        low_color: Animatable<[f32; 3]>,
+        mid_color: Animatable<[f32; 3]>,
+        high_color: Animatable<[f32; 3]>,
+    },
+    /// Cinematic warm light leak from a normalized position.
+    LightLeak {
+        pos_x: Animatable<f32>,
+        pos_y: Animatable<f32>,
+        intensity: Animatable<f32>,
+    },
+    /// Alpha bevel with directional lighting.
+    BevelAlpha {
+        depth: Animatable<f32>,
+        light_angle_deg: Animatable<f32>,
+    },
+    /// Ink cross-hatch sketch stylize.
+    CrossHatch {
+        line_gap: Animatable<f32>,
+        threshold: Animatable<f32>,
+    },
+    /// CMYK four-plate halftone rasterization.
+    CmykHalftone {
+        dot_size: Animatable<f32>,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
