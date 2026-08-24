@@ -471,6 +471,34 @@ pub fn handle_global_shortcuts(
             });
         }
 
+        // ── Shift+; → Go to Next Marker, Cmd+; → Go to Previous Marker ──
+        if i.key_pressed(Key::Semicolon) && shift && !cmd {
+            let comp = app.history.current().active_composition();
+            let cur = *current_frame;
+            let next = comp.markers.iter()
+                .map(|m| m.frame)
+                .filter(|&f| f > cur)
+                .min();
+            if let Some(f) = next {
+                *current_frame = f;
+            } else if let Some(f) = comp.markers.iter().map(|m| m.frame).min() {
+                *current_frame = f;
+            }
+        }
+        if i.key_pressed(Key::Semicolon) && cmd {
+            let comp = app.history.current().active_composition();
+            let cur = *current_frame;
+            let prev = comp.markers.iter()
+                .map(|m| m.frame)
+                .filter(|&f| f < cur)
+                .max();
+            if let Some(f) = prev {
+                *current_frame = f;
+            } else if let Some(f) = comp.markers.iter().map(|m| m.frame).max() {
+                *current_frame = f;
+            }
+        }
+
         // ── Jump between markers: Shift+M cycles forward, Alt+M backward? Use [ ] keys ──
         if allow_single_key && (i.key_pressed(Key::OpenBracket) || i.key_pressed(Key::CloseBracket)) {
             let forward = i.key_pressed(Key::CloseBracket);
