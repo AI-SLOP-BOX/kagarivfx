@@ -43,6 +43,8 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
             let mut pending_split_layer: Option<usize> = None;
             let mut pending_layer_marker: Option<usize> = None;
             let mut pending_clear_markers: Option<usize> = None;
+            // Shift-trim ripple: (layer_idx, old_out, shift)
+            let mut pending_ripple: Option<(usize, u32, i64)> = None;
 
             let mut header_state = header::TimelineHeaderState {
                 is_playing: &mut app.is_playing,
@@ -1019,7 +1021,13 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                                         if is_in {
                                             layer.in_frame = frame.min(layer.out_frame.saturating_sub(1));
                                         } else {
+                                            let old_out = layer.out_frame;
                                             layer.out_frame = frame.max(layer.in_frame + 1);
+                                            // ── Shift+drag Out = ripple edit: close gaps for layers below ──
+                                            if ui.input(|inp| inp.modifiers.shift) && layer.out_frame != old_out {
+                                                let shift = layer.out_frame as i64 - old_out as i64;
+                                                pending_ripple = Some((i, old_out, shift));
+                                            }
                                         }
                                         project_changed = true;
                                     }
@@ -1404,6 +1412,17 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                         .collect();
                     project_changed = true;
                 }
+            }
+
+            // ── Ripple edit: shift later layers after a Shift+trim ──
+            if let Some((idx, old_out, shift)) = pending_ripple {
+                for l2 in temp_project.active_composition_mut().layers.iter_mut().skip(idx + 1) {
+                    if l2.in_frame >= old_out {
+                        l2.in_frame = (l2.in_frame as i64 + shift).max(0) as u32;
+                        l2.out_frame = (l2.out_frame as i64 + shift).max(l2.in_frame as i64 + 1) as u32;
+                    }
+                }
+                app.toasts.info("Ripple edit applied");
             }
 
             // ── Context-menu: layer markers ──
