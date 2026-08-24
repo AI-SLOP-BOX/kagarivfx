@@ -408,6 +408,13 @@ pub fn handle_global_shortcuts(
             }
         }
 
+        // F2 → Rename selected layer (standard file manager shortcut)
+        if allow_single_key && i.key_pressed(Key::F2) {
+            if let Some(idx) = app.selected_layer_idx {
+                app.renaming_layer = Some(idx);
+            }
+        }
+
         // Cmd+Z → Undo, Cmd+Shift+Z → Redo
         if cmd && !shift && i.key_pressed(Key::Z) {
             app.history.undo();
