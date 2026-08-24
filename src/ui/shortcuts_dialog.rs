@@ -56,6 +56,20 @@ pub fn draw_shortcuts_dialog(app: &mut AfterEffectsApp, ctx: &egui::Context) {
                             ("Y", "Pan Behind / Anchor Point Tool"),
                             ("Q", "Shape Tool (Rectangle / Ellipse)"),
                             ("G", "Pen / Vector Bezier Path Tool"),
+                            ("T", "Text Tool (in viewport)"),
+                            ("C", "3D Camera Tool"),
+                            ("Cmd + S", "Save Project (overwrite current path)"),
+                            ("Cmd + N", "New Composition (1920×1080 @ 30fps)"),
+                            ("Alt + M", "Add / Remove Layer Marker at Playhead"),
+                            ("M", "Add / Remove Composition Marker"),
+                            ("Shift + Drag on Keyframe Row", "Marquee Box-Select Keyframes"),
+                            ("Right-Click Keyframe", "Linear / Easy Ease / Hold / Time-Reverse / Delete"),
+                            ("Alt + Drag Layer Bar", "Slip Edit (shift content timing)"),
+                            ("Double-Click Text Layer", "Edit Source Text in Viewport"),
+                            ("Drag Corner Handle", "Scale Selected Layer (Selection tool)"),
+                            ("U", "Reveal Animated Properties Only"),
+                            ("UU", "Reveal All Modified Properties"),
+                            ("A", "Reveal Anchor Point Property"),
                         ];
 
                         for (sc, desc) in shortcuts {

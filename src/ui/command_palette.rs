@@ -198,6 +198,61 @@ pub fn get_all_commands() -> Vec<PaletteCommand> {
                 crate::core::frame_cache::bump_version();
             }),
         },
+        PaletteCommand {
+            name: "File: Save Project",
+            category: "File",
+            shortcut_hint: "Cmd+S",
+            action: Box::new(|app| {
+                let path = app.project_path.clone();
+                let proj = app.history.current();
+                match crate::core::project_migration::save_project_atomic(proj, &path) {
+                    Ok(()) => app.toasts.info(format!("Saved: {}", path)),
+                    Err(e) => app.toasts.error(format!("Save failed: {}", e)),
+                }
+            }),
+        },
+        PaletteCommand {
+            name: "Composition: New Composition",
+            category: "Composition",
+            shortcut_hint: "Cmd+N",
+            action: Box::new(|app| {
+                let count = app.history.current().compositions.len();
+                let new_comp = crate::core::timeline::Composition::new(
+                    format!("comp_{}", count), "Composition 1".to_string(), 1920, 1080, 30, 300,
+                );
+                let proj = app.history.current_mut();
+                proj.compositions.push(new_comp);
+                proj.active_composition_idx = proj.compositions.len() - 1;
+                crate::core::frame_cache::bump_version();
+            }),
+        },
+        PaletteCommand {
+            name: "Keyframe Assistant: Sequence Layers",
+            category: "Animation",
+            shortcut_hint: "",
+            action: Box::new(|app| {
+                app.show_sequence_layers = true;
+            }),
+        },
+        PaletteCommand {
+            name: "Composition: Save Frame as PNG",
+            category: "Export",
+            shortcut_hint: "",
+            action: Box::new(|app| {
+                let dir = std::env::temp_dir().join("aevfx_frames");
+                let _ = std::fs::create_dir_all(&dir);
+                let comp = app.history.current().active_composition().clone();
+                let frame = app.current_frame;
+                let out = dir.join(format!("{}_f{}.png", comp.name, frame));
+                let pixels = crate::core::software_renderer::render_frame_to_pixels(
+                    &comp, frame, comp.width, comp.height, 0.0, 0,
+                );
+                match image::save_buffer(&out, &pixels, comp.width, comp.height, image::ColorType::Rgba8) {
+                    Ok(_) => app.toasts.info(format!("Frame saved: {}", out.display())),
+                    Err(e) => app.toasts.error(format!("Save failed: {}", e)),
+                }
+            }),
+        },
     ]
 }
 
