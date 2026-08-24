@@ -659,6 +659,34 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: u32) 
                     crate::core::frame_cache::bump_version();
                     app.toasts.info("Rectangle created (Q tool)");
                 }
+                // ── T tool: click creates a text layer and opens its editor ──
+                else if app.active_tool == crate::ui::toolbar::ActiveTool::Text {
+                    let cx = ((pointer_pos.x - origin_x) / draw_w * comp_w).clamp(0.0, comp_w);
+                    let cy = ((pointer_pos.y - origin_y) / draw_h * comp_h).clamp(0.0, comp_h);
+                    let (n, dur) = {
+                        let c = app.history.current().active_composition();
+                        (c.layers.len(), c.duration_frames)
+                    };
+                    let mut text_layer = crate::core::timeline::Layer::new(
+                        format!("text_{}", n),
+                        format!("Text {}", n + 1),
+                        crate::core::timeline::LayerType::new_text(
+                            "Text",
+                            72,
+                            [1.0, 1.0, 1.0, 1.0],
+                        ),
+                        dur,
+                    );
+                    text_layer.transform.position = crate::core::property::Animatable::new_constant([cx, cy]);
+                    let comp_mut = app.history.current_mut().active_composition_mut();
+                    comp_mut.layers.push(text_layer);
+                    let new_idx = comp_mut.layers.len() - 1;
+                    app.selected_layer_idx = Some(new_idx);
+                    app.selected_layers.clear();
+                    app.selected_layers.insert(new_idx);
+                    app.inline_text_edit_layer = Some(new_idx);
+                    crate::core::frame_cache::bump_version();
+                }
                 let was_dragging = app.viewport_drag_state.is_some()
                     || app.viewport_mask_drag_state.is_some()
                     || app.viewport_scale_drag.is_some();
