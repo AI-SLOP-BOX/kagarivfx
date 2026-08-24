@@ -257,6 +257,8 @@ pub struct AfterEffectsApp {
     pub export_output_path: String,
     pub is_exporting: bool,
     pub export_format_preset: usize,
+    /// Video codec selection shared by Export dialog + Render presets (0=H264,1=ProRes422,2=ProRes4444)
+    pub export_codec_idx: usize,
     pub export_resolution_scale: usize,
     pub export_rx: Option<std::sync::mpsc::Receiver<ExportEvent>>,
     pub export_cancel_flag: Option<std::sync::Arc<std::sync::atomic::AtomicBool>>,
@@ -396,6 +398,7 @@ impl Default for AfterEffectsApp {
             export_output_path: "output.mp4".to_string(),
             is_exporting: false,
             export_format_preset: 0,
+            export_codec_idx: 0,
             export_resolution_scale: 0,
             export_rx: None,
             export_cancel_flag: None,

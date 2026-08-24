@@ -27,7 +27,7 @@ pub fn start_comp_export(app: &mut crate::AfterEffectsApp, ctx: &egui::Context, 
     } else {
         None
     };
-    let codec_idx = ctx.data_mut(|d| *d.get_temp_mut_or_insert_with(egui::Id::new("ae_export_codec"), || 0usize));
+    let codec_idx = app.export_codec_idx;
     let codec = match codec_idx {
         1 => crate::core::ffmpeg_export::VideoCodec::ProRes422,
         2 => crate::core::ffmpeg_export::VideoCodec::ProRes4444,
@@ -265,9 +265,7 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
 
                 // Estimated file size
                 {
-                    let codec_id = egui::Id::new("ae_export_codec");
-                    let codec_idx = ctx.data_mut(|d| *d.get_temp_mut_or_insert_with(codec_id, || 0usize));
-                    let bitrate_mbps = match codec_idx {
+                    let bitrate_mbps = match app.export_codec_idx {
                         1 => 147.0, // ProRes 422
                         2 => 330.0, // ProRes 4444
                         _ => 10.0,   // H.264
@@ -308,16 +306,9 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
                 // Codec selection
                 ui.horizontal(|ui| {
                     ui.label("Video Codec:");
-                    let codec_id = egui::Id::new("ae_export_codec");
-                    let mut codec_idx = ctx.data_mut(|d| {
-                        *d.get_temp_mut_or_insert_with(codec_id, || 0usize)
-                    });
-                    if ui.selectable_value(&mut codec_idx, 0, "H.264").changed()
-                        || ui.selectable_value(&mut codec_idx, 1, "ProRes 422").changed()
-                        || ui.selectable_value(&mut codec_idx, 2, "ProRes 4444").changed()
-                    {
-                        ctx.data_mut(|d| d.insert_temp(codec_id, codec_idx));
-                    }
+                    ui.selectable_value(&mut app.export_codec_idx, 0, "H.264");
+                    ui.selectable_value(&mut app.export_codec_idx, 1, "ProRes 422");
+                    ui.selectable_value(&mut app.export_codec_idx, 2, "ProRes 4444");
                 });
 
                 ui.horizontal(|ui| {
