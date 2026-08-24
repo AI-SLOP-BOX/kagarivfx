@@ -121,3 +121,11 @@ cat << EOF 形式の複数行ヒアドキュメントは端末統合が入力を
 - **GPU renderer has no mask compositing** — masks render CPU-only (export/preview badge warns). If you implement GPU masks in shader.wgsl/renderer.rs, remove the HUD warning in viewport_overlays.rs.
 - **Effect menu apply helper**: `apply_effect_by_name` in menu.rs — extend it when adding Effect menu entries.
 - **Effect timeline rows**: register animatable params in `core/effect_params.rs` (`animatable_params()`). Unregistered variants compile fine but show no keyframe rows in the timeline.
+
+## Multi-AI Build Coordination (added after 6 overnight build breaks — all resolved <5min)
+
+- **Never `git add -A` / `git add .`**: the other AI works on different files concurrently; blanket staging silently commits their half-finished edits. Stage only files you edited (`git add <file> ...`) and verify with `git diff --cached --stat` before committing.
+- **Re-read before you edit**: the other AI saves continuously. Always re-read a file immediately before editing it — your in-memory copy may be stale and overwriting loses their work.
+- **Build broken by the other AI mid-edit? Don't touch their file.** Loop instead: poll `cargo check` until errors = 0, then run test + clippy, then commit. Their breakages historically resolve within minutes.
+- **Flaky tests under parallel cargo runs**: audio WAV roundtrip and frame_cache version tests can fail transiently when two agents run cargo simultaneously. Re-run the single test before diagnosing.
+- **Commit discipline**: `cargo test --all-features` EXIT:0 and clippy zero warnings at commit time. If the tree is dirty with unknown changes, assume the other AI is mid-task — share status first.
