@@ -1374,6 +1374,14 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                                 }
                             }
 
+                            // ── Time Remap row (when enabled) ──
+                            if let Some(remap) = layer.time_remap.as_mut() {
+                                let moved_r = &mut project_changed;
+                                let tr_kfs = get_kfs(remap);
+                                draw_prop_row(ui, "  ⏱ Time Remap", &tr_kfs, current_frame, start_frame, zoom_span, left_pane_w,
+                                    Some(&mut |o, n| { move_kf(remap, o, n); *moved_r = true; }));
+                            }
+
                             // ── Mask property rows (feather / opacity / expansion / path) ──
                             for (m_idx, mask) in layer.masks.iter_mut().enumerate() {
                                 let moved_m = &mut project_changed;
