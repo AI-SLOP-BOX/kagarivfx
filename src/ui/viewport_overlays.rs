@@ -163,6 +163,25 @@ pub fn draw_viewport_overlays(
     ui.painter().rect_stroke(badge_rect, 4.0, egui::Stroke::new(1.0, backend_color));
     ui.painter().text(badge_rect.center(), egui::Align2::CENTER_CENTER, backend_text, egui::FontId::proportional(11.0), backend_color);
 
+    // ── Mask Notice: GPU path does not composite masks yet ──
+    if rendered_gpu {
+        let comp_now = app.history.current().active_composition();
+        let masked = comp_now.layers.iter()
+            .filter(|l| l.is_active(current_frame) && !l.masks.is_empty())
+            .filter(|l| l.masks.iter().any(|m| m.enabled && m.mode != crate::core::mask::MaskMode::None))
+            .count();
+        if masked > 0 {
+            let warn_text = format!("⚠ {} layer{} masked — visible in export (CPU)", masked, if masked > 1 { "s" } else { "" });
+            let warn_rect = egui::Rect::from_min_size(
+                egui::pos2(origin_x + draw_w - 180.0, origin_y + 40.0),
+                egui::vec2(170.0, 22.0),
+            );
+            ui.painter().rect_filled(warn_rect, 4.0, egui::Color32::from_rgba_unmultiplied(30, 24, 8, 210));
+            ui.painter().rect_stroke(warn_rect, 4.0, egui::Stroke::new(1.0, colors::ACCENT_ORANGE));
+            ui.painter().text(warn_rect.center(), egui::Align2::CENTER_CENTER, &warn_text, egui::FontId::proportional(10.0), colors::ACCENT_ORANGE);
+        }
+    }
+
     // Bottom Left Selection HUD Status
     if let Some(s_idx) = app.selected_layer_idx {
         let comp = app.history.current().active_composition();
