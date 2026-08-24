@@ -99,6 +99,17 @@ enum Commands {
         #[arg(long)]
         height: Option<u32>,
     },
+
+    /// Export the project to Lottie / Bodymovin JSON (transforms + keyframes; effects not included)
+    Lottie {
+        /// Path to project JSON file
+        #[arg(short, long)]
+        project: String,
+
+        /// Output JSON path
+        #[arg(short, long, default_value = "./lottie_export.json")]
+        output: String,
+    },
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -131,6 +142,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
         Commands::Frame { project, frame, output, width, height } => {
             cmd_frame(&project, frame, &output, width, height)?;
+        }
+        Commands::Lottie { project, output } => {
+            cmd_lottie(&project, &output)?;
         }
     }
 
@@ -682,6 +696,28 @@ fn cmd_frame(
     write_png(output, &pixels, w, h)?;
 
     eprintln!("Saved: {}", output);
+    Ok(())
+}
+
+fn cmd_lottie(project_path: &str, output: &str) -> Result<(), Box<dyn std::error::Error>> {
+    let project = load_project(project_path)?;
+    let json = aftereffects_oss::core::lottie_exporter::export_project_to_json(&project);
+
+    let effect_count: usize = project
+        .compositions
+        .iter()
+        .flat_map(|c| c.layers.iter())
+        .map(|l| l.effects.iter().filter(|e| e.enabled).count())
+        .sum();
+
+    std::fs::write(output, &json)?;
+    eprintln!("Lottie exported → {} ({} bytes)", output, json.len());
+    if effect_count > 0 {
+        eprintln!(
+            "Warning: {} enabled effect(s) are NOT part of Lottie output (format limitation)",
+            effect_count
+        );
+    }
     Ok(())
 }
 
