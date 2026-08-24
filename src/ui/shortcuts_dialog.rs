@@ -68,6 +68,8 @@ pub fn draw_shortcuts_dialog(app: &mut AfterEffectsApp, ctx: &egui::Context) {
                             ("Cmd + N", "New Composition (1920×1080 @ 30fps)"),
                             ("Alt + M", "Add / Remove Layer Marker at Playhead"),
                             ("M", "Add / Remove Composition Marker"),
+                            ("Shift + ;", "Go to Next Composition Marker"),
+                            ("Cmd + ;", "Go to Previous Composition Marker"),
                             ("Shift + Drag on Keyframe Row", "Marquee Box-Select Keyframes"),
                             ("Right-Click Keyframe", "Linear / Easy Ease / Hold / Time-Reverse / Delete"),
                             ("Alt + Drag Layer Bar", "Slip Edit (shift content timing)"),
