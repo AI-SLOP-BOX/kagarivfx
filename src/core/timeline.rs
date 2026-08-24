@@ -1323,6 +1323,66 @@ impl Layer {
             None => frame,
         }
     }
+
+    /// AE "Enable Time Remapping": identity map over the layer span, giving the
+    /// user editable keyframes. No-op if remapping is already enabled.
+    pub fn enable_time_remapping(&mut self) {
+        if self.time_remap.is_some() {
+            return;
+        }
+        let in_f = self.in_frame;
+        let out_f = self.out_frame;
+        let linear = crate::core::keyframe::InterpolationType::Linear;
+        self.time_remap = Some(Animatable::Animated(vec![
+            crate::core::keyframe::Keyframe::new(in_f, in_f as f32, linear),
+            crate::core::keyframe::Keyframe::new(out_f, out_f as f32, linear),
+        ]));
+    }
+
+    /// AE "Time Stretch": scale the layer span by `factor` and keep source
+    /// playback consistent via a linear remap (source advances at `factor`).
+    /// factor > 1 slows the source down; factor < 1 speeds it up.
+    pub fn time_stretch(&mut self, factor: f32) {
+        if factor <= 0.001 {
+            return;
+        }
+        let in_f = self.in_frame;
+        let duration = (self.out_frame.saturating_sub(self.in_frame)) as f32;
+        let new_duration = ((duration * factor).round() as u32).max(1);
+        self.out_frame = in_f.saturating_add(new_duration);
+
+        let end_source = in_f as f32 + new_duration as f32 / factor;
+        let linear = crate::core::keyframe::InterpolationType::Linear;
+        self.time_remap = Some(Animatable::Animated(vec![
+            crate::core::keyframe::Keyframe::new(in_f, in_f as f32, linear),
+            crate::core::keyframe::Keyframe::new(
+                in_f.saturating_add(new_duration),
+                end_source,
+                linear,
+            ),
+        ]));
+    }
+
+    /// AE "Time-Reverse Layer": play the layer's source backwards.
+    pub fn time_reverse(&mut self) {
+        let in_f = self.in_frame;
+        let out_f = self.out_frame;
+        let linear = crate::core::keyframe::InterpolationType::Linear;
+        self.time_remap = Some(Animatable::Animated(vec![
+            crate::core::keyframe::Keyframe::new(in_f, out_f as f32, linear),
+            crate::core::keyframe::Keyframe::new(out_f, in_f as f32, linear),
+        ]));
+    }
+
+    /// AE "Freeze Frame": hold one source frame across the whole span.
+    pub fn freeze_at(&mut self, source_frame: u32) {
+        self.time_remap = Some(Animatable::new_constant(source_frame as f32));
+    }
+
+    /// Remove time remapping so the source plays at comp time again.
+    pub fn clear_time_remap(&mut self) {
+        self.time_remap = None;
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -2075,3 +2135,85 @@ mod robustness_tests {
         let _ = eval_f32(&engine, evil2, 0.0, 0, 30);
     }
 }
+
+#[cfg(test)]
+mod layer_time_ops_tests {
+    use super::*;
+
+    fn test_layer() -> Layer {
+        let mut l = Layer::new(
+            "l".into(),
+            "L".into(),
+            LayerType::Solid { color: [0.5, 0.5, 0.5, 1.0] },
+            60,
+        );
+        l.in_frame = 10;
+        l.out_frame = 40;
+        l
+    }
+
+    #[test]
+    fn test_enable_time_remapping_is_identity() {
+        let mut l = test_layer();
+        l.enable_time_remapping();
+        assert_eq!(l.remap_frame(10), 10);
+        assert_eq!(l.remap_frame(25), 25);
+        assert_eq!(l.remap_frame(40), 40);
+        // Idempotent: calling again must not clobber existing keyframes.
+        l.enable_time_remapping();
+        assert!(l.time_remap.is_some());
+    }
+
+    #[test]
+    fn test_clear_time_remap_restores_passthrough() {
+        let mut l = test_layer();
+        l.freeze_at(17);
+        assert_eq!(l.remap_frame(10), 17);
+        l.clear_time_remap();
+        assert_eq!(l.remap_frame(10), 10);
+        assert_eq!(l.remap_frame(33), 33);
+    }
+
+    #[test]
+    fn test_time_reverse_flaps_endpoints() {
+        let mut l = test_layer();
+        l.time_reverse();
+        assert_eq!(l.remap_frame(10), 40);
+        assert_eq!(l.remap_frame(25), 25);
+        assert_eq!(l.remap_frame(40), 10);
+    }
+
+    #[test]
+    fn test_freeze_at_holds_constant() {
+        let mut l = test_layer();
+        l.freeze_at(17);
+        assert_eq!(l.remap_frame(10), 17);
+        assert_eq!(l.remap_frame(99), 17);
+    }
+
+    #[test]
+    fn test_time_stretch_scales_span_and_source_rate() {
+        let mut l = test_layer(); // in=10 out=40 (30 frames)
+        l.time_stretch(2.0);
+        // Span doubles.
+        assert_eq!(l.in_frame, 10);
+        assert_eq!(l.out_frame, 70);
+        // Source advances at half rate: mid-span maps to mid source frame.
+        assert_eq!(l.remap_frame(10), 10);
+        assert_eq!(l.remap_frame(50), 30);
+        assert_eq!(l.remap_frame(70), 40);
+
+        // Speed-up: factor 0.5 halves the span; source runs at double rate.
+        let mut fast = test_layer();
+        fast.time_stretch(0.5);
+        assert_eq!(fast.out_frame, 25);
+        assert_eq!(fast.remap_frame(25), 40);
+
+        // Degenerate factor is ignored.
+        let mut safe = test_layer();
+        safe.time_stretch(0.0);
+        assert_eq!(safe.out_frame, 40);
+        assert!(safe.time_remap.is_none());
+    }
+}
+

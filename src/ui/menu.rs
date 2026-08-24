@@ -298,10 +298,89 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
                 });
                 ui.menu_button("Time", |ui| {
                     if ui.add(egui::Button::new("Enable Time Remapping").shortcut_text("Cmd+Alt+T")).clicked() {
+                        if let Some(idx) = app.selected_layer_idx {
+                            app.modify_project(move |p| {
+                                if let Some(l) = p.active_composition_mut().layers.get_mut(idx) {
+                                    l.enable_time_remapping();
+                                }
+                            });
+                            crate::core::frame_cache::bump_version();
+                            app.toasts.info("Time remapping enabled — edit keyframes in the Graph Editor");
+                        } else {
+                            app.toasts.info("Select a layer first");
+                        }
                         ui.close_menu();
                     }
-                    if ui.add(egui::Button::new("Time Stretch...").shortcut_text("Cmd+Shift+K")).clicked() {
-                        app.toasts.info("Layer Time Stretch: Scale layer in/out duration by factor");
+                    if ui.add(egui::Button::new("Time-Reverse Layer")).clicked() {
+                        if let Some(idx) = app.selected_layer_idx {
+                            app.modify_project(move |p| {
+                                if let Some(l) = p.active_composition_mut().layers.get_mut(idx) {
+                                    l.time_reverse();
+                                }
+                            });
+                            crate::core::frame_cache::bump_version();
+                            app.toasts.info("Layer time-reversed");
+                        } else {
+                            app.toasts.info("Select a layer first");
+                        }
+                        ui.close_menu();
+                    }
+                    if ui.add(egui::Button::new("Freeze Frame at Playhead")).clicked() {
+                        let frame = app.current_frame;
+                        if let Some(idx) = app.selected_layer_idx {
+                            app.modify_project(move |p| {
+                                if let Some(l) = p.active_composition_mut().layers.get_mut(idx) {
+                                    l.freeze_at(frame);
+                                }
+                            });
+                            crate::core::frame_cache::bump_version();
+                            app.toasts.info(format!("Frozen at source frame {}", frame));
+                        } else {
+                            app.toasts.info("Select a layer first");
+                        }
+                        ui.close_menu();
+                    }
+                    if ui.button("Remove Time Remapping").clicked() {
+                        if let Some(idx) = app.selected_layer_idx {
+                            app.modify_project(move |p| {
+                                if let Some(l) = p.active_composition_mut().layers.get_mut(idx) {
+                                    l.clear_time_remap();
+                                }
+                            });
+                            crate::core::frame_cache::bump_version();
+                            app.toasts.info("Time remapping removed");
+                        } else {
+                            app.toasts.info("Select a layer first");
+                        }
+                        ui.close_menu();
+                    }
+                    ui.separator();
+                    if ui.add(egui::Button::new("Time Stretch ×2 (Slow)")).clicked() {
+                        if let Some(idx) = app.selected_layer_idx {
+                            app.modify_project(move |p| {
+                                if let Some(l) = p.active_composition_mut().layers.get_mut(idx) {
+                                    l.time_stretch(2.0);
+                                }
+                            });
+                            crate::core::frame_cache::bump_version();
+                            app.toasts.info("Layer stretched to ×2 duration");
+                        } else {
+                            app.toasts.info("Select a layer first");
+                        }
+                        ui.close_menu();
+                    }
+                    if ui.add(egui::Button::new("Time Stretch ×0.5 (Fast)").shortcut_text("Cmd+Shift+K")).clicked() {
+                        if let Some(idx) = app.selected_layer_idx {
+                            app.modify_project(move |p| {
+                                if let Some(l) = p.active_composition_mut().layers.get_mut(idx) {
+                                    l.time_stretch(0.5);
+                                }
+                            });
+                            crate::core::frame_cache::bump_version();
+                            app.toasts.info("Layer compressed to ×0.5 duration");
+                        } else {
+                            app.toasts.info("Select a layer first");
+                        }
                         ui.close_menu();
                     }
                 });
