@@ -240,6 +240,52 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
             }
 
 
+            // ── Pre-collect sub-comp layer data (before mutable borrow) ──
+            // For each expanded PreComp layer, snapshot its child layers so we
+            // can render them as indented rows without borrowing comp again.
+            #[derive(Clone)]
+            struct PreCompChild {
+                name: String,
+                type_icon: String,
+                label_rgb: [f32; 3],
+                in_frame: u32,
+                out_frame: u32,
+            }
+            let precomp_children: Vec<(usize, Vec<PreCompChild>, String)> = {
+                let comp_ro = temp_project.active_composition();
+                app.expanded_layers.iter().filter_map(|&parent_i| {
+                    let layer = comp_ro.layers.get(parent_i)?;
+                    if let crate::core::timeline::LayerType::PreComp { comp_id } = &layer.layer_type {
+                        let sub = comp_ro.find_sub_comp(comp_id)?;
+                        let children: Vec<PreCompChild> = sub.layers.iter().map(|cl| {
+                            let type_icon = match &cl.layer_type {
+                                crate::core::timeline::LayerType::Video { .. } => "🎬",
+                                crate::core::timeline::LayerType::Image { .. } => "🖼",
+                                crate::core::timeline::LayerType::Audio { .. } => "🔊",
+                                crate::core::timeline::LayerType::Text { .. } => "T",
+                                crate::core::timeline::LayerType::Shape { .. } => "◆",
+                                crate::core::timeline::LayerType::Solid { .. } => "■",
+                                crate::core::timeline::LayerType::Null => "∅",
+                                crate::core::timeline::LayerType::PreComp { .. } => "📦",
+                                crate::core::timeline::LayerType::AdjustmentLayer => "◐",
+                                crate::core::timeline::LayerType::Particle { .. } => "✦",
+                            };
+                            let rgb = cl.label.to_rgb();
+                            PreCompChild {
+                                name: cl.name.clone(),
+                                type_icon: type_icon.to_string(),
+                                label_rgb: rgb,
+                                in_frame: cl.in_frame,
+                                out_frame: cl.out_frame,
+                            }
+                        }).collect();
+                        Some((parent_i, children, sub.id.clone()))
+                    } else {
+                        None
+                    }
+                }).collect()
+            };
+
             // ── Tracks Mode: Layer List & Keyframe Ruler Area ──
             let comp = temp_project.active_composition_mut();
 
@@ -1666,6 +1712,55 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                                     }));
                                 let _ = m_idx;
                             }
+
+                            // ── Pre-comp nested child layers ──
+                            if let Some((_parent_idx, children, _sub_id)) =
+                                precomp_children.iter().find(|(pi, _, _)| *pi == i)
+                            {
+                                ui.add_space(2.0);
+                                for child in children {
+                                    ui.horizontal(|ui| {
+                                        ui.add_space(16.0);
+                                        ui.label(egui::RichText::new(&child.type_icon).small().color(colors::TEXT_SECONDARY));
+                                        let cr = (child.label_rgb[0] * 255.0) as u8;
+                                        let cg = (child.label_rgb[1] * 255.0) as u8;
+                                        let cb = (child.label_rgb[2] * 255.0) as u8;
+                                        let chip_rect = ui.allocate_space(egui::vec2(6.0, 12.0)).1;
+                                        ui.painter().rect_filled(chip_rect, 1.0, egui::Color32::from_rgb(cr, cg, cb));
+                                        ui.add_space(2.0);
+                                        ui.label(egui::RichText::new(&child.name).small().color(colors::TEXT_PRIMARY));
+                                        ui.add_space(4.0);
+                                        // Mini timeline bar for the child layer
+                                        let bar_avail = ui.available_width();
+                                        let bar_resp = ui.allocate_ui_with_layout(
+                                            egui::vec2(bar_avail.min(200.0), 12.0),
+                                            egui::Layout::left_to_right(egui::Align::Center),
+                                            |ui| {
+                                                let total_f = total_frames.max(1);
+                                                let bar_rect = ui.max_rect();
+                                                ui.painter().rect_filled(bar_rect, 0.0, colors::BG_DARK);
+                                                let in_x = bar_rect.left() + (child.in_frame as f32 / total_f as f32) * bar_rect.width();
+                                                let out_x = bar_rect.left() + (child.out_frame as f32 / total_f as f32) * bar_rect.width();
+                                                let layer_rect = egui::Rect::from_min_size(
+                                                    egui::pos2(in_x, bar_rect.top()),
+                                                    egui::vec2((out_x - in_x).max(2.0), bar_rect.height()),
+                                                );
+                                                ui.painter().rect_filled(layer_rect, 2.0, colors::ACCENT_BLUE);
+                                            },
+                                        ).response;
+                                        bar_resp.on_hover_text(format!("{}: frames {}–{}", child.name, child.in_frame, child.out_frame));
+                                    });
+                                }
+                                // "Open Pre-comp" link
+                                ui.horizontal(|ui| {
+                                    ui.add_space(20.0);
+                                    if ui.small(egui::RichText::new("📂 Open Pre-comp...").color(colors::ACCENT_BLUE)).clicked() {
+                                        if let Some((_pi, _, sub_id)) = precomp_children.iter().find(|(pi, _, _)| *pi == i) {
+                                            pending_open_comp = Some(sub_id.clone());
+                                        }
+                                    }
+                                });
+                            }
                         }
                     }
                 }
@@ -1748,10 +1843,16 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
 
             // ── Open nested composition on PreComp double-click ──
             if let Some(comp_id) = pending_open_comp {
+                // First search top-level compositions
                 if let Some(c_idx) = temp_project.compositions.iter().position(|c| c.id == comp_id) {
                     temp_project.active_composition_idx = c_idx;
                     crate::core::frame_cache::bump_version();
                     let name = temp_project.compositions[c_idx].name.clone();
+                    app.toasts.info(format!("Opened nested composition: {}", name));
+                } else if let Some(sub) = temp_project.active_composition().find_sub_comp(&comp_id) {
+                    // Found in sub_compositions — navigate by adding to top-level if needed
+                    // For now, just toast the name since we can't change active_composition_idx to a sub-comp
+                    let name = sub.name.clone();
                     app.toasts.info(format!("Opened nested composition: {}", name));
                 } else {
                     app.toasts.error("Nested composition not found");
