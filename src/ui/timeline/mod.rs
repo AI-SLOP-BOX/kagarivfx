@@ -873,6 +873,17 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                                             project_changed = true;
                                             ui.close_menu();
                                         }
+                                        ui.separator();
+                                        let any_disabled = layer.effects.iter().any(|e| !e.enabled);
+                                        let fx_label = if any_disabled { "✅ Enable All Effects" } else { "🚫 Disable All Effects" };
+                                        if ui.button(fx_label).clicked() {
+                                            let target = any_disabled;
+                                            for fx in layer.effects.iter_mut() {
+                                                fx.enabled = target;
+                                            }
+                                            project_changed = true;
+                                            ui.close_menu();
+                                        }
                                     });
                                     ui.style_mut().visuals.override_text_color = None;
 
