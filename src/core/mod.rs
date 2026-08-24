@@ -1,4 +1,5 @@
 pub mod effect_plugin;
+pub mod effect_params;
 pub mod cpu_effects;
 pub mod cpu_effects_new;
 pub mod expression_engine;

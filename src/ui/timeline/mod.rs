@@ -1439,53 +1439,32 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
 
                             // Effect properties are fully keyframeable: each row
                             // gets a mutator bound to its own Animatable track.
+                            // Param enumeration is centralized in core::effect_params
+                            // so new effect variants automatically gain rows when
+                            // registered there (no UI-side match to maintain).
                             for effect in layer.effects.iter_mut() {
                                 let fx_name = effect.name.clone();
                                 let moved = &mut project_changed;
-                                macro_rules! fx_row {
-                                    ($label:expr, $anim:expr) => {{
-                                        let kfs = get_kfs($anim);
-                                        draw_prop_row(ui, &format!("  [{}] {}", fx_name, $label), &kfs, current_frame, start_frame, zoom_span, left_pane_w,
-                                            Some(&mut |old_f, new_f| { move_kf($anim, old_f, new_f); *moved = true; }));
-                                    }};
-                                }
-                                match &mut effect.effect_type {
-                                    crate::core::timeline::EffectType::GaussianBlur { blur_radius, .. } => {
-                                        fx_row!("Blur Radius", blur_radius);
+                                use crate::core::effect_params::ParamRef;
+                                for (label, param) in effect.effect_type.animatable_params() {
+                                    let row_label = format!("  [{}] {}", fx_name, label);
+                                    match param {
+                                        ParamRef::Scalar(anim) => {
+                                            let kfs = get_kfs(anim);
+                                            draw_prop_row(ui, &row_label, &kfs, current_frame, start_frame, zoom_span, left_pane_w,
+                                                Some(&mut |old_f, new_f| { move_kf(anim, old_f, new_f); *moved = true; }));
+                                        }
+                                        ParamRef::Vec2(anim) => {
+                                            let kfs = get_kfs(anim);
+                                            draw_prop_row(ui, &row_label, &kfs, current_frame, start_frame, zoom_span, left_pane_w,
+                                                Some(&mut |old_f, new_f| { move_kf(anim, old_f, new_f); *moved = true; }));
+                                        }
+                                        ParamRef::Vec4Color(anim) => {
+                                            let kfs = get_kfs(anim);
+                                            draw_prop_row(ui, &row_label, &kfs, current_frame, start_frame, zoom_span, left_pane_w,
+                                                Some(&mut |old_f, new_f| { move_kf(anim, old_f, new_f); *moved = true; }));
+                                        }
                                     }
-                                    crate::core::timeline::EffectType::ColorTint { intensity, .. } => {
-                                        fx_row!("Tint Intensity", intensity);
-                                    }
-                                    crate::core::timeline::EffectType::DropShadow { distance, softness, .. } => {
-                                        fx_row!("Distance", distance);
-                                        fx_row!("Softness", softness);
-                                    }
-                                    crate::core::timeline::EffectType::HueSaturation { hue_shift, saturation, lightness } => {
-                                        fx_row!("Hue Shift", hue_shift);
-                                        fx_row!("Saturation", saturation);
-                                        fx_row!("Lightness", lightness);
-                                    }
-                                    crate::core::timeline::EffectType::Glow { threshold, radius, intensity, .. } => {
-                                        fx_row!("Threshold", threshold);
-                                        fx_row!("Radius", radius);
-                                        fx_row!("Intensity", intensity);
-                                    }
-                                    crate::core::timeline::EffectType::MotionBlur { shutter_angle, .. } => {
-                                        fx_row!("Shutter Angle", shutter_angle);
-                                    }
-                                    crate::core::timeline::EffectType::MeshWarp { top_left, top_right, bottom_left, bottom_right } => {
-                                        fx_row!("Top Left", top_left);
-                                        fx_row!("Top Right", top_right);
-                                        fx_row!("Bottom Left", bottom_left);
-                                        fx_row!("Bottom Right", bottom_right);
-                                    }
-                                    crate::core::timeline::EffectType::ColorGradeLUT { intensity, .. } => {
-                                        fx_row!("LUT Intensity", intensity);
-                                    }
-                                    crate::core::timeline::EffectType::FilmGrain { intensity, .. } => {
-                                        fx_row!("Grain Intensity", intensity);
-                                    }
-                                    _ => {}
                                 }
                             }
                         }

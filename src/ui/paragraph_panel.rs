@@ -21,12 +21,16 @@ pub fn draw_paragraph_panel(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
         return;
     }
 
-    // Ensure text_formatting exists
-    if layer.text_formatting.is_none() {
-        layer.text_formatting = Some(crate::core::timeline::TextFormatting::default());
-    }
-
-    let fmt = layer.text_formatting.as_mut().unwrap();
+    // Ensure text_formatting exists, then borrow it for the panel.
+    let Some(fmt) = (match layer.text_formatting {
+        Some(_) => layer.text_formatting.as_mut(),
+        None => {
+            layer.text_formatting = Some(crate::core::timeline::TextFormatting::default());
+            layer.text_formatting.as_mut()
+        }
+    }) else {
+        return;
+    };
     let mut changed = false;
 
     // ── Alignment ──
