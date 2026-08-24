@@ -348,6 +348,25 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: u32) 
             let comp_px = (pointer_pos.x - origin_x) / draw_w * comp_w;
             let comp_py = (pointer_pos.y - origin_y) / draw_h * comp_h;
 
+            // ── Double-click a text layer → inline source-text editing (AE parity) ──
+            if viewport_response.double_clicked() && app.active_tool == crate::ui::toolbar::ActiveTool::Selection {
+                let comp_state = app.history.current().active_composition();
+                for (i, l) in comp_state.layers.iter().enumerate().rev() {
+                    if !l.is_active(current_frame) || l.locked { continue; }
+                    if matches!(l.layer_type, crate::core::timeline::LayerType::Text { .. }) {
+                        let pos = l.transform.position.evaluate(current_frame);
+                        let scale = l.transform.scale.evaluate(current_frame);
+                        let hw = (scale[0].abs() * 0.6).max(60.0);
+                        let hh = (scale[1].abs() * 0.6).max(30.0);
+                        if (comp_px - pos[0]).abs() <= hw && (comp_py - pos[1]).abs() <= hh {
+                            app.inline_text_edit_layer = Some(i);
+                            app.selected_layer_idx = Some(i);
+                            break;
+                        }
+                    }
+                }
+            }
+
             if viewport_response.drag_started() {
                 // ── Transactional Drag: capture pre-drag snapshot ONCE ──
                 app.begin_drag("Viewport Transform");
@@ -726,4 +745,72 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: u32) 
                 });
         });
     });
+
+    draw_inline_text_editor(app, ctx, current_frame);
+}
+
+/// Inline source-text editor opened by double-clicking a text layer in the viewport.
+fn draw_inline_text_editor(app: &mut AfterEffectsApp, ctx: &egui::Context, _current_frame: u32) {
+    let Some(idx) = app.inline_text_edit_layer else { return };
+    let (layer_name, seed) = {
+        let comp = app.history.current().active_composition();
+        let Some(l) = comp.layers.get(idx) else {
+            app.inline_text_edit_layer = None;
+            return;
+        };
+        let seed_text = match &l.layer_type {
+            crate::core::timeline::LayerType::Text { text, .. } => text.clone(),
+            _ => String::new(),
+        };
+        (l.name.clone(), seed_text)
+    };
+
+    // Seed the edit buffer once from the layer's current source text
+    let buf_id = egui::Id::new(("inline_text_buf", idx));
+    let mut buf = ctx.data_mut(|d| d.get_temp_mut_or_insert_with(buf_id, || seed.clone()).clone());
+    let mut open = true;
+    let mut apply_text: Option<String> = None;
+    let mut should_close = false;
+
+    egui::Window::new(format!("✏ Edit Text — {}", layer_name))
+        .open(&mut open)
+        .collapsible(false)
+        .resizable(false)
+        .anchor(egui::Align2::CENTER_CENTER, egui::vec2(0.0, -80.0))
+        .show(ctx, |ui| {
+            ui.add_sized(
+                [320.0, 90.0],
+                egui::TextEdit::multiline(&mut buf).hint_text("Type source text…"),
+            );
+            let enter = ui.input(|i| i.key_pressed(egui::Key::Enter) && !i.modifiers.shift);
+            let escape = ui.input(|i| i.key_pressed(egui::Key::Escape));
+            ui.horizontal(|ui| {
+                if ui.button("Apply (⏎)").clicked() || enter {
+                    apply_text = Some(buf.clone());
+                    should_close = true;
+                }
+                if ui.button("Cancel (Esc)").clicked() || escape {
+                    should_close = true;
+                }
+            });
+            ui.small(egui::RichText::new("Shift+Enter for newline").color(crate::ui::theme::colors::TEXT_MUTED));
+        });
+
+    if let Some(text) = apply_text {
+        let mut temp_proj = app.history.current().clone();
+        let comp_mut = temp_proj.active_composition_mut();
+        if let Some(l) = comp_mut.layers.get_mut(idx) {
+            if let crate::core::timeline::LayerType::Text { text: t, .. } = &mut l.layer_type {
+                *t = text;
+            }
+        }
+        app.history.commit(temp_proj);
+        crate::core::frame_cache::bump_version();
+        app.toasts.info("Source text updated");
+    }
+
+    if should_close || !open {
+        ctx.data_mut(|d| d.remove::<String>(buf_id));
+        app.inline_text_edit_layer = None;
+    }
 }

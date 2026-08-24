@@ -243,6 +243,8 @@ pub struct AfterEffectsApp {
     pub viewport_mask_drag_state: Option<(usize, usize, usize, [f32; 2], eframe::egui::Pos2)>,
     /// Corner-handle scale drag: (layer_idx, start_scale, start_pointer_distance)
     pub viewport_scale_drag: Option<(usize, [f32; 2], f32)>,
+    /// Layer index whose text is being edited inline from the viewport (double-click)
+    pub inline_text_edit_layer: Option<usize>,
     pub selected_property: Option<String>,
     pub show_export_dialog: bool,
     pub export_status: Option<String>,
@@ -379,6 +381,7 @@ impl Default for AfterEffectsApp {
             viewport_drag_state: None,
             viewport_mask_drag_state: None,
             viewport_scale_drag: None,
+            inline_text_edit_layer: None,
             selected_property: None,
             show_export_dialog: false,
             export_status: None,
