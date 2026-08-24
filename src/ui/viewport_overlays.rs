@@ -82,6 +82,38 @@ pub fn draw_viewport_overlays(
                         ui.painter().circle_stroke(p, 4.0, egui::Stroke::new(1.0, egui::Color32::BLACK));
                     }
 
+                    // ── Spatial Bezier Tangent Handles ──
+                    // Draw outgoing/incoming tangent lines for each keyframe pair
+                    // so users can see the spatial curve control points in the viewport.
+                    for seg in kfs.windows(2) {
+                        let (a, b) = (&seg[0], &seg[1]);
+                        if let crate::core::keyframe::InterpolationType::Bezier { custom_bezier, .. } = &a.interpolation {
+                            let c = custom_bezier.unwrap_or([0.25, 0.1, 0.25, 1.0]);
+                            let val_delta = [b.value[0] - a.value[0], b.value[1] - a.value[1]];
+
+                            // Outgoing handle from keyframe a
+                            let out_pos = [
+                                a.value[0] + c[0] * val_delta[0],
+                                a.value[1] + c[1] * val_delta[1],
+                            ];
+                            let a_screen = to_screen(a.value);
+                            let out_screen = to_screen(out_pos);
+                            let handle_stroke = egui::Stroke::new(1.0, colors::MOTION_PATH.linear_multiply(0.5));
+                            ui.painter().line_segment([a_screen, out_screen], handle_stroke);
+                            ui.painter().circle_filled(out_screen, 2.5, colors::MOTION_PATH.linear_multiply(0.6));
+
+                            // Incoming handle for keyframe b
+                            let in_pos = [
+                                b.value[0] - (1.0 - c[2]) * val_delta[0],
+                                b.value[1] - (1.0 - c[3]) * val_delta[1],
+                            ];
+                            let b_screen = to_screen(b.value);
+                            let in_screen = to_screen(in_pos);
+                            ui.painter().line_segment([b_screen, in_screen], handle_stroke);
+                            ui.painter().circle_filled(in_screen, 2.5, colors::MOTION_PATH.linear_multiply(0.6));
+                        }
+                    }
+
                     // Current playhead position marker on the path
                     let cur = layer.transform.position.evaluate(app.current_frame);
                     let cp = to_screen(cur);
