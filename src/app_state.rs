@@ -248,6 +248,8 @@ pub struct AfterEffectsApp {
     /// Multi-layer group drag: (per-layer start positions, start pointer)
     #[allow(clippy::type_complexity)]
     pub viewport_multi_drag: Option<(Vec<(usize, [f32; 2])>, eframe::egui::Pos2)>,
+    /// Rectangle tool rubber-band: (start pointer position in screen space)
+    pub rect_drag_start: Option<eframe::egui::Pos2>,
     /// Layer index whose text is being edited inline from the viewport (double-click)
     pub inline_text_edit_layer: Option<usize>,
     /// Pen tool: in-progress mask vertices in composition coordinates
@@ -392,6 +394,7 @@ impl Default for AfterEffectsApp {
             viewport_mask_drag_state: None,
             viewport_scale_drag: None,
             viewport_multi_drag: None,
+            rect_drag_start: None,
             inline_text_edit_layer: None,
             pen_points: Vec::new(),
             selected_property: None,

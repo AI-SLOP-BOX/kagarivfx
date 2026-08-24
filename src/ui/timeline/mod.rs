@@ -466,7 +466,7 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
             // Collect pending effect drops to apply after the closure
             let mut pending_effect_drops: Vec<(usize, String, usize)> = Vec::new();
 
-            egui::ScrollArea::vertical().max_height(200.0).show(ui, |ui| {
+            let _scroll_resp = egui::ScrollArea::vertical().max_height(200.0).show(ui, |ui| {
                 let layers_len = comp.layers.len();
                 let parent_choices: Vec<(String, String)> = comp.layers.iter().map(|l| (l.id.clone(), l.name.clone())).collect();
                 let parent_choices_ref = &parent_choices;
@@ -598,9 +598,16 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                                                 layer.label = label_choice;
                                                 project_changed = true;
                                                 ui.close_menu();
-                                            }
-                                        }
-                                    });
+                    }
+                }
+                // ── Click empty area below layers → deselect all ──
+                let remaining = ui.available_rect_before_wrap();
+                let bg_resp = ui.interact(remaining, egui::Id::new("timeline_bg_deselect"), egui::Sense::click());
+                if bg_resp.clicked() {
+                    app.selected_layers.clear();
+                    app.selected_layer_idx = None;
+                }
+            });
 
                                     let vis = layer.visible;
                                     let eye_svg = if vis { crate::ui::icons::SVG_EYE_OPEN } else { crate::ui::icons::SVG_EYE_CLOSED };

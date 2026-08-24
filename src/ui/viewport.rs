@@ -419,6 +419,17 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: u32) 
             ui, app, ctx, current_frame, origin_x, origin_y, draw_w, draw_h, comp_w, comp_h, rendered_gpu,
         );
 
+        // ── Rectangle tool rubber-band preview ──
+        if app.active_tool == crate::ui::toolbar::ActiveTool::Rectangle {
+            if let Some(start) = app.rect_drag_start {
+                if let Some(current) = viewport_response.interact_pointer_pos() {
+                    let r = egui::Rect::from_two_pos(start, current);
+                    ui.painter().rect_stroke(r, 0.0, egui::Stroke::new(1.5, colors::ACCENT_BLUE));
+                    ui.painter().rect_filled(r, 0.0, colors::TIMELINE_SELECTION.linear_multiply(0.15));
+                }
+            }
+        }
+
         // ── Interactive Layer & Mask Drag ──────────────────────────
         let mut pen_commit = false;
         if let Some(pointer_pos) = viewport_response.interact_pointer_pos() {
@@ -453,6 +464,10 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: u32) 
                     | crate::ui::toolbar::ActiveTool::Rotation
                     | crate::ui::toolbar::ActiveTool::AnchorPoint
             );
+            // ── Rectangle tool: track drag start for rubber-band preview ──
+            if viewport_response.drag_started() && app.active_tool == crate::ui::toolbar::ActiveTool::Rectangle {
+                app.rect_drag_start = Some(pointer_pos);
+            }
             if viewport_response.drag_started() && !tool_creates_or_navigates {
                 // ── Transactional Drag: capture pre-drag snapshot ONCE ──
                 app.begin_drag("Viewport Transform");
@@ -735,6 +750,14 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: u32) 
                 if app.active_tool == crate::ui::toolbar::ActiveTool::Rectangle {
                     let cx = ((pointer_pos.x - origin_x) / draw_w * comp_w).clamp(0.0, comp_w);
                     let cy = ((pointer_pos.y - origin_y) / draw_h * comp_h).clamp(0.0, comp_h);
+                    // Compute shape dimensions from drag (fallback to 220×160 if no drag)
+                    let (sw, sh) = if let Some(start) = app.rect_drag_start.take() {
+                        let dx = ((pointer_pos.x - start.x) / draw_w * comp_w).abs().max(4.0);
+                        let dy = ((pointer_pos.y - start.y) / draw_h * comp_h).abs().max(4.0);
+                        (dx, dy)
+                    } else {
+                        (220.0, 160.0)
+                    };
                     let (n, dur) = {
                         let c = app.history.current().active_composition();
                         (c.layers.len(), c.duration_frames)
@@ -744,8 +767,8 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: u32) 
                         format!("Rectangle {}", n + 1),
                         crate::core::timeline::LayerType::Shape {
                             shape_type: crate::core::timeline::ShapeType::Rectangle {
-                                width: crate::core::property::Animatable::new_constant(220.0),
-                                height: crate::core::property::Animatable::new_constant(160.0),
+                                width: crate::core::property::Animatable::new_constant(sw),
+                                height: crate::core::property::Animatable::new_constant(sh),
                                 corner_radius: crate::core::property::Animatable::new_constant(0.0),
                             },
                             color: [0.25, 0.55, 1.0, 1.0],

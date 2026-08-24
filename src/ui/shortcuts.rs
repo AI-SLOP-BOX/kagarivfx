@@ -74,6 +74,12 @@ pub fn handle_global_shortcuts(
             app.active_tool = crate::ui::toolbar::ActiveTool::Text;
         }
 
+        // Shift+Z → Viewport zoom to fit (AE parity)
+        if shift && !cmd && i.key_pressed(Key::Z) {
+            app.viewport_mag_ratio = 0.0; // 0.0 = fit mode
+            app.viewport_pan = egui::Vec2::ZERO;
+        }
+
         // B → Set Work Area Start, N → Set Work Area End (single-key)
         if allow_single_key && i.key_pressed(Key::B) && !cmd {
             app.work_area_in = Some(*current_frame);
