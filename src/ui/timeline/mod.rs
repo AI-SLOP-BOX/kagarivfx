@@ -244,9 +244,14 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
 
                 let avail_w = ui.available_width();
                 let (ruler_rect, ruler_response) = ui.allocate_exact_size(
-                    egui::vec2(avail_w, 20.0),
+                    egui::vec2(avail_w, 26.0),
                     egui::Sense::click_and_drag(),
                 );
+
+                // Ruler scrub cursor feedback
+                if ruler_response.hovered() {
+                    ui.ctx().set_cursor_icon(egui::CursorIcon::ResizeHorizontal);
+                }
 
                 ui.painter().rect_filled(ruler_rect, 0.0, colors::BG_DARK);
 
@@ -347,9 +352,16 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                 let playhead_x = ruler_rect.left() + playhead_norm * ruler_rect.width();
                 if (0.0..=1.0).contains(&playhead_norm) {
                     ui.painter().line_segment(
-                        [egui::pos2(playhead_x, ruler_rect.top()), egui::pos2(playhead_x, ruler_rect.bottom() + 300.0)],
+                        [egui::pos2(playhead_x, ruler_rect.top() + 4.0), egui::pos2(playhead_x, ruler_rect.bottom() + 300.0)],
                         egui::Stroke::new(1.5, colors::TIMELINE_PLAYHEAD),
                     );
+                    // Inverted triangle handle (AE-style grab point)
+                    let tri = vec![
+                        egui::pos2(playhead_x - 5.0, ruler_rect.top()),
+                        egui::pos2(playhead_x + 5.0, ruler_rect.top()),
+                        egui::pos2(playhead_x, ruler_rect.top() + 4.0),
+                    ];
+                    ui.painter().add(egui::Shape::convex_polygon(tri, colors::TIMELINE_PLAYHEAD, egui::Stroke::NONE));
                 }
 
                 if !wa_drag_active && (ruler_response.clicked() || ruler_response.dragged()) {

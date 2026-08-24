@@ -23,6 +23,12 @@ pub fn draw_timeline_header(
 ) -> bool {
     let mut project_changed = false;
 
+    // Timecode "Go to Frame" popup state (persisted via egui temp data)
+    let tc_popup_id = ui.make_persistent_id("ae_tc_goto_popup");
+    let mut show_tc_popup: bool = ui.ctx().data_mut(|d| *d.get_temp_mut_or_insert_with(tc_popup_id, || false));
+    let mut tc_input_buf: String = ui.ctx().data_mut(|d| d.get_temp_mut_or_insert_with(ui.make_persistent_id("ae_tc_goto_buf"), || current_frame.to_string()).clone());
+    let mut goto_frame: Option<u32> = None;
+
     ui.horizontal(|ui| {
         let fps = comp.fps.max(1);
         let secs = *current_frame / fps;
@@ -31,7 +37,12 @@ pub fn draw_timeline_header(
         let hours = mins / 60;
         let tc_str = format!("{:02}:{:02}:{:02}:{:02}", hours, mins % 60, secs % 60, sub_f);
 
-        ui.label(egui::RichText::new(format!("TC: {}", tc_str)).strong().color(colors::ACCENT_YELLOW));
+        // Clickable timecode → opens "Go to Frame" popup
+        let tc_resp = ui.label(egui::RichText::new(format!("TC: {}", tc_str)).strong().color(colors::ACCENT_YELLOW));
+        if tc_resp.interact(egui::Sense::click()).clicked() {
+            show_tc_popup = !show_tc_popup;
+            tc_input_buf = current_frame.to_string();
+        }
         ui.add_space(4.0);
         ui.add(egui::DragValue::new(current_frame).range(0..=total_frames).prefix("Frame: ").suffix(format!(" / {}", total_frames)))
             .on_hover_text("Click or Drag to set current frame timecode");
@@ -177,6 +188,37 @@ pub fn draw_timeline_header(
             project_changed = true;
         }
     });
+
+    // ── Go to Frame popup ──
+    if show_tc_popup {
+        egui::Area::new(egui::Id::new("ae_tc_goto"))
+            .fixed_pos(ui.cursor().left_top())
+            .order(egui::Order::Foreground)
+            .show(ui.ctx(), |ui| {
+                ui.group(|ui| {
+                    ui.set_min_width(160.0);
+                    ui.label(egui::RichText::new("Go to Frame").strong());
+                    let resp = ui.add(egui::TextEdit::singleline(&mut tc_input_buf).desired_width(100.0).hint_text("Frame #"));
+                    if ui.button("Go").clicked() || (resp.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter))) {
+                        if let Ok(f) = tc_input_buf.trim().parse::<u32>() {
+                            goto_frame = Some(f.min(total_frames));
+                        }
+                        show_tc_popup = false;
+                    }
+                    if ui.button("Cancel").clicked() {
+                        show_tc_popup = false;
+                    }
+                });
+            });
+    }
+
+    if let Some(f) = goto_frame {
+        *current_frame = f;
+    }
+
+    // Persist popup state
+    ui.ctx().data_mut(|d| { d.insert_temp(tc_popup_id, show_tc_popup); });
+    ui.ctx().data_mut(|d| { d.insert_temp(ui.make_persistent_id("ae_tc_goto_buf"), tc_input_buf); });
 
     project_changed
 }

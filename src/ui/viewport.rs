@@ -109,6 +109,9 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: u32) 
                 let delta = viewport_response.drag_delta();
                 app.viewport_pan.x += delta.x;
                 app.viewport_pan.y += delta.y;
+                if viewport_response.hovered() {
+                    ui.output_mut(|o| o.cursor_icon = if viewport_response.dragged() { egui::CursorIcon::Grabbing } else { egui::CursorIcon::Grab });
+                }
             }
 
             // ── Zoom tool: click zooms in 2x at pointer, Alt-click out ──
@@ -135,7 +138,25 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: u32) 
                     app.viewport_mag_ratio = new_mag;
                 }
                 if viewport_response.hovered() {
-                    ui.output_mut(|o| o.cursor_icon = egui::CursorIcon::ZoomIn);
+                    ui.output_mut(|o| o.cursor_icon = if ui.input(|i| i.modifiers.alt) { egui::CursorIcon::ZoomOut } else { egui::CursorIcon::ZoomIn });
+                }
+            }
+            // ── Cursor feedback for Selection / Rotation / AnchorPoint / Pen ──
+            if viewport_response.hovered() && app.viewport_drag_state.is_none() && app.viewport_multi_drag.is_none() {
+                match app.active_tool {
+                    crate::ui::toolbar::ActiveTool::Selection => {
+                        ui.output_mut(|o| o.cursor_icon = egui::CursorIcon::PointingHand);
+                    }
+                    crate::ui::toolbar::ActiveTool::Rotation => {
+                        ui.output_mut(|o| o.cursor_icon = egui::CursorIcon::ResizeHorizontal);
+                    }
+                    crate::ui::toolbar::ActiveTool::AnchorPoint => {
+                        ui.output_mut(|o| o.cursor_icon = egui::CursorIcon::Crosshair);
+                    }
+                    crate::ui::toolbar::ActiveTool::Pen => {
+                        ui.output_mut(|o| o.cursor_icon = egui::CursorIcon::Crosshair);
+                    }
+                    _ => {}
                 }
             }
         }

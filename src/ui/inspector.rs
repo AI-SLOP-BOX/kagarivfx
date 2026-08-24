@@ -75,6 +75,15 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
             let mut selected_prop = app.selected_property.clone();
             // Access live project mutably without per-frame cloning
             let temp_project = app.history.current_mut();
+
+            // ── Composition info banner ──
+            {
+                let comp = temp_project.active_composition();
+                ui.horizontal(|ui| {
+                    ui.label(egui::RichText::new(format!("📐 {}×{}  ⏱ {:.0}fps", comp.width, comp.height, comp.fps))
+                        .small().color(colors::TEXT_SECONDARY));
+                });
+            }
             
             // ── Camera Suite Panel ──
             {
