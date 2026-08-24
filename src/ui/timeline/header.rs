@@ -1,4 +1,5 @@
 use eframe::egui;
+use std::collections::HashSet;
 use crate::core::timeline::{Composition, Layer, LayerType, ShapeType};
 use crate::core::property::Animatable;
 use crate::ui::theme::colors;
@@ -12,6 +13,7 @@ pub struct TimelineHeaderState<'a> {
     pub timeline_view_start: &'a mut u32,
     pub work_area_in: &'a mut Option<u32>,
     pub work_area_out: &'a mut Option<u32>,
+    pub expanded_layers: &'a mut HashSet<usize>,
 }
 
 pub fn draw_timeline_header(
@@ -74,6 +76,14 @@ pub fn draw_timeline_header(
         if ui.button("Clear WA").on_hover_text("Clear Work Area (In/Out)").clicked() {
             *state.work_area_in = None;
             *state.work_area_out = None;
+        }
+        if ui.button("Expand All").on_hover_text("Expand all layer properties").clicked() {
+            for i in 0..comp.layers.len() {
+                state.expanded_layers.insert(i);
+            }
+        }
+        if ui.button("Collapse All").on_hover_text("Collapse all layer properties").clicked() {
+            state.expanded_layers.clear();
         }
         ui.checkbox(state.snap_to_keyframes, "Snap");
         let mode_btn_text = if *state.show_graph_editor { "Graph Mode" } else { "Tracks Mode" };

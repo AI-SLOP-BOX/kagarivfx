@@ -59,6 +59,7 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                 timeline_view_start: &mut app.timeline_view_start,
                 work_area_in: &mut app.work_area_in,
                 work_area_out: &mut app.work_area_out,
+                expanded_layers: &mut app.expanded_layers,
             };
 
             // Access live project mutably without per-frame cloning
