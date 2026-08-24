@@ -61,7 +61,7 @@ cargo run --features cli --bin aevfx -- frame --project test_project.json --fram
 ## Critical Rules
 
 1. **NEVER remove `default_fonts` from eframe features** — without it NO text renders
-2. **Always run `cargo test --all-features` before committing** — 363 tests must pass
+2. **Always run `cargo test --all-features` before committing** — 469+ tests must pass
 3. **Always run `cargo clippy --all-features`** — must be zero warnings
 4. **Use `git commit` after every meaningful change** — atomic commits
 5. **GPU rendering**: viewport uses WgpuRenderer when available; falls back to CPU
@@ -111,3 +111,12 @@ eguiは画面外要素を自動クリップするが、ウィジェット生成�
 ## 罠③: マルチラインheredocの端末貼り付け禁止
 cat << EOF 形式の複数行ヒアドキュメントは端末統合が入力を正しく送れずファイル破損を起こす。
 ファイル編集は必ず replace_in_file / write_to_file を使うこと。やむを得ない場合は perl -i -pe の単行置換で行う。
+
+## UI Coordination Notes (added by Antigravity session)
+
+- **J/K/L**: J=prev keyframe, K=next keyframe, L=play forward. Do not re-add shuttle J/K handlers.
+- **T key** reveals Opacity; **Cmd+T** selects Text tool. Bare T must never switch tools.
+- **timeline/mod.rs pending_* pattern**: row-loop actions (duplicate/split/marker/ripple/open-precomp) are collected into `pending_*` locals and applied AFTER the layer loop to stay borrow-safe. Follow this for new row-context actions.
+- **draw_prop_row_ext callbacks**: `(on_move, on_select, on_menu, on_box_select, on_group_move)` — all optional.
+- **GPU renderer has no mask compositing** — masks render CPU-only (export/preview badge warns). If you implement GPU masks in shader.wgsl/renderer.rs, remove the HUD warning in viewport_overlays.rs.
+- **Effect menu apply helper**: `apply_effect_by_name` in menu.rs — extend it when adding Effect menu entries.
