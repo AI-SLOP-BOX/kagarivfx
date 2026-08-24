@@ -516,6 +516,8 @@ pub fn render_frame_to_pixels(comp: &Composition, frame: u32, width: u32, height
         mask_feather: f32,
         mask_inverted: bool,
         skip: bool,
+        /// Depth-of-field blur radius in pixels (0 = sharp)
+        dof_blur: f32,
     }
 
     let layer_data: Vec<LayerRenderData> = {
@@ -531,6 +533,21 @@ pub fn render_frame_to_pixels(comp: &Composition, frame: u32, width: u32, height
                 let (pos, scale, rotation, opacity) = comp.resolve_world_transform(layer, effective_frame);
                 let l_opacity = (opacity / 100.0).clamp(0.0, 1.0);
                 if l_opacity < 0.001 { return LayerRenderData::default(); }
+
+                // ── Depth of field: circle-of-confusion for 3D layers ──
+                let dof_blur = if layer.is_3d && comp.active_camera.dof_enabled {
+                    let z = layer.transform_3d.position.evaluate(effective_frame)[2];
+                    let dof = crate::core::camera_dof::CameraDofSettings {
+                        focus_distance: comp.active_camera.focus_distance,
+                        aperture: comp.active_camera.aperture,
+                        f_stop: comp.active_camera.aperture,
+                        blur_level: 100.0,
+                    };
+                    crate::core::camera_dof::calculate_circle_of_confusion(z, &dof)
+                        .clamp(0.0, comp.active_camera.dof_max_blur)
+                } else {
+                    0.0
+                };
 
                 let mut mask_vertices = Vec::new();
                 let mut mask_feather = 0.0;
@@ -554,6 +571,7 @@ pub fn render_frame_to_pixels(comp: &Composition, frame: u32, width: u32, height
                     mask_feather,
                     mask_inverted,
                     skip: false,
+                    dof_blur,
                 }
             })
             .collect()
@@ -1171,6 +1189,14 @@ pub fn render_frame_to_pixels(comp: &Composition, frame: u32, width: u32, height
             }
         }
 
+        // Phase 2.7: depth-of-field defocus for 3D layers.
+        if ld.dof_blur >= 1.0 {
+            crate::core::ae_effects_pack::apply_gaussian_blur(
+                &mut layer_buf, bw, bh,
+                ld.dof_blur.round() as u32,
+            );
+        }
+
         // Phase 3: composite the (effect-processed) buffer over the frame.
         // First, check if this layer uses a track matte from the layer below.
         let matte_pixels = if layer.track_matte != TrackMatteMode::None {
@@ -1629,6 +1655,35 @@ mod tests {
         // Center pixel should be lit (brighter than ambient-only floor)
         let center_idx = ((16 * 32 + 16) * 4) as usize;
         assert!(pixels[center_idx] > 60, "3D layer should be shaded by light, got {}", pixels[center_idx]);
+    }
+
+    #[test]
+    fn test_dof_blurs_off_focus_3d_layer() {
+        let mut comp = Composition::new("c1".to_string(), "Comp".to_string(), 32, 32, 30, 30);
+        let mut layer = Layer::new("l3d".to_string(), "3D Solid".to_string(), LayerType::Solid { color: [1.0, 1.0, 1.0, 1.0] }, 30);
+        layer.is_3d = true;
+        // Push the layer far from the focus plane
+        layer.transform_3d.position = Animatable::new_constant([16.0, 16.0, -3000.0]);
+        comp.layers.push(layer);
+
+        comp.active_camera.dof_enabled = true;
+        comp.active_camera.focus_distance = 1000.0;
+        comp.active_camera.aperture = 50.0;
+        comp.active_camera.dof_max_blur = 24.0;
+
+        let dof_pixels = render_frame_to_pixels(&comp, 0, 32, 32, 0.0, 0);
+        let center_idx = ((16 * 32 + 16) * 4) as usize;
+
+        // Reference render with identical geometry but DOF off
+        comp.active_camera.dof_enabled = false;
+        let sharp_pixels = render_frame_to_pixels(&comp, 0, 32, 32, 0.0, 0);
+
+        // Defocus spreads the solid's energy: center dims vs the sharp render
+        assert!(
+            (sharp_pixels[center_idx] as i32 - dof_pixels[center_idx] as i32).abs() > 2,
+            "DOF should change the off-focus render (sharp {} vs defocused {})",
+            sharp_pixels[center_idx], dof_pixels[center_idx]
+        );
     }
 
 
