@@ -96,6 +96,27 @@ impl FontRasterizer {
         }
     }
 
+    /// Sorted list of successfully loaded font families.
+    pub fn available_families(&self) -> Vec<String> {
+        let mut names: Vec<String> = self.fonts.keys().cloned().collect();
+        names.sort();
+        names
+    }
+
+    /// Try to load every plausible system font family (best effort).
+    pub fn load_all_system_fonts(&mut self) {
+        const CANDIDATES: &[&str] = &[
+            "Helvetica", "Helvetica Neue", "Arial", "Inter", "Roboto",
+            "DejaVu Sans", "Liberation Sans", "Times New Roman", "Georgia",
+            "Courier New", "Menlo", "Monaco", "Verdana", "Tahoma",
+            "Trebuchet MS", "Futura", "Gill Sans", "Avenir", "Optima",
+            "Hiragino Sans", "Yu Gothic", "Noto Sans CJK JP", "Osaka",
+        ];
+        for name in CANDIDATES {
+            self.load_system_font(name);
+        }
+    }
+
     /// Get the default font (first available system font, or embed a fallback).
     pub fn get_default_font_data(&self) -> &[u8] {
         // Try to find a system font
@@ -481,10 +502,7 @@ pub static GLOBAL_FONT_RASTERIZER: OnceLock<std::sync::Mutex<FontRasterizer>> = 
 pub fn init_font_rasterizer() {
     let _ = GLOBAL_FONT_RASTERIZER.set(std::sync::Mutex::new({
         let mut rasterizer = FontRasterizer::new();
-        // Try to load common system fonts
-        for name in &["Helvetica", "Arial", "DejaVu Sans", "Liberation Sans", "Inter", "Roboto"] {
-            rasterizer.load_system_font(name);
-        }
+        rasterizer.load_all_system_fonts();
         rasterizer
     }));
 }
