@@ -152,3 +152,45 @@
 | `src/ui/timeline/utils.rs` | Keyframe tick colors replaced |
 | `src/ui/graph_editor.rs` | Graph editor colors replaced |
 | `src/ui/toolbar.rs` | Toolbar colors replaced |
+
+---
+
+## Antigravity Session Update (Latest)
+
+### New Features Added
+| Feature | Location |
+|---------|----------|
+| Tool shortcuts V/H/Z/Y/Q/G/C, Cmd+T | `src/ui/shortcuts.rs` |
+| Effect menu applies 17 effects | `src/ui/menu.rs` (`apply_effect_by_name`) |
+| Layer bars use label colors | `src/ui/timeline/mod.rs` |
+| Timecode ruler + overlap thinning | `src/ui/timeline/mod.rs` |
+| Cmd+N new comp, Cmd+S save | shortcuts + menu |
+| Pixel color sampling in status bar | `src/app_state.rs` |
+| Draggable work-area handles | `src/ui/timeline/mod.rs` |
+| Graph editor click-to-create KF | `src/ui/graph_editor.rs` |
+| Motion path eased sampling | `src/ui/viewport_overlays.rs` |
+| Render queue sequential FFmpeg batch | `src/ui/render_queue.rs`, `export_dialog.rs` (`start_comp_export`) |
+| Duplicate/Split context menu fixes | `src/ui/timeline/mod.rs` (pending_* pattern) |
+| U/UU/A reveal filtering works | `src/ui/timeline/mod.rs` |
+| Time Stretch real impl | `src/ui/time_remap_panel.rs` |
+| Keyframe right-click menu | `layers.rs` on_menu cb, `utils.rs` RightClicked |
+| Shift+drag marquee select | `layers.rs` on_box_select cb |
+| Selected-KF group move | `layers.rs` on_group_move cb |
+| Viewport scale handles | `src/ui/viewport.rs` (`viewport_scale_drag`) |
+| Sequence Layers assistant | NEW `src/ui/sequence_layers_dialog.rs` |
+| Text dbl-click viewport edit | `viewport.rs` (`inline_text_edit_layer`) |
+| Layer markers + Alt+M | `timeline.rs` Layer.markers |
+| Hand pans / Zoom clicks | `src/ui/viewport.rs` |
+| Save Frame As PNG | `src/ui/menu.rs` |
+| Slip edit Alt+drag, ripple Shift+trim | `src/ui/timeline/mod.rs` |
+| Import Image menu | `src/ui/menu.rs` |
+| Q creates rectangle, T creates text | `src/ui/viewport.rs` drag_stopped |
+| Ruler context menu | `src/ui/timeline/mod.rs` |
+| PreComp dbl-click opens nested comp | `src/ui/timeline/mod.rs` |
+
+### Coordination Notes
+- **J/K/L semantics changed**: J=prev KF, K=next KF, L=play forward. Don't re-add shuttle J/K.
+- **T key** = Opacity reveal; **Cmd+T** = Text tool. Bare T must not switch tools.
+- **pending_* pattern**: timeline/mod.rs defers mutations out of the row loop (borrow-safe). Follow it for new row-context actions.
+- **draw_prop_row_ext** now takes 4 optional callbacks: on_move, on_select, on_menu, on_box_select, on_group_move.
+- If you add EffectType variants: update `apply_effect_by_name` in menu.rs only if adding to Effect menu; my code has no exhaustive match over EffectType.
