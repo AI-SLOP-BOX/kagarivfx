@@ -61,6 +61,9 @@ struct GlobalsUniform {
     exposure_ev: f32,
     lut_mode: u32,
     mask_enabled: u32,
+    mask_mode: u32,
+    mask_inverted: u32,
+    mask_feather: f32,
 }
 
 /// Compile-time proof that LayerUniform is non-zero-sized, embedded directly
@@ -743,6 +746,9 @@ impl WgpuRenderer {
             exposure_ev,
             lut_mode,
             mask_enabled: 0,
+            mask_mode: 0,
+            mask_inverted: 0,
+            mask_feather: 0.0,
         };
         self.queue
             .write_buffer(&self.globals_buffer, 0, bytemuck::bytes_of(&globals));

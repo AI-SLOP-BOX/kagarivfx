@@ -224,6 +224,25 @@ fn render_precomp_layers_inner(_comp: &Composition, precomp_comp: &Composition, 
             }
         }
 
+        // ── Puppet warp: IDW-displace the isolated layer buffer before effects ──
+        if !layer.puppet_pins.is_empty() {
+            // layer_buf rows/cols are world-aligned samples offset by
+            // (min_x, min_y), so comp-space -> buffer-space is a translation.
+            let to_buf = |p: [f32; 2]| -> [f32; 2] {
+                [p[0] - min_x as f32, p[1] - min_y as f32]
+            };
+            let pins: Vec<([f32; 2], [f32; 2])> = layer
+                .puppet_pins
+                .iter()
+                .map(|pin| {
+                    let s = to_buf(pin.comp_source);
+                    let d = to_buf(pin.position.evaluate(effective_frame));
+                    (s, d)
+                })
+                .collect();
+            crate::core::puppet_warp::warp_layer_buf(&mut layer_buf, bw, bh, &pins);
+        }
+
         crate::core::cpu_effects::apply_layer_effects(&mut layer_buf, bw, bh, &layer.effects, effective_frame, precomp_comp.fps);
 
         // Composite onto buffer

@@ -706,6 +706,38 @@ pub fn draw_layer_type_specs(
         });
 
         ui.separator();
+        // ── Puppet Pins (deformation mesh handles, AE Puppet Tool parity) ──
+        ui.collapsing("🧷 Puppet Pins", |ui| {
+            if ui.button("+ Add Pin").on_hover_text("Place a deformation pin at the layer's position (use the 🧷 tool in the viewport to place anywhere)").clicked() {
+                let n = layer.puppet_pins.len() + 1;
+                let center = layer.transform.position.evaluate(current_frame);
+                layer.puppet_pins.push(crate::core::timeline::PuppetPin::new(
+                    format!("pin_{}", n),
+                    format!("Pin {}", n),
+                    center,
+                ));
+                *project_changed = true;
+            }
+            let mut remove_idx: Option<usize> = None;
+            for (pi, pin) in layer.puppet_pins.iter_mut().enumerate() {
+                ui.horizontal(|ui| {
+                    ui.label(egui::RichText::new(format!("🧷 {}", pin.name)).small());
+                    if let Some(nf) = draw_property_ui(current_frame, ui, "", &mut pin.position, |ui, val| {
+                        ui.add(egui::DragValue::new(&mut val[0]).speed(1.0).prefix("X "));
+                        ui.add(egui::DragValue::new(&mut val[1]).speed(1.0).prefix("Y "));
+                    }) { *next_frame = Some(nf); }
+                    if ui.small_button("🗑").on_hover_text("Remove pin").clicked() {
+                        remove_idx = Some(pi);
+                    }
+                });
+            }
+            if let Some(ri) = remove_idx {
+                layer.puppet_pins.remove(ri);
+                *project_changed = true;
+            }
+        });
+
+        ui.separator();
         ui.collapsing("Trim Paths Animator", |ui| {
             if layer.trim_paths.is_none() {
                 if ui.button("+ Add Trim Paths").clicked() {

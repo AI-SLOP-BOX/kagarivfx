@@ -1274,6 +1274,8 @@ pub struct Layer {
 
     // ── AE Masking System ──
     pub masks: Vec<crate::core::mask::Mask>,
+    #[serde(default)]
+    pub puppet_pins: Vec<PuppetPin>,
 
     // ── AE Layer Markers (per-layer comment flags) ──
     #[serde(default)]
@@ -1314,6 +1316,24 @@ pub struct Layer {
     pub constraints: crate::core::layer_constraints::LayerConstraints,
 }
 
+/// A puppet-tool deformation pin. `comp_source` is the rest position in
+/// composition space where the pin was placed; `position` (animatable) is
+/// its current comp-space location — the delta drives the mesh warp.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct PuppetPin {
+    pub id: String,
+    pub name: String,
+    pub comp_source: [f32; 2],
+    pub position: Animatable<[f32; 2]>,
+}
+
+impl PuppetPin {
+    pub fn new(id: String, name: String, source: [f32; 2]) -> Self {
+        Self { id, name, comp_source: source, position: Animatable::new_constant(source) }
+    }
+}
+
+
 
 impl Layer {
     pub fn new(id: String, name: String, layer_type: LayerType, duration_frames: u32) -> Self {
@@ -1345,6 +1365,7 @@ impl Layer {
             effects_enabled: true,
             is_collapsed: false,
             masks: Vec::new(),
+            puppet_pins: Vec::new(),
             markers: Vec::new(),
             auto_orient: crate::core::auto_orient::AutoOrientMode::Off,
             posterize_time: None,
