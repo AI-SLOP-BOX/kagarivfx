@@ -396,6 +396,75 @@ pub fn draw_graph_editor(
                     colors::TIMELINE_KEYFRAME
                 };
                 ui.painter().circle_filled(pt, 4.0, anchor_color);
+
+                // ── Double-click anchor → numeric value popup ──
+                let dbl_id = ui.make_persistent_id(("graph_kf_popup", kf_idx));
+                let mut show_popup: bool = ui.ctx().data_mut(|d| *d.get_temp_mut_or_insert_with(dbl_id, || false));
+                if anchor_resp.double_clicked() {
+                    show_popup = true;
+                }
+                if show_popup {
+                    let popup_id = egui::Id::new(("graph_kf_val_popup", kf_idx));
+                    let resp = egui::Area::new(popup_id)
+                        .fixed_pos(pt + egui::vec2(12.0, -20.0))
+                        .order(egui::Order::Foreground)
+                        .show(ui.ctx(), |ui| {
+                            ui.group(|ui| {
+                                ui.set_min_width(140.0);
+                                ui.horizontal(|ui| {
+                                    ui.label(egui::RichText::new("Frame:").small());
+                                    let mut frame_str = kf_frame.to_string();
+                                    if ui.add(egui::TextEdit::singleline(&mut frame_str).desired_width(50.0)).changed() {
+                                        if let Ok(f) = frame_str.parse::<u32>() {
+                                            let new_f = f.min(total_f);
+                                            with_keyframes!(layer, graph_prop, kfs => {
+                                                if kfs.get(*kf_idx).map(|k| k.frame != new_f).unwrap_or(false) {
+                                                    kfs[*kf_idx].frame = new_f;
+                                                    kfs.sort_by_key(|k| k.frame);
+                                                    *project_changed = true;
+                                                }
+                                            });
+                                        }
+                                    }
+                                });
+                                ui.horizontal(|ui| {
+                                    ui.label(egui::RichText::new("Value:").small());
+                                    let mut val_str = format!("{:.2}", kf_val);
+                                    if ui.add(egui::TextEdit::singleline(&mut val_str).desired_width(70.0)).changed() {
+                                        if let Ok(v) = val_str.parse::<f32>() {
+                                            if graph_prop.starts_with("Position") {
+                                                let ci = if graph_prop.ends_with('Y') { 1 } else { 0 };
+                                                if let Some(kfs) = layer.transform.position.keyframes_mut() {
+                                                    if let Some(kf) = kfs.get_mut(*kf_idx) { kf.value[ci] = v; *project_changed = true; }
+                                                }
+                                            } else if graph_prop.starts_with("Scale") {
+                                                let ci = if graph_prop.ends_with('Y') { 1 } else { 0 };
+                                                if let Some(kfs) = layer.transform.scale.keyframes_mut() {
+                                                    if let Some(kf) = kfs.get_mut(*kf_idx) { kf.value[ci] = v; *project_changed = true; }
+                                                }
+                                            } else if graph_prop == "Rotation" {
+                                                if let Some(kfs) = layer.transform.rotation.keyframes_mut() {
+                                                    if let Some(kf) = kfs.get_mut(*kf_idx) { kf.value = v; *project_changed = true; }
+                                                }
+                                            } else if graph_prop == "Opacity" {
+                                                if let Some(kfs) = layer.transform.opacity.keyframes_mut() {
+                                                    if let Some(kf) = kfs.get_mut(*kf_idx) { kf.value = v.clamp(0.0, 100.0); *project_changed = true; }
+                                                }
+                                            }
+                                        }
+                                    }
+                                });
+                                if ui.button("Done").clicked() {
+                                    show_popup = false;
+                                }
+                            });
+                        });
+                    // Click outside popup → dismiss
+                    if ui.input(|i| i.pointer.any_click()) && !resp.response.contains_pointer() {
+                        show_popup = false;
+                    }
+                }
+                ui.ctx().data_mut(|d| d.insert_temp(dbl_id, show_popup));
                 if anchor_resp.hovered() {
                     ui.painter().circle_stroke(pt, 7.0, egui::Stroke::new(1.0, colors::TIMELINE_KEYFRAME));
                 }
