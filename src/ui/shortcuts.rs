@@ -93,6 +93,24 @@ pub fn handle_global_shortcuts(
             app.work_area_out = Some(*current_frame);
         }
 
+        // ── I / O → Jump to selected layer's in-point / out-point (AE parity) ──
+        if allow_single_key && !cmd && i.key_pressed(Key::I) {
+            if let Some(idx) = app.selected_layer_idx {
+                let comp = app.history.current().active_composition();
+                if let Some(layer) = comp.layers.get(idx) {
+                    *current_frame = layer.in_frame;
+                }
+            }
+        }
+        if allow_single_key && !cmd && i.key_pressed(Key::O) {
+            if let Some(idx) = app.selected_layer_idx {
+                let comp = app.history.current().active_composition();
+                if let Some(layer) = comp.layers.get(idx) {
+                    *current_frame = layer.out_frame;
+                }
+            }
+        }
+
         // ── L: Shuttle Forward (press again to increase speed up to 3x) ──
         // J/K are reserved for keyframe navigation below (AE standard).
         if allow_single_key && !cmd && !shift {

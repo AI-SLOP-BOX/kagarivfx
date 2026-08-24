@@ -44,6 +44,8 @@ pub fn draw_shortcuts_dialog(app: &mut AfterEffectsApp, ctx: &egui::Context) {
                             ("L", "Play Forward (press again: 2x, 3x)"),
                             ("B", "Set Work Area Start at Current Frame"),
                             ("N", "Set Work Area End at Current Frame"),
+                            ("I", "Jump to Layer In-Point"),
+                            ("O", "Jump to Layer Out-Point"),
                             ("Space", "Play / Stop RAM Preview"),
                             ("Cmd + Z", "Undo Single Drag Gesture"),
                             ("Cmd + Shift + Z", "Redo"),
