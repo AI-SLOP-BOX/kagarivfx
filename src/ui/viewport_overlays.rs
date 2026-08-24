@@ -163,22 +163,53 @@ pub fn draw_viewport_overlays(
     ui.painter().rect_stroke(badge_rect, 4.0, egui::Stroke::new(1.0, backend_color));
     ui.painter().text(badge_rect.center(), egui::Align2::CENTER_CENTER, backend_text, egui::FontId::proportional(11.0), backend_color);
 
-    // ── Mask Notice: GPU path does not composite masks yet ──
+    // ── CPU-only Feature Notice ──
+    // Masks, Text Animator, Layer Styles and DOF composite correctly only in
+    // the software (export/CPU) path today. Surface one honest badge when any
+    // of them is active so viewport vs export differences aren't mysterious.
     if rendered_gpu {
         let comp_now = app.history.current().active_composition();
+        let mut reasons: Vec<String> = Vec::new();
+
         let masked = comp_now.layers.iter()
-            .filter(|l| l.is_active(current_frame) && !l.masks.is_empty())
-            .filter(|l| l.masks.iter().any(|m| m.enabled && m.mode != crate::core::mask::MaskMode::None))
+            .filter(|l| l.is_active(current_frame) && l.masks.iter().any(|m| m.enabled && m.mode != crate::core::mask::MaskMode::None))
             .count();
         if masked > 0 {
-            let warn_text = format!("⚠ {} layer{} masked — visible in export (CPU)", masked, if masked > 1 { "s" } else { "" });
+            reasons.push(format!("{} mask{}", masked, if masked > 1 { "s" } else { "" }));
+        }
+
+        let animated_text = comp_now.layers.iter()
+            .filter(|l| l.is_active(current_frame))
+            .filter(|l| l.text_animator.as_ref().map(|a| a.enabled).unwrap_or(false))
+            .count();
+        if animated_text > 0 {
+            reasons.push(format!("text animator ×{}", animated_text));
+        }
+
+        let styled = comp_now.layers.iter()
+            .filter(|l| l.is_active(current_frame))
+            .filter(|l| l.style.drop_shadow.enabled || l.style.outer_glow.enabled || l.style.stroke.enabled)
+            .count();
+        if styled > 0 {
+            reasons.push(format!("layer styles ×{}", styled));
+        }
+
+        if comp_now.active_camera.dof_enabled
+            && comp_now.layers.iter().any(|l| l.is_active(current_frame) && l.is_3d)
+        {
+            reasons.push("3D DOF".to_string());
+        }
+
+        if !reasons.is_empty() {
+            let warn_text = format!("⚠ {} → export only", reasons.join(", "));
+            let warn_w = (warn_text.len() as f32 * 6.2 + 20.0).min(draw_w - 20.0);
             let warn_rect = egui::Rect::from_min_size(
-                egui::pos2(origin_x + draw_w - 180.0, origin_y + 40.0),
-                egui::vec2(170.0, 22.0),
+                egui::pos2(origin_x + draw_w - warn_w - 10.0, origin_y + 40.0),
+                egui::vec2(warn_w, 22.0),
             );
             ui.painter().rect_filled(warn_rect, 4.0, egui::Color32::from_rgba_unmultiplied(30, 24, 8, 210));
             ui.painter().rect_stroke(warn_rect, 4.0, egui::Stroke::new(1.0, colors::ACCENT_ORANGE));
-            ui.painter().text(warn_rect.center(), egui::Align2::CENTER_CENTER, &warn_text, egui::FontId::proportional(10.0), colors::ACCENT_ORANGE);
+            ui.painter().text(warn_rect.center(), egui::Align2::CENTER_CENTER, &warn_text, egui::FontId::proportional(10.5), colors::ACCENT_ORANGE);
         }
     }
 
