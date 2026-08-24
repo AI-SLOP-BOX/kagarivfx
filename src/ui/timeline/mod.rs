@@ -290,13 +290,19 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                 // Ruler Ticks
                 let step = (zoom_span / 10).max(1);
                 let fps = comp.fps.max(1);
-                for f in (start_frame..=(start_frame + zoom_span)).step_by(step as usize) {
+                // Thin out timecode labels when ticks would overlap (11 mono chars ≈ 66px)
+                let tick_px = ruler_rect.width() * (step as f32 / zoom_span as f32);
+                let label_every = ((70.0 / tick_px.max(1.0)).ceil() as usize).max(1);
+                for (tick_i, f) in (start_frame..=(start_frame + zoom_span)).step_by(step as usize).enumerate() {
                     let norm = (f - start_frame) as f32 / zoom_span as f32;
                     let tick_x = ruler_rect.left() + norm * ruler_rect.width();
                     ui.painter().line_segment(
                         [egui::pos2(tick_x, ruler_rect.bottom() - 6.0), egui::pos2(tick_x, ruler_rect.bottom())],
                         egui::Stroke::new(1.0, colors::BORDER_STRONG),
                     );
+                    if tick_px < 70.0 && tick_i % label_every != 0 {
+                        continue;
+                    }
                     let tc_s = f / fps;
                     let tc_sub = f % fps;
                     let tc_m = tc_s / 60;
