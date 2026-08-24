@@ -40,6 +40,7 @@ pub fn draw_shortcuts_dialog(app: &mut AfterEffectsApp, ctx: &egui::Context) {
                             ("F9", "Easy Ease Keyframes (with Bezier Presets)"),
                             ("J", "Jump to Previous Keyframe"),
                             ("K", "Jump to Next Keyframe"),
+                            ("L", "Play Forward (press again: 2x, 3x)"),
                             ("B", "Set Work Area Start at Current Frame"),
                             ("N", "Set Work Area End at Current Frame"),
                             ("Space", "Play / Stop RAM Preview"),

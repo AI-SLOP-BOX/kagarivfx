@@ -79,27 +79,9 @@ pub fn handle_global_shortcuts(
             app.work_area_out = Some(*current_frame);
         }
 
-        // ── J / K / L: AE Shuttle Playback Controls ──────────────────────────
-        // J = Reverse (press again to increase reverse speed up to 3x)
-        // K = Stop playback
-        // L = Forward (press again to increase forward speed up to 3x)
+        // ── L: Shuttle Forward (press again to increase speed up to 3x) ──
+        // J/K are reserved for keyframe navigation below (AE standard).
         if allow_single_key && !cmd && !shift {
-            if i.key_pressed(Key::J) {
-                if app.is_playing && app.playback_speed < 0 {
-                    // Already playing reverse: increase reverse speed (max -3x)
-                    app.playback_speed = (app.playback_speed - 1).max(-3);
-                } else {
-                    app.is_playing = true;
-                    app.playback_speed = -1;
-                }
-                app.toasts.info(format!("⏪ Reverse {}x", app.playback_speed.abs()));
-            }
-            if i.key_pressed(Key::K) {
-                // K = Stop / Pause
-                app.is_playing = false;
-                app.playback_speed = 1; // reset to default forward 1x
-                app.toasts.info("⏸ Stopped");
-            }
             if i.key_pressed(Key::L) {
                 if app.is_playing && app.playback_speed > 0 {
                     // Already playing forward: increase speed (max 3x)
@@ -150,13 +132,10 @@ pub fn handle_global_shortcuts(
         }
 
         // ── AE-style keyframe navigation & transport ──
-        // J → previous keyframe of selected layer, L → next keyframe, K → stop playback.
+        // J → previous keyframe, K → next keyframe (AE standard).
         // Collects keyframe times across all transform properties of the selected layer.
-        if allow_single_key && i.key_pressed(Key::K) {
-            app.is_playing = false;
-        }
-        if allow_single_key && (i.key_pressed(Key::J) || i.key_pressed(Key::L)) {
-            let going_next = i.key_pressed(Key::L);
+        if allow_single_key && i.key_pressed(Key::J) || allow_single_key && i.key_pressed(Key::K) {
+            let going_next = i.key_pressed(Key::K);
             if let Some(idx) = app.selected_layer_idx {
                 let comp = app.history.current().active_composition();
                 if let Some(layer) = comp.layers.get(idx) {
