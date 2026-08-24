@@ -304,6 +304,14 @@ pub fn get_all_commands() -> Vec<PaletteCommand> {
             }),
         },
         PaletteCommand {
+            name: "Edit: Undo History Panel",
+            category: "Edit",
+            shortcut_hint: "",
+            action: Box::new(|app| {
+                app.show_history_panel = !app.show_history_panel;
+            }),
+        },
+        PaletteCommand {
             name: "File: Save Project",
             category: "File",
             shortcut_hint: "Cmd+S",

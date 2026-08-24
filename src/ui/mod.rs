@@ -18,6 +18,7 @@ pub mod viewport_canvas;
 pub mod viewport_camera_3d;
 pub mod export_dialog;
 pub mod audio_meter;
+pub mod history_panel;
 pub mod icons;
 pub mod toolbar;
 pub mod project_panel;

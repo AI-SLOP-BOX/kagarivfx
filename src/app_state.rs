@@ -232,6 +232,7 @@ pub struct AfterEffectsApp {
     pub precompose_name: String,
     pub precompose_move_attributes: bool,
     pub show_command_palette: bool,
+    pub show_history_panel: bool,
     pub command_palette_search: String,
     pub command_palette_selected_idx: usize,
     pub snap_to_keyframes: bool,
@@ -453,6 +454,7 @@ impl Default for AfterEffectsApp {
             font_family_idx: 0,
             faux_font_switches: (false, false, false, false),
             show_command_palette: false,
+            show_history_panel: false,
             command_palette_search: String::new(),
             command_palette_selected_idx: 0,
             toasts: crate::ui::notification::ToastManager::new(),
@@ -748,6 +750,7 @@ impl eframe::App for AfterEffectsApp {
             });
 
         crate::ui::viewport::draw(self, ctx, current_frame);
+        crate::ui::history_panel::draw_history_panel(self, ctx);
         crate::ui::export_dialog::draw(self, ctx);
         crate::ui::comp_settings_dialog::draw_comp_settings_dialog(self, ctx);
 

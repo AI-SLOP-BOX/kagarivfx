@@ -148,7 +148,39 @@ impl ProjectHistory {
         &mut self.stack[self.current_idx].project
     }
 
-    /// Check if undo is available.
+    // Check if undo is available.
+    /// Number of stored history steps (including the initial snapshot).
+    pub fn len(&self) -> usize {
+        self.stack.len()
+    }
+
+    /// True when no history entries exist.
+    pub fn is_empty(&self) -> bool {
+        self.stack.is_empty()
+    }
+
+    /// Index of the active entry (for highlighting in a history UI).
+    pub fn current_index(&self) -> usize {
+        self.current_idx
+    }
+
+    /// Action name of the entry at `idx`, if in range.
+    pub fn action_name_at(&self, idx: usize) -> Option<&str> {
+        self.stack.get(idx).map(|e| e.action_name.as_str())
+    }
+
+    /// Jump to an arbitrary history index (Undo History panel support):
+    /// repeatedly undoes or redoes until `current_idx` matches. Returns
+    /// true when the jump happened.
+    pub fn jump_to(&mut self, idx: usize) -> bool {
+        if idx >= self.stack.len() || idx == self.current_idx {
+            return false;
+        }
+        self.current_idx = idx;
+        crate::core::frame_cache::bump_version();
+        true
+    }
+
     pub fn can_undo(&self) -> bool {
         self.current_idx > 0
     }

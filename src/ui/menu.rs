@@ -233,6 +233,10 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
                     app.history.redo();
                     ui.close_menu();
                 }
+                if ui.button("🕘 Undo History…").on_hover_text("Open the named-step history panel and jump to any step").clicked() {
+                    app.show_history_panel = !app.show_history_panel;
+                    ui.close_menu();
+                }
                 ui.separator();
                 if ui.add(egui::Button::new("Duplicate").shortcut_text("Cmd+D")).clicked() {
                     if let Some(sel_idx) = app.selected_layer_idx {
