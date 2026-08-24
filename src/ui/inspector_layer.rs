@@ -136,6 +136,51 @@ pub fn draw_layer_transforms(
             draw_expression_selector(ui, "rotation", &mut layer.transform.rotation_expression, project_changed);
             if rot_before != layer.transform.rotation { *project_changed = true; }
 
+            // ── Auto-Orient (AE parity): rotation follows motion path ──
+            {
+                use crate::core::auto_orient::AutoOrientMode;
+                let ao_before = layer.auto_orient;
+                let mode_text = match layer.auto_orient {
+                    AutoOrientMode::Off => "Off",
+                    AutoOrientMode::OrientAlongPath => "Orient Along Path",
+                    AutoOrientMode::OrientTowardsPoint { .. } => "Orient Towards Point",
+                };
+                ui.horizontal(|ui| {
+                    ui.label(egui::RichText::new("Auto-Orient").small().color(colors::TEXT_SECONDARY));
+                    egui::ComboBox::from_id_salt("insp_auto_orient")
+                        .selected_text(mode_text)
+                        .show_ui(ui, |ui| {
+                            if ui.selectable_label(layer.auto_orient == AutoOrientMode::Off, "Off").clicked() {
+                                layer.auto_orient = AutoOrientMode::Off;
+                            }
+                            if ui.selectable_label(layer.auto_orient == AutoOrientMode::OrientAlongPath, "Orient Along Path")
+                                .on_hover_text("Layer rotates to follow its position motion path")
+                                .clicked()
+                            {
+                                layer.auto_orient = AutoOrientMode::OrientAlongPath;
+                            }
+                            let cur_target = match layer.auto_orient {
+                                AutoOrientMode::OrientTowardsPoint { target_point } => target_point,
+                                _ => [960.0, 540.0],
+                            };
+                            if ui.selectable_label(matches!(layer.auto_orient, AutoOrientMode::OrientTowardsPoint { .. }), "Orient Towards Point")
+                                .on_hover_text("Layer rotates to face a fixed point")
+                                .clicked()
+                            {
+                                layer.auto_orient = AutoOrientMode::OrientTowardsPoint { target_point: cur_target };
+                            }
+                        });
+                });
+                if let AutoOrientMode::OrientTowardsPoint { target_point } = &mut layer.auto_orient {
+                    ui.horizontal(|ui| {
+                        ui.label(egui::RichText::new("Target").small().color(colors::TEXT_SECONDARY));
+                        ui.add(egui::DragValue::new(&mut target_point[0]).prefix("X: ").speed(1.0));
+                        ui.add(egui::DragValue::new(&mut target_point[1]).prefix("Y: ").speed(1.0));
+                    });
+                }
+                if ao_before != layer.auto_orient { *project_changed = true; }
+            }
+
             ui.separator();
             let _op_before = layer.transform.opacity.clone();
             if let Some(nf) = draw_property_ui(current_frame, ui, "Opacity", &mut layer.transform.opacity, |ui, val| {

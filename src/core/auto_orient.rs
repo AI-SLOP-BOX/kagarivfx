@@ -2,12 +2,14 @@
 use crate::core::timeline::Layer;
 
 /// Auto-Orient mode matching After Effects layer orientation settings.
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, serde::Serialize, serde::Deserialize)]
 #[derive(Default)]
 pub enum AutoOrientMode {
     #[default]
     Off,
+    /// Rotation follows the direction of the position motion path.
     OrientAlongPath,
+    /// Rotation points at a fixed composition coordinate.
     OrientTowardsPoint { target_point: [f32; 2] },
 }
 

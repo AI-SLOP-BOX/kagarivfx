@@ -575,6 +575,26 @@ pub fn handle_global_shortcuts(
             }
         }
 
+        // Cmd+[ → Send Backward, Cmd+] → Bring Forward (layer stacking order)
+        if cmd && (i.key_pressed(Key::OpenBracket) || i.key_pressed(Key::CloseBracket)) {
+            if let Some(idx) = app.selected_layer_idx {
+                let forward = i.key_pressed(Key::CloseBracket);
+                let len = app.history.current().active_composition().layers.len();
+                let target = if forward {
+                    (idx + 1 < len).then_some(idx + 1)
+                } else {
+                    (idx > 0).then_some(idx - 1)
+                };
+                if let Some(new_idx) = target {
+                    let mut proj = app.history.current().clone();
+                    proj.active_composition_mut().layers.swap(idx, new_idx);
+                    app.selected_layer_idx = Some(new_idx);
+                    app.history.commit(proj);
+                    crate::core::frame_cache::bump_version();
+                }
+            }
+        }
+
         // Delete / Backspace → Delete all selected layers (single-key)
         if allow_single_key && (i.key_pressed(Key::Delete) || i.key_pressed(Key::Backspace)) && !shift {
             let mut indices: Vec<usize> = app.selected_layers.iter().copied().collect();

@@ -1258,6 +1258,10 @@ pub struct Layer {
     #[serde(default)]
     pub markers: Vec<TimelineMarker>,
 
+    // ── AE Auto-Orient (rotation follows motion path) ──
+    #[serde(default)]
+    pub auto_orient: crate::core::auto_orient::AutoOrientMode,
+
     // ── AE Layer Style System ──
     pub style: LayerStyle,
 
@@ -1317,6 +1321,7 @@ impl Layer {
             is_collapsed: false,
             masks: Vec::new(),
             markers: Vec::new(),
+            auto_orient: crate::core::auto_orient::AutoOrientMode::Off,
             style: LayerStyle::default(),
             text_formatting: None,
             text_animator: None,
@@ -1653,6 +1658,13 @@ impl Composition {
                 layer.transform.eval_rotation(frame, fps),
                 layer.transform.eval_opacity(frame, fps),
             )
+        };
+
+        // ── Auto-Orient: override rotation from motion path / target point ──
+        let rot = match layer.auto_orient {
+            crate::core::auto_orient::AutoOrientMode::Off => rot,
+            mode => crate::core::auto_orient::evaluate_auto_orient_rotation(layer, frame, mode)
+                .unwrap_or(rot),
         };
 
         if let Some(pid) = &layer.parent_id {
