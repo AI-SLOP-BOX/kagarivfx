@@ -1,3 +1,8 @@
+// UI code must never panic in production: unwraps here crash the whole app.
+// Use let-else / if-let with early return instead (see ai_collaboration.md,
+// "Robustness roadmap"). Tests may still unwrap freely.
+#![cfg_attr(not(test), warn(clippy::unwrap_used))]
+
 pub mod menu;
 pub mod inspector;
 pub mod inspector_camera;
