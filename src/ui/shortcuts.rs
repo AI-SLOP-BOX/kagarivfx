@@ -137,7 +137,7 @@ pub fn handle_global_shortcuts(
         // ── AE-style keyframe navigation & transport ──
         // J → previous keyframe, K → next keyframe (AE standard).
         // Collects keyframe times across all transform properties of the selected layer.
-        if allow_single_key && i.key_pressed(Key::J) || allow_single_key && i.key_pressed(Key::K) {
+        if allow_single_key && (i.key_pressed(Key::J) || i.key_pressed(Key::K)) {
             let going_next = i.key_pressed(Key::K);
             if let Some(idx) = app.selected_layer_idx {
                 let comp = app.history.current().active_composition();

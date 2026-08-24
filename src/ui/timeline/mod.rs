@@ -45,6 +45,8 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
             let mut pending_clear_markers: Option<usize> = None;
             // Shift-trim ripple: (layer_idx, old_out, shift)
             let mut pending_ripple: Option<(usize, u32, i64)> = None;
+            // Double-clicked PreComp layer: comp_id to open
+            let mut pending_open_comp: Option<String> = None;
 
             let mut header_state = header::TimelineHeaderState {
                 is_playing: &mut app.is_playing,
@@ -694,7 +696,13 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                                     ui.style_mut().visuals.override_text_color = Some(text_color);
                                     let click_resp = ui.selectable_label(is_selected, &layer.name);
                                     if click_resp.double_clicked() {
-                                        app.renaming_layer = Some(i);
+                                        // Double-click a PreComp layer opens its nested composition (AE parity)
+                                        // (deferred: resolved after the row loop)
+                                        if let crate::core::timeline::LayerType::PreComp { comp_id } = &layer.layer_type {
+                                            pending_open_comp = Some(comp_id.clone());
+                                        } else {
+                                            app.renaming_layer = Some(i);
+                                        }
                                     }
                                     if app.renaming_layer == Some(i) {
                                         let mut name_buf = layer.name.clone();
@@ -1451,6 +1459,18 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                         .map(|i| remap(*i))
                         .collect();
                     project_changed = true;
+                }
+            }
+
+            // ── Open nested composition on PreComp double-click ──
+            if let Some(comp_id) = pending_open_comp {
+                if let Some(c_idx) = temp_project.compositions.iter().position(|c| c.id == comp_id) {
+                    temp_project.active_composition_idx = c_idx;
+                    crate::core::frame_cache::bump_version();
+                    let name = temp_project.compositions[c_idx].name.clone();
+                    app.toasts.info(format!("Opened nested composition: {}", name));
+                } else {
+                    app.toasts.error("Nested composition not found");
                 }
             }
 

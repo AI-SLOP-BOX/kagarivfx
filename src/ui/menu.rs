@@ -252,6 +252,21 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
                     app.toasts.info(format!("New {}x{} @ {}fps", default_w, default_h, default_fps));
                     ui.close_menu();
                 }
+                if ui.add(egui::Button::new("Duplicate Composition")).clicked() {
+                    app.modify_project(|p| {
+                        let idx = p.active_composition_idx;
+                        if let Some(src) = p.compositions.get(idx).cloned() {
+                            let mut copy = src.clone();
+                            copy.name = format!("{} copy", src.name);
+                            copy.id = format!("{}_copy_{}", src.id, p.compositions.len());
+                            p.compositions.push(copy);
+                            p.active_composition_idx = p.compositions.len() - 1;
+                        }
+                    });
+                    crate::core::frame_cache::bump_version();
+                    app.toasts.info("Composition duplicated");
+                    ui.close_menu();
+                }
                 let comp_sc = crate::ui::shortcuts::format_shortcut("K", true, false, false);
                 let btn = egui::Button::new("Composition Settings...").shortcut_text(comp_sc);
                 if ui.add(btn).clicked() {
