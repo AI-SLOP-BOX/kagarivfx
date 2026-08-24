@@ -29,6 +29,23 @@ pub fn maybe_snap_frame(frame: u32, snap: bool, comp: &crate::core::timeline::Co
     frame
 }
 
+pub fn snap_to_layer_edges(frame: u32, exclude_idx: usize, comp: &crate::core::timeline::Composition) -> u32 {
+    let threshold = 5i32;
+    let mut best = frame;
+    let mut best_dist = threshold + 1;
+    for (i, layer) in comp.layers.iter().enumerate() {
+        if i == exclude_idx { continue; }
+        for edge in [layer.in_frame, layer.out_frame] {
+            let dist = (frame as i32 - edge as i32).abs();
+            if dist < best_dist {
+                best_dist = dist;
+                best = edge;
+            }
+        }
+    }
+    best
+}
+
 /// Interaction result of a single keyframe tick.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum KeyframeTickResult {

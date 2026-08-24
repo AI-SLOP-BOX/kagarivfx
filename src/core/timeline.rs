@@ -1381,6 +1381,10 @@ impl Layer {
         self.visible && frame >= self.in_frame && frame <= self.out_frame
     }
 
+    pub fn duration_frames(&self) -> u32 {
+        self.out_frame.saturating_sub(self.in_frame)
+    }
+
     pub fn remap_frame(&self, frame: u32) -> u32 {
         match &self.time_remap {
             Some(anim) => anim.evaluate(frame) as u32,
@@ -1411,7 +1415,7 @@ impl Layer {
             return;
         }
         let in_f = self.in_frame;
-        let duration = (self.out_frame.saturating_sub(self.in_frame)) as f32;
+        let duration = self.duration_frames() as f32;
         let new_duration = ((duration * factor).round() as u32).max(1);
         self.out_frame = in_f.saturating_add(new_duration);
 

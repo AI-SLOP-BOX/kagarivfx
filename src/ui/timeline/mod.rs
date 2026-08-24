@@ -471,6 +471,7 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                 let layers_len = comp.layers.len();
                 let parent_choices: Vec<(String, String)> = comp.layers.iter().map(|l| (l.id.clone(), l.name.clone())).collect();
                 let parent_choices_ref = &parent_choices;
+                let layer_edges: Vec<(u32, u32)> = comp.layers.iter().map(|l| (l.in_frame, l.out_frame)).collect();
                 for i in 0..layers_len {
                     // Safe index access (.get_mut(i))
                     if let Some(layer) = comp.layers.get_mut(i) {
@@ -1133,9 +1134,27 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                                         } else {
                                             // Slide: move the whole bar
                                             let span = layer.out_frame - layer.in_frame;
-                                            let new_in = (layer.in_frame as i32 + delta_frames)
+                                            let raw_in = (layer.in_frame as i32 + delta_frames)
                                                 .clamp(0, (total_frames - span) as i32)
                                                 as u32;
+                                            let new_in = if app.snap_to_keyframes {
+                                                let threshold = 5i32;
+                                                let mut best = raw_in;
+                                                let mut best_dist = threshold + 1;
+                                                for (j, &(e_in, e_out)) in layer_edges.iter().enumerate() {
+                                                    if j == i { continue; }
+                                                    for edge in [e_in, e_out] {
+                                                        let dist = (raw_in as i32 - edge as i32).abs();
+                                                        if dist < best_dist {
+                                                            best_dist = dist;
+                                                            best = edge;
+                                                        }
+                                                    }
+                                                }
+                                                best
+                                            } else {
+                                                raw_in
+                                            };
                                             layer.in_frame = new_in;
                                             layer.out_frame = new_in + span;
                                         }
