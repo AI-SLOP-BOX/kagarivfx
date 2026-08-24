@@ -120,14 +120,23 @@ impl EffectType {
                 push!("Size", size, Scalar);
                 push!("Evolution", evolution, Scalar);
             }
-            EffectType::DisplacementMap { .. } => {}
+            EffectType::DisplacementMap { max_horizontal, max_vertical, .. } => {
+                push!("Max Horizontal", max_horizontal, Scalar);
+                push!("Max Vertical", max_vertical, Scalar);
+            }
             EffectType::CompoundBlur { .. } => {}
             EffectType::Minimax { .. } => {}
             EffectType::ShiftChannels { .. } => {}
             EffectType::WaveWarp { .. } => {}
-            EffectType::CcLens { .. } => {}
+            EffectType::CcLens { convergence, zoom } => {
+                push!("Convergence", convergence, Scalar);
+                push!("Zoom", zoom, Scalar);
+            }
             EffectType::PolarCoordinates { .. } => {}
-            EffectType::OpticsCompensation { .. } => {}
+            EffectType::OpticsCompensation { field_of_view_deg, zoom, .. } => {
+                push!("Field of View", field_of_view_deg, Scalar);
+                push!("Zoom", zoom, Scalar);
+            }
             EffectType::ColorBalance { .. } => {}
             EffectType::ChannelMixer { .. } => {}
             EffectType::LightSweep { .. } => {}
@@ -156,6 +165,97 @@ impl EffectType {
             EffectType::FilmEmulation { .. } => {}
             EffectType::GodRays { .. } => {}
             EffectType::RadialBlurZoom { amount } => push!("Zoom Amount", amount, Scalar),
+            // ── Newly registered effects (session 3) ──
+            EffectType::BevelAlpha { depth, light_angle_deg } => {
+                push!("Depth", depth, Scalar);
+                push!("Light Angle", light_angle_deg, Scalar);
+            }
+            EffectType::CrossHatch { line_gap, threshold } => {
+                push!("Line Gap", line_gap, Scalar);
+                push!("Threshold", threshold, Scalar);
+            }
+            EffectType::CmykHalftone { dot_size } => push!("Dot Size", dot_size, Scalar),
+            EffectType::ColorGradeLUT { intensity, .. } => push!("LUT Intensity", intensity, Scalar),
+            EffectType::Colorama { preset_index, cycle_phase } => {
+                push!("Preset", preset_index, Scalar);
+                push!("Cycle Phase", cycle_phase, Scalar);
+            }
+            EffectType::ColorSpaceConvert { .. } => {}
+            EffectType::Curves { channel } => push!("Channel", channel, Scalar),
+            EffectType::DirectionalSharpen { angle_deg, strength } => {
+                push!("Angle", angle_deg, Scalar);
+                push!("Strength", strength, Scalar);
+            }
+            EffectType::Emboss { angle_deg, depth } => {
+                push!("Angle", angle_deg, Scalar);
+                push!("Depth", depth, Scalar);
+            }
+            EffectType::FbmTurbulence { octaves, amplitude } => {
+                push!("Octaves", octaves, Scalar);
+                push!("Amplitude", amplitude, Scalar);
+            }
+            EffectType::FireAutomaton { intensity } => push!("Intensity", intensity, Scalar),
+            EffectType::FractalNoise { contrast, brightness, complexity, evolution, .. } => {
+                push!("Contrast", contrast, Scalar);
+                push!("Brightness", brightness, Scalar);
+                push!("Complexity", complexity, Scalar);
+                push!("Evolution", evolution, Scalar);
+            }
+            EffectType::GradientMap { .. } => {} // [f32;3] not yet keyframeable
+            EffectType::Halftone { cell_size } => push!("Cell Size", cell_size, Scalar),
+            EffectType::Invert { .. } => {}
+            EffectType::LightLeak { pos_x, pos_y, intensity } => {
+                push!("Position X", pos_x, Scalar);
+                push!("Position Y", pos_y, Scalar);
+                push!("Intensity", intensity, Scalar);
+            }
+            EffectType::LightningArc { start_x, start_y, end_x, end_y, seed, glow } => {
+                push!("Start X", start_x, Scalar);
+                push!("Start Y", start_y, Scalar);
+                push!("End X", end_x, Scalar);
+                push!("End Y", end_y, Scalar);
+                push!("Seed", seed, Scalar);
+                push!("Glow", glow, Scalar);
+            }
+            EffectType::LumaKeyRange { low_threshold, high_threshold, .. } => {
+                push!("Low Threshold", low_threshold, Scalar);
+                push!("High Threshold", high_threshold, Scalar);
+            }
+            EffectType::MedianFilter { radius } => push!("Radius", radius, Scalar),
+            EffectType::Mosaic { block_w, block_h } => {
+                push!("Block Width", block_w, Scalar);
+                push!("Block Height", block_h, Scalar);
+            }
+            EffectType::PerlinFlow { scale } => push!("Scale", scale, Scalar),
+            EffectType::PinchPunch { radius, amount } => {
+                push!("Radius", radius, Scalar);
+                push!("Amount", amount, Scalar);
+            }
+            EffectType::PixelSort { threshold } => push!("Threshold", threshold, Scalar),
+            EffectType::ReflectionMap { reflect_y, fade_dist, opacity } => {
+                push!("Reflect Y", reflect_y, Scalar);
+                push!("Fade Distance", fade_dist, Scalar);
+                push!("Opacity", opacity, Scalar);
+            }
+            EffectType::RefractionLens { radius, ior } => {
+                push!("Radius", radius, Scalar);
+                push!("IOR", ior, Scalar);
+            }
+            EffectType::ScanlineGlitch { jitter_amount, seed } => {
+                push!("Jitter", jitter_amount, Scalar);
+                push!("Seed", seed, Scalar);
+            }
+            EffectType::SobelEdges { .. } => {}
+            EffectType::Solarize { threshold } => push!("Threshold", threshold, Scalar),
+            EffectType::TiltShift { focus_y, focus_height, max_blur } => {
+                push!("Focus Y", focus_y, Scalar);
+                push!("Focus Height", focus_height, Scalar);
+                push!("Max Blur", max_blur, Scalar);
+            }
+            EffectType::GlassEdgeBevel { bevel_size, refraction } => {
+                push!("Bevel Size", bevel_size, Scalar);
+                push!("Refraction", refraction, Scalar);
+            }
             // Catch-all keeps this future-proof: new variants compile fine
             // and just show no rows until registered above.
             _ => {}
