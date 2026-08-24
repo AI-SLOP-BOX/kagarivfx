@@ -1223,6 +1223,13 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                                 if body_resp.hovered() && !in_resp.hovered() && !out_resp.hovered() {
                                     let alt_held = ui.input(|inp| inp.modifiers.alt);
                                     ui.ctx().set_cursor_icon(if alt_held { egui::CursorIcon::ResizeHorizontal } else { egui::CursorIcon::Grab });
+                                    body_resp.on_hover_text(format!(
+                                        "{} — In: {} Out: {} ({:.2}s)",
+                                        layer.name,
+                                        layer.in_frame,
+                                        layer.out_frame,
+                                        layer.duration_frames() as f32 / comp.fps.max(1) as f32
+                                    ));
                                 }
                             }
 
