@@ -392,6 +392,12 @@ pub fn draw_layer_type_specs(
             LayerType::Image { path } => {
                 let val_before = path.clone();
                 ui.text_edit_singleline(path);
+                if !path.is_empty() && ui.small("📂 Reveal in Finder").on_hover_text("Open the source file location in Finder").clicked() {
+                    let _ = std::process::Command::new("open")
+                        .arg("-R")
+                        .arg(path.as_str())
+                        .spawn();
+                }
                 if val_before != *path { *project_changed = true; }
             }
             LayerType::Video { source, frames_dir, frame_count, audio_wav, speed } => {
@@ -404,6 +410,12 @@ pub fn draw_layer_type_specs(
                     ui.label("Source:");
                     ui.text_edit_singleline(source);
                 });
+                if !source.is_empty() && ui.small("📂 Reveal in Finder").on_hover_text("Open the source file location in Finder").clicked() {
+                    let _ = std::process::Command::new("open")
+                        .arg("-R")
+                        .arg(source.as_str())
+                        .spawn();
+                }
                 ui.horizontal(|ui| {
                     ui.label("Frames dir:");
                     ui.text_edit_singleline(frames_dir);
@@ -590,6 +602,12 @@ pub fn draw_layer_type_specs(
             }
             LayerType::Audio { path, volume } => {
                 ui.label(format!("Audio File ({})", path));
+                if !path.is_empty() && ui.small("📂 Reveal in Finder").on_hover_text("Open the source file location in Finder").clicked() {
+                    let _ = std::process::Command::new("open")
+                        .arg("-R")
+                        .arg(path.as_str())
+                        .spawn();
+                }
                 let v_before = volume.clone();
                 if let Some(nf) = draw_property_ui(current_frame, ui, "  Volume", volume, |ui, val| {
                     ui.add(egui::Slider::new(val, -48.0..=12.0).suffix(" dB"));
