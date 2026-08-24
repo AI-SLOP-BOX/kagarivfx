@@ -1,6 +1,9 @@
 pub mod utils;
 pub mod header;
 pub mod layers;
+pub mod ruler_bar;
+pub mod precomp_children;
+pub mod pending_actions;
 
 use eframe::egui;
 use crate::AfterEffectsApp;
@@ -103,112 +106,7 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
 
             ui.add_space(4.0);
 
-            // ── RAM Preview & Marker Ruler Bar ──
-            {
-                let bar_height = 14.0;
-                let avail_w = ui.available_width();
-                let (bar_rect, bar_response) = ui.allocate_exact_size(
-                    egui::vec2(avail_w, bar_height),
-                    egui::Sense::click(),
-                );
-
-                ui.painter().rect_filled(bar_rect, 2.0, colors::BG_DARKEST);
-
-                if total_frames > 0 {
-                    let frame_w = bar_rect.width() / total_frames as f32;
-                    // Vertex-count safety: coalesce consecutive cached frames
-                    // into ONE rect per run instead of one painter call per frame
-                    // (a 10k-frame comp would otherwise emit 10k quads every frame).
-                    let mut run_start: Option<u32> = None;
-                    for f in 0..=total_frames {
-                        let cached = f < total_frames && app.frame_cache.is_cached(f);
-                        if cached && run_start.is_none() {
-                            run_start = Some(f);
-                        } else if !cached {
-                            if let Some(s) = run_start.take() {
-                                let x = bar_rect.left() + s as f32 * frame_w;
-                                let w = ((f - s) as f32 * frame_w).max(1.0);
-                                ui.painter().rect_filled(
-                                    egui::Rect::from_min_size(
-                                        egui::pos2(x, bar_rect.top()),
-                                        egui::vec2(w, bar_height),
-                                    ),
-                                    0.0,
-                                    colors::ACCENT_GREEN,
-                                );
-                            }
-                        }
-                    }
-                }
-
-                // Render Timeline Markers & Beat Detection Transients
-                let comp_mut = app.history.current_mut().active_composition_mut();
-
-                // 🥁 Real beat-detection transient lines from the comp's audio
-                // sources (energy-flux onsets, cached per audio file).
-                let audio_paths: Vec<String> = comp_mut.layers.iter().filter_map(|l| match &l.layer_type {
-                    LayerType::Audio { path, .. } => Some(path.clone()),
-                    LayerType::Video { audio_wav: Some(w), .. } => Some(w.clone()),
-                    _ => None,
-                }).collect();
-                let fps_now = comp_mut.fps.max(1) as f32;
-                let mut beat_frames: Vec<u32> = Vec::new();
-                for ap in &audio_paths {
-                    let key = egui::Id::new(("beat_frames", ap.as_str()));
-                    let frames: std::sync::Arc<Vec<u32>> = ui.ctx().data_mut(|d| {
-                        d.get_temp::<std::sync::Arc<Vec<u32>>>(key)
-                            .unwrap_or_else(|| {
-                                let v = crate::core::audio_engine::detect_beat_frames(
-                                    std::path::Path::new(ap), total_frames, fps_now,
-                                );
-                                let arc = std::sync::Arc::new(v);
-                                d.insert_temp(key, arc.clone());
-                                arc
-                            })
-                    });
-                    beat_frames.extend(frames.iter().copied());
-                }
-                beat_frames.sort_unstable();
-                beat_frames.dedup();
-                // Cap drawn lines to keep painter calls bounded (~200)
-                if beat_frames.len() > 200 {
-                    let keep = beat_frames.len() / 200;
-                    beat_frames = beat_frames.into_iter().step_by(keep).collect();
-                }
-                for bf in &beat_frames {
-                    let b_norm = *bf as f32 / total_frames.max(1) as f32;
-                    let bx = bar_rect.left() + b_norm * bar_rect.width();
-                    ui.painter().line_segment(
-                        [egui::pos2(bx, bar_rect.top()), egui::pos2(bx, bar_rect.bottom())],
-                        egui::Stroke::new(1.0, colors::ACCENT_YELLOW),
-                    );
-                }
-
-                for marker in &comp_mut.markers {
-                    if total_frames > 0 {
-                        let norm = marker.frame as f32 / total_frames as f32;
-                        let mx = bar_rect.left() + norm * bar_rect.width();
-                        let m_pts = vec![
-                            egui::pos2(mx - 4.0, bar_rect.top()),
-                            egui::pos2(mx + 4.0, bar_rect.top()),
-                            egui::pos2(mx, bar_rect.top() + 7.0),
-                        ];
-                        let mc = egui::Color32::from_rgb(
-                            (marker.color[0] * 255.0) as u8,
-                            (marker.color[1] * 255.0) as u8,
-                            (marker.color[2] * 255.0) as u8,
-                        );
-                        ui.painter().add(egui::Shape::convex_polygon(m_pts, mc, egui::Stroke::NONE));
-                    }
-                }
-
-                if bar_response.clicked() {
-                    if let Some(pos) = bar_response.interact_pointer_pos() {
-                        let norm = ((pos.x - bar_rect.left()) / bar_rect.width()).clamp(0.0, 1.0);
-                        *current_frame = (norm * total_frames as f32).round() as u32;
-                    }
-                }
-            }
+            crate::ui::timeline::ruler_bar::draw_ram_ruler(app, ui, current_frame, total_frames);
 
             ui.add_space(2.0);
 
@@ -241,50 +139,7 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
 
 
             // ── Pre-collect sub-comp layer data (before mutable borrow) ──
-            // For each expanded PreComp layer, snapshot its child layers so we
-            // can render them as indented rows without borrowing comp again.
-            #[derive(Clone)]
-            struct PreCompChild {
-                name: String,
-                type_icon: String,
-                label_rgb: [f32; 3],
-                in_frame: u32,
-                out_frame: u32,
-            }
-            let precomp_children: Vec<(usize, Vec<PreCompChild>, String)> = {
-                let comp_ro = temp_project.active_composition();
-                app.expanded_layers.iter().filter_map(|&parent_i| {
-                    let layer = comp_ro.layers.get(parent_i)?;
-                    if let crate::core::timeline::LayerType::PreComp { comp_id } = &layer.layer_type {
-                        let sub = comp_ro.find_sub_comp(comp_id)?;
-                        let children: Vec<PreCompChild> = sub.layers.iter().map(|cl| {
-                            let type_icon = match &cl.layer_type {
-                                crate::core::timeline::LayerType::Video { .. } => "🎬",
-                                crate::core::timeline::LayerType::Image { .. } => "🖼",
-                                crate::core::timeline::LayerType::Audio { .. } => "🔊",
-                                crate::core::timeline::LayerType::Text { .. } => "T",
-                                crate::core::timeline::LayerType::Shape { .. } => "◆",
-                                crate::core::timeline::LayerType::Solid { .. } => "■",
-                                crate::core::timeline::LayerType::Null => "∅",
-                                crate::core::timeline::LayerType::PreComp { .. } => "📦",
-                                crate::core::timeline::LayerType::AdjustmentLayer => "◐",
-                                crate::core::timeline::LayerType::Particle { .. } => "✦",
-                            };
-                            let rgb = cl.label.to_rgb();
-                            PreCompChild {
-                                name: cl.name.clone(),
-                                type_icon: type_icon.to_string(),
-                                label_rgb: rgb,
-                                in_frame: cl.in_frame,
-                                out_frame: cl.out_frame,
-                            }
-                        }).collect();
-                        Some((parent_i, children, sub.id.clone()))
-                    } else {
-                        None
-                    }
-                }).collect()
-            };
+            let precomp_children = crate::ui::timeline::precomp_children::collect(temp_project, &app.expanded_layers);
 
             // ── Tracks Mode: Layer List & Keyframe Ruler Area ──
             let comp = temp_project.active_composition_mut();
@@ -1714,74 +1569,19 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                             }
 
                             // ── Pre-comp nested child layers ──
-                            if let Some((_parent_idx, children, _sub_id)) =
+                            if let Some((_parent_idx, children, sub_id)) =
                                 precomp_children.iter().find(|(pi, _, _)| *pi == i)
                             {
-                                ui.add_space(2.0);
-                                for child in children {
-                                    ui.horizontal(|ui| {
-                                        ui.add_space(16.0);
-                                        ui.label(egui::RichText::new(&child.type_icon).small().color(colors::TEXT_SECONDARY));
-                                        let cr = (child.label_rgb[0] * 255.0) as u8;
-                                        let cg = (child.label_rgb[1] * 255.0) as u8;
-                                        let cb = (child.label_rgb[2] * 255.0) as u8;
-                                        let chip_rect = ui.allocate_space(egui::vec2(6.0, 12.0)).1;
-                                        ui.painter().rect_filled(chip_rect, 1.0, egui::Color32::from_rgb(cr, cg, cb));
-                                        ui.add_space(2.0);
-                                        ui.label(egui::RichText::new(&child.name).small().color(colors::TEXT_PRIMARY));
-                                        ui.add_space(4.0);
-                                        // Mini timeline bar for the child layer
-                                        let bar_avail = ui.available_width();
-                                        let bar_resp = ui.allocate_ui_with_layout(
-                                            egui::vec2(bar_avail.min(200.0), 12.0),
-                                            egui::Layout::left_to_right(egui::Align::Center),
-                                            |ui| {
-                                                let total_f = total_frames.max(1);
-                                                let bar_rect = ui.max_rect();
-                                                ui.painter().rect_filled(bar_rect, 0.0, colors::BG_DARK);
-                                                let in_x = bar_rect.left() + (child.in_frame as f32 / total_f as f32) * bar_rect.width();
-                                                let out_x = bar_rect.left() + (child.out_frame as f32 / total_f as f32) * bar_rect.width();
-                                                let layer_rect = egui::Rect::from_min_size(
-                                                    egui::pos2(in_x, bar_rect.top()),
-                                                    egui::vec2((out_x - in_x).max(2.0), bar_rect.height()),
-                                                );
-                                                ui.painter().rect_filled(layer_rect, 2.0, colors::ACCENT_BLUE);
-                                            },
-                                        ).response;
-                                        bar_resp.on_hover_text(format!("{}: frames {}–{}", child.name, child.in_frame, child.out_frame));
-                                    });
+                                if crate::ui::timeline::precomp_children::draw_children_rows(ui, sub_id, children, total_frames) {
+                                    pending_open_comp = Some(sub_id.clone());
                                 }
-                                // "Open Pre-comp" link
-                                ui.horizontal(|ui| {
-                                    ui.add_space(20.0);
-                                    if ui.small(egui::RichText::new("📂 Open Pre-comp...").color(colors::ACCENT_BLUE)).clicked() {
-                                        if let Some((_pi, _, sub_id)) = precomp_children.iter().find(|(pi, _, _)| *pi == i) {
-                                            pending_open_comp = Some(sub_id.clone());
-                                        }
-                                    }
-                                });
                             }
                         }
                     }
                 }
             });
 
-            // ── Apply pending effect drops (after layer loop to avoid borrow conflicts) ──
-            if !pending_effect_drops.is_empty() {
-                let presets = crate::ui::effects_controls::get_all_effect_presets();
-                for (layer_idx, effect_name, preset_idx) in pending_effect_drops {
-                    if let Some(preset) = presets.get(preset_idx) {
-                        let comp = temp_project.active_composition_mut();
-                        if layer_idx < comp.layers.len() {
-                            let effect = (preset.create_fn)(comp.layers[layer_idx].effects.len());
-                            comp.layers[layer_idx].effects.push(effect);
-                            project_changed = true;
-                            app.toasts.info(format!("Applied '{}' to '{}'", effect_name, comp.layers[layer_idx].name));
-                        }
-                    }
-                }
-                app.dragging_effect = None;
-            }
+            crate::ui::timeline::pending_actions::apply_effect_drops(app, pending_effect_drops, &mut project_changed);
 
             // ── AE Timeline Bottom Controls Bar (Toggle Switches / Modes F4) ──
             ui.add_space(2.0);
@@ -1800,239 +1600,22 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                 ui.small(egui::RichText::new("AE Standard Timeline 1:1 Parity Mode").color(colors::TEXT_SECONDARY));
             });
 
-            if let Some((a, b)) = swap_request {
-                if a < temp_project.active_composition().layers.len() && b < temp_project.active_composition().layers.len() {
-                    temp_project.active_composition_mut().layers.swap(a, b);
-                    // Selection must follow the swapped rows, otherwise a drag leaves
-                    // the selection pointing at the wrong layer.
-                    let remap = |idx: usize| -> usize {
-                        if idx == a { b } else if idx == b { a } else { idx }
-                    };
-                    app.selected_layers = app
-                        .selected_layers
-                        .iter()
-                        .map(|i| remap(*i))
-                        .collect();
-                    if let Some(sel) = app.selected_layer_idx {
-                        app.selected_layer_idx = Some(remap(sel));
-                    }
-                    app.expanded_layers = app
-                        .expanded_layers
-                        .iter()
-                        .map(|i| remap(*i))
-                        .collect();
-                    project_changed = true;
-                }
-            }
-
-            // ── Ruler menu: apply new comp duration ──
-            if let Some(dur) = pending_duration {
-                temp_project.active_composition_mut().duration_frames = dur;
-                project_changed = true;
-            }
-            if let Some((w_in, w_out)) = pending_trim_work_area {
-                for layer in temp_project.active_composition_mut().layers.iter_mut() {
-                    layer.in_frame = layer.in_frame.max(w_in);
-                    layer.out_frame = layer.out_frame.min(w_out);
-                    if layer.in_frame >= layer.out_frame {
-                        layer.out_frame = layer.in_frame + 1;
-                    }
-                }
-                project_changed = true;
-            }
-
-            // ── Open nested composition on PreComp double-click ──
-            if let Some(comp_id) = pending_open_comp {
-                // First search top-level compositions
-                if let Some(c_idx) = temp_project.compositions.iter().position(|c| c.id == comp_id) {
-                    temp_project.active_composition_idx = c_idx;
-                    crate::core::frame_cache::bump_version();
-                    let name = temp_project.compositions[c_idx].name.clone();
-                    app.toasts.info(format!("Opened nested composition: {}", name));
-                } else if let Some(sub) = temp_project.active_composition().find_sub_comp(&comp_id) {
-                    // Found in sub_compositions — navigate by adding to top-level if needed
-                    // For now, just toast the name since we can't change active_composition_idx to a sub-comp
-                    let name = sub.name.clone();
-                    app.toasts.info(format!("Opened nested composition: {}", name));
-                } else {
-                    app.toasts.error("Nested composition not found");
-                }
-            }
-
-            // ── Ripple edit: shift later layers after a Shift+trim ──
-            if let Some((idx, old_out, shift)) = pending_ripple {
-                for l2 in temp_project.active_composition_mut().layers.iter_mut().skip(idx + 1) {
-                    if l2.in_frame >= old_out {
-                        l2.in_frame = (l2.in_frame as i64 + shift).max(0) as u32;
-                        l2.out_frame = (l2.out_frame as i64 + shift).max(l2.in_frame as i64 + 1) as u32;
-                    }
-                }
-                app.toasts.info("Ripple edit applied");
-            }
-
-            // ── Context-menu: layer markers ──
-            if let Some(idx) = pending_layer_marker {
-                let cur = *current_frame;
-                if let Some(layer) = temp_project.active_composition_mut().layers.get_mut(idx) {
-                    layer.markers.push(crate::core::timeline::TimelineMarker {
-                        frame: cur,
-                        label: format!("Marker {}", layer.markers.len() + 1),
-                        color: [0.95, 0.85, 0.10],
-                    });
-                    project_changed = true;
-                    app.toasts.info(format!("Layer marker at frame {}", cur));
-                }
-            }
-            if let Some(idx) = pending_clear_markers {
-                if let Some(layer) = temp_project.active_composition_mut().layers.get_mut(idx) {
-                    layer.markers.clear();
-                    project_changed = true;
-                }
-            }
-
-            // ── Alt+M: toggle a layer marker on the selected layer at the playhead ──
-            if ui.input(|inp| inp.modifiers.alt && inp.key_pressed(egui::Key::M)) {
-                if let Some(sel_idx) = app.selected_layer_idx {
-                    let cur = *current_frame;
-                    if let Some(layer) = temp_project.active_composition_mut().layers.get_mut(sel_idx) {
-                        if let Some(pos) = layer.markers.iter().position(|m| m.frame == cur) {
-                            layer.markers.remove(pos);
-                            app.toasts.info("Layer marker removed");
-                        } else {
-                            layer.markers.push(crate::core::timeline::TimelineMarker {
-                                frame: cur,
-                                label: format!("Marker {}", layer.markers.len() + 1),
-                                color: [0.95, 0.85, 0.10],
-                            });
-                            app.toasts.info(format!("Layer marker at frame {}", cur));
-                        }
-                        project_changed = true;
-                    }
-                }
-            }
-
-            // ── Context-menu: Duplicate Layer (inserts a clone above the original) ──
-            if let Some(idx) = pending_dup_layer {
-                let layers_len = temp_project.active_composition().layers.len();
-                if idx < layers_len {
-                    let mut cloned = temp_project.active_composition().layers[idx].clone();
-                    cloned.id = format!("{}_copy_{}", cloned.id, layers_len);
-                    cloned.name = format!("{} copy", cloned.name);
-                    temp_project.active_composition_mut().layers.insert(idx + 1, cloned);
-                    app.selected_layer_idx = Some(idx + 1);
-                    app.selected_layers.clear();
-                    app.selected_layers.insert(idx + 1);
-                    project_changed = true;
-                }
-            }
-
-            // ── Context-menu: Split Layer (true split: tail becomes a new layer above) ──
-            if let Some(idx) = pending_split_layer {
-                let cur = *current_frame;
-                let layers_len = temp_project.active_composition().layers.len();
-                if idx < layers_len {
-                    let orig_out = temp_project.active_composition().layers[idx].out_frame;
-                    if cur > temp_project.active_composition().layers[idx].in_frame && cur < orig_out {
-                        // 1) Head keeps [in .. cur)
-                        temp_project.active_composition_mut().layers[idx].out_frame = cur;
-                        // 2) Tail is a fresh layer covering [cur .. out)
-                        let mut tail = temp_project.active_composition().layers[idx].clone();
-                        tail.id = format!("{}_split_{}", tail.id, layers_len);
-                        tail.name = format!("{} split", tail.name);
-                        tail.in_frame = cur;
-                        tail.out_frame = orig_out;
-                        temp_project.active_composition_mut().layers.insert(idx + 1, tail);
-                        app.selected_layer_idx = Some(idx + 1);
-                        app.selected_layers.clear();
-                        app.selected_layers.insert(idx + 1);
-                        project_changed = true;
-                        app.toasts.info(format!("Split layer at frame {}", cur));
-                    } else {
-                        app.toasts.error("Split point must be inside the layer's duration");
-                    }
-                }
-            }
-
-            if let Some(selected_indices) = pending_precomp_indices {
-                let comp_len = temp_project.compositions.len();
-                let (c_w, c_h, c_fps, c_dur) = {
-                    let active = temp_project.active_composition();
-                    (active.width, active.height, active.fps, active.duration_frames)
-                };
-                let precomp_id = format!("precomp_{}", comp_len);
-                let precomp_name = format!("Pre-comp {}", comp_len + 1);
-                let mut new_comp = crate::core::timeline::Composition::new(
-                    precomp_id.clone(),
-                    precomp_name.clone(),
-                    c_w, c_h, c_fps, c_dur,
-                );
-
-                let active_comp = temp_project.active_composition_mut();
-                let mut extracted_layers = Vec::new();
-                for &idx in selected_indices.iter().rev() {
-                    if idx < active_comp.layers.len() {
-                        extracted_layers.push(active_comp.layers.remove(idx));
-                    }
-                }
-                extracted_layers.reverse();
-                new_comp.layers = extracted_layers;
-
-                let precomp_layer = crate::core::timeline::Layer::new(
-                    format!("layer_{}", precomp_id),
-                    precomp_name,
-                    crate::core::timeline::LayerType::PreComp { comp_id: precomp_id },
-                    c_dur,
-                );
-                let insert_pos = selected_indices.first().copied().unwrap_or(0).min(active_comp.layers.len());
-                active_comp.layers.insert(insert_pos, precomp_layer);
-                temp_project.compositions.push(new_comp);
-
-                app.selected_layers.clear();
-                app.selected_layers.insert(insert_pos);
-                app.selected_layer_idx = Some(insert_pos);
-                project_changed = true;
-            }
-
-            // ── Cmd+D: Duplicate Selected Layer ──
-            if ui.input(|i| i.modifiers.command && i.key_pressed(egui::Key::D)) {
-                if let Some(sel_idx) = app.selected_layer_idx {
-                    let layers_len = temp_project.active_composition().layers.len();
-                    if sel_idx < layers_len {
-                        let mut cloned = temp_project.active_composition().layers[sel_idx].clone();
-                        cloned.id = format!("{}_copy", cloned.id);
-                        cloned.name = format!("{} copy", cloned.name);
-                        let insert_idx = sel_idx + 1;
-                        temp_project.active_composition_mut().layers.insert(insert_idx, cloned);
-                        app.selected_layer_idx = Some(insert_idx);
-                        app.selected_layers.clear();
-                        app.selected_layers.insert(insert_idx);
-                        project_changed = true;
-                        app.toasts.info("Duplicated layer (Cmd+D)");
-                    }
-                }
-            }
-
-            // ── Alt+[ : Trim Layer In Point to Current Frame ──
-            if ui.input(|i| i.modifiers.alt && i.key_pressed(egui::Key::OpenBracket)) {
-                if let Some(sel_idx) = app.selected_layer_idx {
-                    if let Some(layer) = temp_project.active_composition_mut().layers.get_mut(sel_idx) {
-                        layer.in_frame = (*current_frame).min(layer.out_frame.saturating_sub(1));
-                        project_changed = true;
-                        app.toasts.info(format!("Trimmed In Point to frame {}", current_frame));
-                    }
-                }
-            }
-
-            // ── Alt+] : Trim Layer Out Point to Current Frame ──
-            if ui.input(|i| i.modifiers.alt && i.key_pressed(egui::Key::CloseBracket)) {
-                if let Some(sel_idx) = app.selected_layer_idx {
-                    if let Some(layer) = temp_project.active_composition_mut().layers.get_mut(sel_idx) {
-                        layer.out_frame = (*current_frame).max(layer.in_frame + 1);
-                        project_changed = true;
-                        app.toasts.info(format!("Trimmed Out Point to frame {}", current_frame));
-                    }
-                }
-            }
+            crate::ui::timeline::pending_actions::apply(
+                app,
+                ui,
+                *current_frame,
+                &mut project_changed,
+                swap_request,
+                pending_duration,
+                pending_trim_work_area,
+                pending_open_comp,
+                pending_ripple,
+                pending_layer_marker,
+                pending_clear_markers,
+                pending_dup_layer,
+                pending_split_layer,
+                pending_precomp_indices,
+            );
 
             if project_changed {
                 // Transactional undo commit: snapshot on pointer-down, single entry on release
