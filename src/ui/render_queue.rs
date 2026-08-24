@@ -50,10 +50,9 @@ pub fn draw_render_queue_panel(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
         if custom_widgets::ae_button(ui, "+ Add Active Comp")
             .on_hover_text("Add the active composition to the render queue")
             .clicked()
+            && !app.render_queue_items.contains(&comp_name)
         {
-            if !app.render_queue_items.contains(&comp_name) {
-                app.render_queue_items.push(comp_name.clone());
-            }
+            app.render_queue_items.push(comp_name.clone());
         }
         if custom_widgets::ae_button(ui, "Clear Queue")
             .on_hover_text("Remove all items from the queue")

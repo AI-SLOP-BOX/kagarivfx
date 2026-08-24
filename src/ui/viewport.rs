@@ -466,17 +466,18 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: u32) 
                     }
                 } else if let Some((drag_idx, start_scale, start_dist)) = app.viewport_scale_drag {
                     // Corner-handle scale: distance from layer center drives uniform scale
-                    let comp_state = app.history.current().active_composition();
-                    if drag_idx < comp_state.layers.len() {
-                        let l = &comp_state.layers[drag_idx];
-                        let pos = l.transform.position.evaluate(current_frame);
+                    let pos = {
+                        let comp_state = app.history.current().active_composition();
+                        comp_state.layers.get(drag_idx)
+                            .map(|l| l.transform.position.evaluate(current_frame))
+                    };
+                    if let Some(pos) = pos {
                         let cx = origin_x + (pos[0] / comp_w) * draw_w;
                         let cy = origin_y + (pos[1] / comp_h) * draw_h;
                         let cur_dist = ((pointer_pos.x - cx).powi(2) + (pointer_pos.y - cy).powi(2)).sqrt().max(1.0);
                         let factor = (cur_dist / start_dist).clamp(0.05, 50.0);
                         let new_scl = [start_scale[0] * factor, start_scale[1] * factor];
 
-                        drop(comp_state);
                         let comp_mut = app.history.current_mut().active_composition_mut();
                         if drag_idx < comp_mut.layers.len() {
                             let layer = &mut comp_mut.layers[drag_idx];

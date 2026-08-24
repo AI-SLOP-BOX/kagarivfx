@@ -1,6 +1,9 @@
 use eframe::egui;
 use super::utils::{draw_keyframe_tick, KeyframeTickResult};
 
+type KfMenuCb<'a> = Option<&'a mut dyn for<'r> FnMut(&'static str, u32, &'r egui::Response)>;
+type KfBoxSelCb<'a> = Option<&'a mut dyn FnMut(&'static str, Vec<u32>, bool)>;
+
 /// Legacy signature kept for backward compatibility (no selection support).
 #[allow(clippy::too_many_arguments)]
 pub fn draw_prop_row(
@@ -40,11 +43,11 @@ pub fn draw_prop_row_ext(
     mut on_select: Option<&mut dyn FnMut(&'static str, u32, bool, bool)>,
     // Optional callback when a keyframe is right-clicked: caller attaches the
     // context menu to the returned response with mutable access to the track.
-    mut on_menu: Option<&mut dyn FnMut(&'static str, u32, &egui::Response)>,
+    mut on_menu: KfMenuCb<'_>,
     // Optional callback when Shift+drag box-selects keyframes on this row.
     // Carries the frames inside the marquee and whether the existing
     // selection should be kept (additive).
-    mut on_box_select: Option<&mut dyn FnMut(&'static str, Vec<u32>, bool)>,
+    mut on_box_select: KfBoxSelCb<'_>,
 ) -> Option<u32> {
     let mut requested_frame = None;
     let mut pending_move: Option<(u32, u32)> = None;

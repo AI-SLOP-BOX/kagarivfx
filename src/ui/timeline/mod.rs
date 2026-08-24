@@ -1162,7 +1162,7 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                                                 } else {
                                                     InterpolationType::Hold
                                                 },
-                                                _ => kf.interpolation.clone(),
+                                                _ => kf.interpolation,
                                             };
                                         }
                                     }
