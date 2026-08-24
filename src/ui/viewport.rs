@@ -172,6 +172,26 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: u32) 
             egui::pos2(origin_x, origin_y),
             egui::vec2(draw_w, draw_h),
         );
+
+        // ── Checkerboard transparency grid behind comp canvas ──
+        {
+            let cell = 16.0f32;
+            let light = egui::Color32::from_rgb(180, 180, 180);
+            let dark = egui::Color32::from_rgb(130, 130, 130);
+            let cols = (draw_w / cell).ceil() as i32;
+            let rows = (draw_h / cell).ceil() as i32;
+            let p = ui.painter();
+            for r in 0..rows {
+                for c in 0..cols {
+                    let x = draw_rect.left() + c as f32 * cell;
+                    let y = draw_rect.top() + r as f32 * cell;
+                    let cell_rect = egui::Rect::from_min_size(egui::pos2(x, y), egui::vec2(cell, cell)).intersect(draw_rect);
+                    let color = if (r + c) % 2 == 0 { light } else { dark };
+                    p.rect_filled(cell_rect, 0.0, color);
+                }
+            }
+        }
+
         let comp_w = comp.width as f32;
         let comp_h = comp.height as f32;
 

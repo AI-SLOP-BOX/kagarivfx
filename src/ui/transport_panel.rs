@@ -7,6 +7,24 @@ pub fn draw_transport_panel(app: &mut AfterEffectsApp, ui: &mut egui::Ui, curren
     ui.heading("Preview / Time Controls");
     ui.separator();
 
+    // ── Current Timecode + Frame Number ──
+    {
+        let fps = app.history.current().active_composition().fps.max(1);
+        let secs = *current_frame / fps;
+        let sub_f = *current_frame % fps;
+        let mins = secs / 60;
+        let hours = mins / 60;
+        ui.horizontal(|ui| {
+            ui.label(egui::RichText::new(format!("{:02}:{:02}:{:02}:{:02}", hours, mins % 60, secs % 60, sub_f))
+                .strong().color(colors::ACCENT_YELLOW));
+            ui.separator();
+            ui.label(egui::RichText::new(format!("Frame {} / {}", current_frame, total_frames))
+                .small().color(colors::TEXT_SECONDARY));
+        });
+    }
+
+    ui.add_space(4.0);
+
     ui.horizontal(|ui| {
         // Vector transport icons
         use crate::ui::icons::{render_svg_bytes, SVG_PLAY, SVG_PAUSE};
