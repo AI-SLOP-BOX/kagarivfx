@@ -1125,17 +1125,44 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                                 }
                             }
 
-                            if let LayerType::Audio { .. } = &layer.layer_type {
-                                let samples = 12;
-                                let step_x = layer_rect.width() / samples as f32;
-                                for s in 0..samples {
-                                    let h = ((s as f32 * 1.5).sin().abs() * 8.0).max(2.0);
-                                    let sx = layer_rect.left() + s as f32 * step_x;
-                                    let sy = layer_rect.center().y;
+                            if let LayerType::Audio { path, .. } = &layer.layer_type {
+                                // Real waveform from the audio file (cached per layer)
+                                let wav_id = egui::Id::new(("audio_peaks", layer.id.as_str()));
+                                let peaks: std::sync::Arc<Vec<f32>> = ui.ctx().data_mut(|d| {
+                                    d.get_temp::<std::sync::Arc<Vec<f32>>>(wav_id)
+                                        .unwrap_or_else(|| {
+                                            let peaks = std::cell::RefCell::new(Vec::new());
+                                            if let Ok(buf) = crate::core::audio_engine::AudioBuffer::load_wav(std::path::Path::new(path)) {
+                                                *peaks.borrow_mut() = buf.waveform_peaks(200);
+                                            }
+                                            let peaks = std::sync::Arc::new(peaks.into_inner());
+                                            d.insert_temp(wav_id, peaks.clone());
+                                            peaks
+                                        })
+                                });
+                                if peaks.is_empty() {
+                                    // No decodable audio: flat placeholder line
                                     ui.painter().line_segment(
-                                        [egui::pos2(sx, sy - h), egui::pos2(sx, sy + h)],
-                                        egui::Stroke::new(1.0, colors::ACCENT_CYAN),
+                                        [egui::pos2(layer_rect.left() + 2.0, layer_rect.center().y),
+                                         egui::pos2(layer_rect.right() - 2.0, layer_rect.center().y)],
+                                        egui::Stroke::new(1.0, colors::ACCENT_CYAN.linear_multiply(0.5)),
                                     );
+                                } else {
+                                    let bin_span = (total_frames.max(1) as f32) / peaks.len() as f32;
+                                    for (bin, &amp) in peaks.iter().enumerate() {
+                                        let frame_at = bin as f32 * bin_span;
+                                        if frame_at < start_frame as f32 || frame_at > (start_frame + zoom_span) as f32 {
+                                            continue;
+                                        }
+                                        let norm = (frame_at - start_frame as f32) / zoom_span as f32;
+                                        let sx = bar_rect.left() + norm * bar_rect.width();
+                                        let h = (amp * layer_rect.height() * 0.45).max(1.0);
+                                        let sy = layer_rect.center().y;
+                                        ui.painter().line_segment(
+                                            [egui::pos2(sx, sy - h), egui::pos2(sx, sy + h)],
+                                            egui::Stroke::new(1.0, colors::ACCENT_CYAN),
+                                        );
+                                    }
                                 }
                             }
                         });
