@@ -49,6 +49,8 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
             let mut pending_open_comp: Option<String> = None;
             // Ruler menu: new comp duration
             let mut pending_duration: Option<u32> = None;
+            // Trim comp to work area: (w_in, w_out)
+            let mut pending_trim_work_area: Option<(u32, u32)> = None;
 
             let mut header_state = header::TimelineHeaderState {
                 is_playing: &mut app.is_playing,
@@ -388,6 +390,16 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                         if w_out > 0 && w_out <= total_frames {
                             pending_duration = Some(w_out);
                             app.toasts.info(format!("Comp duration set to {} frames", w_out));
+                        }
+                        ui.close_menu();
+                    }
+                    if ui.button("✂ Trim Comp to Work Area").on_hover_text("Set comp duration to work area and trim layers beyond it").clicked() {
+                        let w_in = app.work_area_in.unwrap_or(0);
+                        let w_out = app.work_area_out.unwrap_or(total_frames);
+                        if w_out > w_in {
+                            pending_duration = Some(w_out);
+                            pending_trim_work_area = Some((w_in, w_out));
+                            app.toasts.info(format!("Trimmed to work area: {}f–{}f", w_in, w_out));
                         }
                         ui.close_menu();
                     }
@@ -1670,6 +1682,16 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
             // ── Ruler menu: apply new comp duration ──
             if let Some(dur) = pending_duration {
                 temp_project.active_composition_mut().duration_frames = dur;
+                project_changed = true;
+            }
+            if let Some((w_in, w_out)) = pending_trim_work_area {
+                for layer in temp_project.active_composition_mut().layers.iter_mut() {
+                    layer.in_frame = layer.in_frame.max(w_in);
+                    layer.out_frame = layer.out_frame.min(w_out);
+                    if layer.in_frame >= layer.out_frame {
+                        layer.out_frame = layer.in_frame + 1;
+                    }
+                }
                 project_changed = true;
             }
 
