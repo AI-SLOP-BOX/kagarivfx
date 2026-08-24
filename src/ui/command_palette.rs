@@ -312,6 +312,44 @@ pub fn get_all_commands() -> Vec<PaletteCommand> {
             }),
         },
         PaletteCommand {
+            name: "Layer: Fit to Comp Width",
+            category: "Layer",
+            shortcut_hint: "",
+            action: Box::new(|app| {
+                if let Some(idx) = app.selected_layer_idx {
+                    let cw = app.history.current().active_composition().width as f32;
+                    app.modify_project(move |p| {
+                        if let Some(l) = p.active_composition_mut().layers.get_mut(idx) {
+                            let bs = l.bounding_size();
+                            if bs[0] > 1.0 {
+                                let s = cw / bs[0] * 100.0;
+                                l.transform.scale = crate::core::property::Animatable::new_constant([s, s]);
+                            }
+                        }
+                    });
+                }
+            }),
+        },
+        PaletteCommand {
+            name: "Layer: Fit to Comp Height",
+            category: "Layer",
+            shortcut_hint: "",
+            action: Box::new(|app| {
+                if let Some(idx) = app.selected_layer_idx {
+                    let ch = app.history.current().active_composition().height as f32;
+                    app.modify_project(move |p| {
+                        if let Some(l) = p.active_composition_mut().layers.get_mut(idx) {
+                            let bs = l.bounding_size();
+                            if bs[1] > 1.0 {
+                                let s = ch / bs[1] * 100.0;
+                                l.transform.scale = crate::core::property::Animatable::new_constant([s, s]);
+                            }
+                        }
+                    });
+                }
+            }),
+        },
+        PaletteCommand {
             name: "File: Save Project",
             category: "File",
             shortcut_hint: "Cmd+S",
