@@ -47,6 +47,8 @@ pub fn draw_shortcuts_dialog(app: &mut AfterEffectsApp, ctx: &egui::Context) {
                             ("Space", "Play / Stop RAM Preview"),
                             ("Cmd + Z", "Undo Single Drag Gesture"),
                             ("Cmd + Shift + Z", "Redo"),
+                            ("Cmd + A", "Select All Layers"),
+                            ("Cmd + 0", "Viewport Zoom to Fit"),
                             ("P", "Select Position Property"),
                             ("S", "Select Scale Property"),
                             ("R", "Select Rotation Property"),
