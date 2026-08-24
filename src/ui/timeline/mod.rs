@@ -1374,6 +1374,34 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                                 }
                             }
 
+                            // ── Mask property rows (feather / opacity / expansion / path) ──
+                            for (m_idx, mask) in layer.masks.iter_mut().enumerate() {
+                                let moved_m = &mut project_changed;
+                                ui.label(egui::RichText::new(format!("  🎭 {}", mask.name)).small().strong().color(colors::TEXT_SECONDARY));
+                                let f_kfs = get_kfs(&mask.feather);
+                                draw_prop_row(ui, "    Feather", &f_kfs, current_frame, start_frame, zoom_span, left_pane_w,
+                                    Some(&mut |o, n| { move_kf(&mut mask.feather, o, n); *moved_m = true; }));
+                                let op_kfs_m = get_kfs(&mask.opacity);
+                                draw_prop_row(ui, "    Opacity", &op_kfs_m, current_frame, start_frame, zoom_span, left_pane_w,
+                                    Some(&mut |o, n| { move_kf(&mut mask.opacity, o, n); *moved_m = true; }));
+                                let ex_kfs = get_kfs(&mask.expansion);
+                                draw_prop_row(ui, "    Expansion", &ex_kfs, current_frame, start_frame, zoom_span, left_pane_w,
+                                    Some(&mut |o, n| { move_kf(&mut mask.expansion, o, n); *moved_m = true; }));
+                                let p_kfs = get_kfs(&mask.path.vertices);
+                                draw_prop_row(ui, &format!("    Path ({} pts)", p_kfs.len()), &p_kfs, current_frame, start_frame, zoom_span, left_pane_w,
+                                    Some(&mut |o, n| {
+                                        // Vec<[f32;2]> lacks Interpolate — retime inline
+                                        if let Some(kfs) = mask.path.vertices.keyframes_mut() {
+                                            if let Some(kf) = kfs.iter_mut().find(|k| k.frame == o) {
+                                                kf.frame = n;
+                                                kfs.sort_by_key(|k| k.frame);
+                                            }
+                                        }
+                                        *moved_m = true;
+                                    }));
+                                let _ = m_idx;
+                            }
+
                             // Effect properties are fully keyframeable: each row
                             // gets a mutator bound to its own Animatable track.
                             for effect in layer.effects.iter_mut() {
