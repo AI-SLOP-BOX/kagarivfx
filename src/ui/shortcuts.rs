@@ -389,6 +389,15 @@ pub fn handle_global_shortcuts(
                     "opacity" => t.opacity.keyframes()
                         .and_then(|k| k.iter().find(|k| k.frame == frame))
                         .and_then(|k| serde_json::to_value(k).ok()),
+                    _ if pk.starts_with("pin_") => {
+                        let pin_id = pk.strip_prefix("pin_").unwrap_or("");
+                        if let Some(pin) = comp.puppet_pins.iter().find(|p| p.id == pin_id) {
+                            if let Some(kfs) = pin.position.keyframes() {
+                                kfs.iter().find(|k| k.frame == frame)
+                                    .and_then(|k| serde_json::to_value(k).ok())
+                            } else { None }
+                        } else { None }
+                    }
                     _ if pk.starts_with("fx_") => {
                         // Effect keyframe: find the effect + param and serialize
                         let parts: Vec<&str> = pk.strip_prefix("fx_").unwrap_or("").splitn(2, '_').collect();
@@ -467,6 +476,12 @@ pub fn handle_global_shortcuts(
                     "scale" => paste_into!(t.scale, [f32; 2], value_json),
                     "rotation" => paste_into!(t.rotation, f32, value_json),
                     "opacity" => paste_into!(t.opacity, f32, value_json),
+                    _ if pk.starts_with("pin_") => {
+                        let pid = pk.strip_prefix("pin_").unwrap_or("");
+                        if let Some(pin) = layer.puppet_pins.iter_mut().find(|p| p.id == pid) {
+                            paste_into!(pin.position, [f32; 2], value_json);
+                        }
+                    }
                     _ if pk.starts_with("fx_") => {
                         // Paste into effect param
                         let stripped = pk.strip_prefix("fx_").unwrap_or("");
