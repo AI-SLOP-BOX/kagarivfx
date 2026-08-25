@@ -439,7 +439,7 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
 
                     // ── Keyframe Graph Editor ──
                     ui.add_space(8.0);
-                    crate::ui::graph_editor::draw_graph_editor(&mut selected_prop, ui, comp.duration_frames, layer, &mut project_changed);
+                    crate::ui::graph_editor::draw_graph_editor(&mut selected_prop, ui, comp.duration_frames, layer, &mut project_changed, &mut app.linked_tangent);
                 }
                 
                 // ── Transactional Commit (Issue #2 fix) ──────────────────────────────

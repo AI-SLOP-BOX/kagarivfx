@@ -245,6 +245,7 @@ pub struct AfterEffectsApp {
     pub command_palette_selected_idx: usize,
     pub snap_to_keyframes: bool,
     pub show_graph_editor: bool,
+    pub linked_tangent: bool,
     pub timeline_zoom: f32,
     /// Left edge (frame) of the visible timeline window. Stays fixed while
     /// scrubbing so the ruler does not slide under the cursor; only re-centers
@@ -412,6 +413,7 @@ impl Default for AfterEffectsApp {
             snap_to_keyframes: true,
             dragging_layer: None,
             show_graph_editor: false,
+            linked_tangent: true,
             timeline_zoom: 1.0,
             timeline_view_start: 0,
             timeline_scroll: 0.0,

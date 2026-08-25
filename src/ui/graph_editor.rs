@@ -18,7 +18,9 @@ pub fn draw_graph_editor(
     duration_frames: u32,
     layer: &mut Layer,
     project_changed: &mut bool,
+    linked_tangent: &mut bool,
 ) {
+    let graph_height = 120.0f32;
     ui.group(|ui| {
         ui.horizontal(|ui| {
             ui.label(egui::RichText::new("📈 Graph Editor").strong());
@@ -48,6 +50,7 @@ pub fn draw_graph_editor(
                 });
 
             ui.add_space(8.0);
+            ui.checkbox(linked_tangent, "🔗 Link");
             if ui.button("⚡ Easy Ease (F9)").on_hover_text("Apply smooth cubic Bezier ease curve to all keyframes").clicked() {
                 use crate::core::property::Animatable;
                 use crate::core::keyframe::InterpolationType;
@@ -268,7 +271,7 @@ pub fn draw_graph_editor(
 
         // Allocate drawing region
         let (rect, graph_response) = ui.allocate_exact_size(
-            egui::vec2(ui.available_width(), 70.0),
+            egui::vec2(ui.available_width(), graph_height),
             egui::Sense::click_and_drag(),
         );
         ui.painter().rect_filled(rect, 4.0, egui::Color32::from_gray(25));
@@ -632,13 +635,23 @@ pub fn draw_graph_editor(
                     let d = h_out_resp.drag_delta();
                     let nx2 = (bx2 + d.x / 44.0).clamp(bx1 + 0.01, 1.0);
                     let ny2 = (by2 - d.y / 24.0).clamp(-1.5, 2.5);
-                    new_pts = Some([bx1, by1, nx2, ny2]);
+                    if *linked_tangent {
+                        let mir_x = (1.0 - nx2).clamp(0.0, nx2 - 0.01);
+                        new_pts = Some([mir_x, -ny2, nx2, ny2]);
+                    } else {
+                        new_pts = Some([bx1, by1, nx2, ny2]);
+                    }
                 }
                 if h_in_resp.dragged() {
                     let d = h_in_resp.drag_delta();
                     let nx1 = (bx1 - d.x / 44.0).clamp(0.0, bx2 - 0.01);
                     let ny1 = (by1 + d.y / 24.0).clamp(-1.5, 2.5);
-                    new_pts = Some([nx1, ny1, bx2, by2]);
+                    if *linked_tangent {
+                        let mir_x = (1.0 - nx1).clamp(nx1 + 0.01, 1.0);
+                        new_pts = Some([nx1, ny1, mir_x, -ny1]);
+                    } else {
+                        new_pts = Some([nx1, ny1, bx2, by2]);
+                    }
                 }
                 if let Some(pts) = new_pts {
                     with_keyframes!(layer, graph_prop, kfs => {

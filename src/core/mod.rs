@@ -47,6 +47,7 @@ pub mod posterize_time;
 pub mod camera_dof;
 pub mod shape_repeater;
 pub mod aep_parser;
+pub mod export_presets;
 pub mod wiggle_paths;
 pub mod colorama;
 pub mod light_transmission;

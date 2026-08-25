@@ -133,7 +133,7 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                 if let Some(selected_idx) = app.selected_layer_idx {
                     let duration_f = temp_project.active_composition().duration_frames;
                     if let Some(layer) = temp_project.active_composition_mut().layers.get_mut(selected_idx) {
-                        crate::ui::graph_editor::draw_graph_editor(&mut app.selected_property, ui, duration_f, layer, &mut project_changed);
+                        crate::ui::graph_editor::draw_graph_editor(&mut app.selected_property, ui, duration_f, layer, &mut project_changed, &mut app.linked_tangent);
                     }
                 } else {
                     ui.label("Select a layer to edit keyframe curves in Graph Editor");

@@ -254,6 +254,32 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
 
             ui.add_space(8.0);
 
+            // ── User Export Presets ──
+            {
+                let user_presets = crate::core::export_presets::load_user_presets();
+                if !user_presets.is_empty() {
+                    ui.horizontal(|ui| {
+                        ui.label("User Preset:");
+                        egui::ComboBox::from_id_salt("export_user_preset")
+                            .selected_text("Select preset...")
+                            .show_ui(ui, |ui| {
+                                for preset in &user_presets {
+                                    if ui.selectable_label(false, &preset.name).clicked() {
+                                        app.export_format_preset = match preset.format {
+                                            crate::core::export_presets::ExportFormat::Mp4 => 0,
+                                            crate::core::export_presets::ExportFormat::ProRes => 1,
+                                            crate::core::export_presets::ExportFormat::PngSequence => 2,
+                                            _ => 0,
+                                        };
+                                        app.export_fps = preset.fps;
+                                        app.export_resolution_scale = if preset.width >= 1920 { 0 } else if preset.width >= 1280 { 1 } else { 2 };
+                                    }
+                                }
+                            });
+                    });
+                }
+            }
+
             ui.horizontal(|ui| {
                 ui.label("Format Preset:");
                 egui::ComboBox::from_id_salt("export_fmt_combo")
@@ -294,6 +320,28 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
             ui.horizontal(|ui| {
                 ui.label("Output Path:");
                 ui.text_edit_singleline(&mut app.export_output_path);
+            });
+
+            ui.add_space(6.0);
+            ui.horizontal(|ui| {
+                if ui.button("💾 Save Current as Preset").clicked() {
+                    let preset = crate::core::export_presets::ExportPreset {
+                        name: format!("Custom {}", { let t = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_secs(); format!("{}", t) }),
+                        format: match app.export_format_preset {
+                            1 => crate::core::export_presets::ExportFormat::ProRes,
+                            2 => crate::core::export_presets::ExportFormat::PngSequence,
+                            _ => crate::core::export_presets::ExportFormat::Mp4,
+                        },
+                        width: comp.width,
+                        height: comp.height,
+                        fps: app.export_fps,
+                        quality: 85,
+                        codec: "h264".into(),
+                        audio_enabled: true,
+                        audio_bitrate: 192,
+                    };
+                    let _ = crate::core::export_presets::add_user_preset(preset);
+                }
             });
 
             ui.add_space(10.0);
