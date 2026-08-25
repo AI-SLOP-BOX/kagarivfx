@@ -284,6 +284,9 @@ pub struct AfterEffectsApp {
     pub export_resolution_scale: usize,
     pub export_rx: Option<std::sync::mpsc::Receiver<ExportEvent>>,
     pub import_rx: Option<std::sync::mpsc::Receiver<crate::ui::drop_import::ImportResult>>,
+    /// Path of the most recent export (for the "Reveal in Finder" button).
+    #[cfg_attr(not(feature = "gui"), allow(dead_code))]
+    pub last_export_path: Option<String>,
     pub export_cancel_flag: Option<std::sync::Arc<std::sync::atomic::AtomicBool>>,
     pub tracker_rx: Option<std::sync::mpsc::Receiver<TrackerEvent>>,
     pub tracker_cancel_flag: Option<std::sync::Arc<std::sync::atomic::AtomicBool>>,
@@ -472,6 +475,7 @@ impl Default for AfterEffectsApp {
             audio_preview_enabled: true,
             ui_ctx: None,
             import_rx: None,
+            last_export_path: None,
             command_palette_search: String::new(),
             command_palette_selected_idx: 0,
             toasts: crate::ui::notification::ToastManager::new(),

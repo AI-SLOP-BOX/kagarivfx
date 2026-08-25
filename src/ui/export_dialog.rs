@@ -42,6 +42,7 @@ pub fn start_comp_export(app: &mut crate::AfterEffectsApp, ctx: &egui::Context, 
     let res_scale = ctx.data_mut(|d| *d.get_temp_mut_or_insert_with(egui::Id::new("ae_export_res_scale"), || 1.0f32));
 
     let output_path = app.export_output_path.clone();
+    app.last_export_path = Some(output_path.clone());
     // Final output size.
     let render_w = ((comp.width as f32 * res_scale) as u32).max(2);
     let render_h = ((comp.height as f32 * res_scale) as u32).max(2);
@@ -308,6 +309,15 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
                     let color = if status.contains("Error") { egui::Color32::RED } else { egui::Color32::GREEN };
                     ui.label(egui::RichText::new(status).color(color));
                     ui.add_space(4.0);
+                    if !status.contains("Error") {
+                        if let Some(lp) = &app.last_export_path {
+                            ui.horizontal(|ui| {
+                                if ui.small_button("📂 Show in Folder").clicked() {
+                                    crate::ui::project_io::reveal_in_file_manager(&std::path::PathBuf::from(lp));
+                                }
+                            });
+                        }
+                    }
                 }
                 // Include-audio toggle (only meaningful for MP4)
                 let audio_toggle_id = egui::Id::new("ae_export_include_audio");

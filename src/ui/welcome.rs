@@ -34,6 +34,29 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context) {
                 }
             });
 
+            // ── Recent projects ──
+            let recents = crate::ui::project_io::recent_projects();
+            if !recents.is_empty() {
+                ui.add_space(6.0);
+                ui.label(egui::RichText::new("Recent Projects").small().strong().color(colors::TEXT_SECONDARY));
+                for rp in recents.iter().take(5) {
+                    let fname = std::path::Path::new(rp).file_name().map(|s| s.to_string_lossy().to_string()).unwrap_or_else(|| rp.clone());
+                    ui.horizontal(|ui| {
+                        if ui.small_button(egui::RichText::new(format!("📄 {}", fname)).small()).on_hover_text(rp).clicked() {
+                            let p = std::path::PathBuf::from(rp);
+                            if let Err(e) = crate::ui::project_io::open_project_from_path(app, &p) {
+                                app.toasts.error(e);
+                            } else {
+                                app.show_welcome = false;
+                            }
+                        }
+                        ui.label(egui::RichText::new(std::path::Path::new(rp).parent().map(|p| p.display().to_string()).unwrap_or_default() ).small().color(colors::TEXT_MUTED));
+                    });
+                }
+                ui.add_space(6.0);
+                ui.separator();
+            }
+
             ui.add_space(8.0);
             ui.separator();
             ui.label(egui::RichText::new("🡇 Drop PNG / JPG / MP4 / WAV files anywhere to import").color(colors::TEXT_ACCENT));

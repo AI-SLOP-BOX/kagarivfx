@@ -35,17 +35,8 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
                         .set_file_name("project.aevfx.json")
                         .save_file()
                     {
-                        let project = app.history.current();
-                        match crate::core::project_migration::save_project_atomic(project, &path) {
-                            Ok(_) => {
-                                app.project_path = path.to_string_lossy().to_string();
-                                // Clean save → recovery snapshots no longer needed
-                                let _ = app.autosave.save_now(project);
-                                app.toasts.info(format!("Project saved: {}", path.file_name().unwrap_or_default().to_string_lossy()));
-                            }
-                            Err(err) => {
-                                app.toasts.error(format!("Failed to save project file: {}", err));
-                            }
+                        if let Err(e) = crate::ui::project_io::save_project_to_path(app, &path) {
+                            app.toasts.error(e);
                         }
                     }
                     ui.close_menu();
@@ -55,23 +46,8 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
                         .add_filter("After Effects OSS Project", &["json", "aevfx"])
                         .pick_file()
                     {
-                        match std::fs::read_to_string(&path) {
-                            Ok(json) => match crate::core::project_migration::load_project_migrated(&json) {
-                                Ok(project) => {
-                                    app.history = crate::core::history::ProjectHistory::new(project);
-                                    app.selected_layer_idx = None;
-                                    app.selected_layers.clear();
-                                    app.project_path = path.to_string_lossy().to_string();
-                                    crate::core::frame_cache::bump_version();
-                                    app.toasts.info(format!("Project opened: {}", path.file_name().unwrap_or_default().to_string_lossy()));
-                                }
-                                Err(err) => {
-                                    app.toasts.error(format!("Failed to parse project file: {}", err));
-                                }
-                            },
-                            Err(err) => {
-                                app.toasts.error(format!("Could not read file: {}", err));
-                            }
+                        if let Err(e) = crate::ui::project_io::open_project_from_path(app, &path) {
+                            app.toasts.error(e);
                         }
                     }
                     ui.close_menu();
