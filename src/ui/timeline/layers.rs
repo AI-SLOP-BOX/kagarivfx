@@ -17,7 +17,7 @@ pub fn draw_prop_row(
     on_move: Option<&mut dyn FnMut(u32, u32)>,
 ) -> Option<u32> {
     draw_prop_row_ext(ui, label, kfs, current_frame, start_frame, zoom_span, left_pane_w,
-        &std::collections::HashSet::new(), "", on_move, None, None, None, None, &[])
+        &std::collections::HashSet::new(), "", on_move, None, None, None, None, &[], None)
 }
 
 /// Extended version with keyframe selection support.
@@ -52,6 +52,9 @@ pub fn draw_prop_row_ext(
     // selected keyframes should follow: (prop_key, dragged_frame, delta_frames).
     mut on_group_move: Option<&mut dyn FnMut(&'static str, u32, i32)>,
     snap_to: &[u32],
+    // Optional callback when the row LABEL is double-clicked:
+    // select every keyframe of this property (AE parity).
+    mut on_select_all: Option<&mut dyn FnMut(&'static str)>,
 ) -> Option<u32> {
     let mut requested_frame = None;
     let mut pending_move: Option<(u32, u32)> = None;
@@ -66,7 +69,12 @@ pub fn draw_prop_row_ext(
 
     ui.horizontal(|ui| {
         ui.allocate_ui(egui::vec2(left_pane_w, 18.0), |ui| {
-            ui.label(egui::RichText::new(label).small().color(crate::ui::theme::colors::TEXT_SECONDARY));
+            let lbl_resp = ui.add_sized([left_pane_w, 18.0], egui::Label::new(
+                egui::RichText::new(label).small().color(crate::ui::theme::colors::TEXT_SECONDARY),
+            ).sense(egui::Sense::click()));
+            if lbl_resp.double_clicked() {
+                if let Some(cb) = on_select_all.as_mut() { cb(prop_key); }
+            }
         });
 
         let avail_w = ui.available_width();
