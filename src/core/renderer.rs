@@ -1886,7 +1886,15 @@ impl WgpuRenderer {
                     }
                 }
 
-                let view = if target_snapshot {
+                // RAM pre-pass draws straight into the ring slot's texture;
+                // live/snapshot keep their dedicated targets.
+                let view = if let Some(slot) = self
+                    .ram_ring
+                    .get(self.ram_render_idx)
+                    .and_then(|(_, t)| t.as_ref())
+                {
+                    Some(&slot.1)
+                } else if target_snapshot {
                     self.snapshot_view.as_ref()
                 } else {
                     self.target_view.as_ref()
@@ -2015,7 +2023,11 @@ impl WgpuRenderer {
                 },
             };
 
-            if self.ram_ring[slot_idx].1.is_none() {
+            let size_mismatch = match self.ram_ring[slot_idx].1.as_ref() {
+                None => true,
+                Some((tex, _)) => tex.size().width != width || tex.size().height != height,
+            };
+            if size_mismatch {
                 let size = wgpu::Extent3d { width, height, depth_or_array_layers: 1 };
                 let texture = self.device.create_texture(&wgpu::TextureDescriptor {
                     label: Some("RAM Preview Slot"),
