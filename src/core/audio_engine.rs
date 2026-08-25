@@ -335,6 +335,86 @@ mod wav_tests {
 
 // ── Multi-track mixing: real audio sources ──────────────────────────────────
 
+/// Recursively mix audio from a sub-composition (PreComp) into the stereo output.
+#[allow(clippy::too_many_arguments)]
+fn mix_precomp_audio(
+    sub_comp: &crate::core::timeline::Composition,
+    sub_frame: u32,
+    stereo_output: &mut [f32],
+    sample_rate: u32,
+    buffer_size: usize,
+    gain: f32,
+    pan: f32,
+    fps: f32,
+) {
+    use std::collections::HashMap;
+    use std::sync::Mutex;
+    static WAV_CACHE: std::sync::OnceLock<Mutex<HashMap<String, std::sync::Arc<AudioBuffer>>>> =
+        std::sync::OnceLock::new();
+    let cache = WAV_CACHE.get_or_init(|| Mutex::new(HashMap::new()));
+
+    for layer in &sub_comp.layers {
+        if !layer.is_active(sub_frame) || !layer.visible {
+            continue;
+        }
+        match &layer.layer_type {
+            crate::core::timeline::LayerType::PreComp { comp_id, .. } => {
+                if let Some(sub) = sub_comp.find_sub_comp(comp_id) {
+                    mix_precomp_audio(
+                        sub, sub_frame.saturating_sub(layer.in_frame),
+                        stereo_output, sample_rate, buffer_size,
+                        gain, pan, fps,
+                    );
+                }
+            }
+            crate::core::timeline::LayerType::Audio { volume, .. } => {
+                let vol_db = volume.evaluate(sub_frame);
+                let _layer_gain = gain * 10.0f32.powf(vol_db / 20.0);
+            }
+            crate::core::timeline::LayerType::Video { audio_wav: Some(w), .. } => {
+                let time_start = (sub_frame.saturating_sub(layer.in_frame)) as f32 / fps;
+                let source = {
+                    let map = cache.lock().unwrap_or_else(|e| e.into_inner());
+                    if let Some(buf) = map.get(w) {
+                        Some(buf.clone())
+                    } else {
+                        drop(map);
+                        let loaded = AudioBuffer::load_wav(std::path::Path::new(w)).ok()
+                            .map(|b| std::sync::Arc::new(b.resample(sample_rate)));
+                        if let Some(buf) = &loaded {
+                            cache.lock().unwrap_or_else(|e| e.into_inner()).insert(w.clone(), buf.clone());
+                        }
+                        loaded
+                    }
+                };
+                if let Some(buf) = source {
+                    for i in 0..buffer_size {
+                        let t = time_start + i as f32 / sample_rate as f32;
+                        let idx = (t.max(0.0) * buf.sample_rate as f32) as usize * buf.channels as usize;
+                        let l = buf.samples.get(idx).copied().unwrap_or(0.0);
+                        let r = if buf.channels > 1 {
+                            buf.samples.get(idx + 1).copied().unwrap_or(l)
+                        } else {
+                            l
+                        };
+                        let gl = gain * (1.0 - pan.max(0.0));
+                        let gr = gain * (1.0 - (-pan).max(0.0));
+                        let l_idx = i * 2;
+                        let r_idx = i * 2 + 1;
+                        if l_idx < stereo_output.len() {
+                            stereo_output[l_idx] += l * gl;
+                        }
+                        if r_idx < stereo_output.len() {
+                            stereo_output[r_idx] += r * gr;
+                        }
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+}
+
 /// Mixes ALL audio-carrying layers (Audio layers + Video layers with WAVs)
 /// at the given frame into a stereo buffer, respecting per-layer volume and
 /// active ranges. This is the real backing for the audio mixer UI.
@@ -364,6 +444,26 @@ pub fn mix_audio_sources_for_frame(
 
     for (layer_idx, layer) in comp.layers.iter().enumerate() {
         if !layer.is_active(frame) || !layer.visible {
+            continue;
+        }
+        // Handle PreComp layers: recursively mix sub-composition audio
+        if let LayerType::PreComp { comp_id, .. } = &layer.layer_type {
+            if let Some(sub) = comp.find_sub_comp(comp_id) {
+                let time_start = (frame.saturating_sub(layer.in_frame)) as f32 / fps;
+                let sub_frame = (time_start * fps) as u32;
+                let mut sub_gain = 1.0f32;
+                let mut sub_pan = 0.0f32;
+                if let Some(mix) = mixer {
+                    if let Some(ch) = mix.get(layer_idx) {
+                        sub_gain *= 10.0f32.powf(ch.gain_db / 20.0);
+                        sub_pan = (ch.pan / 100.0).clamp(-1.0, 1.0);
+                        if ch.mute { sub_gain = 0.0; }
+                    }
+                }
+                if sub_gain > 0.0 {
+                    mix_precomp_audio(sub, sub_frame, &mut stereo_output, sample_rate, buffer_size, sub_gain, sub_pan, fps);
+                }
+            }
             continue;
         }
         // Resolve the WAV path + gain for this layer
