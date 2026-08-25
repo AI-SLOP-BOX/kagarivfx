@@ -179,6 +179,23 @@ pub fn draw_expanded_rows(
                                 }
                             }
 
+                            // ── Puppet Pin rows (keyframeable positions) ──
+                            for pin in layer.puppet_pins.iter_mut() {
+                                let pin_key_str = format!("pin_{}", pin.id);
+                                let pin_key: &'static str = Box::leak(pin_key_str.into_boxed_str());
+                                let moved_p: &mut bool = project_changed;
+                                let kfs = get_kfs(&pin.position);
+                                draw_prop_row_ext(ui, &format!("  🧷 {}", pin.name), &kfs, current_frame, start_frame, zoom_span, left_pane_w,
+                                    &prop_sel, pin_key,
+                                    Some(&mut |old_f, new_f| { move_kf(&mut pin.position, old_f, new_f); *moved_p = true; }),
+                                    Some(&mut |pk, f, shift, cmd| select_requests.push((pk, f, shift, cmd))),
+                                    None,
+                                    Some(&mut |pk, frames: Vec<u32>, _add: bool| box_selects.push((pk, frames))),
+                                    Some(&mut |pk, dragged_f, delta| group_moves.push((pk, dragged_f, delta))),
+                                    all_kf_frames);
+                            }
+
+
                                 // ── Apply keyframe context-menu commands ──
                                 fn set_kf_interp<T: Clone>(
                                     anim: &mut crate::core::property::Animatable<T>,

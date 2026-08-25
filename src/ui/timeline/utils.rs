@@ -61,6 +61,11 @@ pub fn collect_all_kf_frames(comp: &crate::core::timeline::Composition) -> Vec<u
         if let Some(kfs) = layer.transform.opacity.keyframes() {
             for kf in kfs { frames.push(kf.frame); }
         }
+        for pin in &layer.puppet_pins {
+            if let Some(kfs) = pin.position.keyframes() {
+                for kf in kfs { frames.push(kf.frame); }
+            }
+        }
     }
     frames.sort();
     frames.dedup();
