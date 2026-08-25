@@ -165,23 +165,57 @@ pub(crate) struct MaskShape {
 
 /// CPU-rasterized combined mask coverage for one layer, ready for GPU upload.
 pub(crate) struct MaskRaster {
-    /// Value hash of the raster (no pointers) — identifies identical rasters
-    /// so multiple layers sharing the same masks reuse a single upload.
+    /// Hash of the mask INPUTS (scaled shapes + output size) — identical
+    /// inputs across frames hit the cache and share one upload.
     pub key: u64,
     /// RGBA8 pixels; rgb = white, a = combined coverage.
     pub pixels: Vec<u8>,
-    /// Max feather across contributing masks (passed to the shader's
-    /// smoothstep softening approximation).
-    pub feather: f32,
 }
 
-fn mask_raster_key(pixels: &[u8], width: u32, height: u32, feather: f32) -> u64 {
+/// Content-addressed FIFO cache so static masks skip the (expensive) EDT
+/// re-raster while OTHER layers keep animating during playback.
+#[derive(Default)]
+struct MaskRasterCache {
+    order: Vec<u64>,
+    map: std::collections::HashMap<u64, std::sync::Arc<MaskRaster>>,
+}
+
+impl MaskRasterCache {
+    const CAP: usize = 6;
+
+    fn get(&self, key: u64) -> Option<std::sync::Arc<MaskRaster>> {
+        self.map.get(&key).cloned()
+    }
+
+    fn insert(&mut self, raster: std::sync::Arc<MaskRaster>) {
+        let key = raster.key;
+        if self.map.insert(key, raster).is_none() {
+            self.order.push(key);
+            while self.order.len() > Self::CAP {
+                let evicted = self.order.remove(0);
+                self.map.remove(&evicted);
+            }
+        }
+    }
+}
+
+/// Hashes only the mask INPUTS — cheaper than hashing the full pixel buffer
+/// and enables lookup before any rasterization work.
+fn mask_input_key(shapes: &[MaskShape], width: u32, height: u32) -> u64 {
     use std::hash::{Hash, Hasher};
     let mut hasher = std::collections::hash_map::DefaultHasher::new();
     width.hash(&mut hasher);
     height.hash(&mut hasher);
-    feather.to_bits().hash(&mut hasher);
-    hasher.write(pixels);
+    for shape in shapes {
+        for pt in &shape.poly {
+            pt[0].to_bits().hash(&mut hasher);
+            pt[1].to_bits().hash(&mut hasher);
+        }
+        (shape.mode as u8).hash(&mut hasher);
+        shape.opacity.to_bits().hash(&mut hasher);
+        shape.inverted.hash(&mut hasher);
+        shape.feather.to_bits().hash(&mut hasher);
+    }
     hasher.finish()
 }
 
@@ -381,14 +415,16 @@ pub(crate) fn combine_mask_shapes(
 /// Evaluates and rasterizes all enabled masks of `layer` at `frame` into an
 /// output-sized RGBA8 coverage texture payload. Returns None when the layer
 /// has no effective masks.
-pub(crate) fn rasterize_layer_masks(
+/// Evaluates enabled masks into scaled shapes and returns the input cache key.
+/// None when the layer has no effective masks this frame.
+pub(crate) fn collect_mask_shapes(
     layer: &crate::core::timeline::Layer,
     frame: u32,
     out_w: u32,
     out_h: u32,
     comp_w: u32,
     comp_h: u32,
-) -> Option<MaskRaster> {
+) -> Option<(u64, Vec<MaskShape>)> {
     use crate::core::mask::MaskMode;
     if layer.masks.is_empty() || out_w == 0 || out_h == 0 {
         return None;
@@ -416,7 +452,20 @@ pub(crate) fn rasterize_layer_masks(
             feather: mask.feather.evaluate(frame).max(0.0),
         });
     }
-    let coverage = combine_mask_shapes(&shapes, out_w, out_h)?;
+    if shapes.is_empty() {
+        return None;
+    }
+    Some((mask_input_key(&shapes, out_w, out_h), shapes))
+}
+
+/// Combines + packs previously collected shapes into the uploadable raster.
+/// `key` must come from [`collect_mask_shapes`] for the same inputs.
+pub(crate) fn rasterize_from_shapes(
+    shapes: &[MaskShape],
+    out_w: u32,
+    out_h: u32,
+) -> Option<MaskRaster> {
+    let coverage = combine_mask_shapes(shapes, out_w, out_h)?;
     let mut pixels = vec![0u8; coverage.len() * 4];
     for (i, c) in coverage.iter().enumerate() {
         let a = (c.clamp(0.0, 1.0) * 255.0).round() as u8;
@@ -425,11 +474,9 @@ pub(crate) fn rasterize_layer_masks(
         pixels[i * 4 + 2] = 255;
         pixels[i * 4 + 3] = a;
     }
-    let key = mask_raster_key(&pixels, out_w, out_h, 0.0);
     Some(MaskRaster {
-        key,
+        key: mask_input_key(shapes, out_w, out_h),
         pixels,
-        feather: 0.0, // feather is baked into the coverage ramp already
     })
 }
 
@@ -523,13 +570,49 @@ mod gpu_mask_tests {
     }
 
     #[test]
-    fn raster_key_is_deterministic_value_hash() {
-        let ca = rasterize_polygon_evenodd(&rect(1.0, 1.0, 4.0, 4.0), 8, 8);
-        let cb = rasterize_polygon_evenodd(&rect(1.0, 1.0, 4.0, 4.0), 8, 8);
-        let pa: Vec<u8> = ca.iter().map(|c| (c * 255.0) as u8).collect();
-        let pb: Vec<u8> = cb.iter().map(|c| (c * 255.0) as u8).collect();
-        assert_eq!(mask_raster_key(&pa, 8, 8, 0.0), mask_raster_key(&pb, 8, 8, 0.0));
-        assert_ne!(mask_raster_key(&pa, 8, 8, 0.0), mask_raster_key(&pa, 8, 8, 2.5));
+    fn raster_key_is_deterministic_input_hash() {
+        let shape = |feather: f32, mode: crate::core::mask::MaskMode| MaskShape {
+            poly: rect(1.0, 1.0, 4.0, 4.0),
+            mode,
+            opacity: 1.0,
+            inverted: false,
+            feather,
+        };
+        let a = mask_input_key(&[shape(0.0, crate::core::mask::MaskMode::Add)], 8, 8);
+        let b = mask_input_key(&[shape(0.0, crate::core::mask::MaskMode::Add)], 8, 8);
+        assert_eq!(a, b, "identical inputs must hash identically");
+        assert_ne!(
+            mask_input_key(&[shape(2.5, crate::core::mask::MaskMode::Add)], 8, 8),
+            a,
+            "feather participates in the key"
+        );
+        assert_ne!(
+            mask_input_key(
+                &[shape(0.0, crate::core::mask::MaskMode::Subtract)],
+                8,
+                8
+            ),
+            a,
+            "mode participates in the key"
+        );
+        assert_ne!(mask_input_key(&[shape(0.0, crate::core::mask::MaskMode::Add)], 16, 8), a);
+    }
+
+    #[test]
+    fn mask_raster_cache_fifo_evicts_oldest() {
+        let mut cache = MaskRasterCache::default();
+        let dummy = |k: u64| MaskRaster {
+            key: k,
+            pixels: vec![255, 255, 255, k as u8],
+        };
+        for k in 0..MaskRasterCache::CAP as u64 {
+            cache.insert(std::sync::Arc::new(dummy(k)));
+        }
+        assert!(cache.get(0).is_some(), "all six fit within capacity");
+        // Insert one more → oldest (key 0) evicted, newest present.
+        cache.insert(std::sync::Arc::new(dummy(MaskRasterCache::CAP as u64)));
+        assert!(cache.get(0).is_none(), "FIFO must drop the oldest");
+        assert!(cache.get(MaskRasterCache::CAP as u64).is_some());
     }
 
     #[test]
@@ -713,6 +796,9 @@ pub struct WgpuRenderer {
     mask_texture: Option<wgpu::Texture>,
     mask_view: Option<wgpu::TextureView>,
     mask_size: (u32, u32),
+    /// Content-addressed cache so static masks skip EDT re-raster during
+    /// playback of other layers.
+    mask_raster_cache: std::cell::RefCell<MaskRasterCache>,
 
     // Target offscreen texture
     pub target_texture: Option<wgpu::Texture>,
@@ -1094,6 +1180,7 @@ impl WgpuRenderer {
             mask_texture: None,
             mask_view: None,
             mask_size: (0, 0),
+            mask_raster_cache: std::cell::RefCell::new(MaskRasterCache::default()),
             target_texture: None,
             target_view: None,
             target_size: (0, 0),
@@ -1358,7 +1445,7 @@ impl WgpuRenderer {
             // Step 1: Pre-evaluate active layer transform matrices and effect properties
             let mut active_layers = Vec::new();
             let mut uniforms = Vec::new();
-            let mut layer_mask_plans: Vec<Option<MaskRaster>> = Vec::new();
+            let mut layer_mask_plans: Vec<Option<std::sync::Arc<MaskRaster>>> = Vec::new();
 
             for layer in &comp.layers {
                 if !layer.is_active(frame) {
@@ -1608,7 +1695,22 @@ impl WgpuRenderer {
                     _padding_align: [[0.0; 4]; 9],
                 };
 
-                layer_mask_plans.push(rasterize_layer_masks(layer, frame, width, height, comp.width, comp.height));
+                layer_mask_plans.push(collect_mask_shapes(
+                    layer, frame, width, height, comp.width, comp.height,
+                )
+                .map(|(key, shapes)| {
+                    if let Some(hit) = self.mask_raster_cache.borrow_mut().get(key) {
+                        return hit;
+                    }
+                    // Drop the short-lived borrow before the (possibly slow)
+                    // raster so we never hold the cache across heavy work.
+                    let raster = std::sync::Arc::new(
+                        rasterize_from_shapes(&shapes, width, height)
+                            .expect("non-empty shapes always yield coverage"),
+                    );
+                    self.mask_raster_cache.borrow_mut().insert(raster.clone());
+                    raster
+                }));
                 uniforms.push(layer_uniform);
                 active_layers.push(layer);
             }
@@ -1622,7 +1724,7 @@ impl WgpuRenderer {
                 u.mask_enabled = u32::from(active);
                 u.mask_mode = u32::from(active); // 1 = alpha channel
                 u.mask_inverted = 0; // inversion is baked per-mask into the raster
-                u.mask_feather = plan.as_ref().map_or(0.0, |m| m.feather);
+                u.mask_feather = 0.0; // feather is baked into the coverage ramp
             }
 
             // Step 2: Upload all Layer Uniforms in a single GPU command write

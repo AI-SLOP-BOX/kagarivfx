@@ -118,7 +118,7 @@ cat << EOF 形式の複数行ヒアドキュメントは端末統合が入力を
 - **T key** reveals Opacity; **Cmd+T** selects Text tool. Bare T must never switch tools.
 - **timeline/mod.rs pending_* pattern**: row-loop actions (duplicate/split/marker/ripple/open-precomp) are collected into `pending_*` locals and applied AFTER the layer loop to stay borrow-safe. Follow this for new row-context actions.
 - **draw_prop_row_ext callbacks**: `(on_move, on_select, on_menu, on_box_select, on_group_move)` — all optional.
-- **GPU renderer has no mask compositing** — masks render CPU-only (export/preview badge warns). If you implement GPU masks in shader.wgsl/renderer.rs, remove the HUD warning in viewport_overlays.rs.
+- **GPU mask compositing shipped** — masks composite on the GPU preview path via a group-3 mask texture (CPU-rasterized coverage, EDT feather, FIFO-cached rasters); position KF dots on the motion path are drag-editable. The CPU/export renderer remains the reference implementation.
 - **Effect menu apply helper**: `apply_effect_by_name` in menu.rs — extend it when adding Effect menu entries.
 - **Effect timeline rows**: register animatable params in `core/effect_params.rs` (`animatable_params()`). Unregistered variants compile fine but show no keyframe rows in the timeline.
 
