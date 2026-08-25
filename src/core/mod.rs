@@ -17,6 +17,7 @@ pub mod stabilizer;
 pub mod puppet_warp;
 pub mod paint;
 pub mod camera_track;
+pub mod subtitles;
 pub mod supersample;
 pub mod tracker_engine;
 pub mod mask;

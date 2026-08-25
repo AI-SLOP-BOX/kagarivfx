@@ -41,6 +41,37 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
                     }
                     ui.close_menu();
                 }
+                if ui.button("Import Subtitles (.srt / .vtt)...").on_hover_text("Create timed, bottom-center caption text layers — pair with Kdenlive/Shotcut Whisper output").clicked() {
+                    if let Some(path) = rfd::FileDialog::new()
+                        .add_filter("Subtitles", &["srt", "vtt"])
+                        .pick_file()
+                    {
+                        match std::fs::read_to_string(&path)
+                            .map_err(|e| e.to_string())
+                            .map(|s| crate::core::subtitles::parse_srt(&s, app.history.current().active_composition().fps))
+                        {
+                            Ok(cues) => {
+                                if cues.is_empty() {
+                                    app.toasts.error("No cues found in subtitle file");
+                                } else {
+                                    let (cw, ch) = { let cc = app.history.current().active_composition(); (cc.width as f32, cc.height as f32) };
+                                    let layers = crate::core::subtitles::cues_to_layers(&cues, cw, ch, 48);
+                                    let n = layers.len();
+                                    let proj = app.history.current_mut();
+                                    let comp = proj.active_composition_mut();
+                                    for l in layers {
+                                        comp.add_layer(l);
+                                    }
+                                    crate::core::frame_cache::bump_version();
+                                    app.toasts.info(format!("{} caption layers created", n));
+                                }
+                            }
+                            Err(e) => app.toasts.error(e),
+                        }
+                    }
+                    ui.close_menu();
+                }
+                ui.separator();
                 if ui.button("Import Blender Camera Track (.json)...").on_hover_text("Bake a tracked camera solve onto this comp's active 3D camera — run tools/blender_camera_export.py inside Blender first").clicked() {
                     if let Some(path) = rfd::FileDialog::new()
                         .add_filter("Camera Track JSON", &["json"])
@@ -290,6 +321,27 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
                     ui.close_menu();
                 }
                 ui.separator();
+                if ui.button("Export Captions (.srt)").on_hover_text("Write all 'Caption …' text layers as an SRT file").clicked() {
+                    if let Some(path) = rfd::FileDialog::new()
+                        .add_filter("Subtitles", &["srt"])
+                        .set_file_name(format!("{}_captions.srt",
+                            app.history.current().active_composition().name.replace(' ', "_")))
+                        .save_file()
+                    {
+                        let proj = app.history.current();
+                        let comp = proj.active_composition();
+                        let srt = crate::core::subtitles::layers_to_srt(&comp.layers, comp.fps);
+                        if srt.is_empty() {
+                            app.toasts.error("No caption layers found");
+                        } else {
+                            match std::fs::write(&path, &srt) {
+                                Ok(_) => app.toasts.info(format!("Captions exported: {}", path.display())),
+                                Err(e) => app.toasts.error(format!("Write failed: {}", e)),
+                            }
+                        }
+                    }
+                    ui.close_menu();
+                }
                 if ui.button("Save Frame As… (PNG)").on_hover_text("Render the current frame at full resolution and save as PNG").clicked() {
                     if let Some(path) = rfd::FileDialog::new()
                         .add_filter("PNG Image", &["png"])

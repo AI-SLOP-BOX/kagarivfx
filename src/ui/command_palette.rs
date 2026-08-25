@@ -425,6 +425,58 @@ pub fn get_all_commands() -> Vec<PaletteCommand> {
             }),
         },
         PaletteCommand {
+            name: "Import: Subtitles (.srt/.vtt)",
+            category: "File",
+            shortcut_hint: "",
+            action: Box::new(|app| {
+                if let Some(path) = rfd::FileDialog::new()
+                    .add_filter("Subtitles", &["srt", "vtt"])
+                    .pick_file()
+                {
+                    match std::fs::read_to_string(&path)
+                        .map_err(|e| e.to_string())
+                        .map(|s| crate::core::subtitles::parse_srt(&s, app.history.current().active_composition().fps))
+                    {
+                        Ok(cues) if !cues.is_empty() => {
+                            let (cw, ch) = { let cc = app.history.current().active_composition(); (cc.width as f32, cc.height as f32) };
+                            let layers = crate::core::subtitles::cues_to_layers(&cues, cw, ch, 48);
+                            let n = layers.len();
+                            let proj = app.history.current_mut();
+                            let comp = proj.active_composition_mut();
+                            for l in layers { comp.add_layer(l); }
+                            crate::core::frame_cache::bump_version();
+                            app.toasts.info(format!("{} caption layers created", n));
+                        }
+                        Ok(_) => app.toasts.error("No cues found"),
+                        Err(e) => app.toasts.error(e),
+                    }
+                }
+            }),
+        },
+        PaletteCommand {
+            name: "Export: Captions (.srt)",
+            category: "File",
+            shortcut_hint: "",
+            action: Box::new(|app| {
+                if let Some(path) = rfd::FileDialog::new()
+                    .add_filter("Subtitles", &["srt"])
+                    .set_file_name("captions.srt")
+                    .save_file()
+                {
+                    let proj = app.history.current();
+                    let comp = proj.active_composition();
+                    let srt = crate::core::subtitles::layers_to_srt(&comp.layers, comp.fps);
+                    if srt.is_empty() {
+                        app.toasts.error("No caption layers found");
+                    } else if let Err(e) = std::fs::write(&path, &srt) {
+                        app.toasts.error(format!("Write failed: {}", e));
+                    } else {
+                        app.toasts.info("Captions exported");
+                    }
+                }
+            }),
+        },
+        PaletteCommand {
             name: "File: Save Project",
             category: "File",
             shortcut_hint: "Cmd+S",
