@@ -180,8 +180,16 @@ pub fn apply_eq(buf: &mut [f32], bands: &[EqBand], sample_rate: u32) {
         return;
     }
     let fs = sample_rate as f64;
+    let nyquist = fs * 0.5;
     let filters: Vec<Biquad> = bands.iter()
-        .filter(|b| b.gain_db.abs() > 0.01 || matches!(b.band_type, EqBandType::HighPass | EqBandType::LowPass))
+        .filter(|b| {
+            // Skip pass filters at extreme frequencies (bypass mode)
+            match b.band_type {
+                EqBandType::HighPass => b.freq > 1.0 && (b.freq as f64) < nyquist,
+                EqBandType::LowPass => b.freq > 100.0 && (b.freq as f64) < nyquist,
+                _ => b.gain_db.abs() > 0.01,
+            }
+        })
         .map(|b| design_biquad(b, fs))
         .collect();
 

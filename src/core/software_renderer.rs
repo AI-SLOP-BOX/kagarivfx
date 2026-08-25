@@ -722,7 +722,7 @@ pub fn render_frame_to_pixels(comp: &Composition, frame: u32, width: u32, height
         use crate::core::audio_spectrum::SpectrumAnalyzer;
         let sample_rate = 44100u32;
         let buffer_size = 2048u32;
-        let (pcm, meter) = mix_audio_for_frame(comp, frame, sample_rate, buffer_size as usize);
+        let (pcm, meter) = mix_audio_for_frame(comp, frame, sample_rate, buffer_size as usize, &crate::core::audio_engine::MasterDspParams::default());
         let peak = meter.peak_db_left.max(meter.peak_db_right);
         let amplitude = peak.clamp(-60.0, 0.0) / 60.0;
 

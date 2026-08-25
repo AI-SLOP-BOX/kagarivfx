@@ -81,13 +81,44 @@ impl Default for AudioFrameMeter {
 /// Mix audio tracks across all active layers for a given frame window into a 2-channel stereo f32 buffer.
 /// Delegates to `mix_audio_sources_for_frame` for real WAV sampling.
 #[allow(dead_code)]
+/// Master DSP parameters (passed from UI controls to audio engine).
+#[derive(Debug, Clone)]
+pub struct MasterDspParams {
+    pub eq_highpass: f32,
+    pub eq_lowpass: f32,
+    pub eq_mid_gain: f32,
+    pub eq_mid_freq: f32,
+    pub comp_threshold: f32,
+    pub comp_ratio: f32,
+    pub comp_attack: f32,
+    pub comp_release: f32,
+    pub comp_makeup: f32,
+}
+
+impl Default for MasterDspParams {
+    fn default() -> Self {
+        Self {
+            eq_highpass: 30.0,
+            eq_lowpass: 18000.0,
+            eq_mid_gain: 0.0,
+            eq_mid_freq: 1000.0,
+            comp_threshold: -12.0,
+            comp_ratio: 2.0,
+            comp_attack: 10.0,
+            comp_release: 100.0,
+            comp_makeup: 0.0,
+        }
+    }
+}
+
 pub fn mix_audio_for_frame(
     comp: &Composition,
     frame: u32,
     sample_rate: u32,
     buffer_size: usize,
+    dsp: &MasterDspParams,
 ) -> (Vec<f32>, AudioFrameMeter) {
-    mix_audio_sources_for_frame(comp, frame, sample_rate, buffer_size, None)
+    mix_audio_sources_for_frame(comp, frame, sample_rate, buffer_size, None, dsp)
 }
 
 /// Keyframe data point generated from audio amplitude analysis
@@ -108,7 +139,7 @@ pub fn convert_audio_to_keyframes(comp: &Composition) -> Vec<AudioAmplitudeKeyfr
     let buffer_size = (sample_rate / comp.fps.max(1)) as usize;
 
     for frame in 0..comp.duration_frames {
-        let (_pcm, meter) = mix_audio_for_frame(comp, frame, sample_rate, buffer_size);
+        let (_pcm, meter) = mix_audio_for_frame(comp, frame, sample_rate, buffer_size, &MasterDspParams::default());
 
         // Convert dB (-90dB .. +6dB) to normalized 0.0 .. 100.0 AE amplitude scale
         let db_to_ae_scale = |db: f32| -> f32 {
@@ -139,7 +170,7 @@ mod tests {
     #[test]
     fn test_mix_audio_for_frame_empty_comp() {
         let comp = Composition::new("c1".into(), "Comp 1".into(), 1920, 1080, 30, 300);
-        let (buf, meter) = mix_audio_for_frame(&comp, 0, 44100, 512);
+        let (buf, meter) = mix_audio_for_frame(&comp, 0, 44100, 512, &MasterDspParams::default());
         assert_eq!(buf.len(), 1024);
         assert!(meter.peak_db_left < -100.0, "silent comp should have very low peak");
     }
@@ -427,6 +458,7 @@ pub fn mix_audio_sources_for_frame(
     buffer_size: usize,
     // Optional per-layer mixer overrides indexed by layer order
     mixer: Option<&[crate::app_state::MixerChannel]>,
+    dsp: &MasterDspParams,
 ) -> (Vec<f32>, AudioFrameMeter) {
     use std::collections::HashMap;
     use std::sync::Mutex;
@@ -551,25 +583,35 @@ pub fn mix_audio_sources_for_frame(
     // ── Master DSP processing (EQ → Compressor → Limiter) ──
     {
         use crate::core::audio_dsp;
-        // Default mastering chain: gentle high-pass at 30Hz, then compress
         let master_eq = vec![
             audio_dsp::EqBand {
-                freq: 30.0,
+                freq: dsp.eq_highpass,
                 gain_db: 0.0,
                 q: 0.707,
                 band_type: audio_dsp::EqBandType::HighPass,
             },
+            audio_dsp::EqBand {
+                freq: dsp.eq_lowpass,
+                gain_db: 0.0,
+                q: 0.707,
+                band_type: audio_dsp::EqBandType::LowPass,
+            },
+            audio_dsp::EqBand {
+                freq: dsp.eq_mid_freq,
+                gain_db: dsp.eq_mid_gain,
+                q: 1.0,
+                band_type: audio_dsp::EqBandType::Bell,
+            },
         ];
         audio_dsp::apply_eq(&mut stereo_output, &master_eq, sample_rate);
 
-        // Gentle master compression (stateless per-frame processing)
         let comp_params = audio_dsp::CompressorParams {
-            threshold_db: -12.0,
-            ratio: 2.0,
-            attack_ms: 10.0,
-            release_ms: 100.0,
+            threshold_db: dsp.comp_threshold,
+            ratio: dsp.comp_ratio,
+            attack_ms: dsp.comp_attack,
+            release_ms: dsp.comp_release,
             knee_db: 6.0,
-            makeup_gain_db: 0.0,
+            makeup_gain_db: dsp.comp_makeup,
         };
         let mut comp_state = audio_dsp::CompressorState::default();
         audio_dsp::apply_compressor(&mut stereo_output, &comp_params, &mut comp_state, sample_rate);
@@ -706,7 +748,18 @@ mod multitrack_tests {
         comp.layers.push(la);
         comp.layers.push(lb);
 
-        let (mix, meter) = mix_audio_sources_for_frame(&comp, 0, rate, 480, None);
+        let bypass_dsp = MasterDspParams {
+            eq_highpass: 0.0,
+            eq_lowpass: 24000.0,
+            eq_mid_gain: 0.0,
+            eq_mid_freq: 1000.0,
+            comp_threshold: 0.0,
+            comp_ratio: 1.0,
+            comp_attack: 0.1,
+            comp_release: 10.0,
+            comp_makeup: 0.0,
+        };
+        let (mix, meter) = mix_audio_sources_for_frame(&comp, 0, rate, 480, None, &bypass_dsp);
         // Sum of 0.5 + 0.25 at sample 0 ≈ 0.75
         assert!((mix[0] - 0.75).abs() < 0.01, "mix[0] = {}", mix[0]);
         // Meter reflects the combined level

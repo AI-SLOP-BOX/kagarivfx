@@ -628,12 +628,24 @@ impl eframe::App for AfterEffectsApp {
             {
                 let project = self.history.current();
                 let comp = project.active_composition();
+                let dsp = crate::core::audio_engine::MasterDspParams {
+                    eq_highpass: self.master_eq_highpass,
+                    eq_lowpass: self.master_eq_lowpass,
+                    eq_mid_gain: self.master_eq_mid_gain,
+                    eq_mid_freq: self.master_eq_mid_freq,
+                    comp_threshold: self.master_comp_threshold,
+                    comp_ratio: self.master_comp_ratio,
+                    comp_attack: self.master_comp_attack,
+                    comp_release: self.master_comp_release,
+                    comp_makeup: self.master_comp_makeup,
+                };
                 let (_mix, meter) = crate::core::audio_engine::mix_audio_sources_for_frame(
                     comp,
                     self.current_frame,
                     48000,
                     64, // small buffer — metering only
                     Some(&self.audio_mixer_channels),
+                    &dsp,
                 );
                 let db_to_lin = |db: f32| 10.0f32.powf(db / 20.0).min(1.0);
                 self.audio_meter = (
