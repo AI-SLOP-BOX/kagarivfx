@@ -140,6 +140,10 @@ pub const NAMES: &[&str] = &[
     "Typewriter", "Bounce In Text", "Scale Up Text", "Fade Up Words",
     // ── Time Remap presets ──
     "Freeze Frame", "Reverse", "Slow Motion 0.5×", "Fast Forward 2×",
+    // ── Compound cinematic v2 ──
+    "YouTube Vlog", "Music Video", "Cinematic Reveal", "Documentary Opener",
+    // ── Utility ──
+    "Reset Layer",
 ];
 
 /// Dispatch by name; returns whether the preset applied.
@@ -181,6 +185,11 @@ pub fn apply_by_name(name: &str, l: &mut Layer, cf: u32, comp_w: f32, _comp_h: f
         "Reverse" => reverse_time(l),
         "Slow Motion 0.5×" => time_scale(l, 0.5),
         "Fast Forward 2×" => time_scale(l, 2.0),
+        "YouTube Vlog" => youtube_vlog(l, cf),
+        "Music Video" => music_video(l, cf),
+        "Cinematic Reveal" => cinematic_reveal(l, cf, comp_w),
+        "Documentary Opener" => documentary_opener(l, cf),
+        "Reset Layer" => reset_layer(l),
         _ => false,
     }
 }
@@ -481,6 +490,69 @@ pub fn time_scale(l: &mut Layer, factor: f32) -> bool {
         Keyframe::new(l.in_frame, 0.0, InterpolationType::Linear),
         Keyframe::new(l.out_frame.saturating_sub(1), mapped, InterpolationType::Linear),
     ]));
+    true
+}
+
+// ── Compound cinematic v2 ──
+
+/// Handheld + Film Look + Letterbox + subtle zoom punch on beat.
+pub fn youtube_vlog(l: &mut Layer, cf: u32) -> bool {
+    let _ = handheld(l);
+    let _ = film_look(l);
+    let _ = letterbox_239(l, cf);
+    let _ = zoom_punch(l, cf);
+    true
+}
+
+/// Strobe + Quake + high-energy shake for music video cuts.
+pub fn music_video(l: &mut Layer, cf: u32) -> bool {
+    let _ = quake(l, cf);
+    let _ = expr_strobe(l, 1920.0);
+    l.transform.rotation_expression = Some(crate::core::timeline::Expression::Raw(
+        "noise(time * 40.0) * 3.0".into(),
+    ));
+    true
+}
+
+/// Fade from black + Ken Burns in + film look: dramatic scene opener.
+pub fn cinematic_reveal(l: &mut Layer, cf: u32, comp_w: f32) -> bool {
+    let _ = fade_from_color(l, cf, [0.0; 4]);
+    let _ = ken_burns(l, cf, comp_w, true);
+    let _ = film_look(l);
+    let _ = letterbox_239(l, cf);
+    true
+}
+
+/// Slow Ken Burns + fade from black + grain + handheld: documentary style.
+pub fn documentary_opener(l: &mut Layer, cf: u32) -> bool {
+    let _ = fade_from_color(l, cf, [0.0; 4]);
+    let _ = ken_burns(l, cf, 1920.0, true);
+    let c = |v: f32| Animatable::new_constant(v);
+    l.effects.push(make_effect("preset_doc_grain", "Film Grain",
+        crate::core::timeline::EffectType::FilmGrain {
+            intensity: c(0.18), grain_size: 2.0, color_film: false,
+        }));
+    l.effects.push(make_effect("preset_doc_lb", "Letterbox",
+        crate::core::timeline::EffectType::Letterbox {
+            frac: c(0.13),
+        }));
+    let _ = handheld(l);
+    true
+}
+
+/// Clear all effects, expressions, and time remap; reset transforms to defaults.
+pub fn reset_layer(l: &mut Layer) -> bool {
+    l.effects.clear();
+    l.transform.position_expression = None;
+    l.transform.scale_expression = None;
+    l.transform.rotation_expression = None;
+    l.transform.opacity_expression = None;
+    l.time_remap = None;
+    l.text_animator = None;
+    l.transform.position = Animatable::new_constant([960.0, 540.0]);
+    l.transform.scale = Animatable::new_constant([100.0, 100.0]);
+    l.transform.rotation = Animatable::new_constant(0.0);
+    l.transform.opacity = Animatable::new_constant(100.0);
     true
 }
 
@@ -936,6 +1008,57 @@ mod tests {
         let kfs = l.time_remap.as_ref().unwrap().keyframes().unwrap();
         // span=180, factor=2.0 → mapped = 360
         assert!((kfs[1].value - 360.0).abs() < 0.01, "fast: {}", kfs[1].value);
+    }
+
+
+    #[test]
+    fn test_youtube_vlog_stacks_four_effects() {
+        let mut l = mk();
+        assert!(apply_by_name("YouTube Vlog", &mut l, 30, 1920.0, 1080.0));
+        assert!(l.effects.len() >= 3, "vlog effects: {}", l.effects.len());
+        assert!(l.transform.position_expression.is_some(), "handheld expr");
+    }
+
+    #[test]
+    fn test_music_video_sets_rotation_expression() {
+        let mut l = mk();
+        assert!(apply_by_name("Music Video", &mut l, 30, 1920.0, 1080.0));
+        assert!(l.transform.rotation_expression.is_some());
+        assert!(l.transform.opacity_expression.is_some(), "strobe expr");
+    }
+
+    #[test]
+    fn test_cinematic_reveal_fades_and_letterboxes() {
+        let mut l = mk();
+        assert!(apply_by_name("Cinematic Reveal", &mut l, 30, 1920.0, 1080.0));
+        let op = l.transform.opacity.keyframes().unwrap();
+        assert_eq!(op[0].value, 0.0, "fade from black");
+        assert!(l.effects.iter().any(|e| e.name == "Letterbox"));
+        assert!(l.effects.iter().any(|e| e.name == "Film Look"));
+    }
+
+    #[test]
+    fn test_documentary_opener_has_grain_and_letterbox() {
+        let mut l = mk();
+        assert!(apply_by_name("Documentary Opener", &mut l, 30, 1920.0, 1080.0));
+        let names: Vec<_> = l.effects.iter().map(|e| e.name.as_str()).collect();
+        assert!(names.contains(&"Film Grain"));
+        assert!(names.contains(&"Letterbox"));
+        assert!(l.transform.position_expression.is_some());
+    }
+
+    #[test]
+    fn test_reset_layer_clears_everything() {
+        let mut l = mk();
+        let _ = apply_by_name("YouTube Vlog", &mut l, 30, 1920.0, 1080.0);
+        assert!(!l.effects.is_empty());
+        assert!(l.transform.position_expression.is_some());
+        assert!(apply_by_name("Reset Layer", &mut l, 30, 1920.0, 1080.0));
+        assert!(l.effects.is_empty());
+        assert!(l.transform.position_expression.is_none());
+        assert!(l.transform.scale_expression.is_none());
+        assert!(l.time_remap.is_none());
+        assert!(l.text_animator.is_none());
     }
 
     #[test]
