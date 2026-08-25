@@ -153,7 +153,9 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: u32) 
                     crate::ui::toolbar::ActiveTool::AnchorPoint => {
                         ui.output_mut(|o| o.cursor_icon = egui::CursorIcon::Crosshair);
                     }
-                    crate::ui::toolbar::ActiveTool::Pen => {
+                    crate::ui::toolbar::ActiveTool::Pen
+                    | crate::ui::toolbar::ActiveTool::Brush
+                    | crate::ui::toolbar::ActiveTool::Eraser => {
                         ui.output_mut(|o| o.cursor_icon = egui::CursorIcon::Crosshair);
                     }
                     _ => {}
@@ -461,6 +463,196 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: u32) 
                     let r = egui::Rect::from_two_pos(start, current);
                     ui.painter().rect_stroke(r, 0.0, egui::Stroke::new(1.5, colors::ACCENT_BLUE));
                     ui.painter().rect_filled(r, 0.0, colors::TIMELINE_SELECTION.linear_multiply(0.15));
+                }
+            }
+        }
+
+        // ── Brush / Eraser tool: paint strokes onto the selected layer ──
+        if matches!(
+            app.active_tool,
+            crate::ui::toolbar::ActiveTool::Brush | crate::ui::toolbar::ActiveTool::Eraser
+        ) {
+            // Floating mini-HUD: brush size + color (Brush only)
+            if app.active_tool == crate::ui::toolbar::ActiveTool::Brush {
+                let hud_id = egui::Id::new("paint_hud");
+                egui::Area::new(hud_id)
+                    .anchor(egui::Align2::RIGHT_TOP, [-14.0, 60.0])
+                    .show(ctx, |ui| {
+                        let hud_frame = egui::Frame::default()
+                            .fill(egui::Color32::from_rgba_premultiplied(18, 22, 30, 225))
+                            .stroke(egui::Stroke::new(1.0, colors::BORDER_MEDIUM))
+                            .inner_margin(8.0);
+                        hud_frame.show(ui, |ui: &mut egui::Ui| {
+                                ui.set_min_width(150.0);
+                                ui.label(egui::RichText::new("🖌 Brush").strong().small());
+                                let mut size = ctx.data_mut(|d| {
+                                    d.get_temp::<f32>(egui::Id::new("paint_size")).unwrap_or(12.0)
+                                });
+                                if ui.add(
+                                    egui::Slider::new(&mut size, 1.0..=80.0).suffix(" px"),
+                                ).changed() {
+                                    ctx.data_mut(|d| d.insert_temp(egui::Id::new("paint_size"), size));
+                                }
+                                let mut col = ctx.data_mut(|d| {
+                                    d.get_temp::<[f32; 4]>(egui::Id::new("paint_color"))
+                                        .unwrap_or([1.0, 1.0, 1.0, 1.0])
+                                });
+                                ui.color_edit_button_rgba_unmultiplied(&mut col);
+                                ctx.data_mut(|d| d.insert_temp(egui::Id::new("paint_color"), col));
+                            });
+                    });
+            }
+
+            if let Some(sel_li) = app.selected_layer_idx {
+                let pointer = viewport_response.interact_pointer_pos();
+                let comp_pt: Option<[f32; 2]> = pointer.map(|pp| {
+                    [(pp.x - origin_x) / draw_w * comp_w, (pp.y - origin_y) / draw_h * comp_h]
+                });
+
+                // Eraser: click removes the topmost stroke hit near a point.
+                if app.active_tool == crate::ui::toolbar::ActiveTool::Eraser {
+                    if viewport_response.clicked() {
+                        if let Some(pt) = comp_pt {
+                            let radius = ctx.data_mut(|d| {
+                                d.get_temp::<f32>(egui::Id::new("paint_size")).unwrap_or(12.0)
+                            }) * 0.5;
+                            let proj = app.history.current_mut().active_composition_mut();
+                            if let Some(layer) = proj.layers.get_mut(sel_li) {
+                                if let Some(pos) = layer.paint_strokes.iter().rposition(|s| {
+                                    s.points.iter().any(|p| {
+                                        let dx = p[0] - pt[0];
+                                        let dy = p[1] - pt[1];
+                                        dx * dx + dy * dy <= radius * radius
+                                    })
+                                }) {
+                                    layer.paint_strokes.remove(pos);
+                                    crate::core::frame_cache::bump_version();
+                                    app.toasts.info("Stroke erased");
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    // Brush: build a live stroke while dragging.
+                    let stroke_id = egui::Id::new(("paint_live", sel_li));
+                    if viewport_response.drag_started() {
+                        if let Some(pt) = comp_pt {
+                            // Convert comp -> layer-local (inverse transform).
+                            let local = {
+                                let comp_ro = app.history.current().active_composition();
+                                match comp_ro.layers.get(sel_li) {
+                                    Some(l) => {
+                                        let (pos, scl, rot, _) =
+                                            comp_ro.resolve_world_transform(l, current_frame);
+                                        let rad = rot.to_radians();
+                                        let (cr, sr) = rad.sin_cos();
+                                        let dx = (pt[0] - pos[0]) * 100.0;
+                                        let dy = (pt[1] - pos[1]) * 100.0;
+                                        let lx = (dx * cr + dy * sr) / scl[0].abs().max(0.001);
+                                        let ly = (-dx * sr + dy * cr) / scl[1].abs().max(0.001);
+                                        [lx, ly]
+                                    }
+                                    None => pt,
+                                }
+                            };
+                            ctx.data_mut(|d| d.insert_temp(stroke_id, vec![local]));
+                            app.begin_drag("Paint Stroke");
+                        }
+                    }
+                    if viewport_response.dragged() && comp_pt.is_some() {
+                        let has = ctx.data_mut(|d| d.get_temp::<Vec<[f32; 2]>>(stroke_id).is_some());
+                        if has {
+                            if let Some(pt) = comp_pt {
+                                let local = {
+                                    let comp_ro = app.history.current().active_composition();
+                                    match comp_ro.layers.get(sel_li) {
+                                        Some(l) => {
+                                            let (pos, scl, rot, _) =
+                                                comp_ro.resolve_world_transform(l, current_frame);
+                                            let rad = rot.to_radians();
+                                            let (cr, sr) = rad.sin_cos();
+                                            let dx = (pt[0] - pos[0]) * 100.0;
+                                            let dy = (pt[1] - pos[1]) * 100.0;
+                                            let lx = (dx * cr + dy * sr) / scl[0].abs().max(0.001);
+                                            let ly = (-dx * sr + dy * cr) / scl[1].abs().max(0.001);
+                                            [lx, ly]
+                                        }
+                                        None => pt,
+                                    }
+                                };
+                                ctx.data_mut(|d| {
+                                    let mut pts = d.get_temp::<Vec<[f32; 2]>>(stroke_id).unwrap_or_default();
+                                    if pts.last().map(|last| {
+                                        let dx = last[0] - local[0];
+                                        let dy = last[1] - local[1];
+                                        dx * dx + dy * dy >= 4.0
+                                    }).unwrap_or(true)
+                                    {
+                                        pts.push(local);
+                                        d.insert_temp(stroke_id, pts);
+                                    }
+                                });
+                            }
+                        }
+                    }
+                    if viewport_response.drag_stopped() {
+                        let pts_opt = ctx.data_mut(|d| d.remove_temp::<Vec<[f32; 2]>>(stroke_id));
+                        if let Some(pts) = pts_opt {
+                            if !pts.is_empty() {
+                                let color = ctx.data_mut(|d| {
+                                    d.get_temp::<[f32; 4]>(egui::Id::new("paint_color"))
+                                        .unwrap_or([1.0, 1.0, 1.0, 1.0])
+                                });
+                                let bsize = ctx.data_mut(|d| {
+                                    d.get_temp::<f32>(egui::Id::new("paint_size")).unwrap_or(12.0)
+                                });
+                                let start_f = current_frame;
+                                let proj = app.history.current_mut().active_composition_mut();
+                                if let Some(layer) = proj.layers.get_mut(sel_li) {
+                                    layer.paint_strokes.push(crate::core::timeline::PaintStroke {
+                                        color,
+                                        size: bsize,
+                                        points: pts,
+                                        start_frame: start_f,
+                                        end_frame: 0,
+                                    });
+                                    crate::core::frame_cache::bump_version();
+                                    app.commit_drag();
+                                    app.toasts.info("Stroke painted");
+                                }
+                            } else {
+                                app.cancel_drag();
+                            }
+                        }
+                    }
+
+                    // Live preview of the in-progress stroke on screen.
+                    let preview_pts = ctx.data(|d| d.get_temp::<Vec<[f32; 2]>>(stroke_id));
+                    if let Some(pts) = preview_pts {
+                        if pts.len() >= 2 {
+                            let comp_ro = app.history.current().active_composition();
+                            if let Some(l) = comp_ro.layers.get(sel_li) {
+                                let (pos, scl, rot, _) = comp_ro.resolve_world_transform(l, current_frame);
+                                let rad = rot.to_radians();
+                                let (cr, sr) = rad.sin_cos();
+                                let to_screen = |lp: [f32; 2]| {
+                                    let wx = pos[0] + (lp[0] * cr - lp[1] * sr) * scl[0] / 100.0;
+                                    let wy = pos[1] + (lp[0] * sr + lp[1] * cr) * scl[1] / 100.0;
+                                    egui::pos2(origin_x + wx / comp_w * draw_w, origin_y + wy / comp_h * draw_h)
+                                };
+                                for seg in pts.windows(2) {
+                                    ui.painter().line_segment(
+                                        [to_screen(seg[0]), to_screen(seg[1])],
+                                        egui::Stroke::new(
+                                            ctx.data_mut(|d| d.get_temp::<f32>(egui::Id::new("paint_size")).unwrap_or(12.0)) * 0.5
+                                                * (scl[0].abs() / 100.0),
+                                            colors::ACCENT_YELLOW.linear_multiply(0.8),
+                                        ),
+                                    );
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }

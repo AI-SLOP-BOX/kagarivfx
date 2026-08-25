@@ -1276,6 +1276,8 @@ pub struct Layer {
     pub masks: Vec<crate::core::mask::Mask>,
     #[serde(default)]
     pub puppet_pins: Vec<PuppetPin>,
+    #[serde(default)]
+    pub paint_strokes: Vec<PaintStroke>,
 
     // ── AE Layer Markers (per-layer comment flags) ──
     #[serde(default)]
@@ -1314,6 +1316,21 @@ pub struct Layer {
     // ── Layer Constraints System (Pinning) ──
     #[serde(default)]
     pub constraints: crate::core::layer_constraints::LayerConstraints,
+}
+
+/// A brush stroke painted onto a layer. Points live in layer-local space
+/// (origin = the layer's rest center), so strokes follow transforms.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct PaintStroke {
+    pub color: [f32; 4],
+    pub size: f32,
+    pub points: Vec<[f32; 2]>,
+    /// First frame the stroke is visible.
+    #[serde(default)]
+    pub start_frame: u32,
+    /// Last frame it is visible; 0 = until the layer's out-point.
+    #[serde(default)]
+    pub end_frame: u32,
 }
 
 /// A puppet-tool deformation pin. `comp_source` is the rest position in
@@ -1366,6 +1383,7 @@ impl Layer {
             is_collapsed: false,
             masks: Vec::new(),
             puppet_pins: Vec::new(),
+            paint_strokes: Vec::new(),
             markers: Vec::new(),
             auto_orient: crate::core::auto_orient::AutoOrientMode::Off,
             posterize_time: None,

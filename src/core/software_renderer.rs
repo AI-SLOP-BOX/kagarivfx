@@ -224,6 +224,32 @@ fn render_precomp_layers_inner(_comp: &Composition, precomp_comp: &Composition, 
             }
         }
 
+        // ── Paint strokes: drawn in buffer space so they follow the layer ──
+        if !layer.paint_strokes.is_empty() {
+            let inv_sx = if scale[0].abs() > f32::EPSILON { 100.0 / scale[0] } else { 0.0 };
+            let inv_sy = if scale[1].abs() > f32::EPSILON { 100.0 / scale[1] } else { 0.0 };
+            let to_buf_local = |lp: [f32; 2]| -> [f32; 2] {
+                // local -> world (rotate + scale + pos), then into buffer px
+                let wx = cx + (lp[0] * cos_r - lp[1] * sin_r) * scale[0] / 100.0;
+                let wy = cy + (lp[0] * sin_r + lp[1] * cos_r) * scale[1] / 100.0;
+                [wx - min_x as f32, wy - min_y as f32]
+            };
+            let _ = (inv_sx, inv_sy); // inverse reserved for future pick tools
+            for stroke in &layer.paint_strokes {
+                let end_f = if stroke.end_frame == 0 { layer.out_frame } else { stroke.end_frame };
+                if effective_frame < stroke.start_frame || effective_frame > end_f {
+                    continue;
+                }
+                let buf_pts: Vec<[f32; 2]> =
+                    stroke.points.iter().map(|&p| to_buf_local(p)).collect();
+                let mut col = stroke.color;
+                col[3] *= l_opacity;
+                crate::core::paint::draw_stroke(
+                    &mut layer_buf, bw, bh, &buf_pts, col, stroke.size.max(1.0),
+                );
+            }
+        }
+
         // ── Puppet warp: IDW-displace the isolated layer buffer before effects ──
         if !layer.puppet_pins.is_empty() {
             // layer_buf rows/cols are world-aligned samples offset by
