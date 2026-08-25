@@ -264,11 +264,13 @@ pub fn draw_viewport_overlays(
         let comp_now = app.history.current().active_composition();
         let mut reasons: Vec<String> = Vec::new();
 
-        let masked = comp_now.layers.iter()
+        // GPU path composites ONE distinct mask raster per frame; multiple
+        // different masks fall back to CPU/export-only rendering.
+        let masked_layers: Vec<&crate::core::timeline::Layer> = comp_now.layers.iter()
             .filter(|l| l.is_active(current_frame) && l.masks.iter().any(|m| m.enabled && m.mode != crate::core::mask::MaskMode::None))
-            .count();
-        if masked > 0 {
-            reasons.push(format!("{} mask{}", masked, if masked > 1 { "s" } else { "" }));
+            .collect();
+        if masked_layers.len() > 1 {
+            reasons.push(format!("{} distinct masks", masked_layers.len()));
         }
 
         let animated_text = comp_now.layers.iter()
