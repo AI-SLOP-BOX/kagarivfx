@@ -322,6 +322,20 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                     ui.ctx().data_mut(|d| d.remove_temp::<u32>(egui::Id::new("wa_rubber_start")));
                 }
 
+                if ruler_response.double_clicked() && !cmd_mod {
+                    if let Some(pos) = ruler_response.interact_pointer_pos() {
+                        let norm = ((pos.x - ruler_rect.left()) / ruler_rect.width()).clamp(0.0, 1.0);
+                        let raw_f = start_frame + (norm * zoom_span as f32).round() as u32;
+                        comp.markers.push(crate::core::timeline::TimelineMarker {
+                            frame: raw_f,
+                            label: format!("Marker {}", comp.markers.len() + 1),
+                            color: [0.35, 0.75, 1.0],
+                        });
+                        project_changed = true;
+                        app.toasts.info(format!("Comp marker added at frame {}", raw_f));
+                    }
+                }
+
                 if !wa_drag_active && !cmd_mod && (ruler_response.clicked() || ruler_response.dragged()) {
                     if let Some(pos) = ruler_response.interact_pointer_pos() {
                         let norm = ((pos.x - ruler_rect.left()) / ruler_rect.width()).clamp(0.0, 1.0);
@@ -332,6 +346,22 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
 
                 // ── Ruler context menu (AE parity) ──
                 ruler_response.context_menu(|ui| {
+                    if ui.button("📍 Add Composition Marker at Playhead").clicked() {
+                        comp.markers.push(crate::core::timeline::TimelineMarker {
+                            frame: *current_frame,
+                            label: format!("Marker {}", comp.markers.len() + 1),
+                            color: [0.35, 0.75, 1.0],
+                        });
+                        project_changed = true;
+                        app.toasts.info(format!("Comp marker at frame {}", current_frame));
+                        ui.close_menu();
+                    }
+                    if !comp.markers.is_empty() && ui.button("🧹 Clear All Composition Markers").clicked() {
+                        comp.markers.clear();
+                        project_changed = true;
+                        ui.close_menu();
+                    }
+                    ui.separator();
                     if ui.button("🔍 Zoom to Work Area").clicked() {
                         let w_in = app.work_area_in.unwrap_or(0);
                         let w_out = app.work_area_out.unwrap_or(total_frames).max(w_in + 1);
