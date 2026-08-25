@@ -119,6 +119,9 @@ pub fn slam_in(l: &mut Layer, cf: u32) -> bool {
 pub const NAMES: &[&str] = &[
     "Fade In", "Fade Out", "Pop In", "Slide In ←", "Slide In →",
     "Zoom Punch", "Slam In",
+    // ── Cinematic set ──
+    "🎞 Film Look", "🎬 Handheld", "💥 Quake", "🎬 Letterbox 2.39",
+    "⚡ Whip Out →", "⚡ Whip In ←",
 ];
 
 /// Dispatch by name; returns whether the preset applied.
@@ -131,8 +134,101 @@ pub fn apply_by_name(name: &str, l: &mut Layer, cf: u32, comp_w: f32, _comp_h: f
         "Slide In →" => slide_in(l, cf, comp_w, true),
         "Zoom Punch" => zoom_punch(l, cf),
         "Slam In" => slam_in(l, cf),
+        "🎞 Film Look" => film_look(l),
+        "🎬 Handheld" => handheld(l),
+        "💥 Quake" => quake(l, cf),
+        "🎬 Letterbox 2.39" => letterbox_239(l, cf),
+        "⚡ Whip Out →" => whip(l, cf, true),
+        "⚡ Whip In ←" => whip(l, cf, false),
         _ => false,
     }
+}
+
+fn make_effect(id_seed: &str, name: &str, et: crate::core::timeline::EffectType) -> crate::core::timeline::Effect {
+    crate::core::timeline::Effect {
+        id: format!("{}_{}", id_seed, rand_suffix()),
+        name: name.to_string(),
+        effect_type: et,
+        enabled: true,
+    }
+}
+
+fn counter() -> u32 {
+    use std::sync::atomic::{AtomicU32, Ordering};
+    static C: AtomicU32 = AtomicU32::new(0);
+    C.fetch_add(1, Ordering::Relaxed)
+}
+fn rand_suffix() -> u32 { counter() }
+
+/// Teal-shadow / warm-highlight film emulation + subtle grain.
+pub fn film_look(l: &mut Layer) -> bool {
+    let c = |v: f32| Animatable::new_constant(v);
+    l.effects.push(make_effect("preset_film", "Film Look", crate::core::timeline::EffectType::FilmEmulation {
+        lift: c(-0.03), gamma: c(0.96), gain: c(1.07), hue_shift_deg: c(-4.0),
+    }));
+    l.effects.push(make_effect("preset_grain", "Film Grain", crate::core::timeline::EffectType::FilmGrain {
+        intensity: c(0.12), grain_size: 1.6, color_film: true,
+    }));
+    true
+}
+
+/// Procedural handheld camera via expressions (position + micro-rotation).
+pub fn handheld(l: &mut Layer) -> bool {
+    l.transform.position_expression = Some(crate::core::timeline::Expression::Raw(
+        "[array2(wiggle(1.4, 5.0), wiggle(1.7, 5.0)), wiggle(1.2, 3.0)]".into(),
+    ));
+    l.transform.rotation_expression = Some(crate::core::timeline::Expression::Raw(
+        "wiggle(1.1, 0.7)".into(),
+    ));
+    true
+}
+
+/// Impact quake: high-frequency noise burst (constant amp; trim layer to taste).
+pub fn quake(l: &mut Layer, cf: u32) -> bool {
+    let base = l.transform.position.evaluate(cf);
+    l.transform.position = Animatable::new_animated(vec![
+        kfv2(cf.saturating_sub(1), base),
+        kfv2(cf, base),
+        kfv2(cf + 14, base),
+    ]);
+    l.transform.position_expression = Some(crate::core::timeline::Expression::Raw(
+        "[array2(noise(time * 34) * 26, noise(time * 27 + 41.3) * 26)]".into(),
+    ));
+    true
+}
+
+/// Cinema bars via the Letterbox effect (keyframeable fraction).
+pub fn letterbox_239(l: &mut Layer, cf: u32) -> bool {
+    let mut kfs = vec![kf(cf, 0.0), kf(cf + 18, 0.13)];
+    ease_all(&mut kfs);
+    l.effects.push(make_effect("preset_lb", "Letterbox", crate::core::timeline::EffectType::Letterbox {
+        frac: Animatable::Animated(kfs),
+    }));
+    true
+}
+
+/// Whip pan out/in: directional blur spike + lateral slide at in/out.
+pub fn whip(l: &mut Layer, _cf: u32, is_out: bool) -> bool {
+    let anchor_f = if is_out { l.out_frame.saturating_sub(8) } else { l.in_frame };
+    let dir: f32 = if is_out { 1.0 } else { -1.0 };
+
+    let base_p = l.transform.position.evaluate(anchor_f);
+    let mut pkfs = vec![
+        kfv2(anchor_f, base_p),
+        kfv2(if is_out { l.out_frame.saturating_sub(1) } else { anchor_f + 8 },
+             [base_p[0] + dir * 420.0, base_p[1]]),
+    ];
+    ease_all(&mut pkfs);
+    l.transform.position = Animatable::Animated(pkfs);
+
+    l.effects.push(make_effect("preset_whip", "Whip Blur", crate::core::timeline::EffectType::DirectionalBlur {
+        angle: Animatable::new_constant(0.0),
+        length: Animatable::new_animated(vec![
+            kf(if is_out { anchor_f } else { l.in_frame }, 0.0),
+            kf(if is_out { l.out_frame.saturating_sub(1) } else { anchor_f + 8 }, 260.0),
+        ]),
+    }));
+    true
 }
 
 #[cfg(test)]

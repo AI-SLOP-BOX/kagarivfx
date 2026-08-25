@@ -758,6 +758,10 @@ fn apply_one(
                 frame as f32 / fps.max(1) as f32,
             );
         }
+        EffectType::Letterbox { frac } => {
+            use crate::core::ae_effects_pack_v24::apply_letterbox;
+            apply_letterbox(pixels, width, height, frac.evaluate(frame));
+        }
         // Expression Controls: non-rendering utility effects (values are read
         // by the expression engine via effect_param), so CPU pass is a no-op.
         EffectType::SliderControl { .. } => {}

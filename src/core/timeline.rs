@@ -1152,6 +1152,10 @@ pub enum EffectType {
     ColorControl {
         color: Animatable<[f32; 4]>,
     },
+    /// Cinematic letterbox bars (fraction of frame height, total both sides).
+    Letterbox {
+        frac: Animatable<f32>,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

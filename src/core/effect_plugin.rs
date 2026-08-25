@@ -257,6 +257,7 @@ impl RenderEffectPlugin for EnumEffectPlugin {
             EffectType::AngleControl { .. } => "Angle Control",
             EffectType::PointControl { .. } => "Point Control",
             EffectType::ColorControl { .. } => "Color Control",
+            EffectType::Letterbox { .. } => "Letterbox (Cinema Bars)",
         }
     }
 
@@ -359,6 +360,7 @@ impl RenderEffectPlugin for EnumEffectPlugin {
             EffectType::AngleControl { .. } => "angle_control",
             EffectType::PointControl { .. } => "point_control",
             EffectType::ColorControl { .. } => "color_control",
+            EffectType::Letterbox { .. } => "letterbox",
         }
     }
 

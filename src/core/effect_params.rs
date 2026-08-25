@@ -290,6 +290,7 @@ impl EffectType {
             EffectType::AngleControl { angle_degrees } => push!("Angle", angle_degrees, Scalar),
             EffectType::PointControl { point } => push!("Point", point, Vec2),
             EffectType::ColorControl { color } => push!("Color", color, Color),
+            EffectType::Letterbox { frac } => push!("Bars", frac, Scalar),
             EffectType::Halftone { cell_size } => push!("Cell Size", cell_size, Scalar),
             EffectType::Invert { .. } => {}
             EffectType::LightLeak { pos_x, pos_y, intensity } => {
@@ -618,6 +619,7 @@ impl EffectType {
             EffectType::AngleControl { angle_degrees } => push!("Angle", angle_degrees, Scalar),
             EffectType::PointControl { point } => push!("Point", point, Vec2),
             EffectType::ColorControl { color } => push!("Color", color, Color),
+            EffectType::Letterbox { frac } => push!("Bars", frac, Scalar),
             EffectType::Halftone { cell_size } => push!("Cell Size", cell_size, Scalar),
             EffectType::Invert { .. } => {}
             EffectType::LightLeak { pos_x, pos_y, intensity } => {

@@ -2024,6 +2024,9 @@ pub fn draw_effect_type_ui(
             }) { *next_frame = Some(nf); }
             if p_before != *point { *project_changed = true; }
         }
+        EffectType::Letterbox { frac } => {
+            draw_prop(ui, current_frame, project_changed, next_frame, "Bars (frame frac)", frac, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=0.45)); });
+        }
         EffectType::ColorControl { color } => {
             let c_before = color.clone();
             if let Some(nf) = draw_property_ui(current_frame, ui, "Color", color, |ui, val| {
