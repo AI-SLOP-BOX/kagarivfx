@@ -883,6 +883,10 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
                 });
             });
             ui.menu_button("Help", |ui| {
+                if ui.button("✨ Show Welcome Screen").clicked() {
+                    app.show_welcome = true;
+                    ui.close_menu();
+                }
                 if ui.button("Keyboard Shortcuts Reference...").clicked() {
                     let help_id = egui::Id::new("show_shortcuts_modal");
                     ctx.data_mut(|d| d.insert_temp(help_id, true));

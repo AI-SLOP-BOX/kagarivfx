@@ -233,6 +233,7 @@ pub struct AfterEffectsApp {
     pub precompose_move_attributes: bool,
     pub show_command_palette: bool,
     pub show_history_panel: bool,
+    pub show_welcome: bool,
     pub command_palette_search: String,
     pub command_palette_selected_idx: usize,
     pub snap_to_keyframes: bool,
@@ -276,6 +277,7 @@ pub struct AfterEffectsApp {
     pub export_codec_idx: usize,
     pub export_resolution_scale: usize,
     pub export_rx: Option<std::sync::mpsc::Receiver<ExportEvent>>,
+    pub import_rx: Option<std::sync::mpsc::Receiver<crate::ui::drop_import::ImportResult>>,
     pub export_cancel_flag: Option<std::sync::Arc<std::sync::atomic::AtomicBool>>,
     pub tracker_rx: Option<std::sync::mpsc::Receiver<TrackerEvent>>,
     pub tracker_cancel_flag: Option<std::sync::Arc<std::sync::atomic::AtomicBool>>,
@@ -458,6 +460,8 @@ impl Default for AfterEffectsApp {
             faux_font_switches: (false, false, false, false),
             show_command_palette: false,
             show_history_panel: false,
+            show_welcome: true,
+            import_rx: None,
             command_palette_search: String::new(),
             command_palette_selected_idx: 0,
             toasts: crate::ui::notification::ToastManager::new(),
@@ -754,6 +758,8 @@ impl eframe::App for AfterEffectsApp {
 
         crate::ui::viewport::draw(self, ctx, current_frame);
         crate::ui::history_panel::draw_history_panel(self, ctx);
+        crate::ui::drop_import::handle_dropped_files(self, ctx);
+        crate::ui::welcome::draw(self, ctx);
         crate::ui::export_dialog::draw(self, ctx);
         crate::ui::comp_settings_dialog::draw_comp_settings_dialog(self, ctx);
 
