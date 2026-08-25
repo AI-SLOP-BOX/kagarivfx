@@ -1015,10 +1015,12 @@ pub fn render_frame_to_pixels(comp: &Composition, frame: u32, width: u32, height
                     return;
                 }
 
-                // Enabled Text Animator takes precedence: per-character transforms
-                let maybe_text = if let Some(anim) = layer.text_animator.as_ref().filter(|a| a.enabled) {
+                // Text Animator: prefer stack (multi-animator) if present, else single animator
+                let maybe_text = if let Some(stack) = layer.text_animator_stack.as_ref().filter(|s| !s.animators.is_empty()) {
                     let lead = layer.text_formatting.as_ref().map(|tf| tf.leading).unwrap_or(1.2);
-                    // Evaluate animated offset if present (typewriter sweeps etc.)
+                    rasterizer.rasterize_text_animated_stack(&family_name, &text_str, fs, text_color, tk, lead, 0.0, alignment, stack, frame as f32 / comp.fps.max(1) as f32)
+                } else if let Some(anim) = layer.text_animator.as_ref().filter(|a| a.enabled) {
+                    let lead = layer.text_formatting.as_ref().map(|tf| tf.leading).unwrap_or(1.2);
                     let anim_owned = if let Some(ref oa) = anim.selector.offset_anim {
                         let mut a2 = anim.clone();
                         a2.selector.offset = oa.evaluate(frame);

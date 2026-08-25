@@ -1,5 +1,6 @@
 use crate::core::property::Animatable;
 use crate::core::expression_engine;
+use crate::core::text_animator_advanced::AnimatorStack;
 use serde::{Deserialize, Serialize};
 
 /// Bounding box: (min_xy, max_xy, width, height)
@@ -1307,6 +1308,7 @@ pub struct Layer {
     // ── Text Animator (per-character animation) ──
     #[serde(default)]
     pub text_animator: Option<crate::core::text_animator::TextAnimatorSettings>,
+    pub text_animator_stack: Option<AnimatorStack>,
 
     // ── AE Transparency System ──
     #[serde(default)]
@@ -1397,6 +1399,7 @@ impl Layer {
             style: LayerStyle::default(),
             text_formatting: None,
             text_animator: None,
+            text_animator_stack: None,
             preserve_transparency: false,
             trim_paths: None,
             shape_repeater: None,
