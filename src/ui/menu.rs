@@ -1029,6 +1029,25 @@ fn apply_effect_by_name(app: &mut crate::AfterEffectsApp, effect_name: &str) {
                         color: crate::core::property::Animatable::new_constant([1.0, 1.0, 1.0, 1.0]),
                     }, enabled: true,
                 },
+                "Checkbox Control" => crate::core::timeline::Effect {
+                    id: format!("checkbox_{}", len), name: "Checkbox Control".to_string(),
+                    effect_type: crate::core::timeline::EffectType::CheckboxControl {
+                        checked: false,
+                    }, enabled: true,
+                },
+                "Dropdown Control" => crate::core::timeline::Effect {
+                    id: format!("dropdown_{}", len), name: "Dropdown Control".to_string(),
+                    effect_type: crate::core::timeline::EffectType::DropdownControl {
+                        value: 0,
+                        options: vec!["Option 1".to_string(), "Option 2".to_string(), "Option 3".to_string()],
+                    }, enabled: true,
+                },
+                "3D Point Control" => crate::core::timeline::Effect {
+                    id: format!("point3d_{}", len), name: "3D Point Control".to_string(),
+                    effect_type: crate::core::timeline::EffectType::Point3DControl {
+                        point: crate::core::property::Animatable::new_constant([0.0, 0.0, 0.0]),
+                    }, enabled: true,
+                },
                 "Gaussian Blur" => crate::core::timeline::Effect {
                     id: format!("blur_{}", len), name: "Gaussian Blur".to_string(),
                     effect_type: crate::core::timeline::EffectType::GaussianBlur {

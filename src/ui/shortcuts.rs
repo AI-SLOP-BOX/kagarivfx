@@ -422,6 +422,12 @@ pub fn handle_global_shortcuts(
                                                         .and_then(|k| serde_json::to_value(k).ok());
                                                 }
                                             }
+                                            ParamRefRef::Vec3(anim) => {
+                                                if let Some(kfs) = anim.keyframes() {
+                                                    found_json = kfs.iter().find(|k| k.frame == frame)
+                                                        .and_then(|k| serde_json::to_value(k).ok());
+                                                }
+                                            }
                                             ParamRefRef::Vec4Color(anim) => {
                                                 if let Some(kfs) = anim.keyframes() {
                                                     found_json = kfs.iter().find(|k| k.frame == frame)
@@ -499,6 +505,9 @@ pub fn handle_global_shortcuts(
                                             }
                                             ParamRef::Vec2(anim) => {
                                                 paste_into!(anim, [f32; 2], value_json);
+                                            }
+                                            ParamRef::Vec3(anim) => {
+                                                paste_into!(anim, [f32; 3], value_json);
                                             }
                                             ParamRef::Vec4Color(anim) => {
                                                 paste_into!(anim, [f32; 4], value_json);

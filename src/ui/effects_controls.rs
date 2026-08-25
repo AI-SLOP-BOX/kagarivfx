@@ -2034,6 +2034,34 @@ pub fn draw_effect_type_ui(
             }) { *next_frame = Some(nf); }
             if c_before != *color { *project_changed = true; }
         }
+        EffectType::CheckboxControl { checked } => {
+            if ui.checkbox(checked, "Enabled").changed() {
+                *project_changed = true;
+            }
+        }
+        EffectType::DropdownControl { value, options } => {
+            let id = egui::Id::new(("dropdown_ctrl", value as *const i32 as usize));
+            egui::ComboBox::from_id_salt(id)
+                .selected_text(options.get(*value as usize).cloned().unwrap_or_default())
+                .show_ui(ui, |ui| {
+                    for (i, opt) in options.iter().enumerate() {
+                        if ui.selectable_value(value, i as i32, opt).clicked() {
+                            *project_changed = true;
+                        }
+                    }
+                });
+        }
+        EffectType::Point3DControl { point } => {
+            let p_before = point.clone();
+            if let Some(nf) = draw_property_ui(current_frame, ui, "Point 3D", point, |ui, val| {
+                ui.horizontal(|ui| {
+                    ui.add(egui::DragValue::new(&mut val[0]).speed(1.0).prefix("X: "));
+                    ui.add(egui::DragValue::new(&mut val[1]).speed(1.0).prefix("Y: "));
+                    ui.add(egui::DragValue::new(&mut val[2]).speed(1.0).prefix("Z: "));
+                });
+            }) { *next_frame = Some(nf); }
+            if p_before != *point { *project_changed = true; }
+        }
         EffectType::MergePaths { operation } => {
             draw_prop(ui, current_frame, project_changed, next_frame, "Operation", operation, |ui, v| {
                 ui.add(egui::Slider::new(v, 0.0..=3.0).text("0=Add 1=Sub 2=Int 3=Exc"));

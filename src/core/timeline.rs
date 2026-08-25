@@ -1177,6 +1177,19 @@ pub enum EffectType {
     ColorControl {
         color: Animatable<[f32; 4]>,
     },
+    /// AE Checkbox Control: boolean toggle for expressions
+    CheckboxControl {
+        checked: bool,
+    },
+    /// AE Dropdown/Menu Control: integer selector for expressions
+    DropdownControl {
+        value: i32,
+        options: Vec<String>,
+    },
+    /// AE 3D Point Control: XYZ position for expressions
+    Point3DControl {
+        point: Animatable<[f32; 3]>,
+    },
     /// Cinematic letterbox bars (fraction of frame height, total both sides).
     Letterbox {
         frac: Animatable<f32>,

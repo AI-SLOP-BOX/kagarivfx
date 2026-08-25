@@ -184,6 +184,18 @@ pub fn draw_expanded_rows(
                                                 all_kf_frames,
                                                 Some(&mut |pk| select_all_reqs.push(pk)));
                                         }
+                                        ParamRef::Vec3(anim) => {
+                                            let kfs = get_kfs(anim);
+                                            draw_prop_row_ext(ui, &row_label, &kfs, current_frame, start_frame, zoom_span, left_pane_w,
+                                                &prop_sel, prop_key,
+                                                Some(&mut |old_f, new_f| { move_kf(anim, old_f, new_f); *moved = true; }),
+                                                Some(&mut |pk, f, shift, cmd| select_requests.push((pk, f, shift, cmd))),
+                                                kf_menu_cb!(),
+                                                Some(&mut |pk, frames: Vec<u32>, _add: bool| box_selects.push((pk, frames))),
+                                                Some(&mut |pk, dragged_f, delta| group_moves.push((pk, dragged_f, delta))),
+                                                all_kf_frames,
+                                                Some(&mut |pk| select_all_reqs.push(pk)));
+                                        }
                                         ParamRef::Vec4Color(anim) => {
                                             let kfs = get_kfs(anim);
                                             draw_prop_row_ext(ui, &row_label, &kfs, current_frame, start_frame, zoom_span, left_pane_w,
@@ -368,6 +380,7 @@ pub fn draw_expanded_rows(
                                                     let frames: Vec<u32> = match pref {
                                                         ParamRefRef::Scalar(a) => a.keyframes().map(|ks| ks.iter().map(|k| k.frame).collect()).unwrap_or_default(),
                                                         ParamRefRef::Vec2(a) => a.keyframes().map(|ks| ks.iter().map(|k| k.frame).collect()).unwrap_or_default(),
+                                                        ParamRefRef::Vec3(a) => a.keyframes().map(|ks| ks.iter().map(|k| k.frame).collect()).unwrap_or_default(),
                                                         ParamRefRef::Vec4Color(a) => a.keyframes().map(|ks| ks.iter().map(|k| k.frame).collect()).unwrap_or_default(),
                                                     };
                                                     out.extend(frames);

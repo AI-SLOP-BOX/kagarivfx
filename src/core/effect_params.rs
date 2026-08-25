@@ -15,6 +15,7 @@ use crate::core::timeline::EffectType;
 pub enum ParamRef<'a> {
     Scalar(&'a mut Animatable<f32>),
     Vec2(&'a mut Animatable<[f32; 2]>),
+    Vec3(&'a mut Animatable<[f32; 3]>),
     Vec4Color(&'a mut Animatable<[f32; 4]>),
 }
 
@@ -22,6 +23,7 @@ pub enum ParamRef<'a> {
 pub enum ParamRefRef<'a> {
     Scalar(&'a Animatable<f32>),
     Vec2(&'a Animatable<[f32; 2]>),
+    Vec3(&'a Animatable<[f32; 3]>),
     Vec4Color(&'a Animatable<[f32; 4]>),
 }
 
@@ -32,6 +34,7 @@ impl EffectType {
         macro_rules! push {
             ($label:expr, $field:expr, Scalar) => { out.push(($label, ParamRef::Scalar($field))) };
             ($label:expr, $field:expr, Vec2) => { out.push(($label, ParamRef::Vec2($field))) };
+            ($label:expr, $field:expr, Vec3) => { out.push(($label, ParamRef::Vec3($field))) };
             ($label:expr, $field:expr, Color) => { out.push(($label, ParamRef::Vec4Color($field))) };
         }
         match self {
@@ -290,6 +293,9 @@ impl EffectType {
             EffectType::AngleControl { angle_degrees } => push!("Angle", angle_degrees, Scalar),
             EffectType::PointControl { point } => push!("Point", point, Vec2),
             EffectType::ColorControl { color } => push!("Color", color, Color),
+            EffectType::CheckboxControl { .. } => {}
+            EffectType::DropdownControl { .. } => {}
+            EffectType::Point3DControl { point } => push!("Point 3D", point, Vec3),
             EffectType::Letterbox { frac } => push!("Bars", frac, Scalar),
             EffectType::Halftone { cell_size } => push!("Cell Size", cell_size, Scalar),
             EffectType::Invert { .. } => {}
@@ -366,6 +372,7 @@ impl EffectType {
         macro_rules! push {
             ($label:expr, $field:expr, Scalar) => { out.push(($label, ParamRefRef::Scalar($field))) };
             ($label:expr, $field:expr, Vec2) => { out.push(($label, ParamRefRef::Vec2($field))) };
+            ($label:expr, $field:expr, Vec3) => { out.push(($label, ParamRefRef::Vec3($field))) };
             ($label:expr, $field:expr, Color) => { out.push(($label, ParamRefRef::Vec4Color($field))) };
         }
         match self {
@@ -623,6 +630,9 @@ impl EffectType {
             EffectType::AngleControl { angle_degrees } => push!("Angle", angle_degrees, Scalar),
             EffectType::PointControl { point } => push!("Point", point, Vec2),
             EffectType::ColorControl { color } => push!("Color", color, Color),
+            EffectType::CheckboxControl { .. } => {}
+            EffectType::DropdownControl { .. } => {}
+            EffectType::Point3DControl { point } => push!("Point 3D", point, Vec3),
             EffectType::Letterbox { frac } => push!("Bars", frac, Scalar),
             EffectType::Halftone { cell_size } => push!("Cell Size", cell_size, Scalar),
             EffectType::Invert { .. } => {}

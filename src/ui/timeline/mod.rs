@@ -1301,6 +1301,14 @@ let type_icon = crate::ui::icons::layer_icon(&layer.layer_type);
                                                                 kfs.sort_by_key(|k| k.frame);
                                                             }
                                                         }
+                                                        ParamRef::Vec3(anim) => {
+                                                            if let Some(kfs) = anim.keyframes_mut() {
+                                                                for kf in kfs.iter_mut() {
+                                                                    kf.frame = (kf.frame as i64 + shift as i64).clamp(0, u32::MAX as i64) as u32;
+                                                                }
+                                                                kfs.sort_by_key(|k| k.frame);
+                                                            }
+                                                        }
                                                         ParamRef::Vec4Color(anim) => {
                                                             if let Some(kfs) = anim.keyframes_mut() {
                                                                 for kf in kfs.iter_mut() {
@@ -1557,6 +1565,7 @@ let type_icon = crate::ui::icons::layer_icon(&layer.layer_type);
                             match pref {
                                 crate::core::effect_params::ParamRefRef::Scalar(a) => track!(key.as_str(), a),
                                 crate::core::effect_params::ParamRefRef::Vec2(a) => track!(key.as_str(), a),
+                                crate::core::effect_params::ParamRefRef::Vec3(a) => track!(key.as_str(), a),
                                 crate::core::effect_params::ParamRefRef::Vec4Color(a) => track!(key.as_str(), a),
                             }
                         }

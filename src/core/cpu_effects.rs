@@ -768,6 +768,9 @@ fn apply_one(
         EffectType::AngleControl { .. } => {}
         EffectType::PointControl { .. } => {}
         EffectType::ColorControl { .. } => {}
+        EffectType::CheckboxControl { .. } => {}
+        EffectType::DropdownControl { .. } => {}
+        EffectType::Point3DControl { .. } => {}
         EffectType::CustomShader { .. } => {
             // Custom WGSL shaders are GPU-only; CPU renderer applies a identity passthrough.
             // Users should switch to GPU preview for custom shader effects.

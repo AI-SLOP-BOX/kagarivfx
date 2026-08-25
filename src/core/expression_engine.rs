@@ -493,6 +493,12 @@ fn build_comp_snapshot_uncached(comp: &crate::core::timeline::Composition, frame
                             params.insert(format!("{} Y", label), v[1] as f64);
                             params.insert(label.to_string(), v[0] as f64);
                         }
+                        crate::core::effect_params::ParamRefRef::Vec3(a) => {
+                            let v = a.evaluate(frame);
+                            params.insert(format!("{} X", label), v[0] as f64);
+                            params.insert(format!("{} Y", label), v[1] as f64);
+                            params.insert(format!("{} Z", label), v[2] as f64);
+                        }
                         crate::core::effect_params::ParamRefRef::Vec4Color(a) => {
                             let v = a.evaluate(frame);
                             params.insert(label.to_string(), (v[0] + v[1] + v[2]).max(v[3]) as f64);
