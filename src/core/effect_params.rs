@@ -40,7 +40,8 @@ impl EffectType {
                 push!("Tint Color", color, Color);
                 push!("Intensity", intensity, Scalar);
             }
-            EffectType::DropShadow { opacity, direction, distance, softness, .. } => {
+            EffectType::DropShadow { color, opacity, direction, distance, softness } => {
+                push!("Shadow Color", color, Color);
                 push!("Opacity", opacity, Scalar);
                 push!("Direction", direction, Scalar);
                 push!("Distance", distance, Scalar);
@@ -51,7 +52,8 @@ impl EffectType {
                 push!("Blue Shift", shift_b, Scalar);
                 push!("Edge Falloff", edge_falloff, Scalar);
             }
-            EffectType::Vignette { intensity, roundness, feather, .. } => {
+            EffectType::Vignette { intensity, roundness, feather, color } => {
+                push!("Vignette Color", color, Color);
                 push!("Intensity", intensity, Scalar);
                 push!("Roundness", roundness, Scalar);
                 push!("Feather", feather, Scalar);
@@ -68,7 +70,8 @@ impl EffectType {
                 push!("Saturation", saturation, Scalar);
                 push!("Lightness", lightness, Scalar);
             }
-            EffectType::Glow { threshold, radius, intensity, .. } => {
+            EffectType::Glow { threshold, radius, intensity, color } => {
+                push!("Glow Color", color, Color);
                 push!("Threshold", threshold, Scalar);
                 push!("Radius", radius, Scalar);
                 push!("Intensity", intensity, Scalar);
@@ -122,39 +125,79 @@ impl EffectType {
                 push!("Radius", radius, Scalar);
                 push!("Refractive Index", refractive_index, Scalar);
             }
-            EffectType::TurbulentDisplace { amount, size, evolution, .. } => {
+            EffectType::TurbulentDisplace { amount, size, evolution, complexity } => {
                 push!("Amount", amount, Scalar);
                 push!("Size", size, Scalar);
                 push!("Evolution", evolution, Scalar);
+                push!("Complexity", complexity, Scalar);
             }
-            EffectType::DisplacementMap { max_horizontal, max_vertical, .. } => {
+            EffectType::DisplacementMap { source_layer, max_horizontal, max_vertical } => {
+                push!("Source Layer Idx", source_layer, Scalar);
                 push!("Max Horizontal", max_horizontal, Scalar);
                 push!("Max Vertical", max_vertical, Scalar);
             }
-            EffectType::CompoundBlur { .. } => {}
-            EffectType::Minimax { .. } => {}
-            EffectType::ShiftChannels { .. } => {}
-            EffectType::WaveWarp { .. } => {}
+            EffectType::CompoundBlur { source_layer, max_blur } => {
+                push!("Source Layer Idx", source_layer, Scalar);
+                push!("Max Blur", max_blur, Scalar);
+            }
+            EffectType::Minimax { operation, radius } => {
+                push!("Operation", operation, Scalar);
+                push!("Radius", radius, Scalar);
+            }
+            EffectType::ShiftChannels { take_red, take_green, take_blue, take_alpha } => {
+                push!("Take Red", take_red, Scalar);
+                push!("Take Green", take_green, Scalar);
+                push!("Take Blue", take_blue, Scalar);
+                push!("Take Alpha", take_alpha, Scalar);
+            }
+            EffectType::WaveWarp { wave_height, wave_width, speed, direction_deg, .. } => {
+                push!("Wave Height", wave_height, Scalar);
+                push!("Wave Width", wave_width, Scalar);
+                push!("Speed", speed, Scalar);
+                push!("Direction °", direction_deg, Scalar);
+            }
             EffectType::CcLens { convergence, zoom } => {
                 push!("Convergence", convergence, Scalar);
                 push!("Zoom", zoom, Scalar);
             }
-            EffectType::PolarCoordinates { .. } => {}
+            EffectType::PolarCoordinates { interpolation, .. } => push!("Interpolation", interpolation, Scalar),
             EffectType::OpticsCompensation { field_of_view_deg, zoom, .. } => {
                 push!("Field of View", field_of_view_deg, Scalar);
                 push!("Zoom", zoom, Scalar);
             }
             EffectType::ColorBalance { .. } => {}
             EffectType::ChannelMixer { .. } => {}
-            EffectType::LightSweep { .. } => {}
-            EffectType::BendIt { .. } => {}
-            EffectType::Tiler { .. } => {}
+            EffectType::LightSweep { direction_deg, center, width, sweep_intensity, edge_intensity } => {
+                push!("Direction °", direction_deg, Scalar);
+                push!("Center", center, Scalar);
+                push!("Width", width, Scalar);
+                push!("Sweep Intensity", sweep_intensity, Scalar);
+                push!("Edge Intensity", edge_intensity, Scalar);
+            }
+            EffectType::BendIt { top_offset, bottom_offset } => {
+                push!("Top Offset", top_offset, Scalar);
+                push!("Bottom Offset", bottom_offset, Scalar);
+            }
+            EffectType::Tiler { scale_percent, .. } => push!("Scale %", scale_percent, Scalar),
             EffectType::Tritone { .. } => {}
-            EffectType::MatteChoker { .. } => {}
-            EffectType::VenetianBlinds { .. } => {}
+            EffectType::MatteChoker { choke_amount, gray_level } => {
+                push!("Choke Amount", choke_amount, Scalar);
+                push!("Gray Level", gray_level, Scalar);
+            }
+            EffectType::VenetianBlinds { completion, width } => {
+                push!("Completion", completion, Scalar);
+                push!("Stripe Width", width, Scalar);
+            }
             EffectType::Vibrance { amount } => push!("Amount", amount, Scalar),
-            EffectType::WhiteBalance { .. } => {}
-            EffectType::HslAdjust { .. } => {}
+            EffectType::WhiteBalance { temperature, tint } => {
+                push!("Temperature", temperature, Scalar);
+                push!("Tint", tint, Scalar);
+            }
+            EffectType::HslAdjust { hue_deg, saturation, lightness } => {
+                push!("Hue °", hue_deg, Scalar);
+                push!("Saturation", saturation, Scalar);
+                push!("Lightness", lightness, Scalar);
+            }
             EffectType::GlowPro { threshold, radius, intensity, .. } => {
                 push!("Threshold", threshold, Scalar);
                 push!("Radius", radius, Scalar);
@@ -235,7 +278,8 @@ impl EffectType {
                 push!("Amplitude", amplitude, Scalar);
             }
             EffectType::FireAutomaton { intensity } => push!("Intensity", intensity, Scalar),
-            EffectType::FractalNoise { contrast, brightness, complexity, evolution, .. } => {
+            EffectType::FractalNoise { fractal_type, contrast, brightness, complexity, evolution } => {
+                push!("Fractal Type", fractal_type, Scalar);
                 push!("Contrast", contrast, Scalar);
                 push!("Brightness", brightness, Scalar);
                 push!("Complexity", complexity, Scalar);
@@ -302,6 +346,11 @@ impl EffectType {
             }
             // Catch-all keeps this future-proof: new variants compile fine
             // and just show no rows until registered above.
+            EffectType::StarField { num_stars, depth_speed } => {
+                push!("Star Count", num_stars, Scalar);
+                push!("Depth Speed", depth_speed, Scalar);
+            }
+            #[allow(unreachable_patterns)]
             _ => {}
         }
         out
@@ -320,7 +369,8 @@ impl EffectType {
                 push!("Tint Color", color, Color);
                 push!("Intensity", intensity, Scalar);
             }
-            EffectType::DropShadow { opacity, direction, distance, softness, .. } => {
+            EffectType::DropShadow { color, opacity, direction, distance, softness } => {
+                push!("Shadow Color", color, Color);
                 push!("Opacity", opacity, Scalar);
                 push!("Direction", direction, Scalar);
                 push!("Distance", distance, Scalar);
@@ -331,7 +381,8 @@ impl EffectType {
                 push!("Blue Shift", shift_b, Scalar);
                 push!("Edge Falloff", edge_falloff, Scalar);
             }
-            EffectType::Vignette { intensity, roundness, feather, .. } => {
+            EffectType::Vignette { intensity, roundness, feather, color } => {
+                push!("Vignette Color", color, Color);
                 push!("Intensity", intensity, Scalar);
                 push!("Roundness", roundness, Scalar);
                 push!("Feather", feather, Scalar);
@@ -348,7 +399,8 @@ impl EffectType {
                 push!("Saturation", saturation, Scalar);
                 push!("Lightness", lightness, Scalar);
             }
-            EffectType::Glow { threshold, radius, intensity, .. } => {
+            EffectType::Glow { threshold, radius, intensity, color } => {
+                push!("Glow Color", color, Color);
                 push!("Threshold", threshold, Scalar);
                 push!("Radius", radius, Scalar);
                 push!("Intensity", intensity, Scalar);
@@ -402,39 +454,79 @@ impl EffectType {
                 push!("Radius", radius, Scalar);
                 push!("Refractive Index", refractive_index, Scalar);
             }
-            EffectType::TurbulentDisplace { amount, size, evolution, .. } => {
+            EffectType::TurbulentDisplace { amount, size, evolution, complexity } => {
                 push!("Amount", amount, Scalar);
                 push!("Size", size, Scalar);
                 push!("Evolution", evolution, Scalar);
+                push!("Complexity", complexity, Scalar);
             }
-            EffectType::DisplacementMap { max_horizontal, max_vertical, .. } => {
+            EffectType::DisplacementMap { source_layer, max_horizontal, max_vertical } => {
+                push!("Source Layer Idx", source_layer, Scalar);
                 push!("Max Horizontal", max_horizontal, Scalar);
                 push!("Max Vertical", max_vertical, Scalar);
             }
-            EffectType::CompoundBlur { .. } => {}
-            EffectType::Minimax { .. } => {}
-            EffectType::ShiftChannels { .. } => {}
-            EffectType::WaveWarp { .. } => {}
+            EffectType::CompoundBlur { source_layer, max_blur } => {
+                push!("Source Layer Idx", source_layer, Scalar);
+                push!("Max Blur", max_blur, Scalar);
+            }
+            EffectType::Minimax { operation, radius } => {
+                push!("Operation", operation, Scalar);
+                push!("Radius", radius, Scalar);
+            }
+            EffectType::ShiftChannels { take_red, take_green, take_blue, take_alpha } => {
+                push!("Take Red", take_red, Scalar);
+                push!("Take Green", take_green, Scalar);
+                push!("Take Blue", take_blue, Scalar);
+                push!("Take Alpha", take_alpha, Scalar);
+            }
+            EffectType::WaveWarp { wave_height, wave_width, speed, direction_deg, .. } => {
+                push!("Wave Height", wave_height, Scalar);
+                push!("Wave Width", wave_width, Scalar);
+                push!("Speed", speed, Scalar);
+                push!("Direction °", direction_deg, Scalar);
+            }
             EffectType::CcLens { convergence, zoom } => {
                 push!("Convergence", convergence, Scalar);
                 push!("Zoom", zoom, Scalar);
             }
-            EffectType::PolarCoordinates { .. } => {}
+            EffectType::PolarCoordinates { interpolation, .. } => push!("Interpolation", interpolation, Scalar),
             EffectType::OpticsCompensation { field_of_view_deg, zoom, .. } => {
                 push!("Field of View", field_of_view_deg, Scalar);
                 push!("Zoom", zoom, Scalar);
             }
             EffectType::ColorBalance { .. } => {}
             EffectType::ChannelMixer { .. } => {}
-            EffectType::LightSweep { .. } => {}
-            EffectType::BendIt { .. } => {}
-            EffectType::Tiler { .. } => {}
+            EffectType::LightSweep { direction_deg, center, width, sweep_intensity, edge_intensity } => {
+                push!("Direction °", direction_deg, Scalar);
+                push!("Center", center, Scalar);
+                push!("Width", width, Scalar);
+                push!("Sweep Intensity", sweep_intensity, Scalar);
+                push!("Edge Intensity", edge_intensity, Scalar);
+            }
+            EffectType::BendIt { top_offset, bottom_offset } => {
+                push!("Top Offset", top_offset, Scalar);
+                push!("Bottom Offset", bottom_offset, Scalar);
+            }
+            EffectType::Tiler { scale_percent, .. } => push!("Scale %", scale_percent, Scalar),
             EffectType::Tritone { .. } => {}
-            EffectType::MatteChoker { .. } => {}
-            EffectType::VenetianBlinds { .. } => {}
+            EffectType::MatteChoker { choke_amount, gray_level } => {
+                push!("Choke Amount", choke_amount, Scalar);
+                push!("Gray Level", gray_level, Scalar);
+            }
+            EffectType::VenetianBlinds { completion, width } => {
+                push!("Completion", completion, Scalar);
+                push!("Stripe Width", width, Scalar);
+            }
             EffectType::Vibrance { amount } => push!("Amount", amount, Scalar),
-            EffectType::WhiteBalance { .. } => {}
-            EffectType::HslAdjust { .. } => {}
+            EffectType::WhiteBalance { temperature, tint } => {
+                push!("Temperature", temperature, Scalar);
+                push!("Tint", tint, Scalar);
+            }
+            EffectType::HslAdjust { hue_deg, saturation, lightness } => {
+                push!("Hue °", hue_deg, Scalar);
+                push!("Saturation", saturation, Scalar);
+                push!("Lightness", lightness, Scalar);
+            }
             EffectType::GlowPro { threshold, radius, intensity, .. } => {
                 push!("Threshold", threshold, Scalar);
                 push!("Radius", radius, Scalar);
@@ -514,7 +606,8 @@ impl EffectType {
                 push!("Amplitude", amplitude, Scalar);
             }
             EffectType::FireAutomaton { intensity } => push!("Intensity", intensity, Scalar),
-            EffectType::FractalNoise { contrast, brightness, complexity, evolution, .. } => {
+            EffectType::FractalNoise { fractal_type, contrast, brightness, complexity, evolution } => {
+                push!("Fractal Type", fractal_type, Scalar);
                 push!("Contrast", contrast, Scalar);
                 push!("Brightness", brightness, Scalar);
                 push!("Complexity", complexity, Scalar);
@@ -579,8 +672,74 @@ impl EffectType {
                 push!("Bevel Size", bevel_size, Scalar);
                 push!("Refraction", refraction, Scalar);
             }
+            EffectType::StarField { num_stars, depth_speed } => {
+                push!("Star Count", num_stars, Scalar);
+                push!("Depth Speed", depth_speed, Scalar);
+            }
+            // Exhaustive today (all 97 variants registered); keep the
+            // catch-all so future variants still compile without rows.
+            #[allow(unreachable_patterns)]
             _ => {}
         }
         out
+    }
+}
+
+#[cfg(test)]
+mod registration_tests {
+    use super::*;
+    use crate::core::effect_plugin::RenderEffectPlugin;
+    use crate::core::property::Animatable;
+
+    fn c() -> Animatable<f32> {
+        Animatable::new_constant(0.0)
+    }
+
+    #[test]
+    fn formerly_unregistered_variants_expose_keyframe_rows() {
+        let mut cases: Vec<EffectType> = vec![
+            EffectType::StarField { num_stars: c(), depth_speed: c() },
+            EffectType::WaveWarp {
+                wave_height: c(), wave_width: c(), speed: c(), direction_deg: c(),
+                wave_type: 0, pinning: 0,
+            },
+            EffectType::Minimax { operation: c(), radius: c() },
+            EffectType::ShiftChannels {
+                take_red: c(), take_green: c(), take_blue: c(), take_alpha: c(),
+            },
+            EffectType::LightSweep {
+                direction_deg: c(), center: c(), width: c(),
+                sweep_intensity: c(), edge_intensity: c(),
+            },
+            EffectType::WhiteBalance { temperature: c(), tint: c() },
+            EffectType::HslAdjust { hue_deg: c(), saturation: c(), lightness: c() },
+            EffectType::CompoundBlur { source_layer: c(), max_blur: c() },
+        ];
+        for effect in &mut cases {
+            let rows = effect.animatable_params().len();
+            assert!(rows > 0, "{} exposes no timeline rows", effect_name(effect));
+        }
+    }
+
+    fn effect_name(e: &EffectType) -> String {
+        crate::core::effect_plugin::EnumEffectPlugin { effect_type: e.clone() }
+            .name()
+            .to_string()
+    }
+
+    #[test]
+    fn animatable_params_ref_matches_mutable_counts() {
+        let mut mutable = EffectType::LightSweep {
+            direction_deg: c(), center: c(), width: c(),
+            sweep_intensity: c(), edge_intensity: c(),
+        };
+        let read_only = EffectType::LightSweep {
+            direction_deg: c(), center: c(), width: c(),
+            sweep_intensity: c(), edge_intensity: c(),
+        };
+        assert_eq!(
+            mutable.animatable_params().len(),
+            read_only.animatable_params_ref().len(),
+        );
     }
 }
