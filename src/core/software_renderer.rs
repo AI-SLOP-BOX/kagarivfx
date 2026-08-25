@@ -1855,6 +1855,43 @@ pub fn render_frame_to_pixels(comp: &Composition, frame: u32, width: u32, height
                          fg(src_r, dst_r, src_g, dst_g, src_b, dst_b),
                          fb(src_r, dst_r, src_g, dst_g, src_b, dst_b))
                     }
+                    // Stencil: source alpha as mask for destination
+                    BlendMode::StencilAlpha => {
+                        let mask = src_a;
+                        (dst_r * mask, dst_g * mask, dst_b * mask)
+                    }
+                    BlendMode::StencilLuma => {
+                        let luma = src_r * 0.299 + src_g * 0.587 + src_b * 0.114;
+                        (dst_r * luma, dst_g * luma, dst_b * luma)
+                    }
+                    // Silhouette: inverse stencil (punch hole)
+                    BlendMode::SilhouetteAlpha => {
+                        let mask = 1.0 - src_a;
+                        (dst_r * mask, dst_g * mask, dst_b * mask)
+                    }
+                    BlendMode::SilhouetteLuma => {
+                        let luma = src_r * 0.299 + src_g * 0.587 + src_b * 0.114;
+                        let mask = 1.0 - luma;
+                        (dst_r * mask, dst_g * mask, dst_b * mask)
+                    }
+                    // Behind: paint behind (source only shows where destination is transparent)
+                    BlendMode::Behind => {
+                        let mask = 1.0 - dst_a;
+                        (src_r * mask + dst_r * (1.0 - mask), src_g * mask + dst_g * (1.0 - mask), src_b * mask + dst_b * (1.0 - mask))
+                    }
+                    // Alpha Add: additive blend using alpha
+                    BlendMode::AlphaAdd => {
+                        (src_r * src_a + dst_r * dst_a, src_g * src_a + dst_g * dst_a, src_b * src_a + dst_b * dst_a)
+                    }
+                    // Linear Light: combination of Linear Burn and Linear Dodge
+                    BlendMode::LinearLight => {
+                        let f = |s: f32, d: f32| -> f32 {
+                            (s + d - 0.5).clamp(0.0, 1.0)
+                        };
+                        (f(src_r, dst_r),
+                         f(src_g, dst_g),
+                         f(src_b, dst_b))
+                    }
                     BlendMode::Normal => (src_r, src_g, src_b),
                 };
 

@@ -701,6 +701,13 @@ let type_icon = crate::ui::icons::layer_icon(&layer.layer_type);
                                             crate::core::timeline::BlendMode::Hue => "Hue",
                                             crate::core::timeline::BlendMode::Saturation => "Saturation",
                                             crate::core::timeline::BlendMode::Luminosity => "Luminosity",
+                                            crate::core::timeline::BlendMode::StencilAlpha => "Stencil Alpha",
+                                            crate::core::timeline::BlendMode::StencilLuma => "Stencil Luma",
+                                            crate::core::timeline::BlendMode::SilhouetteAlpha => "Silhouette Alpha",
+                                            crate::core::timeline::BlendMode::SilhouetteLuma => "Silhouette Luma",
+                                            crate::core::timeline::BlendMode::Behind => "Behind",
+                                            crate::core::timeline::BlendMode::AlphaAdd => "Alpha Add",
+                                            crate::core::timeline::BlendMode::LinearLight => "Linear Light",
                                     };
                                     egui::ComboBox::from_id_salt(blend_id)
                                         .selected_text(blend_label)
@@ -728,6 +735,13 @@ let type_icon = crate::ui::icons::layer_icon(&layer.layer_type);
                                                 (crate::core::timeline::BlendMode::Hue, "Hue"),
                                                 (crate::core::timeline::BlendMode::Saturation, "Saturation"),
                                                 (crate::core::timeline::BlendMode::Luminosity, "Luminosity"),
+                                                (crate::core::timeline::BlendMode::StencilAlpha, "Stencil Alpha"),
+                                                (crate::core::timeline::BlendMode::StencilLuma, "Stencil Luma"),
+                                                (crate::core::timeline::BlendMode::SilhouetteAlpha, "Silhouette Alpha"),
+                                                (crate::core::timeline::BlendMode::SilhouetteLuma, "Silhouette Luma"),
+                                                (crate::core::timeline::BlendMode::Behind, "Behind"),
+                                                (crate::core::timeline::BlendMode::AlphaAdd, "Alpha Add"),
+                                                (crate::core::timeline::BlendMode::LinearLight, "Linear Light"),
                                             ] {
                                                 if ui.selectable_value(&mut layer.blend_mode, bm, name).clicked() {
                                                     project_changed = true;

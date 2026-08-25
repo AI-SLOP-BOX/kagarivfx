@@ -65,7 +65,10 @@ fn blend_mode_code(bm: &BlendMode) -> i32 {
         | BlendMode::Exclusion | BlendMode::Divide | BlendMode::Subtract
         | BlendMode::ColorBurn | BlendMode::LinearBurn | BlendMode::VividLight
         | BlendMode::ColorDodge | BlendMode::LinearDodge
-        | BlendMode::Color | BlendMode::Hue | BlendMode::Saturation | BlendMode::Luminosity => 4,
+        | BlendMode::Color | BlendMode::Hue | BlendMode::Saturation | BlendMode::Luminosity
+        | BlendMode::StencilAlpha | BlendMode::StencilLuma
+        | BlendMode::SilhouetteAlpha | BlendMode::SilhouetteLuma
+        | BlendMode::Behind | BlendMode::AlphaAdd | BlendMode::LinearLight => 4,
     }
 }
 

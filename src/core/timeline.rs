@@ -305,6 +305,13 @@ pub enum BlendMode {
     Hue,
     Saturation,
     Luminosity,
+    StencilAlpha,
+    StencilLuma,
+    SilhouetteAlpha,
+    SilhouetteLuma,
+    Behind,
+    AlphaAdd,
+    LinearLight,
 }
 
 // ─── Label Colors ──────────────────────────────────────────────────────────
