@@ -6,7 +6,12 @@ use crate::ui::theme::colors;
 ///
 /// Visualizes animatable property value curves over time, drawing interactive control
 /// points and Bezier tangent handles.
-#[allow(dead_code)]
+/// Resolve "PinX:<id>" / "PinY:<id>" graph properties to the pin's track.
+fn pin_anim_mut<'a>(layer: &'a mut Layer, prop: &str) -> Option<&'a mut crate::core::property::Animatable<[f32; 2]>> {
+    let id = prop.strip_prefix("PinX:").or_else(|| prop.strip_prefix("PinY:"))?;
+    layer.puppet_pins.iter_mut().find(|p| p.id == id).map(|p| &mut p.position)
+}
+
 pub fn draw_graph_editor(
     selected_property: &mut Option<String>,
     ui: &mut egui::Ui,
@@ -21,9 +26,23 @@ pub fn draw_graph_editor(
             egui::ComboBox::from_id_salt("graph_prop_select_module")
                 .selected_text(&prop_name)
                 .show_ui(ui, |ui| {
-                    for p in ["Position X", "Position Y", "Scale X", "Scale Y", "Rotation", "Opacity"] {
-                        if ui.selectable_label(prop_name == p, p).clicked() {
-                            *selected_property = Some(p.to_string());
+                    let mut props: Vec<(String, String)> = [
+                        ("Position X", "Position X"), ("Position Y", "Position Y"),
+                        ("Scale X", "Scale X"), ("Scale Y", "Scale Y"),
+                        ("Rotation", "Rotation"), ("Opacity", "Opacity"),
+                    ].iter().map(|(a,b)|(a.to_string(),b.to_string())).collect();
+                    for pin in &layer.puppet_pins {
+                        props.push((format!("PinX:{}", pin.id), format!("\u{1f9f7} {} X", pin.name)));
+                        props.push((format!("PinY:{}", pin.id), format!("\u{1f9f7} {} Y", pin.name)));
+                    }
+                    let label_of = |key: &str| -> String {
+                        props.iter().find(|(k, _)| k == key).map(|(_, l)| l.clone()).unwrap_or_else(|| key.to_string())
+                    };
+                    let sel_label = label_of(&prop_name);
+                    ui.label(egui::RichText::new(&sel_label).weak());
+                    for (key, lbl) in &props {
+                        if ui.selectable_label(prop_name == *key, lbl).clicked() {
+                            *selected_property = Some(key.clone());
                         }
                     }
                 });
@@ -60,6 +79,18 @@ pub fn draw_graph_editor(
                     }
                     "Opacity" => {
                         if let Animatable::Animated(ref mut kfs) = layer.transform.opacity { apply_easy_ease!(kfs); }
+                    }
+                                        p if p.starts_with("Pin") => {
+                        if let Some(Animatable::Animated(ref mut kfs)) = pin_anim_mut(layer, p) {
+                            let ez = crate::core::keyframe::EasePreset::Standard.control_points();
+                            for kf in kfs.iter_mut() {
+                                kf.interpolation = crate::core::keyframe::InterpolationType::Bezier {
+                                    outgoing: crate::core::keyframe::BezierControlPoint { influence: 0.333, speed: 0.0 },
+                                    incoming: crate::core::keyframe::BezierControlPoint { influence: 0.333, speed: 0.0 },
+                                    custom_bezier: Some(ez),
+                                };
+                            }
+                        }
                     }
                     _ => {}
                 }
@@ -99,6 +130,9 @@ pub fn draw_graph_editor(
                     "Scale X" | "Scale Y" => reverse_v2(&mut layer.transform.scale),
                     "Rotation" => reverse_f32(&mut layer.transform.rotation),
                     "Opacity" => reverse_f32(&mut layer.transform.opacity),
+                                        p if p.starts_with("Pin") => {
+                                            if let Some(a) = pin_anim_mut(layer, p) { reverse_v2(a); }
+                                        }
                     _ => {}
                 }
                 *project_changed = true;
@@ -138,6 +172,11 @@ pub fn draw_graph_editor(
                             for kf in kfs.iter_mut() { mirror_custom_bezier(&mut kf.interpolation); }
                         }
                     }
+                    p if p.starts_with("Pin") => {
+                        if let Some(Animatable::Animated(ref mut kfs)) = pin_anim_mut(layer, p) {
+                                                            for kf in kfs.iter_mut() { mirror_custom_bezier(&mut kf.interpolation); }
+                        }
+                    }
                     _ => {}
                 }
                 *project_changed = true;
@@ -162,6 +201,11 @@ pub fn draw_graph_editor(
                     "Scale X" | "Scale Y" => { if let Animatable::Animated(ref mut kfs) = layer.transform.scale { for kf in kfs.iter_mut() { ease_in(&mut kf.interpolation); } } }
                     "Rotation" => { if let Animatable::Animated(ref mut kfs) = layer.transform.rotation { for kf in kfs.iter_mut() { ease_in(&mut kf.interpolation); } } }
                     "Opacity" => { if let Animatable::Animated(ref mut kfs) = layer.transform.opacity { for kf in kfs.iter_mut() { ease_in(&mut kf.interpolation); } } }
+                                        p if p.starts_with("Pin") => {
+                                            if let Some(Animatable::Animated(ref mut kfs)) = pin_anim_mut(layer, p) {
+                                                                                                    for kf in kfs.iter_mut() { ease_in(&mut kf.interpolation); }
+                                            }
+                                        }
                     _ => {}
                 }
                 *project_changed = true;
@@ -184,6 +228,11 @@ pub fn draw_graph_editor(
                     "Scale X" | "Scale Y" => { if let Animatable::Animated(ref mut kfs) = layer.transform.scale { for kf in kfs.iter_mut() { ease_out(&mut kf.interpolation); } } }
                     "Rotation" => { if let Animatable::Animated(ref mut kfs) = layer.transform.rotation { for kf in kfs.iter_mut() { ease_out(&mut kf.interpolation); } } }
                     "Opacity" => { if let Animatable::Animated(ref mut kfs) = layer.transform.opacity { for kf in kfs.iter_mut() { ease_out(&mut kf.interpolation); } } }
+                                        p if p.starts_with("Pin") => {
+                                            if let Some(Animatable::Animated(ref mut kfs)) = pin_anim_mut(layer, p) {
+                                                                                                    for kf in kfs.iter_mut() { ease_out(&mut kf.interpolation); }
+                                            }
+                                        }
                     _ => {}
                 }
                 *project_changed = true;
@@ -204,6 +253,13 @@ pub fn draw_graph_editor(
                 "Scale Y" => layer.transform.scale.evaluate(f)[1],
                 "Rotation" => layer.transform.rotation.evaluate(f),
                 "Opacity" => layer.transform.opacity.evaluate(f),
+                p if p.starts_with("PinX:") || p.starts_with("PinY:") => {
+                    let ci = usize::from(p.starts_with("PinY:"));
+                    let pid = p.split(':').nth(1).unwrap_or("");
+                    layer.puppet_pins.iter().find(|pp| pp.id == pid)
+                        .map(|pp| pp.position.evaluate(f)[ci])
+                        .unwrap_or(0.0)
+                }
                 _ => layer.transform.position.evaluate(f)[0],
             };
             let val = if raw_val.is_nan() { 0.0 } else { raw_val };
@@ -261,6 +317,13 @@ pub fn draw_graph_editor(
                             "Scale Y" => chan_kfs(&layer.transform.scale, 1),
                             "Rotation" => scalar_kfs(&layer.transform.rotation),
                             "Opacity" => scalar_kfs(&layer.transform.opacity),
+                            p if p.starts_with("PinX:") || p.starts_with("PinY:") => {
+                                let ci = usize::from(p.starts_with("PinY:"));
+                                let pid = p.split(':').nth(1).unwrap_or("");
+                                layer.puppet_pins.iter().find(|pp| pp.id == pid)
+                                    .map(|pp| chan_kfs(&pp.position, ci))
+                                    .unwrap_or_default()
+                            }
                             _ => vec![],
                         };
                         let near_anchor = anchor_pts.iter().any(|&(f, v)| {
@@ -298,6 +361,14 @@ pub fn draw_graph_editor(
                                 }
                                 "Opacity" => {
                                     layer.transform.opacity.add_keyframe(GKeyframe::new(new_frame, new_val.clamp(0.0, 100.0), GInterp::Linear));
+                                }
+                                p if p.starts_with("PinX:") || p.starts_with("PinY:") => {
+                                    if let Some(pin) = pin_anim_mut(layer, p) {
+                                        let ci = usize::from(p.starts_with("PinY:"));
+                                        let mut v = pin.evaluate(new_frame);
+                                        v[ci] = new_val;
+                                        pin.add_keyframe(GKeyframe::new(new_frame, v, GInterp::Linear));
+                                    }
                                 }
                                 _ => {}
                             }
