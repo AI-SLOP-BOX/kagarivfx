@@ -89,6 +89,13 @@ pub struct EffectParams {
     pub corner_top_right: [f32; 2],
     pub corner_bottom_left: [f32; 2],
     pub corner_bottom_right: [f32; 2],
+
+    // Motion Blur
+    pub motionblur_enabled: u32,
+    pub motionblur_shutter: f32,
+    pub motionblur_velocity_x: f32,
+    pub motionblur_velocity_y: f32,
+    pub motionblur_samples: u32,
 }
 
 impl Default for EffectParams {
@@ -140,6 +147,11 @@ impl Default for EffectParams {
             corner_top_right: [100.0, 0.0],
             corner_bottom_left: [0.0, 100.0],
             corner_bottom_right: [100.0, 100.0],
+            motionblur_enabled: 0,
+            motionblur_shutter: 0.5,
+            motionblur_velocity_x: 0.0,
+            motionblur_velocity_y: 0.0,
+            motionblur_samples: 8,
         }
     }
 }
@@ -455,6 +467,11 @@ impl RenderEffectPlugin for EnumEffectPlugin {
                 params.corner_top_right = top_right.evaluate(frame);
                 params.corner_bottom_left = bottom_left.evaluate(frame);
                 params.corner_bottom_right = bottom_right.evaluate(frame);
+            }
+            EffectType::MotionBlur { shutter_angle, samples } => {
+                params.motionblur_enabled = 1;
+                params.motionblur_shutter = shutter_angle.evaluate(frame) / 360.0;
+                params.motionblur_samples = *samples;
             }
             _ => {}
         }
