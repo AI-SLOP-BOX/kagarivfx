@@ -63,6 +63,9 @@ pub struct RangeSelector {
     pub char_start: i32,
     #[serde(default = "default_unbounded")]
     pub char_end: i32,
+    /// When present, overrides `offset` each frame (for typewriter sweeps, etc.).
+    #[serde(default)]
+    pub offset_anim: Option<crate::core::property::Animatable<f32>>,
 }
 
 fn default_unbounded() -> i32 {
@@ -81,6 +84,7 @@ impl Default for RangeSelector {
             random_order: false,
             char_start: -1,
             char_end: -1,
+            offset_anim: None,
         }
     }
 }

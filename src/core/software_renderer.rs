@@ -987,7 +987,15 @@ pub fn render_frame_to_pixels(comp: &Composition, frame: u32, width: u32, height
                 // Enabled Text Animator takes precedence: per-character transforms
                 let maybe_text = if let Some(anim) = layer.text_animator.as_ref().filter(|a| a.enabled) {
                     let lead = layer.text_formatting.as_ref().map(|tf| tf.leading).unwrap_or(1.2);
-                    rasterizer.rasterize_text_animated(&family_name, &text_str, fs, text_color, tk, lead, 0.0, alignment, anim)
+                    // Evaluate animated offset if present (typewriter sweeps etc.)
+                    let anim_owned = if let Some(ref oa) = anim.selector.offset_anim {
+                        let mut a2 = anim.clone();
+                        a2.selector.offset = oa.evaluate(frame);
+                        a2
+                    } else {
+                        anim.clone()
+                    };
+                    rasterizer.rasterize_text_animated(&family_name, &text_str, fs, text_color, tk, lead, 0.0, alignment, &anim_owned)
                 } else {
                     rasterizer.rasterize_text_formatted(&family_name, &text_str, fs, text_color, tk, ld, 0.0, alignment)
                 };

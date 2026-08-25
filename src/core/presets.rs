@@ -136,6 +136,8 @@ pub const NAMES: &[&str] = &[
     "🧲 Bounce", "🌀 Elastic", "🌊 Sine Wave", "💡 Strobe",
     // ── Scene transitions (at out-point) ──
     "🎬 Slide Out →", "🎬 Zoom Out",
+    // ── Text animation presets ──
+    "Typewriter", "Bounce In Text", "Scale Up Text", "Fade Up Words",
 ];
 
 /// Dispatch by name; returns whether the preset applied.
@@ -169,6 +171,10 @@ pub fn apply_by_name(name: &str, l: &mut Layer, cf: u32, comp_w: f32, _comp_h: f
         "💡 Strobe" => expr_strobe(l, comp_w),
         "🎬 Slide Out →" => slide_out(l, comp_w),
         "🎬 Zoom Out" => zoom_out(l),
+        "Typewriter" => text_typewriter(l, cf),
+        "Bounce In Text" => text_bounce_in(l, cf),
+        "Scale Up Text" => text_scale_up(l, cf),
+        "Fade Up Words" => text_fade_up(l, cf),
         _ => false,
     }
 }
@@ -329,6 +335,113 @@ pub fn zoom_out(l: &mut Layer) -> bool {
     ease_all(&mut op);
     l.transform.scale = Animatable::Animated(sk);
     l.transform.opacity = Animatable::Animated(op);
+    true
+}
+
+// ── Text animation presets ──
+// These configure the TextAnimator per-character system (type-on, bounce, etc.).
+
+use crate::core::text_animator::{RangeSelector, SelectorShape, TextAnimatorSettings};
+
+/// Typewriter: characters appear left-to-right via animated selector offset.
+pub fn text_typewriter(l: &mut Layer, cf: u32) -> bool {
+    use crate::core::property::Animatable as A;
+    let sel = RangeSelector {
+        shape: SelectorShape::RampUp,
+        offset_anim: Some(A::new_animated(vec![
+            kf(cf, -100.0),
+            kf(cf + 30, 100.0),
+        ])),
+        ..RangeSelector::default()
+    };
+    l.text_animator = Some(TextAnimatorSettings {
+        enabled: true,
+        selector: sel,
+        position_offset: [0.0, 0.0],
+        scale: [1.0, 1.0],
+        opacity: 100.0,
+        tracking: 0.0,
+        rotation: 0.0,
+        blur_amount: 0.0,
+    });
+    true
+}
+
+/// Bounce In: characters drop in from above with a bounce expression.
+pub fn text_bounce_in(l: &mut Layer, cf: u32) -> bool {
+    use crate::core::property::Animatable as A;
+    let sel = RangeSelector {
+        shape: SelectorShape::RampUp,
+        offset_anim: Some(A::new_animated(vec![
+            kf(cf, -100.0),
+            kf(cf + 24, 100.0),
+        ])),
+        ..RangeSelector::default()
+    };
+    l.text_animator = Some(TextAnimatorSettings {
+        enabled: true,
+        selector: sel,
+        position_offset: [0.0, -50.0],
+        scale: [1.0, 1.0],
+        opacity: 0.0,
+        tracking: 0.0,
+        rotation: 0.0,
+        blur_amount: 0.0,
+    });
+    // Layer-level bounce expression on position Y
+    l.transform.position_expression = Some(crate::core::timeline::Expression::Raw(
+        "[value[0], value[1] + 30 * abs(sin(time * 6.0 * 3.14159265)) * exp(-time * 3.5)]".into(),
+    ));
+    true
+}
+
+/// Scale Up: characters scale from 0% to 100% with overshoot.
+pub fn text_scale_up(l: &mut Layer, cf: u32) -> bool {
+    use crate::core::property::Animatable as A;
+    let sel = RangeSelector {
+        shape: SelectorShape::RampUp,
+        offset_anim: Some(A::new_animated(vec![
+            kf(cf, -100.0),
+            kf(cf + 20, 100.0),
+        ])),
+        ..RangeSelector::default()
+    };
+    l.text_animator = Some(TextAnimatorSettings {
+        enabled: true,
+        selector: sel,
+        position_offset: [0.0, 0.0],
+        scale: [0.0, 0.0],
+        opacity: 0.0,
+        tracking: 0.0,
+        rotation: 0.0,
+        blur_amount: 0.0,
+    });
+    true
+}
+
+/// Fade Up Words: characters fade in while drifting upward (10 at a time).
+pub fn text_fade_up(l: &mut Layer, cf: u32) -> bool {
+    use crate::core::property::Animatable as A;
+    let sel = RangeSelector {
+        shape: SelectorShape::RampUp,
+        ease_high: 50.0,
+        ease_low: 50.0,
+        offset_anim: Some(A::new_animated(vec![
+            kf(cf, -100.0),
+            kf(cf + 36, 100.0),
+        ])),
+        ..RangeSelector::default()
+    };
+    l.text_animator = Some(TextAnimatorSettings {
+        enabled: true,
+        selector: sel,
+        position_offset: [0.0, 30.0],
+        scale: [1.0, 1.0],
+        opacity: 0.0,
+        tracking: 0.0,
+        rotation: 0.0,
+        blur_amount: 4.0,
+    });
     true
 }
 
@@ -702,6 +815,48 @@ mod tests {
         assert!((sk[1].value[0] - 200.0).abs() < 0.01, "zoom 200%: {}", sk[1].value[0]);
         let op = l.transform.opacity.keyframes().unwrap();
         assert_eq!(op[1].value, 0.0);
+    }
+
+
+    #[test]
+    fn test_text_typewriter_sets_animator_with_offset_anim() {
+        let mut l = mk();
+        assert!(apply_by_name("Typewriter", &mut l, 30, 1920.0, 1080.0));
+        let anim = l.text_animator.as_ref().unwrap();
+        assert!(anim.enabled);
+        assert!(anim.selector.offset_anim.is_some());
+        let oa = anim.selector.offset_anim.as_ref().unwrap();
+        // at cf=30, offset should be -100; at cf+30=60, should be 100
+        assert!((oa.evaluate(30) - (-100.0)).abs() < 0.01);
+        assert!((oa.evaluate(60) - 100.0).abs() < 0.01);
+    }
+
+    #[test]
+    fn test_text_bounce_in_sets_position_expression() {
+        let mut l = mk();
+        assert!(apply_by_name("Bounce In Text", &mut l, 30, 1920.0, 1080.0));
+        assert!(l.transform.position_expression.is_some());
+        let anim = l.text_animator.as_ref().unwrap();
+        assert_eq!(anim.position_offset, [0.0, -50.0]);
+    }
+
+    #[test]
+    fn test_text_scale_up_zeroes_scale() {
+        let mut l = mk();
+        assert!(apply_by_name("Scale Up Text", &mut l, 30, 1920.0, 1080.0));
+        let anim = l.text_animator.as_ref().unwrap();
+        assert_eq!(anim.scale, [0.0, 0.0]);
+        assert_eq!(anim.opacity, 0.0);
+    }
+
+    #[test]
+    fn test_text_fade_up_has_blur_and_offset() {
+        let mut l = mk();
+        assert!(apply_by_name("Fade Up Words", &mut l, 30, 1920.0, 1080.0));
+        let anim = l.text_animator.as_ref().unwrap();
+        assert!((anim.blur_amount - 4.0).abs() < 0.01);
+        assert_eq!(anim.position_offset, [0.0, 30.0]);
+        assert!(anim.selector.ease_high > 0.0);
     }
 
     #[test]
