@@ -670,6 +670,98 @@ mod gpu_mask_tests {
     }
 }
 
+/// End-to-end parity checks between the CPU reference renderer's mask
+/// handling and this file's coverage rasterizer (which feeds the GPU path).
+///
+/// Known CPU divergences (documented, not asserted here): the software
+/// renderer honors only the FIRST enabled non-None mask and ignores
+/// mode-based combining, per-mask opacity, expansion, and wiggle — the GPU
+/// rasterizer implements the full superset.
+#[cfg(test)]
+mod cpu_parity_tests {
+    use super::*;
+    use crate::core::mask::Mask;
+    use crate::core::timeline::{Composition, Layer, LayerType};
+
+    const W: u32 = 64;
+    const H: u32 = 64;
+
+    fn solid_with_rect_mask(mode: crate::core::mask::MaskMode, inverted: bool) -> Composition {
+        let mut comp = Composition::new("c".into(), "Parity".into(), W, H, 30, 30);
+        comp.background_color = [0.0, 0.0, 0.0, 1.0];
+        let mut layer = Layer::new(
+            "l".into(),
+            "Solid".into(),
+            LayerType::Solid {
+                color: [1.0, 1.0, 1.0, 1.0],
+            },
+            30,
+        );
+        layer.transform.position =
+            crate::core::property::Animatable::new_constant([32.0, 32.0]);
+        let mut mask = Mask::new_rect("m".into(), "M".into(), 8.0, 8.0, 24.0, 40.0);
+        mask.mode = mode;
+        mask.inverted = inverted;
+        layer.masks.push(mask);
+        comp.layers.push(layer);
+        comp
+    }
+
+    /// Renders the comp through the CPU reference and through our coverage
+    /// rasterizer, then asserts both agree at an interior and an exterior
+    /// probe pixel.
+    fn assert_cpu_and_gpu_agree(inverted: bool) {
+        use crate::core::mask::MaskMode;
+        let comp = solid_with_rect_mask(MaskMode::Add, inverted);
+        let cpu =
+            crate::core::software_renderer::render_frame_to_pixels(&comp, 0, W, H, 0.0, 0);
+
+        let (key, shapes) =
+            collect_mask_shapes(&comp.layers[0], 0, W, H, W, H).expect("mask present");
+        let raster = rasterize_from_shapes(&shapes, W, H).expect("coverage");
+        assert_eq!(raster.key, key, "key must derive from the same inputs");
+
+        // Rect spans x[8..32) y[8..48): interior (20,32), exterior (52,32).
+        for &(px, py, inside_polygon) in
+            &[(20usize, 32usize, true), (52usize, 32usize, false)]
+        {
+            let i = (py * W as usize + px) * 4;
+            let cpu_red = cpu[i];
+            let my_alpha = raster.pixels[i + 3];
+            let expect_white = inside_polygon != inverted;
+            if expect_white {
+                assert!(
+                    cpu_red >= 250,
+                    "CPU should show the solid at ({},{}), red={}",
+                    px,
+                    py,
+                    cpu_red
+                );
+                assert_eq!(my_alpha, 255, "GPU coverage opaque at ({},{})", px, py);
+            } else {
+                assert!(
+                    cpu_red <= 8,
+                    "CPU should show background at ({},{}), red={}",
+                    px,
+                    py,
+                    cpu_red
+                );
+                assert_eq!(my_alpha, 0, "GPU coverage clear at ({},{})", px, py);
+            }
+        }
+    }
+
+    #[test]
+    fn add_mask_matches_cpu_reference() {
+        assert_cpu_and_gpu_agree(false);
+    }
+
+    #[test]
+    fn inverted_add_mask_matches_cpu_reference() {
+        assert_cpu_and_gpu_agree(true);
+    }
+}
+
 /// Bakes a text stroke into a rasterized text bitmap: dilates the fill alpha by the
 /// stroke radius, colors it with stroke_color, and composites it behind the fill.
 /// Returns padded (width, height, pixels) so the stroke is not clipped.
