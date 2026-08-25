@@ -98,6 +98,10 @@ pub struct FrameCache {
     pub max_memory_bytes: usize,
     /// Currently allocated pixel bytes in memory.
     pub current_memory_bytes: usize,
+    /// Layer indices that have been modified since last commit.
+    dirty_layers: std::collections::HashSet<usize>,
+    /// Composition IDs that contain dirty layers.
+    dirty_comps: std::collections::HashSet<String>,
 }
 
 impl FrameCache {
@@ -107,7 +111,35 @@ impl FrameCache {
             max_entries,
             max_memory_bytes: 512 * 1024 * 1024, // 512 MB default
             current_memory_bytes: 0,
+            dirty_layers: std::collections::HashSet::new(),
+            dirty_comps: std::collections::HashSet::new(),
         }
+    }
+
+    /// Mark a layer as dirty (modified). Only frames containing this layer need re-rendering.
+    pub fn mark_layer_dirty(&mut self, layer_idx: usize) {
+        self.dirty_layers.insert(layer_idx);
+    }
+
+    /// Mark a composition as dirty (contains modified layers).
+    pub fn mark_comp_dirty(&mut self, comp_id: &str) {
+        self.dirty_comps.insert(comp_id.to_string());
+    }
+
+    /// Check if a specific layer is dirty.
+    pub fn is_layer_dirty(&self, layer_idx: usize) -> bool {
+        self.dirty_layers.contains(&layer_idx)
+    }
+
+    /// Clear all dirty flags (call after a full re-render or commit).
+    pub fn clear_dirty(&mut self) {
+        self.dirty_layers.clear();
+        self.dirty_comps.clear();
+    }
+
+    /// Get the set of dirty layer indices.
+    pub fn dirty_layers(&self) -> &std::collections::HashSet<usize> {
+        &self.dirty_layers
     }
 
     /// Try to retrieve a cached frame for the current global version (updates LRU timestamp).

@@ -846,7 +846,53 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: u32) 
                         None
                     };
 
-                if let Some((l_idx, kf_frame, kf_start)) = kf_hit {
+                // 1a-tangent. Bezier tangent handle hit detection
+                let tangent_hit: Option<(usize, u32, u8, [f32; 2])> = if app.active_tool == crate::ui::toolbar::ActiveTool::Selection {
+                    if let Some(sel) = app.selected_layer_idx {
+                        if sel < comp_state.layers.len() {
+                            let l = &comp_state.layers[sel];
+                            let pos_kfs = l.transform.position.keyframes().unwrap_or(&[]);
+                            if pos_kfs.len() >= 2 {
+                                let aspect = comp_w / comp_h;
+                                let (ox, oy, dw, dh) = crate::ui::viewport_state::compute_draw_layout_pan(draw_rect, aspect, app.viewport_mag_ratio, app.viewport_pan);
+                                let to_scr = |v: [f32; 2]| -> eframe::egui::Pos2 {
+                                    egui::pos2(ox + (v[0] / comp_w) * dw, oy + (v[1] / comp_h) * dh)
+                                };
+                                let mut found = None;
+                                'outer: for seg in pos_kfs.windows(2) {
+                                    let (a, b) = (&seg[0], &seg[1]);
+                                    if let crate::core::keyframe::InterpolationType::Bezier { custom_bezier, .. } = &a.interpolation {
+                                        let c = custom_bezier.unwrap_or([0.25, 0.1, 0.25, 1.0]);
+                                        let val_delta = [b.value[0] - a.value[0], b.value[1] - a.value[1]];
+                                        let out_pos = [a.value[0] + c[0] * val_delta[0], a.value[1] + c[1] * val_delta[1]];
+                                        let out_screen = to_scr(out_pos);
+                                        let d_out = ((pointer_pos.x - out_screen.x).powi(2) + (pointer_pos.y - out_screen.y).powi(2)).sqrt();
+                                        if d_out <= 8.0 {
+                                            found = Some((sel, a.frame, 0u8, out_pos));
+                                            break 'outer;
+                                        }
+                                        let in_pos = [b.value[0] - (1.0 - c[2]) * val_delta[0], b.value[1] - (1.0 - c[3]) * val_delta[1]];
+                                        let in_screen = to_scr(in_pos);
+                                        let d_in = ((pointer_pos.x - in_screen.x).powi(2) + (pointer_pos.y - in_screen.y).powi(2)).sqrt();
+                                        if d_in <= 8.0 {
+                                            found = Some((sel, b.frame, 1u8, in_pos));
+                                            break 'outer;
+                                        }
+                                    }
+                                }
+                                found
+                            } else { None }
+                        } else { None }
+                    } else { None }
+                } else { None };
+
+                if let Some((l_idx, kf_frame, handle_type, start_bez)) = tangent_hit {
+                    app.viewport_tangent_drag_state = Some((l_idx, kf_frame, handle_type, start_bez, pointer_pos));
+                    app.viewport_pos_kf_drag_state = None;
+                    app.viewport_tangent_drag_state = None;
+                    app.viewport_drag_state = None;
+                    app.viewport_mask_drag_state = None;
+                } else if let Some((l_idx, kf_frame, kf_start)) = kf_hit {
                     app.viewport_pos_kf_drag_state =
                         Some((l_idx, kf_frame, kf_start, pointer_pos));
                     app.viewport_drag_state = None;
@@ -960,6 +1006,58 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: u32) 
                                     start_val[0] + delta_x,
                                     start_val[1] + delta_y,
                                 ];
+                            }
+                        }
+                    }
+                } else if let Some((l_idx, kf_frame, handle_type, _start_bez, start_ptr)) = app.viewport_tangent_drag_state {
+                    let delta_x = (pointer_pos.x - start_ptr.x) / draw_w * comp_w;
+                    let delta_y = (pointer_pos.y - start_ptr.y) / draw_h * comp_h;
+
+                    let comp_mut = app.history.current_mut().active_composition_mut();
+                    if let Some(layer) = comp_mut.layers.get_mut(l_idx) {
+                        if let Some(kfs) = layer.transform.position.keyframes_mut() {
+                            // Find the keyframe and its neighbor
+                            let mut update: Option<(usize, [f32; 4])> = None;
+                            for i in 0..kfs.len() {
+                                if kfs[i].frame == kf_frame {
+                                    if let crate::core::keyframe::InterpolationType::Bezier { custom_bezier: Some(ref pts), .. } = kfs[i].interpolation {
+                                        let mut new_pts = *pts;
+                                        if handle_type == 0 && i + 1 < kfs.len() {
+                                            // Dragging outgoing handle of keyframe i
+                                            let val_delta = [kfs[i+1].value[0] - kfs[i].value[0], kfs[i+1].value[1] - kfs[i].value[1]];
+                                            let new_out_x = ((pts[0] * val_delta[0] + delta_x) / val_delta[0]).clamp(0.01, 0.99);
+                                            let new_out_y = ((pts[1] * val_delta[1] + delta_y) / val_delta[1]).clamp(-1.5, 2.5);
+                                            if app.viewport_linked_tangent {
+                                                new_pts[2] = 1.0 - new_out_x;
+                                                new_pts[3] = -new_out_y;
+                                            }
+                                            new_pts[0] = new_out_x;
+                                            new_pts[1] = new_out_y;
+                                            update = Some((i, new_pts));
+                                        } else if handle_type == 1 && i > 0 {
+                                            // Dragging incoming handle of keyframe i (which is the outgoing of i-1... actually incoming of this kf)
+                                            let val_delta = [kfs[i].value[0] - kfs[i-1].value[0], kfs[i].value[1] - kfs[i-1].value[1]];
+                                            let new_in_x = ((pts[2] * val_delta[0] - delta_x) / val_delta[0]).clamp(0.01, 0.99);
+                                            let new_in_y = ((pts[3] * val_delta[1] - delta_y) / val_delta[1]).clamp(-1.5, 2.5);
+                                            if app.viewport_linked_tangent {
+                                                new_pts[0] = 1.0 - new_in_x;
+                                                new_pts[1] = -new_in_y;
+                                            }
+                                            new_pts[2] = new_in_x;
+                                            new_pts[3] = new_in_y;
+                                            update = Some((i, new_pts));
+                                        }
+                                        break;
+                                    }
+                                }
+                            }
+                            if let Some((idx, pts)) = update {
+                                kfs[idx].interpolation = crate::core::keyframe::InterpolationType::Bezier {
+                                    outgoing: crate::core::keyframe::BezierControlPoint { influence: 0.333, speed: 0.0 },
+                                    incoming: crate::core::keyframe::BezierControlPoint { influence: 0.333, speed: 0.0 },
+                                    custom_bezier: Some(pts),
+                                };
+                                crate::core::frame_cache::bump_version();
                             }
                         }
                     }

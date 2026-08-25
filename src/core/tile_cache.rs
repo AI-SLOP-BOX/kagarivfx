@@ -1,0 +1,198 @@
+use std::collections::HashMap;
+use std::sync::atomic::{AtomicU64, Ordering};
+
+static TILE_VERSION: AtomicU64 = AtomicU64::new(0);
+
+pub fn bump_tile_version() {
+    TILE_VERSION.fetch_add(1, Ordering::Relaxed);
+}
+
+pub fn current_tile_version() -> u64 {
+    TILE_VERSION.load(Ordering::Relaxed)
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct TileCoord {
+    pub tx: u32,
+    pub ty: u32,
+}
+
+#[derive(Debug, Clone)]
+pub struct TileEntry {
+    pub pixels: Vec<u8>,
+    pub version: u64,
+    pub lru_stamp: u64,
+}
+
+pub struct TileCache {
+    tiles: HashMap<(u32, u32, TileCoord), TileEntry>,
+    tile_size: u32,
+    lru_clock: u64,
+    current_memory: usize,
+    max_memory: usize,
+}
+
+impl Default for TileCache {
+    fn default() -> Self {
+        Self {
+            tiles: HashMap::new(),
+            tile_size: 256,
+            lru_clock: 0,
+            current_memory: 0,
+            max_memory: 256 * 1024 * 1024, // 256 MB
+        }
+    }
+}
+
+impl TileCache {
+    pub fn new(tile_size: u32, max_memory_bytes: usize) -> Self {
+        Self {
+            tile_size,
+            max_memory: max_memory_bytes,
+            ..Default::default()
+        }
+    }
+
+    pub fn tile_size(&self) -> u32 {
+        self.tile_size
+    }
+
+    pub fn tiles_for_frame(&self, _frame: u32, comp_w: u32, comp_h: u32) -> Vec<TileCoord> {
+        let cols = comp_w.div_ceil(self.tile_size);
+        let rows = comp_h.div_ceil(self.tile_size);
+        let mut coords = Vec::with_capacity((cols * rows) as usize);
+        for ty in 0..rows {
+            for tx in 0..cols {
+                coords.push(TileCoord { tx, ty });
+            }
+        }
+        coords
+    }
+
+    pub fn tile_rect(&self, coord: TileCoord, comp_w: u32, comp_h: u32) -> (u32, u32, u32, u32) {
+        let x = coord.tx * self.tile_size;
+        let y = coord.ty * self.tile_size;
+        let w = self.tile_size.min(comp_w.saturating_sub(x));
+        let h = self.tile_size.min(comp_h.saturating_sub(y));
+        (x, y, w, h)
+    }
+
+    pub fn get(&mut self, frame: u32, coord: TileCoord) -> Option<&[u8]> {
+        let version = current_tile_version();
+        let entry = self.tiles.get(&(frame, 0, coord))?;
+        if entry.version != version {
+            return None;
+        }
+        self.lru_clock += 1;
+        // Can't mutate in get; LRU update happens on insert
+        Some(&entry.pixels)
+    }
+
+    pub fn insert(&mut self, frame: u32, coord: TileCoord, pixels: Vec<u8>) {
+        let version = current_tile_version();
+        let tile_bytes = pixels.len();
+        self.lru_clock += 1;
+
+        // Evict if over budget
+        while self.current_memory + tile_bytes > self.max_memory && !self.tiles.is_empty() {
+            if let Some((worst_key, worst_entry)) = self.tiles.iter()
+                .min_by_key(|(_, e)| e.lru_stamp)
+                .map(|(k, e)| (*k, e.clone()))
+            {
+                self.current_memory -= worst_entry.pixels.len();
+                self.tiles.remove(&worst_key);
+            } else {
+                break;
+            }
+        }
+
+        self.current_memory += tile_bytes;
+        self.tiles.insert((frame, 0, coord), TileEntry {
+            pixels,
+            version,
+            lru_stamp: self.lru_clock,
+        });
+    }
+
+    pub fn invalidate_all(&mut self) {
+        self.tiles.clear();
+        self.current_memory = 0;
+        bump_tile_version();
+    }
+
+    pub fn invalidate_frame(&mut self, frame: u32) {
+        let version = current_tile_version();
+        let keys: Vec<_> = self.tiles.keys()
+            .filter(|(f, _, _)| *f == frame)
+            .copied()
+            .collect();
+        for key in keys {
+            if let Some(entry) = self.tiles.remove(&key) {
+                self.current_memory -= entry.pixels.len();
+            }
+        }
+        let _ = version;
+    }
+
+    pub fn memory_usage(&self) -> usize {
+        self.current_memory
+    }
+
+    pub fn tile_count(&self) -> usize {
+        self.tiles.len()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_tiles_for_frame() {
+        let cache = TileCache::new(256, 1024 * 1024);
+        let tiles = cache.tiles_for_frame(0, 1920, 1080);
+        // 1920/256 = 8 cols, 1080/256 = 5 rows (rounded up)
+        assert_eq!(tiles.len(), 8 * 5);
+        assert_eq!(tiles[0], TileCoord { tx: 0, ty: 0 });
+    }
+
+    #[test]
+    fn test_tile_rect() {
+        let cache = TileCache::new(256, 1024 * 1024);
+        let (x, y, w, h) = cache.tile_rect(TileCoord { tx: 7, ty: 4 }, 1920, 1080);
+        assert_eq!(x, 7 * 256);
+        assert_eq!(y, 4 * 256);
+        assert!(w <= 256);
+        assert!(h <= 256);
+    }
+
+    #[test]
+    fn test_insert_and_get() {
+        let mut cache = TileCache::new(256, 1024 * 1024);
+        let pixels = vec![0u8; 256 * 256 * 4];
+        cache.insert(0, TileCoord { tx: 0, ty: 0 }, pixels.clone());
+        let got = cache.get(0, TileCoord { tx: 0, ty: 0 });
+        assert!(got.is_some());
+        assert_eq!(got.unwrap().len(), pixels.len());
+    }
+
+    #[test]
+    fn test_invalidate_all() {
+        let mut cache = TileCache::new(256, 1024 * 1024);
+        cache.insert(0, TileCoord { tx: 0, ty: 0 }, vec![0u8; 100]);
+        assert_eq!(cache.tile_count(), 1);
+        cache.invalidate_all();
+        assert_eq!(cache.tile_count(), 0);
+    }
+
+    #[test]
+    fn test_eviction() {
+        let mut cache = TileCache::new(256, 1024); // Very small cache
+        for i in 0..10 {
+            cache.insert(i, TileCoord { tx: 0, ty: 0 }, vec![i as u8; 256]);
+        }
+        // Should have evicted some tiles
+        assert!(cache.tile_count() < 10);
+        assert!(cache.memory_usage() <= 1024);
+    }
+}
