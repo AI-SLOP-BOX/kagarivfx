@@ -2,6 +2,97 @@ use crate::core::timeline::{Composition, LayerType, BlendMode, ShapeType, TrimPa
 use crate::core::mask::point_in_polygon;
 use rayon::prelude::*;
 
+/// Perspective-project a 3D layer's corners onto screen space.
+/// Returns [(screen_x, screen_y, u, v)] for the 4 corners (TL, TR, BR, BL),
+/// or None if the layer is behind the camera.
+#[allow(clippy::too_many_arguments)]
+fn perspective_project_layer(
+    cam_fov: f32,
+    cam_pos: [f32; 3],
+    cam_rot: [f32; 3],       // degrees: [rx, ry, rz]
+    layer_pos: [f32; 3],
+    layer_rot: [f32; 3],     // degrees
+    layer_scale: [f32; 2],   // percent (100 = no scale)
+    layer_width: f32,
+    layer_height: f32,
+    screen_width: f32,
+    screen_height: f32,
+) -> Option<[[f32; 4]; 4]> {
+    let hw = layer_width * 0.5 * (layer_scale[0] / 100.0);
+    let hh = layer_height * 0.5 * (layer_scale[1] / 100.0);
+
+    let corners: [[f32; 3]; 4] = [
+        [-hw, -hh, 0.0],
+        [ hw, -hh, 0.0],
+        [ hw,  hh, 0.0],
+        [-hw,  hh, 0.0],
+    ];
+
+    // Euler angles to rotation matrix (XYZ order)
+    let to_rad = |d: f32| d * std::f32::consts::PI / 180.0;
+    let (rx, ry, rz) = (to_rad(layer_rot[0]), to_rad(layer_rot[1]), to_rad(layer_rot[2]));
+    let (crx, srx) = (rx.cos(), rx.sin());
+    let (cry, sry) = (ry.cos(), ry.sin());
+    let (crz, srz) = (rz.cos(), rz.sin());
+
+    // Rz * Ry * Rx
+    let rotate = |p: [f32; 3]| -> [f32; 3] {
+        // Rx
+        let y1 = p[1] * crx - p[2] * srx;
+        let z1 = p[1] * srx + p[2] * crx;
+        let x1 = p[0];
+        // Ry
+        let x2 = x1 * cry + z1 * sry;
+        let z2 = -x1 * sry + z1 * cry;
+        let y2 = y1;
+        // Rz
+        [
+            x2 * crz - y2 * srz,
+            x2 * srz + y2 * crz,
+            z2,
+        ]
+    };
+
+    // World-space corners
+    let world: Vec<[f32; 3]> = corners.iter().map(|c| {
+        let r = rotate(*c);
+        [r[0] + layer_pos[0], r[1] + layer_pos[1], r[2] + layer_pos[2]]
+    }).collect();
+
+    // Camera transform (simplified: translate + Z-rotate only)
+    let cam_zr = to_rad(cam_rot[2]);
+    let (ccrz, ssrz) = (cam_zr.cos(), cam_zr.sin());
+
+    let cam_space: Vec<[f32; 3]> = world.iter().map(|c| {
+        let dx = c[0] - cam_pos[0];
+        let dy = c[1] - cam_pos[1];
+        let dz = c[2] - cam_pos[2];
+        [
+            dx * ccrz - dy * ssrz,
+            dx * ssrz + dy * ccrz,
+            dz,
+        ]
+    }).collect();
+
+    if cam_space.iter().any(|c| c[2] <= 0.1) {
+        return None;
+    }
+
+    let fov_rad = cam_fov * std::f32::consts::PI / 180.0;
+    let focal = (screen_height * 0.5) / (fov_rad * 0.5).tan();
+
+    let mut result = [[0.0f32; 4]; 4];
+    for (i, c) in cam_space.iter().enumerate() {
+        let z = c[2];
+        let sx = screen_width * 0.5 + (c[0] * focal) / z;
+        let sy = screen_height * 0.5 - (c[1] * focal) / z;
+        let u = if i == 0 || i == 3 { 0.0 } else { 1.0 };
+        let v = if i == 0 || i == 1 { 0.0 } else { 1.0 };
+        result[i] = [sx, sy, u, v];
+    }
+    Some(result)
+}
+
 /// Render a sub-composition into a pixel buffer (for PreComp nesting).
 pub fn render_sub_comp(_comp: &Composition, sub_comp_id: &str, _frame: u32, _width: u32, _height: u32, time_remapped_frame: u32) -> Option<Vec<u8>> {
     // Find the sub-comp by id in the project (we need to search all compositions)
@@ -970,10 +1061,37 @@ pub fn render_frame_to_pixels(comp: &Composition, frame: u32, width: u32, height
         let cx = pos[0];
         let cy = pos[1];
 
-        // Draw each pixel inside the layer bounding area
-        // A simple inverse transform to check pixel coverage
-        let bounds_x = w * 0.5;
-        let bounds_y = h * 0.5;
+        // For 3D layers, use perspective projection from camera
+        let (bounds_x, bounds_y, _perspective_uvs) = if layer.is_3d {
+            let cam = &comp.active_camera;
+            let layer_rot_3d = layer.transform_3d.rotation.evaluate(effective_frame);
+            if let Some(projected) = perspective_project_layer(
+                cam.fov_degrees,
+                cam.transform.position.evaluate(effective_frame),
+                cam.transform.rotation.evaluate(effective_frame),
+                layer.transform_3d.position.evaluate(effective_frame),
+                layer_rot_3d,
+                scale,
+                base_w,
+                base_h,
+                width as f32,
+                height as f32,
+            ) {
+                // Compute bounding box from projected corners
+                let min_sx = projected.iter().map(|c| c[0]).fold(f32::INFINITY, f32::min);
+                let max_sx = projected.iter().map(|c| c[0]).fold(f32::NEG_INFINITY, f32::max);
+                let min_sy = projected.iter().map(|c| c[1]).fold(f32::INFINITY, f32::min);
+                let max_sy = projected.iter().map(|c| c[1]).fold(f32::NEG_INFINITY, f32::max);
+                let bx = (max_sx - min_sx) * 0.5;
+                let by = (max_sy - min_sy) * 0.5;
+                (bx, by, Some(projected))
+            } else {
+                // Behind camera: fall back to flat 2D rendering
+                (w * 0.5, h * 0.5, None)
+            }
+        } else {
+            (w * 0.5, h * 0.5, None)
+        };
         // abs(): negative scale flips w/h sign — must not invert the bounding box
         let ext = bounds_x.max(bounds_y).abs() * 1.5;
 
