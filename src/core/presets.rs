@@ -116,6 +116,29 @@ pub fn slam_in(l: &mut Layer, cf: u32) -> bool {
     true
 }
 
+/// Returns the display category for a preset name (used by the UI submenu).
+pub fn category_of(name: &str) -> &'static str {
+    match name {
+        "Fade In" | "Fade Out" | "Pop In" | "Slide In \u{2190}" | "Slide In \u{2192}"
+        | "Zoom Punch" | "Slam In" => "Basics",
+        "\u{1f39e} Film Look" | "\u{1f3ac} Handheld" | "\u{1f4a5} Quake"
+        | "\u{1f3ac} Letterbox 2.39" | "\u{26a1} Whip Out \u{2192}" | "\u{26a1} Whip In \u{2190}" => "Cinematic",
+        "\u{23f1} Speed Ramp: Slow-Mo" | "\u{23f1} Speed Ramp: Fast \u{00d7}4" => "Speed",
+        "\u{1f3a5} Ken Burns In" | "\u{1f3a5} Ken Burns Out" => "Camera",
+        "Fade to Black" | "Fade from Black" | "Dip to White" => "Fade to Color",
+        "\u{26a1} Flash Cut" => "Flash",
+        "\u{1f39e} Film Reel Intro" | "YouTube Vlog" | "Music Video"
+        | "Cinematic Reveal" | "Documentary Opener" => "Compound",
+        "\u{1f9f2} Bounce" | "\u{1f300} Elastic" | "\u{1f30a} Sine Wave"
+        | "\u{1f4a1} Strobe" => "Live Expressions",
+        "\u{1f3ac} Slide Out \u{2192}" | "\u{1f3ac} Zoom Out" => "Transitions",
+        "Typewriter" | "Bounce In Text" | "Scale Up Text" | "Fade Up Words" => "Text Animation",
+        "Freeze Frame" | "Reverse" | "Slow Motion 0.5\u{00d7}" | "Fast Forward 2\u{00d7}" => "Time Remap",
+        "Reset Layer" => "Utility",
+        _ => "",
+    }
+}
+
 pub const NAMES: &[&str] = &[
     "Fade In", "Fade Out", "Pop In", "Slide In ←", "Slide In →",
     "Zoom Punch", "Slam In",

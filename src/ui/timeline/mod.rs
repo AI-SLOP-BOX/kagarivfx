@@ -871,7 +871,14 @@ let type_icon = crate::ui::icons::layer_icon(&layer.layer_type);
                                         // ── ✨ Animation Presets ──
                                         ui.menu_button("✨ Animation Presets", |ui| {
                                             let cf = *current_frame;
+                                            let mut last_cat = "";
                                             for name in crate::core::presets::NAMES {
+                                                let cat = crate::core::presets::category_of(name);
+                                                if cat != last_cat && !cat.is_empty() {
+                                                    if !last_cat.is_empty() { ui.separator(); }
+                                                    ui.label(egui::RichText::new(cat).strong().color(colors::TEXT_SECONDARY));
+                                                    last_cat = cat;
+                                                }
                                                 if ui.small_button(*name).clicked() {
                                                     let ok = crate::core::presets::apply_by_name(name, layer, cf, comp_w_f, 0.0);
                                                     if ok {
