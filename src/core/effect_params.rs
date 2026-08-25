@@ -351,6 +351,10 @@ impl EffectType {
                 push!("Star Count", num_stars, Scalar);
                 push!("Depth Speed", depth_speed, Scalar);
             }
+            EffectType::MergePaths { operation } => {
+                push!("Operation", operation, Scalar);
+            }
+            EffectType::CustomShader { .. } => {}
             #[allow(unreachable_patterns)]
             _ => {}
         }
@@ -680,6 +684,10 @@ impl EffectType {
             }
             // Exhaustive today (all 97 variants registered); keep the
             // catch-all so future variants still compile without rows.
+            EffectType::MergePaths { operation } => {
+                push!("Operation", operation, Scalar);
+            }
+            EffectType::CustomShader { .. } => {}
             #[allow(unreachable_patterns)]
             _ => {}
         }

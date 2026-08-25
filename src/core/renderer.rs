@@ -1672,6 +1672,7 @@ impl WgpuRenderer {
                             ShapeType::Ellipse { .. } => 1u32,
                             ShapeType::Star { .. } => 2u32,
                             ShapeType::Polygon { .. } => 3u32,
+                            ShapeType::FreeformBezier { .. } => 4u32,
                         };
                         (2u32, st, *color)
                     }

@@ -258,6 +258,8 @@ impl RenderEffectPlugin for EnumEffectPlugin {
             EffectType::PointControl { .. } => "Point Control",
             EffectType::ColorControl { .. } => "Color Control",
             EffectType::Letterbox { .. } => "Letterbox (Cinema Bars)",
+            EffectType::CustomShader { .. } => "Custom Shader (WGSL)",
+            EffectType::MergePaths { .. } => "Merge Paths",
         }
     }
 
@@ -361,6 +363,8 @@ impl RenderEffectPlugin for EnumEffectPlugin {
             EffectType::PointControl { .. } => "point_control",
             EffectType::ColorControl { .. } => "color_control",
             EffectType::Letterbox { .. } => "letterbox",
+            EffectType::CustomShader { .. } => "custom_shader",
+            EffectType::MergePaths { .. } => "merge_paths",
         }
     }
 

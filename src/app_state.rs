@@ -215,6 +215,7 @@ pub struct AfterEffectsApp {
     pub project_path: String,
     pub otio_path: String,
     pub expanded_layers: std::collections::HashSet<usize>,
+    pub expanded_waveform_layers: std::collections::HashSet<usize>,
     /// Breadcrumb trail of composition indices visited via PreComp
     /// double-click navigation (most recent = last). Back = pop.
     pub comp_nav_stack: Vec<usize>,
@@ -395,6 +396,7 @@ impl Default for AfterEffectsApp {
             project_path: "project.aevfx.json".to_string(),
             otio_path: "timeline.otio.json".to_string(),
             expanded_layers: std::collections::HashSet::new(),
+            expanded_waveform_layers: std::collections::HashSet::new(),
             comp_nav_stack: Vec::new(),
             timeline_fit_to_selection: false,
             timeline_fit_all: false,

@@ -353,6 +353,39 @@ fn sdf_polygon(x: f32, y: f32, sides: u32, radius: f32) -> f32 {
     radius_point - s
 }
 
+/// SDF for an arbitrary polygon defined by vertices.
+fn sdf_polygon_points(x: f32, y: f32, points: &[(f32, f32)]) -> f32 {
+    if points.len() < 3 { return 1.0; }
+    let n = points.len();
+    let mut dist = f32::MAX;
+    for i in 0..n {
+        let a = points[i];
+        let b = points[(i + 1) % n];
+        let ab = (b.0 - a.0, b.1 - a.1);
+        let ap = (x - a.0, y - a.1);
+        let t = (ap.0 * ab.0 + ap.1 * ab.1) / (ab.0 * ab.0 + ab.1 * ab.1).max(1e-10);
+        let t = t.clamp(0.0, 1.0);
+        let closest = (a.0 + t * ab.0, a.1 + t * ab.1);
+        let dx = x - closest.0;
+        let dy = y - closest.1;
+        dist = dist.min((dx * dx + dy * dy).sqrt());
+    }
+    // Inside/outside test using winding number
+    let mut wn = 0i32;
+    for i in 0..n {
+        let a = points[i];
+        let b = points[(i + 1) % n];
+        if a.1 <= y {
+            if b.1 > y && (b.0 - a.0) * (y - a.1) - (b.1 - a.1) * (x - a.0) > 0.0 {
+                wn += 1;
+            }
+        } else if b.1 <= y && (b.0 - a.0) * (y - a.1) - (b.1 - a.1) * (x - a.0) < 0.0 {
+            wn -= 1;
+        }
+    }
+    if wn != 0 { -dist } else { dist }
+}
+
 /// Rasterize a shape layer into the layer buffer using SDF.
 /// Returns true if any pixels were written.
 #[allow(clippy::too_many_arguments)]
@@ -418,6 +451,16 @@ fn rasterize_shape_sdf(
                     let s = (sides.evaluate(frame) as u32).max(3);
                     let r = radius.evaluate(frame) / 100.0;
                     sdf_polygon(nx, ny, s, r)
+                }
+                ShapeType::FreeformBezier { points, .. } => {
+                    // Simple polygon SDF from control points
+                    if points.len() < 3 { 1.0 } else {
+                        let scale = 100.0; // points are in pixel coords, normalize
+                        let pts: Vec<(f32, f32)> = points.iter()
+                            .map(|p| (p[0] / scale, p[1] / scale))
+                            .collect();
+                        sdf_polygon_points(nx, ny, &pts)
+                    }
                 }
             };
 
@@ -666,14 +709,28 @@ pub fn render_frame_to_pixels(comp: &Composition, frame: u32, width: u32, height
             .collect()
     };
 
-    let mut layer_idx = 0usize;
-    for layer in &comp.layers {
+    // ── Z-depth sort for 3D layers ──
+    let has_3d = comp.layers.iter().any(|l| l.is_3d);
+    let sorted_layer_indices: Vec<usize> = if has_3d {
+        let mut indexed: Vec<(usize, f32)> = comp.layers.iter().enumerate().map(|(i, l)| {
+            let z = if l.is_3d { l.transform_3d.position.evaluate(frame)[2] } else { 0.0 };
+            (i, z)
+        }).collect();
+        // Sort back-to-front: smaller z first (further from camera)
+        indexed.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal));
+        indexed.into_iter().map(|(i, _)| i).collect()
+    } else {
+        (0..comp.layers.len()).collect()
+    };
+
+        for &sorted_idx in &sorted_layer_indices {
+        let layer = &comp.layers[sorted_idx];
         // Cooperative cancellation: checked once per layer
         if render_cancelled() {
             break;
         }
         if !layer.is_active(frame) || (has_solo && !layer.solo) || !layer.visible {
-            layer_idx += 1;
+            // layer handled via sorted_idx;
             continue;
         }
 
@@ -681,9 +738,9 @@ pub fn render_frame_to_pixels(comp: &Composition, frame: u32, width: u32, height
         let blend_linear = comp.blend_linear;
 
         // Use precomputed data from the parallel phase
-        let ld = &layer_data[layer_idx];
+        let ld = &layer_data[sorted_idx];
         if ld.skip {
-            layer_idx += 1;
+            // layer handled via sorted_idx;
             continue;
         }
         let effective_frame = ld.effective_frame;
@@ -700,7 +757,7 @@ pub fn render_frame_to_pixels(comp: &Composition, frame: u32, width: u32, height
             if !layer.effects.is_empty() {
                 crate::core::cpu_effects::apply_layer_effects(&mut buffer, width, height, &layer.effects, effective_frame, comp.fps);
             }
-            layer_idx += 1;
+            // layer handled via sorted_idx;
             continue;
         }
 

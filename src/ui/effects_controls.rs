@@ -2034,6 +2034,21 @@ pub fn draw_effect_type_ui(
             }) { *next_frame = Some(nf); }
             if c_before != *color { *project_changed = true; }
         }
+        EffectType::MergePaths { operation } => {
+            draw_prop(ui, current_frame, project_changed, next_frame, "Operation", operation, |ui, v| {
+                ui.add(egui::Slider::new(v, 0.0..=3.0).text("0=Add 1=Sub 2=Int 3=Exc"));
+            });
+        }
+        EffectType::CustomShader { wgsl_source, uniform_values } => {
+            ui.label("Custom WGSL Shader");
+            ui.add(egui::TextEdit::multiline(wgsl_source).desired_width(f32::INFINITY).desired_rows(6));
+            for (i, v) in uniform_values.iter_mut().enumerate() {
+                ui.horizontal(|ui| {
+                    ui.label(format!("Uniform{}", i));
+                    ui.add(egui::DragValue::new(v).speed(0.01));
+                });
+            }
+        }
     }
 }
 

@@ -238,6 +238,14 @@ impl LayerType {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum ShapeType {
+    /// Freeform Bezier path with control points.
+    FreeformBezier {
+        /// Flat list of [x, y] coordinates (closed path if first == last).
+        points: Vec<[f32; 2]>,
+        /// Tangent handles: pairs of (in_tangent, out_tangent) per point.
+        tangents: Vec<([f32; 2], [f32; 2])>,
+        closed: bool,
+    },
     Rectangle {
         width: Animatable<f32>,
         height: Animatable<f32>,
@@ -1159,6 +1167,18 @@ pub enum EffectType {
     /// Cinematic letterbox bars (fraction of frame height, total both sides).
     Letterbox {
         frac: Animatable<f32>,
+    },
+    /// Custom WGSL shader effect (runtime compiled).
+    CustomShader {
+        /// WGSL source code for the fragment shader.
+        wgsl_source: String,
+        /// Uniform float values passed to the shader (up to 16).
+        uniform_values: Vec<f32>,
+    },
+    /// Merge Paths boolean operation on shape sub-paths.
+    MergePaths {
+        /// Operation: 0=Add, 1=Subtract, 2=Intersect, 3=Exclude.
+        operation: Animatable<f32>,
     },
 }
 

@@ -105,6 +105,17 @@ fn shape_geometry(st: &ShapeType) -> Value {
             "os": { "a": 0, "k": 0 },
             "r": { "a": 0, "k": 0 },
         }),
+        ShapeType::FreeformBezier { points, .. } => {
+            // Convert points to Lottie shape vertices
+            let verts: Vec<Value> = points.iter()
+                .map(|p| json!([p[0], p[1]]))
+                .collect();
+            json!({
+                "ty": "sh",
+                "d": 1,
+                "ks": { "a": 0, "k": { "i": Vec::<Value>::new(), "o": Vec::<Value>::new(), "v": verts, "c": true } },
+            })
+        }
     }
 }
 

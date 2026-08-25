@@ -768,6 +768,14 @@ fn apply_one(
         EffectType::AngleControl { .. } => {}
         EffectType::PointControl { .. } => {}
         EffectType::ColorControl { .. } => {}
+        EffectType::CustomShader { .. } => {
+            // Custom WGSL shaders are GPU-only; CPU renderer applies a identity passthrough.
+            // Users should switch to GPU preview for custom shader effects.
+        }
+        EffectType::MergePaths { .. } => {
+            // Merge Paths is a vector shape operator, applied during shape rasterization.
+            // CPU effect pass is a no-op for this.
+        }
     }
 }
 

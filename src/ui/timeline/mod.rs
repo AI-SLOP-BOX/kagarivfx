@@ -1429,7 +1429,54 @@ let type_icon = crate::ui::icons::layer_icon(&layer.layer_type);
                             }
                         });
 
-                        // If expanded, render transform properties & effects
+                        // ── Expanded waveform lane ──
+                        if app.expanded_waveform_layers.contains(&i) {
+                            let audio_path: Option<String> = match &layer.layer_type {
+                                crate::core::timeline::LayerType::Audio { path, .. } => Some(path.clone()),
+                                crate::core::timeline::LayerType::Video { audio_wav: Some(w), .. } => Some(w.clone()),
+                                _ => None,
+                            };
+                            if let Some(apath) = audio_path {
+                                let wf_height = 48.0;
+                                let (response, painter) = ui.allocate_painter(egui::vec2(ui.available_width(), wf_height), egui::Sense::hover());
+                                let wf_rect = response.rect;
+                                painter.rect_filled(wf_rect, 0.0, egui::Color32::from_rgba_premultiplied(20, 20, 25, 255));
+                                let key = egui::Id::new(("tl_wf_exp", apath.as_str()));
+                                let cached: std::sync::Arc<(Vec<f32>, f32)> = ui.ctx().data_mut(|d| {
+                                    d.get_temp::<std::sync::Arc<(Vec<f32>, f32)>>(key).unwrap_or_else(|| {
+                                        let built = crate::core::audio_engine::AudioBuffer::load_wav(std::path::Path::new(&apath))
+                                            .map(|b| {
+                                                let dur = b.samples.len() as f32
+                                                    / (b.sample_rate.max(1) as f32 * b.channels.max(1) as f32);
+                                                (b.waveform_peaks(1200), dur)
+                                            })
+                                            .unwrap_or((Vec::new(), 0.0));
+                                        let arc = std::sync::Arc::new(built);
+                                        d.insert_temp(key, arc.clone());
+                                        arc
+                                    })
+                                });
+                                let (peaks, dur_sec) = (&cached.0, cached.1);
+                                if peaks.len() > 1 && dur_sec > 0.0 && wf_rect.width() > 8.0 {
+                                    let mid_y = wf_rect.center().y;
+                                    let amp = wf_rect.height() * 0.45;
+                                    let wf_color = crate::ui::theme::colors::TIMELINE_WAVEFORM;
+                                    let mut x = wf_rect.left() + 2.0;
+                                    while x <= wf_rect.right() - 2.0 {
+                                        let t = ((x - wf_rect.left()) / wf_rect.width()) * dur_sec;
+                                        let peak_idx = ((t / dur_sec) * (peaks.len() - 1) as f32).round() as usize;
+                                        let peak = peaks.get(peak_idx).copied().unwrap_or(0.0);
+                                        let bar_h = (peak * amp).max(1.0);
+                                        painter.line_segment(
+                                            [egui::pos2(x, mid_y - bar_h), egui::pos2(x, mid_y + bar_h)],
+                                            egui::Stroke::new(1.0, wf_color),
+                                        );
+                                        x += 2.0;
+                                    }
+                                }
+                            }
+                        }
+
                         // If expanded, render transform properties & effects
                         if app.expanded_layers.contains(&i) {
                             crate::ui::timeline::keyframe_rows::draw_expanded_rows(
