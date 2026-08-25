@@ -325,25 +325,46 @@ fn sample_layer_color(local_pos_in: vec2<f32>, tc_in: vec2<f32>, blur_extend: f3
         }
     }
 
-    // ── Glow: screen-space bloom from bright areas ──
+    // ── Glow: screen-space bloom from bright areas (improved: 16 samples + dual ring) ──
     if (layer.glow_enabled == 1u && c.a > 0.01) {
         let vp = max(globals.viewport_size, vec2<f32>(1.0, 1.0));
         let texel = vec2<f32>(1.0) / vp;
         let gr = layer.glow_radius * texel;
+        let thresh = max(layer.glow_threshold, 0.001);
 
         var bloom = vec3<f32>(0.0);
+        var bloom_weight = 0.0;
+
+        // Inner ring: 8 samples at radius 1.0
         for (var s = 0; s < 8; s = s + 1) {
             let angle = f32(s) * 0.785398; // PI/4
-            let sx = tc.x + cos(angle) * gr.x;
-            let sy = tc.y + sin(angle) * gr.y;
-            let sc = textureSample(t_diffuse, s_diffuse, vec2<f32>(sx, sy));
+            let offset = vec2<f32>(cos(angle), sin(angle)) * gr;
+            let sc = textureSample(t_diffuse, s_diffuse, tc + offset);
             let luma = dot(sc.rgb, vec3<f32>(0.299, 0.587, 0.114));
-            let thresh = max(layer.glow_threshold, 0.001);
             if (luma > thresh) {
-                bloom += sc.rgb * ((luma - thresh) / luma);
+                let contribution = (luma - thresh) / max(luma, 0.001);
+                bloom += sc.rgb * contribution;
+                bloom_weight += contribution;
             }
         }
-        bloom = bloom / 8.0 * layer.glow_intensity;
+
+        // Outer ring: 8 samples at radius 2.0 (wider spread)
+        for (var s = 0; s < 8; s = s + 1) {
+            let angle = f32(s) * 0.785398 + 0.392699; // offset by PI/8
+            let offset = vec2<f32>(cos(angle), sin(angle)) * gr * 2.0;
+            let sc = textureSample(t_diffuse, s_diffuse, tc + offset);
+            let luma = dot(sc.rgb, vec3<f32>(0.299, 0.587, 0.114));
+            if (luma > thresh) {
+                let contribution = (luma - thresh) / max(luma, 0.001) * 0.5; // weight outer ring less
+                bloom += sc.rgb * contribution;
+                bloom_weight += contribution;
+            }
+        }
+
+        // Normalize and apply intensity
+        if (bloom_weight > 0.01) {
+            bloom = bloom / max(bloom_weight, 1.0) * layer.glow_intensity;
+        }
 
         // Tint the bloom
         let gc = layer.glow_color.rgb;
@@ -510,15 +531,37 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
         }
     }
 
-    // --- Physical Film Grain Noise ---
+    // --- Physical Film Grain Noise (improved: temporal variation + color noise) ---
     if (layer.grain_enabled == 1u) {
         let grain_uv = in.tex_coords * globals.viewport_size / max(layer.grain_size, 0.1);
-        let n = fract(sin(dot(grain_uv, vec2<f32>(12.9898, 78.233))) * 43758.5453);
-        let grain_noise = (n - 0.5) * layer.grain_intensity;
+        // Temporal variation: use frame-based offset for animated grain
+        let grain_frame = fract(globals.exposure_ev * 0.1); // pseudo-frame from exposure
+        let grain_uv_t = grain_uv + vec2<f32>(grain_frame * 43.758, grain_frame * 17.321);
+
+        // Multi-octave noise for more realistic grain pattern
+        let n1 = fract(sin(dot(grain_uv_t, vec2<f32>(12.9898, 78.233))) * 43758.5453);
+        let n2 = fract(sin(dot(grain_uv_t * 2.0, vec2<f32>(63.7264, 10.873))) * 23421.631);
+        let n3 = fract(sin(dot(grain_uv_t * 0.5, vec2<f32>(45.164, 89.332))) * 65432.123);
+
+        // Combine octaves: 60% fine + 25% medium + 15% coarse grain
+        let grain_luma = (n1 * 0.60 + n2 * 0.25 + n3 * 0.15) - 0.5;
+
+        // Luminance-dependent grain: more visible in shadows and highlights
         let luma = dot(final_color.rgb, vec3<f32>(0.2126, 0.7152, 0.0722));
-        let luma_weight = 1.0 - abs(luma - 0.5) * 2.0;
-        let final_grain = grain_noise * luma_weight;
-        final_color = vec4<f32>(clamp(final_color.rgb + vec3<f32>(final_grain), vec3<f32>(0.0), vec3<f32>(1.0)), final_color.a);
+        let luma_weight = 1.0 - abs(luma - 0.5) * 1.5; // peaks at 0 and 1
+
+        // Color noise: slight RGB offset for film-like appearance
+        let grain_r = grain_luma + (n2 - 0.5) * 0.15;
+        let grain_g = grain_luma + (n3 - 0.5) * 0.15;
+        let grain_b = grain_luma + (n1 - 0.5) * 0.15;
+
+        let intensity = layer.grain_intensity * luma_weight;
+        final_color = vec4<f32>(
+            clamp(final_color.r + grain_r * intensity, 0.0, 1.0),
+            clamp(final_color.g + grain_g * intensity, 0.0, 1.0),
+            clamp(final_color.b + grain_b * intensity, 0.0, 1.0),
+            final_color.a
+        );
     }
 
     // --- Layer Opacity ---
