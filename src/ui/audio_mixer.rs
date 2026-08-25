@@ -239,4 +239,43 @@ pub fn draw_audio_mixer(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
             });
         });
     });
+
+    // ── Master DSP: EQ + Compressor ──
+    ui.add_space(8.0);
+    ui.separator();
+    ui.horizontal(|ui| {
+        ui.strong("Master DSP");
+    });
+    ui.horizontal(|ui| {
+        // EQ controls
+        ui.vertical(|ui| {
+            ui.label(egui::RichText::new("EQ").small().strong().color(colors::ACCENT_BLUE));
+            ui.add(egui::Slider::new(&mut app.master_eq_highpass, 20.0..=500.0)
+                .text("HPF Hz")
+                .logarithmic(true));
+            ui.add(egui::Slider::new(&mut app.master_eq_lowpass, 2000.0..=20000.0)
+                .text("LPF Hz")
+                .logarithmic(true));
+            ui.add(egui::Slider::new(&mut app.master_eq_mid_gain, -12.0..=12.0)
+                .text("Mid dB"));
+            ui.add(egui::Slider::new(&mut app.master_eq_mid_freq, 200.0..=8000.0)
+                .text("Mid Hz")
+                .logarithmic(true));
+        });
+        ui.separator();
+        // Compressor controls
+        ui.vertical(|ui| {
+            ui.label(egui::RichText::new("Compressor").small().strong().color(colors::ACCENT_BLUE));
+            ui.add(egui::Slider::new(&mut app.master_comp_threshold, -40.0..=0.0)
+                .text("Thresh dB"));
+            ui.add(egui::Slider::new(&mut app.master_comp_ratio, 1.0..=20.0)
+                .text("Ratio"));
+            ui.add(egui::Slider::new(&mut app.master_comp_attack, 0.1..=50.0)
+                .text("Attack ms"));
+            ui.add(egui::Slider::new(&mut app.master_comp_release, 10.0..=500.0)
+                .text("Release ms"));
+            ui.add(egui::Slider::new(&mut app.master_comp_makeup, 0.0..=24.0)
+                .text("Makeup dB"));
+        });
+    });
 }
