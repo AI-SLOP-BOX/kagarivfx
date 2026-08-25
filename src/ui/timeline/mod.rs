@@ -1056,6 +1056,53 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                             ui.painter().rect_filled(layer_rect, 2.0, fill_c);
                             ui.painter().rect_stroke(layer_rect, 2.0, egui::Stroke::new(1.0, colors::TEXT_SECONDARY));
 
+                            // ── Audio waveform overlay inside the bar ──
+                            let audio_path: Option<String> = match &layer.layer_type {
+                                crate::core::timeline::LayerType::Audio { path, .. } => Some(path.clone()),
+                                crate::core::timeline::LayerType::Video { audio_wav: Some(w), .. } => Some(w.clone()),
+                                _ => None,
+                            };
+                            if let Some(apath) = audio_path {
+                                let key = egui::Id::new(("tl_waveform", apath.as_str()));
+                                let cached: std::sync::Arc<(Vec<f32>, f32)> = ui.ctx().data_mut(|d| {
+                                    d.get_temp::<std::sync::Arc<(Vec<f32>, f32)>>(key).unwrap_or_else(|| {
+                                        let built = crate::core::audio_engine::AudioBuffer::load_wav(std::path::Path::new(&apath))
+                                            .map(|b| {
+                                                let dur = b.samples.len() as f32
+                                                    / (b.sample_rate.max(1) as f32 * b.channels.max(1) as f32);
+                                                (b.waveform_peaks(600), dur)
+                                            })
+                                            .unwrap_or((Vec::new(), 0.0));
+                                        let arc = std::sync::Arc::new(built);
+                                        d.insert_temp(key, arc.clone());
+                                        arc
+                                    })
+                                });
+                                let (peaks, dur_sec) = (&cached.0, cached.1);
+                                if peaks.len() > 1 && dur_sec > 0.0 && layer_rect.width() > 8.0 {
+                                    let fps_c = comp.fps.max(1) as f32;
+                                    let mid_y = layer_rect.center().y;
+                                    let amp = layer_rect.height() * 0.40;
+                                    let wf_color = colors::TIMELINE_WAVEFORM.linear_multiply(0.9);
+                                    let mut x = layer_rect.left() + 2.0;
+                                    while x <= layer_rect.right() - 2.0 {
+                                        let t = (x - layer_rect.left()) / layer_rect.width();
+                                        let frame_f = layer.in_frame as f32 + t * (layer.out_frame - layer.in_frame) as f32;
+                                        let sec = frame_f / fps_c;
+                                        if sec < dur_sec {
+                                            let bin = ((sec / dur_sec) * peaks.len() as f32) as usize;
+                                            let pk = peaks.get(bin.min(peaks.len() - 1)).copied().unwrap_or(0.0);
+                                            let h = (pk * amp).clamp(1.0, amp);
+                                            ui.painter().line_segment(
+                                                [egui::pos2(x, mid_y - h), egui::pos2(x, mid_y + h)],
+                                                egui::Stroke::new(1.0, wf_color),
+                                            );
+                                        }
+                                        x += 2.0;
+                                    }
+                                }
+                            }
+
                             // ── Trim handles: drag bar edges to set in/out points ──
                             fn handle_rect_of(is_in: bool, lr: &egui::Rect) -> egui::Rect {
                                 const HW: f32 = 6.0;
