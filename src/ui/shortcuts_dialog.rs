@@ -54,6 +54,7 @@ pub fn draw_shortcuts_dialog(app: &mut AfterEffectsApp, ctx: &egui::Context) {
                             ("Cmd + 0", "Viewport Zoom to Fit"),
                             ("Shift + Z", "Zoom to Selected Layers' Bounding Box (no sel: Fit)"),
                             ("Cmd + Alt + ←", "Breadcrumb Back (previous composition)"),
+                            ("Cmd + Alt + F", "Fit Selected Layer to Comp (scale + center)"),
                             ("Ctrl + Drag Ruler", "Rubber-band define Work Area In/Out"),
                             ("Right-Click Audio Layer", "Add 10-frame Audio Fade In / Out"),
                             ("P", "Select Position Property"),

@@ -977,6 +977,26 @@ pub fn handle_global_shortcuts(
             app.is_playing = true;
         }
 
+        // ── Cmd+Alt+F → Fit to Comp (uniform scale + center, AE Layer menu parity) ──
+        if cmd && i.modifiers.alt && i.key_pressed(Key::F) {
+            if let Some(idx) = app.selected_layer_idx {
+                let dims = { let cc = app.history.current().active_composition(); (cc.width as f32, cc.height as f32) };
+                app.modify_project(move |p| {
+                    if let Some(l) = p.active_composition_mut().layers.get_mut(idx) {
+                        let bs = l.bounding_size();
+                        if bs[0] > 1.0 && bs[1] > 1.0 {
+                            let s = ((dims.0 / bs[0]).max(dims.1 / bs[1])) * 100.0;
+                            l.transform.scale = crate::core::property::Animatable::new_constant([s, s]);
+                            l.transform.position = crate::core::property::Animatable::new_constant([dims.0 / 2.0, dims.1 / 2.0]);
+                        }
+                    }
+                });
+                app.toasts.info("Fit to Comp");
+            } else {
+                app.toasts.info("Select a layer first");
+            }
+        }
+
         // ── Cmd+Alt+← → Breadcrumb Back (previous composition) ──
         if cmd && i.modifiers.alt && i.key_pressed(Key::ArrowLeft) && !app.comp_nav_stack.is_empty() {
             if let Some(prev) = app.comp_nav_stack.pop() {
