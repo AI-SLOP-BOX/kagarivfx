@@ -138,6 +138,8 @@ pub const NAMES: &[&str] = &[
     "🎬 Slide Out →", "🎬 Zoom Out",
     // ── Text animation presets ──
     "Typewriter", "Bounce In Text", "Scale Up Text", "Fade Up Words",
+    // ── Time Remap presets ──
+    "Freeze Frame", "Reverse", "Slow Motion 0.5×", "Fast Forward 2×",
 ];
 
 /// Dispatch by name; returns whether the preset applied.
@@ -175,6 +177,10 @@ pub fn apply_by_name(name: &str, l: &mut Layer, cf: u32, comp_w: f32, _comp_h: f
         "Bounce In Text" => text_bounce_in(l, cf),
         "Scale Up Text" => text_scale_up(l, cf),
         "Fade Up Words" => text_fade_up(l, cf),
+        "Freeze Frame" => freeze_frame(l, cf),
+        "Reverse" => reverse_time(l),
+        "Slow Motion 0.5×" => time_scale(l, 0.5),
+        "Fast Forward 2×" => time_scale(l, 2.0),
         _ => false,
     }
 }
@@ -442,6 +448,39 @@ pub fn text_fade_up(l: &mut Layer, cf: u32) -> bool {
         rotation: 0.0,
         blur_amount: 4.0,
     });
+    true
+}
+
+// ── Time Remap presets ──
+
+/// Freeze the layer at the current source frame for its entire duration.
+pub fn freeze_frame(l: &mut Layer, cf: u32) -> bool {
+    let src = l.time_remap.as_ref().map(|r| r.evaluate(cf)).unwrap_or(cf as f32 - l.in_frame as f32);
+    l.time_remap = Some(Animatable::new_animated(vec![
+        Keyframe::new(l.in_frame, src, InterpolationType::Linear),
+        Keyframe::new(l.out_frame.saturating_sub(1), src, InterpolationType::Linear),
+    ]));
+    true
+}
+
+/// Reverse the layer's playback direction.
+pub fn reverse_time(l: &mut Layer) -> bool {
+    let span = l.out_frame.saturating_sub(l.in_frame).max(1);
+    l.time_remap = Some(Animatable::new_animated(vec![
+        Keyframe::new(l.in_frame, span as f32, InterpolationType::Linear),
+        Keyframe::new(l.out_frame.saturating_sub(1), 0.0, InterpolationType::Linear),
+    ]));
+    true
+}
+
+/// Scale the layer's playback speed by `factor` (0.5 = half speed, 2.0 = double).
+pub fn time_scale(l: &mut Layer, factor: f32) -> bool {
+    let span = l.out_frame.saturating_sub(l.in_frame).max(1) as f32;
+    let mapped = span * factor;
+    l.time_remap = Some(Animatable::new_animated(vec![
+        Keyframe::new(l.in_frame, 0.0, InterpolationType::Linear),
+        Keyframe::new(l.out_frame.saturating_sub(1), mapped, InterpolationType::Linear),
+    ]));
     true
 }
 
@@ -857,6 +896,46 @@ mod tests {
         assert!((anim.blur_amount - 4.0).abs() < 0.01);
         assert_eq!(anim.position_offset, [0.0, 30.0]);
         assert!(anim.selector.ease_high > 0.0);
+    }
+
+
+    #[test]
+    fn test_freeze_frame_locks_to_single_source() {
+        let mut l = mk();
+        assert!(apply_by_name("Freeze Frame", &mut l, 50, 1920.0, 1080.0));
+        let rm = l.time_remap.as_ref().unwrap();
+        let kfs = rm.keyframes().unwrap();
+        assert_eq!(kfs.len(), 2);
+        // Both ends map to same source frame
+        assert!((kfs[0].value - kfs[1].value).abs() < 0.01, "freeze: {} vs {}", kfs[0].value, kfs[1].value);
+    }
+
+    #[test]
+    fn test_reverse_time_maps_start_to_end() {
+        let mut l = mk();
+        assert!(apply_by_name("Reverse", &mut l, 50, 1920.0, 1080.0));
+        let kfs = l.time_remap.as_ref().unwrap().keyframes().unwrap();
+        // start maps to span (180), end maps to 0
+        assert!((kfs[0].value - 180.0).abs() < 0.01, "reverse start: {}", kfs[0].value);
+        assert!((kfs[1].value).abs() < 0.01, "reverse end: {}", kfs[1].value);
+    }
+
+    #[test]
+    fn test_slow_motion_doubles_mapped_span() {
+        let mut l = mk();
+        assert!(apply_by_name("Slow Motion 0.5\u{00d7}", &mut l, 50, 1920.0, 1080.0));
+        let kfs = l.time_remap.as_ref().unwrap().keyframes().unwrap();
+        // span=180, factor=0.5 → mapped = 180*0.5 = 90
+        assert!((kfs[1].value - 90.0).abs() < 0.01, "slow: {}", kfs[1].value);
+    }
+
+    #[test]
+    fn test_fast_forward_halves_mapped_span() {
+        let mut l = mk();
+        assert!(apply_by_name("Fast Forward 2\u{00d7}", &mut l, 50, 1920.0, 1080.0));
+        let kfs = l.time_remap.as_ref().unwrap().keyframes().unwrap();
+        // span=180, factor=2.0 → mapped = 360
+        assert!((kfs[1].value - 360.0).abs() < 0.01, "fast: {}", kfs[1].value);
     }
 
     #[test]
