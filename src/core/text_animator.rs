@@ -507,9 +507,11 @@ mod tests {
 
     #[test]
     fn test_expression_selector_basic() {
-        let mut sel = RangeSelector::default();
-        sel.shape = SelectorShape::Expression;
-        sel.expression = Some("index / total".into());
+        let sel = RangeSelector {
+            shape: SelectorShape::Expression,
+            expression: Some("index / total".into()),
+            ..Default::default()
+        };
         let a = TextAnimatorEngine::compute_amount(0, 10, &sel, 0.0);
         let b = TextAnimatorEngine::compute_amount(5, 10, &sel, 0.0);
         let c = TextAnimatorEngine::compute_amount(9, 10, &sel, 0.0);
@@ -520,9 +522,11 @@ mod tests {
 
     #[test]
     fn test_expression_selector_uses_time() {
-        let mut sel = RangeSelector::default();
-        sel.shape = SelectorShape::Expression;
-        sel.expression = Some("if time > 0.5 { 1.0 } else { 0.0 }".into());
+        let sel = RangeSelector {
+            shape: SelectorShape::Expression,
+            expression: Some("if time > 0.5 { 1.0 } else { 0.0 }".into()),
+            ..Default::default()
+        };
         let at_0 = TextAnimatorEngine::compute_amount(0, 10, &sel, 0.0);
         let at_1 = TextAnimatorEngine::compute_amount(0, 10, &sel, 1.0);
         assert!((at_0 - 0.0).abs() < 0.01);
@@ -531,18 +535,22 @@ mod tests {
 
     #[test]
     fn test_expression_selector_clamped_01() {
-        let mut sel = RangeSelector::default();
-        sel.shape = SelectorShape::Expression;
-        sel.expression = Some("2.0".into());
+        let sel = RangeSelector {
+            shape: SelectorShape::Expression,
+            expression: Some("2.0".into()),
+            ..Default::default()
+        };
         let v = TextAnimatorEngine::compute_amount(0, 10, &sel, 0.0);
         assert!((v - 1.0).abs() < 0.01, "should clamp: {}", v);
     }
 
     #[test]
     fn test_expression_selector_no_expr_is_zero() {
-        let mut sel = RangeSelector::default();
-        sel.shape = SelectorShape::Expression;
-        sel.expression = None;
+        let sel = RangeSelector {
+            shape: SelectorShape::Expression,
+            expression: None,
+            ..Default::default()
+        };
         let v = TextAnimatorEngine::compute_amount(0, 10, &sel, 0.0);
         assert!((v - 0.0).abs() < 0.01);
     }
