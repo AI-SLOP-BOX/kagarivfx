@@ -72,10 +72,9 @@ pub fn draw_transport_panel(app: &mut AfterEffectsApp, ui: &mut egui::Ui, curren
             // Applied live by the playback loop in app_state
         }
 
-        let is_audio = ui.ctx().data_mut(|d| *d.get_temp_mut_or_insert_with(egui::Id::new("ae_audio_preview"), || true));
-        let mut audio_val = is_audio;
+        let mut audio_val = app.audio_preview_enabled;
         if ui.checkbox(&mut audio_val, "Audio Preview").changed() {
-            ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("ae_audio_preview"), audio_val));
+            app.audio_preview_enabled = audio_val;
         }
     });
 

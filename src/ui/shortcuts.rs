@@ -989,6 +989,11 @@ pub fn handle_global_shortcuts(
             }
         }
 
+        // ── Cmd+, → Preferences ──
+        if cmd && i.key_pressed(egui::Key::Comma) {
+            app.show_preferences = true;
+        }
+
         // ── Cmd+Alt+← → Breadcrumb Back (previous composition) ──
         if cmd && i.modifiers.alt && i.key_pressed(Key::ArrowLeft) && !app.comp_nav_stack.is_empty() {
             if let Some(prev) = app.comp_nav_stack.pop() {

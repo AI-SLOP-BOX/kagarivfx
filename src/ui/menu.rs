@@ -871,6 +871,10 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
                 });
             });
             ui.menu_button("Help", |ui| {
+                if ui.add(egui::Button::new("⚙ Preferences…").shortcut_text("Cmd+,")).clicked() {
+                    app.show_preferences = true;
+                    ui.close_menu();
+                }
                 if ui.button("✨ Show Welcome Screen").clicked() {
                     app.show_welcome = true;
                     ui.close_menu();

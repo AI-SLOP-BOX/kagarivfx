@@ -46,6 +46,16 @@ impl AutosaveManager {
         self
     }
 
+    /// Runtime interval adjustment (seconds), used by the Preferences dialog.
+    pub fn set_interval_secs(&mut self, secs: u64) {
+        self.interval = Duration::from_secs(secs.clamp(5, 3600));
+    }
+
+    /// Current autosave interval in seconds.
+    pub fn interval_secs(&self) -> u64 {
+        self.interval.as_secs()
+    }
+
     /// Call whenever the project is modified.
     pub fn mark_dirty(&mut self) {
         self.dirty = true;

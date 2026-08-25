@@ -235,6 +235,11 @@ pub struct AfterEffectsApp {
     pub show_history_panel: bool,
     pub show_welcome: bool,
     pub show_new_comp_dialog: bool,
+    pub show_preferences: bool,
+    /// Audio preview during playback (Preferences).
+    pub audio_preview_enabled: bool,
+    /// Handle to the running egui Context (set each frame; used by prefs).
+    pub ui_ctx: Option<eframe::egui::Context>,
     pub command_palette_search: String,
     pub command_palette_selected_idx: usize,
     pub snap_to_keyframes: bool,
@@ -463,6 +468,9 @@ impl Default for AfterEffectsApp {
             show_history_panel: false,
             show_welcome: true,
             show_new_comp_dialog: false,
+            show_preferences: false,
+            audio_preview_enabled: true,
+            ui_ctx: None,
             import_rx: None,
             command_palette_search: String::new(),
             command_palette_selected_idx: 0,
@@ -571,9 +579,7 @@ impl eframe::App for AfterEffectsApp {
                     crate::core::timeline::LayerType::Video { audio_wav, .. } => audio_wav.clone(),
                     _ => None,
                 });
-            let audio_enabled = ctx.data_mut(|d| {
-                *d.get_temp_mut_or_insert_with(egui::Id::new("ae_audio_preview"), || true)
-            });
+            let audio_enabled = self.audio_preview_enabled;
             let fps = self.history.current().active_composition().fps.max(1);
             let playhead_sec = self.current_frame as f32 / fps as f32;
 
@@ -667,6 +673,11 @@ impl eframe::App for AfterEffectsApp {
             ctx.request_repaint_after(std::time::Duration::from_secs_f32(1.0 / effective_fps));
         }
 
+        self.ui_ctx = Some(ctx.clone());
+        if !self.recovery_checked {
+            self.recovery_checked = true;
+            crate::ui::preferences_dialog::apply_loaded(self);
+        }
         crate::ui::shortcuts::handle_global_shortcuts(self, ctx, &mut current_frame, total_frames);
         crate::ui::menu::draw(self, ctx);
         crate::ui::toolbar::draw(self, ctx);
@@ -763,6 +774,7 @@ impl eframe::App for AfterEffectsApp {
         crate::ui::drop_import::handle_dropped_files(self, ctx);
         crate::ui::welcome::draw(self, ctx);
         crate::ui::new_comp_dialog::draw_new_comp_dialog(self, ctx);
+        crate::ui::preferences_dialog::draw_preferences_dialog(self, ctx);
         crate::ui::export_dialog::draw(self, ctx);
         crate::ui::comp_settings_dialog::draw_comp_settings_dialog(self, ctx);
 

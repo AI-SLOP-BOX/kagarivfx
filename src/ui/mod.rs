@@ -23,6 +23,7 @@ pub mod demo_scene;
 pub mod welcome;
 pub mod drop_import;
 pub mod new_comp_dialog;
+pub mod preferences_dialog;
 pub mod icons;
 pub mod toolbar;
 pub mod project_panel;

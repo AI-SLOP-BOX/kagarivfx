@@ -149,6 +149,17 @@ impl ProjectHistory {
     }
 
     // Check if undo is available.
+    /// Adjust the undo-step cap (Preferences UI). Takes effect on next commit;
+    /// clamped to a sane minimum of 10.
+    pub fn set_max_history_entries(&mut self, n: usize) {
+        self.max_history_entries = n.max(10);
+    }
+
+    /// Current undo-step cap.
+    pub fn max_history_entries(&self) -> usize {
+        self.max_history_entries
+    }
+
     /// Number of stored history steps (including the initial snapshot).
     pub fn len(&self) -> usize {
         self.stack.len()
