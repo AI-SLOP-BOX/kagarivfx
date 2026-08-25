@@ -131,3 +131,23 @@ pub fn render_svg_at(
         .tint(tint),
     )
 }
+
+// ── Phosphor glyph helpers (registered via theme::configure_fonts) ──
+
+/// Crisp icon glyph for a layer type, used in timeline rows & panels.
+pub fn layer_icon(lt: &crate::core::timeline::LayerType) -> &'static str {
+    use crate::core::timeline::LayerType;
+    use egui_phosphor::regular as p;
+    match lt {
+        LayerType::Video { .. } => p::FILM_STRIP,
+        LayerType::Image { .. } => p::IMAGE,
+        LayerType::Audio { .. } => p::WAVEFORM,
+        LayerType::Text { .. } => p::TEXT_T,
+        LayerType::Shape { .. } => p::POLYGON,
+        LayerType::Solid { .. } => p::SQUARE,
+        LayerType::Null => p::CIRCLE,
+        LayerType::PreComp { .. } => p::PACKAGE,
+        LayerType::AdjustmentLayer => p::CIRCLE_HALF,
+        LayerType::Particle { .. } => p::SPARKLE,
+    }
+}

@@ -23,6 +23,8 @@ rhai = { version = "1.18", features = ["sync"] }
 rand = "0.8"
 # egui_extras for SVG icon rendering support
 egui_extras = { version = "0.29", features = ["svg"], optional = true }
+# egui-phosphor: professional icon font for crisp UI glyphs
+egui-phosphor = { version = "0.7", optional = true }
 # rfd for native OS file dialogs (macOS / Windows / Linux)
 rfd = { version = "0.14", optional = true }
 # rayon for multi-core parallel pixel sweeps
@@ -44,7 +46,7 @@ naga = { version = "0.19", features = ["wgsl-in"] }
 
 [features]
 default = ["gui"]
-gui = ["dep:eframe", "dep:wgpu", "dep:egui_extras", "dep:rfd", "dep:rodio"]
+gui = ["dep:eframe", "dep:wgpu", "dep:egui_extras", "dep:rfd", "dep:rodio", "dep:egui-phosphor"]
 cli = ["dep:clap", "dep:png"]
 wgpu = []
 

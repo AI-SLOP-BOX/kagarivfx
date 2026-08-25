@@ -501,19 +501,7 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
 
                                     // ── Layer type icon ──
                                     {
-                                        let type_icon = match &layer.layer_type {
-                                            crate::core::timeline::LayerType::Video { .. } => "🎬",
-                                            crate::core::timeline::LayerType::Image { .. } => "🖼",
-                                            crate::core::timeline::LayerType::Audio { .. } => "🔊",
-                                            crate::core::timeline::LayerType::Text { .. } => "T",
-                                            crate::core::timeline::LayerType::Shape { .. } => "◆",
-                                            crate::core::timeline::LayerType::Solid { .. } => "■",
-                                            crate::core::timeline::LayerType::Null => "∅",
-                                            crate::core::timeline::LayerType::PreComp { .. } => "📦",
-                                            crate::core::timeline::LayerType::AdjustmentLayer => "◐",
-                                            crate::core::timeline::LayerType::Particle { .. } => "✦",
-                                        
-                                        };
+let type_icon = crate::ui::icons::layer_icon(&layer.layer_type);
                                         ui.label(egui::RichText::new(type_icon).small().color(colors::TEXT_SECONDARY));
                                     }
                                     ui.add_space(1.0);

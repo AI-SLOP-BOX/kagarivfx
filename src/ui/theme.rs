@@ -157,6 +157,9 @@ fn configure_fonts(ctx: &egui::Context) {
         }
     }
 
+    // Phosphor icon glyphs (used across panels for crisp vector icons)
+    egui_phosphor::add_to_fonts(&mut fonts, egui_phosphor::Variant::Regular);
+
     ctx.set_fonts(fonts);
 
     ctx.style_mut(|style| {
