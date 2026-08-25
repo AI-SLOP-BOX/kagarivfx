@@ -131,6 +131,12 @@ pub struct ParticleEmitter {
     /// Contact diameter for particle-vs-particle collisions (px).
     #[serde(default = "default_particle_diameter")]
     pub particle_diameter: f32,
+    /// Trail length: number of previous positions to store (0 = no trail)
+    #[serde(default)]
+    pub trail_length: u8,
+    /// Trail taper: alpha multiplier per trail step (0..1, 1 = no fade)
+    #[serde(default = "default_trail_taper")]
+    pub trail_taper: f32,
 }
 
 impl Default for ParticleEmitter {
@@ -169,12 +175,18 @@ impl Default for ParticleEmitter {
             surface_friction: 0.9,
             particle_collisions: false,
             particle_diameter: 8.0,
+            trail_length: 0,
+            trail_taper: 0.7,
         }
     }
 }
 
 fn default_particle_diameter() -> f32 {
     8.0
+}
+
+fn default_trail_taper() -> f32 {
+    0.7
 }
 
 /// State of a single alive particle.
@@ -190,6 +202,9 @@ pub struct Particle {
     pub rotation: f32,
     /// Per-particle angular velocity (degrees/sec), set at emission
     pub angular_velocity: f32,
+    /// Trail history: last N positions (newest first), ring buffer
+    pub trail: [(f32, f32); 8],
+    pub trail_len: u8,
 }
 
 /// Particle system simulation.
@@ -275,6 +290,8 @@ impl ParticleSystem {
             size: self.emitter.size_start,
             rotation: self.emitter.rotation_start,
             angular_velocity: rotation_speed,
+            trail: [(px, py); 8],
+            trail_len: 0,
         });
     }
 
@@ -329,6 +346,21 @@ impl ParticleSystem {
             // Integrate position
             p.x += p.vx * dt;
             p.y += p.vy * dt;
+
+            // Update trail: shift positions and add new one
+            let max_trail = self.emitter.trail_length.min(8);
+            if max_trail > 0 {
+                // Shift existing trail positions
+                let mut i = max_trail as usize;
+                while i > 0 {
+                    p.trail[i] = p.trail[i - 1];
+                    i -= 1;
+                }
+                p.trail[0] = (p.x, p.y);
+                if p.trail_len < max_trail {
+                    p.trail_len += 1;
+                }
+            }
 
             // Boundary collisions
             if collide {
@@ -388,6 +420,44 @@ impl ParticleSystem {
             let g = e.color_start[1] + (e.color_end[1] - e.color_start[1]) * t;
             let b = e.color_start[2] + (e.color_end[2] - e.color_start[2]) * t;
             let a = (e.color_start[3] + (e.color_end[3] - e.color_start[3]) * t) * e.fade_curve.apply(t);
+
+            // Render trail segments (newest → oldest, decreasing opacity)
+            if p.trail_len > 0 && e.trail_taper > 0.01 {
+                let max_trail = p.trail_len as usize;
+                let trail_size = p.size * 0.4; // trail dots are smaller
+                for i in 0..max_trail {
+                    let (tx, ty) = p.trail[i];
+                    let fade = e.trail_taper.powi(i as i32 + 1);
+                    let ta = a * fade;
+                    if ta < 0.01 { continue; }
+                    let half_t = trail_size * 0.5 * (1.0 - (i as f32 / max_trail as f32) * 0.5);
+                    let x0 = (tx - half_t).max(0.0) as u32;
+                    let y0 = (ty - half_t).max(0.0) as u32;
+                    let x1 = (tx + half_t).min(buf_width as f32 - 1.0) as u32;
+                    let y1 = (ty + half_t).min(buf_height as f32 - 1.0) as u32;
+                    for py in y0..=y1 {
+                        for px in x0..=x1 {
+                            let dx = px as f32 - tx;
+                            let dy = py as f32 - ty;
+                            let dist = ((dx * dx + dy * dy).sqrt() / half_t).min(1.0);
+                            let falloff = (1.0 - dist * dist).max(0.0);
+                            let pa = ta * falloff;
+                            if pa <= 0.001 { continue; }
+                            let idx = ((py * buf_width + px) * 4) as usize;
+                            if idx + 3 >= buffer.len() { continue; }
+                            let src_r = r * pa;
+                            let src_g = g * pa;
+                            let src_b = b * pa;
+                            let dst_a = buffer[idx + 3] as f32 / 255.0;
+                            let da = (dst_a + pa * (1.0 - dst_a)).max(0.001);
+                            buffer[idx] = ((buffer[idx] as f32 / 255.0 * (1.0 - pa) + src_r) * 255.0).min(255.0) as u8;
+                            buffer[idx + 1] = ((buffer[idx + 1] as f32 / 255.0 * (1.0 - pa) + src_g) * 255.0).min(255.0) as u8;
+                            buffer[idx + 2] = ((buffer[idx + 2] as f32 / 255.0 * (1.0 - pa) + src_b) * 255.0).min(255.0) as u8;
+                            buffer[idx + 3] = (da * 255.0).min(255.0) as u8;
+                        }
+                    }
+                }
+            }
 
             let half = p.size * 0.5;
             let x0 = (p.x - half).max(0.0) as u32;
@@ -799,10 +869,12 @@ mod particle_collision_tests {
         sys.particles.push(Particle {
             x: 46.0, y: 50.0, vx: 30.0, vy: 0.0,
             life: 5.0, max_life: 5.0, size: 4.0, rotation: 0.0, angular_velocity: 0.0,
+            trail: [(46.0, 50.0); 8], trail_len: 0,
         });
         sys.particles.push(Particle {
             x: 54.0, y: 50.0, vx: -30.0, vy: 0.0,
             life: 5.0, max_life: 5.0, size: 4.0, rotation: 0.0, angular_velocity: 0.0,
+            trail: [(54.0, 50.0); 8], trail_len: 0,
         });
         sys
     }
