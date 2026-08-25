@@ -264,6 +264,16 @@ pub fn draw_expanded_rows(
                                             4 => delete_track_kf(&mut t.opacity, f),
                                             m => set_kf_interp(&mut t.opacity, &if sel_frames.is_empty() { vec![f] } else { sel_frames }, m),
                                         },
+                                        _ if pk.starts_with("pin_") => {
+                                            let pid = pk.strip_prefix("pin_").unwrap_or("");
+                                            if let Some(pin) = layer.puppet_pins.iter_mut().find(|p| p.id == pid) {
+                                                match cmd {
+                                                    3 => reverse_track(&mut pin.position),
+                                                    4 => delete_track_kf(&mut pin.position, f),
+                                                    m => set_kf_interp(&mut pin.position, &if sel_frames.is_empty() { vec![f] } else { sel_frames }, m),
+                                                }
+                                            }
+                                        }
                                         _ => {}
                                     }
                                     *project_changed = true;
@@ -300,6 +310,12 @@ pub fn draw_expanded_rows(
                                             "scale" => shift_track!(&mut t.scale),
                                             "rotation" => shift_track!(&mut t.rotation),
                                             "opacity" => shift_track!(&mut t.opacity),
+                                            _ if pk.starts_with("pin_") => {
+                                                let pid = pk.strip_prefix("pin_").unwrap_or("");
+                                                if let Some(pin) = layer.puppet_pins.iter_mut().find(|p| p.id == pid) {
+                                                    shift_track!(&mut pin.position);
+                                                }
+                                            }
                                             _ => {}
                                         }
                                     }
