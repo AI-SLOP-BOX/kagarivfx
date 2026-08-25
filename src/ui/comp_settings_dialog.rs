@@ -131,6 +131,18 @@ pub fn draw_comp_settings_dialog(app: &mut AfterEffectsApp, ctx: &egui::Context)
             });
 
             ui.add_space(4.0);
+            ui.collapsing("🌈 Blending", |ui| {
+                let before = comp.blend_linear;
+                ui.checkbox(&mut comp.blend_linear,
+                    "Blend colors in linear light (1.0 gamma)")
+                    .on_hover_text("Add / Screen / Glow blends compute in linear space — brighter, physically-plausible results. Matches AE's 'Blend Colors Using 1.0 Gamma'.");
+                if comp.blend_linear != before {
+                    crate::core::frame_cache::bump_version();
+                }
+                ui.label(egui::RichText::new("Legacy projects default to OFF (gamma-space) for identical output.").small().color(colors::TEXT_MUTED));
+            });
+
+            ui.add_space(4.0);
             ui.collapsing("🎨 Color Management & Working Space", |ui| {
                 let color_space_id = ui.make_persistent_id("ae_color_space_choice");
                 let mut cs_idx: usize = ui.ctx().data_mut(|d| *d.get_temp_mut_or_insert_with(color_space_id, || 0));

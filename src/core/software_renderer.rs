@@ -645,6 +645,9 @@ pub fn render_frame_to_pixels(comp: &Composition, frame: u32, width: u32, height
             continue;
         }
 
+        // Linear-light blending flag (hoisted once per frame)
+        let blend_linear = comp.blend_linear;
+
         // Use precomputed data from the parallel phase
         let ld = &layer_data[layer_idx];
         if ld.skip {
@@ -1417,14 +1420,25 @@ pub fn render_frame_to_pixels(comp: &Composition, frame: u32, width: u32, height
                     }
                 }
 
-                let src_r = layer_buf[lidx] as f32 / 255.0;
-                let src_g = layer_buf[lidx + 1] as f32 / 255.0;
-                let src_b = layer_buf[lidx + 2] as f32 / 255.0;
+                let mut src_r = layer_buf[lidx] as f32 / 255.0;
+                let mut src_g = layer_buf[lidx + 1] as f32 / 255.0;
+                let mut src_b = layer_buf[lidx + 2] as f32 / 255.0;
 
-                let dst_r = buffer[idx] as f32 / 255.0;
-                let dst_g = buffer[idx + 1] as f32 / 255.0;
-                let dst_b = buffer[idx + 2] as f32 / 255.0;
+                let mut dst_r = buffer[idx] as f32 / 255.0;
+                let mut dst_g = buffer[idx + 1] as f32 / 255.0;
+                let mut dst_b = buffer[idx + 2] as f32 / 255.0;
                 let dst_a = buffer[idx + 3] as f32 / 255.0;
+
+                // Linear-light mode: decode both sides (fast gamma-2.0 approx)
+                // so Add/Screen/Glow blends behave physically.
+                if blend_linear {
+                    src_r *= src_r;
+                    src_g *= src_g;
+                    src_b *= src_b;
+                    dst_r *= dst_r;
+                    dst_g *= dst_g;
+                    dst_b *= dst_b;
+                }
 
                 // Compute BlendMode calculations
                 let (blended_r, blended_g, blended_b) = match layer.blend_mode {
@@ -1470,9 +1484,15 @@ pub fn render_frame_to_pixels(comp: &Composition, frame: u32, width: u32, height
                 let out_g = if out_a > 0.0 { (blended_g * src_a + dst_g * dst_a * (1.0 - src_a)) / out_a } else { 0.0 };
                 let out_b = if out_a > 0.0 { (blended_b * src_a + dst_b * dst_a * (1.0 - src_a)) / out_a } else { 0.0 };
 
-                buffer[idx] = (out_r * 255.0) as u8;
-                buffer[idx + 1] = (out_g * 255.0) as u8;
-                buffer[idx + 2] = (out_b * 255.0) as u8;
+                // Encode back to display space when in linear-light mode.
+                let (or_, og_, ob_) = if blend_linear {
+                    (out_r.max(0.0).sqrt(), out_g.max(0.0).sqrt(), out_b.max(0.0).sqrt())
+                } else {
+                    (out_r, out_g, out_b)
+                };
+                buffer[idx] = (or_ * 255.0) as u8;
+                buffer[idx + 1] = (og_ * 255.0) as u8;
+                buffer[idx + 2] = (ob_ * 255.0) as u8;
                 buffer[idx + 3] = (out_a * 255.0) as u8;
             }
         }

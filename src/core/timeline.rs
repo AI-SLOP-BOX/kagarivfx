@@ -1589,6 +1589,10 @@ pub struct Composition {
     /// Sub-compositions for PreComp nesting (keyed by comp id).
     #[serde(default)]
     pub sub_compositions: Vec<Composition>,
+    /// Blend layers in linear light (AE "Blend Colors Using 1.0 Gamma").
+    /// Off = classic gamma-space compositing (legacy look).
+    #[serde(default)]
+    pub blend_linear: bool,
 }
 
 impl Composition {
@@ -1614,6 +1618,8 @@ impl Composition {
             lights: vec![Light3D::default()],
             markers: Vec::new(),
             sub_compositions: Vec::new(),
+
+            blend_linear: false,
         }
     }
 
