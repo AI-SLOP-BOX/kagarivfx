@@ -492,29 +492,6 @@ where
     start_export_cancelable(config, tx, Arc::new(AtomicBool::new(false)), render_frame_fn)
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_ffmpeg_availability_check() {
-        // Just test that the function runs without panicking.
-        let _available = is_ffmpeg_available();
-    }
-
-    #[test]
-    fn test_export_config_clone() {
-        let cfg = ExportConfig {
-            audio_wav: None,
-            codec: VideoCodec::H264,
-            output_path: "test.mp4".to_string(),
-            width: 1920, height: 1080, fps: 30, total_frames: 90,
-        };
-        let cfg2 = cfg.clone();
-        assert_eq!(cfg.output_path, cfg2.output_path);
-    }
-}
-
 /// PNG image-sequence export: renders every frame and writes
 /// `{stem}_{frame:04}.png` into `dir` using the `image` crate.
 #[allow(clippy::too_many_arguments)]
@@ -561,3 +538,27 @@ pub fn start_png_sequence_export<F>(
         )));
     });
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_ffmpeg_availability_check() {
+        // Just test that the function runs without panicking.
+        let _available = is_ffmpeg_available();
+    }
+
+    #[test]
+    fn test_export_config_clone() {
+        let cfg = ExportConfig {
+            audio_wav: None,
+            codec: VideoCodec::H264,
+            output_path: "test.mp4".to_string(),
+            width: 1920, height: 1080, fps: 30, total_frames: 90,
+        };
+        let cfg2 = cfg.clone();
+        assert_eq!(cfg.output_path, cfg2.output_path);
+    }
+}
+

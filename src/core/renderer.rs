@@ -60,10 +60,6 @@ struct GlobalsUniform {
     viewport_size: [f32; 2],
     exposure_ev: f32,
     lut_mode: u32,
-    mask_enabled: u32,
-    mask_mode: u32,
-    mask_inverted: u32,
-    mask_feather: f32,
 }
 
 /// Compile-time proof that LayerUniform is non-zero-sized, embedded directly
@@ -145,7 +141,298 @@ struct LayerUniform {
     corner_bottom_left: [f32; 2],
     corner_bottom_right: [f32; 2],
 
-    _padding_align: [[f32; 4]; 10], // Align to 512 bytes (multiple of 256 for WGPU dynamic uniform offsets)
+    // Per-layer GPU mask flags (coverage baked CPU-side; see rasterize_layer_masks)
+    mask_enabled: u32,
+    mask_mode: u32,
+    mask_inverted: u32,
+    mask_feather: f32,
+
+    _padding_align: [[f32; 4]; 9], // Keep total size a multiple of 256 for WGPU dynamic uniform offsets
+}
+
+// ─── GPU Layer Mask Rasterization (CPU-baked coverage → group(3) texture) ──
+
+/// One evaluated mask shape, already scaled into output pixel space.
+#[derive(Debug, Clone)]
+pub(crate) struct MaskShape {
+    pub poly: Vec<[f32; 2]>,
+    pub mode: crate::core::mask::MaskMode,
+    pub opacity: f32,
+    pub inverted: bool,
+}
+
+/// CPU-rasterized combined mask coverage for one layer, ready for GPU upload.
+pub(crate) struct MaskRaster {
+    /// Value hash of the raster (no pointers) — identifies identical rasters
+    /// so multiple layers sharing the same masks reuse a single upload.
+    pub key: u64,
+    /// RGBA8 pixels; rgb = white, a = combined coverage.
+    pub pixels: Vec<u8>,
+    /// Max feather across contributing masks (passed to the shader's
+    /// smoothstep softening approximation).
+    pub feather: f32,
+}
+
+fn mask_raster_key(pixels: &[u8], width: u32, height: u32, feather: f32) -> u64 {
+    use std::hash::{Hash, Hasher};
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    width.hash(&mut hasher);
+    height.hash(&mut hasher);
+    feather.to_bits().hash(&mut hasher);
+    hasher.write(pixels);
+    hasher.finish()
+}
+
+/// Even-odd scanline polygon fill with pixel-center sampling.
+/// Returns per-pixel binary coverage in row-major order.
+fn rasterize_polygon_evenodd(poly: &[[f32; 2]], width: u32, height: u32) -> Vec<f32> {
+    let mut cov = vec![0.0f32; (width as usize) * (height as usize)];
+    let n = poly.len();
+    if n < 3 || width == 0 || height == 0 {
+        return cov;
+    }
+    for y in 0..height {
+        let py = y as f32 + 0.5;
+        let mut xs: Vec<f32> = Vec::new();
+        let mut j = n - 1;
+        for i in 0..n {
+            let (x1, y1) = (poly[j][0], poly[j][1]);
+            let (x2, y2) = (poly[i][0], poly[i][1]);
+            if (y1 <= py && y2 > py) || (y2 <= py && y1 > py) {
+                let t = (py - y1) / (y2 - y1);
+                xs.push(x1 + t * (x2 - x1));
+            }
+            j = i;
+        }
+        xs.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+        let row = y as usize * width as usize;
+        let mut k = 0;
+        while k + 1 < xs.len() {
+            let xa = xs[k];
+            let xb = xs[k + 1];
+            if xb <= xa {
+                k += 2;
+                continue;
+            }
+            let x_start = ((xa - 0.5).ceil().max(0.0)) as usize;
+            let x_end_incl = ((xb - 0.5).floor().min(width as f32 - 1.0)).max(-1.0) as usize;
+            for x in x_start..=(x_end_incl.min(width as usize - 1)) {
+                let cx = x as f32 + 0.5;
+                if cx >= xa && cx < xb {
+                    cov[row + x] = 1.0;
+                }
+            }
+            k += 2;
+        }
+    }
+    cov
+}
+
+/// Combines evaluated mask shapes into a single coverage buffer using AE's
+/// mask-mode semantics. A Subtract FIRST mask starts from a full frame so it
+/// carves material away (subtraction against an empty base is a no-op);
+/// an inverted Add already carries its complement in its own coverage.
+pub(crate) fn combine_mask_shapes(
+    shapes: &[MaskShape],
+    width: u32,
+    height: u32,
+) -> Option<Vec<f32>> {
+    use crate::core::mask::MaskMode;
+    let n = (width as usize) * (height as usize);
+    if n == 0 {
+        return None;
+    }
+    let mut acc = vec![0.0f32; n];
+    let mut any = false;
+    let mut first = true;
+    for shape in shapes {
+        if shape.mode == MaskMode::None || shape.poly.len() < 3 {
+            continue;
+        }
+        let mut cov = rasterize_polygon_evenodd(&shape.poly, width, height);
+        let op = shape.opacity.clamp(0.0, 1.0);
+        if op < 1.0 {
+            for c in cov.iter_mut() {
+                *c *= op;
+            }
+        }
+        if shape.inverted {
+            for c in cov.iter_mut() {
+                *c = 1.0 - *c;
+            }
+        }
+        if first && shape.mode == MaskMode::Subtract {
+            acc.iter_mut().for_each(|a| *a = 1.0);
+        }
+        for (a, b) in acc.iter_mut().zip(cov.iter()) {
+            *a = match shape.mode {
+                MaskMode::Add | MaskMode::Lighten => *a + (*b * (1.0 - *a)),
+                MaskMode::Subtract => *a * (1.0 - *b),
+                MaskMode::Intersect | MaskMode::Darken => (*a).min(*b),
+                MaskMode::Difference => (*a - *b).abs(),
+                MaskMode::None => *a,
+            };
+        }
+        any = true;
+        first = false;
+    }
+    if !any {
+        return None;
+    }
+    Some(acc)
+}
+
+/// Evaluates and rasterizes all enabled masks of `layer` at `frame` into an
+/// output-sized RGBA8 coverage texture payload. Returns None when the layer
+/// has no effective masks.
+pub(crate) fn rasterize_layer_masks(
+    layer: &crate::core::timeline::Layer,
+    frame: u32,
+    out_w: u32,
+    out_h: u32,
+    comp_w: u32,
+    comp_h: u32,
+) -> Option<MaskRaster> {
+    use crate::core::mask::MaskMode;
+    if layer.masks.is_empty() || out_w == 0 || out_h == 0 {
+        return None;
+    }
+    let sx = out_w as f32 / comp_w.max(1) as f32;
+    let sy = out_h as f32 / comp_h.max(1) as f32;
+    let mut shapes = Vec::new();
+    let mut max_feather = 0.0f32;
+    for mask in &layer.masks {
+        if !mask.enabled || mask.mode == MaskMode::None {
+            continue;
+        }
+        max_feather = max_feather.max(mask.feather.evaluate(frame));
+        let mut poly = mask.path.to_polygon(frame, 12);
+        // to_polygon may repeat the first point to close the loop — drop it
+        if poly.len() > 1 && poly[0] == *poly.last().unwrap() {
+            poly.pop();
+        }
+        if poly.len() < 3 {
+            continue;
+        }
+        shapes.push(MaskShape {
+            poly: poly.iter().map(|p| [p[0] * sx, p[1] * sy]).collect(),
+            mode: mask.mode,
+            opacity: (mask.opacity.evaluate(frame) / 100.0).clamp(0.0, 1.0),
+            inverted: mask.inverted,
+        });
+    }
+    let coverage = combine_mask_shapes(&shapes, out_w, out_h)?;
+    let mut pixels = vec![0u8; coverage.len() * 4];
+    for (i, c) in coverage.iter().enumerate() {
+        let a = (c.clamp(0.0, 1.0) * 255.0).round() as u8;
+        pixels[i * 4] = 255;
+        pixels[i * 4 + 1] = 255;
+        pixels[i * 4 + 2] = 255;
+        pixels[i * 4 + 3] = a;
+    }
+    let key = mask_raster_key(&pixels, out_w, out_h, max_feather);
+    Some(MaskRaster {
+        key,
+        pixels,
+        feather: max_feather,
+    })
+}
+
+#[cfg(test)]
+mod gpu_mask_tests {
+    use super::*;
+
+    fn rect(x: f32, y: f32, w: f32, h: f32) -> Vec<[f32; 2]> {
+        vec![[x, y], [x + w, y], [x + w, y + h], [x, y + h]]
+    }
+
+    #[test]
+    fn evenodd_fill_rect_interior_only() {
+        let cov = rasterize_polygon_evenodd(&rect(2.0, 2.0, 4.0, 4.0), 8, 8);
+        assert_eq!(cov.len(), 64);
+        let get = |px: usize, py: usize| cov[py * 8 + px];
+        assert_eq!(get(3, 3), 1.0, "interior must be covered");
+        assert_eq!(get(0, 0), 0.0, "outside must be uncovered");
+        assert_eq!(get(7, 7), 0.0, "far corner must be uncovered");
+    }
+
+    #[test]
+    fn degenerate_polygon_yields_no_coverage() {
+        let cov = rasterize_polygon_evenodd(&[[0.0, 0.0], [5.0, 5.0]], 8, 8);
+        assert!(cov.iter().all(|&c| c == 0.0));
+    }
+
+    #[test]
+    fn add_mode_unions_adjacent_rects() {
+        let shapes = [
+            MaskShape { poly: rect(0.0, 0.0, 4.0, 2.0), mode: crate::core::mask::MaskMode::Add, opacity: 1.0, inverted: false },
+            MaskShape { poly: rect(4.0, 0.0, 4.0, 2.0), mode: crate::core::mask::MaskMode::Add, opacity: 1.0, inverted: false },
+        ];
+        let cov = combine_mask_shapes(&shapes, 8, 2).expect("masks present");
+        assert!(cov.iter().all(|&c| c == 1.0), "union of both halves covers the row");
+    }
+
+    #[test]
+    fn subtract_first_mask_carves_full_frame() {
+        let shapes = [MaskShape {
+            poly: rect(2.0, 2.0, 4.0, 4.0),
+            mode: crate::core::mask::MaskMode::Subtract,
+            opacity: 1.0,
+            inverted: false,
+        }];
+        let cov = combine_mask_shapes(&shapes, 8, 8).expect("masks present");
+        let get = |px: usize, py: usize| cov[py * 8 + px];
+        assert_eq!(get(3, 3), 0.0, "carved hole must be transparent");
+        assert_eq!(get(0, 0), 1.0, "frame outside the hole stays opaque");
+    }
+
+    #[test]
+    fn inverted_first_add_reveals_outside_only() {
+        let shapes = [MaskShape {
+            poly: rect(2.0, 2.0, 4.0, 4.0),
+            mode: crate::core::mask::MaskMode::Add,
+            opacity: 1.0,
+            inverted: true,
+        }];
+        let cov = combine_mask_shapes(&shapes, 8, 8).expect("masks present");
+        let get = |px: usize, py: usize| cov[py * 8 + px];
+        assert_eq!(get(3, 3), 0.0);
+        assert_eq!(get(0, 0), 1.0);
+    }
+
+    #[test]
+    fn intersect_mode_takes_minimum() {
+        let shapes = [
+            MaskShape { poly: rect(0.0, 0.0, 6.0, 2.0), mode: crate::core::mask::MaskMode::Add, opacity: 1.0, inverted: false },
+            MaskShape { poly: rect(2.0, 0.0, 6.0, 2.0), mode: crate::core::mask::MaskMode::Intersect, opacity: 1.0, inverted: false },
+        ];
+        let cov = combine_mask_shapes(&shapes, 8, 2).expect("masks present");
+        assert_eq!(cov[1], 0.0, "only in first");
+        assert_eq!(cov[4], 1.0, "in both");
+        assert_eq!(cov[7], 0.0, "only in second");
+    }
+
+    #[test]
+    fn none_and_empty_masks_return_none() {
+        assert!(combine_mask_shapes(&[], 8, 8).is_none());
+        let disabled = [MaskShape {
+            poly: rect(0.0, 0.0, 4.0, 4.0),
+            mode: crate::core::mask::MaskMode::None,
+            opacity: 1.0,
+            inverted: false,
+        }];
+        assert!(combine_mask_shapes(&disabled, 8, 8).is_none());
+    }
+
+    #[test]
+    fn raster_key_is_deterministic_value_hash() {
+        let ca = rasterize_polygon_evenodd(&rect(1.0, 1.0, 4.0, 4.0), 8, 8);
+        let cb = rasterize_polygon_evenodd(&rect(1.0, 1.0, 4.0, 4.0), 8, 8);
+        let pa: Vec<u8> = ca.iter().map(|c| (c * 255.0) as u8).collect();
+        let pb: Vec<u8> = cb.iter().map(|c| (c * 255.0) as u8).collect();
+        assert_eq!(mask_raster_key(&pa, 8, 8, 0.0), mask_raster_key(&pb, 8, 8, 0.0));
+        assert_ne!(mask_raster_key(&pa, 8, 8, 0.0), mask_raster_key(&pa, 8, 8, 2.5));
+    }
 }
 
 /// Bakes a text stroke into a rasterized text bitmap: dilates the fill alpha by the
@@ -268,6 +555,13 @@ pub struct WgpuRenderer {
     dummy_texture_bind_group: wgpu::BindGroup,
     sampler: wgpu::Sampler,
 
+    // Shared layer-mask resources (group 3)
+    mask_bind_group_layout: wgpu::BindGroupLayout,
+    mask_bind_group: wgpu::BindGroup,
+    mask_texture: Option<wgpu::Texture>,
+    mask_view: Option<wgpu::TextureView>,
+    mask_size: (u32, u32),
+
     // Target offscreen texture
     pub target_texture: Option<wgpu::Texture>,
     pub target_view: Option<wgpu::TextureView>,
@@ -372,6 +666,7 @@ impl WgpuRenderer {
         let texture_bind_group_layout =
             device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
                 entries: &[
+                    // Diffuse texture
                     wgpu::BindGroupLayoutEntry {
                         binding: 0,
                         visibility: wgpu::ShaderStages::FRAGMENT,
@@ -382,6 +677,7 @@ impl WgpuRenderer {
                         },
                         count: None,
                     },
+                    // Diffuse sampler
                     wgpu::BindGroupLayoutEntry {
                         binding: 1,
                         visibility: wgpu::ShaderStages::FRAGMENT,
@@ -467,7 +763,7 @@ impl WgpuRenderer {
         );
         let dummy_mask_view = dummy_mask_texture.create_view(&wgpu::TextureViewDescriptor::default());
 
-        let _dummy_mask_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+        let mask_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             layout: &mask_bind_group_layout,
             entries: &[
                 wgpu::BindGroupEntry {
@@ -479,7 +775,7 @@ impl WgpuRenderer {
                     resource: wgpu::BindingResource::Sampler(&sampler),
                 },
             ],
-            label: Some("dummy_mask_bind_group"),
+            label: Some("mask_bind_group"),
         });
 
         let layer_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
@@ -549,6 +845,14 @@ impl WgpuRenderer {
                     binding: 1,
                     resource: wgpu::BindingResource::Sampler(&sampler),
                 },
+                wgpu::BindGroupEntry {
+                    binding: 2,
+                    resource: wgpu::BindingResource::TextureView(&dummy_mask_view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 3,
+                    resource: wgpu::BindingResource::Sampler(&sampler),
+                },
             ],
             label: Some("dummy_texture_bind_group"),
         });
@@ -561,6 +865,7 @@ impl WgpuRenderer {
                     &globals_bind_group_layout,
                     &layer_bind_group_layout,
                     &texture_bind_group_layout,
+                    &mask_bind_group_layout,
                 ],
                 push_constant_ranges: &[],
             });
@@ -632,6 +937,11 @@ impl WgpuRenderer {
             texture_bind_group_layout,
             dummy_texture_bind_group,
             sampler,
+            mask_bind_group_layout,
+            mask_bind_group,
+            mask_texture: None,
+            mask_view: None,
+            mask_size: (0, 0),
             target_texture: None,
             target_view: None,
             target_size: (0, 0),
@@ -647,6 +957,47 @@ impl WgpuRenderer {
             ram_render_idx: usize::MAX,
             preview_max_width: None,
         }
+    }
+
+    /// Creates/replaces the shared layer-mask texture when its size changed.
+    fn ensure_mask_texture(&mut self, width: u32, height: u32) {
+        if self.mask_size == (width, height) && self.mask_texture.is_some() {
+            return;
+        }
+        let size = wgpu::Extent3d {
+            width,
+            height,
+            depth_or_array_layers: 1,
+        };
+        let texture = self.device.create_texture(&wgpu::TextureDescriptor {
+            label: Some("Layer Mask Texture"),
+            size,
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: wgpu::TextureFormat::Rgba8UnormSrgb,
+            usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+            view_formats: &[],
+        });
+        let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
+        let bind_group = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
+            layout: &self.mask_bind_group_layout,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::TextureView(&view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::Sampler(&self.sampler),
+                },
+            ],
+            label: Some("mask_bind_group_live"),
+        });
+        self.mask_texture = Some(texture);
+        self.mask_view = Some(view);
+        self.mask_bind_group = bind_group;
+        self.mask_size = (width, height);
     }
 
     /// Prepares/resizes the offscreen target texture if needed.
@@ -826,10 +1177,6 @@ impl WgpuRenderer {
             viewport_size: [width as f32, height as f32],
             exposure_ev,
             lut_mode,
-            mask_enabled: 0,
-            mask_mode: 0,
-            mask_inverted: 0,
-            mask_feather: 0.0,
         };
         self.queue
             .write_buffer(&self.globals_buffer, 0, bytemuck::bytes_of(&globals));
@@ -894,6 +1241,7 @@ impl WgpuRenderer {
             // Step 1: Pre-evaluate active layer transform matrices and effect properties
             let mut active_layers = Vec::new();
             let mut uniforms = Vec::new();
+            let mut layer_mask_plans: Vec<Option<MaskRaster>> = Vec::new();
 
             for layer in &comp.layers {
                 if !layer.is_active(frame) {
@@ -1136,11 +1484,68 @@ impl WgpuRenderer {
                     corner_top_right: ep.corner_top_right,
                     corner_bottom_left: ep.corner_bottom_left,
                     corner_bottom_right: ep.corner_bottom_right,
-                    _padding_align: [[0.0; 4]; 10],
+                    mask_enabled: 0,
+                    mask_mode: 0,
+                    mask_inverted: 0,
+                    mask_feather: 0.0,
+                    _padding_align: [[0.0; 4]; 9],
                 };
 
+                layer_mask_plans.push(rasterize_layer_masks(layer, frame, width, height, comp.width, comp.height));
                 uniforms.push(layer_uniform);
                 active_layers.push(layer);
+            }
+
+            // Resolve per-layer mask rasters. A single distinct raster can be
+            // uploaded once and shared by every masked draw in this submit;
+            // multiple distinct rasters would need re-uploads between draws
+            // inside one submit (impossible — writes land before the whole
+            // submit), so those layers render unmasked on GPU this frame.
+            let distinct_keys: std::collections::HashSet<u64> = layer_mask_plans
+                .iter()
+                .flatten()
+                .map(|m| m.key)
+                .collect();
+            let shared_raster: Option<&MaskRaster> = if distinct_keys.len() == 1 {
+                layer_mask_plans.iter().flatten().next()
+            } else {
+                if distinct_keys.len() > 1 {
+                    log::debug!(
+                        "[WgpuRenderer] {} distinct layer masks exceed single-upload limit; GPU renders them unmasked",
+                        distinct_keys.len()
+                    );
+                }
+                None
+            };
+            if let Some(raster) = shared_raster {
+                self.ensure_mask_texture(width, height);
+                let size = wgpu::Extent3d {
+                    width,
+                    height,
+                    depth_or_array_layers: 1,
+                };
+                self.queue.write_texture(
+                    wgpu::ImageCopyTexture {
+                        texture: self.mask_texture.as_ref().expect("mask texture just ensured"),
+                        mip_level: 0,
+                        origin: wgpu::Origin3d::ZERO,
+                        aspect: wgpu::TextureAspect::All,
+                    },
+                    &raster.pixels,
+                    wgpu::ImageDataLayout {
+                        offset: 0,
+                        bytes_per_row: Some(width * 4),
+                        rows_per_image: Some(height),
+                    },
+                    size,
+                );
+            }
+            for (u, plan) in uniforms.iter_mut().zip(layer_mask_plans.iter()) {
+                let active = plan.is_some() && shared_raster.is_some();
+                u.mask_enabled = u32::from(active);
+                u.mask_mode = u32::from(active); // 1 = alpha channel
+                u.mask_inverted = 0; // inversion is baked per-mask into the raster
+                u.mask_feather = plan.as_ref().map_or(0.0, |m| m.feather);
             }
 
             // Step 2: Upload all Layer Uniforms in a single GPU command write
@@ -1175,6 +1580,7 @@ impl WgpuRenderer {
                     _ => &self.dummy_texture_bind_group,
                 };
                 render_pass.set_bind_group(2, tex_bg, &[]);
+                render_pass.set_bind_group(3, &self.mask_bind_group, &[]);
 
                 // Draw!
                 render_pass.draw_indexed(0..(INDICES.len() as u32), 0, 0..1);

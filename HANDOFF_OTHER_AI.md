@@ -283,3 +283,20 @@
 - Fixed pre-existing clippy warnings (unused_parens / identity_op) in cpu_effects tests → clippy --all-features is at zero again
 - Full suite: 482 passed / 0 failed at commit time
 - Still orphaned (need software_renderer/compositor integration, currently your dirty zone): echo_effect, set_matte, difference_matte, light_transmission, frame_blending, shape_modifiers, stroke_modifier, typography_engine, vfx_graph_compiler
+
+## Session: GPU Layer Mask Compositing (shader.wgsl + renderer.rs)
+
+### What shipped
+- Masks now render on the **GPU viewport path** for the common cases:
+  - `@group(3)` dedicated mask texture + sampler (`t_mask`/`s_mask`), pipeline layout has 4 bind groups
+  - Per-layer mask flags moved from Globals → **LayerUniform** (`mask_enabled/mode/inverted/feather`); padding 10→9 keeps size multiple of 256 for dynamic offsets
+  - CPU rasterizer in renderer.rs: even-odd scanline fill (`rasterize_polygon_evenodd`) + AE mask-mode combine (`combine_mask_shapes`: Add/Lighten=over, Subtract, Intersect/Darken=min, Difference=XOR). First-mask Subtract starts from full frame; inverted Add carries its complement directly
+  - `rasterize_layer_masks()` evaluates `path.to_polygon(frame,12)` per enabled mask, scales comp→effective preview res, packs RGBA8 (white, alpha=coverage)
+  - Single distinct raster per frame → uploaded once and shared by all masked draws; >1 distinct rasters fall back to unmasked GPU draw that frame (single-submit upload ordering constraint) with a log::debug
+  - Shader softens via smoothstep feather approximation on the alpha ramp
+
+### Gotchas for your sessions
+- `texture_bind_group_layout` (group 2) is back to 2 entries — text/video bind groups unchanged and valid again
+- Don't add fields to `LayerUniform` without mirroring byte order in shader `struct Layer` AND adjusting `_padding_align`
+- 8 new tests in `renderer.rs::gpu_mask_tests`; full suite 505 passed / clippy zero at commit
+- Also relocated `start_png_sequence_export` above `mod tests` in ffmpeg_export.rs (clippy items_after_test_module)

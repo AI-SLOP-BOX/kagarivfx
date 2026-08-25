@@ -67,6 +67,12 @@ struct Layer {
     // Track Matte System
     track_matte_mode: u32,
 
+    // Per-layer GPU mask (coverage rasterized on CPU, uploaded once per frame)
+    mask_enabled: u32,
+    mask_mode: u32,
+    mask_inverted: u32,
+    mask_feather: f32,
+
     // Shape params: x = polygon sides, y = rectangle corner radius (normalized 0..1 of half-size)
     shape_params: vec4<f32>,
 
@@ -82,6 +88,8 @@ struct Layer {
 @group(1) @binding(0) var<uniform> layer: Layer;
 @group(2) @binding(0) var t_diffuse: texture_2d<f32>;
 @group(2) @binding(1) var s_diffuse: sampler;
+@group(3) @binding(0) var t_mask: texture_2d<f32>;
+@group(3) @binding(1) var s_mask: sampler;
 
 struct VertexInput {
     @location(0) position: vec2<f32>,
@@ -456,6 +464,32 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
 
     // --- Layer Opacity ---
     final_color.a = final_color.a * (layer.opacity / 100.0);
+
+    // --- GPU Layer Mask Compositing ---
+    if (layer.mask_enabled == 1u) {
+        // Mask mode: 0=none, 1=alpha, 2=inverted alpha, 3=luma, 4=inverted luma
+        var mask_alpha: f32 = 1.0;
+        if (layer.mask_mode == 1u) {
+            mask_alpha = textureSample(t_mask, s_mask, in.tex_coords).a;
+        } else if (layer.mask_mode == 2u) {
+            mask_alpha = 1.0 - textureSample(t_mask, s_mask, in.tex_coords).a;
+        } else if (layer.mask_mode == 3u) {
+            let tex = textureSample(t_mask, s_mask, in.tex_coords);
+            mask_alpha = dot(tex.rgb, vec3<f32>(0.2126, 0.7152, 0.0722));
+        } else if (layer.mask_mode == 4u) {
+            let tex = textureSample(t_mask, s_mask, in.tex_coords);
+            mask_alpha = 1.0 - dot(tex.rgb, vec3<f32>(0.2126, 0.7152, 0.0722));
+        }
+        // Apply mask inversion and feather
+        if (layer.mask_inverted == 1u) {
+            mask_alpha = 1.0 - mask_alpha;
+        }
+        if (layer.mask_feather > 0.01) {
+            // Simple feather blur approximation using smoothstep
+            mask_alpha = smoothstep(0.0, layer.mask_feather, mask_alpha * layer.mask_feather);
+        }
+        final_color.a = final_color.a * mask_alpha;
+    }
 
     // --- Track Matte Masking ---
     if (layer.track_matte_mode > 0u) {
