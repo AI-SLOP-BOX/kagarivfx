@@ -1026,6 +1026,16 @@ pub fn handle_global_shortcuts(
         if i.key_pressed(Key::F3) && shift {
             app.show_graph_editor = !app.show_graph_editor;
         }
+
+        // Shift+F4 → Toggle Vectorscope / RGB Parade window
+        if i.key_pressed(Key::F4) && shift {
+            app.show_vectorscope = !app.show_vectorscope;
+            app.toasts.info(if app.show_vectorscope {
+                "Vectorscope ON (Shift+F4)"
+            } else {
+                "Vectorscope OFF"
+            });
+        }
     });
 }
 

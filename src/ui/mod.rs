@@ -29,6 +29,7 @@ pub mod icons;
 pub mod toolbar;
 pub mod project_panel;
 pub mod flowchart;
+pub mod vectorscope;
 pub mod character_panel;
 pub mod paragraph_panel;
 pub mod tracker_panel;

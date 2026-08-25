@@ -233,6 +233,8 @@ pub struct AfterEffectsApp {
     pub precompose_name: String,
     pub precompose_move_attributes: bool,
     pub show_command_palette: bool,
+    /// 📊 Vectorscope / RGB Parade floating scope window (Shift+F4)
+    pub show_vectorscope: bool,
     pub show_history_panel: bool,
     pub show_welcome: bool,
     pub show_new_comp_dialog: bool,
@@ -505,6 +507,7 @@ impl Default for AfterEffectsApp {
             font_family_idx: 0,
             faux_font_switches: (false, false, false, false),
             show_command_palette: false,
+            show_vectorscope: false,
             show_history_panel: false,
             show_welcome: true,
             show_new_comp_dialog: false,
@@ -841,6 +844,7 @@ impl eframe::App for AfterEffectsApp {
         }
 
         crate::ui::command_palette::draw_command_palette(self, ctx);
+        crate::ui::vectorscope::draw_vectorscope_window(self, ctx);
         crate::ui::shortcuts_dialog::draw_shortcuts_dialog(self, ctx);
         self.toasts.draw(ctx);
         self.current_frame = current_frame;
