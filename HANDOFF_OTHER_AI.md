@@ -313,3 +313,13 @@
 ### Still open
 - Export/CPU renderer remains reference implementation (its mask feather semantics may differ slightly from the GPU ramp — compare visually someday)
 - Orphan modules list unchanged (blocked on software_renderer.rs ownership)
+
+## Session: Gap 2 closed — draggable position keyframe dots on motion path
+
+### What shipped (viewport.rs, app_state.rs, viewport_overlays.rs) → commit `7551494`
+- Selection-tool hit-testing (8px) on the motion-path keyframe dots; dragging moves that keyframe's VALUE at its own frame (spatial editing) without touching temporal bezier data
+- Mirrors mask-vertex drag exactly: `begin_drag` once per gesture → direct `current_mut` edits during drag → single undo via `commit_drag()`
+- New state `viewport_pos_kf_drag_state: Option<(layer, kf_frame, start_value, start_ptr)>`; wired into mid-drag repaint gate, `was_dragging`, and release-clears
+- Dragged dot renders a playhead-colored ring in the overlay
+- Priority: KF dot > mask vertex > corner-scale > whole-layer drag (all gated to Selection tool for dots)
+- Note: `ae_effects_pack_v24::test_bars_cover_fraction` failed on your in-flight dirty tree at commit time (your file, untouched by me)
