@@ -27,6 +27,7 @@ pub mod color_science;
 pub mod software_renderer;
 pub mod content_aware_engine;
 pub mod audio_engine;
+pub mod audio_dsp;
 pub mod fft;
 pub mod autosave;
 #[cfg(feature = "gui")]

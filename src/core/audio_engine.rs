@@ -548,6 +548,33 @@ pub fn mix_audio_sources_for_frame(
         let _ = frame_len_sec;
     }
 
+    // ── Master DSP processing (EQ → Compressor → Limiter) ──
+    {
+        use crate::core::audio_dsp;
+        // Default mastering chain: gentle high-pass at 30Hz, then compress
+        let master_eq = vec![
+            audio_dsp::EqBand {
+                freq: 30.0,
+                gain_db: 0.0,
+                q: 0.707,
+                band_type: audio_dsp::EqBandType::HighPass,
+            },
+        ];
+        audio_dsp::apply_eq(&mut stereo_output, &master_eq, sample_rate);
+
+        // Gentle master compression (stateless per-frame processing)
+        let comp_params = audio_dsp::CompressorParams {
+            threshold_db: -12.0,
+            ratio: 2.0,
+            attack_ms: 10.0,
+            release_ms: 100.0,
+            knee_db: 6.0,
+            makeup_gain_db: 0.0,
+        };
+        let mut comp_state = audio_dsp::CompressorState::default();
+        audio_dsp::apply_compressor(&mut stereo_output, &comp_params, &mut comp_state, sample_rate);
+    }
+
     // Meter the MIXED output, not per-layer contributions — otherwise the peak
     // reflects the loudest single source instead of the actual sum.
     for chunk in stereo_output.chunks_exact(2) {
