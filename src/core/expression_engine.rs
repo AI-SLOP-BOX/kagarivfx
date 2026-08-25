@@ -8,6 +8,43 @@
 ///   - Any arbitrary Rhai script that returns a number or array.
 use rhai::{Engine, Scope, Dynamic, Array};
 
+/// Per-frame audio data for expression functions (audioAmplitude, audioSpectrum).
+/// Set by the renderer before evaluating expressions each frame.
+pub struct AudioExprData {
+    /// Overall amplitude 0..1 (from audio mixer).
+    pub amplitude: f32,
+    /// Frequency band amplitudes: [bass, low-mid, mid, high-mid, treble] each 0..1.
+    pub bands: [f32; 5],
+}
+
+impl Default for AudioExprData {
+    fn default() -> Self {
+        Self { amplitude: 0.0, bands: [0.0; 5] }
+    }
+}
+
+thread_local! {
+    static AUDIO_DATA: std::cell::RefCell<AudioExprData> = const { std::cell::RefCell::new(AudioExprData { amplitude: 0.0, bands: [0.0; 5] }) };
+}
+
+/// Set the current frame's audio data (call before expression evaluation).
+pub fn set_audio_expr_data(data: AudioExprData) {
+    AUDIO_DATA.with(|d| *d.borrow_mut() = data);
+}
+
+/// Get the current amplitude (0..1).
+pub fn get_audio_amplitude() -> f32 {
+    AUDIO_DATA.with(|d| d.borrow().amplitude)
+}
+
+/// Get a frequency band by index (0=bass, 1=low-mid, 2=mid, 3=high-mid, 4=treble).
+pub fn get_audio_band(idx: usize) -> f32 {
+    AUDIO_DATA.with(|d| {
+        let data = d.borrow();
+        if idx < 5 { data.bands[idx] } else { 0.0 }
+    })
+}
+
 /// Build the shared Rhai engine with all AE-compatible functions registered.
 /// Creating the engine is expensive — do it once and cache it.
 /// 64-bit Permuted Congruential Generator (PCG32) hash to produce uniform f64 in [0.0, 1.0).
@@ -591,6 +628,31 @@ thread_local! {
                 let bv = b.get(i).and_then(|d| d.as_float().ok()).unwrap_or(0.0);
                 Dynamic::from_float(av + bv)
             }).collect()
+        });
+        // Audio-reactive expression functions (MV/lyric video support)
+        e.register_fn("audioAmplitude", || -> f64 {
+            AUDIO_DATA.with(|d| d.borrow().amplitude as f64)
+        });
+        e.register_fn("audioBand", |idx: i64| -> f64 {
+            AUDIO_DATA.with(|d| {
+                let data = d.borrow();
+                let i = idx.max(0) as usize;
+                if i < 5 { data.bands[i] as f64 } else { 0.0 }
+            })
+        });
+        // AE-style: audioAmplitude("bass"), audioAmplitude("treble"), etc.
+        e.register_fn("audioAmplitude", |band_name: &str| -> f64 {
+            AUDIO_DATA.with(|d| {
+                let data = d.borrow();
+                match band_name.to_lowercase().as_str() {
+                    "bass" | "low" => data.bands[0] as f64,
+                    "lowmid" | "low-mid" => data.bands[1] as f64,
+                    "mid" | "midrange" => data.bands[2] as f64,
+                    "highmid" | "high-mid" => data.bands[3] as f64,
+                    "treble" | "high" => data.bands[4] as f64,
+                    _ => data.amplitude as f64,
+                }
+            })
         });
         e
     };
