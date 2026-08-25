@@ -272,10 +272,20 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
                     {
                         let comp = app.history.current().active_composition().clone();
                         let frame = app.current_frame;
-                        let pixels = crate::core::software_renderer::render_frame_to_pixels(
-                            &comp, frame, comp.width, comp.height, 0.0, 0,
+                        // 2× supersample render then alpha-weighted downsample
+                        // for clean anti-aliased edges (clamped by raster max).
+                        let max_dim = crate::core::software_renderer::MAX_RENDER_DIMENSION;
+                        let sw = (comp.width.saturating_mul(2)).min(max_dim);
+                        let sh = (comp.height.saturating_mul(2)).min(max_dim);
+                        let px = crate::core::software_renderer::render_frame_to_pixels(
+                            &comp, frame, sw, sh, 0.0, 0,
                         );
-                        match image::save_buffer(&path, &pixels, comp.width, comp.height, image::ColorType::Rgba8) {
+                        let (pixels, w, h) = if sw > comp.width || sh > comp.height {
+                            (crate::core::supersample::downsample2x(&px, comp.width, comp.height), comp.width, comp.height)
+                        } else {
+                            (px, sw, sh)
+                        };
+                        match image::save_buffer(&path, &pixels, w, h, image::ColorType::Rgba8) {
                             Ok(_) => app.toasts.info(format!("Frame {} saved to {}", frame, path.display())),
                             Err(e) => app.toasts.error(format!("Save failed: {}", e)),
                         }

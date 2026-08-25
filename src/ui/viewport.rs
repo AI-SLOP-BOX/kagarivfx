@@ -244,8 +244,21 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: u32) 
                 // viewport renders at ~800px wide (4-16x less fill rate).
                 // While playing, the adaptive factor further reduces resolution when
                 // frames exceed the playback budget (AE-style auto quality drop).
+                // While the user is mid-drag (transform/mask/pin handles) we cap at
+                // half resolution so heavy comps stay interactive; idle frames
+                // snap back to full via the drift logic below.
+                let dragging_now = ui.input(|i| i.pointer.any_down())
+                    && (app.viewport_drag_state.is_some()
+                        || app.viewport_multi_drag.is_some()
+                        || app.viewport_mask_drag_state.is_some()
+                        || app.viewport_scale_drag.is_some());
+                let effective_factor = if dragging_now {
+                    app.adaptive_preview_factor.min(0.5)
+                } else {
+                    app.adaptive_preview_factor
+                };
                 let display_px = (draw_w * ctx.pixels_per_point()).ceil();
-                let preview_px = ((display_px * app.adaptive_preview_factor) as u32).clamp(64, 4096);
+                let preview_px = ((display_px * effective_factor) as u32).clamp(64, 4096);
                 renderer.set_preview_max_width(Some(preview_px));
 
                 // ── RAM preview: incremental pre-pass, a few frames per UI frame ──
