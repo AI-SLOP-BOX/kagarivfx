@@ -137,11 +137,24 @@ pub fn draw_expanded_rows(
                                     }
                                 }
 
-                            // ── Effect keyframe rows (draw_prop_row_ext for selection + snap) ──
+                            // ── Effect keyframe rows: collapsible per-effect groups ──
                             for effect in layer.effects.iter_mut() {
                                 let fx_name = effect.name.clone();
                                 let moved: &mut bool = project_changed;
                                 use crate::core::effect_params::ParamRef;
+                                let fx_enabled = effect.enabled;
+                                let hdr = egui::CollapsingHeader::new(
+                                    egui::RichText::new(format!(
+                                        "{} {}",
+                                        if fx_enabled { egui_phosphor::regular::POWER } else { egui_phosphor::regular::PROHIBIT },
+                                        fx_name
+                                    ))
+                                    .small()
+                                    .color(if fx_enabled { colors::TEXT_PRIMARY } else { colors::TEXT_MUTED }),
+                                )
+                                .id_salt(ui.make_persistent_id(format!("fxgrp_{}_{}", i, fx_name)))
+                                .default_open(false);
+                                hdr.show(ui, |ui| {
                                 for (label, param) in effect.effect_type.animatable_params() {
                                     let prop_key_str = format!("fx_{}_{}", fx_name, label);
                                     let prop_key: &'static str = Box::leak(prop_key_str.into_boxed_str());
@@ -185,6 +198,7 @@ pub fn draw_expanded_rows(
                                         }
                                     }
                                 }
+                                });
                             }
 
                             // ── Puppet Pin rows (keyframeable positions) ──
