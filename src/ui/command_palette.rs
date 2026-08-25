@@ -382,6 +382,23 @@ pub fn get_all_commands() -> Vec<PaletteCommand> {
             }),
         },
         PaletteCommand {
+            name: "Tool: Brush",
+            category: "Tools",
+            shortcut_hint: "",
+            action: Box::new(|app| {
+                app.active_tool = crate::ui::toolbar::ActiveTool::Brush;
+                app.toasts.info("Brush — drag in viewport to paint on the selected layer");
+            }),
+        },
+        PaletteCommand {
+            name: "Tool: Eraser (removes strokes)",
+            category: "Tools",
+            shortcut_hint: "",
+            action: Box::new(|app| {
+                app.active_tool = crate::ui::toolbar::ActiveTool::Eraser;
+            }),
+        },
+        PaletteCommand {
             name: "File: Save Project",
             category: "File",
             shortcut_hint: "Cmd+S",

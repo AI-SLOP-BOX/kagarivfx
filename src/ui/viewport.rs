@@ -472,8 +472,9 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: u32) 
             app.active_tool,
             crate::ui::toolbar::ActiveTool::Brush | crate::ui::toolbar::ActiveTool::Eraser
         ) {
-            // Floating mini-HUD: brush size + color (Brush only)
-            if app.active_tool == crate::ui::toolbar::ActiveTool::Brush {
+            // Floating mini-HUD: size (+ color for Brush)
+            if app.active_tool == crate::ui::toolbar::ActiveTool::Brush
+                || app.active_tool == crate::ui::toolbar::ActiveTool::Eraser {
                 let hud_id = egui::Id::new("paint_hud");
                 egui::Area::new(hud_id)
                     .anchor(egui::Align2::RIGHT_TOP, [-14.0, 60.0])
@@ -484,7 +485,8 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: u32) 
                             .inner_margin(8.0);
                         hud_frame.show(ui, |ui: &mut egui::Ui| {
                                 ui.set_min_width(150.0);
-                                ui.label(egui::RichText::new("🖌 Brush").strong().small());
+                                let is_erase = app.active_tool == crate::ui::toolbar::ActiveTool::Eraser;
+                                ui.label(egui::RichText::new(if is_erase { "🧽 Eraser Size" } else { "🖌 Brush" }).strong().small());
                                 let mut size = ctx.data_mut(|d| {
                                     d.get_temp::<f32>(egui::Id::new("paint_size")).unwrap_or(12.0)
                                 });
@@ -493,12 +495,14 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: u32) 
                                 ).changed() {
                                     ctx.data_mut(|d| d.insert_temp(egui::Id::new("paint_size"), size));
                                 }
-                                let mut col = ctx.data_mut(|d| {
-                                    d.get_temp::<[f32; 4]>(egui::Id::new("paint_color"))
-                                        .unwrap_or([1.0, 1.0, 1.0, 1.0])
-                                });
-                                ui.color_edit_button_rgba_unmultiplied(&mut col);
-                                ctx.data_mut(|d| d.insert_temp(egui::Id::new("paint_color"), col));
+                                if app.active_tool != crate::ui::toolbar::ActiveTool::Eraser {
+                                    let mut col = ctx.data_mut(|d| {
+                                        d.get_temp::<[f32; 4]>(egui::Id::new("paint_color"))
+                                            .unwrap_or([1.0, 1.0, 1.0, 1.0])
+                                    });
+                                    ui.color_edit_button_rgba_unmultiplied(&mut col);
+                                    ctx.data_mut(|d| d.insert_temp(egui::Id::new("paint_color"), col));
+                                }
                             });
                     });
             }

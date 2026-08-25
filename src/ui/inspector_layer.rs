@@ -738,6 +738,47 @@ pub fn draw_layer_type_specs(
         });
 
         ui.separator();
+        // ── Paint Strokes ──
+        ui.collapsing("🖌 Paint Strokes", |ui| {
+            let n = layer.paint_strokes.len();
+            if n == 0 {
+                ui.label(egui::RichText::new("No strokes — use the Brush tool in the viewport").small().color(colors::TEXT_MUTED));
+            } else {
+                ui.label(egui::RichText::new(format!("{} stroke{}", n, if n == 1 { "" } else { "s" })).small().color(colors::TEXT_SECONDARY));
+            }
+            let mut remove_idx: Option<usize> = None;
+            for (si, s) in layer.paint_strokes.iter_mut().enumerate() {
+                ui.horizontal(|ui| {
+                    let cr = (s.color[0] * 255.0) as u8;
+                    let cg = (s.color[1] * 255.0) as u8;
+                    let cb = (s.color[2] * 255.0) as u8;
+                    let (rct, _) = ui.allocate_exact_size(egui::vec2(10.0, 10.0), egui::Sense::hover());
+                    ui.painter().rect_filled(rct, 2.0, egui::Color32::from_rgb(cr, cg, cb));
+                    ui.label(egui::RichText::new(format!("Stroke {} · {} pts", si + 1, s.points.len())).small());
+                    ui.add_space(4.0);
+                    ui.label(egui::RichText::new("In").small().color(colors::TEXT_MUTED));
+                    if ui.add(egui::DragValue::new(&mut s.start_frame).range(0..=999_999)).changed() {
+                        *project_changed = true;
+                    }
+                    ui.label(egui::RichText::new("Out").small().color(colors::TEXT_MUTED));
+                    let mut ef = s.end_frame;
+                    let suffix = if ef == 0 { " (auto)" } else { "" };
+                    if ui.add(egui::DragValue::new(&mut ef).range(0..=999_999).suffix(suffix)).changed() {
+                        s.end_frame = ef;
+                        *project_changed = true;
+                    }
+                    if ui.small_button("🗑").on_hover_text("Delete stroke").clicked() {
+                        remove_idx = Some(si);
+                    }
+                });
+            }
+            if let Some(ri) = remove_idx {
+                layer.paint_strokes.remove(ri);
+                *project_changed = true;
+            }
+        });
+
+        ui.separator();
         ui.collapsing("Trim Paths Animator", |ui| {
             if layer.trim_paths.is_none() {
                 if ui.button("+ Add Trim Paths").clicked() {

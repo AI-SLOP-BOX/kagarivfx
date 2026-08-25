@@ -867,6 +867,13 @@ let type_icon = crate::ui::icons::layer_icon(&layer.layer_type);
                                             pending_select_all_kfs = Some(i);
                                             ui.close_menu();
                                         }
+                                        if !layer.paint_strokes.is_empty()
+                                            && ui.button("🧹 Clear All Paint Strokes").clicked() {
+                                            layer.paint_strokes.clear();
+                                            project_changed = true;
+                                            app.toasts.info("All paint strokes cleared");
+                                            ui.close_menu();
+                                        }
                                         if ui.button("Pre-Compose Selected... (Cmd+Shift+C)").clicked() {
                                             let selected_indices: Vec<usize> = if !app.selected_layers.is_empty() {
                                                 let mut s: Vec<usize> = app.selected_layers.iter().copied().collect();
