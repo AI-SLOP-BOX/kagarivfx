@@ -73,6 +73,14 @@ struct Layer {
     mask_inverted: u32,
     mask_feather: f32,
 
+    // Lens Flare (screen-space, from light source)
+    flare_enabled: u32,
+    flare_pos_x: f32,
+    flare_pos_y: f32,
+    flare_intensity: f32,
+    flare_threshold: f32,
+    flare_color: vec4<f32>,
+
     // Shape params: x = polygon sides, y = rectangle corner radius (normalized 0..1 of half-size)
     shape_params: vec4<f32>,
 
@@ -370,6 +378,43 @@ fn sample_layer_color(local_pos_in: vec2<f32>, tc_in: vec2<f32>, blur_extend: f3
         let gc = layer.glow_color.rgb;
         let gc_lum = max(dot(gc, vec3<f32>(0.333)), 0.001);
         c = vec4<f32>(c.r + bloom.r * gc.r / gc_lum, c.g + bloom.g * gc.g / gc_lum, c.b + bloom.b * gc.b / gc_lum, c.a);
+    }
+
+    // ── Lens Flare: screen-space optical flare from light source ──
+    if (layer.flare_enabled == 1u) {
+        let flare_center = vec2<f32>(layer.flare_pos_x, layer.flare_pos_y);
+        let vp = max(globals.viewport_size, vec2<f32>(1.0, 1.0));
+        let texel = vec2<f32>(1.0) / vp;
+
+        // Distance from this pixel to the flare center
+        let d = distance(in.tex_coords, flare_center);
+        let d_norm = d * 2.0; // normalize to 0..1 range
+
+        // Core glow: bright center
+        let core_radius = 0.02;
+        let core = exp(-d_norm * d_norm / (core_radius * core_radius)) * layer.flare_intensity;
+
+        // Ring artifacts: concentric rings along the axis from center to pixel
+        let ring_phase = d_norm * 12.0; // ring frequency
+        let ring = sin(ring_phase) * 0.3 + 0.5; // oscillate 0.2..0.8
+        let ring_mask = exp(-d_norm * 3.0); // fade with distance
+        let ring_contribution = ring * ring_mask * layer.flare_intensity * 0.3;
+
+        // Streaks: 4-pointed star along horizontal and vertical axes
+        let to_center = in.tex_coords - flare_center;
+        let streak_h = exp(-abs(to_center.y) * 80.0) * exp(-abs(to_center.x) * 8.0);
+        let streak_v = exp(-abs(to_center.x) * 80.0) * exp(-abs(to_center.y) * 8.0);
+        let streaks = (streak_h + streak_v) * layer.flare_intensity * 0.4;
+
+        // Combine all flare elements
+        let flare_total = (core + ring_contribution + streaks) * layer.flare_threshold;
+        let fc = layer.flare_color.rgb;
+        c = vec4<f32>(
+            clamp(c.r + fc.r * flare_total, 0.0, 1.0),
+            clamp(c.g + fc.g * flare_total, 0.0, 1.0),
+            clamp(c.b + fc.b * flare_total, 0.0, 1.0),
+            c.a
+        );
     }
 
     return c;

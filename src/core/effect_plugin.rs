@@ -96,6 +96,14 @@ pub struct EffectParams {
     pub motionblur_velocity_x: f32,
     pub motionblur_velocity_y: f32,
     pub motionblur_samples: u32,
+
+    // Lens Flare
+    pub flare_enabled: u32,
+    pub flare_pos_x: f32,
+    pub flare_pos_y: f32,
+    pub flare_intensity: f32,
+    pub flare_threshold: f32,
+    pub flare_color: [f32; 4],
 }
 
 impl Default for EffectParams {
@@ -152,6 +160,12 @@ impl Default for EffectParams {
             motionblur_velocity_x: 0.0,
             motionblur_velocity_y: 0.0,
             motionblur_samples: 8,
+            flare_enabled: 0,
+            flare_pos_x: 0.5,
+            flare_pos_y: 0.5,
+            flare_intensity: 1.0,
+            flare_threshold: 0.8,
+            flare_color: [1.0, 0.95, 0.9, 1.0],
         }
     }
 }

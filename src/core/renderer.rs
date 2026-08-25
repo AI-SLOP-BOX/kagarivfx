@@ -148,6 +148,14 @@ struct LayerUniform {
     motionblur_velocity_y: f32,
     motionblur_samples: u32,
 
+    // Lens Flare
+    flare_enabled: u32,
+    flare_pos_x: f32,
+    flare_pos_y: f32,
+    flare_intensity: f32,
+    flare_threshold: f32,
+    flare_color: [f32; 4],
+
     // Per-layer GPU mask flags (coverage baked CPU-side; see rasterize_layer_masks)
     mask_enabled: u32,
     mask_mode: u32,
@@ -156,8 +164,7 @@ struct LayerUniform {
 
     _pad0: u32,
     _pad1: u32,
-    _pad2: u32,
-    _padding_align: [[f32; 4]; 7], // Keep total size a multiple of 256 for WGPU dynamic uniform offsets
+    _padding_align: [[f32; 4]; 5], // Keep total size a multiple of 256 for WGPU dynamic uniform offsets
 }
 
 // ─── GPU Layer Mask Rasterization (CPU-baked coverage → group(3) texture) ──
@@ -1812,14 +1819,19 @@ impl WgpuRenderer {
                     motionblur_velocity_x: ep.motionblur_velocity_x,
                     motionblur_velocity_y: ep.motionblur_velocity_y,
                     motionblur_samples: ep.motionblur_samples,
+                    flare_enabled: ep.flare_enabled,
+                    flare_pos_x: ep.flare_pos_x,
+                    flare_pos_y: ep.flare_pos_y,
+                    flare_intensity: ep.flare_intensity,
+                    flare_threshold: ep.flare_threshold,
+                    flare_color: ep.flare_color,
                     mask_enabled: 0,
                     mask_mode: 0,
                     mask_inverted: 0,
                     mask_feather: 0.0,
                     _pad0: 0,
                     _pad1: 0,
-                    _pad2: 0,
-                    _padding_align: [[0.0; 4]; 7],
+                    _padding_align: [[0.0; 4]; 5],
                 };
 
                 layer_mask_plans.push(collect_mask_shapes(
