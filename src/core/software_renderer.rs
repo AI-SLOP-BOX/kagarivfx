@@ -281,21 +281,19 @@ fn render_precomp_layers_inner(_comp: &Composition, precomp_comp: &Composition, 
                 let py = min_y + ly;
                 let idx = ((py * width + px) * 4) as usize;
                 if idx+3 >= buffer.len() { continue; }
-                let src_r = layer_buf[lidx] as f32 / 255.0;
-                let src_g = layer_buf[lidx+1] as f32 / 255.0;
-                let src_b = layer_buf[lidx+2] as f32 / 255.0;
-                let dst_r = buffer[idx] as f32 / 255.0;
-                let dst_g = buffer[idx+1] as f32 / 255.0;
-                let dst_b = buffer[idx+2] as f32 / 255.0;
-                let dst_a = buffer[idx+3] as f32 / 255.0;
-                let out_a = src_a + dst_a * (1.0 - src_a);
-                let out_r = if out_a > 0.0 { (src_r * src_a + dst_r * dst_a * (1.0 - src_a)) / out_a } else { 0.0 };
-                let out_g = if out_a > 0.0 { (src_g * src_a + dst_g * dst_a * (1.0 - src_a)) / out_a } else { 0.0 };
-                let out_b = if out_a > 0.0 { (src_b * src_a + dst_b * dst_a * (1.0 - src_a)) / out_a } else { 0.0 };
-                buffer[idx] = (out_r * 255.0) as u8;
-                buffer[idx+1] = (out_g * 255.0) as u8;
-                buffer[idx+2] = (out_b * 255.0) as u8;
-                buffer[idx+3] = (out_a * 255.0) as u8;
+                let src_linear = crate::core::color::Rgbaf::from_rgba8(
+                    layer_buf[lidx], layer_buf[lidx+1], layer_buf[lidx+2], 255,
+                );
+                let src_lin = crate::core::color::Rgbaf::new(src_linear.r, src_linear.g, src_linear.b, src_a);
+                let dst_linear = crate::core::color::Rgbaf::from_rgba8(
+                    buffer[idx], buffer[idx+1], buffer[idx+2], buffer[idx+3],
+                );
+                let out = src_lin.over(dst_linear);
+                let out_rgba = out.to_rgba8();
+                buffer[idx] = out_rgba[0];
+                buffer[idx+1] = out_rgba[1];
+                buffer[idx+2] = out_rgba[2];
+                buffer[idx+3] = out_rgba[3];
             }
         }
     }
@@ -734,25 +732,24 @@ pub fn render_frame_to_pixels(comp: &Composition, frame: u32, width: u32, height
                             let src_idx = ((sy * sw + sx) * 4) as usize;
                             if src_idx + 3 >= sub_pixels.len() { continue; }
 
-                            let src_a = sub_pixels[src_idx + 3] as f32 / 255.0 * l_opacity * mask_alpha;
-                            if src_a <= 0.001 { continue; }
+                            let src_a_raw = sub_pixels[src_idx + 3] as f32 / 255.0 * l_opacity * mask_alpha;
+                            if src_a_raw <= 0.001 { continue; }
                             let dst_idx = ((py * width + px) * 4) as usize;
                             if dst_idx + 3 >= buffer.len() { continue; }
-                            let src_r = sub_pixels[src_idx] as f32 / 255.0;
-                            let src_g = sub_pixels[src_idx + 1] as f32 / 255.0;
-                            let src_b = sub_pixels[src_idx + 2] as f32 / 255.0;
-                            let dst_r = buffer[dst_idx] as f32 / 255.0;
-                            let dst_g = buffer[dst_idx + 1] as f32 / 255.0;
-                            let dst_b = buffer[dst_idx + 2] as f32 / 255.0;
-                            let dst_a = buffer[dst_idx + 3] as f32 / 255.0;
-                            let out_a = src_a + dst_a * (1.0 - src_a);
-                            let out_r = if out_a > 0.0 { (src_r * src_a + dst_r * dst_a * (1.0 - src_a)) / out_a } else { 0.0 };
-                            let out_g = if out_a > 0.0 { (src_g * src_a + dst_g * dst_a * (1.0 - src_a)) / out_a } else { 0.0 };
-                            let out_b = if out_a > 0.0 { (src_b * src_a + dst_b * dst_a * (1.0 - src_a)) / out_a } else { 0.0 };
-                            buffer[dst_idx] = (out_r * 255.0) as u8;
-                            buffer[dst_idx + 1] = (out_g * 255.0) as u8;
-                            buffer[dst_idx + 2] = (out_b * 255.0) as u8;
-                            buffer[dst_idx + 3] = (out_a * 255.0) as u8;
+                            // Linear-space compositing (16bpc quality)
+                            let src_linear = crate::core::color::Rgbaf::from_rgba8(
+                                sub_pixels[src_idx], sub_pixels[src_idx+1], sub_pixels[src_idx+2], 255,
+                            );
+                            let src_lin = crate::core::color::Rgbaf::new(src_linear.r, src_linear.g, src_linear.b, src_a_raw);
+                            let dst_linear = crate::core::color::Rgbaf::from_rgba8(
+                                buffer[dst_idx], buffer[dst_idx+1], buffer[dst_idx+2], buffer[dst_idx+3],
+                            );
+                            let out = src_lin.over(dst_linear);
+                            let out_rgba = out.to_rgba8();
+                            buffer[dst_idx] = out_rgba[0];
+                            buffer[dst_idx + 1] = out_rgba[1];
+                            buffer[dst_idx + 2] = out_rgba[2];
+                            buffer[dst_idx + 3] = out_rgba[3];
                         }
                     }
                 }

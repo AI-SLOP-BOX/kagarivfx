@@ -1,3 +1,4 @@
+pub mod color;
 pub mod effect_plugin;
 pub mod effect_params;
 pub mod cpu_effects;
