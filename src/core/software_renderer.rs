@@ -1,4 +1,4 @@
-use crate::core::timeline::{Composition, LayerType, BlendMode, ShapeType, TrimPaths, TrackMatteMode};
+use crate::core::timeline::{Composition, LayerType, BlendMode, ShapeType, TrimPaths, TrackMatteMode, LightType};
 use crate::core::mask::point_in_polygon;
 use rayon::prelude::*;
 
@@ -798,6 +798,7 @@ pub fn render_frame_to_pixels(comp: &Composition, frame: u32, width: u32, height
                         aperture: comp.active_camera.aperture,
                         f_stop: comp.active_camera.aperture,
                         blur_level: 100.0,
+                        iris_sides: comp.active_camera.dof_iris_sides,
                     };
                     crate::core::camera_dof::calculate_circle_of_confusion(z, &dof)
                         .clamp(0.0, comp.active_camera.dof_max_blur)
@@ -1467,40 +1468,72 @@ pub fn render_frame_to_pixels(comp: &Composition, frame: u32, width: u32, height
 
         // Phase 2.6: 3D light shading for 3D layers.
         // Phong shading with material properties (ambient, diffuse, specular, emission).
+        // Enhanced: spot light cone falloff, inverse-square attenuation, light color tinting.
         if layer.is_3d {
             let mat = &layer.material;
-            let mut shade = mat.ambient; // ambient floor from material
+            let layer_z = layer.transform_3d.position.evaluate(effective_frame)[2];
+            let mut shade_r = mat.ambient;
+            let mut shade_g = mat.ambient;
+            let mut shade_b = mat.ambient;
             for light in &comp.lights {
                 let lpos = light.position.evaluate(effective_frame);
                 let lx = cx - lpos[0];
                 let ly = cy - lpos[1];
-                let lz = 0.0 - lpos[2]; // layer plane sits at z=0
+                let lz = layer_z - lpos[2];
                 let dist = (lx * lx + ly * ly + lz * lz).sqrt().max(1.0);
+
+                // Light direction (normalized)
+                let _ldx = lx / dist;
+                let _ldy = ly / dist;
+                let ldz = lz / dist;
+
                 // N·L with flat normal facing the camera (+z)
-                let ndotl = (lz / dist).max(0.0);
-                let attenuation = (light.intensity / 100.0) / (1.0 + dist / 1000.0);
-                // Diffuse component
-                shade += ndotl * attenuation * mat.diffuse;
-                // Specular component (Blinn-Phong approximation)
+                let ndotl = (ldz).max(0.0);
+
+                // Inverse-square attenuation with configurable intensity
+                let atten_base = light.intensity / 100.0;
+                let atten_dist = 1.0 / (1.0 + (dist / 500.0).powi(2));
+                let mut attenuation = atten_base * atten_dist;
+
+                // Spot light cone falloff
+                if let LightType::Spot { cone_angle_deg, cone_feather_pct } = light.light_type {
+                    let cone_rad = cone_angle_deg.to_radians() * 0.5;
+                    let cos_angle = ldz.max(0.0); // angle from light's forward direction (+z)
+                    let cone_edge = cone_rad.cos();
+                    let feather = (cone_feather_pct / 100.0).clamp(0.01, 1.0);
+                    let spot_falloff = ((cos_angle - cone_edge) / (feather * (1.0 - cone_edge).max(0.01))).clamp(0.0, 1.0);
+                    attenuation *= spot_falloff;
+                }
+
+                // Diffuse component with light color
+                let lc = light.color;
+                shade_r += ndotl * attenuation * mat.diffuse * lc[0];
+                shade_g += ndotl * attenuation * mat.diffuse * lc[1];
+                shade_b += ndotl * attenuation * mat.diffuse * lc[2];
+
+                // Specular component (Blinn-Phong) with light color
                 if mat.specular > 0.01 {
-                    // Half-vector between view direction (+z) and light direction
                     let hx = 0.0;
                     let hy = 0.0;
-                    let hz = 1.0 + lz / dist;
+                    let hz = 1.0 + ldz;
                     let h_len = (hx * hx + hy * hy + hz * hz).sqrt().max(0.001);
                     let ndoth = (hz / h_len).max(0.0);
                     let spec = ndoth.powf(mat.specular_exponent) * attenuation * mat.specular;
-                    shade += spec;
+                    shade_r += spec * lc[0];
+                    shade_g += spec * lc[1];
+                    shade_b += spec * lc[2];
                 }
             }
             // Emission adds constant self-illumination
-            shade += mat.emission;
-            shade = shade.clamp(0.0, 3.0);
-            if (shade - 1.0).abs() > 0.01 {
+            shade_r += mat.emission;
+            shade_g += mat.emission;
+            shade_b += mat.emission;
+            let shade_avg = ((shade_r + shade_g + shade_b) / 3.0).clamp(0.0, 3.0);
+            if (shade_avg - 1.0).abs() > 0.01 {
                 for px_chunk in layer_buf.chunks_exact_mut(4) {
-                    px_chunk[0] = ((px_chunk[0] as f32 * shade).min(255.0)) as u8;
-                    px_chunk[1] = ((px_chunk[1] as f32 * shade).min(255.0)) as u8;
-                    px_chunk[2] = ((px_chunk[2] as f32 * shade).min(255.0)) as u8;
+                    px_chunk[0] = ((px_chunk[0] as f32 * shade_r.clamp(0.0, 3.0)).min(255.0)) as u8;
+                    px_chunk[1] = ((px_chunk[1] as f32 * shade_g.clamp(0.0, 3.0)).min(255.0)) as u8;
+                    px_chunk[2] = ((px_chunk[2] as f32 * shade_b.clamp(0.0, 3.0)).min(255.0)) as u8;
                 }
             }
         }
