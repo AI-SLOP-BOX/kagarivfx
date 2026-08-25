@@ -466,6 +466,7 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
 
             let _scroll_resp = egui::ScrollArea::vertical().max_height(200.0).show(ui, |ui| {
                 let layers_len = comp.layers.len();
+                let comp_w_f = comp.width as f32;
                 let parent_choices: Vec<(String, String)> = comp.layers.iter().map(|l| (l.id.clone(), l.name.clone())).collect();
                 let parent_choices_ref = &parent_choices;
                 let layer_edges: Vec<(u32, u32)> = comp.layers.iter().map(|l| (l.in_frame, l.out_frame)).collect();
@@ -867,6 +868,23 @@ let type_icon = crate::ui::icons::layer_icon(&layer.layer_type);
                                             pending_select_all_kfs = Some(i);
                                             ui.close_menu();
                                         }
+                                        // ── ✨ Animation Presets ──
+                                        ui.menu_button("✨ Animation Presets", |ui| {
+                                            let cf = *current_frame;
+                                            for name in crate::core::presets::NAMES {
+                                                if ui.small_button(*name).clicked() {
+                                                    let ok = crate::core::presets::apply_by_name(name, layer, cf, comp_w_f, 0.0);
+                                                    if ok {
+                                                        project_changed = true;
+                                                        app.toasts.info(format!("{} applied", name));
+                                                    } else {
+                                                        app.toasts.error(format!("{}: not applicable here", name));
+                                                    }
+                                                    ui.close_menu();
+                                                    ui.close_menu();
+                                                }
+                                            }
+                                        });
                                         if !layer.paint_strokes.is_empty()
                                             && ui.button("🧹 Clear All Paint Strokes").clicked() {
                                             layer.paint_strokes.clear();
