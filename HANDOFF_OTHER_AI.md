@@ -300,3 +300,16 @@
 - Don't add fields to `LayerUniform` without mirroring byte order in shader `struct Layer` AND adjusting `_padding_align`
 - 8 new tests in `renderer.rs::gpu_mask_tests`; full suite 505 passed / clippy zero at commit
 - Also relocated `start_png_sequence_export` above `mod tests` in ffmpeg_export.rs (clippy items_after_test_module)
+
+## Session: GPU masks v2 — submit-splitting + real feather
+
+### What shipped (renderer.rs, viewport_overlays.rs)
+- **Multi-mask correctness**: render_internal now builds contiguous runs by mask-raster key and issues ONE SUBMIT PER RUN (first run LoadOp::Clear(bg), later runs LoadOp::Load). Each distinct raster is uploaded just before its own submit → painter order preserved across submits, no more "unmasked fallback" when layers carry different masks
+- **Real feather**: Felzenszwalb–Huttenlocher EDT (`edt_1d`/`edt_2d`) computes exact Euclidean distance to polygon boundary; alpha ramps linearly across `feather` px centered on the edge (saturates at ±feather/2 inside/outside). Baked per-shape into coverage BEFORE mode combine & opacity; `MaskRaster.feather` now always 0 (shader-side smoothstep approx is dead code path)
+- HUD CPU-only notice: masks removed from reasons list entirely (was ">1 distinct" condition) — GPU now composites any mask count
+- Gotcha for EDT users: cast to f64 BEFORE subtracting site indices in the query loop (`q as f64 - v[k] as f64`) — all-INF rows can leave envelope sites past q and usize underflow panics in debug
+- Tests: gpu_mask_tests grew to 11 (+3 feather/EDT). Suite note: 2 software_renderer tests fail on the OTHER AI's in-flight dirty file — unrelated to this change (module untouched)
+
+### Still open
+- Export/CPU renderer remains reference implementation (its mask feather semantics may differ slightly from the GPU ramp — compare visually someday)
+- Orphan modules list unchanged (blocked on software_renderer.rs ownership)

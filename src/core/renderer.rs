@@ -159,6 +159,8 @@ pub(crate) struct MaskShape {
     pub mode: crate::core::mask::MaskMode,
     pub opacity: f32,
     pub inverted: bool,
+    /// Feather radius in output pixels (0 = hard edge).
+    pub feather: f32,
 }
 
 /// CPU-rasterized combined mask coverage for one layer, ready for GPU upload.
@@ -228,6 +230,97 @@ fn rasterize_polygon_evenodd(poly: &[[f32; 2]], width: u32, height: u32) -> Vec<
     cov
 }
 
+/// One pass of the Felzenszwalb–Huttenlocher 1D squared distance transform.
+/// `f` holds per-site squared distances (INF where no target site exists).
+fn edt_1d(f: &[f64], d: &mut [f64], v: &mut [usize], z: &mut [f64]) {
+    let n = f.len();
+    let mut k = 0usize;
+    v[0] = 0;
+    z[0] = f64::NEG_INFINITY;
+    z[1] = f64::INFINITY;
+    for q in 1..n {
+        let mut s = ((f[q] + (q * q) as f64) - (f[v[k]] + (v[k] * v[k]) as f64))
+            / (2.0 * (q - v[k]) as f64);
+        while s <= z[k] {
+            k -= 1;
+            s = ((f[q] + (q * q) as f64) - (f[v[k]] + (v[k] * v[k]) as f64))
+                / (2.0 * (q - v[k]) as f64);
+        }
+        k += 1;
+        v[k] = q;
+        z[k] = s;
+        z[k + 1] = f64::INFINITY;
+    }
+    k = 0;
+    for (q, dq) in d.iter_mut().enumerate() {
+        while z[k + 1] < q as f64 {
+            k += 1;
+        }
+        // Cast before subtracting: with all-INF rows the envelope can hold
+        // sites past q, and usize underflow would panic in debug builds.
+        let dx = q as f64 - v[k] as f64;
+        *dq = dx * dx + f[v[k]];
+    }
+}
+
+/// Exact Euclidean distance (px) from every pixel to the nearest pixel where
+/// `binary == target`. Two-pass separable EDT — O(w·h), branch-stable, and
+/// fully deterministic for identical inputs.
+fn edt_2d(binary: &[bool], width: u32, height: u32, target: bool) -> Vec<f32> {
+    const INF: f64 = 1.0e18;
+    let w = width as usize;
+    let h = height as usize;
+    if w == 0 || h == 0 {
+        return Vec::new();
+    }
+    let mut grid = vec![0.0f64; w * h];
+    for (i, g) in grid.iter_mut().enumerate() {
+        *g = if binary[i] == target { 0.0 } else { INF };
+    }
+    let maxlen = w.max(h);
+    let mut f = vec![0.0f64; maxlen];
+    let mut d = vec![0.0f64; maxlen];
+    let mut v = vec![0usize; maxlen];
+    let mut z = vec![0.0f64; maxlen + 1];
+
+    for y in 0..h {
+        f[..w].copy_from_slice(&grid[y * w..(y + 1) * w]);
+        edt_1d(&f[..w], &mut d[..w], &mut v[..w], &mut z[..w + 1]);
+        grid[y * w..(y + 1) * w].copy_from_slice(&d[..w]);
+    }
+    for x in 0..w {
+        for y in 0..h {
+            f[y] = grid[y * w + x];
+        }
+        edt_1d(&f[..h], &mut d[..h], &mut v[..h], &mut z[..h + 1]);
+        for y in 0..h {
+            grid[y * w + x] = d[y];
+        }
+    }
+    grid.into_iter().map(|g| g.sqrt() as f32).collect()
+}
+
+/// Replaces a binary coverage map with an AE-style feathered matte: alpha
+/// ramps linearly across `feather` pixels centered on the polygon boundary.
+/// Distances are capped so uniform regions clamp cleanly (no INF−INF NaN).
+fn feather_coverage(cov: &[f32], width: u32, height: u32, feather: f32) -> Vec<f32> {
+    let bin: Vec<bool> = cov.iter().map(|&c| c > 0.5).collect();
+    let d_to_uncovered = edt_2d(&bin, width, height, false); // inside → edge
+    let d_to_covered = edt_2d(&bin, width, height, true); // outside → edge
+    let cap = (width + height) as f32;
+    let half = feather.max(0.5);
+    cov.iter()
+        .zip(d_to_uncovered)
+        .zip(d_to_covered)
+        .map(|((_, di), do_)| {
+            let di = di.min(cap);
+            let dout = do_.min(cap);
+            let signed = di - dout; // >0 inside the shape
+            ((signed / half) * 0.5 + 0.5).clamp(0.0, 1.0)
+        })
+        .collect()
+}
+
 /// Combines evaluated mask shapes into a single coverage buffer using AE's
 /// mask-mode semantics. A Subtract FIRST mask starts from a full frame so it
 /// carves material away (subtraction against an empty base is a no-op);
@@ -250,6 +343,9 @@ pub(crate) fn combine_mask_shapes(
             continue;
         }
         let mut cov = rasterize_polygon_evenodd(&shape.poly, width, height);
+        if shape.feather >= 0.5 {
+            cov = feather_coverage(&cov, width, height, shape.feather);
+        }
         let op = shape.opacity.clamp(0.0, 1.0);
         if op < 1.0 {
             for c in cov.iter_mut() {
@@ -300,12 +396,10 @@ pub(crate) fn rasterize_layer_masks(
     let sx = out_w as f32 / comp_w.max(1) as f32;
     let sy = out_h as f32 / comp_h.max(1) as f32;
     let mut shapes = Vec::new();
-    let mut max_feather = 0.0f32;
     for mask in &layer.masks {
         if !mask.enabled || mask.mode == MaskMode::None {
             continue;
         }
-        max_feather = max_feather.max(mask.feather.evaluate(frame));
         let mut poly = mask.path.to_polygon(frame, 12);
         // to_polygon may repeat the first point to close the loop — drop it
         if poly.len() > 1 && poly[0] == *poly.last().unwrap() {
@@ -319,6 +413,7 @@ pub(crate) fn rasterize_layer_masks(
             mode: mask.mode,
             opacity: (mask.opacity.evaluate(frame) / 100.0).clamp(0.0, 1.0),
             inverted: mask.inverted,
+            feather: mask.feather.evaluate(frame).max(0.0),
         });
     }
     let coverage = combine_mask_shapes(&shapes, out_w, out_h)?;
@@ -330,11 +425,11 @@ pub(crate) fn rasterize_layer_masks(
         pixels[i * 4 + 2] = 255;
         pixels[i * 4 + 3] = a;
     }
-    let key = mask_raster_key(&pixels, out_w, out_h, max_feather);
+    let key = mask_raster_key(&pixels, out_w, out_h, 0.0);
     Some(MaskRaster {
         key,
         pixels,
-        feather: max_feather,
+        feather: 0.0, // feather is baked into the coverage ramp already
     })
 }
 
@@ -365,8 +460,8 @@ mod gpu_mask_tests {
     #[test]
     fn add_mode_unions_adjacent_rects() {
         let shapes = [
-            MaskShape { poly: rect(0.0, 0.0, 4.0, 2.0), mode: crate::core::mask::MaskMode::Add, opacity: 1.0, inverted: false },
-            MaskShape { poly: rect(4.0, 0.0, 4.0, 2.0), mode: crate::core::mask::MaskMode::Add, opacity: 1.0, inverted: false },
+            MaskShape { poly: rect(0.0, 0.0, 4.0, 2.0), mode: crate::core::mask::MaskMode::Add, opacity: 1.0, inverted: false, feather: 0.0 },
+            MaskShape { poly: rect(4.0, 0.0, 4.0, 2.0), mode: crate::core::mask::MaskMode::Add, opacity: 1.0, inverted: false, feather: 0.0 },
         ];
         let cov = combine_mask_shapes(&shapes, 8, 2).expect("masks present");
         assert!(cov.iter().all(|&c| c == 1.0), "union of both halves covers the row");
@@ -379,6 +474,7 @@ mod gpu_mask_tests {
             mode: crate::core::mask::MaskMode::Subtract,
             opacity: 1.0,
             inverted: false,
+            feather: 0.0,
         }];
         let cov = combine_mask_shapes(&shapes, 8, 8).expect("masks present");
         let get = |px: usize, py: usize| cov[py * 8 + px];
@@ -393,6 +489,7 @@ mod gpu_mask_tests {
             mode: crate::core::mask::MaskMode::Add,
             opacity: 1.0,
             inverted: true,
+            feather: 0.0,
         }];
         let cov = combine_mask_shapes(&shapes, 8, 8).expect("masks present");
         let get = |px: usize, py: usize| cov[py * 8 + px];
@@ -403,8 +500,8 @@ mod gpu_mask_tests {
     #[test]
     fn intersect_mode_takes_minimum() {
         let shapes = [
-            MaskShape { poly: rect(0.0, 0.0, 6.0, 2.0), mode: crate::core::mask::MaskMode::Add, opacity: 1.0, inverted: false },
-            MaskShape { poly: rect(2.0, 0.0, 6.0, 2.0), mode: crate::core::mask::MaskMode::Intersect, opacity: 1.0, inverted: false },
+            MaskShape { poly: rect(0.0, 0.0, 6.0, 2.0), mode: crate::core::mask::MaskMode::Add, opacity: 1.0, inverted: false, feather: 0.0 },
+            MaskShape { poly: rect(2.0, 0.0, 6.0, 2.0), mode: crate::core::mask::MaskMode::Intersect, opacity: 1.0, inverted: false, feather: 0.0 },
         ];
         let cov = combine_mask_shapes(&shapes, 8, 2).expect("masks present");
         assert_eq!(cov[1], 0.0, "only in first");
@@ -420,6 +517,7 @@ mod gpu_mask_tests {
             mode: crate::core::mask::MaskMode::None,
             opacity: 1.0,
             inverted: false,
+            feather: 0.0,
         }];
         assert!(combine_mask_shapes(&disabled, 8, 8).is_none());
     }
@@ -432,6 +530,60 @@ mod gpu_mask_tests {
         let pb: Vec<u8> = cb.iter().map(|c| (c * 255.0) as u8).collect();
         assert_eq!(mask_raster_key(&pa, 8, 8, 0.0), mask_raster_key(&pb, 8, 8, 0.0));
         assert_ne!(mask_raster_key(&pa, 8, 8, 0.0), mask_raster_key(&pa, 8, 8, 2.5));
+    }
+
+    #[test]
+    fn edt_distance_matches_manhattan_reference() {
+        // 4x4 grid with a single covered pixel at (1,1): Euclidean distance to
+        // it must beat or equal any Manhattan path and match exact diagonals.
+        let bin = vec![
+            false, false, false, false,
+            false, true,  false, false,
+            false, false, false, false,
+            false, false, false, false,
+        ];
+        let d = edt_2d(&bin, 4, 4, true);
+        assert_eq!(d[4 + 1], 0.0);
+        assert_eq!(d[4 + 2], 1.0);
+        assert!((d[2 * 4 + 2] - std::f32::consts::SQRT_2).abs() < 1e-5);
+        assert!((d[3 * 4 + 3] - 8.0f32.sqrt()).abs() < 1e-5);
+    }
+
+    #[test]
+    fn feather_zero_keeps_hard_edge() {
+        let shapes = [MaskShape {
+            poly: rect(2.0, 2.0, 4.0, 4.0),
+            mode: crate::core::mask::MaskMode::Add,
+            opacity: 1.0,
+            inverted: false,
+            feather: 0.0,
+        }];
+        let out = combine_mask_shapes(&shapes, 8, 8).expect("mask present");
+        let raw = rasterize_polygon_evenodd(&rect(2.0, 2.0, 4.0, 4.0), 8, 8);
+        for (a, b) in raw.iter().zip(out.iter()) {
+            assert_eq!(a, b, "zero feather must keep binary coverage intact");
+        }
+    }
+
+    #[test]
+    fn feather_creates_ramp_centered_on_boundary() {
+        // Rect with > feather/2 margins on every side so the probe saturates.
+        let poly = rect(4.0, 4.0, 14.0, 8.0);
+        let shapes = [MaskShape {
+            poly,
+            mode: crate::core::mask::MaskMode::Add,
+            opacity: 1.0,
+            inverted: false,
+            feather: 4.0,
+        }];
+        let out = combine_mask_shapes(&shapes, 24, 16).expect("mask present");
+        let get = |px: usize, py: usize| out[py * 24 + px];
+        assert_eq!(get(11, 8), 1.0, "feather/2 inside saturates opaque");
+        assert_eq!(get(23, 8), 0.0, "far outside stays transparent");
+        // Right boundary sits between columns 17 and 18: both land mid-ramp.
+        assert!(get(17, 8) > 0.0 && get(17, 8) < 1.0, "inner edge pixel");
+        assert!(get(18, 8) > 0.0 && get(18, 8) < 1.0, "outer edge pixel");
+        assert!((get(17, 8) - get(18, 8)).abs() < 0.35, "ramp symmetric around edge");
     }
 }
 
@@ -1184,50 +1336,15 @@ impl WgpuRenderer {
         // Per-layer text texture bind groups (declared before the render pass so they outlive it)
         let mut layer_textures: Vec<Option<std::sync::Arc<wgpu::BindGroup>>> = Vec::new();
 
-        // Create Command Encoder
-        let mut encoder = self
-            .device
-            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                label: Some(if target_snapshot { "Snapshot Render Encoder" } else { "Render Encoder" }),
-            });
+        // Target must exist; per-run views are borrowed fresh inside the Step-3
+        // loop so mask texture uploads (&mut self) fit between submits.
+        if (target_snapshot && self.snapshot_view.is_none())
+            || (!target_snapshot && self.target_view.is_none())
+        {
+            return false;
+        }
 
         {
-            let target_view = if target_snapshot {
-                match &self.snapshot_view {
-                    Some(view) => view,
-                    None => return false,
-                }
-            } else {
-                match &self.target_view {
-                    Some(view) => view,
-                    None => return false,
-                }
-            };
-
-            let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                label: Some(if target_snapshot { "Snapshot Render Pass" } else { "Render Pass" }),
-                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    view: target_view,
-                    resolve_target: None,
-                    ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(wgpu::Color {
-                            r: comp.background_color[0].clamp(0.0, 1.0) as f64,
-                            g: comp.background_color[1].clamp(0.0, 1.0) as f64,
-                            b: comp.background_color[2].clamp(0.0, 1.0) as f64,
-                            a: comp.background_color[3].clamp(0.0, 1.0) as f64,
-                        }),
-                        store: wgpu::StoreOp::Store,
-                    },
-                })],
-                depth_stencil_attachment: None,
-                timestamp_writes: None,
-                occlusion_query_set: None,
-            });
-
-            render_pass.set_pipeline(&self.render_pipeline);
-            render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
-            render_pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
-            render_pass.set_bind_group(0, &self.globals_bind_group, &[]);
 
             // Viewport projection matrix:
             // Maps [0, width] to [-1, 1] on X, and [0, height] to [1, -1] on Y.
@@ -1496,52 +1613,12 @@ impl WgpuRenderer {
                 active_layers.push(layer);
             }
 
-            // Resolve per-layer mask rasters. A single distinct raster can be
-            // uploaded once and shared by every masked draw in this submit;
-            // multiple distinct rasters would need re-uploads between draws
-            // inside one submit (impossible — writes land before the whole
-            // submit), so those layers render unmasked on GPU this frame.
-            let distinct_keys: std::collections::HashSet<u64> = layer_mask_plans
-                .iter()
-                .flatten()
-                .map(|m| m.key)
-                .collect();
-            let shared_raster: Option<&MaskRaster> = if distinct_keys.len() == 1 {
-                layer_mask_plans.iter().flatten().next()
-            } else {
-                if distinct_keys.len() > 1 {
-                    log::debug!(
-                        "[WgpuRenderer] {} distinct layer masks exceed single-upload limit; GPU renders them unmasked",
-                        distinct_keys.len()
-                    );
-                }
-                None
-            };
-            if let Some(raster) = shared_raster {
-                self.ensure_mask_texture(width, height);
-                let size = wgpu::Extent3d {
-                    width,
-                    height,
-                    depth_or_array_layers: 1,
-                };
-                self.queue.write_texture(
-                    wgpu::ImageCopyTexture {
-                        texture: self.mask_texture.as_ref().expect("mask texture just ensured"),
-                        mip_level: 0,
-                        origin: wgpu::Origin3d::ZERO,
-                        aspect: wgpu::TextureAspect::All,
-                    },
-                    &raster.pixels,
-                    wgpu::ImageDataLayout {
-                        offset: 0,
-                        bytes_per_row: Some(width * 4),
-                        rows_per_image: Some(height),
-                    },
-                    size,
-                );
-            }
+            // Per-layer mask rasters were computed in Step 1. Every masked
+            // layer gets mask_enabled=1; each distinct raster is uploaded in
+            // its own submit during Step 3 (uploads execute just before their
+            // own submit, so painter order across runs is preserved).
             for (u, plan) in uniforms.iter_mut().zip(layer_mask_plans.iter()) {
-                let active = plan.is_some() && shared_raster.is_some();
+                let active = plan.is_some();
                 u.mask_enabled = u32::from(active);
                 u.mask_mode = u32::from(active); // 1 = alpha channel
                 u.mask_inverted = 0; // inversion is baked per-mask into the raster
@@ -1564,30 +1641,121 @@ impl WgpuRenderer {
                 );
             }
 
-            // Step 3: Draw active layers using dynamic offsets without CPU-GPU sync blockers
-            for (i, _layer) in active_layers.iter().enumerate() {
-                if i >= 256 {
-                    break;
+            // Step 3: One submit per contiguous mask-key run. Layers sharing a
+            // raster draw together after that raster's upload; unmasked layers
+            // batch freely. LoadOp::Load on later runs preserves earlier
+            // draws, keeping bottom-up painter order across submits.
+            #[derive(Clone, Copy)]
+            struct MaskRun {
+                start: usize,
+                end: usize,
+                key: Option<u64>,
+            }
+            let draw_count = active_layers.len().min(256);
+            let mut runs: Vec<MaskRun> = Vec::new();
+            for i in 0..draw_count {
+                let k = layer_mask_plans.get(i).and_then(|p| p.as_ref()).map(|r| r.key);
+                match runs.last_mut() {
+                    Some(r) if r.key == k => r.end = i + 1,
+                    _ => runs.push(MaskRun { start: i, end: i + 1, key: k }),
+                }
+            }
+            if runs.is_empty() {
+                // No layers this frame — still clear to the background color.
+                runs.push(MaskRun { start: 0, end: 0, key: None });
+            }
+
+            for run in &runs {
+                if let Some(_key) = run.key {
+                    if let Some(raster) = layer_mask_plans[run.start].as_ref() {
+                        self.ensure_mask_texture(width, height);
+                        let size = wgpu::Extent3d {
+                            width,
+                            height,
+                            depth_or_array_layers: 1,
+                        };
+                        self.queue.write_texture(
+                            wgpu::ImageCopyTexture {
+                                texture: self.mask_texture.as_ref().expect("mask texture just ensured"),
+                                mip_level: 0,
+                                origin: wgpu::Origin3d::ZERO,
+                                aspect: wgpu::TextureAspect::All,
+                            },
+                            &raster.pixels,
+                            wgpu::ImageDataLayout {
+                                offset: 0,
+                                bytes_per_row: Some(width * 4),
+                                rows_per_image: Some(height),
+                            },
+                            size,
+                        );
+                    }
                 }
 
-                // Bind resources using dynamic uniform offset
-                let dynamic_offset = (i * std::mem::size_of::<LayerUniform>()) as u32;
-                render_pass.set_bind_group(1, &self.layer_bind_group, &[dynamic_offset]);
-
-                // Texture binding (use per-layer text texture when available, dummy for solid/SDF shapes)
-                let tex_bg: &wgpu::BindGroup = match layer_textures.get(i) {
-                    Some(Some(bg)) => bg,
-                    _ => &self.dummy_texture_bind_group,
+                let view = if target_snapshot {
+                    self.snapshot_view.as_ref()
+                } else {
+                    self.target_view.as_ref()
                 };
-                render_pass.set_bind_group(2, tex_bg, &[]);
-                render_pass.set_bind_group(3, &self.mask_bind_group, &[]);
+                let Some(view) = view else { return false };
 
-                // Draw!
-                render_pass.draw_indexed(0..(INDICES.len() as u32), 0, 0..1);
+                let mut encoder = self
+                    .device
+                    .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                        label: Some(if target_snapshot { "Snapshot Render Encoder" } else { "Render Encoder" }),
+                    });
+
+                {
+                    let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                        label: Some(if target_snapshot { "Snapshot Render Pass" } else { "Render Pass" }),
+                        color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                            view,
+                            resolve_target: None,
+                            ops: wgpu::Operations {
+                                load: if run.start == 0 {
+                                    wgpu::LoadOp::Clear(wgpu::Color {
+                                        r: comp.background_color[0].clamp(0.0, 1.0) as f64,
+                                        g: comp.background_color[1].clamp(0.0, 1.0) as f64,
+                                        b: comp.background_color[2].clamp(0.0, 1.0) as f64,
+                                        a: comp.background_color[3].clamp(0.0, 1.0) as f64,
+                                    })
+                                } else {
+                                    wgpu::LoadOp::Load
+                                },
+                                store: wgpu::StoreOp::Store,
+                            },
+                        })],
+                        depth_stencil_attachment: None,
+                        timestamp_writes: None,
+                        occlusion_query_set: None,
+                    });
+
+                    render_pass.set_pipeline(&self.render_pipeline);
+                    render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
+                    render_pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
+                    render_pass.set_bind_group(0, &self.globals_bind_group, &[]);
+
+                    for i in run.start..run.end {
+                        // Bind resources using dynamic uniform offset
+                        let dynamic_offset = (i * std::mem::size_of::<LayerUniform>()) as u32;
+                        render_pass.set_bind_group(1, &self.layer_bind_group, &[dynamic_offset]);
+
+                        // Texture binding (use per-layer text texture when available, dummy for solid/SDF shapes)
+                        let tex_bg: &wgpu::BindGroup = match layer_textures.get(i) {
+                            Some(Some(bg)) => bg,
+                            _ => &self.dummy_texture_bind_group,
+                        };
+                        render_pass.set_bind_group(2, tex_bg, &[]);
+                        render_pass.set_bind_group(3, &self.mask_bind_group, &[]);
+
+                        // Draw!
+                        render_pass.draw_indexed(0..(INDICES.len() as u32), 0, 0..1);
+                    }
+                }
+
+                self.queue.submit(std::iter::once(encoder.finish()));
             }
         }
-
-        self.queue.submit(std::iter::once(encoder.finish()));
 
         // Remember inputs so redundant renders can be skipped.
         // RAM pre-pass frames never touch the live-view keys.

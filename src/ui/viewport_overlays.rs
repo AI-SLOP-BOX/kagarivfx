@@ -257,21 +257,13 @@ pub fn draw_viewport_overlays(
     ui.painter().text(badge_rect.center(), egui::Align2::CENTER_CENTER, backend_text, egui::FontId::proportional(11.0), backend_color);
 
     // ── CPU-only Feature Notice ──
-    // Masks, Text Animator, Layer Styles and DOF composite correctly only in
+    // Text Animator, Layer Styles and DOF composite correctly only in
     // the software (export/CPU) path today. Surface one honest badge when any
     // of them is active so viewport vs export differences aren't mysterious.
+    // (Layer masks composite on the GPU path since group-3 mask textures.)
     if rendered_gpu {
         let comp_now = app.history.current().active_composition();
         let mut reasons: Vec<String> = Vec::new();
-
-        // GPU path composites ONE distinct mask raster per frame; multiple
-        // different masks fall back to CPU/export-only rendering.
-        let masked_layers: Vec<&crate::core::timeline::Layer> = comp_now.layers.iter()
-            .filter(|l| l.is_active(current_frame) && l.masks.iter().any(|m| m.enabled && m.mode != crate::core::mask::MaskMode::None))
-            .collect();
-        if masked_layers.len() > 1 {
-            reasons.push(format!("{} distinct masks", masked_layers.len()));
-        }
 
         let animated_text = comp_now.layers.iter()
             .filter(|l| l.is_active(current_frame))
