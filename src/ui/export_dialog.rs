@@ -42,8 +42,15 @@ pub fn start_comp_export(app: &mut crate::AfterEffectsApp, ctx: &egui::Context, 
     let res_scale = ctx.data_mut(|d| *d.get_temp_mut_or_insert_with(egui::Id::new("ae_export_res_scale"), || 1.0f32));
 
     let output_path = app.export_output_path.clone();
+    // Final output size.
     let render_w = ((comp.width as f32 * res_scale) as u32).max(2);
     let render_h = ((comp.height as f32 * res_scale) as u32).max(2);
+    // Optional 2× supersample render size (clamped by the rasterizer limit).
+    let ssaa = ctx.data_mut(|d| *d.get_temp_mut_or_insert_with(egui::Id::new("ae_export_ssaa"), || true));
+    let max_dim = crate::core::software_renderer::MAX_RENDER_DIMENSION;
+    let ss_w = if ssaa { (render_w.saturating_mul(2)).min(max_dim) } else { render_w };
+    let ss_h = if ssaa { (render_h.saturating_mul(2)).min(max_dim) } else { render_h };
+    let ss_active = ssaa && (ss_w > render_w || ss_h > render_h);
 
     // ── PNG Sequence branch: bypass FFmpeg, write numbered PNGs directly ──
     if codec_idx == 3 {
@@ -72,14 +79,15 @@ pub fn start_comp_export(app: &mut crate::AfterEffectsApp, ctx: &egui::Context, 
             tx_ui,
             cancel_flag,
             move |frame| {
-                crate::core::software_renderer::render_frame_to_pixels(
+                let px = crate::core::software_renderer::render_frame_to_pixels(
                     &comp,
                     frame + frame_offset,
-                    render_w,
-                    render_h,
+                    ss_w,
+                    ss_h,
                     0.0,
                     0,
-                )
+                );
+                if ss_active { crate::core::supersample::downsample2x(&px, render_w, render_h) } else { px }
             },
         );
         log::info!("Spawned PNG sequence export for {}", app.export_output_path);
@@ -124,14 +132,15 @@ pub fn start_comp_export(app: &mut crate::AfterEffectsApp, ctx: &egui::Context, 
         });
 
         let _ = crate::core::ffmpeg_export::start_export_cancelable(config, tx_ff, cancel_flag, move |frame| {
-            crate::core::software_renderer::render_frame_to_pixels(
+            let px = crate::core::software_renderer::render_frame_to_pixels(
                 &comp,
                 frame + frame_offset,
-                comp.width,
-                comp.height,
+                ss_w,
+                ss_h,
                 0.0,
                 0,
-            )
+            );
+            if ss_active { crate::core::supersample::downsample2x(&px, render_w, render_h) } else { px }
         });
     } else {
         // Fallback async render thread with progress feedback & cancellation support
@@ -374,6 +383,13 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
                     ui.selectable_value(&mut app.export_codec_idx, 1, "ProRes 422");
                     ui.selectable_value(&mut app.export_codec_idx, 2, "ProRes 4444");
                     ui.selectable_value(&mut app.export_codec_idx, 3, "PNG Sequence");
+                });
+                // ── Quality: supersampled anti-aliasing ──
+                ui.horizontal(|ui| {
+                    let mut ssaa_now = ctx.data_mut(|d| *d.get_temp_mut_or_insert_with(egui::Id::new("ae_export_ssaa"), || true));
+                    if ui.checkbox(&mut ssaa_now, "High Quality (2× SSAA)").on_hover_text("Renders at double resolution and downsamples — cleaner edges, ~4× slower").changed() {
+                        ctx.data_mut(|d| d.insert_temp(egui::Id::new("ae_export_ssaa"), ssaa_now));
+                    }
                 });
                 ui.horizontal(|ui| {
                     ui.label("Range:");
