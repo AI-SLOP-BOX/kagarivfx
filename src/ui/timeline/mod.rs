@@ -47,6 +47,7 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
             let mut pending_split_layer: Option<usize> = None;
             let mut pending_layer_marker: Option<usize> = None;
             let mut pending_clear_markers: Option<usize> = None;
+            let mut pending_select_all_kfs: Option<usize> = None;
             // Shift-trim ripple: (layer_idx, old_out, shift)
             let mut pending_ripple: Option<(usize, u32, i64)> = None;
             // Double-clicked PreComp layer: comp_id to open
@@ -844,6 +845,10 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                                             pending_clear_markers = Some(i);
                                             ui.close_menu();
                                         }
+                                        if ui.button("⬚ Select All Keyframes").on_hover_text("Select every keyframe on this layer (transform, effects, pins)").clicked() {
+                                            pending_select_all_kfs = Some(i);
+                                            ui.close_menu();
+                                        }
                                         if ui.button("Pre-Compose Selected... (Cmd+Shift+C)").clicked() {
                                             let selected_indices: Vec<usize> = if !app.selected_layers.is_empty() {
                                                 let mut s: Vec<usize> = app.selected_layers.iter().copied().collect();
@@ -1337,6 +1342,44 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                 }
             });
 
+            // ── Select every keyframe on a layer (context menu) ──
+            if let Some(idx) = pending_select_all_kfs {
+                let mut collected: Vec<(String, u32)> = Vec::new();
+                if let Some(layer) = comp.layers.get(idx) {
+                    macro_rules! track {
+                        ($key:expr, $anim:expr) => {
+                            if let Some(kfs) = $anim.keyframes() {
+                                for k in kfs { collected.push(($key.to_string(), k.frame)); }
+                            }
+                        };
+                    }
+                    track!("position", layer.transform.position);
+                    track!("scale", layer.transform.scale);
+                    track!("rotation", layer.transform.rotation);
+                    track!("opacity", layer.transform.opacity);
+                    for eff in &layer.effects {
+                        for (lbl, pref) in eff.effect_type.animatable_params_ref() {
+                            let key = format!("fx_{}_{}", eff.name, lbl);
+                            match pref {
+                                crate::core::effect_params::ParamRefRef::Scalar(a) => track!(key.as_str(), a),
+                                crate::core::effect_params::ParamRefRef::Vec2(a) => track!(key.as_str(), a),
+                                crate::core::effect_params::ParamRefRef::Vec4Color(a) => track!(key.as_str(), a),
+                            }
+                        }
+                    }
+                    for pin in &layer.puppet_pins {
+                        track!(format!("pin_{}", pin.id), pin.position);
+                    }
+                }
+                if collected.is_empty() {
+                    app.toasts.info("Layer has no keyframes");
+                } else {
+                    app.selected_keyframes.clear();
+                    for (pk, f) in collected {
+                        app.selected_keyframes.insert((idx, pk, f));
+                    }
+
+
             crate::ui::timeline::pending_actions::apply_effect_drops(app, pending_effect_drops, &mut project_changed);
 
             // ── AE Timeline Bottom Controls Bar (Toggle Switches / Modes F4) ──
@@ -1372,6 +1415,10 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                 pending_split_layer,
                 pending_precomp_indices,
             );
+
+                    app.toasts.info("Selected all keyframes on layer");
+                }
+            }
 
             if project_changed {
                 // Transactional undo commit: snapshot on pointer-down, single entry on release
