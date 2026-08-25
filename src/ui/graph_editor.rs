@@ -278,6 +278,25 @@ pub fn draw_graph_editor(
         let max_val = samples.iter().map(|(_, v)| *v).fold(f32::NEG_INFINITY, f32::max);
         let val_range = (max_val - min_val).max(0.001);
 
+        // Min/max value readouts on the right edge (curve readability)
+        {
+            let mono = egui::FontId::monospace(9.0);
+            ui.painter().text(
+                egui::pos2(rect.right() - 4.0, rect.top() + 3.0),
+                egui::Align2::RIGHT_TOP,
+                format!("{:.1}", max_val),
+                mono.clone(),
+                colors::TEXT_MUTED,
+            );
+            ui.painter().text(
+                egui::pos2(rect.right() - 4.0, rect.bottom() - 3.0),
+                egui::Align2::RIGHT_BOTTOM,
+                format!("{:.1}", min_val),
+                mono,
+                colors::TEXT_MUTED,
+            );
+        }
+
         // Convert keyframe time/value to screen space coordinates inside the allocated rect
         let points: Vec<egui::Pos2> = samples.iter().map(|&(f, v)| {
             let x = rect.left() + (f as f32 / total_f as f32) * rect.width();

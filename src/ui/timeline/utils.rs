@@ -146,6 +146,18 @@ pub fn draw_keyframe_tick(
     }
 
     let response = ui.allocate_rect(rect, egui::Sense::click_and_drag());
+
+    // Hover tooltip: frame + interpolation shape (AE shows similar hints)
+    {
+        let interp_name = match _interpolation {
+            Some(InterpolationType::Linear) => "Linear",
+            Some(InterpolationType::Hold) => "Hold",
+            Some(InterpolationType::Bezier { custom_bezier: Some(_), .. }) => "Bezier (custom)",
+            Some(InterpolationType::Bezier { .. }) => "Bezier / Ease",
+            None => "Keyframe",
+        };
+        response.clone().on_hover_text(format!("Frame {} · {}", kf_frame, interp_name));
+    }
     if response.secondary_clicked() {
         return (KeyframeTickResult::RightClicked, response);
     }
