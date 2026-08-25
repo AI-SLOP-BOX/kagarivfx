@@ -41,6 +41,34 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
                     }
                     ui.close_menu();
                 }
+                if ui.button("Import Blender Camera Track (.json)...").on_hover_text("Bake a tracked camera solve onto this comp's active 3D camera — run tools/blender_camera_export.py inside Blender first").clicked() {
+                    if let Some(path) = rfd::FileDialog::new()
+                        .add_filter("Camera Track JSON", &["json"])
+                        .pick_file()
+                    {
+                        match std::fs::read_to_string(&path)
+                            .map_err(|e| e.to_string())
+                            .and_then(|s| crate::core::camera_track::BlenderCamTrack::parse(&s))
+                        {
+                            Ok(track) => {
+                                let baked = std::cell::Cell::new(0usize);
+                                app.modify_project(|p| {
+                                    let n = track.apply_to_comp(p.active_composition_mut(), true);
+                                    baked.set(n);
+                                });
+                                crate::core::frame_cache::bump_version();
+                                app.toasts.info(format!(
+                                    "Camera track baked: {} keyframes from '{}'",
+                                    baked.get(),
+                                    path.file_name().unwrap_or_default().to_string_lossy()
+                                ));
+                            }
+                            Err(e) => app.toasts.error(e),
+                        }
+                    }
+                    ui.close_menu();
+                }
+                ui.separator();
                 if ui.button("Open Project...").clicked() {
                     if let Some(path) = rfd::FileDialog::new()
                         .add_filter("After Effects OSS Project", &["json", "aevfx"])

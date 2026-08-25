@@ -399,6 +399,32 @@ pub fn get_all_commands() -> Vec<PaletteCommand> {
             }),
         },
         PaletteCommand {
+            name: "Import: Blender Camera Track",
+            category: "File",
+            shortcut_hint: "",
+            action: Box::new(|app| {
+                if let Some(path) = rfd::FileDialog::new()
+                    .add_filter("Camera Track JSON", &["json"])
+                    .pick_file()
+                {
+                    match std::fs::read_to_string(&path)
+                        .map_err(|e| e.to_string())
+                        .and_then(|s| crate::core::camera_track::BlenderCamTrack::parse(&s))
+                    {
+                        Ok(track) => {
+                            let mut baked = 0usize;
+                            app.modify_project(|p| {
+                                baked = track.apply_to_comp(p.active_composition_mut(), true);
+                            });
+                            crate::core::frame_cache::bump_version();
+                            app.toasts.info(format!("Camera track baked: {} kfs", baked));
+                        }
+                        Err(e) => app.toasts.error(e),
+                    }
+                }
+            }),
+        },
+        PaletteCommand {
             name: "File: Save Project",
             category: "File",
             shortcut_hint: "Cmd+S",
