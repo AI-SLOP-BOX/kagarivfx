@@ -80,6 +80,17 @@ pub fn draw_viewport_overlays(
                         let p = to_screen(kf.value);
                         ui.painter().circle_filled(p, 4.0, colors::KEYFRAME_DOT);
                         ui.painter().circle_stroke(p, 4.0, egui::Stroke::new(1.0, egui::Color32::BLACK));
+                        // Highlight the dot being spatially dragged
+                        if app
+                            .viewport_pos_kf_drag_state
+                            .is_some_and(|(li, f, _, _)| li == idx && f == kf.frame)
+                        {
+                            ui.painter().circle_stroke(
+                                p,
+                                6.5,
+                                egui::Stroke::new(1.5, colors::TIMELINE_PLAYHEAD),
+                            );
+                        }
                     }
 
                     // ── Spatial Bezier Tangent Handles ──

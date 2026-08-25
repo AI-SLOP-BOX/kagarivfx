@@ -253,6 +253,7 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: u32) 
                     && (app.viewport_drag_state.is_some()
                         || app.viewport_multi_drag.is_some()
                         || app.viewport_mask_drag_state.is_some()
+                        || app.viewport_pos_kf_drag_state.is_some()
                         || app.viewport_scale_drag.is_some());
                 let effective_factor = if dragging_now {
                     app.adaptive_preview_factor.min(0.5)
@@ -824,7 +825,33 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: u32) 
                     }
                 }
 
-                if let Some((l_idx, m_idx, v_idx)) = mask_hit {
+                // 0. Position keyframe dots on the motion path (spatial editing)
+                let kf_hit: Option<(usize, u32, [f32; 2])> =
+                    if app.active_tool == crate::ui::toolbar::ActiveTool::Selection {
+                        app.selected_layer_idx.and_then(|sel_li| {
+                            let l = comp_state.layers.get(sel_li)?;
+                            if l.locked || !l.is_active(current_frame) {
+                                return None;
+                            }
+                            let kfs = l.transform.position.keyframes()?;
+                            kfs.iter().find_map(|kf| {
+                                let sx = origin_x + (kf.value[0] / comp_w) * draw_w;
+                                let sy = origin_y + (kf.value[1] / comp_h) * draw_h;
+                                let dist =
+                                    ((pointer_pos.x - sx).powi(2) + (pointer_pos.y - sy).powi(2)).sqrt();
+                                (dist <= 8.0).then_some((kf.frame, kf.value))
+                            }).map(|(frame, val)| (sel_li, frame, val))
+                        })
+                    } else {
+                        None
+                    };
+
+                if let Some((l_idx, kf_frame, kf_start)) = kf_hit {
+                    app.viewport_pos_kf_drag_state =
+                        Some((l_idx, kf_frame, kf_start, pointer_pos));
+                    app.viewport_drag_state = None;
+                    app.viewport_mask_drag_state = None;
+                } else if let Some((l_idx, m_idx, v_idx)) = mask_hit {
                     let verts = comp_state.layers[l_idx].masks[m_idx].path.vertices_at_frame(current_frame);
                     let start_vertex_pos = if v_idx < verts.len() { verts[v_idx] } else { [0.0, 0.0] };
                     app.viewport_mask_drag_state = Some((l_idx, m_idx, v_idx, start_vertex_pos, pointer_pos));
@@ -921,7 +948,22 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: u32) 
             }
 
             if viewport_response.dragged() {
-                if let Some((l_idx, m_idx, v_idx, start_vertex_pos, start_ptr)) = app.viewport_mask_drag_state {
+                if let Some((l_idx, kf_frame, start_val, start_ptr)) = app.viewport_pos_kf_drag_state {
+                    let delta_x = (pointer_pos.x - start_ptr.x) / draw_w * comp_w;
+                    let delta_y = (pointer_pos.y - start_ptr.y) / draw_h * comp_h;
+
+                    let comp_mut = app.history.current_mut().active_composition_mut();
+                    if let Some(layer) = comp_mut.layers.get_mut(l_idx) {
+                        if let Some(kfs) = layer.transform.position.keyframes_mut() {
+                            if let Some(kf) = kfs.iter_mut().find(|k| k.frame == kf_frame) {
+                                kf.value = [
+                                    start_val[0] + delta_x,
+                                    start_val[1] + delta_y,
+                                ];
+                            }
+                        }
+                    }
+                } else if let Some((l_idx, m_idx, v_idx, start_vertex_pos, start_ptr)) = app.viewport_mask_drag_state {
                     let delta_x = (pointer_pos.x - start_ptr.x) / draw_w * comp_w;
                     let delta_y = (pointer_pos.y - start_ptr.y) / draw_h * comp_h;
                     
@@ -1162,6 +1204,7 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: u32) 
                 }
                 let was_dragging = app.viewport_drag_state.is_some()
                     || app.viewport_mask_drag_state.is_some()
+                    || app.viewport_pos_kf_drag_state.is_some()
                     || app.viewport_scale_drag.is_some()
                     || app.viewport_multi_drag.is_some();
                 if was_dragging {
@@ -1170,6 +1213,7 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: u32) 
                 }
                 app.viewport_drag_state = None;
                 app.viewport_mask_drag_state = None;
+                app.viewport_pos_kf_drag_state = None;
                 app.viewport_scale_drag = None;
                 app.viewport_multi_drag = None;
             }
