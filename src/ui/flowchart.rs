@@ -1,7 +1,20 @@
 use eframe::egui;
 use crate::AfterEffectsApp;
-use crate::core::timeline::{Composition, LayerType};
+use crate::core::timeline::{Composition, LayerType, TrackMatteMode};
+use crate::core::vfx_graph_compiler::{LayerOpType, VfxGraphCompiler};
 use crate::ui::theme::colors;
+
+/// Maps layer_idx → 1-based execution order from a compiled schedule
+/// (first RenderLayer step wins when a layer appears in several ops).
+fn execution_order_map(steps: &[crate::core::vfx_graph_compiler::ExecutionStep]) -> std::collections::HashMap<usize, usize> {
+    let mut out = std::collections::HashMap::new();
+    for (i, step) in steps.iter().enumerate() {
+        if let LayerOpType::RenderLayer { layer_idx } = &step.op {
+            out.entry(*layer_idx).or_insert(i + 1);
+        }
+    }
+    out
+}
 
 #[allow(dead_code)]
 pub fn draw_flowchart_view(
@@ -9,6 +22,12 @@ pub fn draw_flowchart_view(
     ui: &mut egui::Ui,
     comp: &Composition,
 ) {
+    // Compile the dependency graph once per frame: gives topological
+    // execution order + parenting/matte/cycle analysis for the overlays.
+    let mut graph = VfxGraphCompiler::new();
+    graph.compile(comp, app.current_frame);
+    let order_map = execution_order_map(&graph.steps);
+
     ui.vertical(|ui| {
         ui.horizontal(|ui| {
             ui.label(
@@ -19,6 +38,14 @@ pub fn draw_flowchart_view(
             ui.weak("— Visual Graph of Compositions, Layer Hierarchies & Mattes");
         });
         ui.separator();
+
+        if graph.cycle_detected {
+            ui.colored_label(
+                egui::Color32::from_rgb(230, 90, 90),
+                "⚠ Dependency cycle detected between layers — evaluation order may be incorrect",
+            );
+            ui.separator();
+        }
 
         let avail_size = ui.available_size();
         let (rect, response) = ui.allocate_exact_size(
@@ -121,6 +148,17 @@ pub fn draw_flowchart_view(
                 egui::Color32::WHITE,
             );
 
+            // Topological execution-order badge (from VfxGraphCompiler)
+            if let Some(order) = order_map.get(&i) {
+                painter.text(
+                    egui::pos2(npos.x + 62.0, ny - 14.0),
+                    egui::Align2::CENTER_CENTER,
+                    format!("⏱ {}", order),
+                    egui::FontId::proportional(9.0),
+                    colors::ACCENT_CYAN,
+                );
+            }
+
             // Curve line from Root Comp to Layer
             let control1 = egui::pos2(root_pos.x + 80.0, root_pos.y);
             let control2 = egui::pos2(npos.x - 80.0, npos.y);
@@ -160,6 +198,34 @@ pub fn draw_flowchart_view(
             }
         }
 
+        // Track-matte dependency arrows: matte layer → consumer layer.
+        // Dashed cyan so they read differently from parenting lines.
+        for (i, layer) in comp.layers.iter().enumerate() {
+            if layer.track_matte == TrackMatteMode::None || i == 0 {
+                continue;
+            }
+            if let (Some(&matte_pos), Some(&consumer_pos)) =
+                (node_positions.get(i - 1), node_positions.get(i))
+            {
+                let stroke = egui::Stroke::new(1.6, colors::ACCENT_CYAN);
+                for seg in egui::Shape::dashed_line(
+                    &[matte_pos, consumer_pos],
+                    stroke,
+                    6.0,
+                    5.0,
+                ) {
+                    painter.add(seg);
+                }
+                painter.text(
+                    egui::pos2((matte_pos.x + consumer_pos.x) * 0.5, (matte_pos.y + consumer_pos.y) * 0.5 - 8.0),
+                    egui::Align2::CENTER_CENTER,
+                    "matte",
+                    egui::FontId::proportional(9.0),
+                    colors::ACCENT_CYAN,
+                );
+            }
+        }
+
         if response.clicked() {
             if let Some(ptr) = response.interact_pointer_pos() {
                 for (i, npos) in node_positions.iter().enumerate() {
@@ -174,4 +240,59 @@ pub fn draw_flowchart_view(
             }
         }
     });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::core::vfx_graph_compiler::ExecutionStep;
+
+    #[test]
+    fn order_map_uses_first_render_step_and_is_one_based() {
+        let steps = vec![
+            ExecutionStep {
+                step_id: 0,
+                op: LayerOpType::EvaluateParentTransform { layer_idx: 2 },
+                dependencies: vec![],
+            },
+            ExecutionStep {
+                step_id: 1,
+                op: LayerOpType::RenderLayer { layer_idx: 1 },
+                dependencies: vec![],
+            },
+            ExecutionStep {
+                step_id: 2,
+                op: LayerOpType::RenderLayer { layer_idx: 2 },
+                dependencies: vec![],
+            },
+            ExecutionStep {
+                step_id: 3,
+                op: LayerOpType::CompositeTrackMatte {
+                    layer_idx: 2,
+                    matte_layer_idx: 1,
+                },
+                dependencies: vec![],
+            },
+            ExecutionStep {
+                step_id: 4,
+                op: LayerOpType::RenderLayer { layer_idx: 2 },
+                dependencies: vec![],
+            },
+            ExecutionStep {
+                step_id: 5,
+                op: LayerOpType::EvaluatePreComp {
+                    layer_idx: 3,
+                    comp_id: "c".into(),
+                },
+                dependencies: vec![],
+            },
+        ];
+        let m = execution_order_map(&steps);
+        assert_eq!(m[&1], 2, "first RenderLayer step sets the order");
+        assert_eq!(m[&2], 3, "first occurrence wins over later re-renders");
+        assert!(
+            !m.contains_key(&3),
+            "EvaluatePreComp ops must not create badges"
+        );
+    }
 }
