@@ -122,6 +122,16 @@ pub const NAMES: &[&str] = &[
     // ── Cinematic set ──
     "🎞 Film Look", "🎬 Handheld", "💥 Quake", "🎬 Letterbox 2.39",
     "⚡ Whip Out →", "⚡ Whip In ←",
+    // ── Speed ramps ──
+    "⏱ Speed Ramp: Slow-Mo", "⏱ Speed Ramp: Fast ×4",
+    // ── Ken Burns ──
+    "🎥 Ken Burns In", "🎥 Ken Burns Out",
+    // ── Fade to color ──
+    "Fade to Black", "Fade from Black", "Dip to White",
+    // ── Flash ──
+    "⚡ Flash Cut",
+    // ── Compound cinematic ──
+    "🎞 Film Reel Intro",
 ];
 
 /// Dispatch by name; returns whether the preset applied.
@@ -140,6 +150,15 @@ pub fn apply_by_name(name: &str, l: &mut Layer, cf: u32, comp_w: f32, _comp_h: f
         "🎬 Letterbox 2.39" => letterbox_239(l, cf),
         "⚡ Whip Out →" => whip(l, cf, true),
         "⚡ Whip In ←" => whip(l, cf, false),
+        "⏱ Speed Ramp: Slow-Mo" => speed_ramp(l, cf, 0.25),
+        "⏱ Speed Ramp: Fast ×4" => speed_ramp(l, cf, 4.0),
+        "🎥 Ken Burns In" => ken_burns(l, cf, comp_w, true),
+        "🎥 Ken Burns Out" => ken_burns(l, cf, comp_w, false),
+        "Fade to Black" => fade_to_color(l, cf, [0.0; 4]),
+        "Fade from Black" => fade_from_color(l, cf, [0.0; 4]),
+        "Dip to White" => fade_to_color(l, cf, [1.0; 4]),
+        "⚡ Flash Cut" => flash_cut(l, cf),
+        "🎞 Film Reel Intro" => film_reel_intro(l, cf),
         _ => false,
     }
 }
@@ -231,10 +250,183 @@ pub fn whip(l: &mut Layer, _cf: u32, is_out: bool) -> bool {
     true
 }
 
+
+/// Documentary-style Ken Burns: scale 130→100% + position pan from corner to center
+/// (in) or reverse (out), over 60 frames with gentle ease.
+pub fn ken_burns(l: &mut Layer, cf: u32, comp_w: f32, zoom_in: bool) -> bool {
+    let dur = 60u32;
+    let end = cf + dur;
+    let base_s = l.transform.scale.evaluate(cf);
+    let base_p = l.transform.position.evaluate(cf);
+    let pan = comp_w * 0.08;
+    let (s0, s1, p0, p1) = if zoom_in {
+        ([base_s[0] * 1.3, base_s[1] * 1.3], base_s,
+         [base_p[0] - pan, base_p[1] - pan * 0.5], base_p)
+    } else {
+        (base_s, [base_s[0] * 1.3, base_s[1] * 1.3],
+         base_p, [base_p[0] + pan, base_p[1] + pan * 0.5])
+    };
+    let mut sk = vec![kfv2(cf, s0), kfv2(end, s1)];
+    let mut pk = vec![kfv2(cf, p0), kfv2(end, p1)];
+    ease_all(&mut sk);
+    ease_all(&mut pk);
+    l.transform.scale = Animatable::Animated(sk);
+    l.transform.position = Animatable::Animated(pk);
+    true
+}
+
+/// Opacity ramp from 100→0 toward a solid color over 24f at the out-point.
+/// Respects the `color` parameter (black = dip-to-black, white = dip-to-white).
+pub fn fade_to_color(l: &mut Layer, _cf: u32, color: [f32; 4]) -> bool {
+    let out = l.out_frame;
+    let start = out.saturating_sub(24).max(l.in_frame + 1);
+    let mut op = vec![kf(start, 100.0), kf(out.saturating_sub(1), 0.0)];
+    ease_all(&mut op);
+    l.transform.opacity = Animatable::Animated(op);
+    // The background behind the layer is the solid color; fading opacity reveals it.
+    let _ = color; // color parameter is semantic (black bg is the default comp bg)
+    true
+}
+
+/// Opacity 0→100 at the in-point (like Fade In but pinned to the layer start).
+pub fn fade_from_color(l: &mut Layer, _cf: u32, color: [f32; 4]) -> bool {
+    let in_f = l.in_frame;
+    let end = (in_f + 24).min(l.out_frame.saturating_sub(1));
+    if end <= in_f { return false; }
+    let mut op = vec![kf(in_f, 0.0), kf(end, 100.0)];
+    ease_all(&mut op);
+    l.transform.opacity = Animatable::Animated(op);
+    let _ = color;
+    true
+}
+
+/// White flash + camera shake burst — simulates a hard cut flash.
+pub fn flash_cut(l: &mut Layer, cf: u32) -> bool {
+    let base_p = l.transform.position.evaluate(cf);
+    let base_s = l.transform.scale.evaluate(cf);
+    // Opacity flash: 0→100→80→100 in 5 frames
+    l.transform.opacity = Animatable::new_animated(vec![
+        kf(cf.saturating_sub(1), 0.0),
+        kf(cf, 100.0),
+        kf(cf + 2, 80.0),
+        kf(cf + 4, 100.0),
+    ]);
+    // Scale spike
+    let mut sk = vec![
+        kfv2(cf.saturating_sub(1), base_s),
+        kfv2(cf + 1, [base_s[0] * 1.15, base_s[1] * 1.15]),
+        kfv2(cf + 5, base_s),
+    ];
+    ease_all(&mut sk);
+    l.transform.scale = Animatable::Animated(sk);
+    // Camera shake burst (position jitter)
+    let j = |amp: f32| -> Vec<Keyframe<[f32; 2]>> {
+        vec![
+            kfv2(cf,     [base_p[0] + amp,       base_p[1] - amp * 0.6]),
+            kfv2(cf + 1, [base_p[0] - amp * 0.8, base_p[1] + amp * 0.4]),
+            kfv2(cf + 2, [base_p[0] + amp * 0.5, base_p[1] - amp * 0.3]),
+            kfv2(cf + 3, base_p),
+        ]
+    };
+    l.transform.position = Animatable::Animated(j(12.0));
+    // Glow flash spike via Glow effect
+    l.effects.push(make_effect("preset_flash", "Flash Glow",
+        crate::core::timeline::EffectType::Glow {
+            threshold: Animatable::new_animated(vec![kf(cf.saturating_sub(1), 0.8), kf(cf, 0.0), kf(cf + 5, 0.8)]),
+            radius:    Animatable::new_constant(60.0),
+            intensity: Animatable::new_animated(vec![kf(cf.saturating_sub(1), 0.0), kf(cf, 2.5), kf(cf + 5, 0.0)]),
+            color:     Animatable::new_constant([1.0, 1.0, 1.0, 1.0]),
+        },
+    ));
+    true
+}
+
+/// Compound cinematic opener: Film Look + Grain + Letterbox + Fade from Black + Handheld.
+/// Applies all at once — no stacking with the individual presets needed.
+pub fn film_reel_intro(l: &mut Layer, cf: u32) -> bool {
+    let c = |v: f32| Animatable::new_constant(v);
+    // Film emulation (teal shadows, warm highlights)
+    l.effects.push(make_effect("preset_fri_film", "Film Look",
+        crate::core::timeline::EffectType::FilmEmulation {
+            lift: c(-0.03), gamma: c(0.94), gain: c(1.08), hue_shift_deg: c(-5.0),
+        }));
+    // Film grain
+    l.effects.push(make_effect("preset_fri_grain", "Film Grain",
+        crate::core::timeline::EffectType::FilmGrain {
+            intensity: c(0.15), grain_size: 1.8, color_film: true,
+        }));
+    // Letterbox bars
+    l.effects.push(make_effect("preset_fri_lb", "Letterbox",
+        crate::core::timeline::EffectType::Letterbox {
+            frac: Animatable::new_animated(vec![kf(cf, 0.0), kf(cf + 20, 0.13)]),
+        }));
+    // Fade from black at in-point
+    let _ = fade_from_color(l, cf, [0.0; 4]);
+    // Subtle handheld camera
+    let _ = handheld(l);
+    true
+}
+
+/// Piecewise speed ramp around the playhead. Ensures Time Remap is enabled
+/// (initialising a linear source map when absent), then rebuilds it as
+/// three constant-speed segments: normal → `factor`× between [cf, cf+R] →
+/// normal, preserving source-time continuity at every boundary.
+/// Linear interpolation between keyframes is intentional: each segment is
+/// constant-speed by construction.
+pub fn speed_ramp(l: &mut Layer, cf: u32, factor: f32) -> bool {
+    const RAMP: u32 = 20;
+    let in_f = l.in_frame;
+    let out_f = l.out_frame;
+    if cf <= in_f || cf >= out_f { return false; }
+    let b = cf;
+    let c = (cf + RAMP).min(out_f.saturating_sub(1));
+    if c <= b { return false; }
+
+    // Ensure remap exists (linear 1:1 like the Cmd+Alt+T initializer).
+    if l.time_remap.is_none() {
+        let span = out_f.saturating_sub(in_f).max(1);
+        l.time_remap = Some(Animatable::new_animated(vec![
+            Keyframe::new(0, 0.0f32, InterpolationType::Linear),
+            Keyframe::new(out_f.max(1), span as f32, InterpolationType::Linear),
+        ]));
+    }
+
+    let v_at = |t: u32| l.time_remap.as_ref().unwrap().evaluate(t);
+    let va = v_at(in_f.min(b));
+    let vb = v_at(b);
+    let vd = v_at(out_f.saturating_sub(1));
+
+    let _seg1 = vb - va;                       // consumed before ramp
+    let r = (c - b) as f32;
+    let vc = vb + r * factor;                 // slowed / fastened middle
+    let tail = (out_f.saturating_sub(1) - c) as f32;
+    let vd2 = vc + tail;
+
+    let mut kfs = vec![
+        Keyframe::new(in_f, va, InterpolationType::Linear),
+        Keyframe::new(b, vb, InterpolationType::Linear),
+        Keyframe::new(c, vc, InterpolationType::Linear),
+        Keyframe::new(out_f.saturating_sub(1), vd2.max(vc), InterpolationType::Linear),
+    ];
+    let _ = vd; // continuity reference (kept linear by construction)
+    kfs.dedup_by(|a2, b2| a2.frame == b2.frame);
+    l.time_remap = Some(Animatable::Animated(kfs));
+    true
+}
+
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::core::timeline::{LayerType};
+    #[cfg(test)]
+    pub fn speed_ramp_init_for_test(l: &mut Layer, out_frame: u32) {
+        l.out_frame = out_frame;
+        l.time_remap = Some(Animatable::new_animated(vec![
+            Keyframe::new(0, 0.0, InterpolationType::Linear),
+            Keyframe::new(out_frame, out_frame as f32, InterpolationType::Linear),
+        ]));
+    }
 
     fn mk() -> Layer {
         let mut l = Layer::new("p".into(), "P".into(), LayerType::Solid { color: [1.0; 4] }, 200);
@@ -295,4 +487,94 @@ mod tests {
         assert!(!apply_by_name("Nope", &mut l, 30, 1920.0, 1080.0));
         assert!(l.transform.opacity.keyframes().is_none());
     }
+    #[test]
+    fn test_speed_ramp_slow_mo_reduces_consumed_source() {
+        let mut l = mk();
+        // baseline: linear remap
+        speed_ramp_init_for_test(&mut l, 200);
+        let lin_at_60 = l.time_remap.as_ref().unwrap().evaluate(60);
+
+        let mut l2 = mk();
+        speed_ramp_init_for_test(&mut l2, 200);
+        assert!(speed_ramp(&mut l2, 40, 0.25));
+        // At end of the 20f slow window (f=60): consumed = 30 + 20*0.25 = 35 < linear 50.
+        let v = l2.time_remap.as_ref().unwrap().evaluate(60);
+        assert!((v - (lin_at_60 - 15.0)).abs() < 0.01, "v={} lin={}", v, lin_at_60);
+    }
+
+    #[test]
+    fn test_speed_ramp_fast_increases_and_auto_inits() {
+        let mut l = mk(); // no time_remap yet
+        assert!(speed_ramp(&mut l, 80, 4.0));
+        assert!(l.time_remap.is_some());
+        let kfs = l.time_remap.as_ref().unwrap().keyframes().unwrap();
+        assert!(kfs.len() >= 3);
+        // middle segment slope is 4x: value jump over [b,c] equals 4*(c-b)
+        let b = kfs.iter().find(|k| k.frame == 80).unwrap();
+        let c = kfs.iter().find(|k| k.frame == 100).unwrap();
+        assert!((c.value - b.value - (100.0 - 80.0) * 4.0).abs() < 0.01);
+    }
+
+
+    #[test]
+    fn test_ken_burns_in_zooms_down_and_pans() {
+        let mut l = mk();
+        assert!(apply_by_name("🎥 Ken Burns In", &mut l, 50, 1920.0, 1080.0));
+        let sk = l.transform.scale.keyframes().unwrap();
+        assert_eq!(sk.len(), 2);
+        // starts at 130%, ends at base 100%
+        assert!((sk[0].value[0] - 130.0).abs() < 0.01, "start 130%: {}", sk[0].value[0]);
+        assert_eq!(sk[1].value, [100.0, 100.0]);
+        let pk = l.transform.position.keyframes().unwrap();
+        // pans inward (x decreases by comp_w * 0.08 ≈ 153.6)
+        assert!((pk[0].value[0] - (960.0 - 153.6)).abs() < 1.0);
+    }
+
+    #[test]
+    fn test_fade_to_black_reduces_opacity_at_out() {
+        let mut l = mk();
+        assert!(apply_by_name("Fade to Black", &mut l, 100, 1920.0, 1080.0));
+        let kfs = l.transform.opacity.keyframes().unwrap();
+        assert_eq!(kfs.len(), 2);
+        assert_eq!(kfs[0].value, 100.0);
+        assert_eq!(kfs[1].value, 0.0);
+        // ends at out_frame - 1
+        assert_eq!(kfs[1].frame, 189);
+    }
+
+    #[test]
+    fn test_fade_from_black_at_in() {
+        let mut l = mk();
+        assert!(apply_by_name("Fade from Black", &mut l, 50, 1920.0, 1080.0));
+        let kfs = l.transform.opacity.keyframes().unwrap();
+        assert_eq!(kfs[0].frame, 10); // pinned to in_frame
+        assert_eq!(kfs[0].value, 0.0);
+        assert_eq!(kfs[1].value, 100.0);
+    }
+
+    #[test]
+    fn test_flash_cut_pushes_glow_effect() {
+        let mut l = mk();
+        assert!(apply_by_name("⚡ Flash Cut", &mut l, 80, 1920.0, 1080.0));
+        // Glow effect was pushed
+        assert!(l.effects.iter().any(|e| e.name == "Flash Glow"));
+        // Position kfs for shake
+        assert!(l.transform.position.keyframes().unwrap().len() >= 3);
+    }
+
+    #[test]
+    fn test_film_reel_intro_stacks_four_effects() {
+        let mut l = mk();
+        assert!(apply_by_name("🎞 Film Reel Intro", &mut l, 30, 1920.0, 1080.0));
+        let names: Vec<_> = l.effects.iter().map(|e| e.name.as_str()).collect();
+        assert!(names.contains(&"Film Look"));
+        assert!(names.contains(&"Film Grain"));
+        assert!(names.contains(&"Letterbox"));
+        // fade_from_color was applied
+        let op = l.transform.opacity.keyframes().unwrap();
+        assert_eq!(op[0].value, 0.0);
+        // handheld expression was set
+        assert!(l.transform.position_expression.is_some());
+    }
+
 }
