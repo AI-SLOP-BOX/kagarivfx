@@ -880,6 +880,9 @@ type VideoFrameCache = std::collections::HashMap<VideoFrameKey, (std::sync::Arc<
 /// 200 frames at 1080p RGBA is ~830 MB of VRAM; evicted frames re-upload
 /// cheaply on demand, so this only bounds memory, not correctness.
 pub const MAX_VIDEO_FRAME_TEXTURES: usize = 200;
+/// FIFO cap for cached text-layer textures: each entry can be large
+/// (font_size × ~10 rows), so long editing sessions must not grow it forever.
+pub const MAX_TEXT_TEXTURES: usize = 64;
 
 #[allow(dead_code)]
 pub struct WgpuRenderer {
@@ -1434,9 +1437,19 @@ impl WgpuRenderer {
             label: Some("text_texture_bind_group"),
         });
         let bind_group = std::sync::Arc::new(bind_group);
-        self.text_texture_cache
-            .borrow_mut()
-            .insert(key, (texture, bind_group.clone(), tw, th));
+        {
+            let mut cache = self.text_texture_cache.borrow_mut();
+            cache.insert(key, (texture, bind_group.clone(), tw, th));
+            // FIFO eviction: HashMap order is arbitrary but bounded memory
+            // matters more than exact LRU here (entries re-rasterize cheaply).
+            while cache.len() > MAX_TEXT_TEXTURES {
+                if let Some(oldest) = cache.keys().next().cloned() {
+                    cache.remove(&oldest);
+                } else {
+                    break;
+                }
+            }
+        }
         Some((tw, th, bind_group))
     }
 

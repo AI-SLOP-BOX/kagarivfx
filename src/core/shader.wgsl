@@ -387,7 +387,7 @@ fn sample_layer_color(local_pos_in: vec2<f32>, tc_in: vec2<f32>, blur_extend: f3
         let texel = vec2<f32>(1.0) / vp;
 
         // Distance from this pixel to the flare center
-        let d = distance(in.tex_coords, flare_center);
+        let d = distance(tc_in, flare_center);
         let d_norm = d * 2.0; // normalize to 0..1 range
 
         // Core glow: bright center
@@ -401,7 +401,7 @@ fn sample_layer_color(local_pos_in: vec2<f32>, tc_in: vec2<f32>, blur_extend: f3
         let ring_contribution = ring * ring_mask * layer.flare_intensity * 0.3;
 
         // Streaks: 4-pointed star along horizontal and vertical axes
-        let to_center = in.tex_coords - flare_center;
+        let to_center = tc_in - flare_center;
         let streak_h = exp(-abs(to_center.y) * 80.0) * exp(-abs(to_center.x) * 8.0);
         let streak_v = exp(-abs(to_center.x) * 80.0) * exp(-abs(to_center.y) * 8.0);
         let streaks = (streak_h + streak_v) * layer.flare_intensity * 0.4;

@@ -69,7 +69,6 @@ pub mod openfx_bridge;
 pub mod lottie_exporter;
 pub mod rive_runtime;
 pub mod ocio_color;
-pub mod typography_engine;
 pub mod echo_effect;
 pub mod difference_matte;
 pub mod font_rasterizer;

@@ -323,3 +323,15 @@
 - Dragged dot renders a playhead-colored ring in the overlay
 - Priority: KF dot > mask vertex > corner-scale > whole-layer drag (all gated to Selection tool for dots)
 - Note: `ae_effects_pack_v24::test_bars_cover_fraction` failed on your in-flight dirty tree at commit time (your file, untouched by me)
+
+## Session: text-cache cap, typography_engine removal, lens-flare shader fix
+
+### renderer.rs
+- `text_texture_cache` had NO eviction (video cache did) → added `MAX_TEXT_TEXTURES = 64` FIFO cap; entries re-rasterize cheaply so arbitrary-order eviction is fine (same policy as video cache)
+
+### typography_engine.rs DELETED
+- Superseded, NOT wired: its naive advances (0.55·size) + 3-entry kerning table are strictly worse than the real font metrics (`h_advance`) + `core::text_layout` that font_rasterizer already uses for both render paths. Zero callers. If vertical Japanese text is wanted later, extend `text_layout` instead of resurrecting this module.
+
+### shader.wgsl (fixing committed breakage from `ce6f272` GPU Lens Flare)
+- The new lens-flare block lives inside helper `sample_layer_color(local_pos_in, tc_in, blur_extend)` but referenced `in.tex_coords`, which doesn't exist in that scope → WGSL parse failure broke the validation gate for every subsequent commit. Replaced both occurrences with `tc_in`. flare_* fields were already wired Rust-side.
+- Please run `cargo test --test shader_validation` before committing shader changes — it exists precisely to catch this class of breakage pre-push.
