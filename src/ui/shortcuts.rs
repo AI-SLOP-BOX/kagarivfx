@@ -544,15 +544,7 @@ pub fn handle_global_shortcuts(
 
         // Cmd+N → New Composition
         if cmd && !shift && i.key_pressed(Key::N) {
-            let count = app.history.current().compositions.len();
-            let new_comp = crate::core::timeline::Composition::new(
-                format!("comp_{}", count), "Composition 1".to_string(), 1920, 1080, 30, 300,
-            );
-            let proj = app.history.current_mut();
-            proj.compositions.push(new_comp);
-            proj.active_composition_idx = proj.compositions.len() - 1;
-            crate::core::frame_cache::bump_version();
-            app.toasts.info("New 1920x1080 @ 30fps");
+            app.show_new_comp_dialog = true;
         }
 
         // Cmd+S → Save Project (overwrite)

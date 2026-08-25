@@ -234,6 +234,7 @@ pub struct AfterEffectsApp {
     pub show_command_palette: bool,
     pub show_history_panel: bool,
     pub show_welcome: bool,
+    pub show_new_comp_dialog: bool,
     pub command_palette_search: String,
     pub command_palette_selected_idx: usize,
     pub snap_to_keyframes: bool,
@@ -461,6 +462,7 @@ impl Default for AfterEffectsApp {
             show_command_palette: false,
             show_history_panel: false,
             show_welcome: true,
+            show_new_comp_dialog: false,
             import_rx: None,
             command_palette_search: String::new(),
             command_palette_selected_idx: 0,
@@ -760,6 +762,7 @@ impl eframe::App for AfterEffectsApp {
         crate::ui::history_panel::draw_history_panel(self, ctx);
         crate::ui::drop_import::handle_dropped_files(self, ctx);
         crate::ui::welcome::draw(self, ctx);
+        crate::ui::new_comp_dialog::draw_new_comp_dialog(self, ctx);
         crate::ui::export_dialog::draw(self, ctx);
         crate::ui::comp_settings_dialog::draw_comp_settings_dialog(self, ctx);
 

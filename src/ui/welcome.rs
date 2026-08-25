@@ -29,15 +29,8 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context) {
                     app.show_welcome = false;
                 }
                 if ui.add(egui::Button::new("＋ New Comp (Cmd+N)").min_size(egui::vec2(160.0, 34.0))).clicked() {
-                    let count = app.history.current().compositions.len();
-                    let comp = crate::core::timeline::Composition::new(
-                        format!("comp_{}", count), "Composition 1".into(), 1920, 1080, 30, 300);
-                    let proj = app.history.current_mut();
-                    proj.compositions.push(comp);
-                    proj.active_composition_idx = proj.compositions.len() - 1;
-                    crate::core::frame_cache::bump_version();
                     app.show_welcome = false;
-                    app.toasts.info("New 1920×1080 @30fps — drag media files into the window!");
+                    app.show_new_comp_dialog = true;
                 }
             });
 
