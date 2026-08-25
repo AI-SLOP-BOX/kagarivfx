@@ -132,6 +132,10 @@ pub const NAMES: &[&str] = &[
     "⚡ Flash Cut",
     // ── Compound cinematic ──
     "🎞 Film Reel Intro",
+    // ── Live expression presets ──
+    "🧲 Bounce", "🌀 Elastic", "🌊 Sine Wave", "💡 Strobe",
+    // ── Scene transitions (at out-point) ──
+    "🎬 Slide Out →", "🎬 Zoom Out",
 ];
 
 /// Dispatch by name; returns whether the preset applied.
@@ -159,6 +163,12 @@ pub fn apply_by_name(name: &str, l: &mut Layer, cf: u32, comp_w: f32, _comp_h: f
         "Dip to White" => fade_to_color(l, cf, [1.0; 4]),
         "⚡ Flash Cut" => flash_cut(l, cf),
         "🎞 Film Reel Intro" => film_reel_intro(l, cf),
+        "🧲 Bounce" => expr_bounce(l),
+        "🌀 Elastic" => expr_elastic(l),
+        "🌊 Sine Wave" => expr_sine_wave(l),
+        "💡 Strobe" => expr_strobe(l, comp_w),
+        "🎬 Slide Out →" => slide_out(l, comp_w),
+        "🎬 Zoom Out" => zoom_out(l),
         _ => false,
     }
 }
@@ -250,6 +260,77 @@ pub fn whip(l: &mut Layer, _cf: u32, is_out: bool) -> bool {
     true
 }
 
+
+// ── Live expression presets ──
+// These are DYNAMIC: the expression runs every frame, unlike static keyframe bakes.
+
+/// Bounce settle on position Y: overshoots downward then damps.
+pub fn expr_bounce(l: &mut Layer) -> bool {
+    l.transform.position_expression = Some(crate::core::timeline::Expression::Raw(
+        "[value[0], value[1] + 40 * abs(sin(time * 8.0 * 3.14159265)) * exp(-time * 4.0)]".into(),
+    ));
+    true
+}
+
+/// Elastic spring on scale: wobbles like a rubber band after a pull.
+pub fn expr_elastic(l: &mut Layer) -> bool {
+    l.transform.scale_expression = Some(crate::core::timeline::Expression::Raw(
+        "let s = value[0]; [s + s * 0.25 * sin(time * 10.0 * 3.14159265) * exp(-time * 3.0), s + s * 0.25 * sin(time * 10.0 * 3.14159265) * exp(-time * 3.0)]".into(),
+    ));
+    true
+}
+
+/// Continuous sinusoidal oscillation on position Y (breathing / bob effect).
+pub fn expr_sine_wave(l: &mut Layer) -> bool {
+    l.transform.position_expression = Some(crate::core::timeline::Expression::Raw(
+        "[value[0], value[1] + 12 * sin(time * 1.5 * 3.14159265)]".into(),
+    ));
+    true
+}
+
+/// Strobe / flicker: rapid opacity on/off at a given rate (useful for beat hits).
+pub fn expr_strobe(l: &mut Layer, _comp_w: f32) -> bool {
+    l.transform.opacity_expression = Some(crate::core::timeline::Expression::Raw(
+        "if (floor(time * 12.0) % 2 == 0) { 100.0 } else { 0.0 }".into(),
+    ));
+    true
+}
+
+// ── Scene transition presets (at out-point) ──
+
+/// Slide the layer off-screen to the right + fade at the out-point.
+pub fn slide_out(l: &mut Layer, comp_w: f32) -> bool {
+    let out = l.out_frame;
+    let start = out.saturating_sub(20).max(l.in_frame + 1);
+    let base_p = l.transform.position.evaluate(start);
+    let mut pk = vec![
+        kfv2(start, base_p),
+        kfv2(out.saturating_sub(1), [base_p[0] + comp_w * 0.5, base_p[1]]),
+    ];
+    let mut op = vec![kf(start, 100.0), kf(out.saturating_sub(1), 0.0)];
+    ease_all(&mut pk);
+    ease_all(&mut op);
+    l.transform.position = Animatable::Animated(pk);
+    l.transform.opacity = Animatable::Animated(op);
+    true
+}
+
+/// Scale up to 200% + fade at the out-point (zoom-through transition).
+pub fn zoom_out(l: &mut Layer) -> bool {
+    let out = l.out_frame;
+    let start = out.saturating_sub(20).max(l.in_frame + 1);
+    let base_s = l.transform.scale.evaluate(start);
+    let mut sk = vec![
+        kfv2(start, base_s),
+        kfv2(out.saturating_sub(1), [base_s[0] * 2.0, base_s[1] * 2.0]),
+    ];
+    let mut op = vec![kf(start, 100.0), kf(out.saturating_sub(1), 0.0)];
+    ease_all(&mut sk);
+    ease_all(&mut op);
+    l.transform.scale = Animatable::Animated(sk);
+    l.transform.opacity = Animatable::Animated(op);
+    true
+}
 
 /// Documentary-style Ken Burns: scale 130→100% + position pan from corner to center
 /// (in) or reverse (out), over 60 frames with gentle ease.
@@ -560,6 +641,67 @@ mod tests {
         assert!(l.effects.iter().any(|e| e.name == "Flash Glow"));
         // Position kfs for shake
         assert!(l.transform.position.keyframes().unwrap().len() >= 3);
+    }
+
+
+    #[test]
+    fn test_expr_bounce_sets_position_expression() {
+        let mut l = mk();
+        assert!(apply_by_name("\u{1f9f2} Bounce", &mut l, 30, 1920.0, 1080.0));
+        let expr = l.transform.position_expression.as_ref().unwrap();
+        match expr {
+            crate::core::timeline::Expression::Raw(s) => {
+                assert!(s.contains("sin"), "bounce expr missing sin: {}", s);
+                assert!(s.contains("exp"), "bounce expr missing exp: {}", s);
+            }
+            _ => panic!("expected Raw expression"),
+        }
+    }
+
+    #[test]
+    fn test_expr_elastic_sets_scale_expression() {
+        let mut l = mk();
+        assert!(apply_by_name("\u{1f300} Elastic", &mut l, 30, 1920.0, 1080.0));
+        assert!(l.transform.scale_expression.is_some());
+    }
+
+    #[test]
+    fn test_expr_sine_wave_sets_position() {
+        let mut l = mk();
+        assert!(apply_by_name("\u{1f30a} Sine Wave", &mut l, 30, 1920.0, 1080.0));
+        let expr = l.transform.position_expression.as_ref().unwrap();
+        match expr {
+            crate::core::timeline::Expression::Raw(s) => assert!(s.contains("sin")),
+            _ => panic!("expected Raw"),
+        }
+    }
+
+    #[test]
+    fn test_expr_strobe_sets_opacity_expression() {
+        let mut l = mk();
+        assert!(apply_by_name("\u{1f4a1} Strobe", &mut l, 30, 1920.0, 1080.0));
+        assert!(l.transform.opacity_expression.is_some());
+    }
+
+    #[test]
+    fn test_slide_out_moves_right_and_fades() {
+        let mut l = mk();
+        assert!(apply_by_name("\u{1f3ac} Slide Out \u{2192}", &mut l, 100, 1920.0, 1080.0));
+        let pk = l.transform.position.keyframes().unwrap();
+        assert_eq!(pk.len(), 2);
+        assert!((pk[1].value[0] - (960.0 + 960.0)).abs() < 1.0, "slide right: {}", pk[1].value[0]);
+        let op = l.transform.opacity.keyframes().unwrap();
+        assert_eq!(op[1].value, 0.0);
+    }
+
+    #[test]
+    fn test_zoom_out_scales_up_and_fades() {
+        let mut l = mk();
+        assert!(apply_by_name("\u{1f3ac} Zoom Out", &mut l, 100, 1920.0, 1080.0));
+        let sk = l.transform.scale.keyframes().unwrap();
+        assert!((sk[1].value[0] - 200.0).abs() < 0.01, "zoom 200%: {}", sk[1].value[0]);
+        let op = l.transform.opacity.keyframes().unwrap();
+        assert_eq!(op[1].value, 0.0);
     }
 
     #[test]
