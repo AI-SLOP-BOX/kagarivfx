@@ -992,7 +992,7 @@ pub fn render_frame_to_pixels(comp: &Composition, frame: u32, width: u32, height
                     } else {
                         anim.clone()
                     };
-                    rasterizer.rasterize_text_animated(&family_name, &text_str, fs, text_color, tk, lead, 0.0, alignment, &anim_owned)
+                    rasterizer.rasterize_text_animated(&family_name, &text_str, fs, text_color, tk, lead, 0.0, alignment, &anim_owned, frame as f32 / comp.fps.max(1) as f32)
                 } else {
                     rasterizer.rasterize_text_formatted(&family_name, &text_str, fs, text_color, tk, ld, 0.0, alignment)
                 };

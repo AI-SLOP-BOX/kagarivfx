@@ -194,6 +194,7 @@ pub fn draw_software_canvas(
                                 anim.opacity,
                                 anim.tracking,
                                 anim.rotation,
+                                0.0,
                             );
                             let total_w = char_w * text.chars().count() as f32;
                             let mut cx = rx - total_w * 0.5;

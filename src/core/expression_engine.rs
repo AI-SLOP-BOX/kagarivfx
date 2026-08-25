@@ -710,6 +710,17 @@ pub fn eval_v2_with_loops(
     })
 }
 
+/// Evaluate an expression with arbitrary f64 variables (for text selectors, etc.).
+pub fn eval_expression_f64(script: &str, vars: &[(&str, f64)]) -> f64 {
+    LOOP_ENGINE.with(|engine| {
+        let mut scope = Scope::new();
+        for (name, val) in vars {
+            scope.push(*name, *val);
+        }
+        engine.eval_with_scope::<f64>(&mut scope, script).unwrap_or(0.0)
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

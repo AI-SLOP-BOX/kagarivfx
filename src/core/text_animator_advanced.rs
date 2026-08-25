@@ -201,7 +201,7 @@ impl TextAnimatorAdvanced {
             return amounts;
         }
         for (unit_idx, (s, e)) in ranges.iter().enumerate() {
-            let amt = TextAnimatorEngine::compute_amount(unit_idx, total_units, &self.selector);
+            let amt = TextAnimatorEngine::compute_amount(unit_idx, total_units, &self.selector, 0.0);
             for slot in amounts.iter_mut().take(*e).skip(*s) {
                 *slot = amt;
             }

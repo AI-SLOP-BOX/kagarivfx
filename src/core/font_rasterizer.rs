@@ -281,6 +281,7 @@ impl FontRasterizer {
         box_width: f32,
         alignment: crate::core::text_layout::TextAlign,
         animator: &crate::core::text_animator::TextAnimatorSettings,
+        time: f32,
     ) -> Option<(u32, u32, Vec<u8>)> {
         let font_data = self.fonts.get(family_name)?;
         let font = parse_font(font_data)?;
@@ -301,6 +302,7 @@ impl FontRasterizer {
             animator.rotation,
             animator.blur_amount,
             false,
+            time,
         );
 
         let layout = crate::core::text_layout::layout_text(text, font_size, tracking, leading, box_width, alignment);

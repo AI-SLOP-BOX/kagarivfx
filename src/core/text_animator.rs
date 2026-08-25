@@ -47,6 +47,10 @@ pub enum SelectorShape {
     Wobble,
     /// Per-character amount is a deterministic pseudo-random value in [0, 1).
     Random,
+    /// Per-character amount is driven by a Rhai expression. The expression
+    /// receives `index` (0-based char index), `total` (char count), and
+    /// `time` (seconds), and should return a value in 0..1.
+    Expression,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -63,9 +67,13 @@ pub struct RangeSelector {
     pub char_start: i32,
     #[serde(default = "default_unbounded")]
     pub char_end: i32,
-    /// When present, overrides `offset` each frame (for typewriter sweeps, etc.).
+    /// When present, overrides `offset` each frame (for typewriter sweeps etc.).
     #[serde(default)]
     pub offset_anim: Option<crate::core::property::Animatable<f32>>,
+    /// Rhai expression for `SelectorShape::Expression`. Receives `index`,
+    /// `total`, and `time`; returns amount in 0..1.
+    #[serde(default)]
+    pub expression: Option<String>,
 }
 
 fn default_unbounded() -> i32 {
@@ -85,6 +93,7 @@ impl Default for RangeSelector {
             char_start: -1,
             char_end: -1,
             offset_anim: None,
+            expression: None,
         }
     }
 }
@@ -143,13 +152,32 @@ impl TextAnimatorEngine {
         true
     }
 
-    /// Calculate the range selector amount (0.0 to 1.0) for a character index in a string.
+    /// Evaluate a per-character Rhai expression for the expression selector.
+    fn eval_expression_amount(expr_src: &str, char_idx: usize, total_chars: usize, time: f32) -> f32 {
+        let v = crate::core::expression_engine::eval_expression_f64(expr_src, &[
+            ("index", char_idx as f64),
+            ("total", total_chars as f64),
+            ("time", time as f64),
+            ("value", 1.0),
+        ]);
+        (v as f32).clamp(0.0, 1.0)
+    }
+
     pub fn compute_amount(
         char_idx: usize,
         total_chars: usize,
         selector: &RangeSelector,
+        time: f32,
     ) -> f32 {
         if total_chars == 0 || !Self::in_char_range(char_idx, selector) {
+            return 0.0;
+        }
+
+        // Expression selector: evaluate per-character Rhai expression.
+        if selector.shape == SelectorShape::Expression {
+            if let Some(ref expr_src) = selector.expression {
+                return Self::eval_expression_amount(expr_src, char_idx, total_chars, time);
+            }
             return 0.0;
         }
 
@@ -208,11 +236,13 @@ impl TextAnimatorEngine {
             SelectorShape::Smooth => {
                 norm_t * norm_t * (3.0 - 2.0 * norm_t)
             }
+            SelectorShape::Expression => unreachable!("handled above"),
             SelectorShape::Wobble | SelectorShape::Random => 1.0,
         }
     }
 
     /// Evaluate per-character transforms for a text string given target animator property offsets.
+    #[allow(clippy::too_many_arguments)]
     pub fn eval_character_transforms(
         text: &str,
         selector: &RangeSelector,
@@ -221,6 +251,7 @@ impl TextAnimatorEngine {
         target_opacity: f32,
         target_tracking: f32,
         target_rotation: f32,
+        time: f32,
     ) -> Vec<CharacterTransform> {
         Self::eval_character_transforms_extended(
             text,
@@ -232,6 +263,7 @@ impl TextAnimatorEngine {
             target_rotation,
             0.0,
             false,
+            time,
         )
     }
 
@@ -249,10 +281,11 @@ impl TextAnimatorEngine {
         target_rotation: f32,
         target_blur: f32,
         cumulative_tracking: bool,
+        time: f32,
     ) -> Vec<CharacterTransform> {
         let total_chars = text.chars().count();
         let amounts: Vec<f32> = (0..total_chars)
-            .map(|idx| Self::compute_amount(idx, total_chars, selector))
+            .map(|idx| Self::compute_amount(idx, total_chars, selector, time))
             .collect();
         Self::eval_with_amounts(
             amounts,
@@ -323,9 +356,9 @@ mod tests {
             ..Default::default()
         };
 
-        let amt_first = TextAnimatorEngine::compute_amount(0, 10, &selector);
-        let amt_mid = TextAnimatorEngine::compute_amount(5, 10, &selector);
-        let amt_last = TextAnimatorEngine::compute_amount(9, 10, &selector);
+        let amt_first = TextAnimatorEngine::compute_amount(0, 10, &selector, 0.0);
+        let amt_mid = TextAnimatorEngine::compute_amount(5, 10, &selector, 0.0);
+        let amt_last = TextAnimatorEngine::compute_amount(9, 10, &selector, 0.0);
 
         assert_eq!(amt_first, 0.0);
         assert!((amt_mid - 0.5).abs() < 1e-4);
@@ -342,7 +375,7 @@ mod tests {
         };
 
         let amounts: Vec<f32> = (0..6)
-            .map(|i| TextAnimatorEngine::compute_amount(i, 6, &selector))
+            .map(|i| TextAnimatorEngine::compute_amount(i, 6, &selector, 0.0))
             .collect();
 
         assert_eq!(amounts[0], 0.0);
@@ -354,7 +387,7 @@ mod tests {
 
         // char_start only (open-ended end)
         selector.char_end = -1;
-        assert_eq!(TextAnimatorEngine::compute_amount(5, 6, &selector), 1.0);
+        assert_eq!(TextAnimatorEngine::compute_amount(5, 6, &selector, 0.0), 1.0);
     }
 
     #[test]
@@ -362,9 +395,9 @@ mod tests {
         let selector = RangeSelector { shape: SelectorShape::Wobble, ..Default::default() };
 
         for i in 0..20 {
-            let a = TextAnimatorEngine::compute_amount(i, 20, &selector);
+            let a = TextAnimatorEngine::compute_amount(i, 20, &selector, 0.0);
             assert!((0.0..=1.0).contains(&a), "amount {a} out of range at idx {i}");
-            assert_eq!(a, TextAnimatorEngine::compute_amount(i, 20, &selector));
+            assert_eq!(a, TextAnimatorEngine::compute_amount(i, 20, &selector, 0.0));
         }
     }
 
@@ -373,9 +406,9 @@ mod tests {
         let selector = RangeSelector { shape: SelectorShape::Random, ..Default::default() };
 
         for i in 0..20 {
-            let a = TextAnimatorEngine::compute_amount(i, 20, &selector);
+            let a = TextAnimatorEngine::compute_amount(i, 20, &selector, 0.0);
             assert!((0.0..1.0).contains(&a));
-            assert_eq!(a, TextAnimatorEngine::compute_amount(i, 20, &selector));
+            assert_eq!(a, TextAnimatorEngine::compute_amount(i, 20, &selector, 0.0));
         }
     }
 
@@ -388,7 +421,7 @@ mod tests {
 
         // Square shape with random_order: every char gets amount 1 exactly once.
         let ones = (0..10)
-            .filter(|&i| TextAnimatorEngine::compute_amount(i, 10, &selector) == 1.0)
+            .filter(|&i| TextAnimatorEngine::compute_amount(i, 10, &selector, 0.0) == 1.0)
             .count();
         assert_eq!(ones, 10);
     }
@@ -408,6 +441,7 @@ mod tests {
             0.0,
             8.0,
             false,
+            0.0,
         );
 
         assert_eq!(transforms.len(), 4);
@@ -421,6 +455,7 @@ mod tests {
             [0.0, 0.0],
             [1.0, 1.0],
             1.0,
+            0.0,
             0.0,
             0.0,
         );
@@ -440,6 +475,7 @@ mod tests {
             0.0,
             0.0,
             true,
+            0.0,
         );
 
         // AE-style accumulation: offsets are 2, 4, 6 instead of flat 2 each.
@@ -468,4 +504,47 @@ mod tests {
         assert_eq!(settings.selector.char_start, -1);
         assert_eq!(settings.selector.char_end, -1);
     }
+
+    #[test]
+    fn test_expression_selector_basic() {
+        let mut sel = RangeSelector::default();
+        sel.shape = SelectorShape::Expression;
+        sel.expression = Some("index / total".into());
+        let a = TextAnimatorEngine::compute_amount(0, 10, &sel, 0.0);
+        let b = TextAnimatorEngine::compute_amount(5, 10, &sel, 0.0);
+        let c = TextAnimatorEngine::compute_amount(9, 10, &sel, 0.0);
+        assert!((a - 0.0).abs() < 0.01, "idx=0: {}", a);
+        assert!((b - 0.5).abs() < 0.01, "idx=5: {}", b);
+        assert!((c - 0.9).abs() < 0.01, "idx=9: {}", c);
+    }
+
+    #[test]
+    fn test_expression_selector_uses_time() {
+        let mut sel = RangeSelector::default();
+        sel.shape = SelectorShape::Expression;
+        sel.expression = Some("if time > 0.5 { 1.0 } else { 0.0 }".into());
+        let at_0 = TextAnimatorEngine::compute_amount(0, 10, &sel, 0.0);
+        let at_1 = TextAnimatorEngine::compute_amount(0, 10, &sel, 1.0);
+        assert!((at_0 - 0.0).abs() < 0.01);
+        assert!((at_1 - 1.0).abs() < 0.01);
+    }
+
+    #[test]
+    fn test_expression_selector_clamped_01() {
+        let mut sel = RangeSelector::default();
+        sel.shape = SelectorShape::Expression;
+        sel.expression = Some("2.0".into());
+        let v = TextAnimatorEngine::compute_amount(0, 10, &sel, 0.0);
+        assert!((v - 1.0).abs() < 0.01, "should clamp: {}", v);
+    }
+
+    #[test]
+    fn test_expression_selector_no_expr_is_zero() {
+        let mut sel = RangeSelector::default();
+        sel.shape = SelectorShape::Expression;
+        sel.expression = None;
+        let v = TextAnimatorEngine::compute_amount(0, 10, &sel, 0.0);
+        assert!((v - 0.0).abs() < 0.01);
+    }
+
 }
