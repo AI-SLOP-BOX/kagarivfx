@@ -62,7 +62,8 @@ fn blend_mode_code(bm: &BlendMode) -> i32 {
         BlendMode::Overlay | BlendMode::SoftLight | BlendMode::HardLight => 3,
         BlendMode::Add => 4,
         BlendMode::Darken | BlendMode::Lighten | BlendMode::Difference
-        | BlendMode::Exclusion | BlendMode::Divide | BlendMode::Subtract => 4,
+        | BlendMode::Exclusion | BlendMode::Divide | BlendMode::Subtract
+        | BlendMode::ColorBurn | BlendMode::LinearBurn | BlendMode::VividLight => 4,
     }
 }
 
@@ -845,6 +846,7 @@ fn import_mask(m: &Value, idx: usize) -> Mask {
         opacity: parse_anim_value_f32(m.get("o")),
         expansion: parse_anim_value_f32(m.get("x")),
         inverted: m.get("inv").and_then(Value::as_bool).unwrap_or(false),
+        wiggle: None,
     }
 }
 
@@ -1195,6 +1197,7 @@ mod tests {
             opacity: Animatable::new_constant(100.0),
             expansion: Animatable::new_constant(-4.0),
             inverted: false,
+            wiggle: None,
         });
         comp.layers.push(layer);
 
@@ -1228,6 +1231,7 @@ mod tests {
             opacity: Animatable::new_constant(100.0),
             expansion: Animatable::new_constant(0.0),
             inverted: true,
+            wiggle: None,
         };
         let mut layer = Layer::new("l".into(), "L".into(), LayerType::Null, 30);
         layer.masks.push(mk(MaskMode::Subtract, "cut"));
@@ -1269,6 +1273,7 @@ mod tests {
             opacity: Animatable::new_constant(100.0),
             expansion: Animatable::new_constant(0.0),
             inverted: false,
+            wiggle: None,
         });
         comp.layers.push(layer);
 
@@ -1376,6 +1381,7 @@ mod tests {
             opacity: Animatable::new_constant(100.0),
             expansion: Animatable::new_constant(0.0),
             inverted: false,
+            wiggle: None,
         });
         comp.layers.push(src);
         comp.layers.push(txt);

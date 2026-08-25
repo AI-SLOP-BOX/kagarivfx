@@ -691,6 +691,9 @@ let type_icon = crate::ui::icons::layer_icon(&layer.layer_type);
                                         crate::core::timeline::BlendMode::Exclusion => "Exclusion",
                                         crate::core::timeline::BlendMode::Divide => "Divide",
                                         crate::core::timeline::BlendMode::Subtract => "Subtract",
+                                            crate::core::timeline::BlendMode::ColorBurn => "Color Burn",
+                                            crate::core::timeline::BlendMode::LinearBurn => "Linear Burn",
+                                            crate::core::timeline::BlendMode::VividLight => "Vivid Light",
                                     };
                                     egui::ComboBox::from_id_salt(blend_id)
                                         .selected_text(blend_label)
@@ -709,6 +712,9 @@ let type_icon = crate::ui::icons::layer_icon(&layer.layer_type);
                                                 (crate::core::timeline::BlendMode::Exclusion, "Exclusion"),
                                                 (crate::core::timeline::BlendMode::Divide, "Divide"),
                                                 (crate::core::timeline::BlendMode::Subtract, "Subtract"),
+                                                (crate::core::timeline::BlendMode::ColorBurn, "Color Burn"),
+                                                (crate::core::timeline::BlendMode::LinearBurn, "Linear Burn"),
+                                                (crate::core::timeline::BlendMode::VividLight, "Vivid Light"),
                                             ] {
                                                 if ui.selectable_value(&mut layer.blend_mode, bm, name).clicked() {
                                                     project_changed = true;

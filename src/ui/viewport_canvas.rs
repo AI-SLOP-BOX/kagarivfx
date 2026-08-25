@@ -63,6 +63,7 @@ pub fn draw_software_canvas(
                 crate::core::timeline::BlendMode::Exclusion => 0.7,
                 crate::core::timeline::BlendMode::Divide => 0.8,
                 crate::core::timeline::BlendMode::Subtract => 0.8,
+                _ => 0.8,
             };
 
             let layer_color = egui::Color32::from_rgba_unmultiplied(

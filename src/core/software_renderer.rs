@@ -1371,8 +1371,36 @@ pub fn render_frame_to_pixels(comp: &Composition, frame: u32, width: u32, height
                                     }
                                 });
                             }
+                            LayerType::PreComp { comp_id } => {
+                                // Render the nested composition as the matte source
+                                if let Some(sub_comp) = comp.sub_compositions.iter().find(|c| c.id == *comp_id) {
+                                    let sub_buf = render_precomp_layers(comp, sub_comp, m_frame, m_bw, m_bh);
+                                    // Copy sub-comp pixels into matte buffer, applying matte layer opacity
+                                    for i in (0..m_buf.len()).step_by(4) {
+                                        if i + 3 < sub_buf.len() && i + 3 < m_buf.len() {
+                                            m_buf[i] = sub_buf[i];
+                                            m_buf[i+1] = sub_buf[i+1];
+                                            m_buf[i+2] = sub_buf[i+2];
+                                            m_buf[i+3] = (sub_buf[i+3] as f32 * m_opacity) as u8;
+                                        }
+                                    }
+                                } else {
+                                    // Sub-comp not found: fall back to white
+                                    for py in 0..m_bh {
+                                        for px in 0..m_bw {
+                                            let idx = ((py * m_bw + px) * 4) as usize;
+                                            if idx + 3 < m_buf.len() {
+                                                m_buf[idx] = 255;
+                                                m_buf[idx+1] = 255;
+                                                m_buf[idx+2] = 255;
+                                                m_buf[idx+3] = (m_opacity * 255.0) as u8;
+                                            }
+                                        }
+                                    }
+                                }
+                            }
                             _ => {
-                                // For other matte layer types, render as solid white (full matte)
+                                // For other matte layer types (Image, Video, Shape, Particle), render as solid white (full matte)
                                 for py in 0..m_bh {
                                     for px in 0..m_bw {
                                         let idx = ((py * m_bw + px) * 4) as usize;
@@ -1480,6 +1508,19 @@ pub fn render_frame_to_pixels(comp: &Composition, frame: u32, width: u32, height
                     BlendMode::Exclusion => (src_r + dst_r - 2.0 * src_r * dst_r, src_g + dst_g - 2.0 * src_g * dst_g, src_b + dst_b - 2.0 * src_b * dst_b),
                     BlendMode::Divide => ((src_r / dst_r.max(1e-6)).clamp(0.0, 1.0), (src_g / dst_g.max(1e-6)).clamp(0.0, 1.0), (src_b / dst_b.max(1e-6)).clamp(0.0, 1.0)),
                     BlendMode::Subtract => ((src_r - dst_r).max(0.0), (src_g - dst_g).max(0.0), (src_b - dst_b).max(0.0)),
+                    BlendMode::ColorBurn => {
+                        let f = |s: f32, d: f32| if s <= 0.0 { 0.0 } else { (1.0 - ((1.0 - d) / s)).clamp(0.0, 1.0) };
+                        (f(src_r, dst_r), f(src_g, dst_g), f(src_b, dst_b))
+                    }
+                    BlendMode::LinearBurn => ((src_r + dst_r - 1.0).clamp(0.0, 1.0), (src_g + dst_g - 1.0).clamp(0.0, 1.0), (src_b + dst_b - 1.0).clamp(0.0, 1.0)),
+                    BlendMode::VividLight => {
+                        let f = |s: f32, d: f32| {
+                            if s <= 0.5 {
+                                if s == 0.0 { 0.0 } else { (1.0 - (1.0 - d) / (2.0 * s)).clamp(0.0, 1.0) }
+                            } else if s == 1.0 { 1.0 } else { (d / (2.0 * (1.0 - s))).clamp(0.0, 1.0) }
+                        };
+                        (f(src_r, dst_r), f(src_g, dst_g), f(src_b, dst_b))
+                    }
                     BlendMode::Normal => (src_r, src_g, src_b),
                 };
 

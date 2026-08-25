@@ -287,6 +287,9 @@ pub enum BlendMode {
     Exclusion,
     Divide,
     Subtract,
+    ColorBurn,
+    LinearBurn,
+    VividLight,
 }
 
 // ─── Label Colors ──────────────────────────────────────────────────────────
