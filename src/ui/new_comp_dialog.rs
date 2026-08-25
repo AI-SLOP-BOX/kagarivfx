@@ -99,6 +99,9 @@ pub fn draw_new_comp_dialog(app: &mut AfterEffectsApp, ctx: &egui::Context) {
                     );
                     let proj = app.history.current_mut();
                     proj.compositions.push(comp);
+                    if let Some(cc) = proj.compositions.last_mut() {
+                        cc.dither_output = true;
+                    }
                     proj.active_composition_idx = proj.compositions.len() - 1;
                     crate::core::frame_cache::bump_version();
                     app.toasts.info(format!("Created '{}' — {}×{} @{}fps", name, draft.2, draft.3, draft.4));

@@ -1593,6 +1593,10 @@ pub struct Composition {
     /// Off = classic gamma-space compositing (legacy look).
     #[serde(default)]
     pub blend_linear: bool,
+    /// Triangular-PDF dither on final 8-bit output (kills gradient banding).
+    /// Off for legacy projects/tests to preserve byte-exact renders.
+    #[serde(default)]
+    pub dither_output: bool,
 }
 
 impl Composition {
@@ -1620,6 +1624,8 @@ impl Composition {
             sub_compositions: Vec::new(),
 
             blend_linear: false,
+
+dither_output: false,
         }
     }
 

@@ -140,6 +140,9 @@ pub fn draw_comp_settings_dialog(app: &mut AfterEffectsApp, ctx: &egui::Context)
                     crate::core::frame_cache::bump_version();
                 }
                 ui.label(egui::RichText::new("Legacy projects default to OFF (gamma-space) for identical output.").small().color(colors::TEXT_MUTED));
+                ui.add_space(2.0);
+                ui.checkbox(&mut comp.dither_output, "Output dithering (smooth gradients)")
+                    .on_hover_text("Triangular-PDF noise ±1/255 breaks banding in dark gradients — imperceptible, deterministic");
             });
 
             ui.add_space(4.0);

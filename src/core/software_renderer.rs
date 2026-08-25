@@ -1535,19 +1535,17 @@ pub fn render_frame_to_pixels(comp: &Composition, frame: u32, width: u32, height
             b = (b * (a * b + b_val)) / denom_b;
         }
 
-        // Triangular-PDF dither: breaks up 8-bit banding from exposure/LUT
-        // grading without adding perceptible noise. Deterministic (hash-based),
-        // so renders stay reproducible.
-                let grading_active = exposure_ev != 0.0 || lut_mode != 0;
-        let px_coord = if grading_active { pix_i as f32 } else { f32::NAN };
-        let dither_seed = px_coord * 0.618_034; // golden-ratio scatter
+        // Triangular-PDF dither (per-comp option): kills 8-bit banding from
+        // gradients/glow/linear re-encode at imperceptible noise cost.
+        // Deterministic per-pixel seed → renders stay byte-reproducible.
+        let dither_seed = if comp.dither_output { pix_i as f32 * 0.618_034 } else { f32::NAN };
+        let t1 = fract(dither_seed * 7.13);
+        let t2 = fract(dither_seed * 3.71);
+        let noise = (t1 - t2) / 255.0;
         let dith = |v: f32| -> u8 {
             if dither_seed.is_nan() {
                 return (v.clamp(0.0, 1.0) * 255.0).round() as u8;
             }
-            let t1 = fract(dither_seed * 7.13);
-            let t2 = fract(dither_seed * 3.71);
-            let noise = (t1 - t2) / 255.0; // triangular distribution in [-1/255, 1/255]
             ((v + noise).clamp(0.0, 1.0) * 255.0).round() as u8
         };
         p[0] = dith(r);

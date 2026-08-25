@@ -18,6 +18,9 @@ pub fn build(app: &mut crate::AfterEffectsApp) {
         "🎬 Demo Scene".to_string(),
         1280, 720, 30, 150,
     );
+    comp.blend_linear = false;
+    comp.dither_output = true;
+
 
     // ── Background ──
     let bg = Layer::new(
