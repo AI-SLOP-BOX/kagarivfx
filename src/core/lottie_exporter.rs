@@ -63,7 +63,9 @@ fn blend_mode_code(bm: &BlendMode) -> i32 {
         BlendMode::Add => 4,
         BlendMode::Darken | BlendMode::Lighten | BlendMode::Difference
         | BlendMode::Exclusion | BlendMode::Divide | BlendMode::Subtract
-        | BlendMode::ColorBurn | BlendMode::LinearBurn | BlendMode::VividLight => 4,
+        | BlendMode::ColorBurn | BlendMode::LinearBurn | BlendMode::VividLight
+        | BlendMode::ColorDodge | BlendMode::LinearDodge
+        | BlendMode::Color | BlendMode::Hue | BlendMode::Saturation | BlendMode::Luminosity => 4,
     }
 }
 

@@ -299,6 +299,12 @@ pub enum BlendMode {
     ColorBurn,
     LinearBurn,
     VividLight,
+    ColorDodge,
+    LinearDodge,
+    Color,
+    Hue,
+    Saturation,
+    Luminosity,
 }
 
 // ─── Label Colors ──────────────────────────────────────────────────────────

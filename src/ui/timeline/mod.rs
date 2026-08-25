@@ -54,6 +54,7 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
             let mut pending_open_comp: Option<String> = None;
             // Ruler menu: new comp duration
             let mut pending_duration: Option<u32> = None;
+            let mut pending_pick_whip: Option<(usize, usize)> = None; // (child_idx, parent_idx)
             // Trim comp to work area: (w_in, w_out)
             let mut pending_trim_work_area: Option<(u32, u32)> = None;
 
@@ -694,6 +695,12 @@ let type_icon = crate::ui::icons::layer_icon(&layer.layer_type);
                                             crate::core::timeline::BlendMode::ColorBurn => "Color Burn",
                                             crate::core::timeline::BlendMode::LinearBurn => "Linear Burn",
                                             crate::core::timeline::BlendMode::VividLight => "Vivid Light",
+                                            crate::core::timeline::BlendMode::ColorDodge => "Color Dodge",
+                                            crate::core::timeline::BlendMode::LinearDodge => "Linear Dodge",
+                                            crate::core::timeline::BlendMode::Color => "Color",
+                                            crate::core::timeline::BlendMode::Hue => "Hue",
+                                            crate::core::timeline::BlendMode::Saturation => "Saturation",
+                                            crate::core::timeline::BlendMode::Luminosity => "Luminosity",
                                     };
                                     egui::ComboBox::from_id_salt(blend_id)
                                         .selected_text(blend_label)
@@ -715,6 +722,12 @@ let type_icon = crate::ui::icons::layer_icon(&layer.layer_type);
                                                 (crate::core::timeline::BlendMode::ColorBurn, "Color Burn"),
                                                 (crate::core::timeline::BlendMode::LinearBurn, "Linear Burn"),
                                                 (crate::core::timeline::BlendMode::VividLight, "Vivid Light"),
+                                                (crate::core::timeline::BlendMode::ColorDodge, "Color Dodge"),
+                                                (crate::core::timeline::BlendMode::LinearDodge, "Linear Dodge"),
+                                                (crate::core::timeline::BlendMode::Color, "Color"),
+                                                (crate::core::timeline::BlendMode::Hue, "Hue"),
+                                                (crate::core::timeline::BlendMode::Saturation, "Saturation"),
+                                                (crate::core::timeline::BlendMode::Luminosity, "Luminosity"),
                                             ] {
                                                 if ui.selectable_value(&mut layer.blend_mode, bm, name).clicked() {
                                                     project_changed = true;
@@ -757,6 +770,18 @@ let type_icon = crate::ui::icons::layer_icon(&layer.layer_type);
                                     
                                     ui.style_mut().visuals.override_text_color = Some(text_color);
                                     let click_resp = ui.selectable_label(is_selected, &layer.name);
+
+                                    // ── Pick Whip: clicking a layer in pick mode sets it as parent ──
+                                    if click_resp.clicked() && app.pick_whip_mode {
+                                        if let Some(sel) = app.selected_layer_idx {
+                                            if sel != i {
+                                                pending_pick_whip = Some((sel, i));
+                                            }
+                                        }
+                                        app.pick_whip_mode = false;
+                                        app.pick_whip_target = None;
+                                    }
+
                                     if click_resp.double_clicked() {
                                         // Double-click a PreComp layer opens its nested composition (AE parity)
                                         // (deferred: resolved after the row loop)
@@ -1032,9 +1057,14 @@ let type_icon = crate::ui::icons::layer_icon(&layer.layer_type);
                                         });
 
                                     // ── Parenting Pick Whip @ & Dropdown ──
-                                    let pw_btn = ui.selectable_label(false, "@").on_hover_text("Parenting Pick Whip: Click or Drag to link layer parent");
+                                    let pw_active = app.pick_whip_mode;
+                                    let pw_btn = ui.selectable_label(pw_active, "@").on_hover_text("Parenting Pick Whip: Click to enter pick mode, then click target layer");
                                     if pw_btn.clicked() {
-                                        app.toasts.info(format!("🌀 Drag Pickwhip from '{}' to target parent layer", layer.name));
+                                        app.pick_whip_mode = !app.pick_whip_mode;
+                                        app.pick_whip_target = None;
+                                        if app.pick_whip_mode {
+                                            app.toasts.info("🔗 Pick Whip active: click a layer to set as parent");
+                                        }
                                     }
                                     let parent_text = layer.parent_id.as_deref().unwrap_or("None");
                                     egui::ComboBox::from_id_salt(format!("tl_parent_{}", i))
@@ -1567,6 +1597,19 @@ let type_icon = crate::ui::icons::layer_icon(&layer.layer_type);
             );
 
                     app.toasts.info("Selected all keyframes on layer");
+                }
+            }
+
+            // ── Apply pending pick whip ──
+            if let Some((child_idx, parent_idx)) = pending_pick_whip {
+                let comp_mut = app.history.current_mut().active_composition_mut();
+                if child_idx < comp_mut.layers.len() && parent_idx < comp_mut.layers.len() {
+                    let parent_id = comp_mut.layers[parent_idx].id.clone();
+                    let child_name = comp_mut.layers[child_idx].name.clone();
+                    let parent_name = comp_mut.layers[parent_idx].name.clone();
+                    comp_mut.layers[child_idx].parent_id = Some(parent_id);
+                    app.toasts.info(format!("🌀 Parented '{}' → '{}'", child_name, parent_name));
+                    project_changed = true;
                 }
             }
 

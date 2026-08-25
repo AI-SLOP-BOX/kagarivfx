@@ -266,6 +266,10 @@ pub struct AfterEffectsApp {
     /// (layer_idx, kf_frame, handle_type: 0=out/1=in, start_bezier_pt, start_pointer)
     pub viewport_tangent_drag_state: Option<(usize, u32, u8, [f32; 2], eframe::egui::Pos2)>,
     pub viewport_linked_tangent: bool,
+    /// Pick whip mode: when true, clicking a layer sets it as parent
+    pub pick_whip_mode: bool,
+    /// Layer index being picked as parent
+    pub pick_whip_target: Option<usize>,
     /// Corner-handle scale drag: (layer_idx, start_scale, start_pointer_distance)
     pub viewport_scale_drag: Option<(usize, [f32; 2], f32)>,
     /// Multi-layer group drag: (per-layer start positions, start pointer)
@@ -430,6 +434,8 @@ impl Default for AfterEffectsApp {
             viewport_pos_kf_drag_state: None,
             viewport_tangent_drag_state: None,
             viewport_linked_tangent: true,
+            pick_whip_mode: false,
+            pick_whip_target: None,
             viewport_scale_drag: None,
             viewport_multi_drag: None,
             rect_drag_start: None,

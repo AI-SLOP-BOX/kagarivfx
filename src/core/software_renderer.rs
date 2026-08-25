@@ -353,6 +353,39 @@ fn sdf_polygon(x: f32, y: f32, sides: u32, radius: f32) -> f32 {
     radius_point - s
 }
 
+/// Convert RGB (each 0..1) to HSB (H: 0..360, S: 0..1, B: 0..1).
+fn rgb_to_hsb(r: f32, g: f32, b: f32) -> (f32, f32, f32) {
+    let max = r.max(g).max(b);
+    let min = r.min(g).min(b);
+    let delta = max - min;
+    let h = if delta < 0.001 {
+        0.0
+    } else if max == r {
+        60.0 * (((g - b) / delta) % 6.0)
+    } else if max == g {
+        60.0 * ((b - r) / delta + 2.0)
+    } else {
+        60.0 * ((r - g) / delta + 4.0)
+    };
+    let h = if h < 0.0 { h + 360.0 } else { h };
+    let s = if max < 0.001 { 0.0 } else { delta / max };
+    (h, s, max)
+}
+
+/// Convert HSB (H: 0..360, S: 0..1, B: 0..1) to RGB (each 0..1).
+fn hsb_to_rgb(h: f32, s: f32, b: f32) -> (f32, f32, f32) {
+    let c = b * s;
+    let x = c * (1.0 - ((h / 60.0) % 2.0 - 1.0).abs());
+    let m = b - c;
+    let (r, g, bl) = if h < 60.0 { (c, x, 0.0) }
+    else if h < 120.0 { (x, c, 0.0) }
+    else if h < 180.0 { (0.0, c, x) }
+    else if h < 240.0 { (0.0, x, c) }
+    else if h < 300.0 { (x, 0.0, c) }
+    else { (c, 0.0, x) };
+    (r + m, g + m, bl + m)
+}
+
 /// SDF for an arbitrary polygon defined by vertices.
 fn sdf_polygon_points(x: f32, y: f32, points: &[(f32, f32)]) -> f32 {
     if points.len() < 3 { return 1.0; }
@@ -1613,6 +1646,96 @@ pub fn render_frame_to_pixels(comp: &Composition, frame: u32, width: u32, height
                             } else if s == 1.0 { 1.0 } else { (d / (2.0 * (1.0 - s))).clamp(0.0, 1.0) }
                         };
                         (f(src_r, dst_r), f(src_g, dst_g), f(src_b, dst_b))
+                    }
+                    BlendMode::ColorDodge => {
+                        let f = |s: f32, d: f32| {
+                            if d == 0.0 { 0.0 } else if s >= 1.0 { 1.0 } else { (d / (1.0 - s)).clamp(0.0, 1.0) }
+                        };
+                        (f(src_r, dst_r), f(src_g, dst_g), f(src_b, dst_b))
+                    }
+                    BlendMode::LinearDodge => {
+                        let f = |s: f32, d: f32| { (s + d).clamp(0.0, 1.0) };
+                        (f(src_r, dst_r), f(src_g, dst_g), f(src_b, dst_b))
+                    }
+                    BlendMode::Color => {
+                        let f = |sh: f32, dh: f32, ss: f32, ds: f32, sb: f32, db: f32| -> f32 {
+                            let (h, s, _b) = rgb_to_hsb(sh, ss, sb);
+                            let (_, _, db2) = rgb_to_hsb(dh, ds, db);
+                            hsb_to_rgb(h, s, db2).0
+                        };
+                        let fg = |sh: f32, dh: f32, ss: f32, ds: f32, sb: f32, db: f32| -> f32 {
+                            let (h, s, _b) = rgb_to_hsb(sh, ss, sb);
+                            let (_, _, db2) = rgb_to_hsb(dh, ds, db);
+                            hsb_to_rgb(h, s, db2).1
+                        };
+                        let fb = |sh: f32, dh: f32, ss: f32, ds: f32, sb: f32, db: f32| -> f32 {
+                            let (h, s, _b) = rgb_to_hsb(sh, ss, sb);
+                            let (_, _, db2) = rgb_to_hsb(dh, ds, db);
+                            hsb_to_rgb(h, s, db2).2
+                        };
+                        (f(src_r, dst_r, src_g, dst_g, src_b, dst_b),
+                         fg(src_r, dst_r, src_g, dst_g, src_b, dst_b),
+                         fb(src_r, dst_r, src_g, dst_g, src_b, dst_b))
+                    }
+                    BlendMode::Hue => {
+                        let f = |sh: f32, dh: f32, ss: f32, ds: f32, sb: f32, db: f32| -> f32 {
+                            let (h, _, _) = rgb_to_hsb(sh, ss, sb);
+                            let (_, s, b) = rgb_to_hsb(dh, ds, db);
+                            hsb_to_rgb(h, s, b).0
+                        };
+                        let fg = |sh: f32, dh: f32, ss: f32, ds: f32, sb: f32, db: f32| -> f32 {
+                            let (h, _, _) = rgb_to_hsb(sh, ss, sb);
+                            let (_, s, b) = rgb_to_hsb(dh, ds, db);
+                            hsb_to_rgb(h, s, b).1
+                        };
+                        let fb = |sh: f32, dh: f32, ss: f32, ds: f32, sb: f32, db: f32| -> f32 {
+                            let (h, _, _) = rgb_to_hsb(sh, ss, sb);
+                            let (_, s, b) = rgb_to_hsb(dh, ds, db);
+                            hsb_to_rgb(h, s, b).2
+                        };
+                        (f(src_r, dst_r, src_g, dst_g, src_b, dst_b),
+                         fg(src_r, dst_r, src_g, dst_g, src_b, dst_b),
+                         fb(src_r, dst_r, src_g, dst_g, src_b, dst_b))
+                    }
+                    BlendMode::Saturation => {
+                        let f = |sh: f32, dh: f32, ss: f32, ds: f32, sb: f32, db: f32| -> f32 {
+                            let (_, s, _) = rgb_to_hsb(sh, ss, sb);
+                            let (h, _, b) = rgb_to_hsb(dh, ds, db);
+                            hsb_to_rgb(h, s, b).0
+                        };
+                        let fg = |sh: f32, dh: f32, ss: f32, ds: f32, sb: f32, db: f32| -> f32 {
+                            let (_, s, _) = rgb_to_hsb(sh, ss, sb);
+                            let (h, _, b) = rgb_to_hsb(dh, ds, db);
+                            hsb_to_rgb(h, s, b).1
+                        };
+                        let fb = |sh: f32, dh: f32, ss: f32, ds: f32, sb: f32, db: f32| -> f32 {
+                            let (_, s, _) = rgb_to_hsb(sh, ss, sb);
+                            let (h, _, b) = rgb_to_hsb(dh, ds, db);
+                            hsb_to_rgb(h, s, b).2
+                        };
+                        (f(src_r, dst_r, src_g, dst_g, src_b, dst_b),
+                         fg(src_r, dst_r, src_g, dst_g, src_b, dst_b),
+                         fb(src_r, dst_r, src_g, dst_g, src_b, dst_b))
+                    }
+                    BlendMode::Luminosity => {
+                        let f = |sh: f32, dh: f32, ss: f32, ds: f32, sb: f32, db: f32| -> f32 {
+                            let (_, _, b) = rgb_to_hsb(sh, ss, sb);
+                            let (h, s, _) = rgb_to_hsb(dh, ds, db);
+                            hsb_to_rgb(h, s, b).0
+                        };
+                        let fg = |sh: f32, dh: f32, ss: f32, ds: f32, sb: f32, db: f32| -> f32 {
+                            let (_, _, b) = rgb_to_hsb(sh, ss, sb);
+                            let (h, s, _) = rgb_to_hsb(dh, ds, db);
+                            hsb_to_rgb(h, s, b).1
+                        };
+                        let fb = |sh: f32, dh: f32, ss: f32, ds: f32, sb: f32, db: f32| -> f32 {
+                            let (_, _, b) = rgb_to_hsb(sh, ss, sb);
+                            let (h, s, _) = rgb_to_hsb(dh, ds, db);
+                            hsb_to_rgb(h, s, b).2
+                        };
+                        (f(src_r, dst_r, src_g, dst_g, src_b, dst_b),
+                         fg(src_r, dst_r, src_g, dst_g, src_b, dst_b),
+                         fb(src_r, dst_r, src_g, dst_g, src_b, dst_b))
                     }
                     BlendMode::Normal => (src_r, src_g, src_b),
                 };

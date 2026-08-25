@@ -273,6 +273,13 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                                     }
                                 });
 
+                            // Pick whip button: click to enter pick mode, then click a layer in timeline
+                            let whip_text = if app.pick_whip_mode { "🔗 Picking..." } else { "🔗" };
+                            if ui.button(whip_text).on_hover_text("Pick Whip: click this, then click a layer to set as parent").clicked() {
+                                app.pick_whip_mode = !app.pick_whip_mode;
+                                app.pick_whip_target = None;
+                            }
+
                             if parent_before != layer.parent_id { project_changed = true; }
                         });
                     });
