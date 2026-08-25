@@ -30,7 +30,7 @@ pub fn draw(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
                     ui.painter().rect_filled(thumb_rect, 2.0, colors::BG_DARK);
                     ui.painter().rect_stroke(thumb_rect, 2.0, egui::Stroke::new(1.0, colors::BORDER_STRONG));
                     let center = thumb_rect.center();
-                    ui.painter().text(center, egui::Align2::CENTER_CENTER, "🎞", egui::FontId::monospace(14.0), colors::TEXT_ACCENT);
+                    ui.painter().text(center, egui::Align2::CENTER_CENTER, egui_phosphor::regular::FILM_STRIP, egui::FontId::monospace(14.0), colors::TEXT_ACCENT);
 
                     ui.vertical(|ui| {
                         ui.label(egui::RichText::new(&item.name).strong().size(13.0));
@@ -101,16 +101,16 @@ pub fn draw(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
 
             let is_selected = selected_asset_idx == Some(i);
             let (icon_str, item_tag) = match &item.item_type {
-                ProjectItemType::Composition { .. } => ("[COMP]", "Composition"),
-                ProjectItemType::Image { .. } => ("[IMG]", "Footage Image"),
-                ProjectItemType::Video { .. } => ("[VID]", "Footage Video"),
-                ProjectItemType::Audio { .. } => ("[AUD]", "Audio File"),
-                ProjectItemType::Solid { .. } => ("[SOL]", "Solid Color"),
-                ProjectItemType::Folder { .. } => ("[DIR]", "Folder Bin"),
+                ProjectItemType::Composition { .. } => (egui_phosphor::regular::PACKAGE, "Composition"),
+                ProjectItemType::Image { .. } => (egui_phosphor::regular::IMAGE, "Footage Image"),
+                ProjectItemType::Video { .. } => (egui_phosphor::regular::FILM_STRIP, "Footage Video"),
+                ProjectItemType::Audio { .. } => (egui_phosphor::regular::WAVEFORM, "Audio File"),
+                ProjectItemType::Solid { .. } => (egui_phosphor::regular::SQUARE, "Solid Color"),
+                ProjectItemType::Folder { .. } => (egui_phosphor::regular::FOLDER_NOTCH, "Folder Bin"),
             };
 
             if let ProjectItemType::Folder { .. } = &item.item_type {
-                egui::CollapsingHeader::new(format!("[DIR] {}", item.name))
+                egui::CollapsingHeader::new(format!("{} {}", egui_phosphor::regular::FOLDER_NOTCH, item.name))
                     .default_open(true)
                     .show(ui, |ui| {
                         ui.small("Drop assets into folder to categorize");
