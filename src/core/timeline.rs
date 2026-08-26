@@ -1829,6 +1829,10 @@ pub struct Composition {
     pub motion_blur_shutter_angle: f32,
     pub background_color: [f32; 4],
     pub active_camera: Camera3D,
+    /// Additional scene cameras for multi-camera switching. The camera with
+    /// `active == true` wins; empty list falls back to `active_camera`.
+    #[serde(default)]
+    pub cameras: Vec<Camera3D>,
     pub lights: Vec<Light3D>,
     pub markers: Vec<TimelineMarker>,
 
@@ -1865,6 +1869,7 @@ impl Composition {
             motion_blur_shutter_angle: 180.0,
             background_color: [0.05, 0.05, 0.08, 1.0],
             active_camera: Camera3D::default(),
+            cameras: Vec::new(),
             lights: vec![Light3D::default()],
             markers: Vec::new(),
             sub_compositions: Vec::new(),
@@ -1876,6 +1881,30 @@ dither_output: false,
     }
 
     /// Look up a sub-composition by id (recursive search).
+    /// The camera currently driving the render: first entry of `cameras`
+    /// with `active == true`, else the legacy `active_camera` field.
+    pub fn resolve_camera(&self) -> &Camera3D {
+        self.cameras
+            .iter()
+            .find(|c| c.active)
+            .unwrap_or(&self.active_camera)
+    }
+
+    pub fn resolve_camera_mut(&mut self) -> &mut Camera3D {
+        if let Some(i) = self.cameras.iter().position(|c| c.active) {
+            return &mut self.cameras[i];
+        }
+        &mut self.active_camera
+    }
+
+    /// Activate the camera at `idx` (deactivating others). Passing an index
+    /// into `cameras`; out-of-range clears all flags (legacy camera resumes).
+    pub fn set_active_camera(&mut self, idx: Option<usize>) {
+        for (i, c) in self.cameras.iter_mut().enumerate() {
+            c.active = Some(i) == idx;
+        }
+    }
+
     pub fn find_sub_comp(&self, comp_id: &str) -> Option<&Composition> {
         Self::find_sub_comp_limited(self, comp_id, 0)
     }
@@ -2449,6 +2478,60 @@ mod tests {
 
         assert!(comp.set_layer_parent("l2", Some("l1".into())));
         assert!(!comp.set_layer_parent("l1", Some("l2".into())), "Cycle parent assignment must be rejected");
+    }
+}
+
+#[cfg(test)]
+mod multi_camera_tests {
+    use super::*;
+
+    #[test]
+    fn test_resolve_camera_prefers_active_flag() {
+        let mut comp = Composition::new("c".into(), "C".into(), 100, 100, 30, 30);
+        assert_eq!(comp.resolve_camera().name, "Active Camera", "legacy fallback");
+
+        let mut wide = Camera3D::default();
+        wide.name = "Wide".into();
+        wide.fov_degrees = 90.0;
+        wide.active = false;
+        comp.cameras.push(wide);
+        // No active scene camera → legacy active_camera wins
+        assert_eq!(comp.resolve_camera().fov_degrees, 50.0);
+
+        comp.set_active_camera(Some(0));
+        let cam = comp.resolve_camera();
+        assert!((cam.fov_degrees - 90.0).abs() < 1e-4, "active camera wins");
+    }
+
+    #[test]
+    fn test_set_active_camera_exclusive() {
+        let mut comp = Composition::new("c".into(), "C".into(), 100, 100, 30, 30);
+        for i in 0..2 {
+            let mut c = Camera3D::default();
+            c.name = format!("Cam{}", i);
+            c.active = false;
+            comp.cameras.push(c);
+        }
+        comp.set_active_camera(Some(1));
+        assert!(comp.cameras[1].active);
+        assert!(!comp.cameras[0].active);
+        comp.set_active_camera(Some(0));
+        assert!(comp.cameras[0].active && !comp.cameras[1].active);
+        comp.set_active_camera(None);
+        assert!(comp.cameras.iter().all(|c| !c.active), "None clears all");
+        // Falls back to legacy when nothing active
+        assert_eq!(comp.resolve_camera().name, "Active Camera");
+    }
+
+    #[test]
+    fn test_resolve_camera_mut_targets_active() {
+        let mut comp = Composition::new("c".into(), "C".into(), 100, 100, 30, 30);
+        let mut c = Camera3D::default();
+        c.name = "B".into();
+        comp.cameras.push(c);
+        comp.set_active_camera(Some(0));
+        comp.resolve_camera_mut().fov_degrees = 120.0;
+        assert!((comp.cameras[0].fov_degrees - 120.0).abs() < 1e-4);
     }
 }
 

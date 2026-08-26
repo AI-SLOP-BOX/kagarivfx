@@ -1121,17 +1121,17 @@ pub fn render_frame_to_pixels(comp: &Composition, frame: u32, width: u32, height
                 if l_opacity < 0.001 { return LayerRenderData::default(); }
 
                 // ── Depth of field: circle-of-confusion for 3D layers ──
-                let dof_blur = if layer.is_3d && comp.active_camera.dof_enabled {
+                let dof_blur = if layer.is_3d && comp.resolve_camera().dof_enabled {
                     let z = layer.transform_3d.position.evaluate(effective_frame)[2];
                     let dof = crate::core::camera_dof::CameraDofSettings {
-                        focus_distance: comp.active_camera.focus_distance,
-                        aperture: comp.active_camera.aperture,
-                        f_stop: comp.active_camera.aperture,
+                        focus_distance: comp.resolve_camera().focus_distance,
+                        aperture: comp.resolve_camera().aperture,
+                        f_stop: comp.resolve_camera().aperture,
                         blur_level: 100.0,
                         iris_sides: comp.active_camera.dof_iris_sides,
                     };
                     crate::core::camera_dof::calculate_circle_of_confusion(z, &dof)
-                        .clamp(0.0, comp.active_camera.dof_max_blur)
+                        .clamp(0.0, comp.resolve_camera().dof_max_blur)
                 } else {
                     0.0
                 };
@@ -1390,7 +1390,7 @@ pub fn render_frame_to_pixels(comp: &Composition, frame: u32, width: u32, height
             if depth_enabled {
                 // Project particles through the active camera: Z drives
                 // screen position and size scaling.
-                let cam = &comp.active_camera;
+                let cam = comp.resolve_camera();
                 let cpos = cam.transform.position.evaluate(effective_frame);
                 let crot = cam.transform.rotation.evaluate(effective_frame);
                 let rad = crot[2].to_radians();
@@ -1445,7 +1445,7 @@ pub fn render_frame_to_pixels(comp: &Composition, frame: u32, width: u32, height
 
         // For 3D layers, use perspective projection from camera
         let (bounds_x, bounds_y, _perspective_uvs) = if layer.is_3d {
-            let cam = &comp.active_camera;
+            let cam = comp.resolve_camera();
             let layer_rot_3d = layer.transform_3d.rotation.evaluate(effective_frame);
             if let Some(projected) = perspective_project_layer(
                 cam.fov_degrees,
@@ -1831,7 +1831,7 @@ pub fn render_frame_to_pixels(comp: &Composition, frame: u32, width: u32, height
         }).and_then(|light_name| {
             comp.lights.iter().find(|l| l.name == light_name).and_then(|light| {
                 crate::core::timeline::project_point_to_screen(
-                    &comp.active_camera,
+                    comp.resolve_camera(),
                     light.position.evaluate(effective_frame),
                     bw as f32,
                     bh as f32,
@@ -2742,9 +2742,9 @@ mod tests {
         comp.layers.push(layer);
 
         comp.active_camera.dof_enabled = true;
-        comp.active_camera.focus_distance = 1000.0;
-        comp.active_camera.aperture = 50.0;
-        comp.active_camera.dof_max_blur = 24.0;
+        comp.resolve_camera_mut().focus_distance = 1000.0;
+        comp.resolve_camera_mut().aperture = 50.0;
+        comp.resolve_camera_mut().dof_max_blur = 24.0;
 
         let dof_pixels = render_frame_to_pixels(&comp, 0, 32, 32, 0.0, 0);
         let center_idx = ((16 * 32 + 16) * 4) as usize;

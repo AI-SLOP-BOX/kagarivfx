@@ -10,7 +10,47 @@ pub fn draw_camera_light_options(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
     egui::ScrollArea::vertical().show(ui, |ui| {
         // ── 3D Camera Options ──
         crate::ui::custom_widgets::ae_section_header(ui, "3D Camera", "📷");
-        let cam = &mut comp.active_camera;
+
+        // Multi-camera switching: list scene cameras; active one wins.
+        if !comp.cameras.is_empty() {
+            ui.horizontal(|ui| {
+                ui.label(egui::RichText::new("Cameras").small().color(colors::TEXT_SECONDARY));
+                if ui.small_button("+ Add").on_hover_text("Add another camera to the scene").clicked() {
+                    let next_name = format!("Camera {}", comp.cameras.len() + 1);
+                    let fov = comp.active_camera.fov_degrees;
+                    let c = crate::core::timeline::Camera3D {
+                        name: next_name,
+                        active: false,
+                        fov_degrees: fov,
+                        ..crate::core::timeline::Camera3D::default()
+                    };
+                    comp.cameras.push(c);
+                    changed = true;
+                }
+            });
+            let mut activate_idx: Option<usize> = None;
+            let mut remove_idx: Option<usize> = None;
+            for (i, c) in comp.cameras.iter().enumerate() {
+                ui.horizontal(|ui| {
+                    if ui.selectable_label(c.active, &c.name).clicked() && !c.active {
+                        activate_idx = Some(i);
+                    }
+                    if ui.small_button("✕").on_hover_text("Remove this camera").clicked() {
+                        remove_idx = Some(i);
+                    }
+                });
+            }
+            if let Some(i) = activate_idx {
+                comp.set_active_camera(Some(i));
+                changed = true;
+            }
+            if let Some(i) = remove_idx {
+                comp.cameras.remove(i);
+                changed = true;
+            }
+            ui.separator();
+        }
+        let cam = comp.resolve_camera_mut();
 
         ui.horizontal(|ui| {
             ui.label(egui::RichText::new("FOV").small().color(colors::TEXT_SECONDARY));
