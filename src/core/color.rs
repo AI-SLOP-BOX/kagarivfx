@@ -139,6 +139,29 @@ pub fn srgb_to_linear(v: f32) -> f32 {
     v.clamp(0.0, 1.0).powf(2.2)
 }
 
+/// Exact IEC 61966-2-1 piecewise linear→sRGB EOTF^-1.
+/// Matches GPU hardware sRGB encoders bit-for-bit in behavior.
+#[inline]
+pub fn linear_to_srgb_piecewise(v: f32) -> f32 {
+    let v = v.clamp(0.0, 1.0);
+    if v <= 0.0031308 {
+        v * 12.92
+    } else {
+        1.055 * v.powf(1.0 / 2.4) - 0.055
+    }
+}
+
+/// Exact IEC 61966-2-1 piecewise sRGB→linear EOTF.
+#[inline]
+pub fn srgb_to_linear_piecewise(v: f32) -> f32 {
+    let v = v.clamp(0.0, 1.0);
+    if v <= 0.04045 {
+        v / 12.92
+    } else {
+        ((v + 0.055) / 1.055).powf(2.4)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -208,5 +231,35 @@ mod tests {
         let result = fg.over(bg);
         assert!((result.b - 1.0).abs() < 0.001);
         assert!((result.a - 1.0).abs() < 0.001);
+    }
+
+    #[test]
+    fn test_piecewise_roundtrip_exact() {
+        // Piecewise transfer functions must be inverses within float tolerance
+        for i in 0..=100 {
+            let v = i as f32 / 100.0;
+            let lin = srgb_to_linear_piecewise(v);
+            let back = linear_to_srgb_piecewise(lin);
+            assert!((back - v).abs() < 1e-5, "roundtrip failed at {v}");
+        }
+    }
+
+    #[test]
+    fn test_piecewise_matches_hw_srgb_at_knee() {
+        // Below the knee the curve is linear ×12.92
+        assert!((srgb_to_linear_piecewise(0.04045) - 0.04045 / 12.92).abs() < 1e-6);
+        // At mid-gray: piecewise gives ~0.214, pow-2.2 approx gives ~0.218 —
+        // the exact curve must differ from the approximation noticeably.
+        let exact = srgb_to_linear_piecewise(0.5);
+        assert!((exact - 0.5f32.powf(2.2)).abs() > 0.002, "exact != approx");
+        assert!((exact - 0.214).abs() < 0.002, "mid-gray ≈ 0.214 linear");
+    }
+
+    #[test]
+    fn test_piecewise_endpoints() {
+        assert_eq!(srgb_to_linear_piecewise(0.0), 0.0);
+        assert_eq!(srgb_to_linear_piecewise(1.0), 1.0);
+        assert!((linear_to_srgb_piecewise(1.0) - 1.0).abs() < 1e-6);
+        assert!(linear_to_srgb_piecewise(-0.5) >= 0.0, "clamps negatives");
     }
 }

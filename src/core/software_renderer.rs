@@ -1806,15 +1806,17 @@ pub fn render_frame_to_pixels(comp: &Composition, frame: u32, width: u32, height
                 let mut dst_b = buffer[idx + 2] as f32 / 255.0;
                 let dst_a = buffer[idx + 3] as f32 / 255.0;
 
-                // Linear-light mode: decode both sides (fast gamma-2.0 approx)
-                // so Add/Screen/Glow blends behave physically.
+                // Linear-light mode: decode both sides with the exact IEC
+                // sRGB piecewise EOTF so Add/Screen/Glow blends behave
+                // physically and match GPU sRGB hardware encoders.
                 if blend_linear {
-                    src_r *= src_r;
-                    src_g *= src_g;
-                    src_b *= src_b;
-                    dst_r *= dst_r;
-                    dst_g *= dst_g;
-                    dst_b *= dst_b;
+                    use crate::core::color::srgb_to_linear_piecewise as to_lin;
+                    src_r = to_lin(src_r);
+                    src_g = to_lin(src_g);
+                    src_b = to_lin(src_b);
+                    dst_r = to_lin(dst_r);
+                    dst_g = to_lin(dst_g);
+                    dst_b = to_lin(dst_b);
                 }
 
                 // Compute BlendMode calculations
@@ -2003,7 +2005,12 @@ pub fn render_frame_to_pixels(comp: &Composition, frame: u32, width: u32, height
 
                 // Encode back to display space when in linear-light mode.
                 let (or_, og_, ob_) = if blend_linear {
-                    (out_r.max(0.0).sqrt(), out_g.max(0.0).sqrt(), out_b.max(0.0).sqrt())
+                    use crate::core::color::linear_to_srgb_piecewise as to_srgb;
+                    (
+                        to_srgb(out_r.max(0.0)),
+                        to_srgb(out_g.max(0.0)),
+                        to_srgb(out_b.max(0.0)),
+                    )
                 } else {
                     (out_r, out_g, out_b)
                 };
