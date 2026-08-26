@@ -1571,6 +1571,26 @@ pub fn render_frame_to_pixels(comp: &Composition, frame: u32, width: u32, height
                     (st.stroke.size.round() as u32).max(1),
                 );
             }
+            if st.gradient_overlay.enabled {
+                let s = &st.gradient_overlay;
+                crate::core::ae_effects_pack::apply_gradient_overlay(
+                    &mut layer_buf, bw, bh,
+                    &crate::core::ae_effects_pack::GradientOverlayParams {
+                        angle_deg: s.angle,
+                        scale_pct: s.scale,
+                        start: to_rgba8(s.color_start),
+                        end: to_rgba8(s.color_end),
+                        opacity: s.opacity,
+                    },
+                );
+            }
+            if st.color_overlay.enabled {
+                crate::core::ae_effects_pack::apply_color_overlay(
+                    &mut layer_buf, bw, bh,
+                    to_rgba8(st.color_overlay.color),
+                    st.color_overlay.opacity,
+                );
+            }
         }
 
         // Phase 2.7: depth-of-field defocus for 3D layers.

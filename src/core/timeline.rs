@@ -1255,11 +1255,51 @@ pub struct StrokeStyle {
     pub color: [f32; 4],
 }
 
+/// Gradient Overlay layer style: linear gradient blend across the layer
+/// (angle in degrees, scale = gradient extent % of layer diagonal).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GradientOverlayStyle {
+    pub enabled: bool,
+    pub opacity: f32,
+    /// Gradient direction in degrees (0 = left→right, 90 = bottom→top)
+    pub angle: f32,
+    /// Gradient length as % of layer diagonal
+    pub scale: f32,
+    /// Gradient start / end colors
+    pub color_start: [f32; 4],
+    pub color_end: [f32; 4],
+}
+
+impl Default for GradientOverlayStyle {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            opacity: 100.0,
+            angle: 90.0,
+            scale: 100.0,
+            color_start: [1.0, 1.0, 1.0, 1.0],
+            color_end: [0.0, 0.0, 0.0, 1.0],
+        }
+    }
+}
+
+/// Solid Color Overlay layer style.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct ColorOverlayStyle {
+    pub enabled: bool,
+    pub opacity: f32,
+    pub color: [f32; 4],
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct LayerStyle {
     pub drop_shadow: DropShadowStyle,
     pub outer_glow: OuterGlowStyle,
     pub stroke: StrokeStyle,
+    #[serde(default)]
+    pub gradient_overlay: GradientOverlayStyle,
+    #[serde(default)]
+    pub color_overlay: ColorOverlayStyle,
 }
 
 // ─── Text Formatting ───────────────────────────────────────────────────────

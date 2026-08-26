@@ -173,6 +173,73 @@ pub fn draw_layer_styles(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
                 }
             });
         });
+
+        // ── Gradient Overlay ──
+        ui.collapsing("🌈 Gradient Overlay", |ui| {
+            if ui.checkbox(&mut style.gradient_overlay.enabled, "Enabled").clicked() {
+                changed = true;
+            }
+            let go = &mut style.gradient_overlay;
+            ui.horizontal(|ui| {
+                ui.label(egui::RichText::new("Opacity").small().color(colors::TEXT_SECONDARY));
+                if ui.add(egui::Slider::new(&mut go.opacity, 0.0..=100.0).suffix("%")).changed() {
+                    changed = true;
+                }
+            });
+            ui.horizontal(|ui| {
+                ui.label(egui::RichText::new("Angle").small().color(colors::TEXT_SECONDARY));
+                if ui.add(egui::Slider::new(&mut go.angle, -180.0..=180.0).suffix("°")).changed() {
+                    changed = true;
+                }
+            });
+            ui.horizontal(|ui| {
+                ui.label(egui::RichText::new("Scale").small().color(colors::TEXT_SECONDARY));
+                if ui.add(egui::Slider::new(&mut go.scale, 10.0..=400.0).suffix("%")).changed() {
+                    changed = true;
+                }
+            });
+            for (label, cvar) in [("Start", &mut go.color_start), ("End", &mut go.color_end)] {
+                ui.horizontal(|ui| {
+                    ui.label(egui::RichText::new(label).small().color(colors::TEXT_SECONDARY));
+                    let mut col = egui::Color32::from_rgba_premultiplied(
+                        (cvar[0] * 255.0) as u8, (cvar[1] * 255.0) as u8,
+                        (cvar[2] * 255.0) as u8, (cvar[3] * 255.0) as u8,
+                    );
+                    if ui.color_edit_button_srgba(&mut col).changed() {
+                        let [r, g, b, a] = col.to_array();
+                        *cvar = [r as f32 / 255.0, g as f32 / 255.0, b as f32 / 255.0, a as f32 / 255.0];
+                        changed = true;
+                    }
+                });
+            }
+        });
+
+        // ── Color Overlay ──
+        ui.collapsing("🎨 Color Overlay", |ui| {
+            if ui.checkbox(&mut style.color_overlay.enabled, "Enabled").clicked() {
+                changed = true;
+            }
+            let co = &mut style.color_overlay;
+            ui.horizontal(|ui| {
+                ui.label(egui::RichText::new("Opacity").small().color(colors::TEXT_SECONDARY));
+                if ui.add(egui::Slider::new(&mut co.opacity, 0.0..=100.0).suffix("%")).changed() {
+                    changed = true;
+                }
+            });
+            ui.horizontal(|ui| {
+                ui.label(egui::RichText::new("Color").small().color(colors::TEXT_SECONDARY));
+                let c = &mut co.color;
+                let mut col = egui::Color32::from_rgba_premultiplied(
+                    (c[0] * 255.0) as u8, (c[1] * 255.0) as u8,
+                    (c[2] * 255.0) as u8, (c[3] * 255.0) as u8,
+                );
+                if ui.color_edit_button_srgba(&mut col).changed() {
+                    let [r, g, b, a] = col.to_array();
+                    *c = [r as f32 / 255.0, g as f32 / 255.0, b as f32 / 255.0, a as f32 / 255.0];
+                    changed = true;
+                }
+            });
+        });
     });
 
     if changed {

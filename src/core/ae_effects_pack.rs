@@ -858,6 +858,97 @@ mod directional_radial_tests {
     }
 }
 
+// ── Layer Style Overlays ──
+/// Solid Color Overlay: blends every pixel toward `color` by `opacity` (0..100),
+/// weighted by existing alpha so transparent areas stay transparent.
+pub fn apply_color_overlay(
+    pixels: &mut [u8],
+    _width: u32,
+    _height: u32,
+    color: [u8; 4],
+    opacity: f32,
+) {
+    if opacity <= 0.0 {
+        return;
+    }
+    let mix = (opacity / 100.0).clamp(0.0, 1.0);
+    for px in pixels.chunks_exact_mut(4) {
+        let a = px[3] as f32 / 255.0;
+        if a < 0.003 {
+            continue;
+        }
+        px[0] = (px[0] as f32 + (color[0] as f32 - px[0] as f32) * mix) as u8;
+        px[1] = (px[1] as f32 + (color[1] as f32 - px[1] as f32) * mix) as u8;
+        px[2] = (px[2] as f32 + (color[2] as f32 - px[2] as f32) * mix) as u8;
+    }
+}
+
+/// Parameters for [`apply_gradient_overlay`].
+#[derive(Debug, Clone, PartialEq)]
+pub struct GradientOverlayParams {
+    /// Gradient direction in degrees (0 = left→right, 90 = bottom→top)
+    pub angle_deg: f32,
+    /// Gradient length as % of layer bounding extent
+    pub scale_pct: f32,
+    /// Gradient start / end colors
+    pub start: [u8; 4],
+    pub end: [u8; 4],
+    /// Blend strength (0..100)
+    pub opacity: f32,
+}
+
+/// Linear Gradient Overlay: interpolates start→end along `angle_deg`
+/// (0 = left→right, 90 = bottom→top), spanning `scale_pct` of the layer
+/// extent, blended at `opacity` over existing alpha.
+pub fn apply_gradient_overlay(pixels: &mut [u8], width: u32, height: u32, p: &GradientOverlayParams) {
+    if width == 0 || height == 0 || p.opacity <= 0.0 {
+        return;
+    }
+    let mix_max = (p.opacity / 100.0).clamp(0.0, 1.0);
+    let rad = p.angle_deg.to_radians();
+    // Screen-space direction: 0° → +x, 90° → up (-y)
+    let dx = rad.cos();
+    let dy = -rad.sin();
+    let w = width as f32;
+    let h = height as f32;
+
+    // Project the four corners to find the gradient extent
+    let mut t_min = f32::INFINITY;
+    let mut t_max = f32::NEG_INFINITY;
+    for (cx, cy) in [(0.0, 0.0), (w, 0.0), (0.0, h), (w, h)] {
+        let t = cx * dx + cy * dy;
+        t_min = t_min.min(t);
+        t_max = t_max.max(t);
+    }
+    let span = ((t_max - t_min) * (p.scale_pct / 100.0).clamp(0.05, 4.0)).max(1e-3);
+    let mid = (t_min + t_max) * 0.5;
+
+    for y in 0..height {
+        for x in 0..width {
+            let idx = ((y * width + x) * 4) as usize;
+            if idx + 3 >= pixels.len() {
+                continue;
+            }
+            let a = pixels[idx + 3] as f32 / 255.0;
+            if a < 0.003 {
+                continue;
+            }
+            let px = x as f32 + 0.5;
+            let py = y as f32 + 0.5;
+            let t = (((px * dx + py * dy) - mid) / span + 0.5).clamp(0.0, 1.0);
+            let or = p.start[0] as f32 + (p.end[0] as f32 - p.start[0] as f32) * t;
+            let og = p.start[1] as f32 + (p.end[1] as f32 - p.start[1] as f32) * t;
+            let ob = p.start[2] as f32 + (p.end[2] as f32 - p.start[2] as f32) * t;
+            let oa = p.start[3] as f32 + (p.end[3] as f32 - p.start[3] as f32) * t;
+            // Blend overlay color at (mix × overlay alpha)
+            let m = mix_max * (oa / 255.0);
+            pixels[idx] = (pixels[idx] as f32 + (or - pixels[idx] as f32) * m) as u8;
+            pixels[idx + 1] = (pixels[idx + 1] as f32 + (og - pixels[idx + 1] as f32) * m) as u8;
+            pixels[idx + 2] = (pixels[idx + 2] as f32 + (ob - pixels[idx + 2] as f32) * m) as u8;
+        }
+    }
+}
+
 // ── Lens Flare (CPU mirror of the WGSL screen-space flare) ──
 /// Screen-space optical flare parameters.
 #[derive(Debug, Clone, PartialEq)]
@@ -1032,5 +1123,64 @@ mod camera_shake_tests {
             px
         };
         assert_eq!(run(), run());
+    }
+
+    #[test]
+    fn test_color_overlay_blends_opaque_pixels() {
+        let mut px = vec![0u8; 16];
+        // One opaque red pixel
+        px[0] = 255; px[1] = 0; px[2] = 0; px[3] = 255;
+        // One transparent pixel (must stay untouched)
+        px[4] = 200; px[5] = 100; px[6] = 50; px[7] = 0;
+        let before = px.clone();
+        super::apply_color_overlay(&mut px, 2, 2, [0, 0, 255, 255], 50.0);
+        assert!(px[0] >= 127 && px[0] <= 128, "red blended halfway toward blue, got {}", px[0]);
+        assert!(px[2] >= 127 && px[2] <= 128);
+        assert_eq!(&px[4..8], &before[4..8], "transparent pixel untouched");
+    }
+
+    #[test]
+    fn test_gradient_overlay_direction() {
+        // 8x1 layer, gradient left→right (angle 0), white→black
+        let mut px = vec![0u8; 8 * 4];
+        for i in 0..8 {
+            px[i * 4 + 3] = 255;
+        }
+        super::apply_gradient_overlay(
+            &mut px,
+            8,
+            1,
+            &super::GradientOverlayParams {
+                angle_deg: 0.0,
+                scale_pct: 100.0,
+                start: [255, 255, 255, 255],
+                end: [0, 0, 0, 255],
+                opacity: 100.0,
+            },
+        );
+        let left = px[0];
+        let right = px[(7 * 4) as usize];
+        assert!(left > 200, "left edge near start color, got {left}");
+        assert!(right < 55, "right edge near end color, got {right}");
+        assert!(left > right + 100, "strong horizontal ramp expected");
+    }
+
+    #[test]
+    fn test_gradient_overlay_zero_opacity_noop() {
+        let mut px = vec![80u8; 64];
+        let before = px.clone();
+        super::apply_gradient_overlay(
+            &mut px,
+            4,
+            4,
+            &super::GradientOverlayParams {
+                angle_deg: 90.0,
+                scale_pct: 100.0,
+                start: [255, 255, 255, 255],
+                end: [0, 0, 0, 255],
+                opacity: 0.0,
+            },
+        );
+        assert_eq!(px, before);
     }
 }
