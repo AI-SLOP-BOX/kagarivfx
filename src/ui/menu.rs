@@ -842,7 +842,7 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
                         ui.close_menu();
                     }
                 });
-                ui.menu_button("OpenFX Plugins", |ui| {
+                if crate::ui::mode::menu_visible(app.ui_mode, "OpenFX Plugins") { ui.menu_button("OpenFX Plugins", |ui| {
                     if ui.button("Scan Standard Paths...").on_hover_text("Search /Library/OFX/Plugins and $OFX_PLUGIN_PATH for plugin bundles, then probe their ABI exports").clicked() {
                         let found = crate::core::openfx_bridge::discover_all_ofx_plugins();
                         if found.is_empty() {
@@ -874,6 +874,7 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
                         ui.close_menu();
                     }
                 });
+                }
                 ui.menu_button("Stylize", |ui| {
                     if ui.button("Glow").clicked() {
                         apply_effect_by_name(app, "Glow");
@@ -936,6 +937,25 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
                 }
             });
             ui.menu_button("View", |ui| {
+                // ── UI Mode (skill level) ──
+                ui.horizontal(|ui| {
+                    ui.label(egui::RichText::new("UI Mode").small().color(egui::Color32::from_rgb(140,140,148)));
+                    let mode = app.ui_mode;
+                    if ui.selectable_label(mode.is_beginner(), "初心者").on_hover_text("Hide advanced panels and menus").clicked() {
+                        app.ui_mode = crate::ui::mode::UiMode::Beginner;
+                        app.toasts.info("初心者モード: 高度なパネルを非表示にしました");
+                    }
+                    if ui.selectable_label(mode.is_advanced(), "上級者").on_hover_text("Show every panel, menu and tool").clicked() {
+                        app.ui_mode = crate::ui::mode::UiMode::Advanced;
+                        app.toasts.info("上級者モード: 全機能を表示中");
+                    }
+                });
+                ui.separator();
+                if ui.button("🎓 Restart Tutorial").clicked() {
+                    crate::ui::tutorial::restart(app);
+                    ui.close_menu();
+                }
+                ui.separator();
                 ui.checkbox(&mut app.show_grid, "Show Grid");
                 ui.checkbox(&mut app.show_guides, "Show Safe Zones");
                 ui.checkbox(&mut app.show_handles, "Show Handles");

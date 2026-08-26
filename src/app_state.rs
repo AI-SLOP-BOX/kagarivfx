@@ -237,6 +237,10 @@ pub struct AfterEffectsApp {
     pub show_vectorscope: bool,
     pub show_history_panel: bool,
     pub show_welcome: bool,
+    /// Skill-level UI mode: Beginner hides advanced panels/menus.
+    pub ui_mode: crate::ui::mode::UiMode,
+    /// Interactive tutorial state (None = closed).
+    pub tutorial: Option<crate::ui::tutorial::TutorialState>,
     pub show_new_comp_dialog: bool,
     pub show_preferences: bool,
     /// Audio preview during playback (Preferences).
@@ -510,6 +514,8 @@ impl Default for AfterEffectsApp {
             show_vectorscope: false,
             show_history_panel: false,
             show_welcome: true,
+            ui_mode: crate::ui::mode::UiMode::Beginner,
+            tutorial: Some(crate::ui::tutorial::TutorialState::default()),
             show_new_comp_dialog: false,
             show_preferences: false,
             audio_preview_enabled: true,
@@ -829,6 +835,7 @@ impl eframe::App for AfterEffectsApp {
         crate::ui::history_panel::draw_history_panel(self, ctx);
         crate::ui::drop_import::handle_dropped_files(self, ctx);
         crate::ui::welcome::draw(self, ctx);
+        crate::ui::tutorial::draw(self, ctx);
         crate::ui::new_comp_dialog::draw_new_comp_dialog(self, ctx);
         crate::ui::preferences_dialog::draw_preferences_dialog(self, ctx);
         crate::ui::export_dialog::draw(self, ctx);

@@ -62,6 +62,8 @@ pub mod camera_light_options;
 pub mod layer_styles;
 pub mod graph_editor;
 pub mod theme;
+pub mod mode;
+pub mod tutorial;
 pub mod notification;
 pub mod focus;
 pub mod shortcuts;
