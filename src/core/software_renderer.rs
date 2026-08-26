@@ -1598,6 +1598,19 @@ pub fn render_frame_to_pixels(comp: &Composition, frame: u32, width: u32, height
                     st.inner_glow.opacity,
                 );
             }
+            if st.satin.enabled {
+                let s = &st.satin;
+                crate::core::ae_effects_pack::apply_satin(
+                    &mut layer_buf, bw, bh,
+                    &crate::core::ae_effects_pack::SatinParams {
+                        distance: s.distance,
+                        angle_deg: s.angle,
+                        size: (s.size.round() as u32).min(64),
+                        color: to_rgba8(s.color),
+                        opacity: s.opacity,
+                    },
+                );
+            }
             if st.stroke.enabled {
                 crate::core::ae_effects_pack_v2::apply_stroke_effect(
                     &mut layer_buf, bw, bh,

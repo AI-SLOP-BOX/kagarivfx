@@ -211,6 +211,51 @@ pub fn draw_layer_styles(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
             });
         });
 
+        // ── Satin ──
+        ui.collapsing("🧵 Satin", |ui| {
+            if ui.checkbox(&mut style.satin.enabled, "Enabled").clicked() {
+                changed = true;
+            }
+            let s = &mut style.satin;
+            ui.horizontal(|ui| {
+                ui.label(egui::RichText::new("Opacity").small().color(colors::TEXT_SECONDARY));
+                if ui.add(egui::Slider::new(&mut s.opacity, 0.0..=100.0).suffix("%")).changed() {
+                    changed = true;
+                }
+            });
+            ui.horizontal(|ui| {
+                ui.label(egui::RichText::new("Angle").small().color(colors::TEXT_SECONDARY));
+                if ui.add(egui::Slider::new(&mut s.angle, -180.0..=180.0).suffix("°")).changed() {
+                    changed = true;
+                }
+            });
+            ui.horizontal(|ui| {
+                ui.label(egui::RichText::new("Distance").small().color(colors::TEXT_SECONDARY));
+                if ui.add(egui::Slider::new(&mut s.distance, 0.0..=150.0)).changed() {
+                    changed = true;
+                }
+            });
+            ui.horizontal(|ui| {
+                ui.label(egui::RichText::new("Size").small().color(colors::TEXT_SECONDARY));
+                if ui.add(egui::Slider::new(&mut s.size, 1.0..=64.0)).changed() {
+                    changed = true;
+                }
+            });
+            ui.horizontal(|ui| {
+                ui.label(egui::RichText::new("Color").small().color(colors::TEXT_SECONDARY));
+                let c = &mut s.color;
+                let mut col = egui::Color32::from_rgba_premultiplied(
+                    (c[0] * 255.0) as u8, (c[1] * 255.0) as u8,
+                    (c[2] * 255.0) as u8, (c[3] * 255.0) as u8,
+                );
+                if ui.color_edit_button_srgba(&mut col).changed() {
+                    let [r, g, b, a] = col.to_array();
+                    *c = [r as f32 / 255.0, g as f32 / 255.0, b as f32 / 255.0, a as f32 / 255.0];
+                    changed = true;
+                }
+            });
+        });
+
         // ── Stroke ──
         ui.collapsing("✏ Stroke", |ui| {
             if ui.checkbox(&mut style.stroke.enabled, "Enabled").clicked() {

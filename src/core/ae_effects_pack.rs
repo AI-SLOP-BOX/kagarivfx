@@ -971,6 +971,76 @@ pub fn apply_inner_glow(
     }
 }
 
+// ── Satin (layer style) ──
+/// Satin parameters.
+#[derive(Debug, Clone, PartialEq)]
+pub struct SatinParams {
+    /// Offset of the sheen source (px)
+    pub distance: f32,
+    /// Sheen direction in degrees (compass convention: 0 = up, 90 = right)
+    pub angle_deg: f32,
+    /// Softness of the band (gaussian radius px)
+    pub size: u32,
+    /// Tint color RGBA
+    pub color: [u8; 4],
+    /// Blend strength (0..100)
+    pub opacity: f32,
+}
+
+/// Satin: interior sheen band. Shifts the inverted alpha by the compass
+/// offset, intersects it with the original shape, blurs, then tints.
+pub fn apply_satin(pixels: &mut [u8], width: u32, height: u32, p: &SatinParams) {
+    if width == 0 || height == 0 || p.opacity <= 0.0 {
+        return;
+    }
+    let strength = (p.opacity / 100.0).clamp(0.0, 1.0);
+    let rad = p.angle_deg.to_radians();
+    let dx = (rad.sin() * p.distance).round() as i32;
+    let dy = (-rad.cos() * p.distance).round() as i32;
+
+    // Band M(x,y) = A(x,y) × Ainv_shifted(x,y): opaque pixels whose
+    // forward-shifted sample falls outside the shape.
+    let mut mask = vec![0u8; (width * height) as usize];
+    for y in 0..height {
+        for x in 0..width {
+            let idx = ((y * width + x) * 4) as usize;
+            let a = pixels[idx + 3] as f32 / 255.0;
+            if a <= 0.003 {
+                continue;
+            }
+            let sx = (x as i32 - dx).clamp(0, width as i32 - 1) as u32;
+            let sy = (y as i32 - dy).clamp(0, height as i32 - 1) as u32;
+            let s_a = pixels[((sy * width + sx) * 4) as usize + 3] as f32 / 255.0;
+            // Inverted shifted alpha intersected with the shape
+            mask[(y * width + x) as usize] = (a * (1.0 - s_a) * 255.0).round() as u8;
+        }
+    }
+
+    let mut soft = vec![0u8; (width * height * 4) as usize];
+    for i in (0..soft.len()).step_by(4) {
+        soft[i] = p.color[0];
+        soft[i + 1] = p.color[1];
+        soft[i + 2] = p.color[2];
+        soft[i + 3] = mask[i / 4];
+    }
+    if p.size > 0 {
+        apply_gaussian_blur(&mut soft, width, height, p.size);
+    }
+
+    for i in (0..pixels.len()).step_by(4) {
+        let base_a = pixels[i + 3] as f32 / 255.0;
+        let m = ((soft[i + 3] as f32 / 255.0) * (p.color[3] as f32 / 255.0)).min(1.0) * strength;
+        if m <= 0.003 || base_a <= 0.003 {
+            continue;
+        }
+        for c in 0..3 {
+            let base = pixels[i + c] as f32 / 255.0;
+            let sc = soft[i + c] as f32 / 255.0;
+            pixels[i + c] = ((base * (1.0 - m) + sc * m) * 255.0).round() as u8;
+        }
+    }
+}
+
 // ── Layer Style Overlays ──
 /// Solid Color Overlay: blends every pixel toward `color` by `opacity` (0..100),
 /// weighted by existing alpha so transparent areas stay transparent.
@@ -1338,5 +1408,50 @@ mod camera_shake_tests {
         let center = ((8 * w as usize + 8) * 4) as usize;
         assert!(px[edge] > 60, "inner edge must glow, got {}", px[edge]);
         assert_eq!(px[center], 40, "deep interior untouched");
+    }
+
+    fn opaque_rect(w: u32, h: u32, x0: u32, x1: u32, y0: u32, y1: u32, gray: u8) -> Vec<u8> {
+        let mut px = vec![0u8; (w * h * 4) as usize];
+        for y in y0..y1 {
+            for x in x0..x1 {
+                let i = ((y * w + x) * 4) as usize;
+                px[i] = gray;
+                px[i + 1] = gray;
+                px[i + 2] = gray;
+                px[i + 3] = 255;
+            }
+        }
+        px
+    }
+
+    #[test]
+    fn test_satin_bands_one_side() {
+        // Wide rect; angle 90° (dx=+distance): sheen band near LEFT interior.
+        let (w, h) = (48u32, 16u32);
+        let mut px = opaque_rect(w, h, 6, 42, 2, 14, 120);
+        super::apply_satin(
+            &mut px,
+            w,
+            h,
+            &super::SatinParams { distance: 10.0, angle_deg: 90.0, size: 4, color: [30, 30, 60, 255], opacity: 100.0 },
+        );
+        let band = px[(7 * w as usize + 9) * 4];
+        let far = px[(7 * w as usize + 38) * 4];
+        assert!(band < far, "left band tinted: band={band} far={far}");
+        assert!(far <= 120 && far >= 110, "far side ~original: {far}");
+    }
+
+    #[test]
+    fn test_satin_zero_opacity_noop() {
+        let (w, h) = (16u32, 16u32);
+        let mut px = opaque_rect(w, h, 2, 14, 2, 14, 90);
+        let before = px.clone();
+        super::apply_satin(
+            &mut px,
+            w,
+            h,
+            &super::SatinParams { distance: 5.0, angle_deg: 45.0, size: 4, color: [200, 0, 0, 255], opacity: 0.0 },
+        );
+        assert_eq!(px, before);
     }
 }

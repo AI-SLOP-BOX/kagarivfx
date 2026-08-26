@@ -1351,6 +1351,33 @@ pub struct InnerGlowStyle {
     pub color: [f32; 4],
 }
 
+/// Satin layer style: soft interior sheen band along the shape's contour.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SatinStyle {
+    pub enabled: bool,
+    pub opacity: f32,
+    /// Sheen direction (compass degrees, matching DropShadowStyle)
+    pub angle: f32,
+    /// Offset of the sheen source from the edge
+    pub distance: f32,
+    /// Softness of the band
+    pub size: f32,
+    pub color: [f32; 4],
+}
+
+impl Default for SatinStyle {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            opacity: 50.0,
+            angle: 90.0,
+            distance: 12.0,
+            size: 16.0,
+            color: [0.2, 0.2, 0.35, 1.0],
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct LayerStyle {
     pub drop_shadow: DropShadowStyle,
@@ -1364,6 +1391,8 @@ pub struct LayerStyle {
     pub inner_shadow: InnerShadowStyle,
     #[serde(default)]
     pub inner_glow: InnerGlowStyle,
+    #[serde(default)]
+    pub satin: SatinStyle,
 }
 
 // ─── Text Formatting ───────────────────────────────────────────────────────
