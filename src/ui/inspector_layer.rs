@@ -684,6 +684,17 @@ pub fn draw_layer_type_specs(
                         ui.label("Taper");
                     });
                 });
+                ui.collapsing("🎥 3D Depth", |ui| {
+                    changed |= ui.checkbox(&mut emitter.depth_enabled, "Project through camera").changed();
+                    if emitter.depth_enabled {
+                        ui.horizontal(|ui| {
+                            changed |= ui.add(egui::DragValue::new(&mut emitter.depth_range[0]).suffix(" min")).changed();
+                            ui.label("Z Range");
+                            changed |= ui.add(egui::DragValue::new(&mut emitter.depth_range[1]).suffix(" max")).changed();
+                        });
+                        ui.label(egui::RichText::new("Particles scale with distance from the active camera").small().color(colors::TEXT_MUTED));
+                    }
+                });
                 ui.horizontal(|ui| {
                     changed |= ui.color_edit_button_rgba_unmultiplied(&mut emitter.color_start).changed();
                     ui.label("Start Color");
