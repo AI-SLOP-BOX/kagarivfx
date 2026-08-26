@@ -843,13 +843,33 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
                     }
                 });
                 ui.menu_button("OpenFX Plugins", |ui| {
-                    if ui.button("Scan Standard Paths...").on_hover_text("Search /Library/OFX/Plugins and $OFX_PLUGIN_PATH for plugin bundles").clicked() {
+                    if ui.button("Scan Standard Paths...").on_hover_text("Search /Library/OFX/Plugins and $OFX_PLUGIN_PATH for plugin bundles, then probe their ABI exports").clicked() {
                         let found = crate::core::openfx_bridge::discover_all_ofx_plugins();
                         if found.is_empty() {
                             app.toasts.info("No OpenFX plugins found in standard paths");
                         } else {
-                            let names: Vec<&str> = found.iter().map(|p| p.name.as_str()).take(5).collect();
-                            app.toasts.info(format!("Found {} OpenFX plugin(s): {}{}", found.len(), names.join(", "), if found.len() > 5 { "…" } else { "" }));
+                            let mut loadable = 0usize;
+                            let mut names: Vec<String> = Vec::new();
+                            for p in &found {
+                                if let crate::core::openfx_bridge::OfxProbeResult::Loaded { plugin_version, .. } =
+                                    crate::core::openfx_bridge::probe_ofx_plugin(&p.binary_path)
+                                {
+                                    loadable += 1;
+                                    if names.len() < 4 {
+                                        names.push(format!("{} v{}.{}", p.name, plugin_version.0, plugin_version.1));
+                                    }
+                                }
+                            }
+                            if loadable > 0 {
+                                app.toasts.info(format!(
+                                    "{loadable}/{} OFX effect(s) loadable: {}{}",
+                                    found.len(),
+                                    names.join(", "),
+                                    if loadable > 4 { "…" } else { "" }
+                                ));
+                            } else {
+                                app.toasts.info(format!("Found {} bundle(s), none expose OfxImageEffectAPI", found.len()));
+                            }
                         }
                         ui.close_menu();
                     }

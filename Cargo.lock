@@ -126,6 +126,7 @@ dependencies = [
  "egui_extras",
  "env_logger",
  "image",
+ "libloading",
  "log",
  "naga 0.19.2",
  "png 0.17.16",

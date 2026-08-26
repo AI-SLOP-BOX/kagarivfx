@@ -131,6 +131,98 @@ pub fn discover_all_ofx_plugins() -> Vec<OfxPluginDescriptor> {
     all
 }
 
+// ─── dlopen-based ABI probing (OfxGetPlugin / OfxPlugin v1) ─────────────────
+
+/// `struct OfxPlugin` layout from ofxCore.h — read-only fields we inspect
+/// before any host action handshake. Offsets per the published C ABI.
+#[repr(C)]
+struct OfxPluginRaw {
+    struct_version: i32,
+    type_identifier: *const std::os::raw::c_char,
+    plugin_api_version: [i32; 2],
+    plugin_api: *const std::os::raw::c_char,
+    plugin_version_major: i32,
+    plugin_version_minor: i32,
+    set_host: usize, // function pointer, unused during probing
+    main_entry: usize, // function pointer, unused during probing
+}
+
+unsafe fn cstr<'a>(p: *const std::os::raw::c_char) -> Option<&'a str> {
+    if p.is_null() {
+        return None;
+    }
+    std::ffi::CStr::from_ptr(p).to_str().ok()
+}
+
+/// Result of probing one .ofx binary.
+#[derive(Debug, Clone, PartialEq)]
+pub enum OfxProbeResult {
+    /// Binary loaded and exposed at least one valid OfxImageEffectAPI plugin.
+    Loaded {
+        api: String,
+        api_version: (i32, i32),
+        plugin_version: (i32, i32),
+        plugin_count: usize,
+    },
+    /// The binary loaded but is not an OFX plugin (no OfxGetPlugin export).
+    NotOfx(String),
+    /// The binary could not be loaded at all.
+    LoadError(String),
+}
+
+/// dlopen the given `.ofx` binary and introspect its exported plugin list
+/// via `OfxGetNumberOfPlugins` / `OfxGetPlugin`. Read-only: no host actions
+/// are dispatched, so this is safe against arbitrary third-party binaries
+/// beyond the dlopen constructor itself.
+///
+/// Returns `LoadError` when the file is missing/corrupt for this platform,
+/// which callers surface without crashing the app.
+pub fn probe_ofx_plugin(path: &Path) -> OfxProbeResult {
+    let file = match unsafe { libloading::Library::new(path) } {
+        Ok(lib) => lib,
+        Err(e) => return OfxProbeResult::LoadError(format!("dlopen failed: {e}")),
+    };
+    let result = unsafe { probe_loaded(&file) };
+    drop(file);
+    result
+}
+
+unsafe fn probe_loaded(lib: &libloading::Library) -> OfxProbeResult {
+    let get_num: libloading::Symbol<'_, unsafe extern "C" fn() -> i32> = match lib.get(b"OfxGetNumberOfPlugins") {
+        Ok(s) => s,
+        Err(e) => return OfxProbeResult::NotOfx(format!("missing OfxGetNumberOfPlugins: {e}")),
+    };
+    let get_plugin: libloading::Symbol<'_, unsafe extern "C" fn(i32) -> *mut OfxPluginRaw> =
+        match lib.get(b"OfxGetPlugin") {
+            Ok(s) => s,
+            Err(e) => return OfxProbeResult::NotOfx(format!("missing OfxGetPlugin: {e}")),
+        };
+
+    let count = (get_num)().max(0) as usize;
+    if count == 0 {
+        return OfxProbeResult::NotOfx("exports zero plugins".into());
+    }
+
+    for i in 0..count {
+        let raw = (get_plugin)(i as i32);
+        if raw.is_null() {
+            continue;
+        }
+        let p = &*raw;
+        if let Some(api) = cstr(p.plugin_api) {
+            if api.starts_with("OfxImageEffect") {
+                return OfxProbeResult::Loaded {
+                    api: api.to_string(),
+                    api_version: (p.plugin_api_version[0], p.plugin_api_version[1]),
+                    plugin_version: (p.plugin_version_major, p.plugin_version_minor),
+                    plugin_count: count,
+                };
+            }
+        }
+    }
+    OfxProbeResult::NotOfx("no OfxImageEffect plugin in export list".into())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -172,5 +264,25 @@ mod tests {
     #[test]
     fn test_discover_missing_root_is_empty_not_panic() {
         assert!(discover_ofx_plugins(Path::new("/nonexistent/ofx/root")).is_empty());
+    }
+
+    #[test]
+    fn test_probe_missing_file_is_load_error() {
+        match probe_ofx_plugin(Path::new("/nonexistent/probe.ofx")) {
+            OfxProbeResult::LoadError(_) => {}
+            other => panic!("expected LoadError, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn test_probe_garbage_file_is_clean_error_not_crash() {
+        let tmp = std::env::temp_dir().join(format!("ofx_garbage_{}.ofx", std::process::id()));
+        std::fs::write(&tmp, b"definitely not a dylib").unwrap();
+        let res = probe_ofx_plugin(&tmp);
+        let _ = std::fs::remove_file(&tmp);
+        assert!(
+            matches!(res, OfxProbeResult::LoadError(_) | OfxProbeResult::NotOfx(_)),
+            "garbage must not crash: {res:?}"
+        );
     }
 }
