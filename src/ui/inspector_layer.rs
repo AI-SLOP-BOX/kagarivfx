@@ -652,6 +652,23 @@ pub fn draw_layer_type_specs(
                         changed |= ui.add(egui::DragValue::new(&mut emitter.attract_center[1])).changed();
                         ui.label("Force Point");
                     });
+                    ui.separator();
+                    let mut ds = emitter.death_spawn_count as i32;
+                    if ui.add(egui::DragValue::new(&mut ds).range(0..=32).prefix("×")).changed() {
+                        emitter.death_spawn_count = ds.max(0) as u32;
+                        changed = true;
+                    }
+                    ui.label("Death Spawn");
+                    if emitter.death_spawn_count > 0 {
+                        ui.horizontal(|ui| {
+                            changed |= ui.add(egui::Slider::new(&mut emitter.death_spawn_speed_scale, 0.05..=2.0)).changed();
+                            ui.label("Child Speed ×");
+                        });
+                        ui.horizontal(|ui| {
+                            changed |= ui.add(egui::Slider::new(&mut emitter.death_spawn_life_scale, 0.05..=1.0)).changed();
+                            ui.label("Child Life ×");
+                        });
+                    }
                 });
                 ui.collapsing("✨ Trail", |ui| {
                     ui.horizontal(|ui| {

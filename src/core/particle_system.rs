@@ -150,7 +150,19 @@ pub struct ParticleEmitter {
     /// Attractor point [x, y]
     #[serde(default)]
     pub attract_center: [f32; 2],
+    /// Child particles emitted radially when a particle dies (0 = off)
+    #[serde(default)]
+    pub death_spawn_count: u32,
+    /// Child initial speed = parent emitter speed × this (0..1 typical)
+    #[serde(default = "default_death_speed_scale")]
+    pub death_spawn_speed_scale: f32,
+    /// Child lifetime = emitter lifetime × this
+    #[serde(default = "default_death_life_scale")]
+    pub death_spawn_life_scale: f32,
 }
+
+fn default_death_speed_scale() -> f32 { 0.5 }
+fn default_death_life_scale() -> f32 { 0.5 }
 
 impl Default for ParticleEmitter {
     fn default() -> Self {
@@ -194,6 +206,9 @@ impl Default for ParticleEmitter {
             vortex_center: [0.0, 0.0],
             attract_strength: 0.0,
             attract_center: [0.0, 0.0],
+            death_spawn_count: 0,
+            death_spawn_speed_scale: 0.5,
+            death_spawn_life_scale: 0.5,
         }
     }
 }
@@ -439,6 +454,45 @@ impl ParticleSystem {
             }
         }
 
+        // Death-spawn: emit child particles where parents just died
+        if self.emitter.death_spawn_count > 0 {
+            let count = self.emitter.death_spawn_count;
+            let speed_scale = self.emitter.death_spawn_speed_scale;
+            let life_scale = self.emitter.death_spawn_life_scale;
+            let spread = self.emitter.spread_degrees.to_radians();
+            let base_speed = self.emitter.speed * speed_scale;
+            let dead: Vec<(f32, f32)> = self
+                .particles
+                .iter()
+                .filter(|p| p.life <= 0.0)
+                .map(|p| (p.x, p.y))
+                .collect();
+            for (dx, dy) in dead {
+                for _ in 0..count {
+                    if self.particles.len() >= self.emitter.max_particles as usize {
+                        break;
+                    }
+                    let angle = self.next_random() * std::f32::consts::TAU;
+                    let _ = spread; // children burst radially in all directions
+                    let speed = base_speed * (0.5 + self.next_random() * 0.5);
+                    let lifetime = (self.emitter.lifetime * life_scale).max(0.05);
+                    self.particles.push(Particle {
+                        x: dx,
+                        y: dy,
+                        vx: angle.cos() * speed,
+                        vy: angle.sin() * speed,
+                        life: lifetime,
+                        max_life: lifetime,
+                        size: self.emitter.size_start * 0.5,
+                        rotation: 0.0,
+                        angular_velocity: 0.0,
+                        trail: [(dx, dy); 8],
+                        trail_len: 0,
+                    });
+                }
+            }
+        }
+
         // Remove dead particles
         self.particles.retain(|p| p.life > 0.0);
     }
@@ -661,6 +715,57 @@ mod tests {
         let p = &sys.particles[0];
         // Negative strength pushes away from attractor (+x direction here)
         assert!(p.vx > 20.0, "repulsion must push away from point, got {}", p.vx);
+    }
+
+    #[test]
+    fn test_death_spawn_emits_children() {
+        let emitter = ParticleEmitter {
+            rate: 0.0,
+            gravity: [0.0, 0.0],
+            wind: [0.0, 0.0],
+            drag: 0.0,
+            lifetime: 1.0,
+            death_spawn_count: 4,
+            max_particles: 100,
+            ..Default::default()
+        };
+        let mut sys = ParticleSystem::new(emitter);
+        // One particle at end of life
+        sys.particles.push(Particle {
+            x: 50.0, y: 60.0, vx: 0.0, vy: 0.0,
+            life: 0.001, max_life: 1.0, size: 8.0, rotation: 0.0, angular_velocity: 0.0,
+            trail: [(50.0, 60.0); 8], trail_len: 0,
+        });
+        sys.update(0.016, 0.0, 0.0);
+        // Parent dies → replaced by exactly 4 children near (50, 60)
+        assert_eq!(sys.particles.len(), 4, "expected 4 children");
+        for c in &sys.particles {
+            assert!((c.x - 50.0).abs() < 2.0 && (c.y - 60.0).abs() < 2.0);
+            assert!(c.life > 0.0 && c.max_life <= 0.55, "child lifetime scaled");
+        }
+    }
+
+    #[test]
+    fn test_death_spawn_respects_max_particles() {
+        let emitter = ParticleEmitter {
+            rate: 0.0,
+            gravity: [0.0, 0.0],
+            wind: [0.0, 0.0],
+            drag: 0.0,
+            death_spawn_count: 10,
+            max_particles: 3,
+            ..Default::default()
+        };
+        let mut sys = ParticleSystem::new(emitter);
+        for i in 0..5u32 {
+            sys.particles.push(Particle {
+                x: i as f32 * 10.0, y: 0.0, vx: 0.0, vy: 0.0,
+                life: 0.001, max_life: 1.0, size: 4.0, rotation: 0.0, angular_velocity: 0.0,
+                trail: [(i as f32 * 10.0, 0.0); 8], trail_len: 0,
+            });
+        }
+        sys.update(0.016, 0.0, 0.0);
+        assert!(sys.particles.len() <= 3, "must cap at max_particles, got {}", sys.particles.len());
     }
 
     #[test]
