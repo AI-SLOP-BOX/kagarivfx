@@ -7,6 +7,7 @@
 ///   - `thisComp.layer("Name").transform.position[0]`  (inter-layer reference)
 ///   - Any arbitrary Rhai script that returns a number or array.
 use rhai::{Engine, Scope, Dynamic, Array};
+use rhai::{export_module, exported_module};
 
 /// Per-frame audio data for expression functions (audioAmplitude, audioSpectrum).
 /// Set by the renderer before evaluating expressions each frame.
@@ -21,6 +22,19 @@ impl Default for AudioExprData {
     fn default() -> Self {
         Self { amplitude: 0.0, bands: [0.0; 5] }
     }
+}
+
+/// Extracts a scalar from a Rhai result: numbers directly, or the FIRST
+/// element when an Array is returned (AE wiggle returns per-dim arrays).
+fn dynamic_to_f64(v: &Dynamic) -> Option<f64> {
+    if let Ok(f) = v.as_float() { return Some(f); }
+    if let Ok(i) = v.as_int() { return Some(i as f64); }
+    if let Ok(arr) = v.clone().into_array() {
+        if let Some(first) = arr.first() {
+            return dynamic_to_f64(first);
+        }
+    }
+    None
 }
 
 thread_local! {
@@ -56,6 +70,22 @@ pub fn pcg32_hash(mut state: u64) -> f64 {
     val as f64 / 4294967296.0
 }
 
+thread_local! {
+    /// Current composition time (seconds), injected by every eval entry point.
+    /// Lets zero-state helpers like the canonical `wiggle(freq, amp)` behave
+    /// time-aware without changing their Rhai signatures.
+    static CURRENT_TIME: std::cell::Cell<f64> = const { std::cell::Cell::new(0.0) };
+}
+
+fn set_current_time(t: f64) {
+    CURRENT_TIME.with(|c| c.set(t));
+}
+
+#[allow(dead_code)]
+pub fn current_time() -> f64 {
+    CURRENT_TIME.with(|c| c.get())
+}
+
 pub fn build_engine() -> Engine {
     let mut engine = Engine::new();
     engine.set_max_expr_depths(64, 32);
@@ -74,11 +104,51 @@ pub fn build_engine() -> Engine {
 
     // --- wiggle(frequency: f32, amplitude: f32) -> f32 ---
     // Built-in pseudo-random noise matching AE's wiggle expression.
+    // Canonical 2-arg AE form: wiggles BOTH dimensions independently using the
+    // engine-injected current time; returns an Array for position properties.
+    engine.register_fn("wiggle", |freq: f64, amp: f64| -> Array {
+        let t = current_time() * freq.max(1e-4) * std::f64::consts::TAU;
+        let noise = |seed: f64| -> f64 {
+            let n = (t + seed).sin() * 0.70
+                + ((t + seed) * 2.1_f64).sin() * 0.20
+                + ((t + seed) * 5.3_f64).sin() * 0.10;
+            n * amp
+        };
+        vec![Dynamic::from_float(noise(0.0)), Dynamic::from_float(noise(17.0))]
+    });
+    // Legacy/explicit 3-arg form kept for existing projects.
     engine.register_fn("wiggle", |time: f64, freq: f64, amp: f64| -> f64 {
         let t = time * freq * std::f64::consts::TAU;
         let n = t.sin() * 0.70 + (t * 2.1_f64).sin() * 0.20 + (t * 5.3_f64).sin() * 0.10;
         n * amp
     });
+
+    // ── AE `Math` namespace (Math.sin / Math.PI / Math.pow ...) ──
+    #[export_module]
+    mod math_ns {
+        pub const PI: f64 = std::f64::consts::PI;
+        pub const E: f64 = std::f64::consts::E;
+        pub const TAU: f64 = std::f64::consts::TAU;
+        pub fn sin(x: f64) -> f64 { x.sin() }
+        pub fn cos(x: f64) -> f64 { x.cos() }
+        pub fn tan(x: f64) -> f64 { x.tan() }
+        pub fn asin(x: f64) -> f64 { x.asin() }
+        pub fn acos(x: f64) -> f64 { x.acos() }
+        pub fn atan(x: f64) -> f64 { x.atan() }
+        pub fn atan2(y: f64, x: f64) -> f64 { y.atan2(x) }
+        pub fn abs(x: f64) -> f64 { x.abs() }
+        pub fn floor(x: f64) -> f64 { x.floor() }
+        pub fn ceil(x: f64) -> f64 { x.ceil() }
+        pub fn round(x: f64) -> f64 { x.round() }
+        pub fn sqrt(x: f64) -> f64 { x.sqrt() }
+        pub fn log(x: f64) -> f64 { x.ln() }
+        pub fn log10(x: f64) -> f64 { x.log10() }
+        pub fn exp(x: f64) -> f64 { x.exp() }
+        pub fn pow(b: f64, e: f64) -> f64 { b.powf(e) }
+        pub fn min(a: f64, b: f64) -> f64 { a.min(b) }
+        pub fn max(a: f64, b: f64) -> f64 { a.max(b) }
+    }
+    engine.register_static_module("Math", exported_module!(math_ns).into());
 
     // --- Math helpers mirroring AE's Math object ---
     engine.register_fn("sin", |x: f64| -> f64 { x.sin() });
@@ -251,17 +321,19 @@ pub fn eval_f32(
     fps: u32,
 ) -> f32 {
     let time = frame as f64 / fps.max(1) as f64;
+    set_current_time(time);
     let mut scope = Scope::new();
     scope.push("time", time);
     scope.push("frame", frame as i64);
     scope.push("fps", fps as i64);
+    scope.push("index", 0i64); // layer index (threaded at call sites later)
     scope.push("value", base as f64);
     scope.push("comp_width", 1920.0f64);
     scope.push("comp_height", 1080.0f64);
 
     match engine.eval_with_scope::<Dynamic>(&mut scope, script) {
         Ok(val) => {
-            if let Ok(f) = val.as_float() {
+            if let Some(f) = dynamic_to_f64(&val) {
                 return f as f32;
             }
             if let Ok(i) = val.as_int() {
@@ -290,10 +362,12 @@ pub fn eval_v2(
     fps: u32,
 ) -> [f32; 2] {
     let time = frame as f64 / fps.max(1) as f64;
+    set_current_time(time);
     let mut scope = Scope::new();
     scope.push("time", time);
     scope.push("frame", frame as i64);
     scope.push("fps", fps as i64);
+    scope.push("index", 0i64); // layer index (threaded at call sites later)
     scope.push("comp_width", 1920.0f64);
     scope.push("comp_height", 1080.0f64);
     // Expose base value as a Rhai array for scripts like `value + wiggle(...)`
@@ -336,10 +410,12 @@ pub fn eval_v2_with_diagnostics(
     fps: u32,
 ) -> ([f32; 2], Option<String>) {
     let time = frame as f64 / fps.max(1) as f64;
+    set_current_time(time);
     let mut scope = Scope::new();
     scope.push("time", time);
     scope.push("frame", frame as i64);
     scope.push("fps", fps as i64);
+    scope.push("index", 0i64); // layer index (threaded at call sites later)
     scope.push("comp_width", 1920.0f64);
     scope.push("comp_height", 1080.0f64);
     let base_arr: Array = vec![
@@ -540,10 +616,12 @@ pub fn eval_v2_with_comp(
 ) -> [f32; 2] {
     COMP_ENGINE.with(|engine| {
     let time = frame as f64 / fps.max(1) as f64;
+    set_current_time(time);
     let mut scope = Scope::new();
     scope.push("time", time);
     scope.push("frame", frame as i64);
     scope.push("fps", fps as i64);
+    scope.push("index", 0i64); // layer index (threaded at call sites later)
     let base_arr: Array = vec![
         Dynamic::from_float(base[0] as f64),
         Dynamic::from_float(base[1] as f64),
@@ -588,10 +666,12 @@ pub fn eval_f32_with_comp(
 ) -> f32 {
     COMP_ENGINE.with(|engine| {
     let time = frame as f64 / fps.max(1) as f64;
+    set_current_time(time);
     let mut scope = Scope::new();
     scope.push("time", time);
     scope.push("frame", frame as i64);
     scope.push("fps", fps as i64);
+    scope.push("index", 0i64); // layer index (threaded at call sites later)
     scope.push("value", base as f64);
     scope.push("thisComp", comp_snap.clone());
     if let Some(tl) = this_layer {
@@ -600,7 +680,7 @@ pub fn eval_f32_with_comp(
 
     match engine.eval_with_scope::<Dynamic>(&mut scope, script) {
         Ok(val) => {
-            if let Ok(f) = val.as_float() {
+            if let Some(f) = dynamic_to_f64(&val) {
                 return f as f32;
             }
             if let Ok(i) = val.as_int() {
@@ -704,11 +784,13 @@ pub fn eval_f32_with_loops(
 ) -> f32 {
     let rewritten = preprocess_loop_script(script);
     let time = frame as f64 / fps.max(1) as f64;
+    set_current_time(time);
     LOOP_ENGINE.with(|engine| {
     let mut scope = Scope::new();
     scope.push("time", time);
     scope.push("frame", frame as i64);
     scope.push("fps", fps as i64);
+    scope.push("index", 0i64); // layer index (threaded at call sites later)
     scope.push("value", base as f64);
     scope.push("__loop_out_cycle", loops.out_cycle as f64);
     scope.push("__loop_out_pingpong", loops.out_pingpong as f64);
@@ -717,7 +799,7 @@ pub fn eval_f32_with_loops(
 
     match engine.eval_with_scope::<Dynamic>(&mut scope, &rewritten) {
         Ok(val) => {
-            if let Ok(f) = val.as_float() { return f as f32; }
+            if let Some(f) = dynamic_to_f64(&val) { return f as f32; }
             if let Ok(i) = val.as_int() { return i as f32; }
             base
         }
@@ -739,11 +821,13 @@ pub fn eval_v2_with_loops(
 ) -> [f32; 2] {
     let rewritten = preprocess_loop_script(script);
     let time = frame as f64 / fps.max(1) as f64;
+    set_current_time(time);
     LOOP_ENGINE.with(|engine| {
     let mut scope = Scope::new();
     scope.push("time", time);
     scope.push("frame", frame as i64);
     scope.push("fps", fps as i64);
+    scope.push("index", 0i64); // layer index (threaded at call sites later)
     let base_arr: Array = vec![
         Dynamic::from_float(base[0] as f64),
         Dynamic::from_float(base[1] as f64),
