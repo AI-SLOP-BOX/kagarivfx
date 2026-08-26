@@ -93,44 +93,91 @@ pub fn draw(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
     let mut selected_idx_update: Option<Option<usize>> = None;
     let mut add_to_timeline_item: Option<ProjectItem> = None;
 
+    // Asset mutation requests collected during the render pass
+    let mut move_to_folder: Option<(usize, Option<String>)> = None;
+
     egui::ScrollArea::vertical().max_height(280.0).show(ui, |ui| {
+        // Pre-compute folder ids for nesting
+        let folders: Vec<(usize, String, String)> = current_project
+            .assets
+            .iter()
+            .enumerate()
+            .filter_map(|(i, it)| match &it.item_type {
+                ProjectItemType::Folder { .. } => Some((i, it.id.clone(), it.name.clone())),
+                _ => None,
+            })
+            .collect();
+        let in_folder = |i: usize| -> Option<String> {
+            current_project.assets.get(i).and_then(|a| a.parent_folder.clone())
+        };
+
+        // Root-level items first (folders rendered as headers below their root slot)
         for (i, item) in current_project.assets.iter().enumerate() {
             if !query.is_empty() && !item.name.to_lowercase().contains(&query) {
                 continue;
             }
+            if matches!(item.item_type, ProjectItemType::Folder { .. }) {
+                continue;
+            }
+            if in_folder(i).is_some() && query.is_empty() {
+                continue; // nested under its folder header below
+            }
 
             let is_selected = selected_asset_idx == Some(i);
-            let (icon_str, item_tag) = match &item.item_type {
-                ProjectItemType::Composition { .. } => (egui_phosphor::regular::PACKAGE, "Composition"),
-                ProjectItemType::Image { .. } => (egui_phosphor::regular::IMAGE, "Footage Image"),
-                ProjectItemType::Video { .. } => (egui_phosphor::regular::FILM_STRIP, "Footage Video"),
-                ProjectItemType::Audio { .. } => (egui_phosphor::regular::WAVEFORM, "Audio File"),
-                ProjectItemType::Solid { .. } => (egui_phosphor::regular::SQUARE, "Solid Color"),
-                ProjectItemType::Folder { .. } => (egui_phosphor::regular::FOLDER_NOTCH, "Folder Bin"),
-            };
+            draw_asset_row(
+                ui, i, item, is_selected,
+                &mut selected_idx_update, &mut add_to_timeline_item, &mut move_to_folder,
+                &folders,
+            );
+        }
 
-            if let ProjectItemType::Folder { .. } = &item.item_type {
-                egui::CollapsingHeader::new(format!("{} {}", egui_phosphor::regular::FOLDER_NOTCH, item.name))
-                    .default_open(true)
-                    .show(ui, |ui| {
-                        ui.small("Drop assets into folder to categorize");
-                    });
-            } else {
-                ui.horizontal(|ui| {
-                    let response = ui.selectable_label(is_selected, format!("{} {}", icon_str, item.name));
-                    if response.clicked() {
-                        selected_idx_update = Some(Some(i));
-                    }
-
-                    if response.double_clicked() {
-                        add_to_timeline_item = Some(item.clone());
-                    }
-
-                    ui.weak(format!("({})", item_tag));
-                });
+        // Folder bins with nested children
+        for (fi, fid, fname) in &folders {
+            if !query.is_empty() && !fname.to_lowercase().contains(&query) {
+                continue;
             }
+            let children: Vec<(usize, &ProjectItem)> = current_project
+                .assets
+                .iter()
+                .enumerate()
+                .filter(|(_i, it)| it.parent_folder.as_deref() == Some(fid.as_str()))
+                .collect();
+
+            egui::CollapsingHeader::new(format!(
+                "{} {} ({})",
+                egui_phosphor::regular::FOLDER_NOTCH,
+                fname,
+                children.len()
+            ))
+            .default_open(!query.is_empty())
+            .show(ui, |ui| {
+                if children.is_empty() {
+                    ui.small("empty bin");
+                }
+                for (ci, child) in children {
+                    let is_sel = selected_asset_idx == Some(ci);
+                    draw_asset_row(
+                        ui, ci, child, is_sel,
+                        &mut selected_idx_update, &mut add_to_timeline_item, &mut move_to_folder,
+                        &folders,
+                    );
+                }
+                // Un-bin shortcut on the folder itself
+                if ui.small_button("⤴ Move selection out").clicked() {
+                    if let Some(sel) = selected_asset_idx {
+                        if let Some(it) = current_project.assets.get(sel) {
+                            if it.parent_folder.as_deref() == Some(fname.as_str()) {
+                                move_to_folder = Some((sel, None));
+                            }
+                        }
+                    }
+                }
+                let _ = fi;
+            });
         }
     });
+
+
 
     if let Some(update) = selected_idx_update {
         ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("selected_project_asset"), update));
@@ -183,6 +230,7 @@ pub fn draw(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
     // Lazy mutation: Clone project ONLY on action trigger!
     if add_comp_requested || import_file_requested.is_some() || add_folder_requested || add_to_timeline_item.is_some() {
         let mut temp_project = app.history.current().clone();
+        let mut changed = false;
 
         if add_comp_requested {
             let comp_len = temp_project.compositions.len() + 1;
@@ -218,6 +266,14 @@ pub fn draw(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
                 file_name,
                 item_type,
             ));
+        }
+
+        if let Some((idx, target)) = move_to_folder {
+            if let Some(it) = temp_project.assets.get_mut(idx) {
+                it.parent_folder = target;
+                changed = true;
+                crate::core::frame_cache::bump_version();
+            }
         }
 
         if add_folder_requested {
@@ -293,7 +349,63 @@ pub fn draw(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
             comp.add_layer(new_layer);
         }
 
+        if changed {
+            crate::core::frame_cache::bump_version();
+        }
         app.history.commit(temp_project);
         crate::core::frame_cache::bump_version();
     }
+}
+
+
+/// One row of the asset list; shared by root listing and folder bins.
+#[allow(clippy::too_many_arguments)]
+fn draw_asset_row(
+    ui: &mut egui::Ui,
+    i: usize,
+    item: &ProjectItem,
+    is_selected: bool,
+    selected_idx_update: &mut Option<Option<usize>>,
+    add_to_timeline_item: &mut Option<ProjectItem>,
+    move_to_folder: &mut Option<(usize, Option<String>)>,
+    folders: &[(usize, String, String)],
+) {
+    use ProjectItemType as T;
+    let (icon_str, item_tag) = match &item.item_type {
+        T::Composition { .. } => (egui_phosphor::regular::PACKAGE, "Composition"),
+        T::Image { .. } => (egui_phosphor::regular::IMAGE, "Footage Image"),
+        T::Video { .. } => (egui_phosphor::regular::FILM_STRIP, "Footage Video"),
+        T::Audio { .. } => (egui_phosphor::regular::WAVEFORM, "Audio File"),
+        T::Solid { .. } => (egui_phosphor::regular::SQUARE, "Solid Color"),
+        T::Folder { .. } => (egui_phosphor::regular::FOLDER_NOTCH, "Folder Bin"),
+    };
+
+    ui.horizontal(|ui| {
+        let response = ui.selectable_label(is_selected, format!("{} {}", icon_str, item.name));
+        if response.clicked() {
+            *selected_idx_update = Some(Some(i));
+        }
+        if response.double_clicked() {
+            *add_to_timeline_item = Some(item.clone());
+        }
+        ui.weak(format!("({})", item_tag));
+
+        // Move-to-bin dropdown
+        if !folders.is_empty() {
+            let mb = ui.menu_button("📁→", |ui| {
+                if ui.selectable_label(item.parent_folder.is_none(), "(project root)").clicked() {
+                    *move_to_folder = Some((i, None));
+                    ui.close_menu();
+                }
+                for (_, fid, fname) in folders {
+                    let inside = item.parent_folder.as_deref() == Some(fname.as_str());
+                    if ui.selectable_label(inside, fname).clicked() {
+                        *move_to_folder = Some((i, Some(fid.clone())));
+                        ui.close_menu();
+                    }
+                }
+            });
+            mb.response.on_hover_text("Move this asset into/out of a bin");
+        }
+    });
 }

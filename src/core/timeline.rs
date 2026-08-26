@@ -2290,6 +2290,9 @@ pub struct ProjectItem {
     pub id: String,
     pub name: String,
     pub item_type: ProjectItemType,
+    /// Containing folder (id of the Folder item), None = project root.
+    #[serde(default)]
+    pub parent_folder: Option<String>,
 }
 
 impl ProjectItem {
@@ -2298,6 +2301,7 @@ impl ProjectItem {
             id: id.into(),
             name: name.into(),
             item_type,
+            parent_folder: None,
         }
     }
 }
