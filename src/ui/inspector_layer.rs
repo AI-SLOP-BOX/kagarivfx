@@ -633,6 +633,40 @@ pub fn draw_layer_type_specs(
                     changed |= ui.add(egui::Slider::new(&mut emitter.turbulence, 0.0..=1000.0)).changed();
                     ui.label("Turbulence");
                 });
+                ui.collapsing("🌀 Forces", |ui| {
+                    ui.horizontal(|ui| {
+                        changed |= ui.add(egui::Slider::new(&mut emitter.vortex_strength, -2000.0..=2000.0)).changed();
+                        ui.label("Vortex (+CW)");
+                    });
+                    ui.horizontal(|ui| {
+                        changed |= ui.add(egui::DragValue::new(&mut emitter.vortex_center[0])).changed();
+                        changed |= ui.add(egui::DragValue::new(&mut emitter.vortex_center[1])).changed();
+                        ui.label("Vortex Center");
+                    });
+                    ui.horizontal(|ui| {
+                        changed |= ui.add(egui::Slider::new(&mut emitter.attract_strength, -2000.0..=2000.0)).changed();
+                        ui.label("Attract (+) / Repel (−)");
+                    });
+                    ui.horizontal(|ui| {
+                        changed |= ui.add(egui::DragValue::new(&mut emitter.attract_center[0])).changed();
+                        changed |= ui.add(egui::DragValue::new(&mut emitter.attract_center[1])).changed();
+                        ui.label("Force Point");
+                    });
+                });
+                ui.collapsing("✨ Trail", |ui| {
+                    ui.horizontal(|ui| {
+                        let mut tl = emitter.trail_length as i32;
+                        if ui.add(egui::Slider::new(&mut tl, 0..=8)).changed() {
+                            emitter.trail_length = tl as u8;
+                            changed = true;
+                        }
+                        ui.label("Length");
+                    });
+                    ui.horizontal(|ui| {
+                        changed |= ui.add(egui::Slider::new(&mut emitter.trail_taper, 0.1..=1.0)).changed();
+                        ui.label("Taper");
+                    });
+                });
                 ui.horizontal(|ui| {
                     changed |= ui.color_edit_button_rgba_unmultiplied(&mut emitter.color_start).changed();
                     ui.label("Start Color");

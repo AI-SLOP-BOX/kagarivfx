@@ -137,6 +137,19 @@ pub struct ParticleEmitter {
     /// Trail taper: alpha multiplier per trail step (0..1, 1 = no fade)
     #[serde(default = "default_trail_taper")]
     pub trail_taper: f32,
+    /// Vortex tangential acceleration around `vortex_center` (px/s^2, signed:
+    /// positive spins clockwise in screen space, 0 = off)
+    #[serde(default)]
+    pub vortex_strength: f32,
+    /// Vortex center [x, y]
+    #[serde(default)]
+    pub vortex_center: [f32; 2],
+    /// Attraction (+) / repulsion (-) toward `attract_center` (px/s^2)
+    #[serde(default)]
+    pub attract_strength: f32,
+    /// Attractor point [x, y]
+    #[serde(default)]
+    pub attract_center: [f32; 2],
 }
 
 impl Default for ParticleEmitter {
@@ -177,6 +190,10 @@ impl Default for ParticleEmitter {
             particle_diameter: 8.0,
             trail_length: 0,
             trail_taper: 0.7,
+            vortex_strength: 0.0,
+            vortex_center: [0.0, 0.0],
+            attract_strength: 0.0,
+            attract_center: [0.0, 0.0],
         }
     }
 }
@@ -318,6 +335,10 @@ impl ParticleSystem {
         let bounds = self.emitter.collision_bounds;
         let restitution = self.emitter.restitution.clamp(0.0, 1.0);
         let friction = self.emitter.surface_friction.clamp(0.0, 1.0);
+        let vortex_strength = self.emitter.vortex_strength;
+        let vortex_center = self.emitter.vortex_center;
+        let attract_strength = self.emitter.attract_strength;
+        let attract_center = self.emitter.attract_center;
 
         // Update existing particles
         for p in &mut self.particles {
@@ -335,6 +356,25 @@ impl ParticleSystem {
 
             // Air drag
             apply_drag(&mut p.vx, &mut p.vy, drag, dt);
+
+            // Vortex: tangential acceleration around center (falls off with distance)
+            if vortex_strength != 0.0 {
+                let rx = p.x - vortex_center[0];
+                let ry = p.y - vortex_center[1];
+                let dist = (rx * rx + ry * ry).sqrt().max(8.0);
+                // Tangent perpendicular to radius; +strength = clockwise on screen
+                p.vx += (-ry / dist) * vortex_strength * dt;
+                p.vy += (rx / dist) * vortex_strength * dt;
+            }
+
+            // Attraction / repulsion toward attractor point
+            if attract_strength != 0.0 {
+                let ax = attract_center[0] - p.x;
+                let ay = attract_center[1] - p.y;
+                let dist = (ax * ax + ay * ay).sqrt().max(4.0);
+                p.vx += (ax / dist) * attract_strength * dt;
+                p.vy += (ay / dist) * attract_strength * dt;
+            }
 
             // Turbulence
             if turbulence > 0.0 {
@@ -549,6 +589,78 @@ mod tests {
         assert_eq!(e.blend_mode, 1);
         assert!(e.rate > 0.0);
         assert!(e.lifetime > 0.0);
+        assert_eq!(e.vortex_strength, 0.0);
+        assert_eq!(e.attract_strength, 0.0);
+    }
+
+    #[test]
+    fn test_vortex_induces_tangential_velocity() {
+        let emitter = ParticleEmitter {
+            rate: 0.0,
+            gravity: [0.0, 0.0],
+            wind: [0.0, 0.0],
+            drag: 0.0,
+            vortex_strength: 500.0,
+            vortex_center: [100.0, 100.0],
+            ..Default::default()
+        };
+        let mut sys = ParticleSystem::new(emitter);
+        sys.particles.push(Particle {
+            x: 200.0, y: 100.0, vx: 0.0, vy: 0.0,
+            life: 5.0, max_life: 5.0, size: 4.0, rotation: 0.0, angular_velocity: 0.0,
+            trail: [(200.0, 100.0); 8], trail_len: 0,
+        });
+        sys.update(0.1, 0.0, 0.0);
+        let p = &sys.particles[0];
+        // Particle right of center: CW tangent is downward (+vy)
+        assert!(p.vy > 10.0, "vortex must induce tangential +vy, got {}", p.vy);
+        assert!(p.vx.abs() < 1.0, "no radial velocity expected, got {}", p.vx);
+    }
+
+    #[test]
+    fn test_attraction_pulls_particle_toward_point() {
+        let emitter = ParticleEmitter {
+            rate: 0.0,
+            gravity: [0.0, 0.0],
+            wind: [0.0, 0.0],
+            drag: 0.0,
+            attract_strength: 800.0,
+            attract_center: [300.0, 300.0],
+            ..Default::default()
+        };
+        let mut sys = ParticleSystem::new(emitter);
+        sys.particles.push(Particle {
+            x: 100.0, y: 300.0, vx: 0.0, vy: 0.0,
+            life: 5.0, max_life: 5.0, size: 4.0, rotation: 0.0, angular_velocity: 0.0,
+            trail: [(100.0, 300.0); 8], trail_len: 0,
+        });
+        sys.update(0.1, 0.0, 0.0);
+        let p = &sys.particles[0];
+        // Pulled toward +x (attractor at x=300)
+        assert!(p.vx > 20.0, "attraction must accelerate toward point, got {}", p.vx);
+    }
+
+    #[test]
+    fn test_repulsion_pushes_particle_away() {
+        let emitter = ParticleEmitter {
+            rate: 0.0,
+            gravity: [0.0, 0.0],
+            wind: [0.0, 0.0],
+            drag: 0.0,
+            attract_strength: -800.0,
+            attract_center: [100.0, 300.0],
+            ..Default::default()
+        };
+        let mut sys = ParticleSystem::new(emitter);
+        sys.particles.push(Particle {
+            x: 110.0, y: 300.0, vx: 0.0, vy: 0.0,
+            life: 5.0, max_life: 5.0, size: 4.0, rotation: 0.0, angular_velocity: 0.0,
+            trail: [(110.0, 300.0); 8], trail_len: 0,
+        });
+        sys.update(0.1, 0.0, 0.0);
+        let p = &sys.particles[0];
+        // Negative strength pushes away from attractor (+x direction here)
+        assert!(p.vx > 20.0, "repulsion must push away from point, got {}", p.vx);
     }
 
     #[test]
