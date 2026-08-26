@@ -1000,6 +1000,7 @@ impl LottieImporter {
             compositions: comps,
             active_composition_idx: 0,
             assets: Vec::new(),
+            use_gpu_compute: false,
         })
     }
 }
@@ -1460,6 +1461,7 @@ mod tests {
             compositions: vec![a, b],
             active_composition_idx: 0,
             assets: Vec::new(),
+            use_gpu_compute: false,
         };
 
         let v: Value = serde_json::from_str(&export_project_to_json(&project)).unwrap();
@@ -1485,13 +1487,13 @@ mod tests {
         // Missing reference degrades gracefully: no crash, no phantom asset.
         let mut a2 = Composition::new("A2".into(), "R2".into(), 10, 10, 24, 5);
         a2.layers.push(Layer::new("x".into(), "Ghost".into(), LayerType::PreComp { comp_id: "NOPE".into() }, 5));
-        let p2 = Project { compositions: vec![a2], active_composition_idx: 0, assets: Vec::new() };
+        let p2 = Project { compositions: vec![a2], active_composition_idx: 0, assets: Vec::new(), use_gpu_compute: false };
         let v2: Value = serde_json::from_str(&export_project_to_json(&p2)).unwrap();
         assert_eq!(v2["layers"][0]["ty"], 0);
         assert_eq!(v2["assets"].as_array().unwrap().len(), 0);
 
         // Empty project → error payload, no panic.
-        let empty = Project { compositions: vec![], active_composition_idx: 0, assets: Vec::new() };
+        let empty = Project { compositions: vec![], active_composition_idx: 0, assets: Vec::new(), use_gpu_compute: false };
         assert!(export_project_to_json(&empty).contains("error"));
     }
 
@@ -1519,6 +1521,7 @@ mod tests {
             compositions: vec![a, b],
             active_composition_idx: 0,
             assets: Vec::new(),
+            use_gpu_compute: false,
         };
 
         let exported = export_project_to_json(&project);

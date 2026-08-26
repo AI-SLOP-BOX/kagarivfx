@@ -2298,6 +2298,10 @@ pub struct Project {
     pub compositions: Vec<Composition>,
     pub active_composition_idx: usize,
     pub assets: Vec<ProjectItem>,
+    /// Render engine preference persisted with the project:
+    /// GPU compute effects (blurs) run when true AND a compatible adapter exists.
+    #[serde(default)]
+    pub use_gpu_compute: bool,
 }
 
 impl Default for Project {
@@ -2358,6 +2362,7 @@ impl Default for Project {
             compositions: vec![comp],
             active_composition_idx: 0,
             assets: default_assets,
+            use_gpu_compute: false,
         }
     }
 }

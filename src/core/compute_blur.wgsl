@@ -17,9 +17,10 @@ struct Params {
     height: u32,
     // Gaussian: kernel tap count per side. Directional: total tap count.
     radius: u32,
-    // 0 = gaussian horizontal, 2 = gaussian vertical, 1 = directional one-shot
+    // 0 = gaussian horizontal, 2 = gaussian vertical, 1 = directional,
+    // 3 = radial zoom blur (radius taps toward center)
     mode: u32,
-    // Directional blur angle (radians)
+    // Directional angle (radians); radial: unused
     angle: f32,
 };
 
@@ -54,6 +55,31 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
 
     let w = params.width;
     let h = params.height;
+
+    if (params.mode == 3u) {
+        // ── Radial zoom blur: N taps along the ray to the frame center ──
+        let n = max(params.radius, 1u);
+        let cx = f32(w) * 0.5;
+        let cy = f32(h) * 0.5;
+        let rx = f32(x) - cx;
+        let ry = f32(y) - cy;
+        var acc = vec4<f32>(0.0);
+        var wsum = 0.0;
+        for (var i: i32 = 0; i < i32(n); i = i + 1) {
+            let t = 1.0 - f32(i) / f32(n);
+            let sx = u32(clamp(i32(cx + rx * t), 0, i32(w - 1u)));
+            let sy = u32(clamp(i32(cy + ry * t), 0, i32(h - 1u)));
+            let c = unpack(src[sy * w + sx]);
+            acc = acc + vec4<f32>(c.rgb * c.a, c.a);
+            wsum = wsum + 1.0;
+        }
+        let inv = 1.0 / max(wsum, 0.0001);
+        let pm = acc * inv;
+        let out_a = clamp(pm.a, 0.0, 1.0);
+        let rgb = select(vec3<f32>(0.0), pm.rgb / max(out_a, 0.0001), out_a > 0.0001);
+        dst[y * w + x] = pack(vec4<f32>(rgb, out_a));
+        return;
+    }
 
     if (params.mode == 1u) {
         // ── Directional blur: N taps along the motion vector ──

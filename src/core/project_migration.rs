@@ -163,7 +163,7 @@ mod backup_tests {
     fn project_named(name: &str) -> Project {
         let mut comp = Composition::new("c1".into(), name.into(), 32, 32, 30, 30);
         comp.layers.push(Layer::new("l".into(), "S".into(), LayerType::Solid { color: [1.0; 4] }, 30));
-        Project { compositions: vec![comp], active_composition_idx: 0, assets: Vec::new() }
+        Project { compositions: vec![comp], active_composition_idx: 0, assets: Vec::new(), use_gpu_compute: false }
     }
 
     #[test]

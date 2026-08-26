@@ -42,6 +42,9 @@ pub fn open_project_from_path(app: &mut AfterEffectsApp, path: &std::path::Path)
     let project = crate::core::project_migration::load_project_migrated(&json)
         .map_err(|e| format!("Failed to parse project file: {}", e))?;
     app.history = crate::core::history::ProjectHistory::new(project);
+    // Restore the persisted GPU-compute preference (respects adapter availability)
+    let gpu_pref = app.history.current().use_gpu_compute;
+    crate::core::compute_pipeline::set_gpu_effects_enabled(gpu_pref);
     app.selected_layer_idx = None;
     app.selected_layers.clear();
     app.project_path = path.to_string_lossy().to_string();

@@ -160,6 +160,7 @@ mod tests {
             compositions: vec![comp],
             active_composition_idx: 0,
             assets: Vec::new(),
+            use_gpu_compute: false,
         }
     }
 

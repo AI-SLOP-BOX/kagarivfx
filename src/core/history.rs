@@ -243,7 +243,7 @@ mod memory_bound_tests {
             l.transform.position = crate::core::property::Animatable::new_animated(kfs);
             comp.layers.push(l);
         }
-        Project { compositions: vec![comp], active_composition_idx: 0, assets: Vec::new() }
+        Project { compositions: vec![comp], active_composition_idx: 0, assets: Vec::new(), use_gpu_compute: false }
     }
 
     #[test]

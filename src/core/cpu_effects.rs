@@ -154,7 +154,10 @@ fn apply_one_ctx(
             }
         }
         EffectType::RadialBlur { amount } => {
-            pack::apply_radial_blur(pixels, width, height, amount.evaluate(frame));
+            let amt = amount.evaluate(frame);
+            if !crate::core::compute_pipeline::try_gpu_radial_blur(pixels, width, height, (amt * 2.0).round().clamp(2.0, 256.0) as u32) {
+                pack::apply_radial_blur(pixels, width, height, amt);
+            }
         }
         EffectType::Sharpen { amount } => {
             pack::apply_sharpen(pixels, width, height, amount.evaluate(frame));

@@ -381,6 +381,82 @@ impl GpuComputeContext {
         Some(())
     }
 
+    /// Radial zoom blur: `taps` samples along the ray from each pixel toward
+    /// the frame center (zoom-blur look). Single dispatch.
+    pub fn radial_blur(&self, pixels: &mut [u8], width: u32, height: u32, taps: u32) -> bool {
+        if pixels.is_empty() || width == 0 || height == 0 || taps < 2 {
+            return false;
+        }
+        self.radial_blur_inner(pixels, width, height, taps).is_some()
+    }
+
+    fn radial_blur_inner(&self, pixels: &mut [u8], width: u32, height: u32, taps: u32) -> Option<()> {
+        use std::time::Instant;
+        let t = Instant::now();
+        let mut inner = self.inner.lock().ok()?;
+
+        let buf_len = (width as u64) * (height as u64) * 4;
+        if buf_len > inner.device.limits().max_storage_buffer_binding_size as u64 {
+            return None;
+        }
+        if inner.bufs.as_ref().is_none_or(|b| b.len != buf_len) {
+            let fresh = { let dev = &inner.device; self.alloc_buf_set(dev, buf_len) };
+            inner.bufs = Some(fresh);
+        }
+        let bufs = inner.bufs.as_ref()?;
+
+        inner.queue.write_buffer(&bufs.src, 0, bytemuck::cast_slice(pixels));
+        inner.queue.write_buffer(
+            &bufs.params,
+            0,
+            bytemuck::bytes_of(&ParamsUniform { width, height, radius: taps.min(256), mode: 3, angle: 0.0 }),
+        );
+
+        let bg = inner.device.create_bind_group(&wgpu::BindGroupDescriptor {
+            layout: &inner.pipeline.get_bind_group_layout(0),
+            entries: &[
+                wgpu::BindGroupEntry { binding: 0, resource: bufs.params.as_entire_binding() },
+                wgpu::BindGroupEntry { binding: 1, resource: bufs.src.as_entire_binding() },
+                wgpu::BindGroupEntry { binding: 2, resource: bufs.dst.as_entire_binding() },
+                wgpu::BindGroupEntry { binding: 3, resource: bufs.kernel.as_entire_binding() },
+            ],
+            label: Some("bg_radial"),
+        });
+
+        let wg_x = width.div_ceil(8);
+        let wg_y = height.div_ceil(8);
+
+        let mut encoder = inner.device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: Some("radial_enc") });
+        {
+            let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+                label: Some("radial_pass"),
+                timestamp_writes: None,
+            });
+            pass.set_pipeline(&inner.pipeline);
+            pass.set_bind_group(0, &bg, &[]);
+            pass.dispatch_workgroups(wg_x, wg_y, 1);
+        }
+        encoder.copy_buffer_to_buffer(&bufs.dst, 0, &bufs.staging_out, 0, buf_len);
+        inner.queue.submit(Some(encoder.finish()));
+
+        let (tx, rx) = std::sync::mpsc::channel();
+        bufs.staging_out.slice(..).map_async(wgpu::MapMode::Read, move |res| {
+            let _ = tx.send(res);
+        });
+        inner.device.poll(wgpu::Maintain::Wait);
+        rx.recv().ok()?.ok()?;
+        {
+            let data = bufs.staging_out.slice(..).get_mapped_range();
+            if data.len() != pixels.len() {
+                return None;
+            }
+            pixels.copy_from_slice(&data);
+        }
+        bufs.staging_out.unmap();
+        record_timing(t);
+        Some(())
+    }
+
     fn alloc_buf_set(&self, dev: &wgpu::Device, buf_len: u64) -> BufSet {
         let any = wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::COPY_SRC;
         BufSet {
@@ -474,6 +550,17 @@ pub fn try_gpu_directional_blur(
     }
     match global() {
         Some(ctx) => ctx.directional_blur(pixels, width, height, length_px, angle_deg),
+        None => false,
+    }
+}
+
+/// Try running a GPU radial (zoom) blur with the global context.
+pub fn try_gpu_radial_blur(pixels: &mut [u8], width: u32, height: u32, taps: u32) -> bool {
+    if !gpu_effects_enabled() {
+        return false;
+    }
+    match global() {
+        Some(ctx) => ctx.radial_blur(pixels, width, height, taps),
         None => false,
     }
 }
@@ -591,6 +678,33 @@ mod tests {
         let line = timing_hud_line();
         assert!(line.contains("GPU compute"), "hud: {line}");
         assert!(!line.contains("idle"), "after a call hud shows stats: {line}");
+    }
+
+    #[test]
+    fn test_radial_blur_preserves_center_and_smears_edge() {
+        let _g = FLAG_LOCK.lock().unwrap();
+        let ctx = match global() {
+            Some(c) => c,
+            None => return,
+        };
+        set_gpu_effects_enabled(true);
+        // Center pixel stays put; an off-center dot smears toward the center
+        let mut px = vec![0u8; 32 * 32 * 4];
+        for (x, y) in [(16u32, 16u32), (28u32, 16u32)] {
+            let i = ((y * 32 + x) * 4) as usize;
+            px[i] = 255;
+            px[i + 1] = 255;
+            px[i + 2] = 255;
+            px[i + 3] = 255;
+        }
+        assert!(ctx.radial_blur(&mut px, 32, 32, 8));
+        // Center dot still present
+        let center = ((16 * 32 + 16) * 4) as usize;
+        assert!(px[center + 3] > 0, "center must remain");
+        // Smear region between center and edge dot now lit
+        let mid = ((16 * 32 + 22) * 4) as usize;
+        assert!(px[mid + 3] > 0, "radial smear must fill toward center");
+        set_gpu_effects_enabled(false);
     }
 
     fn variance(px: &[u8]) -> f64 {

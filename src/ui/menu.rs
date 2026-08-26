@@ -912,17 +912,26 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
                 let mut gpu_fx = crate::core::compute_pipeline::gpu_effects_enabled();
                 if ui.checkbox(&mut gpu_fx, "GPU Compute Effects (beta)").changed() {
                     crate::core::compute_pipeline::set_gpu_effects_enabled(gpu_fx);
+                    app.history.current_mut().use_gpu_compute = gpu_fx;
                     if gpu_fx {
                         match crate::core::compute_pipeline::global() {
                             Some(ctx) => app.toasts.info(format!("GPU compute: {}", ctx.backend_label())),
                             None => {
                                 app.toasts.error("No GPU adapter — staying on CPU");
                                 crate::core::compute_pipeline::set_gpu_effects_enabled(false);
+                                app.history.current_mut().use_gpu_compute = false;
                             }
                         }
                     } else {
                         app.toasts.info("GPU compute off — deterministic CPU rendering");
                     }
+                }
+                if crate::core::compute_pipeline::gpu_effects_enabled() {
+                    ui.label(
+                        egui::RichText::new(crate::core::compute_pipeline::timing_hud_line())
+                            .small()
+                            .color(egui::Color32::from_rgb(110, 110, 110)),
+                    );
                 }
                 if ui.button("Reset Timeline Zoom (100%)").clicked() {
                     app.timeline_zoom = 1.0;
