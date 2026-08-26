@@ -1556,12 +1556,30 @@ pub fn render_frame_to_pixels(comp: &Composition, frame: u32, width: u32, height
                     to_rgba8(st.drop_shadow.color),
                 );
             }
+            if st.inner_shadow.enabled {
+                let s = &st.inner_shadow;
+                crate::core::ae_effects_pack::apply_inner_shadow(
+                    &mut layer_buf, bw, bh,
+                    s.distance,
+                    s.angle,
+                    (s.size.round() as u32).min(64),
+                    to_rgba8(s.color),
+                );
+            }
             if st.outer_glow.enabled {
                 crate::core::ae_effects_pack::apply_glow(
                     &mut layer_buf, bw, bh,
                     1.0,
                     (st.outer_glow.size.round() as u32).max(1),
                     (st.outer_glow.opacity / 50.0).clamp(0.0, 2.0),
+                );
+            }
+            if st.inner_glow.enabled {
+                crate::core::ae_effects_pack::apply_inner_glow(
+                    &mut layer_buf, bw, bh,
+                    (st.inner_glow.size.round() as u32).min(64),
+                    to_rgba8(st.inner_glow.color),
+                    st.inner_glow.opacity,
                 );
             }
             if st.stroke.enabled {

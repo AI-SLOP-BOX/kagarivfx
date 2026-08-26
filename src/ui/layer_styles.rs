@@ -95,6 +95,51 @@ pub fn draw_layer_styles(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
             });
         });
 
+        // ── Inner Shadow ──
+        ui.collapsing("🕳 Inner Shadow", |ui| {
+            if ui.checkbox(&mut style.inner_shadow.enabled, "Enabled").clicked() {
+                changed = true;
+            }
+            let s = &mut style.inner_shadow;
+            ui.horizontal(|ui| {
+                ui.label(egui::RichText::new("Opacity").small().color(colors::TEXT_SECONDARY));
+                if ui.add(egui::Slider::new(&mut s.opacity, 0.0..=100.0).suffix("%")).changed() {
+                    changed = true;
+                }
+            });
+            ui.horizontal(|ui| {
+                ui.label(egui::RichText::new("Angle").small().color(colors::TEXT_SECONDARY));
+                if ui.add(egui::Slider::new(&mut s.angle, -180.0..=180.0).suffix("°")).changed() {
+                    changed = true;
+                }
+            });
+            ui.horizontal(|ui| {
+                ui.label(egui::RichText::new("Distance").small().color(colors::TEXT_SECONDARY));
+                if ui.add(egui::Slider::new(&mut s.distance, 0.0..=250.0)).changed() {
+                    changed = true;
+                }
+            });
+            ui.horizontal(|ui| {
+                ui.label(egui::RichText::new("Size").small().color(colors::TEXT_SECONDARY));
+                if ui.add(egui::Slider::new(&mut s.size, 0.0..=64.0)).changed() {
+                    changed = true;
+                }
+            });
+            ui.horizontal(|ui| {
+                ui.label(egui::RichText::new("Color").small().color(colors::TEXT_SECONDARY));
+                let c = &mut s.color;
+                let mut col = egui::Color32::from_rgba_premultiplied(
+                    (c[0] * 255.0) as u8, (c[1] * 255.0) as u8,
+                    (c[2] * 255.0) as u8, (c[3] * 255.0) as u8,
+                );
+                if ui.color_edit_button_srgba(&mut col).changed() {
+                    let [r, g, b, a] = col.to_array();
+                    *c = [r as f32 / 255.0, g as f32 / 255.0, b as f32 / 255.0, a as f32 / 255.0];
+                    changed = true;
+                }
+            });
+        });
+
         // ── Outer Glow ──
         ui.collapsing("🌟 Outer Glow", |ui| {
             if ui.checkbox(&mut style.outer_glow.enabled, "Enabled").clicked() {
@@ -121,6 +166,39 @@ pub fn draw_layer_styles(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
             ui.horizontal(|ui| {
                 ui.label(egui::RichText::new("Color").small().color(colors::TEXT_SECONDARY));
                 let c = &mut style.outer_glow.color;
+                let mut col = egui::Color32::from_rgba_premultiplied(
+                    (c[0] * 255.0) as u8, (c[1] * 255.0) as u8,
+                    (c[2] * 255.0) as u8, (c[3] * 255.0) as u8,
+                );
+                if ui.color_edit_button_srgba(&mut col).changed() {
+                    let [r, g, b, a] = col.to_array();
+                    *c = [r as f32 / 255.0, g as f32 / 255.0, b as f32 / 255.0, a as f32 / 255.0];
+                    changed = true;
+                }
+            });
+        });
+
+        // ── Inner Glow ──
+        ui.collapsing("💡 Inner Glow", |ui| {
+            if ui.checkbox(&mut style.inner_glow.enabled, "Enabled").clicked() {
+                changed = true;
+            }
+            let ig = &mut style.inner_glow;
+            ui.horizontal(|ui| {
+                ui.label(egui::RichText::new("Opacity").small().color(colors::TEXT_SECONDARY));
+                if ui.add(egui::Slider::new(&mut ig.opacity, 0.0..=100.0).suffix("%")).changed() {
+                    changed = true;
+                }
+            });
+            ui.horizontal(|ui| {
+                ui.label(egui::RichText::new("Size").small().color(colors::TEXT_SECONDARY));
+                if ui.add(egui::Slider::new(&mut ig.size, 0.0..=64.0)).changed() {
+                    changed = true;
+                }
+            });
+            ui.horizontal(|ui| {
+                ui.label(egui::RichText::new("Color").small().color(colors::TEXT_SECONDARY));
+                let c = &mut ig.color;
                 let mut col = egui::Color32::from_rgba_premultiplied(
                     (c[0] * 255.0) as u8, (c[1] * 255.0) as u8,
                     (c[2] * 255.0) as u8, (c[3] * 255.0) as u8,

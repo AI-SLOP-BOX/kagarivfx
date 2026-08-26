@@ -858,6 +858,119 @@ mod directional_radial_tests {
     }
 }
 
+// ── Inner Shadow / Inner Glow (layer styles) ──
+/// Inner Shadow: darkens the inside edges of the layer's alpha, offset in
+/// `angle_deg` (compass convention matching apply_drop_shadow) by `distance`,
+/// softened by `softness`. Composites `shadow_color` under existing pixels.
+pub fn apply_inner_shadow(
+    pixels: &mut [u8],
+    width: u32,
+    height: u32,
+    distance: f32,
+    angle_deg: f32,
+    softness: u32,
+    shadow_color: [u8; 4],
+) {
+    if width == 0 || height == 0 {
+        return;
+    }
+    let rad = angle_deg.to_radians();
+    let dx = (rad.sin() * distance).round() as i32;
+    let dy = (-rad.cos() * distance).round() as i32;
+
+    // Mask M = A(x,y) × (1 − A(x−dx, y−dy)): the band of opaque pixels whose
+    // back-shifted sample falls outside the shape.
+    let mut mask = vec![0u8; (width * height) as usize];
+    for y in 0..height {
+        for x in 0..width {
+            let idx = ((y * width + x) * 4) as usize;
+            let a = pixels[idx + 3] as f32 / 255.0;
+            if a <= 0.003 {
+                continue;
+            }
+            let sx = (x as i32 - dx).clamp(0, width as i32 - 1) as u32;
+            let sy = (y as i32 - dy).clamp(0, height as i32 - 1) as u32;
+            let s_a = pixels[((sy * width + sx) * 4) as usize + 3] as f32 / 255.0;
+            mask[(y * width + x) as usize] = (a * (1.0 - s_a) * 255.0).round() as u8;
+        }
+    }
+
+    // Soften the band into an RGBA buffer so gaussian blur can run on alpha.
+    let mut soft = vec![shadow_color[0]; (width * height * 4) as usize];
+    for i in (0..soft.len()).step_by(4) {
+        soft[i] = shadow_color[0];
+        soft[i + 1] = shadow_color[1];
+        soft[i + 2] = shadow_color[2];
+        soft[i + 3] = mask[i / 4];
+    }
+    if softness > 0 {
+        apply_gaussian_blur(&mut soft, width, height, softness);
+    }
+
+    // Under-composite: shadow sits beneath the original pixels but only where
+    // the original is opaque (inner region), scaled by its own alpha.
+    for i in (0..pixels.len()).step_by(4) {
+        let base_a = pixels[i + 3] as f32 / 255.0;
+        let sh_a = (soft[i + 3] as f32 / 255.0) * (shadow_color[3] as f32 / 255.0);
+        let m = sh_a.min(1.0);
+        if m <= 0.003 || base_a <= 0.003 {
+            continue;
+        }
+        for c in 0..3 {
+            let base = pixels[i + c] as f32 / 255.0;
+            let sc = soft[i + c] as f32 / 255.0;
+            // Multiply-ish darkening toward shadow color, preserving base alpha
+            let blended = base * (1.0 - m) + sc * m;
+            pixels[i + c] = (blended * 255.0).round() as u8;
+        }
+    }
+}
+
+/// Inner Glow: brightens the interior edges of the layer's alpha with
+/// `glow_color`, falloff controlled by `size`, strength by `opacity` (0..100).
+pub fn apply_inner_glow(
+    pixels: &mut [u8],
+    width: u32,
+    height: u32,
+    size: u32,
+    glow_color: [u8; 4],
+    opacity: f32,
+) {
+    if width == 0 || height == 0 || opacity <= 0.0 {
+        return;
+    }
+    let strength = (opacity / 100.0).clamp(0.0, 1.0);
+
+    // Invert alpha, blur it, then re-mask by original alpha: brightest just
+    // inside the edge, fading toward the interior.
+    let mut inv = vec![0u8; (width * height * 4) as usize];
+    for i in (0..inv.len()).step_by(4) {
+        inv[i + 3] = 255 - pixels[i + 3];
+    }
+    if size > 0 {
+        apply_gaussian_blur(&mut inv, width, height, size);
+    }
+
+    for i in (0..pixels.len()).step_by(4) {
+        let base_a = pixels[i + 3] as f32 / 255.0;
+        if base_a <= 0.003 {
+            continue;
+        }
+        let edge = (inv[i + 3] as f32 / 255.0).min(1.0);
+        let g = edge * strength * (glow_color[3] as f32 / 255.0);
+        if g <= 0.003 {
+            continue;
+        }
+        for c in 0..3 {
+            let base = pixels[i + c] as f32;
+            let gc = glow_color[c] as f32;
+            // Additive-leaning screen blend keeps interiors luminous
+            let screened = 255.0 - ((255.0 - base) * (255.0 - gc) / 255.0);
+            pixels[i + c] = (base + (screened - base) * g).round() as u8;
+        }
+    }
+}
+
 // ── Layer Style Overlays ──
 /// Solid Color Overlay: blends every pixel toward `color` by `opacity` (0..100),
 /// weighted by existing alpha so transparent areas stay transparent.
@@ -1182,5 +1295,48 @@ mod camera_shake_tests {
             },
         );
         assert_eq!(px, before);
+    }
+
+    #[test]
+    fn test_inner_shadow_darkens_offset_edge() {
+        // Opaque rectangle x∈[6..26) inside a 32x8 buffer; angle 90°
+        // (light from left) must darken only the LEFT inner band.
+        let (w, h) = (32u32, 8u32);
+        let mut px = vec![0u8; (w * h * 4) as usize];
+        for y in 0..h {
+            for x in 6..26u32 {
+                let i = ((y * w + x) * 4) as usize;
+                px[i] = 200;
+                px[i + 1] = 200;
+                px[i + 2] = 200;
+                px[i + 3] = 255;
+            }
+        }
+        super::apply_inner_shadow(&mut px, w, h, 6.0, 90.0, 1, [0, 0, 0, 255]);
+        let left = px[(2 * w as usize + 7) * 4];
+        let right = px[(2 * w as usize + 22) * 4];
+        assert!(left < right, "left band must darken: left={left} right={right}");
+        assert!(right >= 195, "far side stays bright: {right}");
+    }
+
+    #[test]
+    fn test_inner_glow_brightens_edges_not_center() {
+        // Opaque rectangle with transparent margins so alpha edges exist
+        let (w, h) = (16u32, 16u32);
+        let mut px = vec![0u8; (w * h * 4) as usize];
+        for y in 3..13usize {
+            for x in 3..13usize {
+                let i = (y * w as usize + x) * 4;
+                px[i] = 40;
+                px[i + 1] = 40;
+                px[i + 2] = 40;
+                px[i + 3] = 255;
+            }
+        }
+        super::apply_inner_glow(&mut px, w, h, 2, [255, 255, 0, 255], 100.0);
+        let edge = ((4 * w as usize + 4) * 4) as usize;
+        let center = ((8 * w as usize + 8) * 4) as usize;
+        assert!(px[edge] > 60, "inner edge must glow, got {}", px[edge]);
+        assert_eq!(px[center], 40, "deep interior untouched");
     }
 }

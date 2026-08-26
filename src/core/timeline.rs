@@ -1291,6 +1291,26 @@ pub struct ColorOverlayStyle {
     pub color: [f32; 4],
 }
 
+/// Inner Shadow layer style (compass angle matching DropShadowStyle).
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct InnerShadowStyle {
+    pub enabled: bool,
+    pub opacity: f32,
+    pub angle: f32,
+    pub distance: f32,
+    pub size: f32,
+    pub color: [f32; 4],
+}
+
+/// Inner Glow layer style.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct InnerGlowStyle {
+    pub enabled: bool,
+    pub opacity: f32,
+    pub size: f32,
+    pub color: [f32; 4],
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct LayerStyle {
     pub drop_shadow: DropShadowStyle,
@@ -1300,6 +1320,10 @@ pub struct LayerStyle {
     pub gradient_overlay: GradientOverlayStyle,
     #[serde(default)]
     pub color_overlay: ColorOverlayStyle,
+    #[serde(default)]
+    pub inner_shadow: InnerShadowStyle,
+    #[serde(default)]
+    pub inner_glow: InnerGlowStyle,
 }
 
 // ─── Text Formatting ───────────────────────────────────────────────────────
