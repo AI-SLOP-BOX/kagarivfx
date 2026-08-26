@@ -16,37 +16,58 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
         .default_width(240.0)
         .min_width(animated_width)
         .show(ctx, |ui| {
+            // ── Two-tier tab navigation: category row → tab row ──
+            const TAB_CATEGORIES: &[(&str, &[(usize, &str)])] = &[
+                ("Core", &[(30, "Effect Controls"), (0, "Effects & Presets"), (4, "Preview"), (2, "Info")]),
+                ("Audio", &[(7, "Audio"), (23, "Mixer")]),
+                ("Text", &[(21, "Fonts"), (27, "Character"), (28, "Paragraph")]),
+                ("Transform", &[(1, "Align"), (8, "Time"), (24, "Velocity"), (6, "Markers")]),
+                ("Layer FX", &[(26, "Layer Styles"), (9, "Masks"), (5, "Paint"), (12, "Content-Aware Fill")]),
+                ("Color", &[(19, "Lumetri Color"), (16, "Color (OCIO)"), (20, "Libraries")]),
+                ("3D", &[(18, "3D Views"), (25, "3D Options"), (3, "Tracker")]),
+                ("Automation", &[(10, "Expressions"), (14, "Scripting Console"), (22, "Render Presets")]),
+                ("More", &[(11, "Essential Graphics"), (13, "Metadata"), (15, "Workspaces")]),
+            ];
+            let active_cat = TAB_CATEGORIES
+                .iter()
+                .position(|(_, tabs)| tabs.iter().any(|(idx, _)| *idx == app.right_tab_idx))
+                .unwrap_or(0);
+            let cat_id = egui::Id::new("right_panel_active_category");
+
+            // Row 1: category selector
+            ui.horizontal_wrapped(|ui| {
+                for (ci, (cat_name, tabs)) in TAB_CATEGORIES.iter().enumerate() {
+                    let mut is_active_cat = ci == active_cat;
+                    let resp = ui.toggle_value(&mut is_active_cat, *cat_name).clicked();
+                    if resp {
+                        ui.ctx().data_mut(|d| d.insert_temp(cat_id, ci));
+                        // Jump to the first tab of the chosen category so the
+                        // body always shows something sensible.
+                        if let Some((first_idx, _)) = tabs.first() {
+                            if !tabs.iter().any(|(idx, _)| *idx == app.right_tab_idx) {
+                                app.right_tab_idx = *first_idx;
+                            }
+                        }
+                    }
+                }
+            });
+            // Persisted category override when the current tab belongs to none
+            let active_cat = ui.ctx().data_mut(|d| {
+                let stored: Option<usize> = d.get_temp(cat_id);
+                match stored {
+                    Some(c) if c < TAB_CATEGORIES.len() => Some(c),
+                    _ => None,
+                }
+            })
+            .and(Some(active_cat))
+            .unwrap_or(0);
+
+            // Row 2: child tabs of the selected category
             egui::ScrollArea::horizontal().show(ui, |ui| {
                 ui.horizontal(|ui| {
-                    ui.selectable_value(&mut app.right_tab_idx, 30, "Effect Controls");
-                    ui.selectable_value(&mut app.right_tab_idx, 0, "Effects & Presets");
-                    ui.selectable_value(&mut app.right_tab_idx, 4, "Preview");
-                    ui.selectable_value(&mut app.right_tab_idx, 2, "Info");
-                    ui.selectable_value(&mut app.right_tab_idx, 7, "Audio");
-                    ui.selectable_value(&mut app.right_tab_idx, 23, "Mixer");
-                    ui.selectable_value(&mut app.right_tab_idx, 1, "Align");
-                    ui.selectable_value(&mut app.right_tab_idx, 3, "Tracker");
-                    ui.selectable_value(&mut app.right_tab_idx, 5, "Paint");
-                    ui.selectable_value(&mut app.right_tab_idx, 21, "Fonts");
-                    ui.selectable_value(&mut app.right_tab_idx, 27, "Character");
-                    ui.selectable_value(&mut app.right_tab_idx, 28, "Paragraph");
-                    ui.selectable_value(&mut app.right_tab_idx, 26, "Layer Styles");
-                    ui.selectable_value(&mut app.right_tab_idx, 19, "Lumetri Color");
-                    ui.selectable_value(&mut app.right_tab_idx, 20, "Libraries");
-                    ui.selectable_value(&mut app.right_tab_idx, 18, "3D Views");
-                    ui.selectable_value(&mut app.right_tab_idx, 25, "3D Options");
-                    ui.selectable_value(&mut app.right_tab_idx, 11, "Essential Graphics");
-                    ui.selectable_value(&mut app.right_tab_idx, 12, "Content-Aware Fill");
-                    ui.selectable_value(&mut app.right_tab_idx, 9, "Masks");
-                    ui.selectable_value(&mut app.right_tab_idx, 10, "Expressions");
-                    ui.selectable_value(&mut app.right_tab_idx, 16, "Color (OCIO)");
-                    ui.selectable_value(&mut app.right_tab_idx, 13, "Metadata");
-                    ui.selectable_value(&mut app.right_tab_idx, 14, "Scripting Console");
-                    ui.selectable_value(&mut app.right_tab_idx, 15, "Workspaces");
-                    ui.selectable_value(&mut app.right_tab_idx, 22, "Render Presets");
-                    ui.selectable_value(&mut app.right_tab_idx, 24, "Velocity");
-                    ui.selectable_value(&mut app.right_tab_idx, 8, "Time");
-                    ui.selectable_value(&mut app.right_tab_idx, 6, "Markers");
+                    for (idx, label) in TAB_CATEGORIES[active_cat].1 {
+                        ui.selectable_value(&mut app.right_tab_idx, *idx, *label);
+                    }
                 });
             });
             ui.separator();
