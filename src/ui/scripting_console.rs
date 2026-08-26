@@ -3,8 +3,20 @@ use rhai::Dynamic;
 use crate::AfterEffectsApp;
 use crate::ui::theme::colors;
 
+/// Immutable snapshot of the context expressions need, taken before any
+/// mutable borrows so automation runs can coexist with the console UI.
+struct ConsoleCtx {
+    frame: f64,
+    fps: f64,
+    time: f64,
+    comp_width: f64,
+    comp_height: f64,
+    comp_name: String,
+    num_layers: i64,
+}
+
 pub fn draw_scripting_console(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
-    // Ensure console state exists
+    // Console state
     if app.script_console_output.is_none() {
         app.script_console_output = Some(vec![
             "[INFO] Rhai Expression Engine v1.0 initialized".to_string(),
@@ -15,51 +27,87 @@ pub fn draw_scripting_console(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
         app.script_console_history = Some(Vec::new());
     }
 
-    let (Some(output), Some(history)) = (
-        app.script_console_output.as_mut(),
-        app.script_console_history.as_mut(),
-    ) else {
-        return;
+    // Take owned copies to avoid borrow conflicts with automation runs
+    let mut output = app.script_console_output.take().unwrap_or_default();
+    let mut history = app.script_console_history.take().unwrap_or_default();
+
+    let ctx_data = {
+        let comp = app.history.current().active_composition();
+        let fps = comp.fps as f64;
+        let frame = app.current_frame as f64;
+        ConsoleCtx {
+            frame,
+            fps,
+            time: frame / fps.max(1.0),
+            comp_width: comp.width as f64,
+            comp_height: comp.height as f64,
+            comp_name: comp.name.clone(),
+            num_layers: comp.layers.len() as i64,
+        }
     };
 
     crate::ui::custom_widgets::ae_section_header(ui, "Console", "💻");
 
-    let comp_ref = app.history.current().active_composition();
-    let cf = app.current_frame;
-
+    // ── Mode toggle ──
+    let mode_id = egui::Id::new("script_console_automation");
+    let automation_mode = ui.ctx().data_mut(|d| d.get_temp::<bool>(mode_id).unwrap_or(false));
     ui.horizontal(|ui| {
-        if crate::ui::custom_widgets::ae_button(ui, "▶ Run Script").clicked() {
-            // Evaluate the current command
-            let cmd = app.script_console_command.clone();
-            if !cmd.trim().is_empty() {
-                let start = std::time::Instant::now();
-                let result = evaluate_script(&cmd, comp_ref, cf);
-                let elapsed = start.elapsed().as_secs_f64();
-
-                history.push(cmd.clone());
-                match result {
-                    Ok(val) => {
-                        output.push(format!("[OK] {} → {} ({:.4}s)", cmd, val, elapsed));
-                    }
-                    Err(e) => {
-                        output.push(format!("[ERR] {} → {} ({:.4}s)", cmd, e, elapsed));
-                    }
-                }
-                // Keep output bounded
-                if output.len() > 200 {
-                    output.drain(0..50);
-                }
+        ui.label(egui::RichText::new("Mode:").small().color(colors::TEXT_SECONDARY));
+        for (label, want) in [("Expression", false), ("Automation", true)] {
+            if ui
+                .selectable_label(automation_mode == want, label)
+                .on_hover_text(if want {
+                    "Mutate the project: new_comp / add_solid / add_text / set_position / key_position / save_project"
+                } else {
+                    "Read-only expressions with time/frame context"
+                })
+                .clicked()
+            {
+                ui.ctx().data_mut(|d| d.insert_temp(mode_id, want));
             }
-        }
-        if crate::ui::custom_widgets::ae_button(ui, "🗑 Clear").clicked() {
-            output.clear();
-            output.push("[INFO] Console cleared".to_string());
         }
     });
 
     ui.add_space(4.0);
 
-    // Console output
+    // ── Run / Clear ──
+    let run_requested = ui.horizontal(|ui| {
+        let mut run = false;
+        if crate::ui::custom_widgets::ae_button(ui, "▶ Run Script").clicked() {
+            run = true;
+        }
+        if crate::ui::custom_widgets::ae_button(ui, "🗑 Clear").clicked() {
+            output.clear();
+            output.push("[INFO] Console cleared".to_string());
+        }
+        run
+    }).inner;
+
+    // ── Execute (single mutable pass over app) ──
+    if run_requested && !app.script_console_command.trim().is_empty() {
+        let cmd = std::mem::take(&mut app.script_console_command);
+        let start = std::time::Instant::now();
+        let result: Result<String, String> = if automation_mode {
+            run_automation(app, &cmd).map(|lines| lines.join("\n"))
+        } else {
+            evaluate_script(&cmd, &ctx_data)
+        };
+        let elapsed = start.elapsed().as_secs_f64();
+
+        history.push(cmd.clone());
+        match result {
+            Ok(val) => output.push(format!("[OK] {} → {} ({:.4}s)", cmd, val, elapsed)),
+            Err(e) => output.push(format!("[ERR] {} → {} ({:.4}s)", cmd, e, elapsed)),
+        }
+        if automation_mode {
+            crate::core::frame_cache::bump_version();
+        }
+        if output.len() > 200 {
+            output.drain(0..50);
+        }
+    }
+
+    // ── Output ──
     ui.label(egui::RichText::new("Output:").small().color(colors::TEXT_SECONDARY));
     egui::ScrollArea::vertical().max_height(140.0).stick_to_bottom(true).show(ui, |ui| {
         for line in output.iter() {
@@ -77,41 +125,42 @@ pub fn draw_scripting_console(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
     ui.add_space(4.0);
     ui.separator();
 
-    // Command input
+    // ── Command input ──
     ui.label(egui::RichText::new("Command:").small().color(colors::TEXT_SECONDARY));
-    ui.horizontal(|ui| {
-        let response = ui.add(
-            egui::TextEdit::singleline(&mut app.script_console_command)
-                .hint_text("e.g. wiggle(5, 50), 2 + 2, thisComp.activeItem.name")
-                .desired_width(ui.available_width() - 80.0),
-        );
+    let response = ui.add(
+        egui::TextEdit::singleline(&mut app.script_console_command)
+            .hint_text(if automation_mode {
+                "e.g. add_text(\"T\", \"Hi\", 48); key_position(\"T\", 0, 100.0, 100.0)"
+            } else {
+                "e.g. wiggle(5, 50), 2 + 2"
+            })
+            .desired_width(ui.available_width() - 80.0),
+    );
+    let enter_run = response.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
 
-        if response.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)) {
-            // Execute on Enter
-            let cmd = app.script_console_command.clone();
-            if !cmd.trim().is_empty() {
-                let start = std::time::Instant::now();
-                let result = evaluate_script(&cmd, comp_ref, cf);
-                let elapsed = start.elapsed().as_secs_f64();
-
-                history.push(cmd.clone());
-                match result {
-                    Ok(val) => {
-                        output.push(format!("[OK] {} → {} ({:.4}s)", cmd, val, elapsed));
-                    }
-                    Err(e) => {
-                        output.push(format!("[ERR] {} → {} ({:.4}s)", cmd, e, elapsed));
-                    }
-                }
-                if output.len() > 200 {
-                    output.drain(0..50);
-                }
-                app.script_console_command.clear();
-            }
+    if enter_run && !app.script_console_command.trim().is_empty() {
+        let cmd = std::mem::take(&mut app.script_console_command);
+        let start = std::time::Instant::now();
+        let result: Result<String, String> = if automation_mode {
+            run_automation(app, &cmd).map(|lines| lines.join("\n"))
+        } else {
+            evaluate_script(&cmd, &ctx_data)
+        };
+        let elapsed = start.elapsed().as_secs_f64();
+        history.push(cmd.clone());
+        match result {
+            Ok(val) => output.push(format!("[OK] {} → {} ({:.4}s)", cmd, val, elapsed)),
+            Err(e) => output.push(format!("[ERR] {} → {} ({:.4}s)", cmd, e, elapsed)),
         }
-    });
+        if automation_mode {
+            crate::core::frame_cache::bump_version();
+        }
+        if output.len() > 200 {
+            output.drain(0..50);
+        }
+    }
 
-    // History
+    // ── History ──
     if !history.is_empty() {
         ui.add_space(2.0);
         ui.collapsing(format!("History ({})", history.len()), |ui| {
@@ -120,30 +169,24 @@ pub fn draw_scripting_console(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
             }
         });
     }
+
+    // Return owned state
+    app.script_console_output = Some(output);
+    app.script_console_history = Some(history);
 }
 
-fn evaluate_script(script: &str, comp: &crate::core::timeline::Composition, current_frame: u32) -> Result<String, String> {
+fn evaluate_script(script: &str, c: &ConsoleCtx) -> Result<String, String> {
     let engine = crate::core::expression_engine::build_engine();
     let mut scope = rhai::Scope::new();
+    scope.push("time", c.time);
+    scope.push("frame", c.frame);
+    scope.push("fps", c.fps);
+    scope.push("comp_width", c.comp_width);
+    scope.push("comp_height", c.comp_height);
+    scope.push("comp_name", c.comp_name.clone());
+    scope.push("num_layers", c.num_layers);
 
-    // Inject current context
-    let fps = comp.fps as f64;
-    let frame = current_frame as f64;
-    let time = frame / fps;
-
-    scope.push("time", time);
-    scope.push("frame", frame);
-    scope.push("fps", fps);
-    scope.push("comp_width", comp.width as f64);
-    scope.push("comp_height", comp.height as f64);
-    scope.push("comp_name", comp.name.clone());
-
-    // Add composition info
-    scope.push("num_layers", comp.layers.len() as i64);
-
-    // Try to evaluate
     let result = engine.eval_with_scope::<Dynamic>(&mut scope, script);
-
     match result {
         Ok(val) => {
             if let Some(s) = val.clone().try_cast::<String>() {
@@ -160,4 +203,10 @@ fn evaluate_script(script: &str, comp: &crate::core::timeline::Composition, curr
         }
         Err(e) => Err(format!("{}", e)),
     }
+}
+
+/// Execute an automation snippet against the live project.
+fn run_automation(app: &mut AfterEffectsApp, source: &str) -> Result<Vec<String>, String> {
+    let project = app.history.current_mut();
+    crate::core::automation::run_script(project, source)
 }
