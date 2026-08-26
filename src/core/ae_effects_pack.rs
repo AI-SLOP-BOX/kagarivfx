@@ -971,6 +971,101 @@ pub fn apply_inner_glow(
     }
 }
 
+// ── Bevel/Emboss (layer style) ──
+#[derive(Debug, Clone, PartialEq)]
+pub struct BevelEmbossParams {
+    /// Light direction (degrees; 90 = light from the left per renderer convention)
+    pub angle_deg: f32,
+    pub depth_px: f32,
+    pub size_px: u32,
+    pub color_light: [u8; 4],
+    pub color_dark: [u8; 4],
+    pub highlight_strength: f32,
+    pub shadow_strength: f32,
+}
+
+/// Directional edge lighting: samples alpha at ±depth along the light axis;
+/// edges facing the light get the highlight tint, edges facing away get the
+/// shadow tint. Gaussian-softened bands, alpha-weighted compositing.
+pub fn apply_bevel_emboss(pixels: &mut [u8], width: u32, height: u32, p: &BevelEmbossParams) {
+    let BevelEmbossParams { angle_deg, depth_px, size_px, color_light, color_dark, highlight_strength, shadow_strength } = p;
+    let depth_px = *depth_px;
+    let size_px = *size_px;
+    let highlight_strength = *highlight_strength;
+    let shadow_strength = *shadow_strength;
+    if width == 0 || height == 0 || pixels.is_empty() {
+        return;
+    }
+    let hl = (highlight_strength / 100.0).clamp(0.0, 1.0);
+    let sh = (shadow_strength / 100.0).clamp(0.0, 1.0);
+    if hl <= 0.0 && sh <= 0.0 {
+        return;
+    }
+    let rad = angle_deg.to_radians();
+    // Light comes FROM this direction (compass): offset points back toward light
+    let dx = (-rad.sin() * depth_px).round() as i32;
+    let dy = (rad.cos() * depth_px).round() as i32;
+
+    let sample_a = |x: i32, y: i32| -> f32 {
+        if x < 0 || y < 0 || x >= width as i32 || y >= height as i32 {
+            return 0.0;
+        }
+        pixels[((y as u32 * width + x as u32) * 4) as usize + 3] as f32 / 255.0
+    };
+
+    // Two masks: edges whose toward-light sample is empty → lit side;
+    // edges whose away-from-light sample is empty → shaded side.
+    let mut mask_lit = vec![0u8; (width * height) as usize];
+    let mut mask_shade = vec![0u8; (width * height) as usize];
+    for y in 0..height as i32 {
+        for x in 0..width as i32 {
+            let a = sample_a(x, y);
+            if a <= 0.003 {
+                continue;
+            }
+            let idx = (y as u32 * width + x as u32) as usize;
+            let a_light = sample_a(x + dx, y + dy);   // toward the light
+            let a_away = sample_a(x - dx, y - dy);    // away from the light
+            mask_lit[idx] = (a * (1.0 - a_light) * 255.0).round() as u8;
+            mask_shade[idx] = (a * (1.0 - a_away) * 255.0).round() as u8;
+        }
+    }
+
+    let soften = |mask: &[u8], color: [u8; 4]| -> Vec<u8> {
+        let mut soft = vec![0u8; (width * height * 4) as usize];
+        for i in (0..soft.len()).step_by(4) {
+            soft[i] = color[0];
+            soft[i + 1] = color[1];
+            soft[i + 2] = color[2];
+            soft[i + 3] = mask[i / 4];
+        }
+        if size_px > 0 {
+            apply_gaussian_blur(&mut soft, width, height, size_px);
+        }
+        soft
+    };
+    let lit_buf = soften(&mask_lit, *color_light);
+    let shade_buf = soften(&mask_shade, *color_dark);
+
+    for i in (0..pixels.len()).step_by(4) {
+        let base_a = pixels[i + 3] as f32 / 255.0;
+        if base_a <= 0.003 {
+            continue;
+        }
+        let m_hl = ((lit_buf[i + 3] as f32 / 255.0) * hl).min(1.0);
+        let m_sh = ((shade_buf[i + 3] as f32 / 255.0) * sh).min(1.0);
+        // Shade first, then highlight wins where both overlap
+        for c in 0..3 {
+            let base = pixels[i + c] as f32 / 255.0;
+            let dark_c = shade_buf[i + c] as f32 / 255.0;
+            let light_c = lit_buf[i + c] as f32 / 255.0;
+            let v = base * (1.0 - m_sh) + dark_c * m_sh;
+            let v = v * (1.0 - m_hl) + light_c * m_hl;
+            pixels[i + c] = (v * 255.0).round().clamp(0.0, 255.0) as u8;
+        }
+    }
+}
+
 // ── Satin (layer style) ──
 /// Satin parameters.
 #[derive(Debug, Clone, PartialEq)]
@@ -1451,6 +1546,52 @@ mod camera_shake_tests {
             w,
             h,
             &super::SatinParams { distance: 5.0, angle_deg: 45.0, size: 4, color: [200, 0, 0, 255], opacity: 0.0 },
+        );
+        assert_eq!(px, before);
+    }
+
+    #[test]
+    fn test_bevel_highlights_light_side_shadows_far_side() {
+        // Wide rect; light from the LEFT (angle 270° in compass = left).
+        let (w, h) = (48u32, 16u32);
+        let mut px = opaque_rect(w, h, 6, 42, 2, 14, 128);
+        super::apply_bevel_emboss(
+            &mut px,
+            w,
+            h,
+            &super::BevelEmbossParams {
+                angle_deg: 90.0,
+                depth_px: 4.0,
+                size_px: 2,
+                color_light: [255, 255, 255, 255],
+                color_dark: [0, 0, 0, 255],
+                highlight_strength: 100.0,
+                shadow_strength: 100.0,
+            },
+        );
+        let left_edge = px[(7 * w as usize + 8) * 4];
+        let right_edge = px[(7 * w as usize + 40) * 4];
+        assert!(left_edge > right_edge, "light side brighter: {left_edge} vs {right_edge}");
+    }
+
+    #[test]
+    fn test_bevel_zero_strengths_noop() {
+        let (w, h) = (16u32, 16u32);
+        let mut px = opaque_rect(w, h, 2, 14, 2, 14, 90);
+        let before = px.clone();
+        super::apply_bevel_emboss(
+            &mut px,
+            w,
+            h,
+            &super::BevelEmbossParams {
+                angle_deg: 135.0,
+                depth_px: 3.0,
+                size_px: 2,
+                color_light: [255, 255, 255, 255],
+                color_dark: [0, 0, 0, 255],
+                highlight_strength: 0.0,
+                shadow_strength: 0.0,
+            },
         );
         assert_eq!(px, before);
     }

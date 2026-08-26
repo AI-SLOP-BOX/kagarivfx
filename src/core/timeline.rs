@@ -1378,6 +1378,41 @@ impl Default for SatinStyle {
     }
 }
 
+/// Bevel/Emboss layer style: directional highlight + shadow along alpha edges.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BevelEmbossStyle {
+    pub enabled: bool,
+    /// Light direction (compass degrees matching DropShadowStyle)
+    pub angle: f32,
+    /// Edge detection offset (px)
+    pub depth: f32,
+    /// Softness of the bevel band (px)
+    pub size: f32,
+    /// Highlight strength (0..100)
+    pub highlight: f32,
+    /// Shadow strength (0..100)
+    pub shadow: f32,
+    /// Highlight color
+    pub color_light: [f32; 4],
+    /// Shadow color
+    pub color_dark: [f32; 4],
+}
+
+impl Default for BevelEmbossStyle {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            angle: 135.0,
+            depth: 3.0,
+            size: 3.0,
+            highlight: 70.0,
+            shadow: 50.0,
+            color_light: [1.0, 1.0, 1.0, 1.0],
+            color_dark: [0.0, 0.0, 0.0, 1.0],
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct LayerStyle {
     pub drop_shadow: DropShadowStyle,
@@ -1393,6 +1428,8 @@ pub struct LayerStyle {
     pub inner_glow: InnerGlowStyle,
     #[serde(default)]
     pub satin: SatinStyle,
+    #[serde(default)]
+    pub bevel_emboss: BevelEmbossStyle,
 }
 
 // ─── Text Formatting ───────────────────────────────────────────────────────

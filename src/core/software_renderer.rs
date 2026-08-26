@@ -1633,6 +1633,21 @@ pub fn render_frame_to_pixels(comp: &Composition, frame: u32, width: u32, height
                     },
                 );
             }
+            if st.bevel_emboss.enabled {
+                let s = &st.bevel_emboss;
+                crate::core::ae_effects_pack::apply_bevel_emboss(
+                    &mut layer_buf, bw, bh,
+                    &crate::core::ae_effects_pack::BevelEmbossParams {
+                        angle_deg: s.angle,
+                        depth_px: s.depth.max(1.0),
+                        size_px: (s.size.round() as u32).min(64),
+                        color_light: to_rgba8(s.color_light),
+                        color_dark: to_rgba8(s.color_dark),
+                        highlight_strength: s.highlight,
+                        shadow_strength: s.shadow,
+                    },
+                );
+            }
             if st.stroke.enabled {
                 crate::core::ae_effects_pack_v2::apply_stroke_effect(
                     &mut layer_buf, bw, bh,

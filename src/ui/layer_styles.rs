@@ -256,6 +256,58 @@ pub fn draw_layer_styles(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
             });
         });
 
+        // ── Bevel / Emboss ──
+        ui.collapsing("🪨 Bevel / Emboss", |ui| {
+            if ui.checkbox(&mut style.bevel_emboss.enabled, "Enabled").clicked() {
+                changed = true;
+            }
+            let bv = &mut style.bevel_emboss;
+            ui.horizontal(|ui| {
+                ui.label(egui::RichText::new("Angle").small().color(colors::TEXT_SECONDARY));
+                if ui.add(egui::Slider::new(&mut bv.angle, -180.0..=180.0).suffix("°")).changed() {
+                    changed = true;
+                }
+            });
+            ui.horizontal(|ui| {
+                ui.label(egui::RichText::new("Depth").small().color(colors::TEXT_SECONDARY));
+                if ui.add(egui::Slider::new(&mut bv.depth, 1.0..=20.0)).changed() {
+                    changed = true;
+                }
+            });
+            ui.horizontal(|ui| {
+                ui.label(egui::RichText::new("Size").small().color(colors::TEXT_SECONDARY));
+                if ui.add(egui::Slider::new(&mut bv.size, 0.0..=64.0)).changed() {
+                    changed = true;
+                }
+            });
+            ui.horizontal(|ui| {
+                ui.label(egui::RichText::new("Highlight").small().color(colors::TEXT_SECONDARY));
+                if ui.add(egui::Slider::new(&mut bv.highlight, 0.0..=100.0).suffix("%")).changed() {
+                    changed = true;
+                }
+            });
+            ui.horizontal(|ui| {
+                ui.label(egui::RichText::new("Shadow").small().color(colors::TEXT_SECONDARY));
+                if ui.add(egui::Slider::new(&mut bv.shadow, 0.0..=100.0).suffix("%")).changed() {
+                    changed = true;
+                }
+            });
+            for (label, cvar) in [("Light", &mut bv.color_light), ("Dark", &mut bv.color_dark)] {
+                ui.horizontal(|ui| {
+                    ui.label(egui::RichText::new(label).small().color(colors::TEXT_SECONDARY));
+                    let mut col = egui::Color32::from_rgba_premultiplied(
+                        (cvar[0] * 255.0) as u8, (cvar[1] * 255.0) as u8,
+                        (cvar[2] * 255.0) as u8, (cvar[3] * 255.0) as u8,
+                    );
+                    if ui.color_edit_button_srgba(&mut col).changed() {
+                        let [r, g, b, a] = col.to_array();
+                        *cvar = [r as f32 / 255.0, g as f32 / 255.0, b as f32 / 255.0, a as f32 / 255.0];
+                        changed = true;
+                    }
+                });
+            }
+        });
+
         // ── Stroke ──
         ui.collapsing("✏ Stroke", |ui| {
             if ui.checkbox(&mut style.stroke.enabled, "Enabled").clicked() {
