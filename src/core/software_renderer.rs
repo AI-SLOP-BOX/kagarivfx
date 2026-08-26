@@ -1223,22 +1223,39 @@ pub fn render_frame_to_pixels(comp: &Composition, frame: u32, width: u32, height
                 let mut adjusted = buffer.clone();
                 crate::core::cpu_effects::apply_layer_effects(&mut adjusted, width, height, &layer.effects, effective_frame, comp.fps);
                 let use_mask = !mask_vertices.is_empty();
+                let adj_blend = layer.blend_mode;
                 for py in 0..height {
                     for px in 0..width {
                         if use_mask {
                             let inside = point_in_polygon(px as f32 + 0.5, py as f32 + 0.5, mask_vertices);
-                            // Outside the kept side -> leave original untouched
                             let outside_kept = if mask_inverted { inside } else { !inside };
-                            if outside_kept {
-                                continue;
-                            }
+                            if outside_kept { continue; }
                         }
                         let i = ((py * width + px) * 4) as usize;
-                        for c in 0..3 {
-                            let o = buffer[i + c] as f32;
-                            let a = adjusted[i + c] as f32;
-                            buffer[i + c] = (o * (1.0 - l_opacity) + a * l_opacity).round().clamp(0.0, 255.0) as u8;
-                        }
+                        let src_r = adjusted[i] as f32 / 255.0;
+                        let src_g = adjusted[i+1] as f32 / 255.0;
+                        let src_b = adjusted[i+2] as f32 / 255.0;
+                        let mut dst_r = buffer[i] as f32 / 255.0;
+                        let mut dst_g = buffer[i+1] as f32 / 255.0;
+                        let mut dst_b = buffer[i+2] as f32 / 255.0;
+                        let (br, bg, bb) = match adj_blend {
+                            BlendMode::Multiply => (src_r * dst_r, src_g * dst_g, src_b * dst_b),
+                            BlendMode::Screen => (1.0-(1.0-src_r)*(1.0-dst_r), 1.0-(1.0-src_g)*(1.0-dst_g), 1.0-(1.0-src_b)*(1.0-dst_b)),
+                            BlendMode::Add => ((src_r+dst_r).min(1.0), (src_g+dst_g).min(1.0), (src_b+dst_b).min(1.0)),
+                            BlendMode::Overlay => (
+                                if dst_r<0.5 { 2.0*src_r*dst_r } else { 1.0-2.0*(1.0-src_r)*(1.0-dst_r) },
+                                if dst_g<0.5 { 2.0*src_g*dst_g } else { 1.0-2.0*(1.0-src_g)*(1.0-dst_g) },
+                                if dst_b<0.5 { 2.0*src_b*dst_b } else { 1.0-2.0*(1.0-src_b)*(1.0-dst_b) },
+                            ),
+                            BlendMode::SoftLight => {
+                                let f = |s:f32,d:f32| if s<=0.5 { d-(1.0-2.0*s)*d*(1.0-d) } else { let a=if d<=0.25{((16.0*d-12.0)*d+4.0)*d}else{d.sqrt()}; d+(2.0*s-1.0)*(a-d) };
+                                (f(src_r,dst_r), f(src_g,dst_g), f(src_b,dst_b))
+                            },
+                            _ => (src_r, src_g, src_b),
+                        };
+                        buffer[i]   = ((br*l_opacity+dst_r*(1.0-l_opacity))*255.0).round().clamp(0.0,255.0) as u8;
+                        buffer[i+1] = ((bg*l_opacity+dst_g*(1.0-l_opacity))*255.0).round().clamp(0.0,255.0) as u8;
+                        buffer[i+2] = ((bb*l_opacity+dst_b*(1.0-l_opacity))*255.0).round().clamp(0.0,255.0) as u8;
                     }
                 }
             }

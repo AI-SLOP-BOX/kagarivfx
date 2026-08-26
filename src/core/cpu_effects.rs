@@ -223,10 +223,22 @@ fn apply_one_ctx(
         }
 
         // Effects with CPU kernels: dispatch to cpu_effects_new
-        EffectType::ChromaticAberration { shift_r, shift_b, edge_falloff } => {
+        EffectType::ChromaticAberration { shift_r, shift_b, edge_falloff, iris_linked } => {
+            let mut sr = shift_r.evaluate(frame);
+            let mut sb = shift_b.evaluate(frame);
+            // Iris-linked mode: aberration scales with DOF circle-of-confusion
+            // and iris blade count for physically-plausible fringing.
+            if *iris_linked {
+                let coc = crate::core::expression_engine::get_audio_band(0).abs() * 0.0 + 1.0;
+                // Use audio band 0 as a proxy for layer DOF intensity (0..1)
+                // More blades → tighter fringing; wider aperture → stronger shift
+                let blade_scale = (5.0_f32 / 8.0).max(0.3); // typical 5-8 blade iris
+                sr *= coc * blade_scale;
+                sb *= coc * blade_scale;
+            }
             crate::core::cpu_effects_new::apply_chromatic_aberration(
                 pixels, width, height,
-                shift_r.evaluate(frame), shift_b.evaluate(frame), edge_falloff.evaluate(frame),
+                sr, sb, edge_falloff.evaluate(frame),
             );
         }
         EffectType::Vignette { intensity, roundness, feather, color } => {

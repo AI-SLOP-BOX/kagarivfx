@@ -1276,6 +1276,7 @@ fn apply_effect_by_name(app: &mut crate::AfterEffectsApp, effect_name: &str) {
                         shift_r: crate::core::property::Animatable::new_constant(5.0),
                         shift_b: crate::core::property::Animatable::new_constant(-5.0),
                         edge_falloff: crate::core::property::Animatable::new_constant(0.5),
+                        iris_linked: true,
                     }, enabled: true,
                 },
                 _ => return,

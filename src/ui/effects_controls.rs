@@ -73,6 +73,7 @@ pub fn get_all_effect_presets() -> &'static [EffectPreset] {
                     shift_r: Animatable::new_constant(3.0),
                     shift_b: Animatable::new_constant(3.0),
                     edge_falloff: Animatable::new_constant(0.5),
+                    iris_linked: true,
                 },
                 enabled: true,
             },
@@ -1320,7 +1321,7 @@ pub fn draw_effect_type_ui(
                 *project_changed = true;
             }
         }
-        EffectType::ChromaticAberration { shift_r, shift_b, edge_falloff } => {
+        EffectType::ChromaticAberration { shift_r, shift_b, edge_falloff, iris_linked: _ } => {
             let shift_r_before = shift_r.clone();
             if let Some(nf) = draw_property_ui(current_frame, ui, "Red Shift", shift_r, |ui, val| {
                 ui.add(egui::Slider::new(val, 0.0..=20.0).suffix(" px"));

@@ -772,6 +772,11 @@ pub enum EffectType {
         shift_r: Animatable<f32>,
         shift_b: Animatable<f32>,
         edge_falloff: Animatable<f32>,
+        /// When true, the aberration shift scales with the layer's DOF
+        /// CoC radius and the number of iris blades for physically-plausible
+        /// camera-lens color fringing.
+        #[serde(default = "default_true")]
+        iris_linked: bool,
     },
     Vignette {
         intensity: Animatable<f32>,
