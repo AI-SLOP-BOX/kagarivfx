@@ -51,6 +51,7 @@ pub mod aep_parser;
 pub mod export_presets;
 pub mod tile_cache;
 pub mod compute_pipeline;
+pub mod aces;
 pub mod automation;
 pub mod wiggle_paths;
 pub mod colorama;
