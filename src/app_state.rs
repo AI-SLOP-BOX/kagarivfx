@@ -514,8 +514,8 @@ impl Default for AfterEffectsApp {
             show_vectorscope: false,
             show_history_panel: false,
             show_welcome: true,
-            ui_mode: crate::ui::mode::UiMode::Beginner,
-            tutorial: Some(crate::ui::tutorial::TutorialState::default()),
+            ui_mode: crate::ui::mode::load_mode(),
+            tutorial: None,
             show_new_comp_dialog: false,
             show_preferences: false,
             audio_preview_enabled: true,
@@ -835,6 +835,10 @@ impl eframe::App for AfterEffectsApp {
         crate::ui::history_panel::draw_history_panel(self, ctx);
         crate::ui::drop_import::handle_dropped_files(self, ctx);
         crate::ui::welcome::draw(self, ctx);
+        // Auto-open the walkthrough once per session for beginners on first run
+        if self.show_welcome && self.ui_mode.is_beginner() && self.tutorial.is_none() {
+            self.tutorial = Some(crate::ui::tutorial::TutorialState::default());
+        }
         crate::ui::tutorial::draw(self, ctx);
         crate::ui::new_comp_dialog::draw_new_comp_dialog(self, ctx);
         crate::ui::preferences_dialog::draw_preferences_dialog(self, ctx);

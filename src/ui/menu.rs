@@ -943,10 +943,12 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
                     let mode = app.ui_mode;
                     if ui.selectable_label(mode.is_beginner(), "初心者").on_hover_text("Hide advanced panels and menus").clicked() {
                         app.ui_mode = crate::ui::mode::UiMode::Beginner;
+                        crate::ui::mode::save_mode(app.ui_mode);
                         app.toasts.info("初心者モード: 高度なパネルを非表示にしました");
                     }
                     if ui.selectable_label(mode.is_advanced(), "上級者").on_hover_text("Show every panel, menu and tool").clicked() {
                         app.ui_mode = crate::ui::mode::UiMode::Advanced;
+                        crate::ui::mode::save_mode(app.ui_mode);
                         app.toasts.info("上級者モード: 全機能を表示中");
                     }
                 });
