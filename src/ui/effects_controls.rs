@@ -1942,6 +1942,14 @@ pub fn draw_effect_type_ui(
             draw_prop(ui, current_frame, project_changed, next_frame, "Decay", decay, |ui, v| { ui.add(egui::Slider::new(v, 0.5..=1.0)); });
             draw_prop(ui, current_frame, project_changed, next_frame, "Weight", weight, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=2.0)); });
         }
+        EffectType::AudioSpectrum { enabled: _, bands, opacity, color_start: _, color_end: _, position_x, position_y, width: spec_w, height: spec_h } => {
+            draw_prop(ui, current_frame, project_changed, next_frame, "Bands", bands, |ui, v| { ui.add(egui::Slider::new(v, 1.0..=5.0)); });
+            draw_prop(ui, current_frame, project_changed, next_frame, "Opacity", opacity, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=1.0)); });
+            draw_prop(ui, current_frame, project_changed, next_frame, "Position X", position_x, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=1.0)); });
+            draw_prop(ui, current_frame, project_changed, next_frame, "Position Y", position_y, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=1.0)); });
+            draw_prop(ui, current_frame, project_changed, next_frame, "Width", spec_w, |ui, v| { ui.add(egui::Slider::new(v, 0.01..=1.0)); });
+            draw_prop(ui, current_frame, project_changed, next_frame, "Height", spec_h, |ui, v| { ui.add(egui::Slider::new(v, 0.01..=1.0)); });
+        }
         EffectType::RadialBlurZoom { amount } => {
             draw_prop(ui, current_frame, project_changed, next_frame, "Amount", amount, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=100.0)); });
         }

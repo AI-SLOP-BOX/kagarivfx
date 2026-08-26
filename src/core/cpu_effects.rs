@@ -578,6 +578,51 @@ fn apply_one_ctx(
                 weight.evaluate(frame).max(0.0),
             );
         }
+        EffectType::AudioSpectrum { enabled, bands, opacity, color_start, color_end, position_x, position_y, width: spec_w, height: spec_h } => {
+            if enabled.evaluate(frame) <= 0.5 || opacity.evaluate(frame) <= 0.01 {
+                return;
+            }
+            let bands_n = bands.evaluate(frame).clamp(1.0, 5.0) as usize;
+            let opacity_n = opacity.evaluate(frame).clamp(0.0, 1.0);
+            let cs = *color_start;
+            let ce = *color_end;
+            let px = position_x.evaluate(frame).clamp(0.0, 1.0);
+            let py = position_y.evaluate(frame).clamp(0.0, 1.0);
+            let w_frac = spec_w.evaluate(frame).clamp(0.01, 1.0);
+            let h_frac = spec_h.evaluate(frame).clamp(0.01, 1.0);
+            let x0 = (px * w_frac * width as f32).floor().max(0.0) as u32;
+            let y0 = (py * h_frac * height as f32).floor().max(0.0) as u32;
+            let x1 = ((px + w_frac) * width as f32).ceil().min(width as f32) as u32;
+            let y1 = ((py + h_frac) * height as f32).ceil().min(height as f32) as u32;
+            if x1 <= x0 || y1 <= y0 { return; }
+            let strip_h = y1 - y0;
+            for b in 0..bands_n {
+                let amp = crate::core::expression_engine::get_audio_band(b).clamp(0.0, 1.0);
+                let bar_h = (amp * strip_h as f32) as u32;
+                let bx0 = x0 + (b as u32) * (x1 - x0) / bands_n as u32;
+                let bx1 = x0 + (b as u32 + 1) * (x1 - x0) / bands_n as u32;
+                let t = b as f32 / (bands_n.saturating_sub(1).max(1)) as f32;
+                let r = ((cs[0] + (ce[0] - cs[0]) * t) * 255.0).round() as u8;
+                let g = ((cs[1] + (ce[1] - cs[1]) * t) * 255.0).round() as u8;
+                let bb = ((cs[2] + (ce[2] - cs[2]) * t) * 255.0).round() as u8;
+                let a = ((cs[3] + (ce[3] - cs[3]) * t) * 255.0 * opacity_n).round() as u8;
+                for y in (y1.saturating_sub(bar_h))..y1 {
+                    for x in bx0..bx1 {
+                        if x < width && y < height {
+                            let idx = ((y * width + x) * 4) as usize;
+                            if idx + 3 < pixels.len() {
+                                let src_a = pixels[idx + 3] as f32 / 255.0;
+                                let out_a = (a as f32 / 255.0 * (1.0 - src_a)).clamp(0.0, 1.0);
+                                pixels[idx]     = (r as f32 * out_a).round() as u8;
+                                pixels[idx + 1] = (g as f32 * out_a).round() as u8;
+                                pixels[idx + 2] = (bb as f32 * out_a).round() as u8;
+                                pixels[idx + 3] = (out_a * 255.0).round() as u8;
+                            }
+                        }
+                    }
+                }
+            }
+        }
         EffectType::RadialBlurZoom { amount } => {
             use crate::core::ae_effects_pack_v11::apply_radial_blur_zoom;
             let center = [width as f32 * 0.5, height as f32 * 0.5];

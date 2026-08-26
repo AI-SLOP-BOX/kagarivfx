@@ -1090,6 +1090,22 @@ pub enum EffectType {
         decay: Animatable<f32>,
         weight: Animatable<f32>,
     },
+    /// Audio Spectrum: paint a real-time frequency-bar overlay sourced from
+    /// the current frame's analyzed audio bands (see
+    /// expression_engine::set_audio_data).
+    AudioSpectrum {
+        enabled: Animatable<f32>,
+        bands: Animatable<f32>,
+        opacity: Animatable<f32>,
+        color_start: [f32; 4],
+        color_end: [f32; 4],
+        // Normalized position (0..1) of the bar strip's lower-left.
+        position_x: Animatable<f32>,
+        position_y: Animatable<f32>,
+        // Strip width/height as fraction of the layer quad.
+        width: Animatable<f32>,
+        height: Animatable<f32>,
+    },
     /// Centre zoom motion blur.
     RadialBlurZoom {
         amount: Animatable<f32>,
