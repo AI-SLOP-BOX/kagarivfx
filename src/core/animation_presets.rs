@@ -1,5 +1,9 @@
 use serde::{Deserialize, Serialize};
 
+use crate::core::keyframe::{EasePreset, InterpolationType, Keyframe};
+use crate::core::property::Animatable;
+use crate::core::timeline::Layer;
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AnimationPreset {
     pub name: String,
@@ -48,6 +52,7 @@ pub fn all_presets() -> Vec<AnimationPreset> {
     p.extend(scale_presets());
     p.extend(rotation_presets());
     p.extend(blur_presets());
+    p.extend(text_presets());
     p.extend(combo_presets());
     p
 }
@@ -58,6 +63,112 @@ pub fn presets_by_category(cat: PresetCategory) -> Vec<AnimationPreset> {
 
 pub fn find_preset(name: &str) -> Option<AnimationPreset> {
     all_presets().into_iter().find(|p| p.name == name)
+}
+
+fn eased_kf(frame: u32, v: f32, ease: f32) -> Keyframe<f32> {
+    let mut kf = Keyframe::new(frame, v, InterpolationType::Linear);
+    if ease > 0.001 {
+        let coords = EasePreset::Standard.control_points();
+        kf.interpolation = InterpolationType::Bezier {
+            outgoing: crate::core::keyframe::BezierControlPoint { influence: 0.333, speed: 0.0 },
+            incoming: crate::core::keyframe::BezierControlPoint { influence: 0.333, speed: 0.0 },
+            custom_bezier: Some(coords),
+        };
+    }
+    kf
+}
+
+fn eased_kfv2(frame: u32, v: [f32; 2], ease: f32) -> Keyframe<[f32; 2]> {
+    let mut kf = Keyframe::new(frame, v, InterpolationType::Linear);
+    if ease > 0.001 {
+        let coords = EasePreset::Standard.control_points();
+        kf.interpolation = InterpolationType::Bezier {
+            outgoing: crate::core::keyframe::BezierControlPoint { influence: 0.333, speed: 0.0 },
+            incoming: crate::core::keyframe::BezierControlPoint { influence: 0.333, speed: 0.0 },
+            custom_bezier: Some(coords),
+        };
+    }
+    kf
+}
+
+/// Apply a preset's keyframes to a layer at the given start frame.
+/// Position/Scale presets preserve the layer's current value as the rest point.
+pub fn apply_preset_to_layer(preset: &AnimationPreset, layer: &mut Layer, start_frame: u32) -> bool {
+    let to_frame = |t: f32| start_frame + (t * 30.0).round() as u32;
+
+    match preset.property_type {
+        PresetPropertyType::Opacity | PresetPropertyType::Blur => {
+            let kfs: Vec<Keyframe<f32>> = preset
+                .keyframes
+                .iter()
+                .map(|k| eased_kf(to_frame(k.time), k.value, k.ease))
+                .collect();
+            if kfs.is_empty() {
+                return false;
+            }
+            if preset.property_type == PresetPropertyType::Opacity {
+                layer.transform.opacity = Animatable::Animated(kfs);
+            }
+            true
+        }
+        PresetPropertyType::Scale => {
+            let rest = layer.transform.scale.evaluate(start_frame);
+            let kfs: Vec<Keyframe<[f32; 2]>> = preset
+                .keyframes
+                .iter()
+                .map(|k| {
+                    let v = k.value.max(0.0) / 100.0;
+                    let vx = rest[0] * v;
+                    let vy = k.value_y.map(|y| rest[1] * (y.max(0.0) / 100.0)).unwrap_or(vx);
+                    eased_kfv2(to_frame(k.time), [vx, vy], k.ease)
+                })
+                .collect();
+            if kfs.is_empty() {
+                return false;
+            }
+            layer.transform.scale = Animatable::Animated(kfs);
+            true
+        }
+        PresetPropertyType::Position => {
+            let rest = layer.transform.position.evaluate(start_frame);
+            let kfs: Vec<Keyframe<[f32; 2]>> = preset
+                .keyframes
+                .iter()
+                .map(|k| {
+                    let x = rest[0] + k.value;
+                    let y = rest[1] + k.value_y.unwrap_or(0.0);
+                    eased_kfv2(to_frame(k.time), [x, y], k.ease)
+                })
+                .collect();
+            if kfs.is_empty() {
+                return false;
+            }
+            layer.transform.position = Animatable::Animated(kfs);
+            true
+        }
+        PresetPropertyType::Rotation => {
+            let rest = layer.transform.rotation.evaluate(start_frame);
+            let kfs: Vec<Keyframe<f32>> = preset
+                .keyframes
+                .iter()
+                .map(|k| eased_kf(to_frame(k.time), rest + k.value, k.ease))
+                .collect();
+            if kfs.is_empty() {
+                return false;
+            }
+            layer.transform.rotation = Animatable::Animated(kfs);
+            true
+        }
+        PresetPropertyType::ColorRGB => false,
+    }
+}
+
+/// Apply a preset by name; returns false if not found or not applicable.
+pub fn apply_by_name(name: &str, layer: &mut Layer, start_frame: u32) -> bool {
+    match find_preset(name) {
+        Some(p) => apply_preset_to_layer(&p, layer, start_frame),
+        None => false,
+    }
 }
 
 fn position_presets() -> Vec<AnimationPreset> {
@@ -322,6 +433,77 @@ fn combo_presets() -> Vec<AnimationPreset> {
                 PresetKeyframe { time: 0.5, value: 0.0, ease: 0.7, value_y: Some(0.0) },
             ],
         },
+        AnimationPreset {
+            name: "Spin and Scale In".into(),
+            category: PresetCategory::Combo,
+            description: "Spin 360 + scale from 0% combined".into(),
+            property_type: PresetPropertyType::Rotation,
+            keyframes: vec![
+                PresetKeyframe { time: 0.0, value: 0.0, ease: 0.0, value_y: Some(0.0) },
+                PresetKeyframe { time: 0.5, value: 360.0, ease: 0.7, value_y: Some(110.0) },
+                PresetKeyframe { time: 0.7, value: 360.0, ease: 0.5, value_y: Some(100.0) },
+            ],
+        },
+        AnimationPreset {
+            name: "Drop and Bounce".into(),
+            category: PresetCategory::Combo,
+            description: "Drop from above + bounce scale".into(),
+            property_type: PresetPropertyType::Position,
+            keyframes: vec![
+                PresetKeyframe { time: 0.0, value: 0.0, ease: 0.0, value_y: Some(-80.0) },
+                PresetKeyframe { time: 0.4, value: 0.0, ease: 0.0, value_y: Some(5.0) },
+                PresetKeyframe { time: 0.6, value: 0.0, ease: 0.0, value_y: Some(-2.0) },
+                PresetKeyframe { time: 0.8, value: 0.0, ease: 0.0, value_y: Some(0.0) },
+            ],
+        },
+        AnimationPreset {
+            name: "Slide and Rotate In".into(),
+            category: PresetCategory::Combo,
+            description: "Slide from left + rotate 90 degrees".into(),
+            property_type: PresetPropertyType::Position,
+            keyframes: vec![
+                PresetKeyframe { time: 0.0, value: -100.0, ease: 0.0, value_y: Some(0.0) },
+                PresetKeyframe { time: 0.5, value: 0.0, ease: 0.7, value_y: Some(0.0) },
+                PresetKeyframe { time: 0.7, value: 0.0, ease: 0.5, value_y: Some(0.0) },
+            ],
+        },
+    ]
+}
+
+fn text_presets() -> Vec<AnimationPreset> {
+    vec![
+        AnimationPreset {
+            name: "Typewriter".into(),
+            category: PresetCategory::Text,
+            description: "Character-by-character reveal".into(),
+            property_type: PresetPropertyType::Opacity,
+            keyframes: vec![
+                PresetKeyframe { time: 0.0, value: 0.0, ease: 0.0, value_y: None },
+                PresetKeyframe { time: 0.05, value: 100.0, ease: 0.0, value_y: None },
+            ],
+        },
+        AnimationPreset {
+            name: "Text Wave".into(),
+            category: PresetCategory::Text,
+            description: "Per-character wave animation".into(),
+            property_type: PresetPropertyType::Position,
+            keyframes: vec![
+                PresetKeyframe { time: 0.0, value: 0.0, ease: 0.0, value_y: Some(10.0) },
+                PresetKeyframe { time: 0.5, value: 0.0, ease: 0.5, value_y: Some(-10.0) },
+                PresetKeyframe { time: 1.0, value: 0.0, ease: 0.5, value_y: Some(10.0) },
+            ],
+        },
+        AnimationPreset {
+            name: "Text Scale Pop".into(),
+            category: PresetCategory::Text,
+            description: "Per-character scale pop".into(),
+            property_type: PresetPropertyType::Scale,
+            keyframes: vec![
+                PresetKeyframe { time: 0.0, value: 0.0, ease: 0.0, value_y: Some(0.0) },
+                PresetKeyframe { time: 0.3, value: 120.0, ease: 0.7, value_y: Some(120.0) },
+                PresetKeyframe { time: 0.5, value: 100.0, ease: 0.5, value_y: Some(100.0) },
+            ],
+        },
     ]
 }
 
@@ -371,5 +553,78 @@ mod tests {
         let json = serde_json::to_string(&kf).unwrap();
         let decoded: PresetKeyframe = serde_json::from_str(&json).unwrap();
         assert_eq!(decoded.value_y, Some(75.0));
+    }
+
+    fn test_layer() -> Layer {
+        Layer::new(
+            "t1".into(),
+            "Test".into(),
+            crate::core::timeline::LayerType::Solid { color: [1.0, 1.0, 1.0, 1.0] },
+            100,
+        )
+    }
+
+    #[test]
+    fn test_apply_fade_in() {
+        let mut layer = test_layer();
+        assert!(apply_by_name("Fade In", &mut layer, 10));
+        match &layer.transform.opacity {
+            Animatable::Animated(kfs) => {
+                assert_eq!(kfs.len(), 2);
+                assert_eq!(kfs[0].frame, 10);
+                assert_eq!(kfs[1].frame, 25);
+            }
+            _ => panic!("expected animated opacity"),
+        }
+    }
+
+    #[test]
+    fn test_apply_pop_in_preserves_rest_scale() {
+        let mut layer = test_layer();
+        layer.transform.scale = Animatable::Constant([50.0, 50.0]);
+        assert!(apply_by_name("Pop In", &mut layer, 0));
+        match &layer.transform.scale {
+            Animatable::Animated(kfs) => {
+                // Final keyframe settles at rest scale (50%)
+                let last = kfs.last().unwrap();
+                assert!((last.value[0] - 50.0).abs() < 0.01);
+            }
+            _ => panic!("expected animated scale"),
+        }
+    }
+
+    #[test]
+    fn test_apply_position_preset_offsets_from_rest() {
+        let mut layer = test_layer();
+        layer.transform.position = Animatable::Constant([500.0, 300.0]);
+        assert!(apply_by_name("Slide In from Left", &mut layer, 5));
+        match &layer.transform.position {
+            Animatable::Animated(kfs) => {
+                // First keyframe is 100px left of rest position
+                assert!((kfs[0].value[0] - 400.0).abs() < 0.01);
+                assert!((kfs[0].value[1] - 300.0).abs() < 0.01);
+            }
+            _ => panic!("expected animated position"),
+        }
+    }
+
+    #[test]
+    fn test_apply_unknown_returns_false() {
+        let mut layer = test_layer();
+        assert!(!apply_by_name("No Such Preset", &mut layer, 0));
+    }
+
+    #[test]
+    fn test_apply_rotation_preset() {
+        let mut layer = test_layer();
+        layer.transform.rotation = Animatable::Constant(45.0);
+        assert!(apply_by_name("Spin Clockwise", &mut layer, 0));
+        match &layer.transform.rotation {
+            Animatable::Animated(kfs) => {
+                let last = kfs.last().unwrap();
+                assert!((last.value - 405.0).abs() < 0.01);
+            }
+            _ => panic!("expected animated rotation"),
+        }
     }
 }
