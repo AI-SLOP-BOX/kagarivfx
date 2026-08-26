@@ -469,6 +469,13 @@ pub struct CompSnapshot {
     pub layers: std::collections::HashMap<String, LayerSnapshot>,
     pub comp_width: f64,
     pub comp_height: f64,
+    /// Layer names in composition stacking order (index 0 = bottom),
+    /// enabling AE-style 1-based `thisComp.layer(n)` lookups.
+    pub layer_order: Vec<String>,
+    /// Composition length in frames.
+    pub duration_frames: f64,
+    /// Composition frame rate.
+    pub fps: f64,
 }
 
 impl CompSnapshot {
@@ -483,13 +490,61 @@ impl CompSnapshot {
         })
     }
 
+    /// AE-style `thisComp.layer(n)` — 1-based stack order (topmost = 1).
+    pub fn layer_by_index(&self, index: i64) -> LayerSnapshot {
+        let n = self.layer_order.len() as i64;
+        if index < 1 || index > n {
+            return self.layer("");
+        }
+        self.layer(&self.layer_order[(n - index) as usize])
+    }
+
+    /// Number of layers in the composition.
+    pub fn num_layers(&self) -> f64 {
+        self.layer_order.len() as f64
+    }
+
     /// Composition dimensions in pixels.
     pub fn width(&self) -> f64 { self.comp_width }
     pub fn height(&self) -> f64 { self.comp_height }
+
+    /// Total duration in seconds (AE `thisComp.duration`).
+    pub fn duration(&self) -> f64 {
+        if self.fps > 0.0 { self.duration_frames / self.fps } else { 0.0 }
+    }
+
+    /// Seconds per frame (AE `thisComp.frameDuration`).
+    pub fn frame_duration(&self) -> f64 {
+        if self.fps > 0.0 { 1.0 / self.fps } else { 0.0 }
+    }
 }
 
-fn register_comp_types(engine: &mut Engine) {
-    engine.register_type::<LayerSnapshot>()
+thread_local! {
+    /// Transform of the layer currently being evaluated, for fromComp/toComp.
+    /// (position px, scale %, rotation deg, 1-based stack index)
+    static CURRENT_LAYER_XFORM: std::cell::RefCell<([f64; 2], [f64; 2], f64)> =
+        const { std::cell::RefCell::new(([0.0, 0.0], [100.0, 100.0], 0.0)) };
+}
+
+/// Set the per-evaluation layer context used by `toComp` / `fromComp`.
+pub fn set_current_layer_xform(pos: [f32; 2], scale: [f32; 2], rotation_deg: f32) {
+    CURRENT_LAYER_XFORM.with(|c| {
+        *c.borrow_mut() = (
+            [pos[0] as f64, pos[1] as f64],
+            [scale[0] as f64, scale[1] as f64],
+            rotation_deg as f64,
+        )
+    });
+}
+
+fn with_current_xform<T>(f: impl FnOnce([f64; 2], [f64; 2], f64) -> T) -> T {
+    CURRENT_LAYER_XFORM.with(|c| {
+        let (p, s, r) = *c.borrow();
+        f(p, s, r)
+    })
+}
+
+fn register_comp_types(engine: &mut Engine) {    engine.register_type::<LayerSnapshot>()
         .register_get("transform", |l: &mut LayerSnapshot| l.clone())
         .register_get("position", |l: &mut LayerSnapshot| -> Array {
             vec![Dynamic::from_float(l.position[0]), Dynamic::from_float(l.position[1])]
@@ -509,7 +564,11 @@ fn register_comp_types(engine: &mut Engine) {
         });
 
     engine.register_type::<CompSnapshot>()
-        .register_fn("layer", |c: &mut CompSnapshot, name: &str| c.layer(name));
+        .register_fn("layer", |c: &mut CompSnapshot, name: &str| c.layer(name))
+        .register_fn("layer", |c: &mut CompSnapshot, index: i64| c.layer_by_index(index))
+        .register_fn("numLayers", |c: &mut CompSnapshot| c.num_layers())
+        .register_fn("duration", |c: &mut CompSnapshot| c.duration())
+        .register_fn("frameDuration", |c: &mut CompSnapshot| c.frame_duration());
 
     engine.register_fn("effect_param",
         |l: &mut LayerSnapshot, effect: &str, param: &str| -> f64 {
@@ -519,6 +578,33 @@ fn register_comp_types(engine: &mut Engine) {
                 .copied()
                 .unwrap_or(f64::NAN)
         });
+
+    // ── AE spatial transforms (thisLayer context) ──
+    // toComp(layerPoint): layer-space px → comp-space px
+    engine.register_fn("toComp", |x: f64, y: f64| -> Array {
+        with_current_xform(|pos, scale, rot| {
+            let rad = rot.to_radians();
+            let sx = x * scale[0] / 100.0;
+            let sy = y * scale[1] / 100.0;
+            let cx = sx * rad.cos() - sy * rad.sin();
+            let cy = sx * rad.sin() + sy * rad.cos();
+            vec![Dynamic::from_float(pos[0] + cx), Dynamic::from_float(pos[1] + cy)]
+        })
+    });
+    // fromComp(compPoint): comp-space px → layer-space px
+    engine.register_fn("fromComp", |x: f64, y: f64| -> Array {
+        with_current_xform(|pos, scale, rot| {
+            let dx = x - pos[0];
+            let dy = y - pos[1];
+            let rad = -rot.to_radians();
+            let rx = dx * rad.cos() - dy * rad.sin();
+            let ry = dx * rad.sin() + dy * rad.cos();
+            vec![
+                Dynamic::from_float(rx * 100.0 / scale[0].abs().max(0.0001)),
+                Dynamic::from_float(ry * 100.0 / scale[1].abs().max(0.0001)),
+            ]
+        })
+    });
 }
 
 thread_local! {
@@ -602,7 +688,14 @@ fn build_comp_snapshot_uncached(comp: &crate::core::timeline::Composition, frame
             layers.insert(l.id.clone(), snap);
         }
     }
-    CompSnapshot { layers, comp_width: comp.width as f64, comp_height: comp.height as f64 }
+    CompSnapshot {
+        layers,
+        comp_width: comp.width as f64,
+        comp_height: comp.height as f64,
+        layer_order: comp.layers.iter().map(|l| l.name.clone()).collect(),
+        duration_frames: comp.duration_frames as f64,
+        fps: comp.fps as f64,
+    }
 }
 
 /// Evaluate a v2 expression with composition context (thisComp / thisLayer).
@@ -617,6 +710,14 @@ pub fn eval_v2_with_comp(
     COMP_ENGINE.with(|engine| {
     let time = frame as f64 / fps.max(1) as f64;
     set_current_time(time);
+    // Seed the spatial-transform context for fromComp/toComp
+    if let Some(l) = this_layer {
+        set_current_layer_xform(
+            [l.position[0] as f32, l.position[1] as f32],
+            [l.scale[0] as f32, l.scale[1] as f32],
+            l.rotation as f32,
+        );
+    }
     let mut scope = Scope::new();
     scope.push("time", time);
     scope.push("frame", frame as i64);
@@ -1072,5 +1173,55 @@ mod tests_loops {
         assert!(rewritten.contains("__loop_out_pingpong"));
         assert!(rewritten.contains("__loop_in_cycle"));
         assert!(!rewritten.contains("loopOut("));
+    }
+
+    #[test]
+    fn test_thiscomp_layer_by_index() {
+        let mut comp = Composition::new("c".into(), "Comp".into(), 100, 100, 30, 30);
+        let mut a = Layer::new("a1".into(), "Bottom".into(), LayerType::Null, 30);
+        a.transform.position = Animatable::new_constant([7.0, 0.0]);
+        comp.layers.push(a);
+        let mut b = Layer::new("b1".into(), "Top".into(), LayerType::Null, 30);
+        b.transform.position = Animatable::new_constant([99.0, 0.0]);
+        comp.layers.push(b);
+
+        // AE 1-based: layer(1) = topmost = "Top"
+        let snap = crate::core::expression_engine::build_comp_snapshot(&comp, 0);
+        assert_eq!(snap.layer_by_index(1).position[0], 99.0);
+        assert_eq!(snap.layer_by_index(2).position[0], 7.0);
+        assert_eq!(snap.layer_by_index(99).position[0], 0.0, "out of range → default");
+        assert_eq!(snap.num_layers(), 2.0);
+    }
+
+    #[test]
+    fn test_comp_duration_and_frame_duration() {
+        let comp = Composition::new("c".into(), "Comp".into(), 100, 100, 25, 50);
+        let snap = crate::core::expression_engine::build_comp_snapshot(&comp, 0);
+        assert!((snap.duration() - 2.0).abs() < 1e-6, "50 frames @25fps = 2s");
+        assert!((snap.frame_duration() - 0.04).abs() < 1e-6);
+    }
+
+    #[test]
+    fn test_to_from_comp_roundtrip_identity_layer() {
+        // Identity layer (pos 0, scale 100, rot 0): toComp == fromComp == input
+        set_current_layer_xform([0.0, 0.0], [100.0, 100.0], 0.0);
+        let out: rhai::Array = COMP_ENGINE.with(|e| e.eval("toComp(12.0, -5.0)").unwrap());
+        assert!((out[0].as_float().unwrap() - 12.0).abs() < 1e-6);
+        assert!((out[1].as_float().unwrap() + 5.0).abs() < 1e-6);
+    }
+
+    #[test]
+    fn test_to_comp_applies_translation_rotation_scale() {
+        // Layer at (100, 50), scale 200%, rot 90°
+        set_current_layer_xform([100.0, 50.0], [200.0, 200.0], 90.0);
+        // Local point (10, 0) → scaled (20, 0) → rotated 90°: (0, 20) → +pos = (100, 70)
+        let out: rhai::Array = COMP_ENGINE.with(|e| e.eval("toComp(10.0, 0.0)").unwrap());
+        assert!((out[0].as_float().unwrap() - 100.0).abs() < 1e-4, "{}", out[0]);
+        assert!((out[1].as_float().unwrap() - 70.0).abs() < 1e-4, "{}", out[1]);
+
+        // fromComp inverts it
+        let inv: rhai::Array = COMP_ENGINE.with(|e| e.eval("fromComp(100.0, 70.0)").unwrap());
+        assert!((inv[0].as_float().unwrap() - 10.0).abs() < 1e-3, "{}", inv[0]);
+        assert!(inv[1].as_float().unwrap().abs() < 1e-3, "{}", inv[1]);
     }
 }
