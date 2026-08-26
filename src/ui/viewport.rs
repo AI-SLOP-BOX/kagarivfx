@@ -337,6 +337,15 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: u32) 
                     // Skip live rendering entirely this frame
                     (None, false)
                 } else {
+                    // Shadow map upload for GPU preview parity (CPU Phase 2.72)
+                    if comp.lights.iter().any(|l| l.casts_shadows && l.intensity > 0.0) {
+                        let map = crate::core::software_renderer::build_shadow_map(
+                            comp, current_frame, comp.width.max(1), comp.height.max(1),
+                        );
+                        renderer.update_shadow_map(&map, comp.width.max(1), comp.height.max(1));
+                    } else if renderer.shadow_active() {
+                        renderer.clear_shadow_map();
+                    }
                     let (view, rec) = renderer.render(comp, current_frame, exposure_ev, lut_idx as u32);
                     (Some(view), rec)
                 };

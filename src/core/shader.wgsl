@@ -2,6 +2,8 @@ struct Globals {
     viewport_size: vec2<f32>,
     exposure_ev: f32,
     lut_mode: u32,
+    shadow_enabled: u32,
+    shadow_strength: f32,
 };
 
 struct Layer {
@@ -105,6 +107,10 @@ struct Layer {
 @group(2) @binding(1) var s_diffuse: sampler;
 @group(3) @binding(0) var t_mask: texture_2d<f32>;
 @group(3) @binding(1) var s_mask: sampler;
+
+// Shadow density map (CPU-built, uploaded per frame when shadows active)
+@group(4) @binding(0) var t_shadow: texture_2d<f32>;
+@group(4) @binding(1) var s_shadow: sampler;
 
 struct VertexInput {
     @location(0) position: vec2<f32>,
@@ -607,6 +613,14 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
             clamp(final_color.b + grain_b * intensity, 0.0, 1.0),
             final_color.a
         );
+    }
+
+
+    // ── Shadow map: darken by CPU-projected density at this screen position ──
+    if (globals.shadow_enabled == 1u && final_color.a > 0.01) {
+        let occ = textureSample(t_shadow, s_shadow, in.tex_coords).r;
+        let dark = 1.0 - min(occ, 1.0);
+        final_color = vec4<f32>(final_color.rgb * select(1.0, dark, occ > 0.003), final_color.a);
     }
 
     // --- Layer Opacity ---
