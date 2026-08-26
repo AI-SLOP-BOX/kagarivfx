@@ -847,6 +847,10 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
                         apply_effect_by_name(app, "Glow");
                         ui.close_menu();
                     }
+                    if ui.button("Lens Flare (GPU)").clicked() {
+                        apply_effect_by_name(app, "Lens Flare");
+                        ui.close_menu();
+                    }
                     if ui.button("Vignette").clicked() {
                         apply_effect_by_name(app, "Vignette");
                         ui.close_menu();
@@ -1046,6 +1050,17 @@ fn apply_effect_by_name(app: &mut crate::AfterEffectsApp, effect_name: &str) {
                     id: format!("point3d_{}", len), name: "3D Point Control".to_string(),
                     effect_type: crate::core::timeline::EffectType::Point3DControl {
                         point: crate::core::property::Animatable::new_constant([0.0, 0.0, 0.0]),
+                    }, enabled: true,
+                },
+                "Lens Flare" => crate::core::timeline::Effect {
+                    id: format!("flare_{}", len), name: "Lens Flare".to_string(),
+                    effect_type: crate::core::timeline::EffectType::LensFlare {
+                        enabled: crate::core::property::Animatable::new_constant(1.0),
+                        position_x: crate::core::property::Animatable::new_constant(0.5),
+                        position_y: crate::core::property::Animatable::new_constant(0.35),
+                        intensity: crate::core::property::Animatable::new_constant(1.0),
+                        threshold: crate::core::property::Animatable::new_constant(0.8),
+                        color: crate::core::property::Animatable::new_constant([1.0, 0.95, 0.9, 1.0]),
                     }, enabled: true,
                 },
                 "Gaussian Blur" => crate::core::timeline::Effect {

@@ -1118,6 +1118,25 @@ pub fn get_all_effect_presets() -> &'static [EffectPreset] {
             },
         },
         EffectPreset {
+            name: "Lens Flare (GPU)",
+            button_label: "+ Lens Flare (GPU)",
+            search_key: "lens flare optical anamorphic streak star rings light source gpu screen space",
+            id_prefix: "flare",
+            create_fn: |idx| Effect {
+                id: format!("flare_{}", idx),
+                name: "Lens Flare".to_string(),
+                effect_type: EffectType::LensFlare {
+                    enabled: Animatable::new_constant(1.0),
+                    position_x: Animatable::new_constant(0.5),
+                    position_y: Animatable::new_constant(0.35),
+                    intensity: Animatable::new_constant(1.0),
+                    threshold: Animatable::new_constant(0.8),
+                    color: Animatable::new_constant([1.0, 0.95, 0.9, 1.0]),
+                },
+                enabled: true,
+            },
+        },
+        EffectPreset {
             name: "Bevel Alpha 3D",
             button_label: "+ Bevel Alpha 3D",
             search_key: "bevel alpha 3d inner contour highlight depth emboss edge",
@@ -1415,6 +1434,43 @@ pub fn draw_effect_type_ui(
 
             let c_before = color.clone();
             if let Some(nf) = draw_property_ui(current_frame, ui, "Glow Color", color, |ui, val| {
+                ui.color_edit_button_rgba_unmultiplied(val);
+            }) { *next_frame = Some(nf); }
+            if c_before != *color { *project_changed = true; }
+        }
+        EffectType::LensFlare { enabled, position_x, position_y, intensity, threshold, color } => {
+            let en_before = enabled.clone();
+            if let Some(nf) = draw_property_ui(current_frame, ui, "Enabled", enabled, |ui, val| {
+                ui.add(egui::Slider::new(val, 0.0..=1.0).show_value(false));
+            }) { *next_frame = Some(nf); }
+            if en_before != *enabled { *project_changed = true; }
+
+            let px_before = position_x.clone();
+            if let Some(nf) = draw_property_ui(current_frame, ui, "Position X", position_x, |ui, val| {
+                ui.add(egui::Slider::new(val, 0.0..=1.0));
+            }) { *next_frame = Some(nf); }
+            if px_before != *position_x { *project_changed = true; }
+
+            let py_before = position_y.clone();
+            if let Some(nf) = draw_property_ui(current_frame, ui, "Position Y", position_y, |ui, val| {
+                ui.add(egui::Slider::new(val, 0.0..=1.0));
+            }) { *next_frame = Some(nf); }
+            if py_before != *position_y { *project_changed = true; }
+
+            let i_before = intensity.clone();
+            if let Some(nf) = draw_property_ui(current_frame, ui, "Intensity", intensity, |ui, val| {
+                ui.add(egui::Slider::new(val, 0.0..=5.0));
+            }) { *next_frame = Some(nf); }
+            if i_before != *intensity { *project_changed = true; }
+
+            let th_before = threshold.clone();
+            if let Some(nf) = draw_property_ui(current_frame, ui, "Threshold", threshold, |ui, val| {
+                ui.add(egui::Slider::new(val, 0.0..=2.0));
+            }) { *next_frame = Some(nf); }
+            if th_before != *threshold { *project_changed = true; }
+
+            let c_before = color.clone();
+            if let Some(nf) = draw_property_ui(current_frame, ui, "Flare Color", color, |ui, val| {
                 ui.color_edit_button_rgba_unmultiplied(val);
             }) { *next_frame = Some(nf); }
             if c_before != *color { *project_changed = true; }

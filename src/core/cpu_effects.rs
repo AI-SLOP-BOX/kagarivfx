@@ -771,6 +771,10 @@ fn apply_one(
         EffectType::CheckboxControl { .. } => {}
         EffectType::DropdownControl { .. } => {}
         EffectType::Point3DControl { .. } => {}
+        EffectType::LensFlare { .. } => {
+            // Screen-space optical flare runs in the GPU fragment shader;
+            // CPU/export path renders without flare (identity passthrough).
+        }
         EffectType::CustomShader { .. } => {
             // Custom WGSL shaders are GPU-only; CPU renderer applies a identity passthrough.
             // Users should switch to GPU preview for custom shader effects.

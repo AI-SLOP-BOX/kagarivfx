@@ -286,6 +286,7 @@ impl RenderEffectPlugin for EnumEffectPlugin {
             EffectType::CheckboxControl { .. } => "Checkbox Control",
             EffectType::DropdownControl { .. } => "Dropdown Control",
             EffectType::Point3DControl { .. } => "3D Point Control",
+            EffectType::LensFlare { .. } => "Lens Flare",
             EffectType::Letterbox { .. } => "Letterbox (Cinema Bars)",
             EffectType::CustomShader { .. } => "Custom Shader (WGSL)",
             EffectType::MergePaths { .. } => "Merge Paths",
@@ -394,6 +395,7 @@ impl RenderEffectPlugin for EnumEffectPlugin {
             EffectType::CheckboxControl { .. } => "checkbox_control",
             EffectType::DropdownControl { .. } => "dropdown_control",
             EffectType::Point3DControl { .. } => "point3d_control",
+            EffectType::LensFlare { .. } => "lens_flare",
             EffectType::Letterbox { .. } => "letterbox",
             EffectType::CustomShader { .. } => "custom_shader",
             EffectType::MergePaths { .. } => "merge_paths",
@@ -492,6 +494,15 @@ impl RenderEffectPlugin for EnumEffectPlugin {
                 params.motionblur_enabled = 1;
                 params.motionblur_shutter = shutter_angle.evaluate(frame) / 360.0;
                 params.motionblur_samples = *samples;
+            }
+            EffectType::LensFlare { enabled, position_x, position_y, intensity, threshold, color } => {
+                params.flare_enabled = if enabled.evaluate(frame) > 0.5 { 1 } else { 0 };
+                params.flare_pos_x = position_x.evaluate(frame);
+                params.flare_pos_y = position_y.evaluate(frame);
+                params.flare_intensity = intensity.evaluate(frame);
+                params.flare_threshold = threshold.evaluate(frame);
+                let c = color.evaluate(frame);
+                params.flare_color = [c[0], c[1], c[2], c[3]];
             }
             _ => {}
         }

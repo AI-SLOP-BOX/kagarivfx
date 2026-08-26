@@ -79,6 +79,14 @@ impl EffectType {
                 push!("Radius", radius, Scalar);
                 push!("Intensity", intensity, Scalar);
             }
+            EffectType::LensFlare { enabled, position_x, position_y, intensity, threshold, color } => {
+                push!("Flare Enabled", enabled, Scalar);
+                push!("Position X", position_x, Scalar);
+                push!("Position Y", position_y, Scalar);
+                push!("Intensity", intensity, Scalar);
+                push!("Threshold", threshold, Scalar);
+                push!("Flare Color", color, Color);
+            }
             EffectType::MotionBlur { shutter_angle, .. } => push!("Shutter Angle", shutter_angle, Scalar),
             EffectType::MeshWarp { top_left, top_right, bottom_left, bottom_right } => {
                 push!("Top Left", top_left, Vec2);
@@ -416,6 +424,14 @@ impl EffectType {
                 push!("Threshold", threshold, Scalar);
                 push!("Radius", radius, Scalar);
                 push!("Intensity", intensity, Scalar);
+            }
+            EffectType::LensFlare { enabled, position_x, position_y, intensity, threshold, color } => {
+                push!("Flare Enabled", enabled, Scalar);
+                push!("Position X", position_x, Scalar);
+                push!("Position Y", position_y, Scalar);
+                push!("Intensity", intensity, Scalar);
+                push!("Threshold", threshold, Scalar);
+                push!("Flare Color", color, Color);
             }
             EffectType::MotionBlur { shutter_angle, .. } => push!("Shutter Angle", shutter_angle, Scalar),
             EffectType::MeshWarp { top_left, top_right, bottom_left, bottom_right } => {

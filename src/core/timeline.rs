@@ -754,6 +754,15 @@ pub enum EffectType {
         intensity: Animatable<f32>,
         color: Animatable<[f32; 4]>,
     },
+    /// GPU-only screen-space optical flare (core + rings + star streaks).
+    LensFlare {
+        enabled: Animatable<f32>,
+        position_x: Animatable<f32>,
+        position_y: Animatable<f32>,
+        intensity: Animatable<f32>,
+        threshold: Animatable<f32>,
+        color: Animatable<[f32; 4]>,
+    },
     MotionBlur {
         shutter_angle: Animatable<f32>,
         samples: u32,
