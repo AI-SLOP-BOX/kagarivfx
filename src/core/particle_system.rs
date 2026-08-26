@@ -150,6 +150,12 @@ pub struct ParticleEmitter {
     /// Attractor point [x, y]
     #[serde(default)]
     pub attract_center: [f32; 2],
+    /// Enable per-particle Z depth for camera-projected rendering
+    #[serde(default)]
+    pub depth_enabled: bool,
+    /// Spawn Z range [min, max] offsets from the layer plane (world units)
+    #[serde(default)]
+    pub depth_range: [f32; 2],
     /// Child particles emitted radially when a particle dies (0 = off)
     #[serde(default)]
     pub death_spawn_count: u32,
@@ -209,6 +215,8 @@ impl Default for ParticleEmitter {
             death_spawn_count: 0,
             death_spawn_speed_scale: 0.5,
             death_spawn_life_scale: 0.5,
+            depth_enabled: false,
+            depth_range: [0.0, 0.0],
         }
     }
 }
@@ -237,6 +245,8 @@ pub struct Particle {
     /// Trail history: last N positions (newest first), ring buffer
     pub trail: [(f32, f32); 8],
     pub trail_len: u8,
+    /// Depth offset (world Z) for camera-projected rendering
+    pub z: f32,
 }
 
 /// Particle system simulation.
@@ -312,6 +322,13 @@ impl ParticleSystem {
             }
         };
 
+        let z = if self.emitter.depth_enabled {
+            let [z0, z1] = self.emitter.depth_range;
+            z0 + (z1 - z0) * self.next_random()
+        } else {
+            0.0
+        };
+
         self.particles.push(Particle {
             x: px,
             y: py,
@@ -324,6 +341,7 @@ impl ParticleSystem {
             angular_velocity: rotation_speed,
             trail: [(px, py); 8],
             trail_len: 0,
+            z,
         });
     }
 
@@ -461,13 +479,13 @@ impl ParticleSystem {
             let life_scale = self.emitter.death_spawn_life_scale;
             let spread = self.emitter.spread_degrees.to_radians();
             let base_speed = self.emitter.speed * speed_scale;
-            let dead: Vec<(f32, f32)> = self
+            let dead: Vec<(f32, f32, f32)> = self
                 .particles
                 .iter()
                 .filter(|p| p.life <= 0.0)
-                .map(|p| (p.x, p.y))
+                .map(|p| (p.x, p.y, p.z))
                 .collect();
-            for (dx, dy) in dead {
+            for (dx, dy, parent_z) in dead {
                 for _ in 0..count {
                     if self.particles.len() >= self.emitter.max_particles as usize {
                         break;
@@ -488,6 +506,7 @@ impl ParticleSystem {
                         angular_velocity: 0.0,
                         trail: [(dx, dy); 8],
                         trail_len: 0,
+                        z: parent_z,
                     });
                 }
             }
@@ -497,13 +516,27 @@ impl ParticleSystem {
         self.particles.retain(|p| p.life > 0.0);
     }
 
-    /// Render all particles into an RGBA pixel buffer.
+    /// Render all particles into an RGBA pixel buffer (flat, no camera).
     pub fn render(
         &self,
         buffer: &mut [u8],
         buf_width: u32,
         buf_height: u32,
         _time: f32,
+    ) {
+        self.render_projected(buffer, buf_width, buf_height, _time, None);
+    }
+
+    /// Render with optional camera projection: particle Z depth drives screen
+    /// position and size scaling (translate + Z-rotate pinhole matching the
+    /// renderer's 3D layer convention).
+    pub fn render_projected(
+        &self,
+        buffer: &mut [u8],
+        buf_width: u32,
+        buf_height: u32,
+        _time: f32,
+        proj: Option<&CameraProjection>,
     ) {
         let e = &self.emitter;
         for p in &self.particles {
@@ -515,116 +548,134 @@ impl ParticleSystem {
             let b = e.color_start[2] + (e.color_end[2] - e.color_start[2]) * t;
             let a = (e.color_start[3] + (e.color_end[3] - e.color_start[3]) * t) * e.fade_curve.apply(t);
 
-            // Render trail segments (newest → oldest, decreasing opacity)
+            // Project main position (flat fallback keeps legacy behavior)
+            let Some((sx, sy, sscale)) = proj.map_or(Some((p.x, p.y, 1.0)), |cp| cp.project(p.x, p.y, p.z)) else { continue };
+
+            // Trail dots: projected per-point so streaks follow depth too
             if p.trail_len > 0 && e.trail_taper > 0.01 {
                 let max_trail = p.trail_len as usize;
-                let trail_size = p.size * 0.4; // trail dots are smaller
+                let trail_size = p.size * 0.4;
                 for i in 0..max_trail {
                     let (tx, ty) = p.trail[i];
                     let fade = e.trail_taper.powi(i as i32 + 1);
                     let ta = a * fade;
                     if ta < 0.01 { continue; }
-                    let half_t = trail_size * 0.5 * (1.0 - (i as f32 / max_trail as f32) * 0.5);
-                    let x0 = (tx - half_t).max(0.0) as u32;
-                    let y0 = (ty - half_t).max(0.0) as u32;
-                    let x1 = (tx + half_t).min(buf_width as f32 - 1.0) as u32;
-                    let y1 = (ty + half_t).min(buf_height as f32 - 1.0) as u32;
-                    for py in y0..=y1 {
-                        for px in x0..=x1 {
-                            let dx = px as f32 - tx;
-                            let dy = py as f32 - ty;
-                            let dist = ((dx * dx + dy * dy).sqrt() / half_t).min(1.0);
-                            let falloff = (1.0 - dist * dist).max(0.0);
-                            let pa = ta * falloff;
-                            if pa <= 0.001 { continue; }
-                            let idx = ((py * buf_width + px) * 4) as usize;
-                            if idx + 3 >= buffer.len() { continue; }
-                            let src_r = r * pa;
-                            let src_g = g * pa;
-                            let src_b = b * pa;
-                            let dst_a = buffer[idx + 3] as f32 / 255.0;
-                            let da = (dst_a + pa * (1.0 - dst_a)).max(0.001);
-                            buffer[idx] = ((buffer[idx] as f32 / 255.0 * (1.0 - pa) + src_r) * 255.0).min(255.0) as u8;
-                            buffer[idx + 1] = ((buffer[idx + 1] as f32 / 255.0 * (1.0 - pa) + src_g) * 255.0).min(255.0) as u8;
-                            buffer[idx + 2] = ((buffer[idx + 2] as f32 / 255.0 * (1.0 - pa) + src_b) * 255.0).min(255.0) as u8;
-                            buffer[idx + 3] = (da * 255.0).min(255.0) as u8;
-                        }
-                    }
+                    let Some((txs, tys, ts_scale)) = proj.map_or(Some((tx, ty, 1.0)), |cp| cp.project(tx, ty, p.z)) else { continue };
+                    let half_t = trail_size * ts_scale * 0.5 * (1.0 - (i as f32 / max_trail as f32) * 0.5);
+                    draw_dot(buffer, (buf_width, buf_height), (txs, tys), half_t, [r, g, b], ta, e.blend_mode);
                 }
             }
 
-            let half = p.size * 0.5;
-            let x0 = (p.x - half).max(0.0) as u32;
-            let y0 = (p.y - half).max(0.0) as u32;
-            let x1 = (p.x + half).min(buf_width as f32 - 1.0) as u32;
-            let y1 = (p.y + half).min(buf_height as f32 - 1.0) as u32;
+            let half = p.size * sscale * 0.5;
+            draw_dot(buffer, (buf_width, buf_height), (sx, sy), half, [r, g, b], a, e.blend_mode);
+        }
+    }
+}
 
-            for py in y0..=y1 {
-                for px in x0..=x1 {
-                    // Simple soft circle SDF
-                    let dx = px as f32 - p.x;
-                    let dy = py as f32 - p.y;
-                    let dist = ((dx * dx + dy * dy).sqrt() / half).min(1.0);
-                    let falloff = (1.0 - dist * dist).max(0.0);
-                    let pixel_a = a * falloff;
+/// Camera model for projected particle rendering.
+#[derive(Debug, Clone, Copy)]
+pub struct CameraProjection {
+    pub cam_x: f32,
+    pub cam_y: f32,
+    pub cam_z: f32,
+    /// Focal length in pixels derived from vertical FOV and output height
+    pub focal: f32,
+    pub cos_rz: f32,
+    pub sin_rz: f32,
+}
 
-                    if pixel_a <= 0.001 { continue; }
+impl CameraProjection {
+    /// World (x,y,z) -> screen (sx, sy, size-scale). None when behind camera.
+    pub fn project(&self, x: f32, y: f32, z: f32) -> Option<(f32, f32, f32)> {
+        let dz = z - self.cam_z;
+        if dz <= 0.1 {
+            return None;
+        }
+        let s = self.focal / dz;
+        let rx = x - self.cam_x;
+        let ry = y - self.cam_y;
+        let sx = self.cam_x + (rx * self.cos_rz - ry * self.sin_rz) * s;
+        let sy = self.cam_y - (rx * self.sin_rz + ry * self.cos_rz) * s;
+        // Size scales relative to the z=0 plane; guard degenerate on-plane cams
+        let ref_dz = (-self.cam_z).abs().max(100.0);
+        Some((sx, sy, (ref_dz / dz).max(0.01)))
+    }
+}
 
-                    let idx = ((py * buf_width + px) * 4) as usize;
-                    if idx + 3 >= buffer.len() { continue; }
+/// Rasterize one soft-circle dot with the emitter's blend mode.
+fn draw_dot(buffer: &mut [u8], dims: (u32, u32), center: (f32, f32), half: f32, color: [f32; 3], a: f32, blend_mode: u32) {
+    let [r, g, b] = color;
+    let buf_width = dims.0;
+    let buf_height = dims.1;
+    let cx = center.0;
+    let cy = center.1;
+    if half < 0.35 || a <= 0.001 {
+        return;
+    }
+    let x0 = ((cx - half).max(0.0)) as u32;
+    let y0 = ((cy - half).max(0.0)) as u32;
+    let x1 = ((cx + half).min(buf_width as f32 - 1.0)) as u32;
+    let y1 = ((cy + half).min(buf_height as f32 - 1.0)) as u32;
 
-                    let src_r = r * pixel_a;
-                    let src_g = g * pixel_a;
-                    let src_b = b * pixel_a;
+    for py in y0..=y1 {
+        for px in x0..=x1 {
+            let dx = px as f32 - cx;
+            let dy = py as f32 - cy;
+            let dist = ((dx * dx + dy * dy).sqrt() / half).min(1.0);
+            let falloff = (1.0 - dist * dist).max(0.0);
+            let pixel_a = a * falloff;
+            if pixel_a <= 0.001 { continue; }
 
-                    match e.blend_mode {
-                        1 => {
-                            // Additive blending: add premultiplied source to destination
-                            let dst_a = buffer[idx+3] as f32 / 255.0;
-                            let dr = buffer[idx] as f32 / 255.0 + src_r;
-                            let dg = buffer[idx+1] as f32 / 255.0 + src_g;
-                            let db = buffer[idx+2] as f32 / 255.0 + src_b;
-                            let da = (dst_a + pixel_a).min(1.0);
-                            buffer[idx] = (dr.min(1.0) * 255.0) as u8;
-                            buffer[idx+1] = (dg.min(1.0) * 255.0) as u8;
-                            buffer[idx+2] = (db.min(1.0) * 255.0) as u8;
-                            buffer[idx+3] = (da * 255.0) as u8;
-                        }
-                        2 => {
-                            // Screen blending: unpremultiply source, apply screen, re-premultiply
-                            let dst_r = buffer[idx] as f32 / 255.0;
-                            let dst_g = buffer[idx+1] as f32 / 255.0;
-                            let dst_b = buffer[idx+2] as f32 / 255.0;
-                            let dst_a = buffer[idx+3] as f32 / 255.0;
-                            let sa = pixel_a;
-                            let sr = if sa > 0.001 { r } else { 0.0 };
-                            let sg = if sa > 0.001 { g } else { 0.0 };
-                            let sb = if sa > 0.001 { b } else { 0.0 };
-                            let out_a = sa + dst_a * (1.0 - sa);
-                            if out_a > 0.001 {
-                                let out_r = (sr * sa + (1.0 - sa) * dst_r * dst_a + sa * (1.0 - dst_a) * sr) / out_a;
-                                let out_g = (sg * sa + (1.0 - sa) * dst_g * dst_a + sa * (1.0 - dst_a) * sg) / out_a;
-                                let out_b = (sb * sa + (1.0 - sa) * dst_b * dst_a + sa * (1.0 - dst_a) * sb) / out_a;
-                                buffer[idx] = (out_r.clamp(0.0, 1.0) * 255.0) as u8;
-                                buffer[idx+1] = (out_g.clamp(0.0, 1.0) * 255.0) as u8;
-                                buffer[idx+2] = (out_b.clamp(0.0, 1.0) * 255.0) as u8;
-                                buffer[idx+3] = (out_a.clamp(0.0, 1.0) * 255.0) as u8;
-                            }
-                        }
-                        _ => {
-                            // Normal alpha blending
-                            let dst_a = buffer[idx+3] as f32 / 255.0;
-                            let out_a = pixel_a + dst_a * (1.0 - pixel_a);
-                            if out_a > 0.001 {
-                                let out_r = (src_r + buffer[idx] as f32 / 255.0 * dst_a * (1.0 - pixel_a)) / out_a;
-                                let out_g = (src_g + buffer[idx+1] as f32 / 255.0 * dst_a * (1.0 - pixel_a)) / out_a;
-                                let out_b = (src_b + buffer[idx+2] as f32 / 255.0 * dst_a * (1.0 - pixel_a)) / out_a;
-                                buffer[idx] = (out_r.clamp(0.0, 1.0) * 255.0) as u8;
-                                buffer[idx+1] = (out_g.clamp(0.0, 1.0) * 255.0) as u8;
-                                buffer[idx+2] = (out_b.clamp(0.0, 1.0) * 255.0) as u8;
-                                buffer[idx+3] = (out_a.clamp(0.0, 1.0) * 255.0) as u8;
-                            }
-                        }
+            let idx = ((py * buf_width + px) * 4) as usize;
+            if idx + 3 >= buffer.len() { continue; }
+
+            let src_r = r * pixel_a;
+            let src_g = g * pixel_a;
+            let src_b = b * pixel_a;
+
+            match blend_mode {
+                1 => {
+                    let dst_a = buffer[idx+3] as f32 / 255.0;
+                    let dr = buffer[idx] as f32 / 255.0 + src_r;
+                    let dg = buffer[idx+1] as f32 / 255.0 + src_g;
+                    let db = buffer[idx+2] as f32 / 255.0 + src_b;
+                    let da = (dst_a + pixel_a).min(1.0);
+                    buffer[idx] = (dr.min(1.0) * 255.0) as u8;
+                    buffer[idx+1] = (dg.min(1.0) * 255.0) as u8;
+                    buffer[idx+2] = (db.min(1.0) * 255.0) as u8;
+                    buffer[idx+3] = (da * 255.0) as u8;
+                }
+                2 => {
+                    let dst_r = buffer[idx] as f32 / 255.0;
+                    let dst_g = buffer[idx+1] as f32 / 255.0;
+                    let dst_b = buffer[idx+2] as f32 / 255.0;
+                    let dst_a = buffer[idx+3] as f32 / 255.0;
+                    let sa = pixel_a;
+                    let sr = if sa > 0.001 { r } else { 0.0 };
+                    let sg = if sa > 0.001 { g } else { 0.0 };
+                    let sb = if sa > 0.001 { b } else { 0.0 };
+                    let out_a = sa + dst_a * (1.0 - sa);
+                    if out_a > 0.001 {
+                        let out_r = (sr * sa + (1.0 - sa) * dst_r * dst_a + sa * (1.0 - dst_a) * sr) / out_a;
+                        let out_g = (sg * sa + (1.0 - sa) * dst_g * dst_a + sa * (1.0 - dst_a) * sg) / out_a;
+                        let out_b = (sb * sa + (1.0 - sa) * dst_b * dst_a + sa * (1.0 - dst_a) * sb) / out_a;
+                        buffer[idx] = (out_r.clamp(0.0, 1.0) * 255.0) as u8;
+                        buffer[idx+1] = (out_g.clamp(0.0, 1.0) * 255.0) as u8;
+                        buffer[idx+2] = (out_b.clamp(0.0, 1.0) * 255.0) as u8;
+                        buffer[idx+3] = (out_a.clamp(0.0, 1.0) * 255.0) as u8;
+                    }
+                }
+                _ => {
+                    let dst_a = buffer[idx+3] as f32 / 255.0;
+                    let out_a = pixel_a + dst_a * (1.0 - pixel_a);
+                    if out_a > 0.001 {
+                        let out_r = (src_r + buffer[idx] as f32 / 255.0 * dst_a * (1.0 - pixel_a)) / out_a;
+                        let out_g = (src_g + buffer[idx+1] as f32 / 255.0 * dst_a * (1.0 - pixel_a)) / out_a;
+                        let out_b = (src_b + buffer[idx+2] as f32 / 255.0 * dst_a * (1.0 - pixel_a)) / out_a;
+                        buffer[idx] = (out_r.clamp(0.0, 1.0) * 255.0) as u8;
+                        buffer[idx+1] = (out_g.clamp(0.0, 1.0) * 255.0) as u8;
+                        buffer[idx+2] = (out_b.clamp(0.0, 1.0) * 255.0) as u8;
+                        buffer[idx+3] = (out_a.clamp(0.0, 1.0) * 255.0) as u8;
                     }
                 }
             }
@@ -662,7 +713,9 @@ mod tests {
         sys.particles.push(Particle {
             x: 200.0, y: 100.0, vx: 0.0, vy: 0.0,
             life: 5.0, max_life: 5.0, size: 4.0, rotation: 0.0, angular_velocity: 0.0,
-            trail: [(200.0, 100.0); 8], trail_len: 0,
+            trail: [(200.0, 100.0); 8],
+            trail_len: 0,
+            z: 0.0,
         });
         sys.update(0.1, 0.0, 0.0);
         let p = &sys.particles[0];
@@ -686,7 +739,9 @@ mod tests {
         sys.particles.push(Particle {
             x: 100.0, y: 300.0, vx: 0.0, vy: 0.0,
             life: 5.0, max_life: 5.0, size: 4.0, rotation: 0.0, angular_velocity: 0.0,
-            trail: [(100.0, 300.0); 8], trail_len: 0,
+            trail: [(100.0, 300.0); 8],
+            trail_len: 0,
+            z: 0.0,
         });
         sys.update(0.1, 0.0, 0.0);
         let p = &sys.particles[0];
@@ -709,7 +764,9 @@ mod tests {
         sys.particles.push(Particle {
             x: 110.0, y: 300.0, vx: 0.0, vy: 0.0,
             life: 5.0, max_life: 5.0, size: 4.0, rotation: 0.0, angular_velocity: 0.0,
-            trail: [(110.0, 300.0); 8], trail_len: 0,
+            trail: [(110.0, 300.0); 8],
+            trail_len: 0,
+            z: 0.0,
         });
         sys.update(0.1, 0.0, 0.0);
         let p = &sys.particles[0];
@@ -734,7 +791,9 @@ mod tests {
         sys.particles.push(Particle {
             x: 50.0, y: 60.0, vx: 0.0, vy: 0.0,
             life: 0.001, max_life: 1.0, size: 8.0, rotation: 0.0, angular_velocity: 0.0,
-            trail: [(50.0, 60.0); 8], trail_len: 0,
+            trail: [(50.0, 60.0); 8],
+            trail_len: 0,
+            z: 0.0,
         });
         sys.update(0.016, 0.0, 0.0);
         // Parent dies → replaced by exactly 4 children near (50, 60)
@@ -761,11 +820,74 @@ mod tests {
             sys.particles.push(Particle {
                 x: i as f32 * 10.0, y: 0.0, vx: 0.0, vy: 0.0,
                 life: 0.001, max_life: 1.0, size: 4.0, rotation: 0.0, angular_velocity: 0.0,
-                trail: [(i as f32 * 10.0, 0.0); 8], trail_len: 0,
+                trail: [(i as f32 * 10.0, 0.0); 8],
+                trail_len: 0,
+                z: 0.0,
             });
         }
         sys.update(0.016, 0.0, 0.0);
         assert!(sys.particles.len() <= 3, "must cap at max_particles, got {}", sys.particles.len());
+    }
+
+    #[test]
+    fn test_camera_projection_near_particle_larger() {
+        // Camera at z=-1000 looking toward +z; focal 100
+        let proj = CameraProjection { cam_x: 500.0, cam_y: 400.0, cam_z: -1000.0, focal: 100.0, cos_rz: 1.0, sin_rz: 0.0 };
+        let near = proj.project(500.0, 400.0, -900.0).expect("in front");   // dz=100
+        let far = proj.project(500.0, 400.0, -500.0).expect("in front");    // dz=500
+        assert!(near.2 > far.2 * 2.5, "nearer particle scales bigger: {} vs {}", near.2, far.2);
+        // Centered on camera axis → stays centered
+        assert!((near.0 - 500.0).abs() < 1.0);
+    }
+
+    #[test]
+    fn test_camera_projection_behind_returns_none() {
+        let proj = CameraProjection { cam_x: 0.0, cam_y: 0.0, cam_z: -100.0, focal: 100.0, cos_rz: 1.0, sin_rz: 0.0 };
+        assert!(proj.project(10.0, 10.0, -200.0).is_none(), "behind camera");
+    }
+
+    #[test]
+    fn test_depth_spawn_assigns_z_within_range() {
+        let emitter = ParticleEmitter {
+            rate: 0.0,
+            gravity: [0.0, 0.0],
+            wind: [0.0, 0.0],
+            depth_enabled: true,
+            depth_range: [-200.0, 300.0],
+            ..Default::default()
+        };
+        let mut sys = ParticleSystem::new(emitter);
+        for _ in 0..32 {
+            sys.emit_accumulator = 1.0;
+            sys.update(0.001, 100.0, 100.0);
+        }
+        assert!(!sys.particles.is_empty());
+        for p in &sys.particles {
+            assert!((-200.0..=300.0).contains(&p.z), "spawned z out of range: {}", p.z);
+        }
+    }
+
+    #[test]
+    fn test_projected_render_scales_dot_size() {
+        let e = ParticleEmitter {
+            rate: 0.0,
+            gravity: [0.0, 0.0],
+            wind: [0.0, 0.0],
+            ..Default::default()
+        };
+        let mut sys = ParticleSystem::new(e.clone());
+        // World (15,-15) with cam focal 100 / dz 50 -> screen ~(30,30) in a
+        // 64px buffer; scale factor 20x makes the dot cover most of the frame.
+        sys.particles.push(Particle {
+            x: 15.0, y: -15.0, vx: 0.0, vy: 0.0,
+            life: 1.0, max_life: 1.0, size: 8.0, rotation: 0.0, angular_velocity: 0.0,
+            trail: [(15.0, -15.0); 8], trail_len: 0, z: -950.0,
+        });
+        let mut buf = vec![0u8; 64 * 64 * 4];
+        let proj = CameraProjection { cam_x: 0.0, cam_y: 0.0, cam_z: -1000.0, focal: 100.0, cos_rz: 1.0, sin_rz: 0.0 };
+        sys.render_projected(&mut buf, 64, 64, 0.0, Some(&proj));
+        let lit = buf.chunks_exact(4).filter(|c| c[3] > 0).count();
+        assert!(lit > 400, "depth-scaled dot must be large, got {lit} px");
     }
 
     #[test]
@@ -1086,12 +1208,16 @@ mod particle_collision_tests {
         sys.particles.push(Particle {
             x: 46.0, y: 50.0, vx: 30.0, vy: 0.0,
             life: 5.0, max_life: 5.0, size: 4.0, rotation: 0.0, angular_velocity: 0.0,
-            trail: [(46.0, 50.0); 8], trail_len: 0,
+            trail: [(46.0, 50.0); 8],
+            trail_len: 0,
+            z: 0.0,
         });
         sys.particles.push(Particle {
             x: 54.0, y: 50.0, vx: -30.0, vy: 0.0,
             life: 5.0, max_life: 5.0, size: 4.0, rotation: 0.0, angular_velocity: 0.0,
-            trail: [(54.0, 50.0); 8], trail_len: 0,
+            trail: [(54.0, 50.0); 8],
+            trail_len: 0,
+            z: 0.0,
         });
         sys
     }

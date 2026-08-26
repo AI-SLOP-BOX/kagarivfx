@@ -656,7 +656,7 @@ fn is_sane_render_size(width: u32, height: u32) -> bool {
 
 /// Memoized particle simulation: (version, layer id, frame, emitter fingerprint, state).
 type ParticleSimCacheEntry =
-    (u64, String, u32, [u32; 12], crate::core::particle_system::ParticleSystem);
+    (u64, String, u32, [u32; 15], crate::core::particle_system::ParticleSystem);
 
 // ── Cooperative render cancellation ─────────────────────────────────────────
 // A shared flag checked between layers and periodically inside pixel loops.
@@ -989,12 +989,13 @@ pub fn render_frame_to_pixels(comp: &Composition, frame: u32, width: u32, height
                     const { std::cell::RefCell::new(None) };
             }
 
-            let em_bits: [u32; 12] = [
+            let em_bits: [u32; 15] = [
                 em.rate.to_bits(), em.lifetime.to_bits(), em.speed.to_bits(),
                 em.spread_degrees.to_bits(), em.gravity[0].to_bits(), em.gravity[1].to_bits(),
                 em.color_start[0].to_bits(), em.color_end[3].to_bits(),
                 em.emitter_size[0].to_bits(), em.emitter_size[1].to_bits(),
                 em.max_particles, (em.shape as u32),
+                em.depth_enabled as u32, em.depth_range[0].to_bits(), em.depth_range[1].to_bits(),
             ];
             let sim_key = (
                 crate::core::frame_cache::current_version(),
@@ -1003,6 +1004,7 @@ pub fn render_frame_to_pixels(comp: &Composition, frame: u32, width: u32, height
                 em_bits,
             );
             let dt = 1.0 / comp.fps.max(1) as f32;
+            let depth_enabled = em.depth_enabled;
 
             let cached = PARTICLE_SIM_CACHE.with(|cache| {
                 cache.borrow().as_ref().and_then(|(v, id, f, bits, ps)| {
@@ -1026,7 +1028,27 @@ pub fn render_frame_to_pixels(comp: &Composition, frame: u32, width: u32, height
                     ps
                 }
             };
-            ps.render(&mut buffer, width, height, effective_frame as f32 * dt);
+            if depth_enabled {
+                // Project particles through the active camera: Z drives
+                // screen position and size scaling.
+                let cam = &comp.active_camera;
+                let cpos = cam.transform.position.evaluate(effective_frame);
+                let crot = cam.transform.rotation.evaluate(effective_frame);
+                let rad = crot[2].to_radians();
+                let fov = cam.fov_degrees.max(1.0).to_radians();
+                let focal = (height as f32 * 0.5) / (fov * 0.5).tan();
+                let proj = crate::core::particle_system::CameraProjection {
+                    cam_x: cpos[0],
+                    cam_y: cpos[1],
+                    cam_z: cpos[2],
+                    focal,
+                    cos_rz: rad.cos(),
+                    sin_rz: rad.sin(),
+                };
+                ps.render_projected(&mut buffer, width, height, effective_frame as f32 * dt, Some(&proj));
+            } else {
+                ps.render(&mut buffer, width, height, effective_frame as f32 * dt);
+            }
 
             // Apply the layer's CPU effect stack to the full frame
             crate::core::cpu_effects::apply_layer_effects(&mut buffer, width, height, &layer.effects, effective_frame, comp.fps);
