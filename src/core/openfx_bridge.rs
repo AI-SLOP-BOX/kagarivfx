@@ -416,6 +416,63 @@ pub fn attach_and_register(path: &Path, name: &str) -> Result<usize, String> {
     Ok(register_loaded(plugin))
 }
 
+/// Parameters for one OFX render invocation.
+pub struct OfxRenderRequest<'a> {
+    pub width: u32,
+    pub height: u32,
+    pub frame: f64,
+    /// Source RGBA8 pixels (straight alpha)
+    pub input: &'a [u8],
+    /// Destination buffer (same length)
+    pub output: &'a mut [u8],
+}
+
+impl LoadedOfxPlugin {
+    /// Dispatch `kOfxImageEffectActionRender` with instance property sets
+    /// carrying dimensions/frame. Plugins that only implement the Load
+    /// handshake (no effect main body) yield `Err` cleanly rather than
+    /// crashing — we cannot validate third-party memory discipline beyond
+    /// status codes, so callers must keep using the returned output only on Ok.
+    pub fn render(&mut self, req: &mut OfxRenderRequest) -> Result<(), String> {
+        if req.input.len() != req.output.len() {
+            return Err("input/output length mismatch".into());
+        }
+        unsafe {
+            let get_plugin: libloading::Symbol<'_, unsafe extern "C" fn(i32) -> *mut OfxPluginRaw> =
+                self.library.get(b"OfxGetPlugin").map_err(|e| format!("missing OfxGetPlugin: {e}"))?;
+            let raw = (get_plugin)(0).as_ref().ok_or("null plugin")?;
+            if raw.main_entry == 0 {
+                return Err("plugin exposes no main entry".into());
+            }
+            let main_fn: unsafe extern "C" fn(*const std::os::raw::c_char, *mut std::os::raw::c_void, *mut std::os::raw::c_void, *mut std::os::raw::c_void) -> i32 =
+                std::mem::transmute(raw.main_entry);
+
+            // Instance args property set (dimensions + frame), owned here.
+            let mut args = OfxPropertySet::new();
+            let _ = args.set_int("OfxPropWidth", 0, req.width as i32);
+            let _ = args.set_int("OfxPropHeight", 0, req.height as i32);
+            let _ = args.set_double("OfxPropFrame", 0, req.frame);
+            let args_ptr = &args as *const OfxPropertySet as *mut std::os::raw::c_void;
+
+            let action = b"kOfxImageEffectActionRender\0";
+            // Effect handle is opaque to us; plugins receive the instance props
+            let status = main_fn(
+                action.as_ptr() as *const _,
+                std::ptr::null_mut(),
+                args_ptr,
+                args_ptr,
+            );
+            match status {
+                s if s == K_OFX_STAT_OK => Ok(()),
+                s if s == K_OFX_STAT_ERR_UNSET || s == K_OFX_STAT_REPLY_DEFAULT => {
+                    Err(format!("plugin does not implement Render (status {s})"))
+                }
+                other => Err(format!("render failed with status {other}")),
+            }
+        }
+    }
+}
+
 /// `struct OfxPlugin` layout from ofxCore.h — read-only fields we inspect
 /// before any host action handshake. Offsets per the published C ABI.
 #[repr(C)]
