@@ -78,6 +78,16 @@ enum Commands {
     },
 
     /// Render a single frame to PNG (for testing)
+    /// Run an automation script (Rhai) against a project
+    Script {
+        /// Path to project JSON file (created/overwritten by save_project)
+        #[arg(short, long)]
+        project: String,
+
+        /// Path to .rhai script file
+        #[arg(short, long)]
+        file: String,
+    },
     Frame {
         /// Path to project JSON file
         #[arg(short, long)]
@@ -139,6 +149,36 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
         Commands::Validate { project } => {
             cmd_validate(&project)?;
+        }
+        Commands::Script { project, file } => {
+            let json = std::fs::read_to_string(&project)?;
+            let proj_parse = serde_json::from_str::<aftereffects_oss::Project>(&json);
+            let mut proj = match proj_parse {
+                Ok(p) => p,
+                Err(_) => {
+                    let pf: aftereffects_oss::core::project::ProjectFile =
+                        serde_json::from_str(&json).map_err(|e| e.to_string())?;
+                    aftereffects_oss::Project {
+                        compositions: vec![pf.composition],
+                        active_composition_idx: 0,
+                        assets: Vec::new(),
+                        use_gpu_compute: false,
+                    }
+                }
+            };
+            // Tolerate wrapped ProjectFile format too
+            let source = std::fs::read_to_string(&file)?;
+            match aftereffects_oss::automation::run_script(&mut proj, &source) {
+                Ok(logs) => {
+                    for l in logs {
+                        println!("{l}");
+                    }
+                    let out = serde_json::to_string_pretty(&proj)?;
+                    std::fs::write(&project, out)?;
+                    println!("project saved → {}", project);
+                }
+                Err(e) => return Err(e.into()),
+            }
         }
         Commands::Frame { project, frame, output, width, height } => {
             cmd_frame(&project, frame, &output, width, height)?;

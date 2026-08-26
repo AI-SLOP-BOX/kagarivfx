@@ -10,6 +10,8 @@ pub use app_state::AfterEffectsApp;
 pub use app_state::DragTransaction;
 
 pub use core::ffmpeg_export::ExportEvent;
+pub use core::automation;
+pub use core::timeline::Project;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ViewportMode {
