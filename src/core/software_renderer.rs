@@ -1,4 +1,4 @@
-use crate::core::timeline::{Composition, LayerType, BlendMode, ShapeType, TrimPaths, TrackMatteMode, LightType};
+use crate::core::timeline::{Composition, Layer, LayerType, BlendMode, ShapeType, TrimPaths, TrackMatteMode, LightType};
 use crate::core::mask::point_in_polygon;
 use rayon::prelude::*;
 
@@ -84,6 +84,53 @@ fn box_blur_f32(buf: &mut [f32], width: u32, height: u32, radius: u32) {
     }
 }
 
+/// Build the caster's outline points in LOCAL layer space (centered origin),
+/// honoring the actual shape instead of its bounding quad. Falls back to the
+/// full-size rect for raster/content types.
+fn caster_outline_points(layer: &Layer, base_w: f32, base_h: f32, frame: u32) -> Vec<[f32; 2]> {
+    let shape_pts: Option<Vec<[f32; 2]>> = match &layer.layer_type {
+        LayerType::Shape { shape_type, .. } => match shape_type {
+            ShapeType::Ellipse { width, height } => {
+                let w = width.evaluate(frame).max(1.0) / 2.0;
+                let h = height.evaluate(frame).max(1.0) / 2.0;
+                Some((0..24).map(|i| {
+                    let a = i as f32 / 24.0 * std::f32::consts::TAU;
+                    [w * a.cos(), h * a.sin()]
+                }).collect())
+            }
+            ShapeType::Polygon { sides, radius } => {
+                let n = sides.evaluate(frame).round().max(3.0) as usize;
+                let r = radius.evaluate(frame).max(1.0);
+                Some((0..n).map(|i| {
+                    let a = i as f32 / n as f32 * std::f32::consts::TAU - std::f32::consts::FRAC_PI_2;
+                    [r * a.cos(), r * a.sin()]
+                }).collect())
+            }
+            ShapeType::Star { points, inner_radius, outer_radius } => {
+                let n = points.evaluate(frame).round().max(3.0) as usize;
+                let ri = inner_radius.evaluate(frame).max(1.0);
+                let ro = outer_radius.evaluate(frame).max(ri);
+                Some((0..n * 2).map(|i| {
+                    let a = i as f32 / (n * 2) as f32 * std::f32::consts::TAU - std::f32::consts::FRAC_PI_2;
+                    let r = if i % 2 == 0 { ro } else { ri };
+                    [r * a.cos(), r * a.sin()]
+                }).collect())
+            }
+            ShapeType::Rectangle { width, height, .. } => {
+                let hw = width.evaluate(frame).max(1.0) / 2.0;
+                let hh = height.evaluate(frame).max(1.0) / 2.0;
+                Some(vec![[-hw, -hh], [hw, -hh], [hw, hh], [-hw, hh]])
+            }
+            _ => None,
+        },
+        _ => None,
+    };
+    // Shape-local coordinates are already in comp pixels; layer scale is
+    // applied by the caller via resolve transform values.
+    let _ = (base_w, base_h);
+    shape_pts.unwrap_or_default()
+}
+
 /// Build the shadow density map (0=lit, 1=fully shadowed) at comp resolution:
 /// every shadow-casting light projects every casting layer's world quad onto
 /// the z=0 plane; densities accumulate and are softened by a small blur.
@@ -104,19 +151,23 @@ pub fn build_shadow_map(comp: &Composition, frame: u32, width: u32, height: u32)
             if !layer.is_active(frame) || !layer.visible || !layer.material.cast_shadows {
                 continue;
             }
-            // Layer quad corners in world space (position ± half extents,
-            // rotation applied via resolve transform's rotation about center)
             let (pos, scale, rot, _op) = comp.resolve_world_transform(layer, frame);
+            // Outline points: real shape geometry when available (ellipse,
+            // polygon, star, rect), else the full-size rect quad.
             let (base_w, base_h) = match &layer.layer_type {
                 LayerType::Solid { .. } | LayerType::Shape { .. } | LayerType::Image { .. }
                 | LayerType::Video { .. } | LayerType::Text { .. } | LayerType::PreComp { .. } => {
                     (comp.width as f32, comp.height as f32)
                 }
-                _ => continue, // null/audio cast nothing
+                _ => continue,
             };
-            let hw = base_w * scale[0].abs() / 100.0 / 2.0;
-            let hh = base_h * scale[1].abs() / 100.0 / 2.0;
-            if hw < 0.5 || hh < 0.5 {
+            let mut local_pts = caster_outline_points(layer, base_w, base_h, frame);
+            if local_pts.is_empty() {
+                let hw = base_w / 2.0;
+                let hh = base_h / 2.0;
+                local_pts = vec![[-hw, -hh], [hw, -hh], [hw, hh], [-hw, hh]];
+            }
+            if local_pts.len() < 3 {
                 continue;
             }
             let lz = if layer.is_3d {
@@ -131,13 +182,16 @@ pub fn build_shadow_map(comp: &Composition, frame: u32, width: u32, height: u32)
             }
             let rad = rot.to_radians();
             let (c, s) = (rad.cos(), rad.sin());
-            let corners_local = [[-hw, -hh], [hw, -hh], [hw, hh], [-hw, hh]];
-            let mut projected: Vec<[f32; 2]> = Vec::with_capacity(4);
-            for cl in corners_local {
-                let wx = pos[0] + cl[0] * c - cl[1] * s;
-                let wy = pos[1] + cl[0] * s + cl[1] * c;
-                let world = [wx, wy, lz];
-                match project_point_to_plane_z0(lpos, world) {
+            // Layer scale applies to shape-local coordinates too
+            let sx_mul = scale[0].abs() / 100.0;
+            let sy_mul = scale[1].abs() / 100.0;
+            let mut projected: Vec<[f32; 2]> = Vec::with_capacity(local_pts.len());
+            for cl in &local_pts {
+                let lx2 = cl[0] * sx_mul;
+                let ly2 = cl[1] * sy_mul;
+                let wx = pos[0] + lx2 * c - ly2 * s;
+                let wy = pos[1] + lx2 * s + ly2 * c;
+                match project_point_to_plane_z0(lpos, [wx, wy, lz]) {
                     Some(p) => projected.push(p),
                     None => {
                         projected.clear();
@@ -145,7 +199,7 @@ pub fn build_shadow_map(comp: &Composition, frame: u32, width: u32, height: u32)
                     }
                 }
             }
-            if projected.len() == 4 {
+            if projected.len() == local_pts.len() {
                 accumulate_polygon_density(&mut density, width, height, &projected, strength);
             }
         }
@@ -3151,6 +3205,58 @@ mod shadow_tests {
         let px = render_frame_to_pixels(&comp, 0, 64, 64, 0.0, 0);
         let probe = ((46 * 64 + 44) * 4) as usize;
         assert!(px[probe] >= 240, "no caster -> no shadow, R={}", px[probe]);
+    }
+
+    #[test]
+    fn test_ellipse_caster_shadow_is_round_not_square() {
+        // Ellipse caster: the four bbox corners of its bounding quad must stay
+        // LIT (round shape doesn't reach them), while the center is darkened.
+        let mut comp = Composition::new("e".into(), "EllipseShadow".into(), 96, 96, 30, 30);
+        let mut recv = Layer::new("r1".into(), "Floor".into(), LayerType::Solid { color: [1.0; 4] }, 30);
+        recv.transform.scale = Animatable::new_constant([100.0, 100.0]);
+        recv.transform.position = Animatable::new_constant([48.0, 48.0]);
+        comp.layers.push(recv);
+
+        let mut caster = Layer::new(
+            "c1".into(),
+            "Disc".into(),
+            LayerType::Shape {
+                shape_type: crate::core::timeline::ShapeType::Ellipse {
+                    width: Animatable::new_constant(40.0),
+                    height: Animatable::new_constant(40.0),
+                },
+                color: [1.0, 0.0, 0.0, 1.0],
+                stroke_color: [0.0; 4],
+                stroke_width: 0.0,
+            },
+            30,
+        );
+        caster.is_3d = true;
+        caster.material.cast_shadows = true;
+        caster.transform.scale = Animatable::new_constant([100.0, 100.0]);
+        caster.transform.position = Animatable::new_constant([60.0, 60.0]);
+        caster.transform_3d.position = Animatable::new_constant([60.0, 60.0, 100.0]);
+        comp.layers.push(caster);
+        comp.lights = vec![crate::core::timeline::Light3D {
+            id: "k".into(),
+            name: "K".into(),
+            light_type: crate::core::timeline::LightType::Point,
+            color: [1.0; 4],
+            intensity: 100.0,
+            position: Animatable::new_constant([48.0, 48.0, 300.0]),
+            casts_shadows: true,
+            shadow_darkness: 90.0,
+        }];
+
+        let px = render_frame_to_pixels(&comp, 0, 96, 96, 0.0, 0);
+        // Projection center ≈ light + t*(caster-light), t=300/200=1.5 →
+        // (48+1.5*12, same) = (66,66); ellipse radius scales to ~30px.
+        let in_shadow = ((70 * 96 + 68) * 4) as usize;
+        // Bounding-quad corner of the projected ellipse (~±30 from center):
+        // a square fallback would darken (92,92); the round shape must not.
+        let quad_corner = ((90 * 96 + 90) * 4) as usize;
+        assert!(px[in_shadow] < 210, "ellipse shadow core darkened, R={}", px[in_shadow]);
+        assert!(px[quad_corner] > 235, "round shadow must spare quad corner, R={}", px[quad_corner]);
     }
 }
 
