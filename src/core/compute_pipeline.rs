@@ -13,7 +13,7 @@
 //! results may differ by ±1 LSB from the CPU reference, which is why GPU
 //! effects are opt-in via [`set_gpu_effects_enabled`].
 
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
 
 const SHADER: &str = include_str!("compute_blur.wgsl");
@@ -43,6 +43,47 @@ struct Inner {
     bufs: Option<BufSet>,
 }
 
+/// Last-run timing stats for the HUD (nanoseconds, atomic for cross-thread read).
+pub struct GpuTimings {
+    /// Total GPU wall time of the most recent blur call
+    pub last_nanos: AtomicU64,
+    /// Exponential moving average of blur wall time
+    pub avg_nanos: AtomicU64,
+    pub calls: AtomicU64,
+}
+
+pub static TIMINGS: GpuTimings = GpuTimings {
+    last_nanos: AtomicU64::new(0),
+    avg_nanos: AtomicU64::new(0),
+    calls: AtomicU64::new(0),
+};
+
+fn record_timing(start: std::time::Instant) {
+    let nanos = start.elapsed().as_nanos() as u64;
+    TIMINGS.last_nanos.store(nanos, Ordering::Relaxed);
+    let prev_avg = TIMINGS.avg_nanos.load(Ordering::Relaxed);
+    let n_calls = TIMINGS.calls.fetch_add(1, Ordering::Relaxed);
+    // EMA with alpha ~0.25 (or exact mean for early samples)
+    let new_avg = if n_calls < 4 {
+        (prev_avg * n_calls + nanos) / (n_calls + 1)
+    } else {
+        (prev_avg * 3 + nanos) / 4
+    };
+    TIMINGS.avg_nanos.store(new_avg, Ordering::Relaxed);
+}
+
+/// Human-readable HUD line, e.g. "GPU blur 1.2ms (avg 1.4ms, 12 calls)".
+pub fn timing_hud_line() -> String {
+    let last_us = TIMINGS.last_nanos.load(Ordering::Relaxed) / 1000;
+    let avg_us = TIMINGS.avg_nanos.load(Ordering::Relaxed) / 1000;
+    let calls = TIMINGS.calls.load(Ordering::Relaxed);
+    if calls == 0 {
+        "GPU compute: idle".to_string()
+    } else {
+        format!("GPU compute: {last_us}µs last, {avg_us}µs avg, {calls} calls")
+    }
+}
+
 struct BufSet {
     len: u64,
     src: wgpu::Buffer,
@@ -65,7 +106,8 @@ struct ParamsUniform {
     width: u32,
     height: u32,
     radius: u32,
-    horizontal: u32,
+    mode: u32,
+    angle: f32,
 }
 
 impl GpuComputeContext {
@@ -133,6 +175,7 @@ impl GpuComputeContext {
         height: u32,
         radius_in: u32,
     ) -> Option<()> {
+        let _t = std::time::Instant::now();
         let radius = radius_in
             .min(MAX_BLUR_RADIUS)
             .min(width.max(1) / 2)
@@ -149,31 +192,8 @@ impl GpuComputeContext {
 
         // (Re)allocate cached buffers when size changes
         if inner.bufs.as_ref().is_none_or(|b| b.len != buf_len) {
-            let any = wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::COPY_SRC;
-            inner.bufs = Some(BufSet {
-                len: buf_len,
-                src: inner.device.create_buffer(&wgpu::BufferDescriptor { label: Some("blur_src"), size: buf_len, usage: any, mapped_at_creation: false }),
-                mid: inner.device.create_buffer(&wgpu::BufferDescriptor { label: Some("blur_mid"), size: buf_len, usage: any, mapped_at_creation: false }),
-                dst: inner.device.create_buffer(&wgpu::BufferDescriptor { label: Some("blur_dst"), size: buf_len, usage: any, mapped_at_creation: false }),
-                kernel: inner.device.create_buffer(&wgpu::BufferDescriptor {
-                    label: Some("blur_kernel"),
-                    size: ((2 * MAX_BLUR_RADIUS + 1) * 4) as u64,
-                    usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
-                    mapped_at_creation: false,
-                }),
-                staging_out: inner.device.create_buffer(&wgpu::BufferDescriptor {
-                    label: Some("blur_staging"),
-                    size: buf_len,
-                    usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
-                    mapped_at_creation: false,
-                }),
-                params: inner.device.create_buffer(&wgpu::BufferDescriptor {
-                    label: Some("blur_params"),
-                    size: std::mem::size_of::<ParamsUniform>() as u64,
-                    usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-                    mapped_at_creation: false,
-                }),
-            });
+            let fresh = { let dev = &inner.device; self.alloc_buf_set(dev, buf_len) };
+            inner.bufs = Some(fresh);
         }
         let bufs = inner.bufs.as_ref()?;
 
@@ -195,7 +215,7 @@ impl GpuComputeContext {
         inner.queue.write_buffer(
             &bufs.params,
             0,
-            bytemuck::bytes_of(&ParamsUniform { width, height, radius, horizontal: 1 }),
+            bytemuck::bytes_of(&ParamsUniform { width, height, radius, mode: 0, angle: 0.0 }),
         );
 
         let bg_h = inner.device.create_bind_group(&wgpu::BindGroupDescriptor {
@@ -236,7 +256,7 @@ impl GpuComputeContext {
             inner.queue.write_buffer(
                 &bufs.params,
                 0,
-                bytemuck::bytes_of(&ParamsUniform { width, height, radius, horizontal: 0 }),
+                bytemuck::bytes_of(&ParamsUniform { width, height, radius, mode: 2, angle: 0.0 }),
             );
             pass.set_bind_group(0, &bg_v, &[]);
             pass.dispatch_workgroups(wg_x, wg_y, 1);
@@ -259,7 +279,134 @@ impl GpuComputeContext {
             pixels.copy_from_slice(&data);
         }
         bufs.staging_out.unmap();
+        record_timing(_t);
         Some(())
+    }
+
+    /// Directional (motion) blur: `taps` samples spread along `angle_deg`
+    /// across a total length of `length_px`. Single dispatch.
+    pub fn directional_blur(
+        &self,
+        pixels: &mut [u8],
+        width: u32,
+        height: u32,
+        length_px: u32,
+        angle_deg: f32,
+    ) -> bool {
+        if pixels.is_empty() || width == 0 || height == 0 || length_px < 2 {
+            return false;
+        }
+        self.directional_blur_inner(pixels, width, height, length_px, angle_deg).is_some()
+    }
+
+    fn directional_blur_inner(
+        &self,
+        pixels: &mut [u8],
+        width: u32,
+        height: u32,
+        taps: u32,
+        angle_deg: f32,
+    ) -> Option<()> {
+        use std::time::Instant;
+        let t = Instant::now();
+        let mut inner = self.inner.lock().ok()?;
+
+        let buf_len = (width as u64) * (height as u64) * 4;
+        if buf_len > inner.device.limits().max_storage_buffer_binding_size as u64 {
+            return None;
+        }
+
+        // Reuse the same cached buffer set (kernel unused in this mode)
+        if inner.bufs.as_ref().is_none_or(|b| b.len != buf_len) {
+            let fresh = { let dev = &inner.device; self.alloc_buf_set(dev, buf_len) };
+            inner.bufs = Some(fresh);
+        }
+        let bufs = inner.bufs.as_ref()?;
+
+        inner.queue.write_buffer(&bufs.src, 0, bytemuck::cast_slice(pixels));
+        inner.queue.write_buffer(
+            &bufs.params,
+            0,
+            bytemuck::bytes_of(&ParamsUniform {
+                width,
+                height,
+                radius: taps.min(256),
+                mode: 1,
+                angle: angle_deg.to_radians(),
+            }),
+        );
+
+        let bg = inner.device.create_bind_group(&wgpu::BindGroupDescriptor {
+            layout: &inner.pipeline.get_bind_group_layout(0),
+            entries: &[
+                wgpu::BindGroupEntry { binding: 0, resource: bufs.params.as_entire_binding() },
+                wgpu::BindGroupEntry { binding: 1, resource: bufs.src.as_entire_binding() },
+                wgpu::BindGroupEntry { binding: 2, resource: bufs.dst.as_entire_binding() },
+                wgpu::BindGroupEntry { binding: 3, resource: bufs.kernel.as_entire_binding() },
+            ],
+            label: Some("bg_dir"),
+        });
+
+        let wg_x = width.div_ceil(8);
+        let wg_y = height.div_ceil(8);
+
+        let mut encoder = inner.device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: Some("dir_enc") });
+        {
+            let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+                label: Some("dir_pass"),
+                timestamp_writes: None,
+            });
+            pass.set_pipeline(&inner.pipeline);
+            pass.set_bind_group(0, &bg, &[]);
+            pass.dispatch_workgroups(wg_x, wg_y, 1);
+        }
+        encoder.copy_buffer_to_buffer(&bufs.dst, 0, &bufs.staging_out, 0, buf_len);
+        inner.queue.submit(Some(encoder.finish()));
+
+        let (tx, rx) = std::sync::mpsc::channel();
+        bufs.staging_out.slice(..).map_async(wgpu::MapMode::Read, move |res| {
+            let _ = tx.send(res);
+        });
+        inner.device.poll(wgpu::Maintain::Wait);
+        rx.recv().ok()?.ok()?;
+        {
+            let data = bufs.staging_out.slice(..).get_mapped_range();
+            if data.len() != pixels.len() {
+                return None;
+            }
+            pixels.copy_from_slice(&data);
+        }
+        bufs.staging_out.unmap();
+        record_timing(t);
+        Some(())
+    }
+
+    fn alloc_buf_set(&self, dev: &wgpu::Device, buf_len: u64) -> BufSet {
+        let any = wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::COPY_SRC;
+        BufSet {
+            len: buf_len,
+            src: dev.create_buffer(&wgpu::BufferDescriptor { label: Some("blur_src"), size: buf_len, usage: any, mapped_at_creation: false }),
+            mid: dev.create_buffer(&wgpu::BufferDescriptor { label: Some("blur_mid"), size: buf_len, usage: any, mapped_at_creation: false }),
+            dst: dev.create_buffer(&wgpu::BufferDescriptor { label: Some("blur_dst"), size: buf_len, usage: any, mapped_at_creation: false }),
+            kernel: dev.create_buffer(&wgpu::BufferDescriptor {
+                label: Some("blur_kernel"),
+                size: ((2 * MAX_BLUR_RADIUS + 1) * 4) as u64,
+                usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+                mapped_at_creation: false,
+            }),
+            staging_out: dev.create_buffer(&wgpu::BufferDescriptor {
+                label: Some("blur_staging"),
+                size: buf_len,
+                usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
+                mapped_at_creation: false,
+            }),
+            params: dev.create_buffer(&wgpu::BufferDescriptor {
+                label: Some("blur_params"),
+                size: std::mem::size_of::<ParamsUniform>() as u64,
+                usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+                mapped_at_creation: false,
+            }),
+        }
     }
 }
 
@@ -310,6 +457,23 @@ pub fn try_gpu_gaussian_blur(pixels: &mut [u8], width: u32, height: u32, radius:
     }
     match global() {
         Some(ctx) => ctx.gaussian_blur(pixels, width, height, radius),
+        None => false,
+    }
+}
+
+/// Try running a GPU directional (motion) blur with the global context.
+pub fn try_gpu_directional_blur(
+    pixels: &mut [u8],
+    width: u32,
+    height: u32,
+    length_px: u32,
+    angle_deg: f32,
+) -> bool {
+    if !gpu_effects_enabled() {
+        return false;
+    }
+    match global() {
+        Some(ctx) => ctx.directional_blur(pixels, width, height, length_px, angle_deg),
         None => false,
     }
 }
@@ -387,6 +551,46 @@ mod tests {
         };
         assert_eq!(run(), run(), "GPU blur must be byte-stable across runs");
         set_gpu_effects_enabled(false);
+    }
+
+    #[test]
+    fn test_directional_blur_smears_along_axis() {
+        let _g = FLAG_LOCK.lock().unwrap();
+        let ctx = match global() {
+            Some(c) => c,
+            None => return,
+        };
+        set_gpu_effects_enabled(true);
+        // Single bright dot on transparent background; horizontal smear 8px
+        let mut px = vec![0u8; 24 * 8 * 4];
+        let dot = ((4 * 24 + 6) * 4) as usize;
+        px[dot] = 255;
+        px[dot + 1] = 255;
+        px[dot + 2] = 255;
+        px[dot + 3] = 255;
+        assert!(ctx.directional_blur(&mut px, 24, 8, 9, 0.0));
+        // Count lit pixels on the dot's row vs the row above
+        let row_lit = (0..24).filter(|x| px[((4 * 24 + x) * 4) as usize + 3] > 0).count();
+        let above_lit = (0..24).filter(|x| px[((2 * 24 + x) * 4) as usize + 3] > 0).count();
+        assert!(row_lit >= 5, "horizontal smear must light multiple taps: {row_lit}");
+        assert!(above_lit <= row_lit / 2, "vertical bleed must stay small");
+        set_gpu_effects_enabled(false);
+    }
+
+    #[test]
+    fn test_timing_hud_reports_calls() {
+        let _g = FLAG_LOCK.lock().unwrap();
+        let ctx = match global() {
+            Some(c) => c,
+            None => return,
+        };
+        set_gpu_effects_enabled(true);
+        let mut px = vec![100u8; 16 * 16 * 4];
+        assert!(ctx.gaussian_blur(&mut px, 16, 16, 1));
+        set_gpu_effects_enabled(false);
+        let line = timing_hud_line();
+        assert!(line.contains("GPU compute"), "hud: {line}");
+        assert!(!line.contains("idle"), "after a call hud shows stats: {line}");
     }
 
     fn variance(px: &[u8]) -> f64 {

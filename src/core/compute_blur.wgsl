@@ -15,8 +15,12 @@
 struct Params {
     width: u32,
     height: u32,
+    // Gaussian: kernel tap count per side. Directional: total tap count.
     radius: u32,
-    horizontal: u32,
+    // 0 = gaussian horizontal, 2 = gaussian vertical, 1 = directional one-shot
+    mode: u32,
+    // Directional blur angle (radians)
+    angle: f32,
 };
 
 @group(0) @binding(0) var<uniform> params: Params;
@@ -48,9 +52,35 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         return;
     }
 
-    let r = params.radius;
     let w = params.width;
     let h = params.height;
+
+    if (params.mode == 1u) {
+        // ── Directional blur: N taps along the motion vector ──
+        let n = max(params.radius, 1u);
+        let dx = cos(params.angle);
+        let dy = sin(params.angle);
+        var acc = vec4<f32>(0.0);
+        var wsum = 0.0;
+        for (var i: i32 = 0; i < i32(n); i = i + 1) {
+            // Centered spread across the motion vector
+            let off = f32(i) - f32(n - 1u) * 0.5;
+            let sx = u32(clamp(i32(x) + i32(off * dx), 0, i32(w - 1u)));
+            let sy = u32(clamp(i32(y) + i32(off * dy), 0, i32(h - 1u)));
+            let c = unpack(src[sy * w + sx]);
+            acc = acc + vec4<f32>(c.rgb * c.a, c.a);
+            wsum = wsum + 1.0;
+        }
+        let inv = 1.0 / max(wsum, 0.0001);
+        let pm = acc * inv;
+        let out_a = clamp(pm.a, 0.0, 1.0);
+        let rgb = select(vec3<f32>(0.0), pm.rgb / max(out_a, 0.0001), out_a > 0.0001);
+        dst[y * w + x] = pack(vec4<f32>(rgb, out_a));
+        return;
+    }
+
+    // ── Gaussian separable pass ──
+    let r = params.radius;
 
     // Premultiplied accumulators
     var acc = vec4<f32>(0.0);
@@ -60,14 +90,15 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         let weight = kernel[u32(i + i32(r))];
         var sx: u32;
         var sy: u32;
-        if (params.horizontal == 1u) {
+        if (params.mode == 2u) {
+            // Second pass marker piggybacks on angle>=PI (set by host): vertical
+            let yi = i32(y) + i;
+            sx = x;
+            sy = u32(clamp(yi, 0, i32(h - 1u)));
+        } else {
             let xi = i32(x) + i;
             sx = u32(clamp(xi, 0, i32(w - 1u)));
             sy = y;
-        } else {
-            sx = x;
-            let yi = i32(y) + i;
-            sy = u32(clamp(yi, 0, i32(h - 1u)));
         }
         let c = unpack(src[sy * w + sx]);
         let a = c.a;

@@ -147,13 +147,11 @@ fn apply_one_ctx(
             );
         }
         EffectType::DirectionalBlur { angle, length } => {
-            pack::apply_directional_blur(
-                pixels,
-                width,
-                height,
-                angle.evaluate(frame),
-                length.evaluate(frame),
-            );
+            let a = angle.evaluate(frame);
+            let len = length.evaluate(frame);
+            if !crate::core::compute_pipeline::try_gpu_directional_blur(pixels, width, height, len.round().clamp(2.0, 256.0) as u32, a) {
+                pack::apply_directional_blur(pixels, width, height, a, len);
+            }
         }
         EffectType::RadialBlur { amount } => {
             pack::apply_radial_blur(pixels, width, height, amount.evaluate(frame));
