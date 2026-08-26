@@ -771,9 +771,26 @@ fn apply_one(
         EffectType::CheckboxControl { .. } => {}
         EffectType::DropdownControl { .. } => {}
         EffectType::Point3DControl { .. } => {}
-        EffectType::LensFlare { .. } => {
-            // Screen-space optical flare runs in the GPU fragment shader;
-            // CPU/export path renders without flare (identity passthrough).
+        EffectType::LensFlare { enabled, position_x, position_y, intensity, threshold, color } => {
+            if enabled.evaluate(frame) > 0.5 {
+                let c = color.evaluate(frame);
+                pack::apply_lens_flare(
+                    pixels,
+                    width,
+                    height,
+                    &pack::LensFlareParams {
+                        pos_x: position_x.evaluate(frame),
+                        pos_y: position_y.evaluate(frame),
+                        intensity: intensity.evaluate(frame),
+                        threshold: threshold.evaluate(frame),
+                        color: [
+                            (c[0] * 255.0).clamp(0.0, 255.0) as u8,
+                            (c[1] * 255.0).clamp(0.0, 255.0) as u8,
+                            (c[2] * 255.0).clamp(0.0, 255.0) as u8,
+                        ],
+                    },
+                );
+            }
         }
         EffectType::CustomShader { .. } => {
             // Custom WGSL shaders are GPU-only; CPU renderer applies a identity passthrough.

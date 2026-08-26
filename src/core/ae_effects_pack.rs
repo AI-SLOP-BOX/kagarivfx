@@ -858,11 +858,86 @@ mod directional_radial_tests {
     }
 }
 
+// ── Lens Flare (CPU mirror of the WGSL screen-space flare) ──
+/// Screen-space optical flare parameters.
+#[derive(Debug, Clone, PartialEq)]
+pub struct LensFlareParams {
+    /// Normalized source position (0..1)
+    pub pos_x: f32,
+    pub pos_y: f32,
+    /// Overall brightness multiplier
+    pub intensity: f32,
+    /// Output gain applied after element summation
+    pub threshold: f32,
+    /// Tint color (0-255 RGB)
+    pub color: [u8; 3],
+}
+
+/// Screen-space optical flare: Gaussian core + concentric ring artifacts +
+/// 4-point star streaks, additively tinted onto the buffer.
+/// Mirrors `shader.wgsl` fs_main flare pass for GPU/CPU export parity.
+pub fn apply_lens_flare(pixels: &mut [u8], width: u32, height: u32, p: &LensFlareParams) {
+    if width == 0 || height == 0 || p.intensity <= 0.0 {
+        return;
+    }
+    let w = width as f32;
+    let h = height as f32;
+    let cx = p.pos_x.clamp(0.0, 1.0);
+    let cy = p.pos_y.clamp(0.0, 1.0);
+    let intensity = p.intensity;
+    let threshold = p.threshold;
+    let cr = p.color[0] as f32 / 255.0;
+    let cg = p.color[1] as f32 / 255.0;
+    let cb = p.color[2] as f32 / 255.0;
+
+    for y in 0..height {
+        let ny = (y as f32 + 0.5) / h;
+        for x in 0..width {
+            let nx = (x as f32 + 0.5) / w;
+
+            let dx = nx - cx;
+            let dy = ny - cy;
+            let d = (dx * dx + dy * dy).sqrt();
+            let d_norm = d * 2.0;
+
+            // Core glow
+            let core_radius = 0.02;
+            let core = (-d_norm * d_norm / (core_radius * core_radius)).exp() * intensity;
+
+            // Concentric rings fading with distance
+            let ring_phase = d_norm * 12.0;
+            let ring = (ring_phase.sin() * 0.3) + 0.5;
+            let ring_mask = (-d_norm * 3.0).exp();
+            let rings = ring * ring_mask * intensity * 0.3;
+
+            // Horizontal + vertical star streaks
+            let streak_h = (-dy.abs() * 80.0).exp() * (-dx.abs() * 8.0).exp();
+            let streak_v = (-dx.abs() * 80.0).exp() * (-dy.abs() * 8.0).exp();
+            let streaks = (streak_h + streak_v) * intensity * 0.4;
+
+            let flare = ((core + rings + streaks) * threshold).min(4.0);
+            if flare < 0.002 {
+                continue;
+            }
+
+            let idx = ((y * width + x) * 4) as usize;
+            if idx + 3 >= pixels.len() {
+                continue;
+            }
+            let r = pixels[idx] as f32 + cr * flare * 255.0;
+            let g = pixels[idx + 1] as f32 + cg * flare * 255.0;
+            let b = pixels[idx + 2] as f32 + cb * flare * 255.0;
+            pixels[idx] = r.min(255.0) as u8;
+            pixels[idx + 1] = g.min(255.0) as u8;
+            pixels[idx + 2] = b.min(255.0) as u8;
+        }
+    }
+}
+
 // ── Camera Shake ──
 /// Applies procedural camera shake to a position value.
 /// Returns offset [dx, dy] for the given time.
-pub fn camera_shake(time_sec: f32, intensity: f32, speed_hz: f32, seed: u64) -> [f32; 2] {
-    let t = time_sec * speed_hz;
+pub fn camera_shake(time_sec: f32, intensity: f32, speed_hz: f32, seed: u64) -> [f32; 2] {    let t = time_sec * speed_hz;
     let s = seed as f32;
     let dx = (t * 1.7 + s).sin() * 0.6 + (t * 3.3 + s * 1.7).sin() * 0.4;
     let dy = (t * 2.1 + s * 2.3).sin() * 0.5 + (t * 4.7 + s * 0.9).sin() * 0.5;
@@ -891,5 +966,71 @@ mod camera_shake_tests {
         let a = super::camera_shake(5.0, 0.0, 8.0, 42);
         assert_eq!(a[0], 0.0);
         assert_eq!(a[1], 0.0);
+    }
+
+    #[test]
+    fn test_lens_flare_brightens_center() {
+        let w = 64u32;
+        let h = 64u32;
+        let mut px = vec![10u8; (w * h * 4) as usize];
+        super::apply_lens_flare(
+            &mut px,
+            w,
+            h,
+            &super::LensFlareParams { pos_x: 0.5, pos_y: 0.5, intensity: 1.0, threshold: 1.0, color: [255, 255, 255] },
+        );
+        let center = ((32 * w + 32) * 4) as usize;
+        assert!(px[center] > 200, "flare core must brighten center, got {}", px[center]);
+        // Far corner should stay near original
+        let corner = ((2 * w + 2) * 4) as usize;
+        assert!(px[corner] < 60, "corner must be barely affected, got {}", px[corner]);
+    }
+
+    #[test]
+    fn test_lens_flare_zero_intensity_noop() {
+        let mut px = vec![40u8; 16 * 16 * 4];
+        let before = px.clone();
+        super::apply_lens_flare(
+            &mut px,
+            16,
+            16,
+            &super::LensFlareParams { pos_x: 0.5, pos_y: 0.5, intensity: 0.0, threshold: 1.0, color: [255, 255, 255] },
+        );
+        assert_eq!(px, before);
+    }
+
+    #[test]
+    fn test_lens_flare_clamps_to_white() {
+        let w = 32u32;
+        let h = 32u32;
+        let mut px = vec![250u8; (w * h * 4) as usize];
+        super::apply_lens_flare(
+            &mut px,
+            w,
+            h,
+            &super::LensFlareParams { pos_x: 0.5, pos_y: 0.5, intensity: 5.0, threshold: 2.0, color: [255, 255, 255] },
+        );
+        // Center region must clamp to pure white
+        for y in 12..20u32 {
+            for x in 12..20u32 {
+                let i = ((y * w + x) * 4) as usize;
+                assert_eq!(px[i], 255, "pixel ({x},{y}) must clamp to white");
+            }
+        }
+    }
+
+    #[test]
+    fn test_lens_flare_deterministic() {
+        let run = || {
+            let mut px = vec![0u8; 32 * 32 * 4];
+            super::apply_lens_flare(
+                &mut px,
+                32,
+                32,
+                &super::LensFlareParams { pos_x: 0.3, pos_y: 0.7, intensity: 1.0, threshold: 1.0, color: [200, 150, 100] },
+            );
+            px
+        };
+        assert_eq!(run(), run());
     }
 }
