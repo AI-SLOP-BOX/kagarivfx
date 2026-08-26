@@ -75,9 +75,13 @@ fn apply_one_ctx(
 
     match effect_type {
         // Effects already present in the GPU pipeline, mirrored on CPU.
-        EffectType::GaussianBlur { blur_radius } => {
+                EffectType::GaussianBlur { blur_radius } => {
             let r = blur_radius.evaluate(frame).max(0.0) as u32;
-            pack::apply_gaussian_blur(pixels, width, height, r);
+            // GPU compute path (opt-in via settings); CPU fallback keeps
+            // byte-deterministic output when disabled or unavailable.
+            if !crate::core::compute_pipeline::try_gpu_gaussian_blur(pixels, width, height, r.min(crate::core::compute_pipeline::MAX_BLUR_RADIUS)) {
+                pack::apply_gaussian_blur(pixels, width, height, r);
+            }
         }
         EffectType::ColorTint { color, intensity } => {
             let rgb = color3_to_u8(color.evaluate(frame));

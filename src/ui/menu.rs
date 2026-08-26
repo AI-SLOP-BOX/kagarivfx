@@ -908,6 +908,22 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
                 ui.checkbox(&mut app.show_guides, "Show Safe Zones");
                 ui.checkbox(&mut app.show_handles, "Show Handles");
                 ui.separator();
+                // ── GPU Compute (experimental) ──
+                let mut gpu_fx = crate::core::compute_pipeline::gpu_effects_enabled();
+                if ui.checkbox(&mut gpu_fx, "GPU Compute Effects (beta)").changed() {
+                    crate::core::compute_pipeline::set_gpu_effects_enabled(gpu_fx);
+                    if gpu_fx {
+                        match crate::core::compute_pipeline::global() {
+                            Some(ctx) => app.toasts.info(format!("GPU compute: {}", ctx.backend_label())),
+                            None => {
+                                app.toasts.error("No GPU adapter — staying on CPU");
+                                crate::core::compute_pipeline::set_gpu_effects_enabled(false);
+                            }
+                        }
+                    } else {
+                        app.toasts.info("GPU compute off — deterministic CPU rendering");
+                    }
+                }
                 if ui.button("Reset Timeline Zoom (100%)").clicked() {
                     app.timeline_zoom = 1.0;
                     ui.close_menu();
