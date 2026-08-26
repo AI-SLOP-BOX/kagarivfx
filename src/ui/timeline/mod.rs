@@ -878,6 +878,37 @@ let type_icon = crate::ui::icons::layer_icon(&layer.layer_type);
                                             app.toasts.info("Duplicated selected layer");
                                             ui.close_menu();
                                         }
+                                        if ui.button("📦 Pre-compose… (Cmd+Shift+C)").on_hover_text("Nest this layer into a new composition").clicked() {
+                                            app.selected_layers.clear();
+                                            app.selected_layers.insert(i);
+                                            app.selected_layer_idx = Some(i);
+                                            app.show_precompose_dialog = true;
+                                            ui.close_menu();
+                                        }
+                                        if ui.button("🧊 Toggle 3D Layer").on_hover_text("Switch this layer between 2D and 3D").clicked() {
+                                            layer.is_3d = !layer.is_3d;
+                                            project_changed = true;
+                                            ui.close_menu();
+                                        }
+                                        if ui.button("⏪ Time-Reverse Keyframes").on_hover_text("Reverse the order of all animated keyframes on this layer").clicked() {
+                                            fn rev<T: Clone>(a: &mut crate::core::property::Animatable<T>, in_f: u32, out_f: u32) {
+                                                if let crate::core::property::Animatable::Animated(kfs) = a {
+                                                    let span = out_f.saturating_sub(in_f);
+                                                    for k in kfs.iter_mut() {
+                                                        k.frame = in_f + span.saturating_sub(k.frame.saturating_sub(in_f));
+                                                    }
+                                                    kfs.sort_by_key(|k| k.frame);
+                                                }
+                                            }
+                                            let (inf, outf) = (layer.in_frame, layer.out_frame);
+                                            rev(&mut layer.transform.position, inf, outf);
+                                            rev(&mut layer.transform.scale, inf, outf);
+                                            rev(&mut layer.transform.rotation, inf, outf);
+                                            rev(&mut layer.transform.opacity, inf, outf);
+                                            project_changed = true;
+                                            app.toasts.info("Keyframes time-reversed");
+                                            ui.close_menu();
+                                        }
                                         if ui.button("✂ Split Layer at Current Time (Cmd+Shift+D)").clicked() {
                                             pending_split_layer = Some(i);
                                             ui.close_menu();
