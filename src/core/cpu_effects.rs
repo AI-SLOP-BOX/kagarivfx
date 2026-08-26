@@ -40,21 +40,36 @@ pub fn apply_layer_effects(
     frame: u32,
     fps: u32,
 ) {
+    apply_layer_effects_ctx(pixels, width, height, effects, frame, fps, None);
+}
+
+/// Like [`apply_layer_effects`], with an optional pre-projected light position
+/// (normalized 0..1) for lens flares that link to a comp light.
+pub fn apply_layer_effects_ctx(
+    pixels: &mut [u8],
+    width: u32,
+    height: u32,
+    effects: &[Effect],
+    frame: u32,
+    fps: u32,
+    light_screen: Option<[f32; 2]>,
+) {
     for effect in effects {
         if !effect.enabled {
             continue;
         }
-        apply_one(pixels, width, height, &effect.effect_type, frame, fps);
+        apply_one_ctx(pixels, width, height, &effect.effect_type, frame, fps, light_screen);
     }
 }
 
-fn apply_one(
+fn apply_one_ctx(
     pixels: &mut [u8],
     width: u32,
     height: u32,
     effect_type: &EffectType,
     frame: u32,
     fps: u32,
+    light_screen: Option<[f32; 2]>,
 ) {
     use crate::core::ae_effects_pack as pack;
 
@@ -771,16 +786,20 @@ fn apply_one(
         EffectType::CheckboxControl { .. } => {}
         EffectType::DropdownControl { .. } => {}
         EffectType::Point3DControl { .. } => {}
-        EffectType::LensFlare { enabled, position_x, position_y, intensity, threshold, color } => {
+        EffectType::LensFlare { enabled, position_x, position_y, intensity, threshold, color, .. } => {
             if enabled.evaluate(frame) > 0.5 {
+                let [fx, fy] = light_screen.unwrap_or([
+                    position_x.evaluate(frame),
+                    position_y.evaluate(frame),
+                ]);
                 let c = color.evaluate(frame);
                 pack::apply_lens_flare(
                     pixels,
                     width,
                     height,
                     &pack::LensFlareParams {
-                        pos_x: position_x.evaluate(frame),
-                        pos_y: position_y.evaluate(frame),
+                        pos_x: fx,
+                        pos_y: fy,
                         intensity: intensity.evaluate(frame),
                         threshold: threshold.evaluate(frame),
                         color: [

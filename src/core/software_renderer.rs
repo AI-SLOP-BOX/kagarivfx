@@ -1441,7 +1441,23 @@ pub fn render_frame_to_pixels(comp: &Composition, frame: u32, width: u32, height
         }
 
         // Phase 2: apply the layer's CPU effect stack.
-        crate::core::cpu_effects::apply_layer_effects(&mut layer_buf, bw, bh, &layer.effects, effective_frame, comp.fps);
+        // Resolve lens-flare light links (project the named light through the camera).
+        let flare_light_screen: Option<[f32; 2]> = layer.effects.iter().find_map(|e| {
+            match &e.effect_type {
+                crate::core::timeline::EffectType::LensFlare { link_to_light: Some(n), .. } if e.enabled => Some(n.clone()),
+                _ => None,
+            }
+        }).and_then(|light_name| {
+            comp.lights.iter().find(|l| l.name == light_name).and_then(|light| {
+                crate::core::timeline::project_point_to_screen(
+                    &comp.active_camera,
+                    light.position.evaluate(effective_frame),
+                    bw as f32,
+                    bh as f32,
+                )
+            })
+        });
+        crate::core::cpu_effects::apply_layer_effects_ctx(&mut layer_buf, bw, bh, &layer.effects, effective_frame, comp.fps, flare_light_screen);
 
         // Phase 2.5: velocity-based motion blur (AE-style shutter angle).
         // Computes the layer's positional velocity across neighboring frames and

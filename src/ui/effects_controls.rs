@@ -1132,6 +1132,7 @@ pub fn get_all_effect_presets() -> &'static [EffectPreset] {
                     intensity: Animatable::new_constant(1.0),
                     threshold: Animatable::new_constant(0.8),
                     color: Animatable::new_constant([1.0, 0.95, 0.9, 1.0]),
+                    link_to_light: None,
                 },
                 enabled: true,
             },
@@ -1438,7 +1439,7 @@ pub fn draw_effect_type_ui(
             }) { *next_frame = Some(nf); }
             if c_before != *color { *project_changed = true; }
         }
-        EffectType::LensFlare { enabled, position_x, position_y, intensity, threshold, color } => {
+        EffectType::LensFlare { enabled, position_x, position_y, intensity, threshold, color, .. } => {
             let en_before = enabled.clone();
             if let Some(nf) = draw_property_ui(current_frame, ui, "Enabled", enabled, |ui, val| {
                 ui.add(egui::Slider::new(val, 0.0..=1.0).show_value(false));

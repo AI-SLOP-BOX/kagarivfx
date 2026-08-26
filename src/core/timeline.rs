@@ -665,6 +665,42 @@ impl Default for Camera3D {
     }
 }
 
+/// Project a world-space point through the composition camera to normalized
+/// screen coordinates ([0..1], origin top-left). Returns None when the point is
+/// behind the camera. Mirrors the simplified camera model (translate + Z-rotate)
+/// used by the renderers' `perspective_project_layer`.
+pub fn project_point_to_screen(
+    cam: &Camera3D,
+    point: [f32; 3],
+    screen_width: f32,
+    screen_height: f32,
+) -> Option<[f32; 2]> {
+    if screen_width <= 0.0 || screen_height <= 0.0 {
+        return None;
+    }
+    let cam_pos = cam.transform.position.evaluate(0);
+    let cam_rot = cam.transform.rotation.evaluate(0);
+    let to_rad = |d: f32| d * std::f32::consts::PI / 180.0;
+    let cam_zr = to_rad(cam_rot[2]);
+    let (ccrz, ssrz) = (cam_zr.cos(), cam_zr.sin());
+
+    let dx = point[0] - cam_pos[0];
+    let dy = point[1] - cam_pos[1];
+    let dz = point[2] - cam_pos[2];
+    let cx = dx * ccrz - dy * ssrz;
+    let cy = dx * ssrz + dy * ccrz;
+    let cz = dz;
+    if cz <= 0.1 {
+        return None;
+    }
+
+    let fov_rad = cam.fov_degrees.max(1.0) * std::f32::consts::PI / 180.0;
+    let focal = (screen_height * 0.5) / (fov_rad * 0.5).tan();
+    let sx = screen_width * 0.5 + (cx * focal) / cz;
+    let sy = screen_height * 0.5 - (cy * focal) / cz;
+    Some([sx / screen_width, sy / screen_height])
+}
+
 // ─── 3D Material Options (AE-style material properties) ─────────────────────
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -754,7 +790,9 @@ pub enum EffectType {
         intensity: Animatable<f32>,
         color: Animatable<[f32; 4]>,
     },
-    /// GPU-only screen-space optical flare (core + rings + star streaks).
+    /// GPU-first screen-space optical flare (core + rings + star streaks).
+    /// When `link_to_light` names a comp light, the flare source tracks that
+    /// light's projected position each frame (overrides position_x/y).
     LensFlare {
         enabled: Animatable<f32>,
         position_x: Animatable<f32>,
@@ -762,6 +800,8 @@ pub enum EffectType {
         intensity: Animatable<f32>,
         threshold: Animatable<f32>,
         color: Animatable<[f32; 4]>,
+        #[serde(default)]
+        link_to_light: Option<String>,
     },
     MotionBlur {
         shutter_angle: Animatable<f32>,
@@ -2323,6 +2363,59 @@ mod tests {
 
         assert!(comp.set_layer_parent("l2", Some("l1".into())));
         assert!(!comp.set_layer_parent("l1", Some("l2".into())), "Cycle parent assignment must be rejected");
+    }
+}
+
+#[cfg(test)]
+mod projection_tests {
+    use super::*;
+
+    /// Camera pulled back on -Z looking toward +Z (matches renderer convention:
+    /// visible points have larger z than the camera).
+    fn default_cam() -> Camera3D {
+        let mut cam = Camera3D::default();
+        cam.transform.position = Animatable::new_constant([0.0, 0.0, -600.0]);
+        cam
+    }
+
+    #[test]
+    fn test_project_point_centered_in_front() {
+        let cam = default_cam();
+        let sp = project_point_to_screen(&cam, [0.0, 0.0, -500.0], 1920.0, 1080.0);
+        if let Some([x, y]) = sp {
+            assert!((x - 0.5).abs() < 0.01, "centered point → 0.5, got {x}");
+            assert!((y - 0.5).abs() < 0.01, "centered point → 0.5, got {y}");
+        } else {
+            panic!("point in front of camera must project");
+        }
+    }
+
+    #[test]
+    fn test_project_point_behind_camera_none() {
+        let cam = default_cam();
+        let sp = project_point_to_screen(&cam, [0.0, 0.0, -900.0], 1920.0, 1080.0);
+        assert!(sp.is_none(), "point behind camera returns None");
+    }
+
+    #[test]
+    fn test_project_point_right_of_center() {
+        let cam = default_cam();
+        let sp = project_point_to_screen(&cam, [250.0, 0.0, -500.0], 1000.0, 1000.0);
+        let [x, _] = sp.expect("must project");
+        assert!(x > 0.5, "point right of optical axis → x > 0.5, got {x}");
+    }
+
+    #[test]
+    fn test_projection_matches_documented_formulas() {
+        let cam = default_cam(); // pos [0,0,-600], fov 50
+        let pos = [300.0, 200.0, -500.0];
+        let sp = project_point_to_screen(&cam, pos, 1920.0, 1080.0).expect("projects");
+        // Reference: d = point - campos; focal from vertical fov; sy flipped
+        let focal = (1080.0 * 0.5) / (50f32.to_radians() * 0.5).tan();
+        let expect_x = (960.0 + 300.0 * focal / 100.0) / 1920.0;
+        let expect_y = (540.0 - 200.0 * focal / 100.0) / 1080.0;
+        assert!((sp[0] - expect_x).abs() < 1e-4);
+        assert!((sp[1] - expect_y).abs() < 1e-4);
     }
 }
 

@@ -1061,6 +1061,7 @@ fn apply_effect_by_name(app: &mut crate::AfterEffectsApp, effect_name: &str) {
                         intensity: crate::core::property::Animatable::new_constant(1.0),
                         threshold: crate::core::property::Animatable::new_constant(0.8),
                         color: crate::core::property::Animatable::new_constant([1.0, 0.95, 0.9, 1.0]),
+                        link_to_light: None,
                     }, enabled: true,
                 },
                 "Gaussian Blur" => crate::core::timeline::Effect {

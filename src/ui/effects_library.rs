@@ -540,6 +540,28 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                                 }
                             });
                             ui.collapsing(&effect.name, |ui| {
+                                // Lens flare light-link selector (needs comp lights)
+                                if let crate::core::timeline::EffectType::LensFlare { link_to_light, .. } = &mut effect.effect_type {
+                                    let light_names: Vec<String> = comp.lights.iter().map(|l| l.name.clone()).collect();
+                                    let current = link_to_light.clone().unwrap_or_else(|| "(manual position)".into());
+                                    egui::ComboBox::from_id_salt(("flare_link", effect.id.as_str()))
+                                        .selected_text(current)
+                                        .show_ui(ui, |ui| {
+                                            if ui.selectable_label(link_to_light.is_none(), "(manual position)").clicked() {
+                                                *link_to_light = None;
+                                                project_changed = true;
+                                            }
+                                            for ln in &light_names {
+                                                if ui.selectable_label(link_to_light.as_deref() == Some(ln.as_str()), ln).clicked() {
+                                                    *link_to_light = Some(ln.clone());
+                                                    project_changed = true;
+                                                }
+                                            }
+                                        });
+                                    if link_to_light.is_some() {
+                                        ui.label(egui::RichText::new("↳ tracking selected light").small().color(colors::TEXT_SECONDARY));
+                                    }
+                                }
                                 crate::ui::effects_controls::draw_effect_type_ui(
                                     &mut effect.effect_type,
                                     ui,

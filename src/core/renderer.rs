@@ -1720,7 +1720,27 @@ impl WgpuRenderer {
                 }
 
 
-                let ep = evaluate_effects(&layer.effects, frame);
+                let mut ep = evaluate_effects(&layer.effects, frame);
+
+                // Lens flare light-link: track a comp light's projected position
+                if ep.flare_enabled == 1 {
+                    if let Some(light_name) = layer.effects.iter().find_map(|e| {
+                        match &e.effect_type {
+                            crate::core::timeline::EffectType::LensFlare { link_to_light: Some(n), .. } if e.enabled => Some(n.clone()),
+                            _ => None,
+                        }
+                    }) {
+                        if let Some(light) = comp.lights.iter().find(|l| l.name == light_name) {
+                            let lp = light.position.evaluate(frame);
+                            if let Some(sp) = crate::core::timeline::project_point_to_screen(
+                                &comp.active_camera, lp, comp.width as f32, comp.height as f32,
+                            ) {
+                                ep.flare_pos_x = sp[0];
+                                ep.flare_pos_y = sp[1];
+                            }
+                        }
+                    }
+                }
 
                 // Shape parameters for GPU SDFs: polygon/star point count, rectangle corner radius
                 let shape_params_eval: [f32; 4] = match &layer.layer_type {
