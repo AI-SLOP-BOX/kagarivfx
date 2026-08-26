@@ -2466,18 +2466,17 @@ pub fn render_frame_to_pixels(comp: &Composition, frame: u32, width: u32, height
             g = ng;
             b = nb;
         } else if lut_mode == 2 {
-            // ACEScg filmic tone mapping curve
-            let a = 2.51f32;
-            let b_val = 0.03f32;
-            let c = 2.43f32;
-            let d = 0.59f32;
-            let e = 0.14f32;
-            let denom_r = (r * (c * r + d) + e).max(1e-6);
-            let denom_g = (g * (c * g + d) + e).max(1e-6);
-            let denom_b = (b * (c * b + d) + e).max(1e-6);
-            r = (r * (a * r + b_val)) / denom_r;
-            g = (g * (a * g + b_val)) / denom_g;
-            b = (b * (a * b + b_val)) / denom_b;
+            // ACES preview pipeline: sRGB-decode → scene-linear exposure →
+            // RRT+ODT filmic tonemap → exact piecewise sRGB re-encode.
+            let lin = [
+                crate::core::color::srgb_to_linear_piecewise(r),
+                crate::core::color::srgb_to_linear_piecewise(g),
+                crate::core::color::srgb_to_linear_piecewise(b),
+            ];
+            let out = crate::core::aces::aces_preview_transform(lin);
+            r = out[0];
+            g = out[1];
+            b = out[2];
         }
 
         // Triangular-PDF dither (per-comp option): kills 8-bit banding from
@@ -3381,6 +3380,29 @@ mod shadow_tests {
         assert!((lifted[2] - 200.0).abs() < 0.01, "pz+cz lift: {}", lifted[2]);
         assert!((lifted[0] - 32.0).abs() < 0.01 && (lifted[1] - 32.0).abs() < 0.01,
             "child mapped around parent center: {:?}", lifted);
+    }
+
+    #[test]
+    fn test_lut_mode_2_aces_pipeline_matches_reference() {
+        let mut comp = Composition::new("aces".into(), "A".into(), 16, 16, 30, 30);
+        let mut s = Layer::new("s".into(), "S".into(), LayerType::Solid { color: [1.0, 1.0, 1.0, 1.0] }, 30);
+        s.transform.scale = Animatable::new_constant([100.0, 100.0]);
+        s.transform.position = Animatable::new_constant([8.0, 8.0]);
+        comp.layers.push(s);
+
+        let px = render_frame_to_pixels(&comp, 0, 16, 16, 0.0, 2);
+        let i = ((4 * 16 + 4) * 4) as usize;
+
+        // Reference: white → decode(1)=1 → tonemap ≈0.8019776 → encode
+        let expected = crate::core::aces::aces_preview_transform([1.0, 1.0, 1.0]);
+        let want = (expected[0] * 255.0).round().clamp(0.0, 255.0) as u8;
+        assert!(
+            (px[i] as i32 - want as i32).abs() <= 1,
+            "ACES preview white: got {} want {}",
+            px[i], want
+        );
+        // And it must differ from plain passthrough (255)
+        assert!(px[i] < 250, "tonemap must not be identity on white");
     }
 
     fn adjustment_test_comp(opacity: f32) -> Composition {
