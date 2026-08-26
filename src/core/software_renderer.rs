@@ -111,12 +111,29 @@ pub const MAX_PRECOMP_DEPTH: u32 = 16;
 
 thread_local! {
     static PRECOMP_DEPTH: std::cell::Cell<u32> = const { std::cell::Cell::new(0) };
+    /// Ids of pre-comps currently being rendered on this thread (cycle detection).
+    static PRECOMP_STACK: std::cell::RefCell<Vec<String>> = const { std::cell::RefCell::new(Vec::new()) };
 }
 
 /// Render a pre-comp by recursively rendering its layers into a pixel buffer.
 /// This is the core of pre-comp nesting support.
 pub fn render_precomp_layers(_comp: &Composition, precomp_comp: &Composition, frame: u32, width: u32, height: u32) -> Vec<u8> {
-    // Guard against cyclic or pathologically deep pre-comp nesting
+    // Cycle detection: a comp that (indirectly) contains itself returns empty
+    // immediately instead of burning the whole depth budget on garbage.
+    let cyclic = PRECOMP_STACK.with(|stack| {
+        let mut s = stack.borrow_mut();
+        if s.iter().any(|id| id == &precomp_comp.id) {
+            true
+        } else {
+            s.push(precomp_comp.id.clone());
+            false
+        }
+    });
+    if cyclic {
+        log::warn!("[Renderer] Pre-comp cycle detected at '{}' ; skipping nested render", precomp_comp.name);
+        return Vec::new();
+    }
+    // Guard against pathologically deep (but acyclic) pre-comp nesting
     let overflow = PRECOMP_DEPTH.with(|d| {
         let cur = d.get();
         if cur >= MAX_PRECOMP_DEPTH {
@@ -128,10 +145,12 @@ pub fn render_precomp_layers(_comp: &Composition, precomp_comp: &Composition, fr
     });
     if overflow {
         log::warn!("[Renderer] Pre-comp nesting depth limit exceeded; skipping nested render");
+        PRECOMP_STACK.with(|s| { s.borrow_mut().pop(); });
         return Vec::new();
     }
     let result = render_precomp_layers_inner(_comp, precomp_comp, frame, width, height);
     PRECOMP_DEPTH.with(|d| d.set(d.get().saturating_sub(1)));
+    PRECOMP_STACK.with(|s| { s.borrow_mut().pop(); });
     result
 }
 
@@ -2468,6 +2487,26 @@ mod tests {
         let pixels = render_frame_to_pixels(&comp, 0, 64, 64, 0.0, 0);
         let center = ((32 * 64 + 32) * 4) as usize;
         assert!(pixels[center] > 180, "PreComp should render nested shape (R={})", pixels[center]);
+    }
+
+    #[test]
+    fn test_precomp_self_reference_cycle_is_safe() {
+        // A comp whose pre-comp layer references ITSELF must render empty
+        // (cycle guard) instead of overflowing the stack.
+        let mut comp = Composition::new("selfref".to_string(), "Self".to_string(), 32, 32, 30, 30);
+        let mut inner = Composition::new("selfref_inner".to_string(), "Inner".to_string(), 32, 32, 30, 30);
+        // Inner contains a pre-comp pointing back at the outer comp id
+        let cyc = Layer::new("cyc".to_string(), "Cycle".to_string(), LayerType::PreComp { comp_id: "selfref".to_string() }, 30);
+        inner.layers.push(cyc);
+        comp.sub_compositions.push(inner);
+
+        let mut pc = Layer::new("pc".to_string(), "Loop".to_string(), LayerType::PreComp { comp_id: "selfref_inner".to_string() }, 30);
+        pc.transform.position = Animatable::new_constant([16.0, 16.0]);
+        comp.layers.push(pc);
+
+        // Must terminate and produce a valid buffer
+        let pixels = render_frame_to_pixels(&comp, 0, 32, 32, 0.0, 0);
+        assert_eq!(pixels.len(), (32 * 32 * 4) as usize);
     }
 
     #[test]
