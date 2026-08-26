@@ -211,6 +211,97 @@ pub fn build_shadow_map(comp: &Composition, frame: u32, width: u32, height: u32)
 }
 
 #[allow(clippy::too_many_arguments)]
+/// Expand every collapsed (`is_collapsed`) PreComp layer into its children,
+/// composing parent transform into each child so they render in the parent's
+/// coordinate space (AE "Collapse Transformations"). Recursive up to
+/// MAX_PRECOMP_DEPTH. When nothing is collapsed this is a cheap clone-free
+/// passthrough for callers that need an owned Composition anyway.
+pub fn flatten_collapsed(comp: &Composition, frame: u32) -> Composition {
+    flatten_collapsed_limited(comp, frame, 0)
+}
+
+fn flatten_collapsed_limited(comp: &Composition, frame: u32, depth: u32) -> Composition {
+    let mut out = comp.clone();
+    if depth >= MAX_PRECOMP_DEPTH {
+        return out;
+    }
+    let mut expanded: Vec<Layer> = Vec::with_capacity(out.layers.len());
+    let any_collapsed = out.layers.iter().any(|l| {
+        l.is_collapsed && matches!(l.layer_type, LayerType::PreComp { .. })
+    });
+    if !any_collapsed {
+        return out;
+    }
+    let layers_std = std::mem::take(&mut out.layers);
+    for layer in layers_std {
+        let (Some(sub_id), true) = (
+            match &layer.layer_type {
+                LayerType::PreComp { comp_id } => Some(comp_id.clone()),
+                _ => None,
+            },
+            layer.is_collapsed && layer.is_active(frame),
+        ) else {
+            expanded.push(layer);
+            continue;
+        };
+        let Some(sub) = comp.find_sub_comp(&sub_id) else {
+            expanded.push(layer);
+            continue;
+        };
+        // Parent transform (already resolves parenting chains)
+        let (ppos, pscale, prot, popa) = out.resolve_world_transform(&{
+            // resolve against ORIGINAL comp so chains above this layer hold
+            comp.layers.iter().find(|l| l.id == layer.id).cloned().unwrap_or(layer.clone())
+        }, frame);
+        let prad = prot.to_radians();
+        let (pc, ps) = (prad.cos(), prad.sin());
+        let pz = if layer.is_3d { layer.transform_3d.position.evaluate(frame)[2] } else { 0.0 };
+
+        // Compose: parent ∘ child (2D affine). Sub-comp coordinates are
+        // absolute within the sub frame; map them relative to the sub center
+        // onto the parent layer's center before scaling/rotating.
+        let sub_cx = sub.width as f32 * 0.5;
+        let sub_cy = sub.height as f32 * 0.5;
+        for mut child in sub.layers.clone() {
+            if !child.is_active(frame) || !child.visible {
+                continue;
+            }
+            let (cpos, cscale, crot, copa) = sub.resolve_world_transform(&child, frame);
+            // Compose: parent ∘ child (2D affine)
+            let sx = cscale[0] * pscale[0] / 100.0;
+            let sy = cscale[1] * pscale[1] / 100.0;
+            let rel_x = cpos[0] - sub_cx;
+            let rel_y = cpos[1] - sub_cy;
+            let lx = rel_x * pscale[0] / 100.0;
+            let ly = rel_y * pscale[1] / 100.0;
+            let npos = [ppos[0] + lx * pc - ly * ps, ppos[1] + lx * ps + ly * pc];
+            let nrot = prot + crot;
+            let nopa = (popa / 100.0) * (copa / 100.0) * 100.0;
+
+            child.transform.position = crate::core::property::Animatable::new_constant(npos);
+            child.transform.scale = crate::core::property::Animatable::new_constant([sx.max(0.001), sy.max(0.001)]);
+            child.transform.rotation = crate::core::property::Animatable::new_constant(nrot);
+            child.transform.opacity = crate::core::property::Animatable::new_constant(nopa);
+
+            // 3D continuity: lift child into parent space along Z
+            if layer.is_3d {
+                let cz = if child.is_3d { child.transform_3d.position.evaluate(frame)[2] } else { 0.0 };
+                child.is_3d = true;
+                child.transform_3d.position =
+                    crate::core::property::Animatable::new_constant([npos[0], npos[1], pz + cz]);
+            }
+            expanded.push(child);
+        }
+    }
+    out.layers = expanded;
+    // Recurse for nested collapsed precomps brought in by expansion
+    if out.layers.iter().any(|l| l.is_collapsed && matches!(l.layer_type, LayerType::PreComp { .. })) {
+        return flatten_collapsed_limited(&out, frame, depth + 1);
+    }
+    out
+}
+
+#[allow(clippy::too_many_arguments)]
 fn perspective_project_layer(
     cam_fov: f32,
     cam_pos: [f32; 3],
@@ -916,6 +1007,15 @@ fn render_cancelled() -> bool {
 }
 
 pub fn render_frame_to_pixels(comp: &Composition, frame: u32, width: u32, height: u32, exposure_ev: f32, lut_mode: u32) -> Vec<u8> {
+    // Collapse Transformations: expand collapsed precomps into parent space
+    // so their 3D children join the parent camera / z-sort / shadow passes.
+    let owned;
+    let comp = if comp.layers.iter().any(|l| l.is_collapsed && matches!(l.layer_type, LayerType::PreComp { .. })) {
+        owned = flatten_collapsed(comp, frame);
+        &owned
+    } else {
+        comp
+    };
     if !is_sane_render_size(width, height) {
         log::warn!(
             "[Renderer] Rejecting render with dimensions {}x{} (max {})",
@@ -3233,6 +3333,56 @@ mod shadow_tests {
         assert!(px[probe] >= 240, "no caster -> no shadow, R={}", px[probe]);
     }
 
+    #[test]
+    fn test_collapse_transformations_3d_z_continuity() {
+        // Draw-order rule (renderer sorts far-first): SMALLER effective z is
+        // nearer and paints last. Collapsed child lifts to pz+cz=200, nearer
+        // than green 350 -> child wins. Uncollapsed card sits at pz=400,
+        // farther than green -> green wins. Identical stack, opposite winner.
+        let build = |collapsed: bool| {
+            let mut comp = Composition::new("cz".into(), "Collapse3D".into(), 64, 64, 30, 30);
+            let mut green = Layer::new("green".into(), "G".into(), LayerType::Solid { color: [0.0, 1.0, 0.0, 1.0] }, 30);
+            green.is_3d = true;
+            green.transform.scale = Animatable::new_constant([100.0, 100.0]);
+            green.transform.position = Animatable::new_constant([32.0, 32.0]);
+            green.transform_3d.position = Animatable::new_constant([32.0, 32.0, 350.0]);
+            comp.layers.push(green);
+
+            let mut sub = Composition::new("subz".into(), "S".into(), 64, 64, 30, 30);
+            let mut blue_child = Layer::new("bc".into(), "B".into(), LayerType::Solid { color: [0.0, 0.0, 1.0, 1.0] }, 30);
+            blue_child.is_3d = true;
+            blue_child.transform.scale = Animatable::new_constant([100.0, 100.0]);
+            blue_child.transform.position = Animatable::new_constant([32.0, 32.0]);
+            blue_child.transform_3d.position = Animatable::new_constant([32.0, 32.0, -200.0]);
+            sub.layers.push(blue_child);
+            comp.sub_compositions.push(sub);
+
+            let mut pc = Layer::new("pc".into(), "P".into(), LayerType::PreComp { comp_id: "subz".into() }, 30);
+            pc.is_collapsed = collapsed;
+            pc.is_3d = true;
+            pc.transform.scale = Animatable::new_constant([100.0, 100.0]);
+            pc.transform.position = Animatable::new_constant([32.0, 32.0]);
+            pc.transform_3d.position = Animatable::new_constant([32.0, 32.0, 400.0]);
+            comp.layers.push(pc);
+            comp
+        };
+
+        let px_on = render_frame_to_pixels(&build(true), 0, 64, 64, 0.0, 0);
+        let i = ((16 * 64 + 16) * 4) as usize;
+        assert!(px_on[i + 2] > px_on[i + 1], "collapsed child (nearer) beats green: {:?}",
+            &px_on[i..i + 3]);
+
+        // Structural check: flattening composes parent z + child z and maps
+        // the child into parent space around the sub-comp center.
+        let flat = flatten_collapsed(&build(true), 0);
+        let red_child = flat.layers.iter().find(|l| l.name == "B").expect("expanded child");
+        assert!(red_child.is_3d);
+        let lifted = red_child.transform_3d.position.evaluate(0);
+        assert!((lifted[2] - 200.0).abs() < 0.01, "pz+cz lift: {}", lifted[2]);
+        assert!((lifted[0] - 32.0).abs() < 0.01 && (lifted[1] - 32.0).abs() < 0.01,
+            "child mapped around parent center: {:?}", lifted);
+    }
+
     fn adjustment_test_comp(opacity: f32) -> Composition {
         let mut comp = Composition::new("adj".into(), "Adj".into(), 32, 32, 30, 30);
         // Bottom: pure white solid covering the frame
@@ -3321,4 +3471,5 @@ mod shadow_tests {
         assert!(px[quad_corner] > 235, "round shadow must spare quad corner, R={}", px[quad_corner]);
     }
 }
+
 
