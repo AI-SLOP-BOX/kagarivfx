@@ -553,12 +553,21 @@ impl AfterEffectsApp {
     }
 
     pub fn begin_drag(&mut self, label: &'static str) {
-        if self.drag_tx.is_none() {
-            self.drag_tx = Some(DragTransaction::new(
-                self.history.current().clone(),
-                label,
-            ));
+        if self.drag_tx.is_some() {
+            // Unbalanced re-begin: seal the previous gesture as its own undo
+            // entry instead of letting one transaction swallow multiple
+            // gestures (which would produce a single giant undo step).
+            self.commit_drag();
         }
+        self.drag_tx = Some(DragTransaction::new(
+            self.history.current().clone(),
+            label,
+        ));
+    }
+
+    /// Whether a drag transaction is currently open.
+    pub fn drag_active(&self) -> bool {
+        self.drag_tx.is_some()
     }
 
     pub fn commit_drag(&mut self) {
@@ -586,6 +595,13 @@ impl eframe::App for AfterEffectsApp {
         // Re-assert the dark AE theme every frame (cheap, and guards against
         // eframe's system-theme following resetting visuals)
         crate::ui::theme::configure_ae_theme(ctx);
+
+        // Global drag safety net: any pointer release while a transaction is
+        // open seals it, even if the owning widget missed the release event
+        // (prevents permanently-open transactions from swallowing edits).
+        if self.drag_active() && ctx.input(|i| i.pointer.any_released()) {
+            self.commit_drag();
+        }
 
         // One-time startup check for crash recovery snapshots.
         // Only prompt if a "dirty exit" marker exists — written on startup and
