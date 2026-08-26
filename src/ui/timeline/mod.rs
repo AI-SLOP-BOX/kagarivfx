@@ -936,6 +936,21 @@ let type_icon = crate::ui::icons::layer_icon(&layer.layer_type);
                                                     ui.close_menu();
                                                 }
                                             }
+                                            ui.separator();
+                                            ui.label(egui::RichText::new("Motion Library (keyframe data)").strong().color(colors::TEXT_SECONDARY));
+                                            for preset in crate::core::animation_presets::all_presets() {
+                                                if ui.small_button(preset.name.clone()).on_hover_text(preset.description.clone()).clicked() {
+                                                    let ok = crate::core::animation_presets::apply_preset_to_layer(&preset, layer, cf);
+                                                    if ok {
+                                                        project_changed = true;
+                                                        app.toasts.info(format!("{} applied", preset.name));
+                                                    } else {
+                                                        app.toasts.error(format!("{}: not applicable here", preset.name));
+                                                    }
+                                                    ui.close_menu();
+                                                    ui.close_menu();
+                                                }
+                                            }
                                         });
                                         if !layer.paint_strokes.is_empty()
                                             && ui.button("🧹 Clear All Paint Strokes").clicked() {
