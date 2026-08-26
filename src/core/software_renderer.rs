@@ -387,8 +387,14 @@ fn render_precomp_layers_inner(_comp: &Composition, precomp_comp: &Composition, 
         if l_opacity < 0.001 { continue; }
 
         if matches!(layer.layer_type, LayerType::AdjustmentLayer) {
-            if !layer.effects.is_empty() {
-                crate::core::cpu_effects::apply_layer_effects(&mut buffer, width, height, &layer.effects, effective_frame, precomp_comp.fps);
+            if !layer.effects.is_empty() && l_opacity > 0.003 {
+                let mut adjusted = buffer.clone();
+                crate::core::cpu_effects::apply_layer_effects(&mut adjusted, width, height, &layer.effects, effective_frame, precomp_comp.fps);
+                for i in (0..buffer.len()).step_by(4) {
+                    for c in 0..3 {
+                        buffer[i + c] = (buffer[i + c] as f32 * (1.0 - l_opacity) + adjusted[i + c] as f32 * l_opacity).round().clamp(0.0, 255.0) as u8;
+                    }
+                }
             }
             continue;
         }
@@ -1110,12 +1116,32 @@ pub fn render_frame_to_pixels(comp: &Composition, frame: u32, width: u32, height
         let mask_feather = ld.mask_feather;
         let mask_inverted = ld.mask_inverted;
 
-        // Adjustment Layer: apply effects to the composite below
+        // Adjustment Layer: apply effects to the composite below, blended by
+        // this layer's opacity and clipped to its mask region when present.
         if matches!(layer.layer_type, LayerType::AdjustmentLayer) {
-            if !layer.effects.is_empty() {
-                crate::core::cpu_effects::apply_layer_effects(&mut buffer, width, height, &layer.effects, effective_frame, comp.fps);
+            if !layer.effects.is_empty() && l_opacity > 0.003 {
+                let mut adjusted = buffer.clone();
+                crate::core::cpu_effects::apply_layer_effects(&mut adjusted, width, height, &layer.effects, effective_frame, comp.fps);
+                let use_mask = !mask_vertices.is_empty();
+                for py in 0..height {
+                    for px in 0..width {
+                        if use_mask {
+                            let inside = point_in_polygon(px as f32 + 0.5, py as f32 + 0.5, mask_vertices);
+                            // Outside the kept side -> leave original untouched
+                            let outside_kept = if mask_inverted { inside } else { !inside };
+                            if outside_kept {
+                                continue;
+                            }
+                        }
+                        let i = ((py * width + px) * 4) as usize;
+                        for c in 0..3 {
+                            let o = buffer[i + c] as f32;
+                            let a = adjusted[i + c] as f32;
+                            buffer[i + c] = (o * (1.0 - l_opacity) + a * l_opacity).round().clamp(0.0, 255.0) as u8;
+                        }
+                    }
+                }
             }
-            // layer handled via sorted_idx;
             continue;
         }
 
@@ -3205,6 +3231,42 @@ mod shadow_tests {
         let px = render_frame_to_pixels(&comp, 0, 64, 64, 0.0, 0);
         let probe = ((46 * 64 + 44) * 4) as usize;
         assert!(px[probe] >= 240, "no caster -> no shadow, R={}", px[probe]);
+    }
+
+    fn adjustment_test_comp(opacity: f32) -> Composition {
+        let mut comp = Composition::new("adj".into(), "Adj".into(), 32, 32, 30, 30);
+        // Bottom: pure white solid covering the frame
+        let mut base = Layer::new("b1".into(), "Base".into(), LayerType::Solid { color: [1.0; 4] }, 30);
+        base.transform.scale = Animatable::new_constant([100.0, 100.0]);
+        base.transform.position = Animatable::new_constant([16.0, 16.0]);
+        comp.layers.push(base);
+        // Adjustment layer with Invert at the given opacity
+        let mut adj = Layer::new("a1".into(), "Adjust".into(), LayerType::AdjustmentLayer, 30);
+        adj.effects.push(crate::core::timeline::Effect {
+            id: "fx_inv".into(),
+            enabled: true,
+            name: "Invert".into(),
+            effect_type: crate::core::timeline::EffectType::Invert { invert_alpha: false },
+        });
+        adj.transform.opacity = Animatable::new_constant(opacity);
+        comp.layers.push(adj);
+        comp
+    }
+
+    #[test]
+    fn test_adjustment_layer_inverts_below_at_full_opacity() {
+        let comp = adjustment_test_comp(100.0);
+        let px = render_frame_to_pixels(&comp, 0, 32, 32, 0.0, 0);
+        let i = ((8 * 32 + 8) * 4) as usize;
+        assert!(px[i] < 20, "white inverted to near-black, R={}", px[i]);
+    }
+
+    #[test]
+    fn test_adjustment_layer_opacity_blends() {
+        let comp = adjustment_test_comp(50.0);
+        let px = render_frame_to_pixels(&comp, 0, 32, 32, 0.0, 0);
+        let i = ((8 * 32 + 8) * 4) as usize;
+        assert!(px[i] > 100 && px[i] < 160, "50% invert of white ~127, R={}", px[i]);
     }
 
     #[test]
