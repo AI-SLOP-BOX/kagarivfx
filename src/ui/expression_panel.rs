@@ -63,11 +63,60 @@ pub fn draw_expression_panel(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
     crate::ui::custom_widgets::ae_section_header(ui, "Script Editor", "💻");
 
     let mut script = current_expr.clone();
+
+    // ── IntelliSense: completion popup + live syntax indicator ──
+    let completions = completions_for(&script);
+    let cursor_prefix = script
+        .rsplit(|c: char| c.is_alphanumeric() || c == '_' || c == '.')
+        .next()
+        .unwrap_or("")
+        .to_string();
+    let suggestions: Vec<&str> = if cursor_prefix.len() >= 2 {
+        completions
+            .iter()
+            .copied()
+            .filter(|s| s.to_lowercase().contains(&cursor_prefix.to_lowercase()))
+            .take(6)
+            .collect()
+    } else {
+        Vec::new()
+    };
+
     ui.add(egui::TextEdit::multiline(&mut script)
         .code_editor()
         .desired_rows(6)
         .desired_width(ui.available_width())
     );
+
+    // Live syntax check (compile only — no execution)
+    let syntax_status: Result<(), String> = if script.trim().is_empty() {
+        Ok(())
+    } else {
+        crate::core::expression_engine::build_engine()
+            .compile(&script)
+            .map(|_| ())
+            .map_err(|e| e.to_string())
+    };
+    match &syntax_status {
+        Ok(()) => {}
+        Err(msg) => {
+            ui.label(egui::RichText::new(format!("✕ {}", msg)).small().color(colors::ACCENT_RED));
+        }
+    }
+
+    if !suggestions.is_empty() {
+        ui.horizontal_wrapped(|ui| {
+            for s in suggestions.iter() {
+                if ui
+                    .small_button(*s)
+                    .on_hover_text("Click to insert at end")
+                    .clicked()
+                {
+                    script.push_str(s);
+                }
+            }
+        });
+    }
 
     ui.add_space(4.0);
 
@@ -216,4 +265,20 @@ fn test_expression(script: &str, comp: &crate::core::timeline::Composition, curr
         }
         Err(e) => format!("Error: {}", e),
     }
+}
+
+
+/// Static suggestion dictionary covering the AE-style API surface.
+fn completions_for(script: &str) -> Vec<&'static str> {
+    let _ = script;
+    vec![
+        "thisComp", "thisLayer", "thisComp.layer(", "thisComp.layer(index)",
+        "transform.position", "transform.scale", "transform.rotation",
+        "transform.opacity", ".effect_param(\"Effect\", \"Param\")",
+        "wiggle(freq, amp)", "loopOut(\"cycle\")", "loopOut(\"pingpong\")",
+        "loopIn(\"cycle\")", "linear(t, a, b, c, d)", "ease(t, a, b, c, d)",
+        "random(min, max)", "time", "index", "value", "fps",
+        "toComp(x, y)", "fromComp(x, y)", "Math.sin(", "Math.cos(",
+        "Math.PI", "Math.abs(", "Math.min(", "Math.max(",
+    ]
 }
