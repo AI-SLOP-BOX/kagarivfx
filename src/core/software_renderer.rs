@@ -6,6 +6,157 @@ use rayon::prelude::*;
 /// Returns [(screen_x, screen_y, u, v)] for the 4 corners (TL, TR, BR, BL),
 /// or None if the layer is behind the camera.
 #[allow(clippy::too_many_arguments)]
+/// Project a world point through a light onto the z=0 receiver plane.
+/// Returns None when the ray is parallel to the plane or points away.
+fn project_point_to_plane_z0(
+    light: [f32; 3],
+    point: [f32; 3],
+) -> Option<[f32; 2]> {
+    let dz = point[2] - light[2];
+    if dz.abs() < 0.001 {
+        return None;
+    }
+    let t = -light[2] / dz;
+    if t <= 0.0 {
+        return None;
+    }
+    Some([light[0] + t * (point[0] - light[0]), light[1] + t * (point[1] - light[1])])
+}
+
+/// Fill a convex polygon into the density buffer (scanline-free point test
+/// over the bbox — quads are tiny relative to frame, this is plenty fast).
+fn accumulate_polygon_density(
+    density: &mut [f32],
+    width: u32,
+    height: u32,
+    pts: &[[f32; 2]],
+    amount: f32,
+) {
+    if pts.len() < 3 || amount <= 0.0 {
+        return;
+    }
+    let min_x = pts.iter().map(|p| p[0]).fold(f32::INFINITY, f32::min).floor().max(0.0) as u32;
+    let max_x = pts.iter().map(|p| p[0]).fold(f32::NEG_INFINITY, f32::max).ceil().min(width as f32) as u32;
+    let min_y = pts.iter().map(|p| p[1]).fold(f32::INFINITY, f32::min).floor().max(0.0) as u32;
+    let max_y = pts.iter().map(|p| p[1]).fold(f32::NEG_INFINITY, f32::max).ceil().min(height as f32) as u32;
+    for py in min_y..max_y.min(height) {
+        for px in min_x..max_x.min(width) {
+            if point_in_polygon(px as f32 + 0.5, py as f32 + 0.5, pts) {
+                let idx = (py * width + px) as usize;
+                if idx < density.len() {
+                    density[idx] = (density[idx] + amount).min(1.0);
+                }
+            }
+        }
+    }
+}
+
+fn box_blur_f32(buf: &mut [f32], width: u32, height: u32, radius: u32) {
+    if radius == 0 || buf.is_empty() || width == 0 || height == 0 {
+        return;
+    }
+    let w = width as usize;
+    let h = height as usize;
+    let r = radius as usize;
+    let mut tmp = vec![0.0f32; buf.len()];
+    // Horizontal
+    for y in 0..h {
+        let row = &buf[y * w..(y + 1) * w];
+        let out = &mut tmp[y * w..(y + 1) * w];
+        for (x, slot) in out.iter_mut().enumerate() {
+            let lo = x.saturating_sub(r);
+            let hi = (x + r + 1).min(w);
+            let s: f32 = row[lo..hi].iter().sum();
+            *slot = s / (hi - lo) as f32;
+        }
+    }
+    // Vertical
+    for x in 0..w {
+        for y in 0..h {
+            let lo = y.saturating_sub(r);
+            let hi = (y + r + 1).min(h);
+            let mut s = 0.0;
+            for yy in lo..hi {
+                s += tmp[yy * w + x];
+            }
+            buf[y * w + x] = s / (hi - lo) as f32;
+        }
+    }
+}
+
+/// Build the shadow density map (0=lit, 1=fully shadowed) at comp resolution:
+/// every shadow-casting light projects every casting layer's world quad onto
+/// the z=0 plane; densities accumulate and are softened by a small blur.
+pub fn build_shadow_map(comp: &Composition, frame: u32, width: u32, height: u32) -> Vec<f32> {
+    let n = (width.max(1) as usize) * (height.max(1) as usize);
+    let mut density = vec![0.0f32; n];
+
+    for light in &comp.lights {
+        if !light.casts_shadows || light.intensity <= 0.0 {
+            continue;
+        }
+        let lpos = light.position.evaluate(frame);
+        let strength = ((light.shadow_darkness / 100.0) * (light.intensity / 100.0)).clamp(0.0, 1.0);
+        if strength <= 0.003 {
+            continue;
+        }
+        for layer in &comp.layers {
+            if !layer.is_active(frame) || !layer.visible || !layer.material.cast_shadows {
+                continue;
+            }
+            // Layer quad corners in world space (position ± half extents,
+            // rotation applied via resolve transform's rotation about center)
+            let (pos, scale, rot, _op) = comp.resolve_world_transform(layer, frame);
+            let (base_w, base_h) = match &layer.layer_type {
+                LayerType::Solid { .. } | LayerType::Shape { .. } | LayerType::Image { .. }
+                | LayerType::Video { .. } | LayerType::Text { .. } | LayerType::PreComp { .. } => {
+                    (comp.width as f32, comp.height as f32)
+                }
+                _ => continue, // null/audio cast nothing
+            };
+            let hw = base_w * scale[0].abs() / 100.0 / 2.0;
+            let hh = base_h * scale[1].abs() / 100.0 / 2.0;
+            if hw < 0.5 || hh < 0.5 {
+                continue;
+            }
+            let lz = if layer.is_3d {
+                layer.transform_3d.position.evaluate(frame)[2]
+            } else {
+                0.0
+            };
+            // Coplanar with the receiver plane: its "shadow" lands exactly on
+            // itself and would blanket the frame — skip.
+            if lz.abs() < 1.0 {
+                continue;
+            }
+            let rad = rot.to_radians();
+            let (c, s) = (rad.cos(), rad.sin());
+            let corners_local = [[-hw, -hh], [hw, -hh], [hw, hh], [-hw, hh]];
+            let mut projected: Vec<[f32; 2]> = Vec::with_capacity(4);
+            for cl in corners_local {
+                let wx = pos[0] + cl[0] * c - cl[1] * s;
+                let wy = pos[1] + cl[0] * s + cl[1] * c;
+                let world = [wx, wy, lz];
+                match project_point_to_plane_z0(lpos, world) {
+                    Some(p) => projected.push(p),
+                    None => {
+                        projected.clear();
+                        break;
+                    }
+                }
+            }
+            if projected.len() == 4 {
+                accumulate_polygon_density(&mut density, width, height, &projected, strength);
+            }
+        }
+    }
+
+    // Soft penumbra
+    box_blur_f32(&mut density, width, height, ((width.max(height)) / 64).clamp(1, 8));
+    density
+}
+
+#[allow(clippy::too_many_arguments)]
 fn perspective_project_layer(
     cam_fov: f32,
     cam_pos: [f32; 3],
@@ -855,6 +1006,15 @@ pub fn render_frame_to_pixels(comp: &Composition, frame: u32, width: u32, height
 
     // ── Z-depth sort for 3D layers ──
     let has_3d = comp.layers.iter().any(|l| l.is_3d);
+    // Shadow map: orthographic-along-ray accumulation of caster quads onto
+    // the z=0 receiver plane, per shadow-casting light. Empty when no light
+    // casts shadows (zero cost for legacy comps).
+    let any_shadow_light = comp.lights.iter().any(|l| l.casts_shadows && l.intensity > 0.0);
+    let shadow_map: Vec<f32> = if any_shadow_light {
+        build_shadow_map(comp, frame, width, height)
+    } else {
+        Vec::new()
+    };
     let sorted_layer_indices: Vec<usize> = if has_3d {
         let mut indexed: Vec<(usize, f32)> = comp.layers.iter().enumerate().map(|(i, l)| {
             let z = if l.is_3d { l.transform_3d.position.evaluate(frame)[2] } else { 0.0 };
@@ -1702,6 +1862,31 @@ pub fn render_frame_to_pixels(comp: &Composition, frame: u32, width: u32, height
                 &mut layer_buf, bw, bh,
                 ld.dof_blur.round() as u32,
             );
+        }
+
+        // Phase 2.72: receive shadows — multiply layer pixels by the sampled
+        // shadow density at their world position (all receiver types).
+        if !shadow_map.is_empty() && bw > 0 && bh > 0 {
+            let sw = width.max(1) as usize;
+            let sh = height.max(1) as usize;
+            for ly in 0..bh {
+                let wy = (min_y + ly).min(sh as u32 - 1) as usize;
+                for lx in 0..bw {
+                    let wx = (min_x + lx).min(sw as u32 - 1) as usize;
+                    let occ = shadow_map[wy * sw + wx];
+                    if occ <= 0.003 {
+                        continue;
+                    }
+                    let lidx = ((ly * bw + lx) * 4) as usize;
+                    if lidx + 3 >= layer_buf.len() || layer_buf[lidx + 3] == 0 {
+                        continue;
+                    }
+                    let f = 1.0 - occ;
+                    layer_buf[lidx] = (layer_buf[lidx] as f32 * f) as u8;
+                    layer_buf[lidx + 1] = (layer_buf[lidx + 1] as f32 * f) as u8;
+                    layer_buf[lidx + 2] = (layer_buf[lidx + 2] as f32 * f) as u8;
+                }
+            }
         }
 
         // Phase 3: composite the (effect-processed) buffer over the frame.
@@ -2907,4 +3092,65 @@ mod watchdog_tests {
         let bright = (0..pixels.len()).step_by(4).filter(|&i| pixels[i] > 100).count();
         assert!(bright > 0, "cancel state must not leak into subsequent renders");
     }
+
 }
+
+#[cfg(test)]
+mod shadow_tests {
+    use super::*;
+    use crate::core::timeline::{Composition, Layer, LayerType};
+    use crate::core::property::Animatable;
+
+    fn shadow_test_comp(caster_casts: bool) -> Composition {
+        let mut comp = Composition::new("sh".into(), "Shadows".into(), 64, 64, 30, 30);
+        // Receiver: full-frame white solid (bottom of stack)
+        let mut recv = Layer::new("r1".into(), "Floor".into(), LayerType::Solid { color: [1.0; 4] }, 30);
+        recv.transform.scale = Animatable::new_constant([100.0, 100.0]);
+        recv.transform.position = Animatable::new_constant([32.0, 32.0]);
+        comp.layers.push(recv);
+
+        // Caster: red solid raised on +z between light and floor plane
+        let mut caster = Layer::new("c1".into(), "Card".into(), LayerType::Solid { color: [1.0, 0.0, 0.0, 1.0] }, 30);
+        caster.is_3d = true;
+        caster.material.cast_shadows = caster_casts;
+        caster.transform.scale = Animatable::new_constant([20.0, 20.0]);
+        caster.transform.position = Animatable::new_constant([36.0, 36.0]);
+        caster.transform_3d.position = Animatable::new_constant([36.0, 36.0, 100.0]);
+        comp.layers.push(caster);
+
+        // Point light upper-left of the caster, above the plane (+z), casting
+        let light = crate::core::timeline::Light3D {
+            id: "key".into(),
+            name: "Key".into(),
+            light_type: crate::core::timeline::LightType::Point,
+            color: [1.0, 1.0, 1.0, 1.0],
+            intensity: 100.0,
+            position: Animatable::new_constant([16.0, 16.0, 400.0]),
+            casts_shadows: true,
+            shadow_darkness: 90.0,
+        };
+        comp.lights = vec![light];
+        comp
+    }
+
+    #[test]
+    fn test_shadow_falls_away_from_light() {
+        let comp = shadow_test_comp(true);
+        let px = render_frame_to_pixels(&comp, 0, 64, 64, 0.0, 0);
+        // Projection of caster center through L(16,16,400) onto z=0:
+        // t=400/300 → (16+1.333*20, ...) ≈ (42.7, 42.7)
+        let in_shadow = ((46 * 64 + 44) * 4) as usize;
+        let lit_corner = ((8 * 64 + 8) * 4) as usize;
+        assert!(px[in_shadow] < 200, "shadow region darkened, R={}", px[in_shadow]);
+        assert!(px[lit_corner] >= 240, "far corner stays lit, R={}", px[lit_corner]);
+    }
+
+    #[test]
+    fn test_no_shadow_when_caster_disabled() {
+        let comp = shadow_test_comp(false);
+        let px = render_frame_to_pixels(&comp, 0, 64, 64, 0.0, 0);
+        let probe = ((46 * 64 + 44) * 4) as usize;
+        assert!(px[probe] >= 240, "no caster -> no shadow, R={}", px[probe]);
+    }
+}
+

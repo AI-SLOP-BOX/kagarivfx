@@ -717,7 +717,13 @@ pub struct MaterialOptions {
     pub emission: f32,
     /// Metalness for PBR-like shading (0.0 = dielectric, 1.0 = metal). Default 0.0.
     pub metalness: f32,
+    /// Whether this layer casts shadows from shadow-casting lights (AE material option).
+    #[serde(default = "default_true")]
+    pub cast_shadows: bool,
 }
+
+fn default_true() -> bool { true }
+fn default_shadow_darkness() -> f32 { 60.0 }
 
 impl Default for MaterialOptions {
     fn default() -> Self {
@@ -728,6 +734,7 @@ impl Default for MaterialOptions {
             specular_exponent: 32.0,
             emission: 0.0,
             metalness: 0.0,
+            cast_shadows: true,
         }
     }
 }
@@ -1787,6 +1794,9 @@ pub struct Light3D {
     pub intensity: f32,
     pub position: Animatable<[f32; 3]>,
     pub casts_shadows: bool,
+    /// Shadow opacity cast by this light (0–100, AE Shadow Darkness). Default 60.
+    #[serde(default = "default_shadow_darkness")]
+    pub shadow_darkness: f32,
 }
 
 impl Default for Light3D {
@@ -1799,6 +1809,7 @@ impl Default for Light3D {
             intensity: 100.0,
             position: Animatable::new_constant([960.0, 540.0, -500.0]),
             casts_shadows: true,
+            shadow_darkness: 60.0,
         }
     }
 }
