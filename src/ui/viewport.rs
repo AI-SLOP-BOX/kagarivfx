@@ -1326,24 +1326,30 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: u32) 
                 if app.motion_sketch_active && !app.motion_sketch_recording.is_empty() {
                     if let Some(sel_idx) = app.selected_layer_idx {
                         let recording = std::mem::take(&mut app.motion_sketch_recording);
+                        let recording_count = recording.len();
                         let comp_mut = app.history.current_mut().active_composition_mut();
                         if let Some(layer) = comp_mut.layers.get_mut(sel_idx) {
-                            // Build keyframes from the recorded buffer
-                            let mut kfs: Vec<crate::core::keyframe::Keyframe<[f32; 2]>> = recording
+                            // Douglas-Peucker path simplification to reduce redundant keyframes
+                            let simplified = douglas_peucker(&recording, 2.0);
+                            // Smooth the path with a 3-point moving average
+                            let smoothed = smooth_path(&simplified);
+                            // Assign bezier easing based on velocity changes
+                            let mut kfs: Vec<crate::core::keyframe::Keyframe<[f32; 2]>> = smoothed
                                 .into_iter()
                                 .map(|(frame, pos)| {
                                     crate::core::keyframe::Keyframe::new(frame, pos, crate::core::keyframe::InterpolationType::Bezier {
-                                        outgoing: crate::core::keyframe::BezierControlPoint { influence: 33.0, speed: 100.0 },
-                                        incoming: crate::core::keyframe::BezierControlPoint { influence: 33.0, speed: 0.0 },
+                                        outgoing: crate::core::keyframe::BezierControlPoint { influence: 40.0, speed: 80.0 },
+                                        incoming: crate::core::keyframe::BezierControlPoint { influence: 40.0, speed: 0.0 },
                                         custom_bezier: Some([0.25, 0.1, 0.25, 1.0]),
                                     })
                                 })
                                 .collect();
                             // Remove duplicate frames (keep last value)
                             kfs.dedup_by_key(|kf| kf.frame);
+                            let count = kfs.len();
                             layer.transform.position = crate::core::property::Animatable::Animated(kfs);
                             crate::core::frame_cache::bump_version();
-                            app.toasts.info(format!("Motion Sketch: {} keyframes recorded", layer.transform.position.keyframes().map(|k| k.len()).unwrap_or(0)));
+                            app.toasts.info(format!("Motion Sketch: {} keyframes (from {} raw)", count, recording_count));
                         }
                     }
                 }
@@ -1654,4 +1660,65 @@ fn draw_inline_text_editor(app: &mut AfterEffectsApp, ctx: &egui::Context, _curr
         ctx.data_mut(|d| d.remove::<String>(buf_id));
         app.inline_text_edit_layer = None;
     }
+}
+
+/// Douglas-Peucker path simplification for motion sketch recordings.
+fn douglas_peucker(points: &[(u32, [f32; 2])], epsilon: f32) -> Vec<(u32, [f32; 2])> {
+    if points.len() <= 2 {
+        return points.to_vec();
+    }
+    let mut max_dist = 0.0f32;
+    let mut max_idx = 0;
+    let first = points[0].1;
+    let last = points[points.len() - 1].1;
+    for (i, &(_, pt)) in points[1..points.len() - 1].iter().enumerate() {
+        let d = point_to_line_distance(pt, first, last);
+        if d > max_dist {
+            max_dist = d;
+            max_idx = i + 1;
+        }
+    }
+    if max_dist > epsilon {
+        let left = douglas_peucker(&points[..=max_idx], epsilon);
+        let right = douglas_peucker(&points[max_idx..], epsilon);
+        let mut result = left;
+        result.extend_from_slice(&right[1..]);
+        result
+    } else {
+        vec![points[0], points[points.len() - 1]]
+    }
+}
+
+fn point_to_line_distance(pt: [f32; 2], line_start: [f32; 2], line_end: [f32; 2]) -> f32 {
+    let dx = line_end[0] - line_start[0];
+    let dy = line_end[1] - line_start[1];
+    let len_sq = dx * dx + dy * dy;
+    if len_sq < 1e-10 {
+        let ex = pt[0] - line_start[0];
+        let ey = pt[1] - line_start[1];
+        return (ex * ex + ey * ey).sqrt();
+    }
+    let t = ((pt[0] - line_start[0]) * dx + (pt[1] - line_start[1]) * dy) / len_sq;
+    let t = t.clamp(0.0, 1.0);
+    let proj_x = line_start[0] + t * dx;
+    let proj_y = line_start[1] + t * dy;
+    let ex = pt[0] - proj_x;
+    let ey = pt[1] - proj_y;
+    (ex * ex + ey * ey).sqrt()
+}
+
+/// 3-point moving average smooth for motion sketch paths.
+fn smooth_path(points: &[(u32, [f32; 2])]) -> Vec<(u32, [f32; 2])> {
+    if points.len() <= 2 {
+        return points.to_vec();
+    }
+    let mut result = Vec::with_capacity(points.len());
+    result.push(points[0]);
+    for window in points.windows(3) {
+        let avg_x = (window[0].1[0] + window[1].1[0] + window[2].1[0]) / 3.0;
+        let avg_y = (window[0].1[1] + window[1].1[1] + window[2].1[1]) / 3.0;
+        result.push((window[1].0, [avg_x, avg_y]));
+    }
+    result.push(*points.last().expect("points non-empty"));
+    result
 }

@@ -555,6 +555,99 @@ pub fn draw_layer_type_specs(
                         }
                     });
                 });
+
+                // ── Advanced Animator Stack (multi-animator composition) ──
+                ui.separator();
+                ui.collapsing("Animator Stack", |ui| {
+                    if layer.text_animator_stack.is_none() {
+                        layer.text_animator_stack = Some(crate::core::text_animator_advanced::AnimatorStack::default());
+                    }
+                    let stack = layer.text_animator_stack.as_mut().expect("text_animator_stack");
+                    let mut pending_remove: Option<usize> = None;
+
+                    for (ai, adv) in stack.animators.iter_mut().enumerate() {
+                        ui.group(|ui| {
+                            ui.horizontal(|ui| {
+                                ui.checkbox(&mut adv.enabled, "");
+                                ui.label(egui::RichText::new(format!("Animator {}", ai + 1)).strong());
+                                if ui.small_button("✕").on_hover_text("Remove").clicked() {
+                                    pending_remove = Some(ai);
+                                }
+                            });
+                            ui.horizontal(|ui| {
+                                ui.label("Unit:");
+                                egui::ComboBox::from_id_salt(format!("adv_unit_{}_{}", layer.id, ai))
+                                    .selected_text(format!("{:?}", adv.unit))
+                                    .show_ui(ui, |ui| {
+                                        use crate::core::text_animator_advanced::SelectorUnit;
+                                        for u in [SelectorUnit::Characters, SelectorUnit::Words, SelectorUnit::Lines] {
+                                            ui.selectable_value(&mut adv.unit, u, format!("{:?}", u));
+                                        }
+                                    });
+                            });
+                            ui.horizontal(|ui| {
+                                ui.label("Range:");
+                                ui.add(egui::DragValue::new(&mut adv.selector.start).speed(0.5).suffix("%").range(0.0..=100.0));
+                                ui.label("→");
+                                ui.add(egui::DragValue::new(&mut adv.selector.end).speed(0.5).suffix("%").range(0.0..=100.0));
+                            });
+                            ui.horizontal(|ui| {
+                                ui.label("Shape:");
+                                egui::ComboBox::from_id_salt(format!("adv_shape_{}_{}", layer.id, ai))
+                                    .selected_text(format!("{:?}", adv.selector.shape))
+                                    .show_ui(ui, |ui| {
+                                        use crate::core::text_animator::SelectorShape;
+                                        for s in [SelectorShape::Square, SelectorShape::RampUp, SelectorShape::RampDown, SelectorShape::Triangle, SelectorShape::Round, SelectorShape::Smooth] {
+                                            ui.selectable_value(&mut adv.selector.shape, s, format!("{:?}", s));
+                                        }
+                                    });
+                            });
+                            ui.horizontal(|ui| {
+                                ui.label("Position:");
+                                ui.add(egui::DragValue::new(&mut adv.position[0]).speed(0.5).prefix("X: "));
+                                ui.add(egui::DragValue::new(&mut adv.position[1]).speed(0.5).prefix("Y: "));
+                            });
+                            ui.horizontal(|ui| {
+                                ui.label("Scale:");
+                                ui.add(egui::DragValue::new(&mut adv.scale[0]).speed(0.5).prefix("X: ").range(0.0..=10.0));
+                                ui.add(egui::DragValue::new(&mut adv.scale[1]).speed(0.5).prefix("Y: ").range(0.0..=10.0));
+                            });
+                            ui.horizontal(|ui| {
+                                ui.label("Opacity:");
+                                ui.add(egui::Slider::new(&mut adv.opacity, 0.0..=1.0));
+                                ui.label("Rotation:");
+                                ui.add(egui::DragValue::new(&mut adv.rotation).speed(1.0).suffix("°"));
+                            });
+                            ui.horizontal(|ui| {
+                                ui.label("Blur:");
+                                ui.add(egui::DragValue::new(&mut adv.blur).speed(0.5).range(0.0..=50.0));
+                                ui.label("Tracking:");
+                                ui.add(egui::DragValue::new(&mut adv.tracking).speed(0.5));
+                            });
+                            ui.horizontal(|ui| {
+                                ui.label("Skew:");
+                                ui.add(egui::DragValue::new(&mut adv.advanced.skew).speed(0.5).suffix("°"));
+                                ui.label("Axis:");
+                                ui.add(egui::DragValue::new(&mut adv.advanced.skew_axis).speed(0.5).suffix("°"));
+                            });
+                            ui.horizontal(|ui| {
+                                ui.label("Char Offset:");
+                                ui.add(egui::DragValue::new(&mut adv.advanced.character_offset).speed(1));
+                            });
+                        });
+                        ui.add_space(2.0);
+                    }
+
+                    if let Some(ai) = pending_remove {
+                        stack.animators.remove(ai);
+                        *project_changed = true;
+                    }
+
+                    if ui.small_button("+ Add Animator").clicked() {
+                        stack.animators.push(crate::core::text_animator_advanced::TextAnimatorAdvanced::default());
+                        *project_changed = true;
+                    }
+                });
             }
             LayerType::Shape { shape_type, color, stroke_color, stroke_width, .. } => {
                 ui.label(format!("Shape: {:?}", shape_type));
