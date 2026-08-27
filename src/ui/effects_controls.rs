@@ -1227,6 +1227,73 @@ pub fn get_all_effect_presets() -> &'static [EffectPreset] {
                 enabled: true,
             },
         },
+        EffectPreset {
+            name: "Bass & Treble",
+            button_label: "+ Bass & Treble",
+            search_key: "bass treble eq equalizer bass boost treble cut crossover",
+            id_prefix: "btreble",
+            create_fn: |idx| Effect {
+                id: format!("btreble_{}", idx),
+                name: "Bass & Treble".to_string(),
+                effect_type: EffectType::BassTreble {
+                    bass_gain: Animatable::new_constant(0.0),
+                    treble_gain: Animatable::new_constant(0.0),
+                    crossover_freq: Animatable::new_constant(300.0),
+                },
+                enabled: true,
+            },
+        },
+        EffectPreset {
+            name: "Flanger",
+            button_label: "+ Flanger",
+            search_key: "flanger delay modulation lfo sweeping comb",
+            id_prefix: "flanger",
+            create_fn: |idx| Effect {
+                id: format!("flanger_{}", idx),
+                name: "Flanger".to_string(),
+                effect_type: EffectType::Flanger {
+                    max_delay_ms: Animatable::new_constant(5.0),
+                    lfo_rate: Animatable::new_constant(0.5),
+                    feedback: Animatable::new_constant(0.5),
+                    wet_dry: Animatable::new_constant(0.5),
+                },
+                enabled: true,
+            },
+        },
+        EffectPreset {
+            name: "Chorus",
+            button_label: "+ Chorus",
+            search_key: "chorus detune multi-voice doubling modulation",
+            id_prefix: "chorus",
+            create_fn: |idx| Effect {
+                id: format!("chorus_{}", idx),
+                name: "Chorus".to_string(),
+                effect_type: EffectType::Chorus {
+                    delay_ms: Animatable::new_constant(15.0),
+                    depth_ms: Animatable::new_constant(5.0),
+                    rate_hz: Animatable::new_constant(1.0),
+                    voices: Animatable::new_constant(3.0),
+                    feedback: Animatable::new_constant(0.3),
+                },
+                enabled: true,
+            },
+        },
+        EffectPreset {
+            name: "Parametric EQ",
+            button_label: "+ Parametric EQ",
+            search_key: "parametric eq equalizer bell filter frequency resonance q",
+            id_prefix: "peq",
+            create_fn: |idx| Effect {
+                id: format!("peq_{}", idx),
+                name: "Parametric EQ".to_string(),
+                effect_type: EffectType::ParametricEQ {
+                    freq_hz: Animatable::new_constant(1000.0),
+                    gain_db: Animatable::new_constant(0.0),
+                    q_factor: Animatable::new_constant(1.0),
+                },
+                enabled: true,
+            },
+        },
     ]
 }
 

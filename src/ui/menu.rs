@@ -1279,6 +1279,41 @@ fn apply_effect_by_name(app: &mut crate::AfterEffectsApp, effect_name: &str) {
                         iris_linked: true,
                     }, enabled: true,
                 },
+                "Bass & Treble" => crate::core::timeline::Effect {
+                    id: format!("bass_treble_{}", len), name: "Bass & Treble".to_string(),
+                    effect_type: crate::core::timeline::EffectType::BassTreble {
+                        bass_gain: crate::core::property::Animatable::new_constant(0.0),
+                        treble_gain: crate::core::property::Animatable::new_constant(0.0),
+                        crossover_freq: crate::core::property::Animatable::new_constant(300.0),
+                    }, enabled: true,
+                },
+                "Flanger" => crate::core::timeline::Effect {
+                    id: format!("flanger_{}", len), name: "Flanger".to_string(),
+                    effect_type: crate::core::timeline::EffectType::Flanger {
+                        max_delay_ms: crate::core::property::Animatable::new_constant(5.0),
+                        lfo_rate: crate::core::property::Animatable::new_constant(0.5),
+                        feedback: crate::core::property::Animatable::new_constant(0.5),
+                        wet_dry: crate::core::property::Animatable::new_constant(0.5),
+                    }, enabled: true,
+                },
+                "Chorus" => crate::core::timeline::Effect {
+                    id: format!("chorus_{}", len), name: "Chorus".to_string(),
+                    effect_type: crate::core::timeline::EffectType::Chorus {
+                        delay_ms: crate::core::property::Animatable::new_constant(15.0),
+                        depth_ms: crate::core::property::Animatable::new_constant(5.0),
+                        rate_hz: crate::core::property::Animatable::new_constant(1.0),
+                        voices: crate::core::property::Animatable::new_constant(3.0),
+                        feedback: crate::core::property::Animatable::new_constant(0.3),
+                    }, enabled: true,
+                },
+                "Parametric EQ" => crate::core::timeline::Effect {
+                    id: format!("peq_{}", len), name: "Parametric EQ".to_string(),
+                    effect_type: crate::core::timeline::EffectType::ParametricEQ {
+                        freq_hz: crate::core::property::Animatable::new_constant(1000.0),
+                        gain_db: crate::core::property::Animatable::new_constant(0.0),
+                        q_factor: crate::core::property::Animatable::new_constant(1.0),
+                    }, enabled: true,
+                },
                 _ => return,
             };
             layer.effects.push(effect);
