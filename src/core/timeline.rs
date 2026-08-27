@@ -1283,6 +1283,48 @@ pub enum EffectType {
         /// Operation: 0=Add, 1=Subtract, 2=Intersect, 3=Exclude.
         operation: Animatable<f32>,
     },
+    /// Two-band bass/treble equalizer.
+    BassTreble {
+        /// Bass gain in dB (-24..+24).
+        bass_gain: Animatable<f32>,
+        /// Treble gain in dB (-24..+24).
+        treble_gain: Animatable<f32>,
+        /// Crossover frequency in Hz (80..1200).
+        crossover_freq: Animatable<f32>,
+    },
+    /// Flanger audio effect (modulated delay).
+    Flanger {
+        /// Maximum delay in ms (1..10).
+        max_delay_ms: Animatable<f32>,
+        /// LFO rate in Hz (0.1..10).
+        lfo_rate: Animatable<f32>,
+        /// Feedback amount (0.0..0.95).
+        feedback: Animatable<f32>,
+        /// Wet/dry mix (0..1).
+        wet_dry: Animatable<f32>,
+    },
+    /// Chorus audio effect (multiple detuned delays).
+    Chorus {
+        /// Delay time in ms (1..30).
+        delay_ms: Animatable<f32>,
+        /// Modulation depth in ms (0.5..10).
+        depth_ms: Animatable<f32>,
+        /// LFO rate in Hz (0.1..6).
+        rate_hz: Animatable<f32>,
+        /// Number of voices (2..8).
+        voices: Animatable<f32>,
+        /// Feedback (0.0..0.9).
+        feedback: Animatable<f32>,
+    },
+    /// Parametric equalizer (2-band bell filter).
+    ParametricEQ {
+        /// Center frequency in Hz (60..18000).
+        freq_hz: Animatable<f32>,
+        /// Gain in dB (-24..+24).
+        gain_db: Animatable<f32>,
+        /// Q factor (0.5..12).
+        q_factor: Animatable<f32>,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -1578,6 +1620,14 @@ pub struct Layer {
     // ── Layer Constraints System (Pinning) ──
     #[serde(default)]
     pub constraints: crate::core::layer_constraints::LayerConstraints,
+
+    // ── Essential Properties (Master Properties) ──
+    #[serde(default)]
+    pub essential_properties: Vec<crate::core::essential_properties::EssentialProperty>,
+
+    // ── Proxy (low-res preview) ──
+    #[serde(default)]
+    pub proxy: crate::core::proxy::LayerProxy,
 }
 
 /// A brush stroke painted onto a layer. Points live in layer-local space
@@ -1657,6 +1707,8 @@ impl Layer {
             trim_paths: None,
             shape_repeater: None,
             constraints: crate::core::layer_constraints::LayerConstraints::default(),
+            essential_properties: vec![],
+            proxy: crate::core::proxy::LayerProxy::default(),
         }
     }
 
@@ -1868,6 +1920,9 @@ pub struct Composition {
     /// Off for legacy projects/tests to preserve byte-exact renders.
     #[serde(default)]
     pub dither_output: bool,
+    /// Composition-level proxy settings for preview speed.
+    #[serde(default)]
+    pub comp_proxy: crate::core::proxy::CompProxy,
 }
 
 impl Composition {
@@ -1898,6 +1953,7 @@ impl Composition {
             blend_linear: false,
 
 dither_output: false,
+            comp_proxy: crate::core::proxy::CompProxy::default(),
         }
     }
 

@@ -287,9 +287,14 @@ impl RenderEffectPlugin for EnumEffectPlugin {
             EffectType::DropdownControl { .. } => "Dropdown Control",
             EffectType::Point3DControl { .. } => "3D Point Control",
             EffectType::LensFlare { .. } => "Lens Flare",
+            EffectType::AudioSpectrum { .. } => "Audio Spectrum",
             EffectType::Letterbox { .. } => "Letterbox (Cinema Bars)",
             EffectType::CustomShader { .. } => "Custom Shader (WGSL)",
             EffectType::MergePaths { .. } => "Merge Paths",
+            EffectType::BassTreble { .. } => "Bass & Treble",
+            EffectType::Flanger { .. } => "Flanger",
+            EffectType::Chorus { .. } => "Chorus",
+            EffectType::ParametricEQ { .. } => "Parametric EQ",
         }
     }
 
@@ -396,9 +401,14 @@ impl RenderEffectPlugin for EnumEffectPlugin {
             EffectType::DropdownControl { .. } => "dropdown_control",
             EffectType::Point3DControl { .. } => "point3d_control",
             EffectType::LensFlare { .. } => "lens_flare",
+            EffectType::AudioSpectrum { .. } => "audio_spectrum",
             EffectType::Letterbox { .. } => "letterbox",
             EffectType::CustomShader { .. } => "custom_shader",
             EffectType::MergePaths { .. } => "merge_paths",
+            EffectType::BassTreble { .. } => "bass_treble",
+            EffectType::Flanger { .. } => "flanger",
+            EffectType::Chorus { .. } => "chorus",
+            EffectType::ParametricEQ { .. } => "parametric_eq",
         }
     }
 
@@ -423,7 +433,7 @@ impl RenderEffectPlugin for EnumEffectPlugin {
                 params.shadow_distance = distance.evaluate(frame);
                 params.shadow_softness = softness.evaluate(frame);
             }
-            EffectType::ChromaticAberration { shift_r, shift_b, edge_falloff } => {
+            EffectType::ChromaticAberration { shift_r, shift_b, edge_falloff, iris_linked: _ } => {
                 params.chromatic_enabled = 1;
                 params.chromatic_shift_r = shift_r.evaluate(frame);
                 params.chromatic_shift_b = shift_b.evaluate(frame);
@@ -495,7 +505,7 @@ impl RenderEffectPlugin for EnumEffectPlugin {
                 params.motionblur_shutter = shutter_angle.evaluate(frame) / 360.0;
                 params.motionblur_samples = *samples;
             }
-            EffectType::LensFlare { enabled, position_x, position_y, intensity, threshold, color } => {
+            EffectType::LensFlare { enabled, position_x, position_y, intensity, threshold, color, .. } => {
                 params.flare_enabled = if enabled.evaluate(frame) > 0.5 { 1 } else { 0 };
                 params.flare_pos_x = position_x.evaluate(frame);
                 params.flare_pos_y = position_y.evaluate(frame);

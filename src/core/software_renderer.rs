@@ -831,6 +831,28 @@ fn sdf_polygon_points(x: f32, y: f32, points: &[(f32, f32)]) -> f32 {
     if wn != 0 { -dist } else { dist }
 }
 
+/// Boolean SDF operations for Merge Paths.
+#[allow(dead_code)]
+fn sdf_boolean_union(d1: f32, d2: f32) -> f32 { d1.min(d2) }
+#[allow(dead_code)]
+fn sdf_boolean_subtract(d1: f32, d2: f32) -> f32 { d1.max(-d2) }
+#[allow(dead_code)]
+fn sdf_boolean_intersect(d1: f32, d2: f32) -> f32 { d1.max(d2) }
+#[allow(dead_code)]
+fn sdf_boolean_exclude(d1: f32, d2: f32) -> f32 { d1.abs().min(d2.abs()).copysign(d1) }
+
+#[allow(dead_code)]
+fn sdf_boolean_op(op: u32, d1: f32, d2: f32) -> f32 {
+    match op {
+        0 => sdf_boolean_union(d1, d2),
+        1 => sdf_boolean_subtract(d1, d2),
+        2 => sdf_boolean_intersect(d1, d2),
+        3 => sdf_boolean_exclude(d1, d2),
+        _ => sdf_boolean_union(d1, d2),
+    }
+}
+
+/// Render queue progress callback type.
 /// Rasterize a shape layer into the layer buffer using SDF.
 /// Returns true if any pixels were written.
 #[allow(clippy::too_many_arguments)]
