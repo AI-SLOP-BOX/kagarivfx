@@ -34,6 +34,8 @@ pub enum VideoCodec {
     ProRes422,
     /// Apple ProRes 4444 — highest quality, alpha channel support
     ProRes4444,
+    /// HEVC / H.265 — next-gen compression, smaller files than H.264
+    H265,
     /// GIF animation
     Gif,
 }

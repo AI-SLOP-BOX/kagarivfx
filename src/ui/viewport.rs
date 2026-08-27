@@ -1334,7 +1334,7 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: u32) 
                             // Smooth the path with a 3-point moving average
                             let smoothed = smooth_path(&simplified);
                             // Assign bezier easing based on velocity changes
-                            let mut kfs: Vec<crate::core::keyframe::Keyframe<[f32; 2]>> = smoothed
+                            let mut kfs: Vec<crate::core::keyframe::Keyframe<[f32; 2]>> = final_smoothed
                                 .into_iter()
                                 .map(|(frame, pos)| {
                                     crate::core::keyframe::Keyframe::new(frame, pos, crate::core::keyframe::InterpolationType::Bezier {
