@@ -291,6 +291,8 @@ fn apply_one_ctx(
         EffectType::ColorGradeLUT { lut_path, intensity } => {
             let intensity = intensity.evaluate(frame).clamp(0.0, 1.0);
             if !lut_path.is_empty() && intensity > 0.0 {
+                use std::cell::RefCell;
+                thread_local! { static LUT_CACHE: RefCell<crate::core::lut_cache::LutCache> = RefCell::new(crate::core::lut_cache::LutCache::new(512)); }
                 if let Ok(text) = std::fs::read_to_string(lut_path) {
                     if let Ok(lut) = crate::core::ocio_color::Lut3D::parse_cube(&text) {
                         for p in pixels.chunks_exact_mut(4) {

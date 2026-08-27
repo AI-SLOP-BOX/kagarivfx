@@ -452,12 +452,27 @@ pub fn validate_script(engine: &Engine, script: &str) -> Result<(), String> {
 }
 
 /// Snapshot of a layer's transform at a frame, exposed to Rhai as a custom type.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
+pub struct MaskSnapshot {
+    pub mask_shape: Vec<[f64; 2]>,
+    pub mask_opacity: f64,
+    pub mask_feather: f64,
+    pub mask_inverted: bool,
+}
+
+#[derive(Clone, Debug)]
 pub struct LayerSnapshot {
     pub position: [f64; 2],
     pub scale: [f64; 2],
     pub rotation: f64,
     pub opacity: f64,
+    pub anchor_point: [f64; 2],
+    pub rotation_3d: [f64; 3],
+    pub position_3d: [f64; 3],
+    pub time_remap: Option<f64>,
+    pub start_time: f64,
+    pub stretch: f64,
+    pub masks: std::collections::HashMap<String, MaskSnapshot>,
     /// Effect name -> param label -> evaluated value at the snapshot frame.
     /// Vec2 params are stored as "X"/"Y" entries.
     pub effects: std::collections::HashMap<String, std::collections::HashMap<String, f64>>,
@@ -486,6 +501,13 @@ impl CompSnapshot {
             scale: [100.0, 100.0],
             rotation: 0.0,
             opacity: 100.0,
+            anchor_point: [0.0; 2],
+            rotation_3d: [0.0; 3],
+            position_3d: [0.0; 3],
+            time_remap: None,
+            start_time: 0.0,
+            stretch: 1.0,
+            masks: Default::default(),
             effects: Default::default(),
         })
     }
@@ -554,6 +576,18 @@ fn register_comp_types(engine: &mut Engine) {    engine.register_type::<LayerSna
         })
         .register_get("rotation", |l: &mut LayerSnapshot| l.rotation)
         .register_get("opacity", |l: &mut LayerSnapshot| l.opacity)
+        .register_get("anchorPoint", |l: &mut LayerSnapshot| -> Array {
+            vec![Dynamic::from_float(l.anchor_point[0]), Dynamic::from_float(l.anchor_point[1])]
+        })
+        .register_get("rotationX", |l: &mut LayerSnapshot| l.rotation_3d[0])
+        .register_get("rotationY", |l: &mut LayerSnapshot| l.rotation_3d[1])
+        .register_get("rotationZ", |l: &mut LayerSnapshot| l.rotation_3d[2])
+        .register_get("orientation", |l: &mut LayerSnapshot| -> Array {
+            vec![Dynamic::from_float(l.rotation_3d[0]), Dynamic::from_float(l.rotation_3d[1]), Dynamic::from_float(l.rotation_3d[2])]
+        })
+        .register_get("timeRemap", |l: &mut LayerSnapshot| l.time_remap.unwrap_or(0.0))
+        .register_get("startTime", |l: &mut LayerSnapshot| l.start_time)
+        .register_get("stretch", |l: &mut LayerSnapshot| l.stretch)
         .register_indexer_get(|l: &mut LayerSnapshot, idx: i64| -> Dynamic {
             let arr = [l.position[0], l.position[1]];
             match idx {
@@ -670,6 +704,10 @@ fn build_comp_snapshot_uncached(comp: &crate::core::timeline::Composition, frame
                 fx_map.insert(eff.name.clone(), params);
             }
         }
+        let pos3d = l.transform_3d.position.evaluate(frame);
+        let rot3d = l.transform_3d.rotation.evaluate(frame);
+        let anchor3d = [0.0, 0.0, 0.0];
+        let time_remap_f = l.time_remap.as_ref().map(|t| t.evaluate(frame) as f64).unwrap_or(0.0);
         let snap = LayerSnapshot {
             position: [
                 l.transform.eval_position(frame, fps)[0] as f64,
@@ -681,6 +719,13 @@ fn build_comp_snapshot_uncached(comp: &crate::core::timeline::Composition, frame
             ],
             rotation: l.transform.eval_rotation(frame, fps) as f64,
             opacity: l.transform.eval_opacity(frame, fps) as f64,
+            anchor_point: [anchor3d[0] as f64, anchor3d[1] as f64],
+            rotation_3d: [rot3d[0] as f64, rot3d[1] as f64, rot3d[2] as f64],
+            position_3d: [pos3d[0] as f64, pos3d[1] as f64, pos3d[2] as f64],
+            time_remap: Some(time_remap_f),
+            start_time: l.in_frame as f64,
+            stretch: 1.0,
+            masks: std::collections::HashMap::new(),
             effects: fx_map,
         };
         layers.insert(l.name.clone(), snap.clone());
