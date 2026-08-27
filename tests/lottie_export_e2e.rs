@@ -29,6 +29,7 @@ fn project_with_layers(layer_count: usize, bg: [f32; 4]) -> Project {
         compositions: vec![comp],
         active_composition_idx: 0,
         assets: Vec::new(),
+        use_gpu_compute: false,
     }
 }
 

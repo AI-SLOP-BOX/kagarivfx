@@ -36,7 +36,7 @@ fn main() {
     comp.layers.push(a);
     comp.layers.push(b);
 
-    let project = Project { compositions: vec![comp], active_composition_idx: 0, assets: Vec::new() };
+    let project = Project { use_gpu_compute: false,  compositions: vec![comp], active_composition_idx: 0, assets: Vec::new() };
     let json = serde_json::to_string_pretty(&project).expect("serialize");
     std::fs::write("test_invalid.json", json).expect("write");
     println!("Wrote test_invalid.json");

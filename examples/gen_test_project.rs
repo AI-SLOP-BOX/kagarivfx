@@ -61,7 +61,7 @@ fn main() {
     ]);
     comp.layers.push(text);
 
-    let project = Project {
+    let project = Project { use_gpu_compute: false, 
         compositions: vec![comp],
         active_composition_idx: 0,
         assets: Vec::new(),

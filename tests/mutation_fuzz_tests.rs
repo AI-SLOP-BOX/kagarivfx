@@ -22,6 +22,7 @@ fn seed_project_json() -> String {
     ]);
     comp.layers.push(l);
     serde_json::to_string(&Project {
+            use_gpu_compute: false,
         compositions: vec![comp],
         active_composition_idx: 0,
         assets: Vec::new(),
@@ -180,7 +181,7 @@ fn roundtrip_project_json_preserves_render() {
     l.transform.rotation = Animatable::new_constant(33.0);
     l.transform.position = Animatable::new_constant([24.0, 24.0]);
     comp.layers.push(l);
-    let project = Project { compositions: vec![comp], active_composition_idx: 0, assets: Vec::new() };
+    let project = Project { compositions: vec![comp], active_composition_idx: 0, assets: Vec::new(), use_gpu_compute: false };
 
     let before = render_frame_to_pixels(&project.compositions[0], 0, 48, 48, 0.0, 0);
 
