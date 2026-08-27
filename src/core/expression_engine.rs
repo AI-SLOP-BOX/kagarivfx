@@ -719,7 +719,7 @@ fn build_comp_snapshot_uncached(comp: &crate::core::timeline::Composition, frame
             ],
             rotation: l.transform.eval_rotation(frame, fps) as f64,
             opacity: l.transform.eval_opacity(frame, fps) as f64,
-            anchor_point: [anchor3d[0] as f64, anchor3d[1] as f64],
+            anchor_point: [anchor3d[0], anchor3d[1]],
             rotation_3d: [rot3d[0] as f64, rot3d[1] as f64, rot3d[2] as f64],
             position_3d: [pos3d[0] as f64, pos3d[1] as f64, pos3d[2] as f64],
             time_remap: Some(time_remap_f),
