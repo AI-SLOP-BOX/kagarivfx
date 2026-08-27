@@ -2,7 +2,8 @@
 use crate::core::mask::MaskVertex;
 
 /// Wiggle Paths modifier options matching After Effects Shape Wiggle Paths contents.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(default)]
 pub struct WigglePathsOptions {
     pub size: f32,             // Max pixel displacement radius
     pub detail: f32,           // Number of wiggles per segment

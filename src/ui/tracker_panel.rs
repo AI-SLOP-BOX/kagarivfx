@@ -255,6 +255,7 @@ pub fn draw_tracker_panel(app: &mut AfterEffectsApp, ui: &mut egui::Ui, current_
                             name: format!("Auto Track Mask {}", auto_mask_count + 1),
                             mode: crate::core::mask::MaskMode::Add,
                             inverted: false,
+                            wiggle: None,
                             path: crate::core::mask::MaskPath {
                                 vertices: crate::core::property::Animatable::new_constant(vertices),
                                 tangents: None,

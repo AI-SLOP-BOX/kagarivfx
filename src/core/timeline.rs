@@ -1870,6 +1870,12 @@ pub struct Light3D {
     /// Shadow opacity cast by this light (0–100, AE Shadow Darkness). Default 60.
     #[serde(default = "default_shadow_darkness")]
     pub shadow_darkness: f32,
+    /// Distance falloff exponent (0 = none, 1 = linear, 2 = inverse-square). Default 1.
+    #[serde(default)]
+    pub falloff: f32,
+    /// Maximum influence radius (0 = unlimited). Default 0.
+    #[serde(default)]
+    pub max_radius: f32,
 }
 
 impl Default for Light3D {
@@ -1883,6 +1889,8 @@ impl Default for Light3D {
             position: Animatable::new_constant([960.0, 540.0, -500.0]),
             casts_shadows: true,
             shadow_darkness: 60.0,
+            falloff: 1.0,
+            max_radius: 0.0,
         }
     }
 }

@@ -107,6 +107,29 @@ pub fn draw_mask_panel(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
                                     *project_changed_flag = true;
                                 }
                             });
+
+                            // ── Wiggle Paths (AE parity) ──
+                            let mut wiggle_on = mask.wiggle.is_some();
+                            if ui.checkbox(&mut wiggle_on, "🌊 Wiggle Paths").on_hover_text("Organic noise deformation of the mask outline").changed() {
+                                mask.wiggle = if wiggle_on {
+                                    Some(crate::core::wiggle_paths::WigglePathsOptions::default())
+                                } else {
+                                    None
+                                };
+                                *project_changed_flag = true;
+                            }
+                            if let Some(w) = mask.wiggle.as_mut() {
+                                ui.horizontal(|ui| {
+                                    ui.label("Size:");
+                                    if ui.add(egui::DragValue::new(&mut w.size).range(0.0..=200.0).speed(0.5).suffix(" px")).changed() {
+                                        *project_changed_flag = true;
+                                    }
+                                    ui.label("Freq:");
+                                    if ui.add(egui::DragValue::new(&mut w.wiggles_per_sec).range(0.1..=20.0).speed(0.1).suffix(" Hz")).changed() {
+                                        *project_changed_flag = true;
+                                    }
+                                });
+                            }
                         });
                     }
                 });

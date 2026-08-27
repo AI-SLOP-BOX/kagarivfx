@@ -50,7 +50,7 @@ impl EffectType {
                 push!("Distance", distance, Scalar);
                 push!("Softness", softness, Scalar);
             }
-            EffectType::ChromaticAberration { shift_r, shift_b, edge_falloff } => {
+            EffectType::ChromaticAberration { shift_r, shift_b, edge_falloff, iris_linked: _ } => {
                 push!("Red Shift", shift_r, Scalar);
                 push!("Blue Shift", shift_b, Scalar);
                 push!("Edge Falloff", edge_falloff, Scalar);
@@ -79,7 +79,7 @@ impl EffectType {
                 push!("Radius", radius, Scalar);
                 push!("Intensity", intensity, Scalar);
             }
-            EffectType::LensFlare { enabled, position_x, position_y, intensity, threshold, color } => {
+            EffectType::LensFlare { enabled, position_x, position_y, intensity, threshold, color, .. } => {
                 push!("Flare Enabled", enabled, Scalar);
                 push!("Position X", position_x, Scalar);
                 push!("Position Y", position_y, Scalar);
@@ -396,7 +396,7 @@ impl EffectType {
                 push!("Distance", distance, Scalar);
                 push!("Softness", softness, Scalar);
             }
-            EffectType::ChromaticAberration { shift_r, shift_b, edge_falloff } => {
+            EffectType::ChromaticAberration { shift_r, shift_b, edge_falloff, iris_linked: _ } => {
                 push!("Red Shift", shift_r, Scalar);
                 push!("Blue Shift", shift_b, Scalar);
                 push!("Edge Falloff", edge_falloff, Scalar);
@@ -425,7 +425,7 @@ impl EffectType {
                 push!("Radius", radius, Scalar);
                 push!("Intensity", intensity, Scalar);
             }
-            EffectType::LensFlare { enabled, position_x, position_y, intensity, threshold, color } => {
+            EffectType::LensFlare { enabled, position_x, position_y, intensity, threshold, color, .. } => {
                 push!("Flare Enabled", enabled, Scalar);
                 push!("Position X", position_x, Scalar);
                 push!("Position Y", position_y, Scalar);

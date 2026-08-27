@@ -1,4 +1,4 @@
-use crate::core::timeline::{Composition, Layer, LayerType, BlendMode, ShapeType, TrimPaths, TrackMatteMode, LightType};
+use crate::core::timeline::{Composition, Layer, LayerType, BlendMode, ShapeType, TrimPaths, TrackMatteMode, LightType, Light3D};
 use crate::core::mask::point_in_polygon;
 use rayon::prelude::*;
 
@@ -208,6 +208,75 @@ pub fn build_shadow_map(comp: &Composition, frame: u32, width: u32, height: u32)
     // Soft penumbra
     box_blur_f32(&mut density, width, height, ((width.max(height)) / 64).clamp(1, 8));
     density
+}
+
+/// Compute light attenuation factor based on distance from light to a point.
+/// `falloff`: 0 = no falloff, 1 = linear, 2 = inverse-square (realistic).
+/// `max_radius`: 0 = unlimited, otherwise hard cutoff.
+pub fn light_attenuation(light: &Light3D, light_pos: [f32; 3], point_pos: [f32; 3], _frame: u32) -> f32 {
+    let dx = point_pos[0] - light_pos[0];
+    let dy = point_pos[1] - light_pos[1];
+    let dz = point_pos[2] - light_pos[2];
+    let dist = (dx * dx + dy * dy + dz * dz).sqrt();
+
+    if light.max_radius > 0.0 && dist > light.max_radius {
+        return 0.0;
+    }
+
+    if light.falloff <= 0.001 {
+        return 1.0;
+    }
+
+    let atten = match light.falloff as u32 {
+        0 => 1.0,
+        1 => {
+            // Linear falloff: 1 - dist/max_dist
+            if light.max_radius > 0.0 {
+                (1.0 - dist / light.max_radius).max(0.0)
+            } else {
+                1.0 / (1.0 + dist * 0.001)
+            }
+        }
+        _ => {
+            // Inverse-square (physically correct): 1/(1 + dist^2 * k)
+            let k = 0.0001; // scale factor
+            1.0 / (1.0 + dist * dist * k)
+        }
+    };
+
+    atten.clamp(0.0, 1.0)
+}
+
+/// Compute spot light cone factor. Returns 1.0 for point lights.
+pub fn spot_cone_factor(light: &Light3D, light_pos: [f32; 3], point_pos: [f32; 3], _frame: u32) -> f32 {
+    match light.light_type {
+        LightType::Spot { cone_angle_deg, cone_feather_pct } => {
+            let dx = point_pos[0] - light_pos[0];
+            let dy = point_pos[1] - light_pos[1];
+            let dz = point_pos[2] - light_pos[2];
+            let dist = (dx * dx + dy * dy + dz * dz).sqrt();
+            if dist < 0.001 {
+                return 1.0;
+            }
+            let dir_z = dz / dist;
+            let cone_half = (cone_angle_deg * 0.5).to_radians();
+            let cos_cone = cone_half.cos();
+            let cos_dir = -dir_z;
+
+            if cos_dir < cos_cone {
+                0.0
+            } else {
+                let feather = (cone_feather_pct / 100.0).clamp(0.0, 1.0);
+                let edge = cos_cone + (1.0 - cos_cone) * feather;
+                if cos_dir > edge {
+                    1.0
+                } else {
+                    (cos_dir - cos_cone) / (edge - cos_cone)
+                }
+            }
+        }
+        _ => 1.0,
+    }
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -3409,6 +3478,8 @@ mod shadow_tests {
             position: Animatable::new_constant([16.0, 16.0, 400.0]),
             casts_shadows: true,
             shadow_darkness: 90.0,
+            falloff: 1.0,
+            max_radius: 0.0,
         };
         comp.lights = vec![light];
         comp
@@ -3613,6 +3684,8 @@ mod shadow_tests {
             position: Animatable::new_constant([48.0, 48.0, 300.0]),
             casts_shadows: true,
             shadow_darkness: 90.0,
+            falloff: 1.0,
+            max_radius: 0.0,
         }];
 
         let px = render_frame_to_pixels(&comp, 0, 96, 96, 0.0, 0);

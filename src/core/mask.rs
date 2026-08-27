@@ -308,6 +308,9 @@ pub struct Mask {
     pub expansion: Animatable<f32>,
     /// Whether the mask is inverted
     pub inverted: bool,
+    /// Wiggle Paths organic deformation (AE parity)
+    #[serde(default)]
+    pub wiggle: Option<crate::core::wiggle_paths::WigglePathsOptions>,
 }
 
 impl Mask {
@@ -322,6 +325,7 @@ impl Mask {
             opacity: Animatable::new_constant(100.0),
             expansion: Animatable::new_constant(0.0),
             inverted: false,
+            wiggle: None,
         }
     }
 
@@ -336,6 +340,7 @@ impl Mask {
             opacity: Animatable::new_constant(100.0),
             expansion: Animatable::new_constant(0.0),
             inverted: false,
+            wiggle: None,
         }
     }
 }
