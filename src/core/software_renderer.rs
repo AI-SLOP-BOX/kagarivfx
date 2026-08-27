@@ -2517,6 +2517,43 @@ pub fn render_frame_to_pixels(comp: &Composition, frame: u32, width: u32, height
     buffer
 }
 
+/// Render a frame and return linear-light f32 RGBA pixels (16/32bpc path).
+///
+/// The internal compositing still runs on 8bpc buffers (with dithering to
+/// suppress banding), but the final output is decoded back to scene-linear
+/// via the exact IEC sRGB piecewise transfer functions — so the returned
+/// values are suitable for HDR export (EXR / HDR), ACES二次処理, or any
+/// pipeline that needs physically-linear colour values.
+///
+/// Each pixel is `[r, g, b, a]` in `0.0..=∞` (typically 0..1 for LDR
+/// scenes, but highlights can exceed 1.0 after ACES exposure boost).
+pub fn render_frame_to_pixels_f32(
+    comp: &Composition,
+    frame: u32,
+    width: u32,
+    height: u32,
+    exposure_ev: f32,
+    lut_mode: u32,
+) -> Vec<[f32; 4]> {
+    let buf8 = render_frame_to_pixels(comp, frame, width, height, exposure_ev, lut_mode);
+    if buf8.is_empty() {
+        return Vec::new();
+    }
+    let n = (width as usize) * (height as usize);
+    let mut out = vec![[0.0f32; 4]; n];
+    use crate::core::color::srgb_to_linear_piecewise;
+    for (px, dst) in buf8.chunks_exact(4).zip(out.iter_mut()) {
+        // render_frame_to_pixels already applied exposure, so decode
+        // the sRGB-encoded result back to linear (exposure baked in).
+        let r = srgb_to_linear_piecewise(px[0] as f32 / 255.0);
+        let g = srgb_to_linear_piecewise(px[1] as f32 / 255.0);
+        let b = srgb_to_linear_piecewise(px[2] as f32 / 255.0);
+        let a = px[3] as f32 / 255.0;
+        *dst = [r, g, b, a];
+    }
+    out
+}
+
 #[inline]
 fn fract(x: f32) -> f32 {
     x - x.floor()
@@ -3397,6 +3434,37 @@ mod shadow_tests {
         assert!((lifted[2] - 200.0).abs() < 0.01, "pz+cz lift: {}", lifted[2]);
         assert!((lifted[0] - 32.0).abs() < 0.01 && (lifted[1] - 32.0).abs() < 0.01,
             "child mapped around parent center: {:?}", lifted);
+    }
+
+    #[test]
+    fn test_render_frame_to_pixels_f32_returns_linear() {
+        let mut comp = Composition::new("f32t".into(), "F32".into(), 8, 8, 30, 30);
+        comp.background_color = [1.0, 1.0, 1.0, 1.0];
+        let f32_px = render_frame_to_pixels_f32(&comp, 0, 8, 8, 0.0, 0);
+        assert_eq!(f32_px.len(), 64);
+        // White bg -> linear sRGB decode of 1.0 should be 1.0
+        for p in &f32_px {
+            assert!(p[0] > 0.99, "expected ~1.0 linear, got {}", p[0]);
+            assert!(p[3] > 0.99, "expected opaque alpha, got {}", p[3]);
+        }
+        // Empty render returns empty
+        let empty = render_frame_to_pixels_f32(&comp, 0, 0, 0, 0.0, 0);
+        assert!(empty.is_empty());
+    }
+
+    #[test]
+    fn test_render_frame_to_pixels_f32_exposure_boosts() {
+        let mut comp = Composition::new("f32exp".into(), "F32E".into(), 4, 4, 30, 30);
+        comp.background_color = [0.5, 0.5, 0.5, 1.0];
+        let no_ev = render_frame_to_pixels_f32(&comp, 0, 4, 4, 0.0, 0);
+        let plus2 = render_frame_to_pixels_f32(&comp, 0, 4, 4, 2.0, 0);
+        // +2 EV boosts values; with sRGB encode/decode + dithering
+        // the ratio isn't exactly 4x, but must be significantly > 1.
+        assert!(plus2[0][0] > no_ev[0][0] * 2.0, "expected >2x, got {}", plus2[0][0] / no_ev[0][0]);
+        // All values in valid range
+        for p in &plus2 {
+            for c in p { assert!(*c >= 0.0 && !c.is_nan()); }
+        }
     }
 
     #[test]
