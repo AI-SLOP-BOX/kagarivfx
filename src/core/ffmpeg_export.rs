@@ -139,6 +139,7 @@ where
                 VideoCodec::ProRes4444 => {
                     cmd.args(["-c:v", "prores_ks", "-profile:v", "4", "-pix_fmt", "yuva444p10le"]);
                 }
+                VideoCodec::H265 => { cmd.args(["-c:v", "libx265", "-preset", "medium", "-crf", "23", "-pix_fmt", "yuv420p"]); }
                 VideoCodec::Gif => { /* GIF uses separate pipeline */ }
             }
             if config.audio_wav.is_some() {

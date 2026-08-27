@@ -1332,7 +1332,7 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: u32) 
                             // Douglas-Peucker path simplification to reduce redundant keyframes
                             let simplified = douglas_peucker(&recording, 2.0);
                             // Smooth the path with a 3-point moving average
-                            let smoothed = smooth_path(&simplified);
+                            let final_smoothed = smooth_path(&simplified);
                             // Assign bezier easing based on velocity changes
                             let mut kfs: Vec<crate::core::keyframe::Keyframe<[f32; 2]>> = final_smoothed
                                 .into_iter()
