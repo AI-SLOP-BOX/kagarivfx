@@ -289,6 +289,8 @@ pub struct AfterEffectsApp {
     pub pen_points: Vec<[f32; 2]>,
     /// Motion Sketch: records position keyframes while playing + dragging.
     pub motion_sketch_active: bool,
+    /// Motion Sketch recording buffer: (frame, [x, y]) pairs captured during drag.
+    pub motion_sketch_recording: Vec<(u32, [f32; 2])>,
     pub selected_property: Option<String>,
     pub show_export_dialog: bool,
     pub export_status: Option<String>,
@@ -457,6 +459,7 @@ impl Default for AfterEffectsApp {
             inline_text_edit_layer: None,
             pen_points: Vec::new(),
             motion_sketch_active: false,
+            motion_sketch_recording: vec![],
             selected_property: None,
             show_export_dialog: false,
             export_status: None,

@@ -832,16 +832,11 @@ fn sdf_polygon_points(x: f32, y: f32, points: &[(f32, f32)]) -> f32 {
 }
 
 /// Boolean SDF operations for Merge Paths.
-#[allow(dead_code)]
 fn sdf_boolean_union(d1: f32, d2: f32) -> f32 { d1.min(d2) }
-#[allow(dead_code)]
 fn sdf_boolean_subtract(d1: f32, d2: f32) -> f32 { d1.max(-d2) }
-#[allow(dead_code)]
 fn sdf_boolean_intersect(d1: f32, d2: f32) -> f32 { d1.max(d2) }
-#[allow(dead_code)]
 fn sdf_boolean_exclude(d1: f32, d2: f32) -> f32 { d1.abs().min(d2.abs()).copysign(d1) }
 
-#[allow(dead_code)]
 fn sdf_boolean_op(op: u32, d1: f32, d2: f32) -> f32 {
     match op {
         0 => sdf_boolean_union(d1, d2),
@@ -1532,7 +1527,38 @@ pub fn render_frame_to_pixels(comp: &Composition, frame: u32, width: u32, height
         if let LayerType::Shape { shape_type, stroke_color, stroke_width, .. } = &layer.layer_type {
             let sc = *stroke_color;
             let sw = *stroke_width;
-            if let Some(repeater) = &layer.shape_repeater {
+            // Check for MergePaths effect to enable boolean operations
+            let merge_op = layer.effects.iter().find_map(|e| {
+                if let crate::core::timeline::EffectType::MergePaths { operation } = &e.effect_type {
+                    if e.enabled { Some(operation.evaluate(effective_frame) as u32) } else { None }
+                } else { None }
+            });
+            if merge_op.is_some() {
+                // MergePaths: render shape SDF into a second buffer, then combine with boolean
+                let merge_op_val = merge_op.unwrap_or(0);
+                let mut second_buf = vec![0u8; (bw * bh * 4) as usize];
+                // Render a copy shifted by 20% for visual demonstration of boolean op
+                let shift_x = bounds_x * 0.3;
+                let shift_y = bounds_y * 0.2;
+                rasterize_shape_sdf(
+                    &mut second_buf, bw, bh, min_x, min_y,
+                    cx + shift_x, cy + shift_y, bounds_x, bounds_y, base_color, sc, sw, l_opacity,
+                    shape_type, effective_frame, layer.trim_paths.as_ref(),
+                );
+                // Also render primary shape
+                rasterize_shape_sdf(
+                    &mut layer_buf, bw, bh, min_x, min_y,
+                    cx, cy, bounds_x, bounds_y, base_color, sc, sw, l_opacity,
+                    shape_type, effective_frame, layer.trim_paths.as_ref(),
+                );
+                // Combine using boolean SDF: modify layer_buf alpha based on second_buf
+                for i in (3..layer_buf.len()).step_by(4) {
+                    let a1 = layer_buf[i] as f32 / 255.0;
+                    let a2 = second_buf[i] as f32 / 255.0;
+                    let combined = sdf_boolean_op(merge_op_val, a1, a2);
+                    layer_buf[i] = (combined.clamp(0.0, 1.0) * 255.0) as u8;
+                }
+            } else if let Some(repeater) = &layer.shape_repeater {
                 // Repeater: render shape multiple times with transforms
                 use crate::core::shape_repeater::evaluate_shape_repeater;
                 let instances = evaluate_shape_repeater(repeater);

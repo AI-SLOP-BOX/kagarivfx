@@ -16,6 +16,9 @@ pub fn draw_workspace_manager(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
         ("Minimal", "Maximizes viewport canvas", 1, 0),
         ("Audio", "Audio mixer & waveform", 1, 23),
         ("3D Layout", "Camera views & 3D options", 0, 25),
+        ("Animation", "Keyframes, graph editor, presets", 0, 5),
+        ("Effects", "Effect controls & library focus", 0, 10),
+        ("Essential Graphics", "Master properties panel", 0, 12),
     ];
 
     let mut new_ws: Option<(usize, usize)> = None;

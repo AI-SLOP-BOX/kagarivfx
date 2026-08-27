@@ -1209,6 +1209,10 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: u32) 
                                         }
                                     }
                                 }
+                                // Record into motion sketch buffer for the commit-on-stop pass
+                                if app.motion_sketch_active {
+                                    app.motion_sketch_recording.push((current_frame, new_pos));
+                                }
                             }
                         }
                     }
@@ -1317,6 +1321,31 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: u32) 
                 if was_dragging {
                     // Commit the single Undo entry for the entire drag gesture
                     app.commit_drag();
+                }
+                // Motion Sketch: finalize recording buffer into keyframes
+                if app.motion_sketch_active && !app.motion_sketch_recording.is_empty() {
+                    if let Some(sel_idx) = app.selected_layer_idx {
+                        let recording = std::mem::take(&mut app.motion_sketch_recording);
+                        let comp_mut = app.history.current_mut().active_composition_mut();
+                        if let Some(layer) = comp_mut.layers.get_mut(sel_idx) {
+                            // Build keyframes from the recorded buffer
+                            let mut kfs: Vec<crate::core::keyframe::Keyframe<[f32; 2]>> = recording
+                                .into_iter()
+                                .map(|(frame, pos)| {
+                                    crate::core::keyframe::Keyframe::new(frame, pos, crate::core::keyframe::InterpolationType::Bezier {
+                                        outgoing: crate::core::keyframe::BezierControlPoint { influence: 33.0, speed: 100.0 },
+                                        incoming: crate::core::keyframe::BezierControlPoint { influence: 33.0, speed: 0.0 },
+                                        custom_bezier: Some([0.25, 0.1, 0.25, 1.0]),
+                                    })
+                                })
+                                .collect();
+                            // Remove duplicate frames (keep last value)
+                            kfs.dedup_by_key(|kf| kf.frame);
+                            layer.transform.position = crate::core::property::Animatable::Animated(kfs);
+                            crate::core::frame_cache::bump_version();
+                            app.toasts.info(format!("Motion Sketch: {} keyframes recorded", layer.transform.position.keyframes().map(|k| k.len()).unwrap_or(0)));
+                        }
+                    }
                 }
                 app.viewport_drag_state = None;
                 app.viewport_mask_drag_state = None;
