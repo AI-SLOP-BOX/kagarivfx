@@ -135,7 +135,9 @@ fn apply_one_ctx(
             pack::apply_posterize(pixels, levels.evaluate(frame).max(2.0) as u32);
         }
         EffectType::Invert { invert_alpha } => {
-            pack::apply_invert(pixels, *invert_alpha);
+            if !crate::core::compute_pipeline::try_gpu_invert(pixels, width, height) {
+                pack::apply_invert(pixels, *invert_alpha);
+            }
         }
         EffectType::Offset { shift_x, shift_y } => {
             pack::apply_offset(

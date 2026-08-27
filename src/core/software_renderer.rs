@@ -1235,9 +1235,9 @@ pub fn render_frame_to_pixels(comp: &Composition, frame: u32, width: u32, height
                         let src_r = adjusted[i] as f32 / 255.0;
                         let src_g = adjusted[i+1] as f32 / 255.0;
                         let src_b = adjusted[i+2] as f32 / 255.0;
-                        let mut dst_r = buffer[i] as f32 / 255.0;
-                        let mut dst_g = buffer[i+1] as f32 / 255.0;
-                        let mut dst_b = buffer[i+2] as f32 / 255.0;
+                        let dst_r = buffer[i] as f32 / 255.0;
+                        let dst_g = buffer[i+1] as f32 / 255.0;
+                        let dst_b = buffer[i+2] as f32 / 255.0;
                         let (br, bg, bb) = match adj_blend {
                             BlendMode::Multiply => (src_r * dst_r, src_g * dst_g, src_b * dst_b),
                             BlendMode::Screen => (1.0-(1.0-src_r)*(1.0-dst_r), 1.0-(1.0-src_g)*(1.0-dst_g), 1.0-(1.0-src_b)*(1.0-dst_b)),
