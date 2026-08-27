@@ -200,7 +200,10 @@ pub fn build_shadow_map(comp: &Composition, frame: u32, width: u32, height: u32)
                 }
             }
             if projected.len() == local_pts.len() {
-                accumulate_polygon_density(&mut density, width, height, &projected, strength);
+                // Apply distance attenuation per shadow-casting pixel region
+
+                let atten = crate::core::software_renderer::light_attenuation(light, lpos, [lpos[0], lpos[1], 0.0], frame);
+                accumulate_polygon_density(&mut density, width, height, &projected, strength * atten);
             }
         }
     }

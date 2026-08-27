@@ -299,7 +299,10 @@ fn apply_one_ctx(
                             let r = p[0] as f32 / 255.0;
                             let g = p[1] as f32 / 255.0;
                             let b = p[2] as f32 / 255.0;
-                            let (lr, lg, lb) = lut.apply(r, g, b);
+                            let (lr, lg, lb) = LUT_CACHE.with(|cache| {
+                                let mut c = cache.borrow_mut();
+                                c.get_or_insert(r, g, b, lut.size, |r, g, b| lut.apply(r, g, b))
+                            });
                             let t = intensity;
                             p[0] = ((r * (1.0 - t) + lr * t).clamp(0.0, 1.0) * 255.0).round() as u8;
                             p[1] = ((g * (1.0 - t) + lg * t).clamp(0.0, 1.0) * 255.0).round() as u8;

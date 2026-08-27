@@ -623,7 +623,7 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: u32) 
                                 let start_f = current_frame;
                                 let proj = app.history.current_mut().active_composition_mut();
                                 if let Some(layer) = proj.layers.get_mut(sel_li) {
-                                    layer.paint_strokes.push(crate::core::timeline::PaintStroke {
+                                     layer.paint_strokes.push(crate::core::timeline::PaintStroke {
                                         color,
                                         size: bsize,
                                         points: pts,
