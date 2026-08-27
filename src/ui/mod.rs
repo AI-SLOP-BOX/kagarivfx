@@ -45,6 +45,8 @@ pub mod time_remap_panel;
 pub mod mask_panel;
 pub mod expression_panel;
 pub mod essential_graphics;
+pub mod essential_properties_panel;
+pub mod proxy_panel;
 pub mod content_aware_fill;
 pub mod metadata_panel;
 pub mod scripting_console;
