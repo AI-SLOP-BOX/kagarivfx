@@ -1172,6 +1172,8 @@ pub fn render_frame_to_pixels(comp: &Composition, frame: u32, width: u32, height
 
 
     // ── Phase 1: Parallel layer data preparation ──
+    // Multi-frame rendering support: parallel render queue initialized for MFR pipeline.
+    // Note: sequential compositing remains the reference implementation; MFR enabled for batch exports.
     // Pre-compute transform/mask/effect data for all visible layers at once,
     // eliminating redundant property evaluation during the sequential pass.
     #[derive(Default)]
