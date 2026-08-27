@@ -289,9 +289,26 @@ fn apply_one_ctx(
             pixels.copy_from_slice(&out);
         }
         EffectType::ColorGradeLUT { lut_path, intensity } => {
-            let _ = intensity.evaluate(frame);
-            if !lut_path.is_empty() {
-                log::debug!("ColorGradeLUT: LUT file support pending (path={})", lut_path);
+            let intensity = intensity.evaluate(frame).clamp(0.0, 1.0);
+            if !lut_path.is_empty() && intensity > 0.0 {
+                if let Ok(text) = std::fs::read_to_string(lut_path) {
+                    if let Ok(lut) = crate::core::ocio_color::Lut3D::parse_cube(&text) {
+                        for p in pixels.chunks_exact_mut(4) {
+                            let r = p[0] as f32 / 255.0;
+                            let g = p[1] as f32 / 255.0;
+                            let b = p[2] as f32 / 255.0;
+                            let (lr, lg, lb) = lut.apply(r, g, b);
+                            let t = intensity;
+                            p[0] = ((r * (1.0 - t) + lr * t).clamp(0.0, 1.0) * 255.0).round() as u8;
+                            p[1] = ((g * (1.0 - t) + lg * t).clamp(0.0, 1.0) * 255.0).round() as u8;
+                            p[2] = ((b * (1.0 - t) + lb * t).clamp(0.0, 1.0) * 255.0).round() as u8;
+                        }
+                    } else {
+                        log::warn!("ColorGradeLUT: failed to parse LUT from {}", lut_path);
+                    }
+                } else {
+                    log::warn!("ColorGradeLUT: cannot read LUT file {}", lut_path);
+                }
             }
         }
         EffectType::ColorSpaceConvert { mode } => {

@@ -117,8 +117,6 @@ pub fn draw_essential_properties(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-
     #[test]
     fn test_essential_panel_creation() {
         assert!(true);

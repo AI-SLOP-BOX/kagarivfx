@@ -47,6 +47,7 @@ pub mod continuous_rasterizer;
 pub mod spatial_keyframe;
 pub mod displacement_map;
 pub mod auto_orient;
+pub mod auto_trace;
 pub mod posterize_time;
 pub mod camera_dof;
 pub mod shape_repeater;
