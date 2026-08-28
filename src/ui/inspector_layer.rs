@@ -289,6 +289,29 @@ pub fn draw_layer_transforms(
                     }
                 });
 
+                let mut accepts_shadows = ui.ctx().data(|d| d.get_temp::<bool>(egui::Id::new("mat_accepts_shadows")).unwrap_or(true));
+                let mut accepts_lights = ui.ctx().data(|d| d.get_temp::<bool>(egui::Id::new("mat_accepts_lights")).unwrap_or(true));
+                let mut light_trans = ui.ctx().data(|d| d.get_temp::<f32>(egui::Id::new("mat_light_trans")).unwrap_or(0.0));
+
+                ui.horizontal(|ui| {
+                    if ui.checkbox(&mut accepts_shadows, "Accepts Shadows").changed() {
+                        ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("mat_accepts_shadows"), accepts_shadows));
+                        *project_changed = true;
+                    }
+                    if ui.checkbox(&mut accepts_lights, "Accepts Lights").changed() {
+                        ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("mat_accepts_lights"), accepts_lights));
+                        *project_changed = true;
+                    }
+                });
+
+                ui.horizontal(|ui| {
+                    ui.label("Light Transmission:");
+                    if ui.add(egui::Slider::new(&mut light_trans, 0.0..=100.0).suffix("%")).changed() {
+                        ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("mat_light_trans"), light_trans));
+                        *project_changed = true;
+                    }
+                });
+
                 // ── 3D Geometry Options (Extrusion & Bevel) ──
                 ui.separator();
                 ui.collapsing("📐 Geometry Options (Extrusion & Bevel)", |ui| {
@@ -956,6 +979,52 @@ pub fn draw_layer_type_specs(
                             *project_changed = true;
                         }
                     });
+
+                    // ── 🎈 Pucker & Bloat (AE Vector Modifier) ──
+                    ui.separator();
+                    let mut pucker_bloat = ui.ctx().data(|d| d.get_temp::<f32>(egui::Id::new("shape_pucker_bloat")).unwrap_or(0.0));
+                    ui.horizontal(|ui| {
+                        ui.label("🎈 Pucker & Bloat:");
+                        if ui.add(egui::Slider::new(&mut pucker_bloat, -100.0..=100.0).suffix("%")).changed() {
+                            ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("shape_pucker_bloat"), pucker_bloat));
+                            *project_changed = true;
+                        }
+                    });
+
+                    // ── 〰 Wiggle Paths (AE Vector Modifier) ──
+                    ui.separator();
+                    let mut has_wiggle_paths = ui.ctx().data(|d| d.get_temp::<bool>(egui::Id::new("shape_has_wiggle")).unwrap_or(false));
+                    ui.horizontal(|ui| {
+                        if ui.checkbox(&mut has_wiggle_paths, "〰 Wiggle Paths").clicked() {
+                            ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("shape_has_wiggle"), has_wiggle_paths));
+                            *project_changed = true;
+                        }
+                    });
+                    if has_wiggle_paths {
+                        let mut wp_size = ui.ctx().data(|d| d.get_temp::<f32>(egui::Id::new("wp_size")).unwrap_or(15.0));
+                        let mut wp_detail = ui.ctx().data(|d| d.get_temp::<f32>(egui::Id::new("wp_detail")).unwrap_or(5.0));
+                        let mut wp_temporal = ui.ctx().data(|d| d.get_temp::<f32>(egui::Id::new("wp_temporal")).unwrap_or(2.0));
+
+                        ui.horizontal(|ui| {
+                            ui.label("Size:");
+                            if ui.add(egui::DragValue::new(&mut wp_size).speed(0.5).suffix(" px")).changed() {
+                                ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("wp_size"), wp_size));
+                                *project_changed = true;
+                            }
+                            ui.label("Detail:");
+                            if ui.add(egui::DragValue::new(&mut wp_detail).speed(0.5).range(1.0..=50.0)).changed() {
+                                ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("wp_detail"), wp_detail));
+                                *project_changed = true;
+                            }
+                        });
+                        ui.horizontal(|ui| {
+                            ui.label("Wiggles/sec:");
+                            if ui.add(egui::DragValue::new(&mut wp_temporal).speed(0.1).range(0.1..=20.0).suffix(" Hz")).changed() {
+                                ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("wp_temporal"), wp_temporal));
+                                *project_changed = true;
+                            }
+                        });
+                    }
                 });
             }
             LayerType::Null => {
