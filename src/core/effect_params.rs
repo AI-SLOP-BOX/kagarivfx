@@ -368,6 +368,11 @@ impl EffectType {
             EffectType::MergePaths { operation } => {
                 push!("Operation", operation, Scalar);
             }
+            EffectType::OffsetPath { amount, line_join, miter_limit } => {
+                push!("Amount", amount, Scalar);
+                push!("Line Join", line_join, Scalar);
+                push!("Miter Limit", miter_limit, Scalar);
+            }
             EffectType::CustomShader { .. } => {}
             #[allow(unreachable_patterns)]
             _ => {}
@@ -712,6 +717,11 @@ impl EffectType {
             // catch-all so future variants still compile without rows.
             EffectType::MergePaths { operation } => {
                 push!("Operation", operation, Scalar);
+            }
+            EffectType::OffsetPath { amount, line_join, miter_limit } => {
+                push!("Amount", amount, Scalar);
+                push!("Line Join", line_join, Scalar);
+                push!("Miter Limit", miter_limit, Scalar);
             }
             EffectType::CustomShader { .. } => {}
             #[allow(unreachable_patterns)]

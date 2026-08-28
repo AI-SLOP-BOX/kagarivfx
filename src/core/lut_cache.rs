@@ -2,13 +2,14 @@
 ///
 /// Caches the most-recently-used LUT entries to avoid redundant tetrahedral
 /// lookups. `apply_batch` processes 4 pixels at a time using the cache line.
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 
 /// LRU cache for 3D LUT tetrahedral interpolation results.
+/// Uses `VecDeque` for O(1) front/back removal instead of O(n) `Vec::remove(0)`.
 #[derive(Debug)]
 pub struct LutCache {
     entries: HashMap<u64, [f32; 3]>,
-    order: Vec<u64>,
+    order: VecDeque<u64>,
     capacity: usize,
 }
 
@@ -16,7 +17,7 @@ impl LutCache {
     pub fn new(capacity: usize) -> Self {
         Self {
             entries: HashMap::with_capacity(capacity),
-            order: Vec::with_capacity(capacity),
+            order: VecDeque::with_capacity(capacity),
             capacity,
         }
     }
@@ -33,23 +34,20 @@ impl LutCache {
     pub fn get_or_insert(&mut self, r: f32, g: f32, b: f32, size: usize, f: impl FnOnce(f32, f32, f32) -> (f32, f32, f32)) -> (f32, f32, f32) {
         let key = Self::cache_key(r, g, b, size);
         if let Some(&cached) = self.entries.get(&key) {
-            // Move to most-recently-used
-            if let Some(pos) = self.order.iter().position(|&k| k == key) {
-                self.order.remove(pos);
-            }
-            self.order.push(key);
+            // Move to most-recently-used (O(n) scan but small n in practice)
+            self.order.retain(|&k| k != key);
+            self.order.push_back(key);
             return (cached[0], cached[1], cached[2]);
         }
         let result = f(r, g, b);
-        // Evict if at capacity
+        // Evict if at capacity — O(1) pop_front from VecDeque
         if self.entries.len() >= self.capacity {
-            if let Some(oldest) = self.order.first().copied() {
+            if let Some(oldest) = self.order.pop_front() {
                 self.entries.remove(&oldest);
-                self.order.remove(0);
             }
         }
         self.entries.insert(key, [result.0, result.1, result.2]);
-        self.order.push(key);
+        self.order.push_back(key);
         result
     }
 

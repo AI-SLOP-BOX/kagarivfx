@@ -221,13 +221,43 @@ pub fn draw_tracker_panel(app: &mut AfterEffectsApp, ui: &mut egui::Ui, current_
                     }
                 });
             if let Some(target_idx) = app.tracker_apply_target {
-                if custom_widgets::ae_button_accent(ui, "Apply Motion → Target").clicked() {
-                    app.modify_project(|p| {
-                        let comp = p.active_composition_mut();
-                        crate::core::tracker_engine::TrackerEngine::apply_tracker_to_target(comp, idx, 0, target_idx, true, false);
-                    });
-                    app.toasts.info(format!("Applied tracking to layer {}", target_idx + 1));
-                }
+                ui.horizontal(|ui| {
+                    if custom_widgets::ae_button_accent(ui, "Apply Motion → Target").clicked() {
+                        app.modify_project(|p| {
+                            let comp = p.active_composition_mut();
+                            crate::core::tracker_engine::TrackerEngine::apply_tracker_to_target(comp, idx, 0, target_idx, true, false);
+                        });
+                        app.toasts.info(format!("Applied tracking to layer {}", target_idx + 1));
+                    }
+                    if custom_widgets::ae_button(ui, "Apply as Corner Pin → Target").on_hover_text("Create a CornerPin effect on the target using the tracked quad corners").clicked() {
+                        app.modify_project(|p| {
+                            let comp = p.active_composition_mut();
+                            // Get current quad corners from the 4 trackers
+                            let src_layer = if let Some(l) = comp.layers.get(idx) { l } else { return };
+                            if src_layer.trackers.len() < 4 { return; }
+                            let tl = src_layer.trackers[0].position.evaluate(current_frame);
+                            let tr = src_layer.trackers[1].position.evaluate(current_frame);
+                            let br = src_layer.trackers[2].position.evaluate(current_frame);
+                            let bl = src_layer.trackers[3].position.evaluate(current_frame);
+
+                            let corner_pin = crate::core::timeline::EffectType::CornerPin {
+                                top_left: crate::core::property::Animatable::new_constant(tl),
+                                top_right: crate::core::property::Animatable::new_constant(tr),
+                                bottom_right: crate::core::property::Animatable::new_constant(br),
+                                bottom_left: crate::core::property::Animatable::new_constant(bl),
+                            };
+                            let effect = crate::core::timeline::Effect {
+                                id: format!("corner_pin_{}", comp.layers[target_idx].effects.len()),
+                                name: "Corner Pin (from Tracker)".to_string(),
+                                effect_type: corner_pin,
+                                enabled: true,
+                            };
+                            comp.layers[target_idx].effects.push(effect);
+                        });
+                        crate::core::frame_cache::bump_version();
+                        app.toasts.info(format!("Applied Corner Pin to layer {}", target_idx + 1));
+                    }
+                });
             }
 
             ui.add_space(8.0);

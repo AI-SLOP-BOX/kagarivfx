@@ -13,6 +13,8 @@
 /// 4. Progress events are sent back to the UI via the mpsc sender.
 /// 5. The UI polls the receiver each frame (non-blocking `try_recv`).
 use std::io::Write;
+
+type RenderFrameFn = Arc<dyn Fn(&str, u32) -> Vec<u8> + Send + Sync>;
 use std::process::{Command, Stdio};
 use std::sync::mpsc::Sender;
 
@@ -493,6 +495,60 @@ where
     F: Fn(u32) -> Vec<u8> + Send + 'static,
 {
     start_export_cancelable(config, tx, Arc::new(AtomicBool::new(false)), render_frame_fn)
+}
+
+/// Multi-comp parallel export using `ParallelRenderQueue`.
+///
+/// Each `RenderQueueItem` is rendered in parallel via rayon, with frames
+/// within each item rendered sequentially. Progress is reported via the
+/// `tx` channel as `ExportEvent::Progress` with the overall percentage.
+pub fn start_parallel_export(
+    items: Vec<crate::core::parallel_render::RenderQueueItem>,
+    tx: Sender<ExportEvent>,
+    cancel_flag: Arc<AtomicBool>,
+    render_frame_fn: RenderFrameFn,
+) -> Result<(), String> {
+    if items.is_empty() {
+        let _ = tx.send(ExportEvent::Error("No render queue items".to_string()));
+        return Err("No items".to_string());
+    }
+
+    let total: u32 = items.iter().map(|i| i.end_frame.saturating_sub(i.start_frame) + 1).sum();
+    if total == 0 {
+        let _ = tx.send(ExportEvent::Error("Total frames is zero".to_string()));
+        return Err("Zero frames".to_string());
+    }
+
+    std::thread::Builder::new()
+        .name("parallel_export".to_string())
+        .spawn(move || {
+            let mut queue = crate::core::parallel_render::ParallelRenderQueue::new();
+            for item in items {
+                queue.add_item(item);
+            }
+            queue.cancelled.store(cancel_flag.load(Ordering::SeqCst), Ordering::Relaxed);
+
+            let tx_clone = tx.clone();
+            let total_frames = total;
+            queue.set_progress_callback(move |_item_idx, done, _total| {
+                let pct = done as f32 / total_frames.max(1) as f32;
+                let _ = tx_clone.send(ExportEvent::Progress(
+                    pct,
+                    format!("Parallel: {}/{} frames", done, total_frames),
+                ));
+            });
+
+            queue.render_all(|comp_name, frame| {
+                render_frame_fn(comp_name, frame)
+            });
+
+            let _ = tx.send(ExportEvent::Finished(format!(
+                "Parallel export complete: {} items, {} frames", queue.items.len(), total_frames
+            )));
+        })
+        .map_err(|e| format!("Failed to spawn parallel export thread: {}", e))?;
+
+    Ok(())
 }
 
 /// PNG image-sequence export: renders every frame and writes

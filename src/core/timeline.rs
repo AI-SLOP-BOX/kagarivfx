@@ -1283,6 +1283,15 @@ pub enum EffectType {
         /// Operation: 0=Add, 1=Subtract, 2=Intersect, 3=Exclude.
         operation: Animatable<f32>,
     },
+    /// Offset Path: expand or contract a shape path along its normals.
+    OffsetPath {
+        /// Offset amount in pixels (positive = expand, negative = contract).
+        amount: Animatable<f32>,
+        /// Line join: 0=Miter, 1=Round, 2=Bevel.
+        line_join: Animatable<f32>,
+        /// Miter limit for miter joins.
+        miter_limit: Animatable<f32>,
+    },
     /// Two-band bass/treble equalizer.
     BassTreble {
         /// Bass gain in dB (-24..+24).

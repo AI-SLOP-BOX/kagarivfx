@@ -479,13 +479,26 @@ pub const MAX_PRECOMP_DEPTH: u32 = 16;
 
 thread_local! {
     static PRECOMP_DEPTH: std::cell::Cell<u32> = const { std::cell::Cell::new(0) };
-    /// Ids of pre-comps currently being rendered on this thread (cycle detection).
+    /// Stack of composition IDs currently being rendered (cycle detection).
     static PRECOMP_STACK: std::cell::RefCell<Vec<String>> = const { std::cell::RefCell::new(Vec::new()) };
+    /// Precomp render cache: avoids re-rendering the same sub-comp at the
+    /// same frame when it's referenced by multiple layers.
+    static PRECOMP_RENDER_CACHE: std::cell::RefCell<crate::core::precomp_cache::PrecompCache> = std::cell::RefCell::new(crate::core::precomp_cache::PrecompCache::new(64));
 }
 
 /// Render a pre-comp by recursively rendering its layers into a pixel buffer.
-/// This is the core of pre-comp nesting support.
+/// This is the core of pre-comp nesting support. Uses a thread-local cache
+/// to avoid redundant re-renders when the same pre-comp is referenced by
+/// multiple layers at the same frame.
 pub fn render_precomp_layers(_comp: &Composition, precomp_comp: &Composition, frame: u32, width: u32, height: u32) -> Vec<u8> {
+    // Cache check: skip full render if we already have this precomp's pixels
+    let cached = PRECOMP_RENDER_CACHE.with(|cache| {
+        cache.borrow_mut().get(&precomp_comp.id, frame, width, height)
+    });
+    if let Some(pixels) = cached {
+        return pixels;
+    }
+
     // Cycle detection: a comp that (indirectly) contains itself returns empty
     // immediately instead of burning the whole depth budget on garbage.
     let cyclic = PRECOMP_STACK.with(|stack| {
@@ -519,6 +532,12 @@ pub fn render_precomp_layers(_comp: &Composition, precomp_comp: &Composition, fr
     let result = render_precomp_layers_inner(_comp, precomp_comp, frame, width, height);
     PRECOMP_DEPTH.with(|d| d.set(d.get().saturating_sub(1)));
     PRECOMP_STACK.with(|s| { s.borrow_mut().pop(); });
+    // Cache the result for future lookups at the same (comp, frame, resolution)
+    if !result.is_empty() {
+        PRECOMP_RENDER_CACHE.with(|cache| {
+            cache.borrow_mut().insert(&precomp_comp.id, frame, width, height, result.clone());
+        });
+    }
     result
 }
 
@@ -709,6 +728,8 @@ fn render_precomp_layers_inner(_comp: &Composition, precomp_comp: &Composition, 
         }
 
         // ── Paint strokes: drawn in buffer space so they follow the layer ──
+        // DirtyRect integration: compute the layer's bounding box in buffer
+        // space and skip strokes that are entirely outside it.
         if !layer.paint_strokes.is_empty() {
             let inv_sx = if scale[0].abs() > f32::EPSILON { 100.0 / scale[0] } else { 0.0 };
             let inv_sy = if scale[1].abs() > f32::EPSILON { 100.0 / scale[1] } else { 0.0 };
@@ -719,10 +740,54 @@ fn render_precomp_layers_inner(_comp: &Composition, precomp_comp: &Composition, 
                 [wx - min_x as f32, wy - min_y as f32]
             };
             let _ = (inv_sx, inv_sy); // inverse reserved for future pick tools
+            // DirtyRect: bounding box of all strokes in buffer-pixel space
+            let mut dirty_min_x = bw as f32;
+            let mut dirty_min_y = bh as f32;
+            let mut dirty_max_x = 0.0f32;
+            let mut dirty_max_y = 0.0f32;
             for stroke in &layer.paint_strokes {
                 let end_f = if stroke.end_frame == 0 { layer.out_frame } else { stroke.end_frame };
                 if effective_frame < stroke.start_frame || effective_frame > end_f {
                     continue;
+                }
+                let half = stroke.size * 0.5;
+                for &p in &stroke.points {
+                    let bp = to_buf_local(p);
+                    dirty_min_x = dirty_min_x.min(bp[0] - half);
+                    dirty_min_y = dirty_min_y.min(bp[1] - half);
+                    dirty_max_x = dirty_max_x.max(bp[0] + half);
+                    dirty_max_y = dirty_max_y.max(bp[1] + half);
+                }
+            }
+            // Clamp dirty rect to buffer bounds
+            let dr_x0 = dirty_min_x.floor().max(0.0) as u32;
+            let dr_y0 = dirty_min_y.floor().max(0.0) as u32;
+            let dr_x1 = dirty_max_x.ceil().min(bw as f32) as u32;
+            let dr_y1 = dirty_max_y.ceil().min(bh as f32) as u32;
+            for stroke in &layer.paint_strokes {
+                let end_f = if stroke.end_frame == 0 { layer.out_frame } else { stroke.end_frame };
+                if effective_frame < stroke.start_frame || effective_frame > end_f {
+                    continue;
+                }
+                // Quick AABB test: skip strokes entirely outside the dirty rect
+                let stroke_min = stroke.points.iter().fold(
+                    [f32::MAX, f32::MAX],
+                    |acc, p| [acc[0].min(p[0]), acc[1].min(p[1])],
+                );
+                let stroke_max = stroke.points.iter().fold(
+                    [f32::MIN, f32::MIN],
+                    |acc, p| [acc[0].max(p[0]), acc[1].max(p[1])],
+                );
+                let sb_min = to_buf_local(stroke_min);
+                let sb_max = to_buf_local(stroke_max);
+                let s_min_x = sb_min[0] - stroke.size * 0.5;
+                let s_min_y = sb_min[1] - stroke.size * 0.5;
+                let s_max_x = sb_max[0] + stroke.size * 0.5;
+                let s_max_y = sb_max[1] + stroke.size * 0.5;
+                if s_max_x < dr_x0 as f32 || s_min_x > dr_x1 as f32
+                    || s_max_y < dr_y0 as f32 || s_min_y > dr_y1 as f32
+                {
+                    continue; // stroke entirely outside dirty rect
                 }
                 let buf_pts: Vec<[f32; 2]> =
                     stroke.points.iter().map(|&p| to_buf_local(p)).collect();
@@ -750,7 +815,7 @@ fn render_precomp_layers_inner(_comp: &Composition, precomp_comp: &Composition, 
                     (s, d)
                 })
                 .collect();
-            crate::core::puppet_warp::warp_layer_buf(&mut layer_buf, bw, bh, &pins);
+            crate::core::puppet_warp::warp_layer_buf_mesh(&mut layer_buf, bw, bh, &pins);
         }
 
         crate::core::cpu_effects::apply_layer_effects(&mut layer_buf, bw, bh, &layer.effects, effective_frame, precomp_comp.fps);
@@ -2637,6 +2702,31 @@ pub fn render_frame_to_pixels(comp: &Composition, frame: u32, width: u32, height
     });
 
     buffer
+}
+
+/// Multi-frame rendering (MFR): render a range of frames in parallel using rayon.
+/// Returns a Vec of (frame, pixels) in the same order as the input range.
+/// Each frame is rendered independently on a separate CPU core, then the
+/// results are collected sequentially for GPU texture upload.
+pub fn render_frame_range_parallel(
+    comp: &Composition,
+    from: u32,
+    to: u32,
+    width: u32,
+    height: u32,
+    exposure_ev: f32,
+    lut_mode: u32,
+) -> Vec<(u32, Vec<u8>)> {
+    use rayon::prelude::*;
+
+    let frames: Vec<u32> = (from..=to).collect();
+    frames
+        .par_iter()
+        .map(|&f| {
+            let pixels = render_frame_to_pixels(comp, f, width, height, exposure_ev, lut_mode);
+            (f, pixels)
+        })
+        .collect()
 }
 
 /// Render a frame and return linear-light f32 RGBA pixels (16/32bpc path).

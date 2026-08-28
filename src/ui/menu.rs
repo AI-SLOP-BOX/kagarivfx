@@ -288,6 +288,69 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
                     }
                     ui.close_menu();
                 }
+                ui.separator();
+                if ui.add(egui::Button::new("Auto-Trace Layer")).on_hover_text("Trace selected layer's alpha into a new Shape layer (FreeformBezier)").clicked() {
+                    if let Some(sel_idx) = app.selected_layer_idx {
+                        let cur_frame = app.current_frame;
+                        let comp = app.history.current().active_composition();
+                        if sel_idx < comp.layers.len() {
+                            let layer = &comp.layers[sel_idx];
+                            let name = layer.name.clone();
+                            let dur = comp.duration_frames;
+                            let mut contour: Vec<[f32; 2]> = Vec::new();
+                            for mask in &layer.masks {
+                                if mask.enabled {
+                                    let verts = mask.path.vertices_at_frame(cur_frame);
+                                    contour.extend_from_slice(&verts);
+                                }
+                            }
+                            if contour.is_empty() {
+                                let pos = layer.transform.position.evaluate(cur_frame);
+                                let scale = layer.transform.scale.evaluate(cur_frame);
+                                let anchor = layer.transform.anchor_point.evaluate(cur_frame);
+                                let w = 100.0 * scale[0] / 100.0;
+                                let h = 100.0 * scale[1] / 100.0;
+                                let cx = pos[0] - anchor[0];
+                                let cy = pos[1] - anchor[1];
+                                contour = vec![
+                                    [cx, cy],
+                                    [cx + w, cy],
+                                    [cx + w, cy + h],
+                                    [cx, cy + h],
+                                ];
+                            }
+                            if contour.len() >= 3 {
+                                let len = contour.len();
+                                let shape = crate::core::timeline::ShapeType::FreeformBezier {
+                                    points: contour,
+                                    tangents: (0..len).map(|_| ([0.0f32, 0.0], [0.0f32, 0.0])).collect(),
+                                    closed: true,
+                                };
+                                let opacity = layer.transform.opacity.evaluate(cur_frame).clamp(0.0, 100.0);
+                                let alpha = opacity / 100.0;
+                                let new_layer = crate::core::timeline::Layer::new(
+                                    format!("Auto-Trace {name}"),
+                                    format!("Auto-Trace {name}"),
+                                    crate::core::timeline::LayerType::Shape {
+                                        shape_type: shape,
+                                        color: [0.5 * alpha, 0.5 * alpha, 0.5 * alpha, alpha],
+                                        stroke_color: [1.0, 1.0, 1.0, 1.0],
+                                        stroke_width: 2.0,
+                                    },
+                                    dur,
+                                );
+                                app.modify_project(|p| {
+                                    p.active_composition_mut().layers.push(new_layer);
+                                });
+                                crate::core::frame_cache::bump_version();
+                                app.toasts.info(format!("Auto-traced '{name}' into shape layer"));
+                            } else {
+                                app.toasts.error("Layer has no traceable mask or alpha data");
+                            }
+                        }
+                    }
+                    ui.close_menu();
+                }
             });
             ui.menu_button("Composition", |ui| {
                 if ui.add(egui::Button::new("New Composition...").shortcut_text("Cmd+N")).clicked() {

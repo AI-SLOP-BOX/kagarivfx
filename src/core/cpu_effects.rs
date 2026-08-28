@@ -905,6 +905,12 @@ fn apply_one_ctx(
             // Merge Paths is a vector shape operator, applied during shape rasterization.
             // CPU effect pass is a no-op for this.
         }
+        EffectType::OffsetPath { amount, .. } => {
+            let offset = amount.evaluate(frame);
+            if offset != 0.0 {
+                crate::core::ae_effects_pack::apply_simple_choker(pixels, offset);
+            }
+        }
         EffectType::BassTreble { bass_gain, treble_gain, crossover_freq } => {
             let bass = bass_gain.evaluate(frame);
             let treble = treble_gain.evaluate(frame);

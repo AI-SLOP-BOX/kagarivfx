@@ -89,6 +89,31 @@ impl ParallelRenderQueue {
             items_done.fetch_add(1, Ordering::Relaxed);
         });
     }
+
+    /// Multi-frame rendering (MFR): render all frames of all items in parallel
+    /// across both items AND frames within each item. This maximizes CPU core
+    /// utilization for batch rendering.
+    pub fn render_all_mfr<F>(&self, render_frame: F)
+    where
+        F: Fn(&str, u32) -> Vec<u8> + Sync,
+    {
+        self.items.par_iter().enumerate().for_each(|(item_idx, item)| {
+            if self.is_cancelled() { return; }
+
+            let frames: Vec<u32> = (item.start_frame..=item.end_frame).collect();
+            frames.par_iter().for_each(|&frame| {
+                if self.is_cancelled() { return; }
+
+                let _pixels = render_frame(&item.comp_name, frame);
+                self.total_frames_rendered.fetch_add(1, Ordering::Relaxed);
+
+                if let Some(cb) = &self.progress {
+                    let done = self.total_frames_rendered.load(Ordering::Relaxed);
+                    cb(item_idx, done, self.total_frames);
+                }
+            });
+        });
+    }
 }
 
 impl Default for ParallelRenderQueue {

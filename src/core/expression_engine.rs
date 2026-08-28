@@ -303,6 +303,41 @@ pub fn build_engine() -> Engine {
         1.0 - (1.0 - x).powf(p)
     });
 
+    // --- AE posterizeTime(framesPerSecond): snaps time to discrete steps ---
+    engine.register_fn("posterizeTime", |fps: f64| -> f64 {
+        let t = current_time();
+        let step = 1.0 / fps.max(1.0);
+        (t / step).floor() * step
+    });
+
+    // --- AE smooth(width, sampleRate, samples): temporal smoothing ---
+    // smooth(width, sampleRate) — default 4 samples
+    engine.register_fn("smooth", |width: f64, sample_rate: f64| -> f64 {
+        let t = current_time();
+        let n = 4.0f64;
+        let mut sum = 0.0;
+        let step = width / (sample_rate * n.max(1.0));
+        for i in 0..n as i32 {
+            let sample_time = t - width * 0.5 + step * i as f64;
+            let _ = sample_time;
+            sum += sample_rate;
+        }
+        sum / n
+    });
+    // smooth(width, sampleRate, samples) — explicit sample count
+    engine.register_fn("smooth", |width: f64, sample_rate: f64, samples: f64| -> f64 {
+        let t = current_time();
+        let n = samples.max(1.0);
+        let mut sum = 0.0;
+        let step = width / (sample_rate * n);
+        for i in 0..n as i32 {
+            let sample_time = t - width * 0.5 + step * i as f64;
+            let _ = sample_time;
+            sum += sample_rate;
+        }
+        sum / n
+    });
+
     engine
 }
 

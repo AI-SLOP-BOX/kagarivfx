@@ -100,14 +100,73 @@ pub struct TrackConfig {
 }
 
 /// Track a planar surface from reference to target using SAD block matching.
-/// Compute a 3x3 homography matrix mapping source points to destination points.
+/// Compute the 3×3 homography matrix mapping `src_pts` → `dst_pts` via the
+/// Direct Linear Transform with h33 normalised to 1.  Returns None when
+/// the point configuration is degenerate.
 pub fn compute_homography(src_pts: &[[f32; 2]], dst_pts: &[[f32; 2]]) -> Option<[[f32; 3]; 3]> {
     if src_pts.len() < 4 || dst_pts.len() < 4 || src_pts.len() != dst_pts.len() {
         return None;
     }
-    // Simplified DLT (Direct Linear Transform) using 4 point pairs
-    // Returns 3x3 homography in normalized coordinates
-    Some([[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]])
+    // Build the 8×8 system Ah = b for the homography h = [h11..h32]^T.
+    let mut a = [[0.0f64; 8]; 8];
+    let mut b = [0.0f64; 8];
+    for i in 0..4 {
+        let [x, y] = [src_pts[i][0] as f64, src_pts[i][1] as f64];
+        let [u, v] = [dst_pts[i][0] as f64, dst_pts[i][1] as f64];
+        let r1 = i * 2;
+        let r2 = r1 + 1;
+        a[r1] = [-x, -y, -1.0, 0.0, 0.0, 0.0, u * x, u * y];
+        b[r1] = -u;
+        a[r2] = [0.0, 0.0, 0.0, -x, -y, -1.0, v * x, v * y];
+        b[r2] = -v;
+    }
+
+    // Gaussian elimination with partial pivoting.
+    for col in 0..8 {
+        let pivot_row = (col..8)
+            .max_by(|&l, &r| {
+                a[l][col]
+                    .abs()
+                    .partial_cmp(&a[r][col].abs())
+                    .unwrap_or(std::cmp::Ordering::Equal)
+            })
+            .unwrap_or(col);
+        if a[pivot_row][col].abs() < 1e-10 {
+            return None;
+        }
+        a.swap(col, pivot_row);
+        b.swap(col, pivot_row);
+        for row in (col + 1)..8 {
+            let factor = a[row][col] / a[col][col];
+            let pivot = a[col];
+            for k in col..8 {
+                a[row][k] -= factor * pivot[k];
+            }
+            b[row] -= factor * b[col];
+        }
+    }
+
+    // Back substitution.
+    let mut h = [0.0f64; 8];
+    for i in (0..8).rev() {
+        let mut sum = b[i];
+        for k in (i + 1)..8 {
+            sum -= a[i][k] * h[k];
+        }
+        h[i] = sum / a[i][i];
+    }
+
+    // Normalise so h33 = 1.
+    let h33 = h[7];
+    if h33.abs() < 1e-10 {
+        return None;
+    }
+
+    Some([
+        [h[0] as f32 / h33 as f32, h[1] as f32 / h33 as f32, h[2] as f32 / h33 as f32],
+        [h[3] as f32 / h33 as f32, h[4] as f32 / h33 as f32, h[5] as f32 / h33 as f32],
+        [h[6] as f32 / h33 as f32, h[7] as f32 / h33 as f32, 1.0],
+    ])
 }
 
 pub fn track_planar(

@@ -42,6 +42,7 @@ pub mod layer_constraints;
 pub mod essential_properties;
 pub mod proxy;
 pub mod parallel_render;
+pub mod precomp_cache;
 pub mod path_text;
 pub mod continuous_rasterizer;
 pub mod spatial_keyframe;
