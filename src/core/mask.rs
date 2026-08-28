@@ -39,7 +39,7 @@ pub enum MaskMode {
 /// A single vertex in a Bezier mask path.
 /// Positions are in composition pixel coordinates (0,0 = top-left).
 #[allow(dead_code)]
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct MaskVertex {
     /// Anchor point (the vertex position)
     pub position: [f32; 2],

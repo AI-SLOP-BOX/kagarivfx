@@ -109,6 +109,307 @@ pub fn apply_zig_zag(
     result
 }
 
+/// Applies Round Corners modifier to a Bezier vertex path.
+pub fn apply_round_corners(
+    vertices: &[MaskVertex],
+    radius: f32,
+    closed: bool,
+) -> Vec<MaskVertex> {
+    if vertices.len() < 3 || radius <= 0.001 {
+        return vertices.to_vec();
+    }
+
+    let mut result = Vec::new();
+    let n = vertices.len();
+
+    for i in 0..n {
+        if !closed && (i == 0 || i == n - 1) {
+            result.push(vertices[i].clone());
+            continue;
+        }
+
+        let prev = if i == 0 { &vertices[n - 1] } else { &vertices[i - 1] };
+        let curr = &vertices[i];
+        let next = if i == n - 1 { &vertices[0] } else { &vertices[i + 1] };
+
+        // Vectors from curr to prev and curr to next
+        let v_prev = [prev.position[0] - curr.position[0], prev.position[1] - curr.position[1]];
+        let v_next = [next.position[0] - curr.position[0], next.position[1] - curr.position[1]];
+
+        let len_prev = (v_prev[0].powi(2) + v_prev[1].powi(2)).sqrt().max(0.001);
+        let len_next = (v_next[0].powi(2) + v_next[1].powi(2)).sqrt().max(0.001);
+
+        let d_prev = radius.min(len_prev * 0.45);
+        let d_next = radius.min(len_next * 0.45);
+
+        let p_in = [
+            curr.position[0] + (v_prev[0] / len_prev) * d_prev,
+            curr.position[1] + (v_prev[1] / len_prev) * d_prev,
+        ];
+        let p_out = [
+            curr.position[0] + (v_next[0] / len_next) * d_next,
+            curr.position[1] + (v_next[1] / len_next) * d_next,
+        ];
+
+        let mut v_in = MaskVertex::new(p_in[0], p_in[1]);
+        let mut v_out = MaskVertex::new(p_out[0], p_out[1]);
+
+        let kappa = 0.5522847498f32; // Standard Bezier circular approximation constant
+        v_in.tangent_out = [
+            (curr.position[0] - p_in[0]) * kappa,
+            (curr.position[1] - p_in[1]) * kappa,
+        ];
+        v_out.tangent_in = [
+            (curr.position[0] - p_out[0]) * kappa,
+            (curr.position[1] - p_out[1]) * kappa,
+        ];
+
+        result.push(v_in);
+        result.push(v_out);
+    }
+
+    result
+}
+
+// ──────────────── Hierarchical Shape Content Tree Model ────────────────
+
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct ShapeTransform {
+    pub anchor_point: [f32; 2],
+    pub position: [f32; 2],
+    pub scale: [f32; 2],
+    pub rotation: f32, // Degrees
+    pub opacity: f32,  // 0.0 to 100.0%
+}
+
+impl Default for ShapeTransform {
+    fn default() -> Self {
+        Self {
+            anchor_point: [0.0, 0.0],
+            position: [0.0, 0.0],
+            scale: [100.0, 100.0],
+            rotation: 0.0,
+            opacity: 100.0,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+pub enum ShapeContentItem {
+    Group {
+        name: String,
+        items: Vec<ShapeContentItem>,
+        transform: ShapeTransform,
+    },
+    Path {
+        name: String,
+        vertices: Vec<MaskVertex>,
+        closed: bool,
+    },
+    Rectangle {
+        name: String,
+        size: [f32; 2],
+        position: [f32; 2],
+        roundness: f32,
+    },
+    Ellipse {
+        name: String,
+        size: [f32; 2],
+        position: [f32; 2],
+    },
+    Fill {
+        name: String,
+        color: [f32; 4],
+        opacity: f32,
+    },
+    Stroke {
+        name: String,
+        color: [f32; 4],
+        width: f32,
+        opacity: f32,
+        line_cap: u8,
+        line_join: u8,
+    },
+    TrimPaths {
+        name: String,
+        start: f32,  // 0.0 to 100.0%
+        end: f32,    // 0.0 to 100.0%
+        offset: f32, // Degrees or %
+    },
+    RoundCorners {
+        name: String,
+        radius: f32,
+    },
+    PuckerBloat {
+        name: String,
+        amount: f32,
+    },
+    ZigZag {
+        name: String,
+        size: f32,
+        ridges: u32,
+        smooth: bool,
+    },
+    Repeater {
+        name: String,
+        copies: u32,
+        offset: f32,
+        transform: ShapeTransform,
+    },
+}
+
+#[derive(Debug, Clone)]
+pub struct RenderableShapePath {
+    pub vertices: Vec<MaskVertex>,
+    pub closed: bool,
+    pub fill_color: Option<[f32; 4]>,
+    pub stroke_color: Option<[f32; 4]>,
+    pub stroke_width: f32,
+}
+
+/// Evaluates a recursive tree of ShapeContentItems, sequentially applying geometric modifiers
+/// and outputting the final styled vector path list for the software/GPU renderer.
+pub fn evaluate_shape_tree(items: &[ShapeContentItem]) -> Vec<RenderableShapePath> {
+    let mut current_paths: Vec<(Vec<MaskVertex>, bool)> = Vec::new();
+    let mut active_fill: Option<[f32; 4]> = None;
+    let mut active_stroke: Option<[f32; 4]> = None;
+    let mut active_stroke_w: f32 = 0.0;
+    let mut output_paths: Vec<RenderableShapePath> = Vec::new();
+
+    for item in items {
+        match item {
+            ShapeContentItem::Group { items: sub_items, transform, .. } => {
+                let sub_rendered = evaluate_shape_tree(sub_items);
+                let rad = transform.rotation.to_radians();
+                let cos_r = rad.cos();
+                let sin_r = rad.sin();
+                let sx = transform.scale[0] * 0.01;
+                let sy = transform.scale[1] * 0.01;
+
+                for mut sp in sub_rendered {
+                    for v in &mut sp.vertices {
+                        // Apply local group transform: Anchor -> Scale/Rot -> Position
+                        let lx = (v.position[0] - transform.anchor_point[0]) * sx;
+                        let ly = (v.position[1] - transform.anchor_point[1]) * sy;
+                        let rx = lx * cos_r - ly * sin_r + transform.position[0];
+                        let ry = lx * sin_r + ly * cos_r + transform.position[1];
+                        v.position = [rx, ry];
+                    }
+                    output_paths.push(sp);
+                }
+            }
+            ShapeContentItem::Path { vertices, closed, .. } => {
+                current_paths.push((vertices.clone(), *closed));
+            }
+            ShapeContentItem::Rectangle { size, position, roundness, .. } => {
+                let hw = size[0] * 0.5;
+                let hh = size[1] * 0.5;
+                let raw_rect = vec![
+                    MaskVertex::new(position[0] - hw, position[1] - hh),
+                    MaskVertex::new(position[0] + hw, position[1] - hh),
+                    MaskVertex::new(position[0] + hw, position[1] + hh),
+                    MaskVertex::new(position[0] - hw, position[1] + hh),
+                ];
+                let verts = if *roundness > 0.001 {
+                    apply_round_corners(&raw_rect, *roundness, true)
+                } else {
+                    raw_rect
+                };
+                current_paths.push((verts, true));
+            }
+            ShapeContentItem::Ellipse { size, position, .. } => {
+                let hw = size[0] * 0.5;
+                let hh = size[1] * 0.5;
+                let k_x = hw * 0.5522847498;
+                let k_y = hh * 0.5522847498;
+
+                let mut top = MaskVertex::new(position[0], position[1] - hh);
+                top.tangent_in = [-k_x, 0.0]; top.tangent_out = [k_x, 0.0];
+
+                let mut right = MaskVertex::new(position[0] + hw, position[1]);
+                right.tangent_in = [0.0, -k_y]; right.tangent_out = [0.0, k_y];
+
+                let mut bottom = MaskVertex::new(position[0], position[1] + hh);
+                bottom.tangent_in = [k_x, 0.0]; bottom.tangent_out = [-k_x, 0.0];
+
+                let mut left = MaskVertex::new(position[0] - hw, position[1]);
+                left.tangent_in = [0.0, k_y]; left.tangent_out = [0.0, -k_y];
+
+                current_paths.push((vec![top, right, bottom, left], true));
+            }
+            ShapeContentItem::RoundCorners { radius, .. } => {
+                for (verts, closed) in &mut current_paths {
+                    *verts = apply_round_corners(verts, *radius, *closed);
+                }
+            }
+            ShapeContentItem::PuckerBloat { amount, .. } => {
+                let opt = PuckerBloatOptions { amount: *amount };
+                for (verts, _) in &mut current_paths {
+                    *verts = apply_pucker_bloat(verts, &opt);
+                }
+            }
+            ShapeContentItem::ZigZag { size, ridges, smooth, .. } => {
+                let opt = ZigZagOptions { size: *size, ridges_per_segment: *ridges, smooth: *smooth };
+                for (verts, _) in &mut current_paths {
+                    *verts = apply_zig_zag(verts, &opt);
+                }
+            }
+            ShapeContentItem::Repeater { copies, offset, transform, .. } => {
+                let mut duplicated = Vec::new();
+                let count = (*copies).max(1);
+                for i in 0..count {
+                    let progress = i as f32 + *offset;
+                    let rad = (transform.rotation * progress).to_radians();
+                    let cos_r = rad.cos();
+                    let sin_r = rad.sin();
+                    let sx = (100.0 + (transform.scale[0] - 100.0) * progress) * 0.01;
+                    let sy = (100.0 + (transform.scale[1] - 100.0) * progress) * 0.01;
+                    let tx = transform.position[0] * progress;
+                    let ty = transform.position[1] * progress;
+
+                    for (verts, closed) in &current_paths {
+                        let mut rep_verts = verts.clone();
+                        for v in &mut rep_verts {
+                            let lx = (v.position[0] - transform.anchor_point[0]) * sx;
+                            let ly = (v.position[1] - transform.anchor_point[1]) * sy;
+                            let rx = lx * cos_r - ly * sin_r + tx;
+                            let ry = lx * sin_r + ly * cos_r + ty;
+                            v.position = [rx, ry];
+                        }
+                        duplicated.push((rep_verts, *closed));
+                    }
+                }
+                current_paths = duplicated;
+            }
+            ShapeContentItem::Fill { color, opacity, .. } => {
+                let mut c = *color;
+                c[3] *= (*opacity * 0.01).clamp(0.0, 1.0);
+                active_fill = Some(c);
+            }
+            ShapeContentItem::Stroke { color, width, opacity, .. } => {
+                let mut c = *color;
+                c[3] *= (*opacity * 0.01).clamp(0.0, 1.0);
+                active_stroke = Some(c);
+                active_stroke_w = *width;
+            }
+            _ => {}
+        }
+    }
+
+    // Flush current paths with active styling
+    for (verts, closed) in current_paths {
+        output_paths.push(RenderableShapePath {
+            vertices: verts,
+            closed,
+            fill_color: active_fill,
+            stroke_color: active_stroke,
+            stroke_width: active_stroke_w,
+        });
+    }
+
+    output_paths
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -125,5 +426,48 @@ mod tests {
 
         assert_eq!(bloat.len(), 2);
         assert!(bloat[1].position[0] > 10.0);
+    }
+
+    #[test]
+    fn test_round_corners_generates_tangents() {
+        let rect = vec![
+            MaskVertex::new(0.0, 0.0),
+            MaskVertex::new(100.0, 0.0),
+            MaskVertex::new(100.0, 100.0),
+            MaskVertex::new(0.0, 100.0),
+        ];
+        let rounded = apply_round_corners(&rect, 20.0, true);
+        // Each corner splits into 2 vertices (incoming & outgoing tangent) => 8 vertices
+        assert_eq!(rounded.len(), 8);
+    }
+
+    #[test]
+    fn test_evaluate_shape_tree_with_repeater() {
+        let tree = vec![
+            ShapeContentItem::Rectangle {
+                name: "Rect".into(),
+                size: [50.0, 50.0],
+                position: [0.0, 0.0],
+                roundness: 0.0,
+            },
+            ShapeContentItem::Repeater {
+                name: "Repeater".into(),
+                copies: 3,
+                offset: 0.0,
+                transform: ShapeTransform {
+                    position: [100.0, 0.0],
+                    ..Default::default()
+                },
+            },
+            ShapeContentItem::Fill {
+                name: "Fill".into(),
+                color: [1.0, 0.0, 0.0, 1.0],
+                opacity: 100.0,
+            },
+        ];
+        let paths = evaluate_shape_tree(&tree);
+        assert_eq!(paths.len(), 3);
+        assert_eq!(paths[0].fill_color, Some([1.0, 0.0, 0.0, 1.0]));
+        assert_eq!(paths[1].vertices[0].position[0], 75.0); // 1st copy shifted by 100
     }
 }

@@ -1301,6 +1301,46 @@ pub fn eval_expression_f64(script: &str, vars: &[(&str, f64)]) -> f64 {
     })
 }
 
+// ──────────────── Pick Whip Expression Generator ────────────────
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum PickWhipTarget {
+    TransformProperty { layer_name: String, prop: String },
+    EffectProperty { layer_name: String, effect_name: String, param_name: String },
+    LayerSelf { layer_name: String },
+    ExternalCompProperty { comp_name: String, layer_name: String, prop_path: String },
+}
+
+/// Automatically generates valid AE-compatible expression code when using the Pick Whip tool.
+pub fn generate_pick_whip_expression(target: &PickWhipTarget, current_layer_name: &str) -> String {
+    match target {
+        PickWhipTarget::TransformProperty { layer_name, prop } => {
+            if layer_name == current_layer_name {
+                format!("transform.{}", prop)
+            } else {
+                format!("thisComp.layer(\"{}\").transform.{}", layer_name, prop)
+            }
+        }
+        PickWhipTarget::EffectProperty { layer_name, effect_name, param_name } => {
+            if layer_name == current_layer_name {
+                format!("effect(\"{}\")(\"{}\")", effect_name, param_name)
+            } else {
+                format!("thisComp.layer(\"{}\").effect(\"{}\")(\"{}\")", layer_name, effect_name, param_name)
+            }
+        }
+        PickWhipTarget::LayerSelf { layer_name } => {
+            if layer_name == current_layer_name {
+                "thisLayer".to_string()
+            } else {
+                format!("thisComp.layer(\"{}\")", layer_name)
+            }
+        }
+        PickWhipTarget::ExternalCompProperty { comp_name, layer_name, prop_path } => {
+            format!("comp(\"{}\").layer(\"{}\").{}", comp_name, layer_name, prop_path)
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1574,5 +1614,18 @@ mod tests_loops {
         assert_eq!(arr.len(), 2);
         assert!((arr[0].as_float().unwrap() - 15.0).abs() < 1e-6);
         assert!((arr[1].as_float().unwrap() - 30.0).abs() < 1e-6);
+    }
+
+    #[test]
+    fn test_generate_pick_whip_expression() {
+        let t1 = PickWhipTarget::TransformProperty { layer_name: "Logo".into(), prop: "position".into() };
+        assert_eq!(generate_pick_whip_expression(&t1, "Logo"), "transform.position");
+        assert_eq!(generate_pick_whip_expression(&t1, "Background"), "thisComp.layer(\"Logo\").transform.position");
+
+        let t2 = PickWhipTarget::EffectProperty { layer_name: "Control".into(), effect_name: "Slider Control".into(), param_name: "Slider".into() };
+        assert_eq!(generate_pick_whip_expression(&t2, "Text"), "thisComp.layer(\"Control\").effect(\"Slider Control\")(\"Slider\")");
+
+        let t3 = PickWhipTarget::ExternalCompProperty { comp_name: "PreComp".into(), layer_name: "Null 1".into(), prop_path: "transform.opacity".into() };
+        assert_eq!(generate_pick_whip_expression(&t3, "Main"), "comp(\"PreComp\").layer(\"Null 1\").transform.opacity");
     }
 }

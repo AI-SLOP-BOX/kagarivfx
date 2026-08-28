@@ -2414,6 +2414,88 @@ dither_output: false,
             self.layers[layer_idx].transform.position = crate::core::property::Animatable::new_constant(new_pos);
         }
     }
+
+    /// Pre-compose selected layers into a new nested Sub-Composition (AE Parity).
+    /// Returns the newly created Sub-Composition if successful.
+    pub fn precompose_layers(
+        &mut self,
+        layer_ids: &[String],
+        new_comp_id: String,
+        new_comp_name: String,
+        mode: PrecompAttributesMode,
+    ) -> Option<Composition> {
+        if layer_ids.is_empty() {
+            return None;
+        }
+
+        // Find lowest index of selected layers in parent comp to place the new precomp layer at that spot
+        let mut min_idx = usize::MAX;
+        let mut extracted_layers = Vec::new();
+
+        let mut remaining_layers = Vec::new();
+        for (i, layer) in self.layers.drain(..).enumerate() {
+            if layer_ids.iter().any(|id| id == &layer.id) {
+                min_idx = min_idx.min(i);
+                extracted_layers.push(layer);
+            } else {
+                remaining_layers.push(layer);
+            }
+        }
+        self.layers = remaining_layers;
+
+        if extracted_layers.is_empty() {
+            return None;
+        }
+
+        let mut new_sub_comp = Composition::new(
+            new_comp_id.clone(),
+            new_comp_name.clone(),
+            self.width,
+            self.height,
+            self.fps,
+            self.duration_frames,
+        );
+
+        let mut precomp_layer = Layer::new(
+            format!("layer_precomp_{}", new_comp_id),
+            new_comp_name,
+            LayerType::PreComp { comp_id: new_comp_id.clone() },
+            self.duration_frames,
+        );
+        precomp_layer.transform.position = Animatable::new_constant([self.width as f32 * 0.5, self.height as f32 * 0.5]);
+
+        match mode {
+            PrecompAttributesMode::MoveToNewComp => {
+                // Move all layers and attributes into sub-comp
+                new_sub_comp.layers = extracted_layers;
+            }
+            PrecompAttributesMode::LeaveInParent => {
+                // Single-layer only: move source layer into sub-comp with default transform,
+                // and keep original transform & effects on the precomp layer in the parent.
+                if let Some(mut single_layer) = extracted_layers.into_iter().next() {
+                    precomp_layer.transform = single_layer.transform.clone();
+                    precomp_layer.effects = std::mem::take(&mut single_layer.effects);
+                    precomp_layer.masks = std::mem::take(&mut single_layer.masks);
+                    single_layer.transform = Transform2D::default();
+                    new_sub_comp.layers = vec![single_layer];
+                }
+            }
+        }
+
+        let insert_idx = min_idx.min(self.layers.len());
+        self.layers.insert(insert_idx, precomp_layer);
+        self.sub_compositions.push(new_sub_comp.clone());
+
+        Some(new_sub_comp)
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum PrecompAttributesMode {
+    /// Leaves transforms, effects, and masks on the new precomp layer in the current comp. (Single layer only)
+    LeaveInParent,
+    /// Moves all layer transforms, effects, and masks inside the new sub-composition.
+    MoveToNewComp,
 }
 
 // ─── Project Item & Asset Management ─────────────────────────────────────
@@ -2776,6 +2858,26 @@ mod tests {
         let chapters = export_youtube_chapters(&markers, 30);
         assert!(chapters.contains("00:00 Introduction"));
         assert!(chapters.contains("00:03 Main Feature"));
+    }
+
+    #[test]
+    fn test_precompose_layers_move_and_leave_attributes() {
+        let mut comp = Composition::new("main".into(), "Main".into(), 1920, 1080, 30, 300);
+        let mut l1 = Layer::new("l1".into(), "Text 1".into(), LayerType::Null, 300);
+        l1.transform.position = Animatable::new_constant([123.0, 456.0]);
+        comp.add_layer(l1);
+
+        let sub_comp = comp.precompose_layers(
+            &["l1".into()],
+            "sub1".into(),
+            "Sub Comp 1".into(),
+            PrecompAttributesMode::MoveToNewComp,
+        ).expect("precompose should succeed");
+
+        assert_eq!(comp.layers.len(), 1);
+        assert!(matches!(comp.layers[0].layer_type, LayerType::PreComp { .. }));
+        assert_eq!(sub_comp.layers.len(), 1);
+        assert_eq!(sub_comp.layers[0].transform.position.evaluate(0), [123.0, 456.0]);
     }
 }
 
