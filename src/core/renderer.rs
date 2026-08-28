@@ -170,7 +170,65 @@ struct LayerUniform {
     trim_offset: f32,
     _pad_trim: f32,
 
-    _padding_align: [f32; 18], // Keep total size a multiple of 256 for WGPU dynamic uniform offsets
+    // Shape fill gradient (0=solid, 1=linear, 2=radial)
+    fill_type: u32,
+    grad_start_x: f32,
+    grad_start_y: f32,
+    grad_end_x: f32,
+    grad_end_y: f32,
+    grad_color1_r: f32,
+    grad_color1_g: f32,
+    grad_color1_b: f32,
+    grad_color1_a: f32,
+    grad_color2_r: f32,
+    grad_color2_g: f32,
+    grad_color2_b: f32,
+    grad_color2_a: f32,
+    grad_center_x: f32,
+    grad_center_y: f32,
+    grad_radius: f32,
+    _grad_pad: f32,
+
+    // Layer Styles
+    ls_stroke_width: f32,
+    ls_stroke_r: f32,
+    ls_stroke_g: f32,
+    ls_stroke_b: f32,
+    ls_color_overlay_r: f32,
+    ls_color_overlay_g: f32,
+    ls_color_overlay_b: f32,
+    ls_color_overlay_a: f32,
+    ls_gradient_start_x: f32,
+    ls_gradient_start_y: f32,
+    ls_gradient_end_x: f32,
+    ls_gradient_end_y: f32,
+    ls_gradient_color1_r: f32,
+    ls_gradient_color1_g: f32,
+    ls_gradient_color1_b: f32,
+    ls_gradient_color1_a: f32,
+    ls_gradient_color2_r: f32,
+    ls_gradient_color2_g: f32,
+    ls_gradient_color2_b: f32,
+    ls_gradient_color2_a: f32,
+    ls_inner_shadow_offset_x: f32,
+    ls_inner_shadow_offset_y: f32,
+    ls_inner_shadow_size: f32,
+    ls_inner_shadow_opacity: f32,
+    ls_inner_shadow_r: f32,
+    ls_inner_shadow_g: f32,
+    ls_inner_shadow_b: f32,
+    ls_bevel_size: f32,
+    ls_bevel_angle: f32,
+    ls_bevel_strength: f32,
+    ls_bevel_light_r: f32,
+    ls_bevel_light_g: f32,
+    ls_bevel_light_b: f32,
+    ls_style_flags: u32,
+    _ls_pad1: f32,
+    _ls_pad2: f32,
+    _ls_pad3: f32,
+
+    _padding_align: [f32; 28], // Keep total size a multiple of 256 (768 bytes) for WGPU dynamic uniform offsets
 }
 
 // ─── GPU Layer Mask Rasterization (CPU-baked coverage → group(3) texture) ──
@@ -1947,7 +2005,77 @@ impl WgpuRenderer {
                     trim_end: layer.trim_paths.as_ref().map(|t| t.end.evaluate(frame) / 100.0).unwrap_or(1.0),
                     trim_offset: layer.trim_paths.as_ref().map(|t| t.offset.evaluate(frame).to_radians() / std::f32::consts::TAU).unwrap_or(0.0),
                     _pad_trim: 0.0,
-                    _padding_align: [0.0; 18],
+
+                    fill_type: 0,
+                    grad_start_x: 0.0,
+                    grad_start_y: 0.0,
+                    grad_end_x: 1.0,
+                    grad_end_y: 1.0,
+                    grad_color1_r: 1.0,
+                    grad_color1_g: 1.0,
+                    grad_color1_b: 1.0,
+                    grad_color1_a: 1.0,
+                    grad_color2_r: 0.0,
+                    grad_color2_g: 0.0,
+                    grad_color2_b: 0.0,
+                    grad_color2_a: 1.0,
+                    grad_center_x: 0.5,
+                    grad_center_y: 0.5,
+                    grad_radius: 0.5,
+                    _grad_pad: 0.0,
+
+                    ls_stroke_width: layer.style.stroke.size,
+                    ls_stroke_r: layer.style.stroke.color[0],
+                    ls_stroke_g: layer.style.stroke.color[1],
+                    ls_stroke_b: layer.style.stroke.color[2],
+                    ls_color_overlay_r: layer.style.color_overlay.color[0],
+                    ls_color_overlay_g: layer.style.color_overlay.color[1],
+                    ls_color_overlay_b: layer.style.color_overlay.color[2],
+                    ls_color_overlay_a: layer.style.color_overlay.opacity / 100.0,
+                    ls_gradient_start_x: 0.0,
+                    ls_gradient_start_y: 0.0,
+                    ls_gradient_end_x: 1.0,
+                    ls_gradient_end_y: 1.0,
+                    ls_gradient_color1_r: layer.style.gradient_overlay.color_start[0],
+                    ls_gradient_color1_g: layer.style.gradient_overlay.color_start[1],
+                    ls_gradient_color1_b: layer.style.gradient_overlay.color_start[2],
+                    ls_gradient_color1_a: layer.style.gradient_overlay.color_start[3] * (layer.style.gradient_overlay.opacity / 100.0),
+                    ls_gradient_color2_r: layer.style.gradient_overlay.color_end[0],
+                    ls_gradient_color2_g: layer.style.gradient_overlay.color_end[1],
+                    ls_gradient_color2_b: layer.style.gradient_overlay.color_end[2],
+                    ls_gradient_color2_a: layer.style.gradient_overlay.color_end[3] * (layer.style.gradient_overlay.opacity / 100.0),
+                    ls_inner_shadow_offset_x: {
+                        let rad = layer.style.inner_shadow.angle.to_radians();
+                        rad.cos() * layer.style.inner_shadow.distance
+                    },
+                    ls_inner_shadow_offset_y: {
+                        let rad = layer.style.inner_shadow.angle.to_radians();
+                        rad.sin() * layer.style.inner_shadow.distance
+                    },
+                    ls_inner_shadow_size: layer.style.inner_shadow.size,
+                    ls_inner_shadow_opacity: layer.style.inner_shadow.opacity / 100.0,
+                    ls_inner_shadow_r: layer.style.inner_shadow.color[0],
+                    ls_inner_shadow_g: layer.style.inner_shadow.color[1],
+                    ls_inner_shadow_b: layer.style.inner_shadow.color[2],
+                    ls_bevel_size: layer.style.bevel_emboss.size,
+                    ls_bevel_angle: layer.style.bevel_emboss.angle,
+                    ls_bevel_strength: layer.style.bevel_emboss.highlight,
+                    ls_bevel_light_r: layer.style.bevel_emboss.color_light[0],
+                    ls_bevel_light_g: layer.style.bevel_emboss.color_light[1],
+                    ls_bevel_light_b: layer.style.bevel_emboss.color_light[2],
+                    ls_style_flags: {
+                        let mut flags = 0u32;
+                        if layer.style.stroke.enabled { flags |= 1; }
+                        if layer.style.color_overlay.enabled { flags |= 2; }
+                        if layer.style.gradient_overlay.enabled { flags |= 4; }
+                        if layer.style.inner_shadow.enabled { flags |= 8; }
+                        if layer.style.bevel_emboss.enabled { flags |= 16; }
+                        flags
+                    },
+                    _ls_pad1: 0.0,
+                    _ls_pad2: 0.0,
+                    _ls_pad3: 0.0,
+                    _padding_align: [0.0; 28],
                 };
 
                 layer_mask_plans.push(collect_mask_shapes(

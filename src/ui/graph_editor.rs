@@ -51,53 +51,60 @@ pub fn draw_graph_editor(
 
             ui.add_space(8.0);
             ui.checkbox(linked_tangent, "🔗 Link");
-            if ui.button("⚡ Easy Ease (F9)").on_hover_text("Apply smooth cubic Bezier ease curve to all keyframes").clicked() {
+
+            // ── Visual Ease Presets Palette ──
+            fn apply_preset_to_layer(layer: &mut Layer, prop: &str, preset: crate::core::keyframe::EasePreset) {
                 use crate::core::property::Animatable;
-                use crate::core::keyframe::InterpolationType;
-
-                macro_rules! apply_easy_ease {
-                    ($kfs:expr) => {
-                        for kf in $kfs.iter_mut() {
-                            kf.interpolation = InterpolationType::Bezier {
-                                outgoing: crate::core::keyframe::BezierControlPoint { influence: 0.333, speed: 0.0 },
-                                incoming: crate::core::keyframe::BezierControlPoint { influence: 0.333, speed: 0.0 },
-                                custom_bezier: Some([0.33, 0.0, 0.67, 1.0]),
-                            };
-
-
-                        }
-                    };
+                use crate::core::keyframe::{BezierControlPoint, InterpolationType};
+                let pts = preset.control_points();
+                fn apply<T>(kfs: &mut [crate::core::keyframe::Keyframe<T>], pts: [f32; 4]) {
+                    for kf in kfs.iter_mut() {
+                        kf.interpolation = InterpolationType::Bezier {
+                            outgoing: BezierControlPoint { influence: 0.333, speed: 0.0 },
+                            incoming: BezierControlPoint { influence: 0.333, speed: 0.0 },
+                            custom_bezier: Some(pts),
+                        };
+                    }
                 }
 
-                let active_prop = selected_property.clone().unwrap_or_else(|| "Position X".to_string());
-                match active_prop.as_str() {
+                match prop {
                     "Position X" | "Position Y" => {
-                        if let Animatable::Animated(ref mut kfs) = layer.transform.position { apply_easy_ease!(kfs); }
+                        if let Animatable::Animated(ref mut kfs) = layer.transform.position { apply(kfs, pts); }
                     }
                     "Scale X" | "Scale Y" => {
-                        if let Animatable::Animated(ref mut kfs) = layer.transform.scale { apply_easy_ease!(kfs); }
+                        if let Animatable::Animated(ref mut kfs) = layer.transform.scale { apply(kfs, pts); }
                     }
                     "Rotation" => {
-                        if let Animatable::Animated(ref mut kfs) = layer.transform.rotation { apply_easy_ease!(kfs); }
+                        if let Animatable::Animated(ref mut kfs) = layer.transform.rotation { apply(kfs, pts); }
                     }
                     "Opacity" => {
-                        if let Animatable::Animated(ref mut kfs) = layer.transform.opacity { apply_easy_ease!(kfs); }
+                        if let Animatable::Animated(ref mut kfs) = layer.transform.opacity { apply(kfs, pts); }
                     }
-                                        p if p.starts_with("Pin") => {
+                    p if p.starts_with("Pin") => {
                         if let Some(Animatable::Animated(ref mut kfs)) = pin_anim_mut(layer, p) {
-                            let ez = crate::core::keyframe::EasePreset::Standard.control_points();
-                            for kf in kfs.iter_mut() {
-                                kf.interpolation = crate::core::keyframe::InterpolationType::Bezier {
-                                    outgoing: crate::core::keyframe::BezierControlPoint { influence: 0.333, speed: 0.0 },
-                                    incoming: crate::core::keyframe::BezierControlPoint { influence: 0.333, speed: 0.0 },
-                                    custom_bezier: Some(ez),
-                                };
-                            }
+                            apply(kfs, pts);
                         }
                     }
                     _ => {}
                 }
-                *project_changed = true;
+            }
+
+            let active_prop = selected_property.clone().unwrap_or_else(|| "Position X".to_string());
+
+            for (lbl, preset, tip) in [
+                ("⚡ Easy Ease (F9)", crate::core::keyframe::EasePreset::Standard, "Standard symmetric ease [0.25, 0.1, 0.25, 1.0]"),
+                ("↗ In", crate::core::keyframe::EasePreset::EaseIn, "Ease In (slow start, fast end)"),
+                ("↘ Out", crate::core::keyframe::EasePreset::EaseOut, "Ease Out (fast start, slow end)"),
+                ("🌊 Sine", crate::core::keyframe::EasePreset::Sine, "Ultra smooth Sine ease"),
+                ("🚀 Fast Out", crate::core::keyframe::EasePreset::FastOut, "Quick initial burst then smooth decelerate"),
+                ("🎯 Overshoot", crate::core::keyframe::EasePreset::Overshoot, "Spring overshoot past target value"),
+                ("🏀 Bounce", crate::core::keyframe::EasePreset::Bounce, "Physical single bounce easing"),
+                ("🪀 Elastic", crate::core::keyframe::EasePreset::Elastic, "Elastic spring recoil easing"),
+            ] {
+                if ui.small_button(lbl).on_hover_text(tip).clicked() {
+                    apply_preset_to_layer(layer, &active_prop, preset);
+                    *project_changed = true;
+                }
             }
 
             ui.add_space(4.0);

@@ -105,6 +105,65 @@ struct Layer {
     trim_end: f32,
     trim_offset: f32,
     _pad_trim: f32,
+
+    // Shape fill gradient (0=solid, 1=linear, 2=radial)
+    fill_type: u32,
+    grad_start_x: f32,
+    grad_start_y: f32,
+    grad_end_x: f32,
+    grad_end_y: f32,
+    grad_color1_r: f32,
+    grad_color1_g: f32,
+    grad_color1_b: f32,
+    grad_color1_a: f32,
+    grad_color2_r: f32,
+    grad_color2_g: f32,
+    grad_color2_b: f32,
+    grad_color2_a: f32,
+    grad_center_x: f32,
+    grad_center_y: f32,
+    grad_radius: f32,
+    _grad_pad: f32,
+
+    // Layer Styles (applied after effects, before compositing)
+    ls_stroke_width: f32,
+    ls_stroke_r: f32,
+    ls_stroke_g: f32,
+    ls_stroke_b: f32,
+    ls_color_overlay_r: f32,
+    ls_color_overlay_g: f32,
+    ls_color_overlay_b: f32,
+    ls_color_overlay_a: f32,
+    ls_gradient_start_x: f32,
+    ls_gradient_start_y: f32,
+    ls_gradient_end_x: f32,
+    ls_gradient_end_y: f32,
+    ls_gradient_color1_r: f32,
+    ls_gradient_color1_g: f32,
+    ls_gradient_color1_b: f32,
+    ls_gradient_color1_a: f32,
+    ls_gradient_color2_r: f32,
+    ls_gradient_color2_g: f32,
+    ls_gradient_color2_b: f32,
+    ls_gradient_color2_a: f32,
+    ls_inner_shadow_offset_x: f32,
+    ls_inner_shadow_offset_y: f32,
+    ls_inner_shadow_size: f32,
+    ls_inner_shadow_opacity: f32,
+    ls_inner_shadow_r: f32,
+    ls_inner_shadow_g: f32,
+    ls_inner_shadow_b: f32,
+    ls_bevel_size: f32,
+    ls_bevel_angle: f32,
+    ls_bevel_strength: f32,
+    ls_bevel_light_r: f32,
+    ls_bevel_light_g: f32,
+    ls_bevel_light_b: f32,
+    ls_style_flags: u32,
+    _ls_pad1: f32,
+    _ls_pad2: f32,
+    _ls_pad3: f32,
+    _padding_align: array<vec4<f32>, 7>,
 };
 
 @group(0) @binding(0) var<uniform> globals: Globals;
@@ -447,6 +506,73 @@ fn sample_layer_color(local_pos_in: vec2<f32>, tc_in: vec2<f32>, blur_extend: f3
     return c;
 }
 
+// ── Layer Style Helpers ────────────────────────────────────────────────────
+
+fn ls_stroke_edge_distance(alpha: f32) -> f32 {
+    let dx = abs(dpdx(alpha));
+    let dy = abs(dpdy(alpha));
+    let edge_width = max(dx + dy, 0.001);
+    return clamp((1.0 - alpha) / edge_width, 0.0, 1.0);
+}
+
+fn ls_apply_stroke(color: vec4<f32>, alpha: f32, stroke_color: vec3<f32>, width: f32) -> vec4<f32> {
+    if width <= 0.0 || alpha <= 0.0 { return color; }
+    let dist = ls_stroke_edge_distance(alpha);
+    let stroke_alpha = 1.0 - smoothstep(0.0, width * 0.01, dist);
+    let out_rgb = mix(color.rgb, stroke_color, stroke_alpha);
+    let out_a = max(color.a, stroke_alpha);
+    return vec4<f32>(out_rgb, out_a);
+}
+
+fn ls_apply_color_overlay(color: vec4<f32>, overlay: vec4<f32>) -> vec4<f32> {
+    let a = overlay.a * color.a;
+    return vec4<f32>(mix(color.rgb, overlay.rgb, overlay.a), a);
+}
+
+fn ls_apply_gradient_overlay(color: vec4<f32>, pos: vec2<f32>, start: vec2<f32>, end: vec2<f32>, c1: vec4<f32>, c2: vec4<f32>) -> vec4<f32> {
+    let d = end - start;
+    let len_sq = dot(d, d);
+    var t: f32;
+    if len_sq < 0.001 {
+        t = 0.5;
+    } else {
+        t = clamp(dot(pos - start, d) / len_sq, 0.0, 1.0);
+    }
+    let grad_color = mix(c1, c2, t);
+    let a = grad_color.a * color.a;
+    return vec4<f32>(mix(color.rgb, grad_color.rgb, grad_color.a), a);
+}
+
+fn ls_apply_inner_shadow(color: vec4<f32>, alpha: f32, offset: vec2<f32>, size: f32, shadow_color: vec3<f32>, opacity: f32) -> vec4<f32> {
+    if alpha > 0.99 || size <= 0.0 || opacity <= 0.0 { return color; }
+    let edge_dist = 1.0 - alpha;
+    let shadow_falloff = 1.0 - smoothstep(0.0, size * 0.01, edge_dist);
+    let offset_len = length(offset);
+    let shadow_strength = shadow_falloff * opacity * smoothstep(0.0, offset_len + 0.001, edge_dist * 10.0);
+    let shadow = vec4<f32>(shadow_color, shadow_strength);
+    let out_a = max(color.a, shadow.a * color.a);
+    let out_rgb = mix(color.rgb, shadow.rgb, shadow.a);
+    return vec4<f32>(out_rgb, out_a);
+}
+
+fn ls_apply_bevel(color: vec4<f32>, alpha: f32, size: f32, angle: f32, strength: f32, light_color: vec3<f32>, dark_color: vec3<f32>) -> vec4<f32> {
+    if alpha <= 0.01 || size <= 0.0 { return color; }
+    let normal_x = dpdx(alpha);
+    let normal_y = dpdy(alpha);
+    let edge_width = max(abs(normal_x) + abs(normal_y), 0.001);
+    let bevel_t = clamp((1.0 - alpha) / (size * 0.01 * 4.0 + 0.001), 0.0, 1.0);
+    let rad = angle * 0.01745329251;
+    let light_dir = vec2<f32>(cos(rad), sin(rad));
+    let edge_normal = normalize(vec2<f32>(normal_x, normal_y) + vec2<f32>(0.0001));
+    let ndotl = dot(edge_normal, light_dir);
+    let highlight = max(ndotl, 0.0) * strength * 0.01;
+    let shadow = max(-ndotl, 0.0) * strength * 0.01;
+    let highlight_mask = bevel_t * highlight;
+    let shadow_mask = bevel_t * shadow;
+    let out_rgb = color.rgb + light_color * highlight_mask - dark_color * shadow_mask;
+    return vec4<f32>(clamp(out_rgb, vec3<f32>(0.0), vec3<f32>(1.0)), color.a);
+}
+
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     var blur_extend = 0.0;
@@ -606,27 +732,17 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     // --- Physical Film Grain Noise (improved: temporal variation + color noise) ---
     if (layer.grain_enabled == 1u) {
         let grain_uv = in.tex_coords * globals.viewport_size / max(layer.grain_size, 0.1);
-        // Temporal variation: use frame-based offset for animated grain
-        let grain_frame = fract(globals.exposure_ev * 0.1); // pseudo-frame from exposure
+        let grain_frame = fract(globals.exposure_ev * 0.1);
         let grain_uv_t = grain_uv + vec2<f32>(grain_frame * 43.758, grain_frame * 17.321);
-
-        // Multi-octave noise for more realistic grain pattern
         let n1 = fract(sin(dot(grain_uv_t, vec2<f32>(12.9898, 78.233))) * 43758.5453);
         let n2 = fract(sin(dot(grain_uv_t * 2.0, vec2<f32>(63.7264, 10.873))) * 23421.631);
         let n3 = fract(sin(dot(grain_uv_t * 0.5, vec2<f32>(45.164, 89.332))) * 65432.123);
-
-        // Combine octaves: 60% fine + 25% medium + 15% coarse grain
         let grain_luma = (n1 * 0.60 + n2 * 0.25 + n3 * 0.15) - 0.5;
-
-        // Luminance-dependent grain: more visible in shadows and highlights
         let luma = dot(final_color.rgb, vec3<f32>(0.2126, 0.7152, 0.0722));
-        let luma_weight = 1.0 - abs(luma - 0.5) * 1.5; // peaks at 0 and 1
-
-        // Color noise: slight RGB offset for film-like appearance
+        let luma_weight = 1.0 - abs(luma - 0.5) * 1.5;
         let grain_r = grain_luma + (n2 - 0.5) * 0.15;
         let grain_g = grain_luma + (n3 - 0.5) * 0.15;
         let grain_b = grain_luma + (n1 - 0.5) * 0.15;
-
         let intensity = layer.grain_intensity * luma_weight;
         final_color = vec4<f32>(
             clamp(final_color.r + grain_r * intensity, 0.0, 1.0),
@@ -634,6 +750,40 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
             clamp(final_color.b + grain_b * intensity, 0.0, 1.0),
             final_color.a
         );
+    }
+
+    // ── Layer Styles: applied after effects, before compositing ──
+    if (layer.ls_style_flags != 0u && final_color.a > 0.001) {
+        // Stroke (bit 0)
+        if (layer.ls_style_flags & 1u) != 0u {
+            let stroke_col = vec3<f32>(layer.ls_stroke_r, layer.ls_stroke_g, layer.ls_stroke_b);
+            final_color = ls_apply_stroke(final_color, final_color.a, stroke_col, layer.ls_stroke_width);
+        }
+        // Color Overlay (bit 1)
+        if (layer.ls_style_flags & 2u) != 0u {
+            let overlay = vec4<f32>(layer.ls_color_overlay_r, layer.ls_color_overlay_g, layer.ls_color_overlay_b, layer.ls_color_overlay_a);
+            final_color = ls_apply_color_overlay(final_color, overlay);
+        }
+        // Gradient Overlay (bit 2)
+        if (layer.ls_style_flags & 4u) != 0u {
+            let start = vec2<f32>(layer.ls_gradient_start_x, layer.ls_gradient_start_y);
+            let end = vec2<f32>(layer.ls_gradient_end_x, layer.ls_gradient_end_y);
+            let c1 = vec4<f32>(layer.ls_gradient_color1_r, layer.ls_gradient_color1_g, layer.ls_gradient_color1_b, layer.ls_gradient_color1_a);
+            let c2 = vec4<f32>(layer.ls_gradient_color2_r, layer.ls_gradient_color2_g, layer.ls_gradient_color2_b, layer.ls_gradient_color2_a);
+            final_color = ls_apply_gradient_overlay(final_color, in.local_pos, start, end, c1, c2);
+        }
+        // Inner Shadow (bit 3)
+        if (layer.ls_style_flags & 8u) != 0u {
+            let is_offset = vec2<f32>(layer.ls_inner_shadow_offset_x, layer.ls_inner_shadow_offset_y);
+            let is_color = vec3<f32>(layer.ls_inner_shadow_r, layer.ls_inner_shadow_g, layer.ls_inner_shadow_b);
+            final_color = ls_apply_inner_shadow(final_color, final_color.a, is_offset, layer.ls_inner_shadow_size, is_color, layer.ls_inner_shadow_opacity);
+        }
+        // Bevel/Emboss (bit 4)
+        if (layer.ls_style_flags & 16u) != 0u {
+            let light_col = vec3<f32>(layer.ls_bevel_light_r, layer.ls_bevel_light_g, layer.ls_bevel_light_b);
+            let dark_col = vec3<f32>(0.0, 0.0, 0.0);
+            final_color = ls_apply_bevel(final_color, final_color.a, layer.ls_bevel_size, layer.ls_bevel_angle, layer.ls_bevel_strength, light_col, dark_col);
+        }
     }
 
 

@@ -102,6 +102,10 @@ pub struct FrameCache {
     dirty_layers: std::collections::HashSet<usize>,
     /// Composition IDs that contain dirty layers.
     dirty_comps: std::collections::HashSet<String>,
+    /// Mapping from frame index to the set of layer indices used to render that frame.
+    /// Used for partial invalidation: allows reusing previous-version frames when
+    /// only some layers have changed.
+    frame_layers: std::collections::HashMap<(u32, u64), std::collections::HashSet<usize>>,
 }
 
 impl FrameCache {
@@ -113,6 +117,7 @@ impl FrameCache {
             current_memory_bytes: 0,
             dirty_layers: std::collections::HashSet::new(),
             dirty_comps: std::collections::HashSet::new(),
+            frame_layers: std::collections::HashMap::new(),
         }
     }
 
@@ -126,9 +131,27 @@ impl FrameCache {
         self.dirty_comps.insert(comp_id.to_string());
     }
 
+    /// Mark layers as dirty for partial invalidation.
+    pub fn invalidate_layers(&mut self, layer_indices: &[usize]) {
+        for &idx in layer_indices {
+            self.dirty_layers.insert(idx);
+        }
+    }
+
     /// Check if a specific layer is dirty.
     pub fn is_layer_dirty(&self, layer_idx: usize) -> bool {
         self.dirty_layers.contains(&layer_idx)
+    }
+
+    /// Check if a frame should be invalidated based on its layer composition.
+    /// A frame is dirty if any of the layers used to render it are marked dirty.
+    pub fn is_frame_dirty(&self, frame: u32, layers: &[usize]) -> bool {
+        for &layer_idx in layers {
+            if self.is_layer_dirty(layer_idx) {
+                return true;
+            }
+        }
+        false
     }
 
     /// Clear all dirty flags (call after a full re-render or commit).
@@ -144,14 +167,52 @@ impl FrameCache {
 
     /// Try to retrieve a cached frame for the current global version (updates LRU timestamp).
     /// Checks RAM first, then falls back to disk cache on miss.
+    /// Supports partial invalidation: reuses cached frames if their layers haven't changed.
     pub fn get(&mut self, frame: u32) -> Option<&CacheEntry> {
+        self.get_with_layers(frame, &[])
+    }
+
+    /// Try to retrieve a cached frame with layer-aware partial invalidation.
+    /// If `frame_layers` is provided and the frame is not dirty, reuses the previous
+    /// version's cached frame (avoiding re-rendering for unchanged layers).
+    pub fn get_with_layers(&mut self, frame: u32, frame_layers: &[usize]) -> Option<&CacheEntry> {
         let ver = current_version();
         let key = (frame, ver);
+
+        // Check if we have a cached entry for this frame in current version
         if let Some(entry) = self.entries.get_mut(&key) {
             entry.lru_stamp = lru_tick();
-            // Return immutable ref — safe because we only mutated a non-key field
             return self.entries.get(&key);
         }
+
+        // Check if frame is dirty - if not dirty and we have a cached entry from previous version
+        // that used the same layers, we can reuse it
+        if !self.is_frame_dirty(frame, frame_layers) {
+            let found = self.entries.iter().find_map(|(&(old_frame, old_ver), entry)| {
+                if old_frame == frame && old_ver < ver {
+                    if let Some(_cached_layers) = self.frame_layers.get(&(old_frame, old_ver)) {
+                        return Some((entry.pixels.clone(), entry.width, entry.height));
+                    }
+                }
+                None
+            });
+
+            if let Some((pixels, width, height)) = found {
+                self.entries.insert(
+                    key,
+                    CacheEntry {
+                        version: ver,
+                        width,
+                        height,
+                        pixels,
+                        lru_stamp: lru_tick(),
+                    },
+                );
+                self.frame_layers.insert(key, frame_layers.iter().cloned().collect());
+                return self.entries.get(&key);
+            }
+        }
+
         // Check disk cache on miss
         if let Some((pixels, w, h)) = disk_cache::read_frame(&key) {
             self.current_memory_bytes += pixels.len();
@@ -165,6 +226,7 @@ impl FrameCache {
                     lru_stamp: lru_tick(),
                 },
             );
+            self.frame_layers.insert(key, frame_layers.iter().cloned().collect());
             // Evict from disk once loaded into RAM
             disk_cache::remove_frame(&key);
             return self.entries.get(&key);

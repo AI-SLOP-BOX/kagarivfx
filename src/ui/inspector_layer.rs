@@ -961,6 +961,101 @@ pub fn draw_layer_type_specs(
                 });
             }
         });
+
+        ui.separator();
+        // ── Layer Styles Inspector Section ──
+        ui.collapsing("🎨 Layer Styles", |ui| {
+            let style = &mut layer.style;
+
+            // Stroke
+            ui.collapsing("✏ Stroke", |ui| {
+                if ui.checkbox(&mut style.stroke.enabled, "Enabled").clicked() { *project_changed = true; }
+                ui.horizontal(|ui| {
+                    ui.label("Size:");
+                    if ui.add(egui::Slider::new(&mut style.stroke.size, 1.0..=100.0).suffix(" px")).changed() { *project_changed = true; }
+                });
+                ui.horizontal(|ui| {
+                    ui.label("Color:");
+                    let c = &mut style.stroke.color;
+                    let mut col = egui::Color32::from_rgba_premultiplied(
+                        (c[0] * 255.0) as u8, (c[1] * 255.0) as u8,
+                        (c[2] * 255.0) as u8, (c[3] * 255.0) as u8,
+                    );
+                    if ui.color_edit_button_srgba(&mut col).changed() {
+                        let [r, g, b, a] = col.to_array();
+                        *c = [r as f32 / 255.0, g as f32 / 255.0, b as f32 / 255.0, a as f32 / 255.0];
+                        *project_changed = true;
+                    }
+                });
+            });
+
+            // Drop Shadow
+            ui.collapsing("👤 Drop Shadow", |ui| {
+                if ui.checkbox(&mut style.drop_shadow.enabled, "Enabled").clicked() { *project_changed = true; }
+                ui.horizontal(|ui| {
+                    ui.label("Opacity:");
+                    if ui.add(egui::Slider::new(&mut style.drop_shadow.opacity, 0.0..=100.0).suffix("%")).changed() { *project_changed = true; }
+                });
+                ui.horizontal(|ui| {
+                    ui.label("Distance / Size:");
+                    if ui.add(egui::DragValue::new(&mut style.drop_shadow.distance).prefix("Dist: ")).changed() { *project_changed = true; }
+                    if ui.add(egui::DragValue::new(&mut style.drop_shadow.size).prefix("Size: ")).changed() { *project_changed = true; }
+                });
+                ui.horizontal(|ui| {
+                    ui.label("Angle:");
+                    if ui.add(egui::Slider::new(&mut style.drop_shadow.angle, -180.0..=180.0).suffix("°")).changed() { *project_changed = true; }
+                });
+            });
+
+            // Color Overlay
+            ui.collapsing("🎨 Color Overlay", |ui| {
+                if ui.checkbox(&mut style.color_overlay.enabled, "Enabled").clicked() { *project_changed = true; }
+                ui.horizontal(|ui| {
+                    ui.label("Opacity:");
+                    if ui.add(egui::Slider::new(&mut style.color_overlay.opacity, 0.0..=100.0).suffix("%")).changed() { *project_changed = true; }
+                });
+                ui.horizontal(|ui| {
+                    ui.label("Color:");
+                    let c = &mut style.color_overlay.color;
+                    let mut col = egui::Color32::from_rgba_premultiplied(
+                        (c[0] * 255.0) as u8, (c[1] * 255.0) as u8,
+                        (c[2] * 255.0) as u8, (c[3] * 255.0) as u8,
+                    );
+                    if ui.color_edit_button_srgba(&mut col).changed() {
+                        let [r, g, b, a] = col.to_array();
+                        *c = [r as f32 / 255.0, g as f32 / 255.0, b as f32 / 255.0, a as f32 / 255.0];
+                        *project_changed = true;
+                    }
+                });
+            });
+
+            // Gradient Overlay
+            ui.collapsing("🌈 Gradient Overlay", |ui| {
+                if ui.checkbox(&mut style.gradient_overlay.enabled, "Enabled").clicked() { *project_changed = true; }
+                let go = &mut style.gradient_overlay;
+                ui.horizontal(|ui| {
+                    ui.label("Opacity / Angle:");
+                    if ui.add(egui::DragValue::new(&mut go.opacity).prefix("Op: ").suffix("%")).changed() { *project_changed = true; }
+                    if ui.add(egui::DragValue::new(&mut go.angle).prefix("Ang: ").suffix("°")).changed() { *project_changed = true; }
+                });
+            });
+
+            // Bevel & Emboss
+            ui.collapsing("🪨 Bevel / Emboss", |ui| {
+                if ui.checkbox(&mut style.bevel_emboss.enabled, "Enabled").clicked() { *project_changed = true; }
+                let bv = &mut style.bevel_emboss;
+                ui.horizontal(|ui| {
+                    ui.label("Depth / Size:");
+                    if ui.add(egui::DragValue::new(&mut bv.depth).prefix("Depth: ")).changed() { *project_changed = true; }
+                    if ui.add(egui::DragValue::new(&mut bv.size).prefix("Size: ")).changed() { *project_changed = true; }
+                });
+                ui.horizontal(|ui| {
+                    ui.label("Highlight / Shadow:");
+                    if ui.add(egui::DragValue::new(&mut bv.highlight).prefix("Hi: ").suffix("%")).changed() { *project_changed = true; }
+                    if ui.add(egui::DragValue::new(&mut bv.shadow).prefix("Sh: ").suffix("%")).changed() { *project_changed = true; }
+                });
+            });
+        });
     });
 }
 

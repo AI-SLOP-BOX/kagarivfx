@@ -62,9 +62,14 @@ pub fn draw_expanded_rows(
                                     () => {
                                         Some(&mut |_pk: &'static str, f: u32, resp: &egui::Response| {
                                             resp.context_menu(|ui| {
-                                                ui.set_min_width(190.0);
+                                                ui.set_min_width(210.0);
                                                 if ui.button("⬤ Linear Interpolation").clicked() { kf_menu_cmds.push((_pk, f, 0)); ui.close_menu(); }
                                                 if ui.button("◆ Easy Ease (F9)").clicked() { kf_menu_cmds.push((_pk, f, 1)); ui.close_menu(); }
+                                                if ui.button("↗ Ease In (Shift+F9)").clicked() { kf_menu_cmds.push((_pk, f, 5)); ui.close_menu(); }
+                                                if ui.button("↘ Ease Out (Ctrl+Shift+F9)").clicked() { kf_menu_cmds.push((_pk, f, 6)); ui.close_menu(); }
+                                                if ui.button("🎯 Overshoot / Spring").clicked() { kf_menu_cmds.push((_pk, f, 7)); ui.close_menu(); }
+                                                if ui.button("🏀 Bounce").clicked() { kf_menu_cmds.push((_pk, f, 8)); ui.close_menu(); }
+                                                if ui.button("🪀 Elastic").clicked() { kf_menu_cmds.push((_pk, f, 9)); ui.close_menu(); }
                                                 if ui.button("⬛ Toggle Hold Keyframe").clicked() { kf_menu_cmds.push((_pk, f, 2)); ui.close_menu(); }
                                                 ui.separator();
                                                 if ui.button("⇄ Time-Reverse Keyframes").clicked() { kf_menu_cmds.push((_pk, f, 3)); ui.close_menu(); }
@@ -246,12 +251,37 @@ pub fn draw_expanded_rows(
                                                 1 => InterpolationType::Bezier {
                                                     outgoing: BezierControlPoint { influence: 0.333, speed: 0.0 },
                                                     incoming: BezierControlPoint { influence: 0.333, speed: 0.0 },
-                                                    custom_bezier: Some([0.333, 0.0, 0.333, 1.0]),
+                                                    custom_bezier: Some(crate::core::keyframe::EasePreset::Standard.control_points()),
                                                 },
                                                 2 => if matches!(kf.interpolation, InterpolationType::Hold) {
                                                     InterpolationType::Linear
                                                 } else {
                                                     InterpolationType::Hold
+                                                },
+                                                5 => InterpolationType::Bezier {
+                                                    outgoing: BezierControlPoint { influence: 0.333, speed: 0.0 },
+                                                    incoming: BezierControlPoint { influence: 0.333, speed: 0.0 },
+                                                    custom_bezier: Some(crate::core::keyframe::EasePreset::EaseIn.control_points()),
+                                                },
+                                                6 => InterpolationType::Bezier {
+                                                    outgoing: BezierControlPoint { influence: 0.333, speed: 0.0 },
+                                                    incoming: BezierControlPoint { influence: 0.333, speed: 0.0 },
+                                                    custom_bezier: Some(crate::core::keyframe::EasePreset::EaseOut.control_points()),
+                                                },
+                                                7 => InterpolationType::Bezier {
+                                                    outgoing: BezierControlPoint { influence: 0.333, speed: 0.0 },
+                                                    incoming: BezierControlPoint { influence: 0.333, speed: 0.0 },
+                                                    custom_bezier: Some(crate::core::keyframe::EasePreset::Overshoot.control_points()),
+                                                },
+                                                8 => InterpolationType::Bezier {
+                                                    outgoing: BezierControlPoint { influence: 0.333, speed: 0.0 },
+                                                    incoming: BezierControlPoint { influence: 0.333, speed: 0.0 },
+                                                    custom_bezier: Some(crate::core::keyframe::EasePreset::Bounce.control_points()),
+                                                },
+                                                9 => InterpolationType::Bezier {
+                                                    outgoing: BezierControlPoint { influence: 0.333, speed: 0.0 },
+                                                    incoming: BezierControlPoint { influence: 0.333, speed: 0.0 },
+                                                    custom_bezier: Some(crate::core::keyframe::EasePreset::Elastic.control_points()),
                                                 },
                                                 _ => kf.interpolation,
                                             };

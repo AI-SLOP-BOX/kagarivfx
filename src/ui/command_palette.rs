@@ -531,6 +531,190 @@ pub fn get_all_commands() -> Vec<PaletteCommand> {
                 }
             }),
         },
+        // ── Layer Styles Commands ──
+        PaletteCommand {
+            name: "Layer Style: Toggle Stroke",
+            category: "Layer Styles",
+            shortcut_hint: "",
+            action: Box::new(|app| {
+                let comp = app.history.current_mut().active_composition_mut();
+                if let Some(idx) = app.selected_layer_idx {
+                    if idx < comp.layers.len() {
+                        comp.layers[idx].style.stroke.enabled = !comp.layers[idx].style.stroke.enabled;
+                        crate::core::frame_cache::bump_version();
+                    }
+                }
+            }),
+        },
+        PaletteCommand {
+            name: "Layer Style: Toggle Drop Shadow",
+            category: "Layer Styles",
+            shortcut_hint: "",
+            action: Box::new(|app| {
+                let comp = app.history.current_mut().active_composition_mut();
+                if let Some(idx) = app.selected_layer_idx {
+                    if idx < comp.layers.len() {
+                        comp.layers[idx].style.drop_shadow.enabled = !comp.layers[idx].style.drop_shadow.enabled;
+                        crate::core::frame_cache::bump_version();
+                    }
+                }
+            }),
+        },
+        PaletteCommand {
+            name: "Layer Style: Toggle Color Overlay",
+            category: "Layer Styles",
+            shortcut_hint: "",
+            action: Box::new(|app| {
+                let comp = app.history.current_mut().active_composition_mut();
+                if let Some(idx) = app.selected_layer_idx {
+                    if idx < comp.layers.len() {
+                        comp.layers[idx].style.color_overlay.enabled = !comp.layers[idx].style.color_overlay.enabled;
+                        crate::core::frame_cache::bump_version();
+                    }
+                }
+            }),
+        },
+        PaletteCommand {
+            name: "Layer Style: Toggle Gradient Overlay",
+            category: "Layer Styles",
+            shortcut_hint: "",
+            action: Box::new(|app| {
+                let comp = app.history.current_mut().active_composition_mut();
+                if let Some(idx) = app.selected_layer_idx {
+                    if idx < comp.layers.len() {
+                        comp.layers[idx].style.gradient_overlay.enabled = !comp.layers[idx].style.gradient_overlay.enabled;
+                        crate::core::frame_cache::bump_version();
+                    }
+                }
+            }),
+        },
+        PaletteCommand {
+            name: "Layer Style: Toggle Bevel & Emboss",
+            category: "Layer Styles",
+            shortcut_hint: "",
+            action: Box::new(|app| {
+                let comp = app.history.current_mut().active_composition_mut();
+                if let Some(idx) = app.selected_layer_idx {
+                    if idx < comp.layers.len() {
+                        comp.layers[idx].style.bevel_emboss.enabled = !comp.layers[idx].style.bevel_emboss.enabled;
+                        crate::core::frame_cache::bump_version();
+                    }
+                }
+            }),
+        },
+        // ── Easing Commands ──
+        PaletteCommand {
+            name: "Animation: Easy Ease",
+            category: "Animation",
+            shortcut_hint: "F9",
+            action: Box::new(|app| {
+                let comp = app.history.current_mut().active_composition_mut();
+                if let Some(idx) = app.selected_layer_idx {
+                    if idx < comp.layers.len() {
+                        let layer = &mut comp.layers[idx];
+                        let pts = crate::core::keyframe::EasePreset::Standard.control_points();
+                        if let crate::core::property::Animatable::Animated(ref mut kfs) = layer.transform.position {
+                            for kf in kfs.iter_mut() {
+                                kf.interpolation = crate::core::keyframe::InterpolationType::Bezier {
+                                    outgoing: crate::core::keyframe::BezierControlPoint { influence: 0.333, speed: 0.0 },
+                                    incoming: crate::core::keyframe::BezierControlPoint { influence: 0.333, speed: 0.0 },
+                                    custom_bezier: Some(pts),
+                                };
+                            }
+                        }
+                        crate::core::frame_cache::bump_version();
+                    }
+                }
+            }),
+        },
+        PaletteCommand {
+            name: "Animation: Apply Bounce Easing",
+            category: "Animation",
+            shortcut_hint: "",
+            action: Box::new(|app| {
+                let comp = app.history.current_mut().active_composition_mut();
+                if let Some(idx) = app.selected_layer_idx {
+                    if idx < comp.layers.len() {
+                        let layer = &mut comp.layers[idx];
+                        let pts = crate::core::keyframe::EasePreset::Bounce.control_points();
+                        if let crate::core::property::Animatable::Animated(ref mut kfs) = layer.transform.position {
+                            for kf in kfs.iter_mut() {
+                                kf.interpolation = crate::core::keyframe::InterpolationType::Bezier {
+                                    outgoing: crate::core::keyframe::BezierControlPoint { influence: 0.333, speed: 0.0 },
+                                    incoming: crate::core::keyframe::BezierControlPoint { influence: 0.333, speed: 0.0 },
+                                    custom_bezier: Some(pts),
+                                };
+                            }
+                        }
+                        crate::core::frame_cache::bump_version();
+                    }
+                }
+            }),
+        },
+        PaletteCommand {
+            name: "Animation: Apply Elastic Easing",
+            category: "Animation",
+            shortcut_hint: "",
+            action: Box::new(|app| {
+                let comp = app.history.current_mut().active_composition_mut();
+                if let Some(idx) = app.selected_layer_idx {
+                    if idx < comp.layers.len() {
+                        let layer = &mut comp.layers[idx];
+                        let pts = crate::core::keyframe::EasePreset::Elastic.control_points();
+                        if let crate::core::property::Animatable::Animated(ref mut kfs) = layer.transform.position {
+                            for kf in kfs.iter_mut() {
+                                kf.interpolation = crate::core::keyframe::InterpolationType::Bezier {
+                                    outgoing: crate::core::keyframe::BezierControlPoint { influence: 0.333, speed: 0.0 },
+                                    incoming: crate::core::keyframe::BezierControlPoint { influence: 0.333, speed: 0.0 },
+                                    custom_bezier: Some(pts),
+                                };
+                            }
+                        }
+                        crate::core::frame_cache::bump_version();
+                    }
+                }
+            }),
+        },
+        // ── Additional Layer Creation Commands ──
+        PaletteCommand {
+            name: "Add Layer: New Adjustment Layer",
+            category: "Layer",
+            shortcut_hint: "Cmd+Alt+Y",
+            action: Box::new(|app| {
+                let comp = app.history.current_mut().active_composition_mut();
+                let len = comp.layers.len();
+                let dur = comp.duration_frames;
+                let mut layer = crate::core::timeline::Layer::new(
+                    format!("adj_{}", len),
+                    format!("Adjustment Layer {}", len + 1),
+                    crate::core::timeline::LayerType::Solid { color: [1.0, 1.0, 1.0, 1.0] },
+                    dur,
+                );
+                layer.is_adjustment_layer = true;
+                comp.add_layer(layer);
+                app.selected_layer_idx = Some(len);
+                crate::core::frame_cache::bump_version();
+            }),
+        },
+        PaletteCommand {
+            name: "Add Layer: New Null Object",
+            category: "Layer",
+            shortcut_hint: "Cmd+Alt+Shift+Y",
+            action: Box::new(|app| {
+                let comp = app.history.current_mut().active_composition_mut();
+                let len = comp.layers.len();
+                let dur = comp.duration_frames;
+                let layer = crate::core::timeline::Layer::new(
+                    format!("null_{}", len),
+                    format!("Null {}", len + 1),
+                    crate::core::timeline::LayerType::Null,
+                    dur,
+                );
+                comp.add_layer(layer);
+                app.selected_layer_idx = Some(len);
+                crate::core::frame_cache::bump_version();
+            }),
+        },
     ]
 }
 
