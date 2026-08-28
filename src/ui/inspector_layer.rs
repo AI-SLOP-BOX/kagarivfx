@@ -410,11 +410,8 @@ pub fn draw_layer_type_specs(
             LayerType::Image { path } => {
                 let val_before = path.clone();
                 ui.text_edit_singleline(path);
-                if !path.is_empty() && ui.small("📂 Reveal in Finder").on_hover_text("Open the source file location in Finder").clicked() {
-                    let _ = std::process::Command::new("open")
-                        .arg("-R")
-                        .arg(path.as_str())
-                        .spawn();
+                if !path.is_empty() && ui.small("📂 Reveal File").on_hover_text("Open the source file location in file manager").clicked() {
+                    crate::ui::project_io::reveal_in_file_manager(std::path::Path::new(path.as_str()));
                 }
                 if val_before != *path { *project_changed = true; }
             }
@@ -428,11 +425,8 @@ pub fn draw_layer_type_specs(
                     ui.label("Source:");
                     ui.text_edit_singleline(source);
                 });
-                if !source.is_empty() && ui.small("📂 Reveal in Finder").on_hover_text("Open the source file location in Finder").clicked() {
-                    let _ = std::process::Command::new("open")
-                        .arg("-R")
-                        .arg(source.as_str())
-                        .spawn();
+                if !source.is_empty() && ui.small("📂 Reveal File").on_hover_text("Open the source file location in file manager").clicked() {
+                    crate::ui::project_io::reveal_in_file_manager(std::path::Path::new(source.as_str()));
                 }
                 ui.horizontal(|ui| {
                     ui.label("Frames dir:");
@@ -790,11 +784,8 @@ pub fn draw_layer_type_specs(
             }
             LayerType::Audio { path, volume } => {
                 ui.label(format!("Audio File ({})", path));
-                if !path.is_empty() && ui.small("📂 Reveal in Finder").on_hover_text("Open the source file location in Finder").clicked() {
-                    let _ = std::process::Command::new("open")
-                        .arg("-R")
-                        .arg(path.as_str())
-                        .spawn();
+                if !path.is_empty() && ui.small("📂 Reveal File").on_hover_text("Open the source file location in file manager").clicked() {
+                    crate::ui::project_io::reveal_in_file_manager(std::path::Path::new(path.as_str()));
                 }
                 let v_before = volume.clone();
                 if let Some(nf) = draw_property_ui(current_frame, ui, "  Volume", volume, |ui, val| {

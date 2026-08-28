@@ -741,6 +741,26 @@ impl FontRasterizer {
         #[cfg(target_os = "linux")]
         {
             paths.push(std::path::PathBuf::from(format!(
+                "/usr/share/fonts/truetype/{}/{}.ttf",
+                lower, family_name
+            )));
+            paths.push(std::path::PathBuf::from(format!(
+                "/usr/share/fonts/truetype/dejavu/{}.ttf",
+                family_name
+            )));
+            paths.push(std::path::PathBuf::from(format!(
+                "/usr/share/fonts/truetype/ubuntu/{}.ttf",
+                family_name
+            )));
+            paths.push(std::path::PathBuf::from(format!(
+                "/usr/share/fonts/truetype/noto/{}.ttf",
+                family_name
+            )));
+            paths.push(std::path::PathBuf::from(format!(
+                "/usr/share/fonts/truetype/liberation/{}.ttf",
+                family_name
+            )));
+            paths.push(std::path::PathBuf::from(format!(
                 "/usr/share/fonts/truetype/{}.ttf",
                 lower
             )));
@@ -748,6 +768,11 @@ impl FontRasterizer {
                 "/usr/share/fonts/{}/{}.ttf",
                 lower, family_name
             )));
+            if let Some(home) = std::env::var_os("HOME") {
+                let home_path = std::path::PathBuf::from(home);
+                paths.push(home_path.join(format!(".local/share/fonts/{}.ttf", family_name)));
+                paths.push(home_path.join(format!(".fonts/{}.ttf", family_name)));
+            }
         }
 
         paths

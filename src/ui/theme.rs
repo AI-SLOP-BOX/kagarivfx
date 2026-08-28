@@ -157,6 +157,60 @@ fn configure_fonts(ctx: &egui::Context) {
         }
     }
 
+    // Load Linux system fonts (DejaVu Sans, Ubuntu, Noto Sans, Liberation)
+    #[cfg(target_os = "linux")]
+    {
+        let linux_prop_paths = [
+            "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+            "/usr/share/fonts/truetype/ubuntu/Ubuntu-R.ttf",
+            "/usr/share/fonts/truetype/noto/NotoSans-Regular.ttf",
+            "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
+            "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
+        ];
+        let linux_mono_paths = [
+            "/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf",
+            "/usr/share/fonts/truetype/ubuntu/UbuntuMono-R.ttf",
+            "/usr/share/fonts/truetype/liberation/LiberationMono-Regular.ttf",
+        ];
+
+        for path in &linux_prop_paths {
+            if let Ok(data) = std::fs::read(path) {
+                fonts.font_data.insert("LinuxSystemFont".to_string(), egui::FontData::from_owned(data));
+                fonts.families.entry(egui::FontFamily::Proportional).or_default().insert(0, "LinuxSystemFont".to_string());
+                break;
+            }
+        }
+        for path in &linux_mono_paths {
+            if let Ok(data) = std::fs::read(path) {
+                fonts.font_data.insert("LinuxMonoFont".to_string(), egui::FontData::from_owned(data));
+                fonts.families.entry(egui::FontFamily::Monospace).or_default().insert(0, "LinuxMonoFont".to_string());
+                break;
+            }
+        }
+    }
+
+    // Load Windows system fonts (Segoe UI, Consolas)
+    #[cfg(target_os = "windows")]
+    {
+        let win_prop_paths = ["C:\\Windows\\Fonts\\segoeui.ttf", "C:\\Windows\\Fonts\\arial.ttf"];
+        let win_mono_paths = ["C:\\Windows\\Fonts\\consola.ttf"];
+
+        for path in &win_prop_paths {
+            if let Ok(data) = std::fs::read(path) {
+                fonts.font_data.insert("SegoeUI".to_string(), egui::FontData::from_owned(data));
+                fonts.families.entry(egui::FontFamily::Proportional).or_default().insert(0, "SegoeUI".to_string());
+                break;
+            }
+        }
+        for path in &win_mono_paths {
+            if let Ok(data) = std::fs::read(path) {
+                fonts.font_data.insert("Consolas".to_string(), egui::FontData::from_owned(data));
+                fonts.families.entry(egui::FontFamily::Monospace).or_default().insert(0, "Consolas".to_string());
+                break;
+            }
+        }
+    }
+
     // Phosphor icon glyphs (used across panels for crisp vector icons)
     egui_phosphor::add_to_fonts(&mut fonts, egui_phosphor::Variant::Regular);
 
