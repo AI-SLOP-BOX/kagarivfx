@@ -99,6 +99,12 @@ struct Layer {
     motionblur_velocity_x: f32,
     motionblur_velocity_y: f32,
     motionblur_samples: u32,
+
+    // TrimPaths (angular trim on shape SDF)
+    trim_start: f32,
+    trim_end: f32,
+    trim_offset: f32,
+    _pad_trim: f32,
 };
 
 @group(0) @binding(0) var<uniform> globals: Globals;
@@ -130,6 +136,20 @@ fn vs_main(model: VertexInput) -> VertexOutput {
     out.tex_coords = model.tex_coords;
     out.local_pos = model.position; // Ranges in [-0.5, 0.5]
     return out;
+}
+
+fn trim_shape_alpha(angle: f32, trim_start: f32, trim_end: f32, trim_offset: f32) -> f32 {
+    if (trim_start == 0.0 && trim_end == 1.0) {
+        return 1.0;
+    }
+    let normalized = fract(angle / 6.2831853 + 1.0);
+    let start = fract(trim_start + trim_offset);
+    let end = fract(trim_end + trim_offset);
+    if (start < end) {
+        return select(0.0, 1.0, normalized >= start && normalized <= end);
+    } else {
+        return select(0.0, 1.0, normalized >= start || normalized <= end);
+    }
 }
 
 // Helper: SDF-based alpha coverage for Shape layers (layer_type == 2u).
@@ -166,7 +186,8 @@ fn shape_sdf_alpha(local_pos_in: vec2<f32>, blur_extend: f32) -> f32 {
     } else {
         alpha = 1.0;
     }
-    return alpha;
+    let angle = atan2(local_pos_in.y, local_pos_in.x);
+    return alpha * trim_shape_alpha(angle, layer.trim_start, layer.trim_end, layer.trim_offset);
 }
 
 // Helper: sample layer color at a given local_pos and tex_coords

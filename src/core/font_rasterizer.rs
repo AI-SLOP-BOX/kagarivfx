@@ -103,8 +103,122 @@ impl FontRasterizer {
         names
     }
 
+    /// Dynamically discover installed system fonts by scanning font directories.
+    /// Returns a Vec of (family_name, file_path) pairs.
+    pub fn discover_system_fonts() -> Vec<(String, String)> {
+        let mut fonts = Vec::new();
+
+        #[cfg(target_os = "macos")]
+        {
+            let dirs = [
+                "/Library/Fonts",
+                "/System/Library/Fonts",
+                "/System/Library/Fonts/Supplemental",
+            ];
+            if let Some(home) = std::env::var_os("HOME") {
+                let home = std::path::PathBuf::from(home);
+                let user_dirs = [home.join("Library/Fonts")];
+                for dir in &user_dirs {
+                    if dir.is_dir() {
+                        if let Ok(entries) = std::fs::read_dir(dir) {
+                            for entry in entries.flatten() {
+                                let path = entry.path();
+                                let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("");
+                                if matches!(ext, "ttf" | "otf" | "ttc") {
+                                    let name = path
+                                        .file_stem()
+                                        .and_then(|s| s.to_str())
+                                        .unwrap_or("Unknown")
+                                        .to_string();
+                                    fonts.push((name, path.to_string_lossy().to_string()));
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            for dir in &dirs {
+                if let Ok(entries) = std::fs::read_dir(dir) {
+                    for entry in entries.flatten() {
+                        let path = entry.path();
+                        let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("");
+                        if matches!(ext, "ttf" | "otf" | "ttc") {
+                            let name = path
+                                .file_stem()
+                                .and_then(|s| s.to_str())
+                                .unwrap_or("Unknown")
+                                .to_string();
+                            fonts.push((name, path.to_string_lossy().to_string()));
+                        }
+                    }
+                }
+            }
+        }
+
+        #[cfg(target_os = "linux")]
+        {
+            let dirs = ["/usr/share/fonts", "/usr/local/share/fonts"];
+            for dir in &dirs {
+                if let Ok(entries) = std::fs::read_dir(dir) {
+                    for entry in entries.flatten() {
+                        let path = entry.path();
+                        if path.is_dir() {
+                            if let Ok(sub_entries) = std::fs::read_dir(&path) {
+                                for sub_entry in sub_entries.flatten() {
+                                    let sub_path = sub_entry.path();
+                                    let ext = sub_path.extension().and_then(|e| e.to_str()).unwrap_or("");
+                                    if matches!(ext, "ttf" | "otf") {
+                                        let name = sub_path
+                                            .file_stem()
+                                            .and_then(|s| s.to_str())
+                                            .unwrap_or("Unknown")
+                                            .to_string();
+                                        fonts.push((name, sub_path.to_string_lossy().to_string()));
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        #[cfg(target_os = "windows")]
+        {
+            if let Ok(windir) = std::env::var("WINDIR") {
+                let fonts_dir = std::path::PathBuf::from(windir).join("Fonts");
+                if let Ok(entries) = std::fs::read_dir(&fonts_dir) {
+                    for entry in entries.flatten() {
+                        let path = entry.path();
+                        let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("");
+                        if matches!(ext, "ttf" | "otf" | "ttc") {
+                            let name = path
+                                .file_stem()
+                                .and_then(|s| s.to_str())
+                                .unwrap_or("Unknown")
+                                .to_string();
+                            fonts.push((name, path.to_string_lossy().to_string()));
+                        }
+                    }
+                }
+            }
+        }
+
+        fonts
+    }
+
     /// Try to load every plausible system font family (best effort).
+    /// Uses dynamic font discovery with a hardcoded fallback list.
     pub fn load_all_system_fonts(&mut self) {
+        let discovered = Self::discover_system_fonts();
+        for (name, path) in discovered {
+            if let Ok(data) = std::fs::read(&path) {
+                if parse_font(&data).is_some() {
+                    self.fonts.insert(name, data);
+                }
+            }
+        }
+
         const CANDIDATES: &[&str] = &[
             "Helvetica", "Helvetica Neue", "Arial", "Inter", "Roboto",
             "DejaVu Sans", "Liberation Sans", "Times New Roman", "Georgia",
@@ -113,7 +227,9 @@ impl FontRasterizer {
             "Hiragino Sans", "Yu Gothic", "Noto Sans CJK JP", "Osaka",
         ];
         for name in CANDIDATES {
-            self.load_system_font(name);
+            if !self.fonts.contains_key(*name) {
+                self.load_system_font(name);
+            }
         }
     }
 

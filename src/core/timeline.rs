@@ -97,6 +97,8 @@ pub enum LayerType {
         color: [f32; 4],
         stroke_color: [f32; 4],
         stroke_width: f32,
+        #[serde(default)]
+        fill_type: ShapeFillType,
     },
     Null,
     PreComp {
@@ -234,6 +236,24 @@ impl LayerType {
             text_on_path: false,
         }
     }
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub enum ShapeFillType {
+    #[default]
+    Solid,
+    LinearGradient {
+        start: [f32; 2],
+        end: [f32; 2],
+        colors: Vec<[f32; 4]>,
+        stops: Vec<f32>,
+    },
+    RadialGradient {
+        center: [f32; 2],
+        radius: f32,
+        colors: Vec<[f32; 4]>,
+        stops: Vec<f32>,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

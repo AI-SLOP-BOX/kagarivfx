@@ -1272,6 +1272,7 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: u32) 
                             color: [0.25, 0.55, 1.0, 1.0],
                             stroke_color: [1.0, 1.0, 1.0, 1.0],
                             stroke_width: 0.0,
+                            fill_type: Default::default(),
                         },
                         dur,
                     );

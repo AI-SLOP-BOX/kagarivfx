@@ -143,12 +143,30 @@ impl FrameCache {
     }
 
     /// Try to retrieve a cached frame for the current global version (updates LRU timestamp).
+    /// Checks RAM first, then falls back to disk cache on miss.
     pub fn get(&mut self, frame: u32) -> Option<&CacheEntry> {
         let ver = current_version();
         let key = (frame, ver);
         if let Some(entry) = self.entries.get_mut(&key) {
             entry.lru_stamp = lru_tick();
             // Return immutable ref — safe because we only mutated a non-key field
+            return self.entries.get(&key);
+        }
+        // Check disk cache on miss
+        if let Some((pixels, w, h)) = disk_cache::read_frame(&key) {
+            self.current_memory_bytes += pixels.len();
+            self.entries.insert(
+                key,
+                CacheEntry {
+                    version: ver,
+                    width: w,
+                    height: h,
+                    pixels: Arc::new(pixels),
+                    lru_stamp: lru_tick(),
+                },
+            );
+            // Evict from disk once loaded into RAM
+            disk_cache::remove_frame(&key);
             return self.entries.get(&key);
         }
         None
@@ -215,6 +233,8 @@ impl FrameCache {
                     break;
                 }
                 if let Some(removed) = self.entries.remove(&key) {
+                    // Spill to disk before evicting from RAM
+                    let _ = disk_cache::write_frame(&key, &removed.pixels, removed.width, removed.height);
                     self.current_memory_bytes = self.current_memory_bytes.saturating_sub(removed.pixels.len());
                 }
             }
@@ -224,20 +244,27 @@ impl FrameCache {
     /// Discard all cache entries whose version is strictly older than `target_version`.
     pub fn collect_garbage_below(&mut self, target_version: u64) {
         let mut freed_bytes = 0usize;
-        self.entries.retain(|(_frame, ver), entry| {
+        let mut evicted = Vec::new();
+        self.entries.retain(|(frame, ver), entry| {
             let keep = *ver >= target_version;
             if !keep {
                 freed_bytes += entry.pixels.len();
+                evicted.push(((*frame, *ver), entry.pixels.as_ref().clone(), entry.width, entry.height));
             }
             keep
         });
+        // Spill evicted entries to disk
+        for (key, pixels, w, h) in evicted {
+            let _ = disk_cache::write_frame(&key, &pixels, w, h);
+        }
         self.current_memory_bytes = self.current_memory_bytes.saturating_sub(freed_bytes);
     }
 
-    /// Discard the entire cache.
+    /// Discard the entire cache (RAM + disk).
     pub fn invalidate_all(&mut self) {
         self.entries.clear();
         self.current_memory_bytes = 0;
+        disk_cache::clear_all();
     }
 
     /// How many entries are currently held (all versions combined).
@@ -254,6 +281,64 @@ impl FrameCache {
     pub fn current_version_len(&self) -> usize {
         let ver = current_version();
         self.entries.keys().filter(|(_, v)| *v == ver).count()
+    }
+}
+
+/// Simple disk-backed frame cache: writes evicted frames to temp files
+/// and reloads them on cache miss. Frames are stored as raw RGBA bytes.
+mod disk_cache {
+    use std::path::PathBuf;
+    use std::sync::OnceLock;
+
+    fn cache_dir() -> PathBuf {
+        static DIR: OnceLock<PathBuf> = OnceLock::new();
+        DIR.get_or_init(|| {
+            let dir = std::env::temp_dir().join("aevfx_frame_cache");
+            let _ = std::fs::create_dir_all(&dir);
+            dir
+        }).clone()
+    }
+
+    fn frame_path(key: &(u32, u64)) -> PathBuf {
+        cache_dir().join(format!("frame_{}_{}.rgba", key.0, key.1))
+    }
+
+    /// Write frame pixels to disk. Returns true on success.
+    pub fn write_frame(key: &(u32, u64), pixels: &[u8], width: u32, height: u32) -> bool {
+        let path = frame_path(key);
+        let header = width.to_le_bytes().into_iter()
+            .chain(height.to_le_bytes())
+            .chain(pixels.iter().copied())
+            .collect::<Vec<u8>>();
+        std::fs::write(&path, &header).is_ok()
+    }
+
+    /// Read frame pixels from disk. Returns (pixels, width, height) on success.
+    pub fn read_frame(key: &(u32, u64)) -> Option<(Vec<u8>, u32, u32)> {
+        let path = frame_path(key);
+        let data = std::fs::read(&path).ok()?;
+        if data.len() < 8 {
+            return None;
+        }
+        let width = u32::from_le_bytes([data[0], data[1], data[2], data[3]]);
+        let height = u32::from_le_bytes([data[4], data[5], data[6], data[7]]);
+        let expected = (width as usize * height as usize * 4) + 8;
+        if data.len() < expected {
+            return None;
+        }
+        Some((data[8..expected].to_vec(), width, height))
+    }
+
+    /// Remove a frame from disk.
+    pub fn remove_frame(key: &(u32, u64)) {
+        let path = frame_path(key);
+        let _ = std::fs::remove_file(&path);
+    }
+
+    /// Clean up all cached files.
+    pub fn clear_all() {
+        let dir = cache_dir();
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }
 

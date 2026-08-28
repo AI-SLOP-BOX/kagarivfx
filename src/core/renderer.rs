@@ -164,9 +164,13 @@ struct LayerUniform {
     mask_inverted: u32,
     mask_feather: f32,
 
-    _pad0: u32,
-    _pad1: u32,
-    _padding_align: [[f32; 4]; 5], // Keep total size a multiple of 256 for WGPU dynamic uniform offsets
+    // TrimPaths (angular trim on shape SDF)
+    trim_start: f32,
+    trim_end: f32,
+    trim_offset: f32,
+    _pad_trim: f32,
+
+    _padding_align: [f32; 18], // Keep total size a multiple of 256 for WGPU dynamic uniform offsets
 }
 
 // ─── GPU Layer Mask Rasterization (CPU-baked coverage → group(3) texture) ──
@@ -1939,9 +1943,11 @@ impl WgpuRenderer {
                     mask_mode: 0,
                     mask_inverted: 0,
                     mask_feather: 0.0,
-                    _pad0: 0,
-                    _pad1: 0,
-                    _padding_align: [[0.0; 4]; 5],
+                    trim_start: layer.trim_paths.as_ref().map(|t| t.start.evaluate(frame) / 100.0).unwrap_or(0.0),
+                    trim_end: layer.trim_paths.as_ref().map(|t| t.end.evaluate(frame) / 100.0).unwrap_or(1.0),
+                    trim_offset: layer.trim_paths.as_ref().map(|t| t.offset.evaluate(frame).to_radians() / std::f32::consts::TAU).unwrap_or(0.0),
+                    _pad_trim: 0.0,
+                    _padding_align: [0.0; 18],
                 };
 
                 layer_mask_plans.push(collect_mask_shapes(

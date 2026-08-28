@@ -160,6 +160,7 @@ pub fn draw_timeline_header(
                 color: [0.9, 0.4, 0.2, 1.0],
                 stroke_color: [0.0, 0.0, 0.0, 1.0],
                 stroke_width: 0.0,
+                fill_type: Default::default(),
             }, total_frames);
             layer.transform.position = Animatable::new_constant([comp.width as f32 / 2.0, comp.height as f32 / 2.0]);
             comp.add_layer(layer);

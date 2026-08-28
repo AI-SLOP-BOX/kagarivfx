@@ -41,6 +41,7 @@ pub fn build(app: &mut crate::AfterEffectsApp) {
             color: [0.0, 0.64, 1.0, 1.0],
             stroke_color: [1.0, 1.0, 1.0, 1.0],
             stroke_width: 0.0,
+            fill_type: Default::default(),
         },
         comp.duration_frames,
     );

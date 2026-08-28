@@ -336,6 +336,7 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
                                         color: [0.5 * alpha, 0.5 * alpha, 0.5 * alpha, alpha],
                                         stroke_color: [1.0, 1.0, 1.0, 1.0],
                                         stroke_width: 2.0,
+                                        fill_type: Default::default(),
                                     },
                                     dur,
                                 );

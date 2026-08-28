@@ -25,6 +25,7 @@ fn main() {
         color: [0.9, 0.3, 0.2, 1.0],
         stroke_color: [0.0, 0.0, 0.0, 1.0],
         stroke_width: 0.0,
+        fill_type: Default::default(),
     }, 30);
     // Horizontal motion for motion blur testing
     moving.motion_blur = true;

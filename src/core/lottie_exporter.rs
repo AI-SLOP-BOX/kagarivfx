@@ -353,7 +353,7 @@ fn serialize_layer(layer: &Layer, comp: &Composition, index: usize, is_matte_sou
         if layer.motion_blur {
             obj.insert("mb".into(), json!(1));
         }
-        if let LayerType::Shape { shape_type, color, stroke_color, stroke_width } = &layer.layer_type {
+        if let LayerType::Shape { shape_type, color, stroke_color, stroke_width, .. } = &layer.layer_type {
             obj.insert("shapes".into(), json!(serialize_shapes(shape_type, color, stroke_color, *stroke_width)));
         }
         if let Some(doc) = text_document(&layer.layer_type) {
@@ -930,7 +930,7 @@ impl LottieImporter {
                 }
                 4 => match lj.get("shapes").and_then(parse_shape_group) {
                     Some((shape_type, color, stroke_color, stroke_width)) => Layer::new(id, lname, LayerType::Shape {
-                        shape_type, color, stroke_color, stroke_width,
+                        shape_type, color, stroke_color, stroke_width, fill_type: Default::default(),
                     }, duration),
                     None => Layer::new(id, lname, LayerType::Null, duration),
                 },
@@ -1068,6 +1068,7 @@ mod tests {
             color: [1.0, 0.0, 0.0, 1.0],
             stroke_color: [0.0, 0.0, 1.0, 1.0],
             stroke_width: 4.0,
+            fill_type: Default::default(),
         }, 30));
         comp.layers.push(Layer::new("s2".into(), "Rect".into(), LayerType::Shape {
             shape_type: ShapeType::Rectangle {
@@ -1077,18 +1078,21 @@ mod tests {
             color: [0.0, 1.0, 0.0, 1.0],
             stroke_color: [0.0, 0.0, 0.0, 1.0],
             stroke_width: 0.0,
+            fill_type: Default::default(),
         }, 30));
         comp.layers.push(Layer::new("s3".into(), "Poly".into(), LayerType::Shape {
             shape_type: ShapeType::Polygon { sides: Animatable::new_constant(6.0), radius: Animatable::new_constant(30.0) },
             color: [1.0, 1.0, 1.0, 1.0],
             stroke_color: [0.0, 0.0, 0.0, 1.0],
             stroke_width: 2.0,
+            fill_type: Default::default(),
         }, 30));
         comp.layers.push(Layer::new("s4".into(), "Star".into(), LayerType::Shape {
             shape_type: ShapeType::Star { points: Animatable::new_constant(5.0), inner_radius: Animatable::new_constant(15.0), outer_radius: Animatable::new_constant(40.0) },
             color: [0.5, 0.5, 0.0, 1.0],
             stroke_color: [0.0, 0.0, 0.0, 1.0],
             stroke_width: 0.0,
+            fill_type: Default::default(),
         }, 30));
 
         let v: Value = serde_json::from_str(&LottieExporter::export_to_json(&comp)).unwrap();
@@ -1383,6 +1387,7 @@ mod tests {
             color: [1.0, 0.0, 0.0, 1.0],
             stroke_color: [0.0, 1.0, 0.0, 1.0],
             stroke_width: 2.0,
+            fill_type: Default::default(),
         }, 30);
         shape.transform.position = Animatable::new_animated(vec![
             Keyframe::new(0, [10.0, 10.0], InterpolationType::Linear),
@@ -1447,6 +1452,7 @@ mod tests {
             color: [1.0, 0.0, 0.0, 1.0],
             stroke_color: [0.0; 4],
             stroke_width: 0.0,
+            fill_type: Default::default(),
         }, 30));
         let mut c = Composition::new("C".into(), "DeepC".into(), 80, 80, 24, 30);
         c.layers.push(Layer::new("cl".into(), "CNull".into(), LayerType::Null, 30));
@@ -1509,6 +1515,7 @@ mod tests {
             color: [1.0, 0.0, 0.0, 1.0],
             stroke_color: [0.0; 4],
             stroke_width: 0.0,
+            fill_type: Default::default(),
         }, 30));
         let mut c = Composition::new("C".into(), "DeepC".into(), 80, 80, 24, 30);
         c.layers.push(Layer::new("cl".into(), "CNull".into(), LayerType::Null, 30));

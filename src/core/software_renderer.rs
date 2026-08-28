@@ -666,12 +666,12 @@ fn render_precomp_layers_inner(_comp: &Composition, precomp_comp: &Composition, 
         let mut layer_buf = vec![0u8; buf_size];
 
         match &layer.layer_type {
-            LayerType::Shape { shape_type, color, stroke_color, stroke_width } => {
+            LayerType::Shape { shape_type, color, stroke_color, stroke_width, fill_type } => {
                 // SDF shape rendering (same path as the main renderer)
                 rasterize_shape_sdf(
                     &mut layer_buf, bw, bh, min_x, min_y,
                     cx, cy, bounds_x, bounds_y,
-                    *color, *stroke_color, *stroke_width, l_opacity,
+                    *color, fill_type, *stroke_color, *stroke_width, l_opacity,
                     shape_type, effective_frame, layer.trim_paths.as_ref(),
                 );
             }
@@ -898,6 +898,61 @@ pub fn rgba_buffer_size(width: u32, height: u32) -> Option<usize> {
     w.checked_mul(h)?.checked_mul(4)
 }
 
+// ─── Bezier Tessellation ────────────────────────────────────────────────
+
+/// Tessellate cubic Bezier curves into line segments using de Casteljau subdivision.
+/// Takes control points with tangent handles and produces a flat polygon.
+fn tessellate_bezier_path(
+    points: &[[f32; 2]],
+    tangents: &[([f32; 2], [f32; 2])],
+    closed: bool,
+    subdivisions: u32,
+) -> Vec<[f32; 2]> {
+    if points.len() < 2 {
+        return points.to_vec();
+    }
+
+    let mut result = Vec::new();
+    let n = points.len();
+
+    for i in 0..n {
+        let p0 = points[i];
+        let p1 = points[(i + 1) % n];
+
+        let out_tan = if i < tangents.len() { tangents[i].1 } else { p0 };
+        let in_tan = if (i + 1) % n < tangents.len() { tangents[(i + 1) % n].0 } else { p1 };
+
+        let has_curves = (out_tan[0] - p0[0]).abs() > 0.01
+            || (out_tan[1] - p0[1]).abs() > 0.01
+            || (in_tan[0] - p1[0]).abs() > 0.01
+            || (in_tan[1] - p1[1]).abs() > 0.01;
+
+        if has_curves {
+            let steps = subdivisions.max(4);
+            for s in 0..=steps {
+                let t = s as f32 / steps as f32;
+                let t2 = t * t;
+                let t3 = t2 * t;
+                let mt = 1.0 - t;
+                let mt2 = mt * mt;
+                let mt3 = mt2 * mt;
+
+                let x = mt3 * p0[0] + 3.0 * mt2 * t * out_tan[0] + 3.0 * mt * t2 * in_tan[0] + t3 * p1[0];
+                let y = mt3 * p0[1] + 3.0 * mt2 * t * out_tan[1] + 3.0 * mt * t2 * in_tan[1] + t3 * p1[1];
+                result.push([x, y]);
+            }
+        } else {
+            result.push(p0);
+        }
+    }
+
+    if closed && !result.is_empty() {
+        result.push(result[0]);
+    }
+
+    result
+}
+
 // ─── Shape SDF Rasterization ─────────────────────────────────────────────
 
 /// SDF for axis-aligned rectangle centered at origin with half-extents (hx, hy).
@@ -1025,6 +1080,51 @@ fn sdf_boolean_op(op: u32, d1: f32, d2: f32) -> f32 {
     }
 }
 
+fn sample_gradient(colors: &[[f32; 4]], stops: &[f32], t: f32) -> [f32; 4] {
+    if colors.is_empty() { return [0.5, 0.5, 0.5, 1.0]; }
+    if colors.len() == 1 || stops.len() <= 1 { return colors[0]; }
+    let t = t.clamp(0.0, 1.0);
+    for i in 0..stops.len().saturating_sub(1) {
+        if t >= stops[i] && t <= stops[i + 1] {
+            let range = stops[i + 1] - stops[i];
+            let local_t = if range.abs() < 0.001 { 0.0 } else { (t - stops[i]) / range };
+            let c0 = colors[i.min(colors.len() - 1)];
+            let c1 = colors[(i + 1).min(colors.len() - 1)];
+            return [
+                c0[0] + (c1[0] - c0[0]) * local_t,
+                c0[1] + (c1[1] - c0[1]) * local_t,
+                c0[2] + (c1[2] - c0[2]) * local_t,
+                c0[3] + (c1[3] - c0[3]) * local_t,
+            ];
+        }
+    }
+    colors[colors.len() - 1]
+}
+
+fn resolve_fill_color(fill: &crate::core::timeline::ShapeFillType, fallback: [f32; 4], px: f32, py: f32, cx: f32, cy: f32) -> [f32; 4] {
+    match fill {
+        crate::core::timeline::ShapeFillType::Solid => fallback,
+        crate::core::timeline::ShapeFillType::LinearGradient { start, end, colors, stops } => {
+            let dx = end[0] - start[0];
+            let dy = end[1] - start[1];
+            let len_sq = dx * dx + dy * dy;
+            if len_sq > 0.001 {
+                let t = ((px - cx - start[0]) * dx + (py - cy - start[1]) * dy) / len_sq;
+                sample_gradient(colors, stops, t)
+            } else {
+                fallback
+            }
+        }
+        crate::core::timeline::ShapeFillType::RadialGradient { center, radius, colors, stops } => {
+            let dx = px - cx - center[0];
+            let dy = py - cy - center[1];
+            let dist = (dx * dx + dy * dy).sqrt();
+            let t = (dist / radius.max(0.001)).clamp(0.0, 1.0);
+            sample_gradient(colors, stops, t)
+        }
+    }
+}
+
 /// Render queue progress callback type.
 /// Rasterize a shape layer into the layer buffer using SDF.
 /// Returns true if any pixels were written.
@@ -1040,6 +1140,7 @@ fn rasterize_shape_sdf(
     bounds_x: f32,
     bounds_y: f32,
     base_color: [f32; 4],
+    fill_type: &crate::core::timeline::ShapeFillType,
     stroke_color: [f32; 4],
     stroke_width: f32,
     l_opacity: f32,
@@ -1092,11 +1193,11 @@ fn rasterize_shape_sdf(
                     let r = radius.evaluate(frame) / 100.0;
                     sdf_polygon(nx, ny, s, r)
                 }
-                ShapeType::FreeformBezier { points, .. } => {
-                    // Simple polygon SDF from control points
+                ShapeType::FreeformBezier { points, tangents, closed } => {
                     if points.len() < 3 { 1.0 } else {
-                        let scale = 100.0; // points are in pixel coords, normalize
-                        let pts: Vec<(f32, f32)> = points.iter()
+                        let tessellated = tessellate_bezier_path(points, tangents, *closed, 8);
+                        let scale = 100.0;
+                        let pts: Vec<(f32, f32)> = tessellated.iter()
                             .map(|p| (p[0] / scale, p[1] / scale))
                             .collect();
                         sdf_polygon_points(nx, ny, &pts)
@@ -1137,8 +1238,9 @@ fn rasterize_shape_sdf(
                         // Stroke: render stroke color where dist is near the edge
                         (stroke_color[0], stroke_color[1], stroke_color[2], stroke_color[3] * alpha)
                     } else {
-                        // Fill: render fill color inside the shape
-                        (base_color[0], base_color[1], base_color[2], base_color[3] * alpha)
+                        // Fill: resolve gradient or solid color
+                        let fc = resolve_fill_color(fill_type, base_color, world_x as f32, world_y as f32, cx, cy);
+                        (fc[0], fc[1], fc[2], fc[3] * alpha)
                     };
                     layer_buf[lidx] = (r * 255.0) as u8;
                     layer_buf[lidx + 1] = (g * 255.0) as u8;
@@ -1690,9 +1792,10 @@ pub fn render_frame_to_pixels(comp: &Composition, frame: u32, width: u32, height
         let mut layer_buf = vec![0u8; (bw * bh * 4) as usize];
 
         // Shape layers: use SDF rasterization instead of flat fill
-        if let LayerType::Shape { shape_type, stroke_color, stroke_width, .. } = &layer.layer_type {
+        if let LayerType::Shape { shape_type, stroke_color, stroke_width, fill_type, .. } = &layer.layer_type {
             let sc = *stroke_color;
             let sw = *stroke_width;
+            let ft = fill_type;
             // Check for MergePaths effect to enable boolean operations
             let merge_op = layer.effects.iter().find_map(|e| {
                 if let crate::core::timeline::EffectType::MergePaths { operation } = &e.effect_type {
@@ -1708,13 +1811,13 @@ pub fn render_frame_to_pixels(comp: &Composition, frame: u32, width: u32, height
                 let shift_y = bounds_y * 0.2;
                 rasterize_shape_sdf(
                     &mut second_buf, bw, bh, min_x, min_y,
-                    cx + shift_x, cy + shift_y, bounds_x, bounds_y, base_color, sc, sw, l_opacity,
+                    cx + shift_x, cy + shift_y, bounds_x, bounds_y, base_color, ft, sc, sw, l_opacity,
                     shape_type, effective_frame, layer.trim_paths.as_ref(),
                 );
                 // Also render primary shape
                 rasterize_shape_sdf(
                     &mut layer_buf, bw, bh, min_x, min_y,
-                    cx, cy, bounds_x, bounds_y, base_color, sc, sw, l_opacity,
+                    cx, cy, bounds_x, bounds_y, base_color, ft, sc, sw, l_opacity,
                     shape_type, effective_frame, layer.trim_paths.as_ref(),
                 );
                 // Combine using boolean SDF: modify layer_buf alpha based on second_buf
@@ -1737,14 +1840,14 @@ pub fn render_frame_to_pixels(comp: &Composition, frame: u32, width: u32, height
                     copy_color[3] *= instance.opacity;
                     rasterize_shape_sdf(
                         &mut layer_buf, bw, bh, min_x, min_y,
-                        rx, ry, bounds_x, bounds_y, copy_color, sc, sw, l_opacity,
+                        rx, ry, bounds_x, bounds_y, copy_color, ft, sc, sw, l_opacity,
                         shape_type, effective_frame, layer.trim_paths.as_ref(),
                     );
                 }
             } else {
                 rasterize_shape_sdf(
                     &mut layer_buf, bw, bh, min_x, min_y,
-                    cx, cy, bounds_x, bounds_y, base_color, sc, sw, l_opacity,
+                    cx, cy, bounds_x, bounds_y, base_color, ft, sc, sw, l_opacity,
                     shape_type, effective_frame, layer.trim_paths.as_ref(),
                 );
             }
@@ -3137,6 +3240,7 @@ mod tests {
             color: [1.0, 0.0, 0.0, 1.0],
             stroke_color: [0.0, 0.0, 0.0, 1.0],
             stroke_width: 0.0,
+            fill_type: Default::default(),
         }, 30);
         shape.transform.position = Animatable::new_constant([32.0, 32.0]);
         sub.layers.push(shape);
@@ -3393,7 +3497,7 @@ mod tests {
             LayerType::Shape { shape_type: crate::core::timeline::ShapeType::Ellipse {
                 width: crate::core::property::Animatable::new_constant(100.0),
                 height: crate::core::property::Animatable::new_constant(100.0),
-            }, color: [1.0, 0.0, 0.0, 1.0], stroke_color: [0.0, 0.0, 0.0, 1.0], stroke_width: 0.0 },
+            }, color: [1.0, 0.0, 0.0, 1.0], stroke_color: [0.0, 0.0, 0.0, 1.0], stroke_width: 0.0, fill_type: Default::default() },
             30,
         );
         layer.transform.position = crate::core::property::Animatable::new_constant([32.0, 32.0]);
@@ -3418,7 +3522,7 @@ mod tests {
                 width: crate::core::property::Animatable::new_constant(100.0),
                 height: crate::core::property::Animatable::new_constant(100.0),
                 corner_radius: crate::core::property::Animatable::new_constant(0.0),
-            }, color: [0.0, 1.0, 0.0, 1.0], stroke_color: [0.0, 0.0, 0.0, 1.0], stroke_width: 0.0 },
+            }, color: [0.0, 1.0, 0.0, 1.0], stroke_color: [0.0, 0.0, 0.0, 1.0], stroke_width: 0.0, fill_type: Default::default() },
             30,
         );
         layer.transform.position = crate::core::property::Animatable::new_constant([32.0, 32.0]);
@@ -3795,6 +3899,7 @@ mod shadow_tests {
                 color: [1.0, 0.0, 0.0, 1.0],
                 stroke_color: [0.0; 4],
                 stroke_width: 0.0,
+                fill_type: Default::default(),
             },
             30,
         );
