@@ -293,6 +293,44 @@ pub fn draw_tracker_panel(app: &mut AfterEffectsApp, ui: &mut egui::Ui, current_
                 });
             });
 
+            // ── Roto Brush & Refine Edge (Matte Cleanup) ──
+            ui.collapsing("✂ Roto Brush & Refine Edge", |ui| {
+                let mut refine_smooth = ui.ctx().data(|d| d.get_temp::<f32>(egui::Id::new("roto_smooth")).unwrap_or(2.0));
+                let mut refine_feather = ui.ctx().data(|d| d.get_temp::<f32>(egui::Id::new("roto_feather")).unwrap_or(5.0));
+                let mut refine_contrast = ui.ctx().data(|d| d.get_temp::<f32>(egui::Id::new("roto_contrast")).unwrap_or(80.0));
+                let mut shift_edge = ui.ctx().data(|d| d.get_temp::<f32>(egui::Id::new("roto_shift_edge")).unwrap_or(0.0));
+                let mut decontaminate = ui.ctx().data(|d| d.get_temp::<bool>(egui::Id::new("roto_decontaminate")).unwrap_or(true));
+
+                ui.horizontal(|ui| {
+                    ui.label("Smoothness:");
+                    if ui.add(egui::Slider::new(&mut refine_smooth, 0.0..=10.0)).changed() {
+                        ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("roto_smooth"), refine_smooth));
+                    }
+                });
+                ui.horizontal(|ui| {
+                    ui.label("Feather:");
+                    if ui.add(egui::Slider::new(&mut refine_feather, 0.0..=50.0).suffix(" px")).changed() {
+                        ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("roto_feather"), refine_feather));
+                    }
+                });
+                ui.horizontal(|ui| {
+                    ui.label("Contrast:");
+                    if ui.add(egui::Slider::new(&mut refine_contrast, 0.0..=100.0).suffix(" %")).changed() {
+                        ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("roto_contrast"), refine_contrast));
+                    }
+                });
+                ui.horizontal(|ui| {
+                    ui.label("Shift Edge:");
+                    if ui.add(egui::Slider::new(&mut shift_edge, -100.0..=100.0).suffix(" %")).changed() {
+                        ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("roto_shift_edge"), shift_edge));
+                    }
+                });
+                ui.checkbox(&mut decontaminate, "Decontaminate Edge Colors (Fringe Removal)");
+                if decontaminate != ui.ctx().data(|d| d.get_temp::<bool>(egui::Id::new("roto_decontaminate")).unwrap_or(true)) {
+                    ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("roto_decontaminate"), decontaminate));
+                }
+            });
+
             ui.horizontal(|ui| {
                 if custom_widgets::ae_button_accent(ui, "🎯 Auto-Generate Mask").on_hover_text("Auto-create Bezier Mask around tracked feature").clicked() {
                     let mut temp_proj = app.history.current().clone();

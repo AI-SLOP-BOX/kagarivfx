@@ -82,4 +82,17 @@ pub fn draw_content_aware_fill(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
             Err(e) => app.toasts.error(format!("Failed to write fill: {}", e)),
         }
     }
+
+    if ui.button("🖼 Create Reference Frame").on_hover_text("Export current frame as a reference PNG for manual painting/cleanup").clicked() {
+        let comp = app.history.current().active_composition();
+        let (w, h) = (comp.width, comp.height);
+        let pixels = crate::core::software_renderer::render_frame_to_pixels(
+            comp, app.current_frame, w, h, 0.0, 0,
+        );
+        let out_path = std::env::temp_dir().join(format!("ref_frame_{}.png", app.current_frame));
+        if let Ok(_) = image::save_buffer(&out_path, &pixels, w, h, image::ColorType::Rgba8) {
+            crate::ui::project_io::reveal_in_file_manager(&out_path);
+            app.toasts.info(format!("Exported Reference Frame: {}", out_path.display()));
+        }
+    }
 }
