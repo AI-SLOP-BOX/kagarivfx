@@ -168,17 +168,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             };
             // Tolerate wrapped ProjectFile format too
             let source = std::fs::read_to_string(&file)?;
-            match aftereffects_oss::automation::run_script(&mut proj, &source) {
-                Ok(logs) => {
-                    for l in logs {
-                        println!("{l}");
-                    }
-                    let out = serde_json::to_string_pretty(&proj)?;
-                    std::fs::write(&project, out)?;
-                    println!("project saved → {}", project);
-                }
-                Err(e) => return Err(e.into()),
+            let logs = aftereffects_oss::automation::run_script(&mut proj, &source)?;
+            for l in logs {
+                println!("{l}");
             }
+            let out = serde_json::to_string_pretty(&proj)?;
+            std::fs::write(&project, out)?;
+            println!("project saved → {}", project);
         }
         Commands::Frame { project, frame, output, width, height } => {
             cmd_frame(&project, frame, &output, width, height)?;

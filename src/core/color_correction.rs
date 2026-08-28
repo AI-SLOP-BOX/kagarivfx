@@ -81,7 +81,7 @@ impl ToneCurve {
                 (pts[i + 1][1] - pts[i][1]) / dx
             }
         };
-        let d_lo = secant(lo.saturating_sub(1).max(0));
+        let d_lo = secant(lo.saturating_sub(1));
         let d_mid = secant(lo);
         let d_hi = secant((lo + 1).min(last - 1));
 

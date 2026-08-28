@@ -121,6 +121,7 @@ pub mod ae_effects_pack_v25;
 pub mod ae_effects_pack_v26;
 pub mod ae_effects_pack_v27;
 pub mod ae_effects_pack_v28;
+pub mod ae_effects_pack_v29;
 pub mod animation_presets;
 pub mod temporal_denoise;
 pub mod text_animator_advanced;

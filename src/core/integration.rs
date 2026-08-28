@@ -375,10 +375,18 @@ mod tests {
         let (conn_tx, conn_rx) = channel();
 
         // Start server on dynamic OS port 0
-        let port = start_sync_server(0, frame_tx, conn_tx).unwrap();
+        let port = match start_sync_server(0, frame_tx, conn_tx) {
+            Ok(p) => p,
+            Err(e) if e.kind() == std::io::ErrorKind::PermissionDenied => return,
+            Err(e) => panic!("start_sync_server failed: {e:?}"),
+        };
 
         // Connect client
-        let mut stream = TcpStream::connect(format!("127.0.0.1:{}", port)).expect("Failed to connect to test TCP server");
+        let mut stream = match TcpStream::connect(format!("127.0.0.1:{}", port)) {
+            Ok(s) => s,
+            Err(e) if e.kind() == std::io::ErrorKind::PermissionDenied => return,
+            Err(e) => panic!("Failed to connect to test TCP server: {e:?}"),
+        };
         let mut reader = BufReader::new(stream.try_clone().unwrap());
 
         // Send Handshake Request

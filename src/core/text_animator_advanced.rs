@@ -264,7 +264,7 @@ impl AnimatorStack {
                 continue;
             }
             let per = animator.eval(text);
-            for (slot, t) in out.iter_mut().zip(per.into_iter()) {
+            for (slot, t) in out.iter_mut().zip(per) {
                 slot.base.position_offset[0] += t.base.position_offset[0];
                 slot.base.position_offset[1] += t.base.position_offset[1];
                 slot.base.scale_multiplier[0] *= t.base.scale_multiplier[0];

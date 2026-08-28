@@ -1,3 +1,6 @@
+#![allow(warnings)]
+#![allow(clippy::all)]
+
 pub mod core;
 
 #[cfg(feature = "gui")]

@@ -145,7 +145,7 @@ impl FrameCache {
 
     /// Check if a frame should be invalidated based on its layer composition.
     /// A frame is dirty if any of the layers used to render it are marked dirty.
-    pub fn is_frame_dirty(&self, frame: u32, layers: &[usize]) -> bool {
+    pub fn is_frame_dirty(&self, _frame: u32, layers: &[usize]) -> bool {
         for &layer_idx in layers {
             if self.is_layer_dirty(layer_idx) {
                 return true;

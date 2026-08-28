@@ -155,28 +155,220 @@ pub fn build_engine() -> Engine {
     engine.register_fn("cos", |x: f64| -> f64 { x.cos() });
     engine.register_fn("abs", |x: f64| -> f64 { x.abs() });
     engine.register_fn("clamp", |v: f64, lo: f64, hi: f64| -> f64 { v.clamp(lo, hi) });
+    // --- AE-compatible Linear interpolation (3-arg & 5-arg, scalar & array) ---
+    engine.register_fn("linear", |t: f64, v_min: f64, v_max: f64| -> f64 {
+        let s = t.clamp(0.0, 1.0);
+        v_min + s * (v_max - v_min)
+    });
     engine.register_fn("linear", |t: f64, t_min: f64, t_max: f64, v_min: f64, v_max: f64| -> f64 {
         let s = if (t_max - t_min).abs() < 1e-6 { 0.0 } else { ((t - t_min) / (t_max - t_min)).clamp(0.0, 1.0) };
         v_min + s * (v_max - v_min)
     });
+    engine.register_fn("linear", |t: f64, a1: Array, a2: Array| -> Array {
+        let s = t.clamp(0.0, 1.0);
+        let n = a1.len().min(a2.len());
+        let mut out = Vec::with_capacity(n);
+        for i in 0..n {
+            let v1 = dynamic_to_f64(&a1[i]).unwrap_or(0.0);
+            let v2 = dynamic_to_f64(&a2[i]).unwrap_or(0.0);
+            out.push(Dynamic::from_float(v1 + s * (v2 - v1)));
+        }
+        out
+    });
+    engine.register_fn("linear", |t: f64, t_min: f64, t_max: f64, a1: Array, a2: Array| -> Array {
+        let s = if (t_max - t_min).abs() < 1e-6 { 0.0 } else { ((t - t_min) / (t_max - t_min)).clamp(0.0, 1.0) };
+        let n = a1.len().min(a2.len());
+        let mut out = Vec::with_capacity(n);
+        for i in 0..n {
+            let v1 = dynamic_to_f64(&a1[i]).unwrap_or(0.0);
+            let v2 = dynamic_to_f64(&a2[i]).unwrap_or(0.0);
+            out.push(Dynamic::from_float(v1 + s * (v2 - v1)));
+        }
+        out
+    });
 
-    // --- AE-compatible Easing functions ---
+    // --- AE-compatible Easing functions (3-arg & 5-arg, scalar & array) ---
+    engine.register_fn("ease", |t: f64, v_min: f64, v_max: f64| -> f64 {
+        let s = t.clamp(0.0, 1.0);
+        let smooth_s = s * s * (3.0 - 2.0 * s);
+        v_min + smooth_s * (v_max - v_min)
+    });
     engine.register_fn("ease", |t: f64, t_min: f64, t_max: f64, v_min: f64, v_max: f64| -> f64 {
         let s = if (t_max - t_min).abs() < 1e-6 { 0.0 } else { ((t - t_min) / (t_max - t_min)).clamp(0.0, 1.0) };
         let smooth_s = s * s * (3.0 - 2.0 * s); // Hermite smoothstep
         v_min + smooth_s * (v_max - v_min)
     });
+    engine.register_fn("ease", |t: f64, t_min: f64, t_max: f64, a1: Array, a2: Array| -> Array {
+        let s = if (t_max - t_min).abs() < 1e-6 { 0.0 } else { ((t - t_min) / (t_max - t_min)).clamp(0.0, 1.0) };
+        let smooth_s = s * s * (3.0 - 2.0 * s);
+        let n = a1.len().min(a2.len());
+        let mut out = Vec::with_capacity(n);
+        for i in 0..n {
+            let v1 = dynamic_to_f64(&a1[i]).unwrap_or(0.0);
+            let v2 = dynamic_to_f64(&a2[i]).unwrap_or(0.0);
+            out.push(Dynamic::from_float(v1 + smooth_s * (v2 - v1)));
+        }
+        out
+    });
+    engine.register_fn("ease", |t: f64, a1: Array, a2: Array| -> Array {
+        let s = t.clamp(0.0, 1.0);
+        let smooth_s = s * s * (3.0 - 2.0 * s);
+        let n = a1.len().min(a2.len());
+        let mut out = Vec::with_capacity(n);
+        for i in 0..n {
+            let v1 = dynamic_to_f64(&a1[i]).unwrap_or(0.0);
+            let v2 = dynamic_to_f64(&a2[i]).unwrap_or(0.0);
+            out.push(Dynamic::from_float(v1 + smooth_s * (v2 - v1)));
+        }
+        out
+    });
 
+    engine.register_fn("easeIn", |t: f64, v_min: f64, v_max: f64| -> f64 {
+        let s = t.clamp(0.0, 1.0);
+        v_min + s * s * (v_max - v_min)
+    });
     engine.register_fn("easeIn", |t: f64, t_min: f64, t_max: f64, v_min: f64, v_max: f64| -> f64 {
         let s = if (t_max - t_min).abs() < 1e-6 { 0.0 } else { ((t - t_min) / (t_max - t_min)).clamp(0.0, 1.0) };
         let ease_in_s = s * s; // Quadratic acceleration
         v_min + ease_in_s * (v_max - v_min)
     });
+    engine.register_fn("easeIn", |t: f64, t_min: f64, t_max: f64, a1: Array, a2: Array| -> Array {
+        let s = if (t_max - t_min).abs() < 1e-6 { 0.0 } else { ((t - t_min) / (t_max - t_min)).clamp(0.0, 1.0) };
+        let ease_in_s = s * s;
+        let n = a1.len().min(a2.len());
+        let mut out = Vec::with_capacity(n);
+        for i in 0..n {
+            let v1 = dynamic_to_f64(&a1[i]).unwrap_or(0.0);
+            let v2 = dynamic_to_f64(&a2[i]).unwrap_or(0.0);
+            out.push(Dynamic::from_float(v1 + ease_in_s * (v2 - v1)));
+        }
+        out
+    });
 
+    engine.register_fn("easeOut", |t: f64, v_min: f64, v_max: f64| -> f64 {
+        let s = t.clamp(0.0, 1.0);
+        let ease_out_s = 1.0 - (1.0 - s) * (1.0 - s);
+        v_min + ease_out_s * (v_max - v_min)
+    });
     engine.register_fn("easeOut", |t: f64, t_min: f64, t_max: f64, v_min: f64, v_max: f64| -> f64 {
         let s = if (t_max - t_min).abs() < 1e-6 { 0.0 } else { ((t - t_min) / (t_max - t_min)).clamp(0.0, 1.0) };
         let ease_out_s = 1.0 - (1.0 - s) * (1.0 - s); // Quadratic deceleration
         v_min + ease_out_s * (v_max - v_min)
+    });
+    engine.register_fn("easeOut", |t: f64, t_min: f64, t_max: f64, a1: Array, a2: Array| -> Array {
+        let s = if (t_max - t_min).abs() < 1e-6 { 0.0 } else { ((t - t_min) / (t_max - t_min)).clamp(0.0, 1.0) };
+        let ease_out_s = 1.0 - (1.0 - s) * (1.0 - s);
+        let n = a1.len().min(a2.len());
+        let mut out = Vec::with_capacity(n);
+        for i in 0..n {
+            let v1 = dynamic_to_f64(&a1[i]).unwrap_or(0.0);
+            let v2 = dynamic_to_f64(&a2[i]).unwrap_or(0.0);
+            out.push(Dynamic::from_float(v1 + ease_out_s * (v2 - v1)));
+        }
+        out
+    });
+
+    // --- AE Vector Math (length, distance, normalize, dot, cross, lookAt, add, sub, mul, div) ---
+    engine.register_fn("length", |a: Array| -> f64 {
+        let sum_sq: f64 = a.iter().filter_map(dynamic_to_f64).map(|v| v * v).sum();
+        sum_sq.sqrt()
+    });
+    engine.register_fn("length", |a1: Array, a2: Array| -> f64 {
+        let n = a1.len().min(a2.len());
+        let mut sum_sq = 0.0;
+        for i in 0..n {
+            let v1 = dynamic_to_f64(&a1[i]).unwrap_or(0.0);
+            let v2 = dynamic_to_f64(&a2[i]).unwrap_or(0.0);
+            let d = v1 - v2;
+            sum_sq += d * d;
+        }
+        sum_sq.sqrt()
+    });
+    engine.register_fn("distance", |a1: Array, a2: Array| -> f64 {
+        let n = a1.len().min(a2.len());
+        let mut sum_sq = 0.0;
+        for i in 0..n {
+            let v1 = dynamic_to_f64(&a1[i]).unwrap_or(0.0);
+            let v2 = dynamic_to_f64(&a2[i]).unwrap_or(0.0);
+            let d = v1 - v2;
+            sum_sq += d * d;
+        }
+        sum_sq.sqrt()
+    });
+    engine.register_fn("normalize", |a: Array| -> Array {
+        let len: f64 = a.iter().filter_map(dynamic_to_f64).map(|v| v * v).sum::<f64>().sqrt();
+        if len < 1e-9 {
+            a
+        } else {
+            a.iter().filter_map(dynamic_to_f64).map(|v| Dynamic::from_float(v / len)).collect()
+        }
+    });
+    engine.register_fn("dot", |a1: Array, a2: Array| -> f64 {
+        let n = a1.len().min(a2.len());
+        let mut sum = 0.0;
+        for i in 0..n {
+            let v1 = dynamic_to_f64(&a1[i]).unwrap_or(0.0);
+            let v2 = dynamic_to_f64(&a2[i]).unwrap_or(0.0);
+            sum += v1 * v2;
+        }
+        sum
+    });
+    engine.register_fn("cross", |a1: Array, a2: Array| -> Array {
+        let v1_0 = a1.get(0).and_then(dynamic_to_f64).unwrap_or(0.0);
+        let v1_1 = a1.get(1).and_then(dynamic_to_f64).unwrap_or(0.0);
+        let v1_2 = a1.get(2).and_then(dynamic_to_f64).unwrap_or(0.0);
+        let v2_0 = a2.get(0).and_then(dynamic_to_f64).unwrap_or(0.0);
+        let v2_1 = a2.get(1).and_then(dynamic_to_f64).unwrap_or(0.0);
+        let v2_2 = a2.get(2).and_then(dynamic_to_f64).unwrap_or(0.0);
+        vec![
+            Dynamic::from_float(v1_1 * v2_2 - v1_2 * v2_1),
+            Dynamic::from_float(v1_2 * v2_0 - v1_0 * v2_2),
+            Dynamic::from_float(v1_0 * v2_1 - v1_1 * v2_0),
+        ]
+    });
+    engine.register_fn("lookAt", |from_p: Array, target_p: Array| -> Array {
+        let fx = from_p.get(0).and_then(dynamic_to_f64).unwrap_or(0.0);
+        let fy = from_p.get(1).and_then(dynamic_to_f64).unwrap_or(0.0);
+        let fz = from_p.get(2).and_then(dynamic_to_f64).unwrap_or(0.0);
+        let tx = target_p.get(0).and_then(dynamic_to_f64).unwrap_or(0.0);
+        let ty = target_p.get(1).and_then(dynamic_to_f64).unwrap_or(0.0);
+        let tz = target_p.get(2).and_then(dynamic_to_f64).unwrap_or(0.0);
+        let dx = tx - fx;
+        let dy = ty - fy;
+        let dz = tz - fz;
+        let x_rot = (-dy).atan2((dx * dx + dz * dz).sqrt()).to_degrees();
+        let y_rot = dx.atan2(dz).to_degrees();
+        vec![Dynamic::from_float(x_rot), Dynamic::from_float(y_rot), Dynamic::from_float(0.0)]
+    });
+    engine.register_fn("add", |a1: Array, a2: Array| -> Array {
+        let n = a1.len().min(a2.len());
+        let mut out = Vec::with_capacity(n);
+        for i in 0..n {
+            let v1 = dynamic_to_f64(&a1[i]).unwrap_or(0.0);
+            let v2 = dynamic_to_f64(&a2[i]).unwrap_or(0.0);
+            out.push(Dynamic::from_float(v1 + v2));
+        }
+        out
+    });
+    engine.register_fn("sub", |a1: Array, a2: Array| -> Array {
+        let n = a1.len().min(a2.len());
+        let mut out = Vec::with_capacity(n);
+        for i in 0..n {
+            let v1 = dynamic_to_f64(&a1[i]).unwrap_or(0.0);
+            let v2 = dynamic_to_f64(&a2[i]).unwrap_or(0.0);
+            out.push(Dynamic::from_float(v1 - v2));
+        }
+        out
+    });
+    engine.register_fn("mul", |a: Array, s: f64| -> Array {
+        a.iter().filter_map(dynamic_to_f64).map(|v| Dynamic::from_float(v * s)).collect()
+    });
+    engine.register_fn("div", |a: Array, s: f64| -> Array {
+        let s_inv = if s.abs() < 1e-9 { 1.0 } else { 1.0 / s };
+        a.iter().filter_map(dynamic_to_f64).map(|v| Dynamic::from_float(v * s_inv)).collect()
+    });
+    engine.register_fn("clamp", |a: Array, lo: f64, hi: f64| -> Array {
+        a.iter().filter_map(dynamic_to_f64).map(|v| Dynamic::from_float(v.clamp(lo, hi))).collect()
     });
 
     // --- AE-compatible Random functions (PCG32 Deterministic Generator with time-variation) ---
@@ -218,6 +410,12 @@ pub fn build_engine() -> Engine {
     // --- Array constructors ---
     engine.register_fn("array2", |x: f64, y: f64| -> Array {
         vec![Dynamic::from_float(x), Dynamic::from_float(y)]
+    });
+    engine.register_fn("array3", |x: f64, y: f64, z: f64| -> Array {
+        vec![Dynamic::from_float(x), Dynamic::from_float(y), Dynamic::from_float(z)]
+    });
+    engine.register_fn("array4", |x: f64, y: f64, z: f64, w: f64| -> Array {
+        vec![Dynamic::from_float(x), Dynamic::from_float(y), Dynamic::from_float(z), Dynamic::from_float(w)]
     });
 
     // --- Additional AE-compatible math functions ---
@@ -1352,5 +1550,29 @@ mod tests_loops {
         let inv: rhai::Array = COMP_ENGINE.with(|e| e.eval("fromComp(100.0, 70.0)").unwrap());
         assert!((inv[0].as_float().unwrap() - 10.0).abs() < 1e-3, "{}", inv[0]);
         assert!(inv[1].as_float().unwrap().abs() < 1e-3, "{}", inv[1]);
+    }
+
+    #[test]
+    fn test_ae_interpolation_and_vectors() {
+        let engine = crate::core::expression_engine::build_engine();
+        // 3-arg linear & ease
+        let v: f64 = engine.eval("linear(0.5, 10.0, 20.0)").unwrap();
+        assert!((v - 15.0).abs() < 1e-6);
+        let ve: f64 = engine.eval("ease(0.5, 0.0, 100.0)").unwrap();
+        assert!((ve - 50.0).abs() < 1e-6);
+
+        // Vector math
+        let len: f64 = engine.eval("length([3.0, 4.0])").unwrap();
+        assert!((len - 5.0).abs() < 1e-6);
+        let dist: f64 = engine.eval("distance([0.0, 0.0], [3.0, 4.0])").unwrap();
+        assert!((dist - 5.0).abs() < 1e-6);
+        let dot: f64 = engine.eval("dot([1.0, 2.0], [3.0, 4.0])").unwrap();
+        assert!((dot - 11.0).abs() < 1e-6);
+
+        // Array linear
+        let arr: rhai::Array = engine.eval("linear(0.5, 0.0, 1.0, [10.0, 20.0], [20.0, 40.0])").unwrap();
+        assert_eq!(arr.len(), 2);
+        assert!((arr[0].as_float().unwrap() - 15.0).abs() < 1e-6);
+        assert!((arr[1].as_float().unwrap() - 30.0).abs() < 1e-6);
     }
 }

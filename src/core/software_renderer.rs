@@ -595,7 +595,7 @@ fn render_precomp_layers_inner(_comp: &Composition, precomp_comp: &Composition, 
     let has_solo = precomp_comp.layers.iter().any(|l| l.is_active(frame) && l.solo);
 
     for layer in &precomp_comp.layers {
-        if !layer.is_active(frame) || !layer.visible { continue; }
+        if !layer.is_active(frame) || !layer.visible || layer.is_guide_layer { continue; }
         if has_solo && !layer.solo { continue; }
 
         let effective_frame = {
@@ -2718,8 +2718,18 @@ pub fn render_frame_to_pixels(comp: &Composition, frame: u32, width: u32, height
                     BlendMode::Normal => (src_r, src_g, src_b),
                 };
 
-                // Alpha blending formula: Standard Source-Over
-                let out_a = src_a + dst_a * (1.0 - src_a);
+                // Preserve Underlying Transparency (AE 'T' switch)
+                if layer.preserve_transparency {
+                    src_a *= dst_a;
+                    if src_a <= 0.001 { continue; }
+                }
+
+                // Alpha blending formula: Standard Source-Over or Transparency Preservation
+                let out_a = if layer.preserve_transparency {
+                    dst_a
+                } else {
+                    src_a + dst_a * (1.0 - src_a)
+                };
                 let out_r = if out_a > 0.0 { (blended_r * src_a + dst_r * dst_a * (1.0 - src_a)) / out_a } else { 0.0 };
                 let out_g = if out_a > 0.0 { (blended_g * src_a + dst_g * dst_a * (1.0 - src_a)) / out_a } else { 0.0 };
                 let out_b = if out_a > 0.0 { (blended_b * src_a + dst_b * dst_a * (1.0 - src_a)) / out_a } else { 0.0 };
@@ -3931,6 +3941,52 @@ mod shadow_tests {
         let quad_corner = ((90 * 96 + 90) * 4) as usize;
         assert!(px[in_shadow] < 210, "ellipse shadow core darkened, R={}", px[in_shadow]);
         assert!(px[quad_corner] > 235, "round shadow must spare quad corner, R={}", px[quad_corner]);
+    }
+
+    #[test]
+    fn test_preserve_transparency_blends_only_onto_opaque_dest() {
+        let mut comp = Composition::new("pt".into(), "PTComp".into(), 32, 32, 30, 30);
+        // Base layer: small 16x16 white square in the center (16..32, 16..32), background transparent
+        comp.background_color = [0.0, 0.0, 0.0, 0.0];
+        let mut base = Layer::new("b".into(), "Base".into(), LayerType::Solid { color: [1.0, 1.0, 1.0, 1.0] }, 30);
+        base.transform.position = Animatable::new_constant([16.0, 16.0]);
+        base.transform.scale = Animatable::new_constant([50.0, 50.0]); // 16x16
+        comp.layers.push(base);
+
+        // Top layer: red solid covering entire 32x32 screen, but with preserve_transparency = true
+        let mut top = Layer::new("t".into(), "TopRed".into(), LayerType::Solid { color: [1.0, 0.0, 0.0, 1.0] }, 30);
+        top.transform.position = Animatable::new_constant([16.0, 16.0]);
+        top.transform.scale = Animatable::new_constant([100.0, 100.0]);
+        top.preserve_transparency = true;
+        comp.layers.push(top);
+
+        let px = render_frame_to_pixels(&comp, 0, 32, 32, 0.0, 0);
+        // Center pixel (16, 16): should be painted Red (R=255, G=0, B=0, A=255)
+        let c_idx = ((16 * 32 + 16) * 4) as usize;
+        assert_eq!(px[c_idx], 255);
+        assert_eq!(px[c_idx + 1], 0);
+
+        // Corner pixel (2, 2): should remain transparent (A=0), not painted red
+        let corner_idx = ((2 * 32 + 2) * 4) as usize;
+        assert_eq!(px[corner_idx + 3], 0);
+    }
+
+    #[test]
+    fn test_guide_layer_skipped_in_precomp() {
+        let mut sub_comp = Composition::new("sub".into(), "Sub".into(), 32, 32, 30, 30);
+        let mut guide = Layer::new("g".into(), "Guide".into(), LayerType::Solid { color: [1.0, 0.0, 0.0, 1.0] }, 30);
+        guide.is_guide_layer = true;
+        sub_comp.layers.push(guide);
+
+        let mut main_comp = Composition::new("main".into(), "Main".into(), 32, 32, 30, 30);
+        main_comp.background_color = [0.0, 0.0, 0.0, 0.0];
+        let precomp_layer = Layer::new("p".into(), "Pre".into(), LayerType::PreComp { comp_id: "sub".into() }, 30);
+        main_comp.layers.push(precomp_layer);
+        main_comp.sub_compositions.push(sub_comp);
+
+        let px = render_frame_to_pixels(&main_comp, 0, 32, 32, 0.0, 0);
+        // Entire buffer should be empty / transparent since the only sub-layer was a guide layer
+        assert!(px.iter().all(|&b| b == 0));
     }
 }
 
