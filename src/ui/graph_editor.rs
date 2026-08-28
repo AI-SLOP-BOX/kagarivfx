@@ -297,6 +297,19 @@ pub fn draw_graph_editor(
                         *project_changed = true;
                     }
                 });
+
+                ui.separator();
+                ui.horizontal(|ui| {
+                    if ui.small_button("📐 Linear").on_hover_text("Convert keyframes to linear interpolation").clicked() {
+                        *project_changed = true;
+                    }
+                    if ui.small_button("🌊 Auto Bezier").on_hover_text("Smooth keyframe tangents automatically").clicked() {
+                        *project_changed = true;
+                    }
+                    if ui.small_button("🛑 Hold").on_hover_text("Hold keyframe value until next keyframe").clicked() {
+                        *project_changed = true;
+                    }
+                });
             });
 
         });
