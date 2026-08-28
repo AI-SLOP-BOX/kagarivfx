@@ -704,6 +704,52 @@ pub fn draw_layer_type_specs(
                         *project_changed = true;
                     }
                 });
+
+                // ── Trim Paths (AE Shape Operator) ──
+                ui.add_space(4.0);
+                ui.collapsing("✂ Trim Paths", |ui| {
+                    let has_trim = layer.trim_paths.is_some();
+                    ui.horizontal(|ui| {
+                        if !has_trim {
+                            if ui.button("+ Add Trim Paths").clicked() {
+                                layer.trim_paths = Some(crate::core::timeline::TrimPaths::default());
+                                *project_changed = true;
+                            }
+                        } else if ui.small_button("🗑 Remove").clicked() {
+                            layer.trim_paths = None;
+                            *project_changed = true;
+                        }
+                    });
+
+                    if let Some(ref mut trim) = layer.trim_paths {
+                        let mut start_val = trim.start.evaluate(current_frame);
+                        ui.horizontal(|ui| {
+                            ui.label("Start:");
+                            if ui.add(egui::Slider::new(&mut start_val, 0.0..=100.0).suffix("%")).changed() {
+                                trim.start = crate::core::property::Animatable::new_constant(start_val);
+                                *project_changed = true;
+                            }
+                        });
+
+                        let mut end_val = trim.end.evaluate(current_frame);
+                        ui.horizontal(|ui| {
+                            ui.label("End:");
+                            if ui.add(egui::Slider::new(&mut end_val, 0.0..=100.0).suffix("%")).changed() {
+                                trim.end = crate::core::property::Animatable::new_constant(end_val);
+                                *project_changed = true;
+                            }
+                        });
+
+                        let mut offset_val = trim.offset.evaluate(current_frame);
+                        ui.horizontal(|ui| {
+                            ui.label("Offset:");
+                            if ui.add(egui::DragValue::new(&mut offset_val).suffix("°")).changed() {
+                                trim.offset = crate::core::property::Animatable::new_constant(offset_val);
+                                *project_changed = true;
+                            }
+                        });
+                    }
+                });
             }
             LayerType::Null => {
                 ui.label("Null Object (Controller)");

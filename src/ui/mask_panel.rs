@@ -108,6 +108,51 @@ pub fn draw_mask_panel(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
                                 }
                             });
 
+                            // ── Mask Path & Bezier Vertices ──
+                            ui.collapsing("📐 Mask Path & Vertices", |ui| {
+                                let mut verts = mask.path.get_vertices(app.current_frame);
+                                ui.horizontal(|ui| {
+                                    ui.label(format!("Vertices: {}", verts.len()));
+                                    if ui.small_button("+ Add Vertex").clicked() {
+                                        let last = verts.last().copied().unwrap_or([100.0, 100.0]);
+                                        verts.push([last[0] + 20.0, last[1] + 20.0]);
+                                        mask.path.vertices = crate::core::property::Animatable::new_constant(verts.clone());
+                                        *project_changed_flag = true;
+                                    }
+                                    if ui.checkbox(&mut mask.path.is_closed, "Closed Path").clicked() {
+                                        *project_changed_flag = true;
+                                    }
+                                });
+
+                                let mut to_delete = None;
+                                let can_delete = verts.len() > 3;
+                                for vi in 0..verts.len() {
+                                    ui.horizontal(|ui| {
+                                        ui.label(format!("#{}:", vi + 1));
+                                        let mut x = verts[vi][0];
+                                        let mut y = verts[vi][1];
+                                        if ui.add(egui::DragValue::new(&mut x).speed(1.0).prefix("X: ")).changed() {
+                                            verts[vi][0] = x;
+                                            *project_changed_flag = true;
+                                        }
+                                        if ui.add(egui::DragValue::new(&mut y).speed(1.0).prefix("Y: ")).changed() {
+                                            verts[vi][1] = y;
+                                            *project_changed_flag = true;
+                                        }
+                                        if can_delete && ui.small_button("✕").clicked() {
+                                            to_delete = Some(vi);
+                                        }
+                                    });
+                                }
+                                if let Some(d) = to_delete {
+                                    verts.remove(d);
+                                    mask.path.vertices = crate::core::property::Animatable::new_constant(verts);
+                                    *project_changed_flag = true;
+                                } else if *project_changed_flag {
+                                    mask.path.vertices = crate::core::property::Animatable::new_constant(verts);
+                                }
+                            });
+
                             // ── Wiggle Paths (AE parity) ──
                             let mut wiggle_on = mask.wiggle.is_some();
                             if ui.checkbox(&mut wiggle_on, "🌊 Wiggle Paths").on_hover_text("Organic noise deformation of the mask outline").changed() {

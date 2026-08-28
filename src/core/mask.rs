@@ -136,11 +136,9 @@ impl MaskPath {
         }
     }
 
-    /// Sample the path as a series of screen-space points for CPU rendering into a caller-provided output vector.
-    /// Reuses existing vector allocations to eliminate heap allocation pressure during interactive scrubbing.
-    pub fn to_polygon_into(&self, frame: u32, segments_per_edge: u32, out_vec: &mut Vec<[f32; 2]>) {
-        out_vec.clear();
-        let verts = match &self.vertices {
+    /// Get evaluated vertices at a given frame.
+    pub fn get_vertices(&self, frame: u32) -> Vec<[f32; 2]> {
+        match &self.vertices {
             Animatable::Constant(v) => v.clone(),
             Animatable::Animated(kfs) => {
                 if kfs.is_empty() {
@@ -170,7 +168,14 @@ impl MaskPath {
                     Vec::new()
                 }
             }
-        };
+        }
+    }
+
+    /// Sample the path as a series of screen-space points for CPU rendering into a caller-provided output vector.
+    /// Reuses existing vector allocations to eliminate heap allocation pressure during interactive scrubbing.
+    pub fn to_polygon_into(&self, frame: u32, segments_per_edge: u32, out_vec: &mut Vec<[f32; 2]>) {
+        out_vec.clear();
+        let verts = self.get_vertices(frame);
         if verts.len() < 2 {
             out_vec.extend(verts);
             return;

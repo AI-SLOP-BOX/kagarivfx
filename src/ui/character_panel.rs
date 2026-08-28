@@ -128,119 +128,97 @@ pub fn draw_character_panel(
                         });
                     });
                     ui.add_space(6.0);
-                    // ── Full AE Range Selector & Animator Controls ──
+                    // ── AE Multi-Animator Stack (Layered Animators) ──
                     ui.group(|ui| {
-                        let has_anim = layer.text_animator.is_some();
+                        let has_stack = layer.text_animator_stack.is_some();
                         ui.horizontal(|ui| {
-                            ui.label(egui::RichText::new("🎛 Text Animator").strong().color(colors::ACCENT_CYAN));
-                            if !has_anim {
-                                if ui.button("+ Add Animator").clicked() {
-                                    layer.text_animator = Some(crate::core::text_animator::TextAnimatorSettings::default());
-                                    project_changed = true;
+                            ui.label(egui::RichText::new("📚 Animators Stack").strong().color(colors::ACCENT_CYAN));
+                            if ui.button("+ Add Animator").on_hover_text("Add another layered text animator").clicked() {
+                                if layer.text_animator_stack.is_none() {
+                                    layer.text_animator_stack = Some(crate::core::text_animator_advanced::AnimatorStack::default());
                                 }
-                            } else if ui.small_button("🗑 Remove").clicked() {
-                                layer.text_animator = None;
+                                if let Some(ref mut stack) = layer.text_animator_stack {
+                                    stack.animators.push(crate::core::text_animator_advanced::TextAnimatorAdvanced::default());
+                                }
+                                project_changed = true;
+                            }
+                            if has_stack && ui.small_button("Clear Stack").clicked() {
+                                layer.text_animator_stack = None;
                                 project_changed = true;
                             }
                         });
 
-                        if let Some(ref mut anim) = layer.text_animator {
-                            ui.separator();
-                            if ui.checkbox(&mut anim.enabled, "Enable Animator").clicked() {
+                        if let Some(ref mut stack) = layer.text_animator_stack {
+                            let mut to_remove = None;
+                            for (ai, anim) in stack.animators.iter_mut().enumerate() {
+                                ui.push_id(ai, |ui| {
+                                    ui.collapsing(format!("🎛 Animator {}", ai + 1), |ui| {
+                                        ui.horizontal(|ui| {
+                                            if ui.checkbox(&mut anim.enabled, "Enabled").clicked() { project_changed = true; }
+                                            ui.label("Based On:");
+                                            let mut unit_idx = match anim.unit {
+                                                crate::core::text_animator_advanced::SelectorUnit::Characters => 0,
+                                                crate::core::text_animator_advanced::SelectorUnit::Words => 1,
+                                                crate::core::text_animator_advanced::SelectorUnit::Lines => 2,
+                                            };
+                                            egui::ComboBox::from_id_salt("anim_unit")
+                                                .selected_text(match anim.unit {
+                                                    crate::core::text_animator_advanced::SelectorUnit::Characters => "Characters",
+                                                    crate::core::text_animator_advanced::SelectorUnit::Words => "Words",
+                                                    crate::core::text_animator_advanced::SelectorUnit::Lines => "Lines",
+                                                })
+                                                .show_ui(ui, |ui| {
+                                                    if ui.selectable_value(&mut unit_idx, 0, "Characters").clicked() { anim.unit = crate::core::text_animator_advanced::SelectorUnit::Characters; project_changed = true; }
+                                                    if ui.selectable_value(&mut unit_idx, 1, "Words").clicked() { anim.unit = crate::core::text_animator_advanced::SelectorUnit::Words; project_changed = true; }
+                                                    if ui.selectable_value(&mut unit_idx, 2, "Lines").clicked() { anim.unit = crate::core::text_animator_advanced::SelectorUnit::Lines; project_changed = true; }
+                                                });
+                                            if ui.small_button("🗑").clicked() { to_remove = Some(ai); }
+                                        });
+
+                                        // Range Selector
+                                        ui.collapsing("🎯 Range Selector", |ui| {
+                                            let sel = &mut anim.selector;
+                                            ui.horizontal(|ui| {
+                                                ui.label("Start / End:");
+                                                if ui.add(egui::Slider::new(&mut sel.start, 0.0..=100.0).suffix("%")).changed() { project_changed = true; }
+                                                if ui.add(egui::Slider::new(&mut sel.end, 0.0..=100.0).suffix("%")).changed() { project_changed = true; }
+                                            });
+                                            ui.horizontal(|ui| {
+                                                ui.label("Offset:");
+                                                if ui.add(egui::Slider::new(&mut sel.offset, -100.0..=100.0).suffix("%")).changed() { project_changed = true; }
+                                            });
+                                        });
+
+                                        // Property targets
+                                        ui.collapsing("📐 Transform & Advanced Properties", |ui| {
+                                            ui.horizontal(|ui| {
+                                                ui.label("Position:");
+                                                if ui.add(egui::DragValue::new(&mut anim.position[0]).prefix("X: ")).changed() { project_changed = true; }
+                                                if ui.add(egui::DragValue::new(&mut anim.position[1]).prefix("Y: ")).changed() { project_changed = true; }
+                                            });
+                                            ui.horizontal(|ui| {
+                                                ui.label("Rotation / Opacity:");
+                                                if ui.add(egui::DragValue::new(&mut anim.rotation).suffix("°")).changed() { project_changed = true; }
+                                                if ui.add(egui::Slider::new(&mut anim.opacity, 0.0..=1.0)).changed() { project_changed = true; }
+                                            });
+                                            ui.horizontal(|ui| {
+                                                ui.label("Tracking:");
+                                                if ui.add(egui::DragValue::new(&mut anim.tracking).suffix(" px")).changed() { project_changed = true; }
+                                                ui.label("Skew:");
+                                                if ui.add(egui::DragValue::new(&mut anim.advanced.skew).suffix("°")).changed() { project_changed = true; }
+                                            });
+                                            ui.horizontal(|ui| {
+                                                ui.label("Char Offset (Glyph Shift):");
+                                                if ui.add(egui::DragValue::new(&mut anim.advanced.character_offset)).changed() { project_changed = true; }
+                                            });
+                                        });
+                                    });
+                                });
+                            }
+                            if let Some(r) = to_remove {
+                                stack.animators.remove(r);
                                 project_changed = true;
                             }
-
-                            // Range Selector
-                            ui.collapsing("🎯 Range Selector", |ui| {
-                                let sel = &mut anim.selector;
-                                ui.horizontal(|ui| {
-                                    ui.label("Start / End:");
-                                    if ui.add(egui::Slider::new(&mut sel.start, 0.0..=100.0).suffix("%")).changed() { project_changed = true; }
-                                    if ui.add(egui::Slider::new(&mut sel.end, 0.0..=100.0).suffix("%")).changed() { project_changed = true; }
-                                });
-                                ui.horizontal(|ui| {
-                                    ui.label("Offset:");
-                                    if ui.add(egui::Slider::new(&mut sel.offset, -100.0..=100.0).suffix("%")).changed() { project_changed = true; }
-                                });
-
-                                ui.horizontal(|ui| {
-                                    ui.label("Shape:");
-                                    let mut shape_idx = match sel.shape {
-                                        crate::core::text_animator::SelectorShape::Square => 0,
-                                        crate::core::text_animator::SelectorShape::RampUp => 1,
-                                        crate::core::text_animator::SelectorShape::RampDown => 2,
-                                        crate::core::text_animator::SelectorShape::Triangle => 3,
-                                        crate::core::text_animator::SelectorShape::Round => 4,
-                                        crate::core::text_animator::SelectorShape::Smooth => 5,
-                                        crate::core::text_animator::SelectorShape::Wobble => 6,
-                                        crate::core::text_animator::SelectorShape::Random => 7,
-                                        crate::core::text_animator::SelectorShape::Expression => 8,
-                                    };
-                                    egui::ComboBox::from_id_salt("range_shape")
-                                        .selected_text(match sel.shape {
-                                            crate::core::text_animator::SelectorShape::Square => "Square",
-                                            crate::core::text_animator::SelectorShape::RampUp => "Ramp Up",
-                                            crate::core::text_animator::SelectorShape::RampDown => "Ramp Down",
-                                            crate::core::text_animator::SelectorShape::Triangle => "Triangle",
-                                            crate::core::text_animator::SelectorShape::Round => "Round",
-                                            crate::core::text_animator::SelectorShape::Smooth => "Smooth",
-                                            crate::core::text_animator::SelectorShape::Wobble => "Wobble",
-                                            crate::core::text_animator::SelectorShape::Random => "Random",
-                                            crate::core::text_animator::SelectorShape::Expression => "Expression",
-                                        })
-                                        .show_ui(ui, |ui| {
-                                            if ui.selectable_value(&mut shape_idx, 0, "Square").clicked() { sel.shape = crate::core::text_animator::SelectorShape::Square; project_changed = true; }
-                                            if ui.selectable_value(&mut shape_idx, 1, "Ramp Up").clicked() { sel.shape = crate::core::text_animator::SelectorShape::RampUp; project_changed = true; }
-                                            if ui.selectable_value(&mut shape_idx, 2, "Ramp Down").clicked() { sel.shape = crate::core::text_animator::SelectorShape::RampDown; project_changed = true; }
-                                            if ui.selectable_value(&mut shape_idx, 3, "Triangle").clicked() { sel.shape = crate::core::text_animator::SelectorShape::Triangle; project_changed = true; }
-                                            if ui.selectable_value(&mut shape_idx, 4, "Round").clicked() { sel.shape = crate::core::text_animator::SelectorShape::Round; project_changed = true; }
-                                            if ui.selectable_value(&mut shape_idx, 5, "Smooth").clicked() { sel.shape = crate::core::text_animator::SelectorShape::Smooth; project_changed = true; }
-                                            if ui.selectable_value(&mut shape_idx, 6, "Wobble").clicked() { sel.shape = crate::core::text_animator::SelectorShape::Wobble; project_changed = true; }
-                                            if ui.selectable_value(&mut shape_idx, 7, "Random").clicked() { sel.shape = crate::core::text_animator::SelectorShape::Random; project_changed = true; }
-                                            if ui.selectable_value(&mut shape_idx, 8, "Expression").clicked() { sel.shape = crate::core::text_animator::SelectorShape::Expression; project_changed = true; }
-                                        });
-                                });
-
-                                ui.horizontal(|ui| {
-                                    ui.label("Ease High / Low:");
-                                    if ui.add(egui::DragValue::new(&mut sel.ease_high).prefix("Hi: ").suffix("%")).changed() { project_changed = true; }
-                                    if ui.add(egui::DragValue::new(&mut sel.ease_low).prefix("Lo: ").suffix("%")).changed() { project_changed = true; }
-                                });
-
-                                ui.horizontal(|ui| {
-                                    if ui.checkbox(&mut sel.random_order, "Randomize Order").clicked() { project_changed = true; }
-                                });
-                            });
-
-                            // Target Property Offsets
-                            ui.collapsing("📐 Transform Properties", |ui| {
-                                ui.horizontal(|ui| {
-                                    ui.label("Position Offset:");
-                                    if ui.add(egui::DragValue::new(&mut anim.position_offset[0]).prefix("X: ")).changed() { project_changed = true; }
-                                    if ui.add(egui::DragValue::new(&mut anim.position_offset[1]).prefix("Y: ")).changed() { project_changed = true; }
-                                });
-                                ui.horizontal(|ui| {
-                                    ui.label("Scale Target:");
-                                    if ui.add(egui::DragValue::new(&mut anim.scale[0]).speed(0.05).prefix("X: ")).changed() { project_changed = true; }
-                                    if ui.add(egui::DragValue::new(&mut anim.scale[1]).speed(0.05).prefix("Y: ")).changed() { project_changed = true; }
-                                });
-                                ui.horizontal(|ui| {
-                                    ui.label("Rotation Offset:");
-                                    if ui.add(egui::DragValue::new(&mut anim.rotation).suffix("°")).changed() { project_changed = true; }
-                                });
-                                ui.horizontal(|ui| {
-                                    ui.label("Opacity Target:");
-                                    if ui.add(egui::Slider::new(&mut anim.opacity, 0.0..=1.0)).changed() { project_changed = true; }
-                                });
-                                ui.horizontal(|ui| {
-                                    ui.label("Tracking Delta:");
-                                    if ui.add(egui::DragValue::new(&mut anim.tracking).suffix(" px")).changed() { project_changed = true; }
-                                });
-                                ui.horizontal(|ui| {
-                                    ui.label("Blur Amount:");
-                                    if ui.add(egui::DragValue::new(&mut anim.blur_amount).speed(0.5).suffix(" px")).changed() { project_changed = true; }
-                                });
-                            });
                         }
                     });
 
