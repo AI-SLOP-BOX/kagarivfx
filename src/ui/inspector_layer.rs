@@ -833,6 +833,58 @@ pub fn draw_layer_type_specs(
                         });
                     }
                 });
+
+                // ── Zig Zag & Round Corners (AE Vector Modifiers) ──
+                ui.collapsing("⚡ Zig Zag & Round Corners", |ui| {
+                    let mut has_zigzag = ui.ctx().data(|d| d.get_temp::<bool>(egui::Id::new("has_shape_zigzag")).unwrap_or(false));
+                    ui.horizontal(|ui| {
+                        if ui.checkbox(&mut has_zigzag, "⚡ Enable Zig Zag").clicked() {
+                            ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("has_shape_zigzag"), has_zigzag));
+                            *project_changed = true;
+                        }
+                    });
+                    if has_zigzag {
+                        let mut zz_size = ui.ctx().data(|d| d.get_temp::<f32>(egui::Id::new("zz_size")).unwrap_or(10.0));
+                        let mut zz_ridges = ui.ctx().data(|d| d.get_temp::<u32>(egui::Id::new("zz_ridges")).unwrap_or(4));
+                        let mut zz_smooth = ui.ctx().data(|d| d.get_temp::<bool>(egui::Id::new("zz_smooth")).unwrap_or(false));
+
+                        ui.horizontal(|ui| {
+                            ui.label("Size:");
+                            if ui.add(egui::DragValue::new(&mut zz_size).speed(0.5).range(0.0..=200.0).suffix(" px")).changed() {
+                                ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("zz_size"), zz_size));
+                                *project_changed = true;
+                            }
+                            ui.label("Ridges:");
+                            if ui.add(egui::DragValue::new(&mut zz_ridges).range(1..=50)).changed() {
+                                ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("zz_ridges"), zz_ridges));
+                                *project_changed = true;
+                            }
+                        });
+                        ui.horizontal(|ui| {
+                            ui.label("Points:");
+                            if ui.selectable_label(!zz_smooth, "Corner").clicked() {
+                                zz_smooth = false;
+                                ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("zz_smooth"), false));
+                                *project_changed = true;
+                            }
+                            if ui.selectable_label(zz_smooth, "Smooth").clicked() {
+                                zz_smooth = true;
+                                ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("zz_smooth"), true));
+                                *project_changed = true;
+                            }
+                        });
+                    }
+
+                    ui.separator();
+                    let mut round_radius = ui.ctx().data(|d| d.get_temp::<f32>(egui::Id::new("shape_round_radius")).unwrap_or(0.0));
+                    ui.horizontal(|ui| {
+                        ui.label("📐 Round Corners:");
+                        if ui.add(egui::DragValue::new(&mut round_radius).speed(0.5).range(0.0..=100.0).suffix(" px")).changed() {
+                            ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("shape_round_radius"), round_radius));
+                            *project_changed = true;
+                        }
+                    });
+                });
             }
             LayerType::Null => {
                 ui.label("Null Object (Controller)");

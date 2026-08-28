@@ -148,6 +148,34 @@ pub fn draw_character_panel(
                             }
                         });
 
+                        ui.horizontal_wrapped(|ui| {
+                            ui.label(egui::RichText::new("✨ Presets:").small().color(colors::TEXT_SECONDARY));
+                            if ui.small_button("⌨ Typewriter").clicked() {
+                                let mut anim = crate::core::text_animator_advanced::TextAnimatorAdvanced::default();
+                                anim.opacity = 0.0;
+                                anim.unit = crate::core::text_animator_advanced::SelectorUnit::Characters;
+                                if layer.text_animator_stack.is_none() { layer.text_animator_stack = Some(crate::core::text_animator_advanced::AnimatorStack::default()); }
+                                if let Some(ref mut st) = layer.text_animator_stack { st.animators.push(anim); }
+                                project_changed = true;
+                            }
+                            if ui.small_button("🌊 Char Wave").clicked() {
+                                let mut anim = crate::core::text_animator_advanced::TextAnimatorAdvanced::default();
+                                anim.position = [0.0, -30.0];
+                                anim.unit = crate::core::text_animator_advanced::SelectorUnit::Characters;
+                                if layer.text_animator_stack.is_none() { layer.text_animator_stack = Some(crate::core::text_animator_advanced::AnimatorStack::default()); }
+                                if let Some(ref mut st) = layer.text_animator_stack { st.animators.push(anim); }
+                                project_changed = true;
+                            }
+                            if ui.small_button("🐇 Word Hop").clicked() {
+                                let mut anim = crate::core::text_animator_advanced::TextAnimatorAdvanced::default();
+                                anim.position = [0.0, -50.0];
+                                anim.unit = crate::core::text_animator_advanced::SelectorUnit::Words;
+                                if layer.text_animator_stack.is_none() { layer.text_animator_stack = Some(crate::core::text_animator_advanced::AnimatorStack::default()); }
+                                if let Some(ref mut st) = layer.text_animator_stack { st.animators.push(anim); }
+                                project_changed = true;
+                            }
+                        });
+
                         if let Some(ref mut stack) = layer.text_animator_stack {
                             let mut to_remove = None;
                             for (ai, anim) in stack.animators.iter_mut().enumerate() {
