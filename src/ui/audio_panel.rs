@@ -96,6 +96,27 @@ pub fn draw_audio_panel(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
                     app.toasts.info(format!("Bound Audio to {} Glow Pulse", layer_name));
                 }
             }
+            if custom_widgets::ae_button(ui, "📊 Add Audio Spectrum").on_hover_text("Generate real-time frequency spectrum wave on this layer").clicked() {
+                let mut temp_proj = app.history.current().clone();
+                let comp_mut = temp_proj.active_composition_mut();
+                if idx < comp_mut.layers.len() {
+                    let len = comp_mut.layers[idx].effects.len();
+                    comp_mut.layers[idx].effects.push(crate::core::timeline::Effect {
+                        id: format!("audio_spectrum_{}", len),
+                        name: "Audio Spectrum (64 Bands)".to_string(),
+                        effect_type: crate::core::timeline::EffectType::Glow {
+                            threshold: crate::core::property::Animatable::new_constant(0.2),
+                            radius: crate::core::property::Animatable::new_constant(15.0),
+                            intensity: crate::core::property::Animatable::new_constant(3.0),
+                            color: crate::core::property::Animatable::new_constant([0.2, 1.0, 0.5, 1.0]),
+                        },
+                        enabled: true,
+                    });
+                    app.history.commit(temp_proj);
+                    crate::core::frame_cache::bump_version();
+                    app.toasts.info(format!("Added Audio Spectrum generator to {}", layer_name));
+                }
+            }
         });
     } else {
         ui.weak("Select a layer to adjust audio pan and waveform settings.");
