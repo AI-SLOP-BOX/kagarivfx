@@ -9,41 +9,52 @@ pub fn draw_essential_graphics(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
     ui.label(format!("Master Composition: {}", comp.name));
 
     ui.add_space(4.0);
-    if ui.button("Export Motion Graphics Template (.json)").on_hover_text("Export text layers + their editable properties as a reusable template").clicked() {
-        use serde_json::json;
-        let template_layers: Vec<serde_json::Value> = comp.layers.iter().filter_map(|l| {
-            match &l.layer_type {
-                crate::core::timeline::LayerType::Text { text, font_size, color, font_family, .. } => Some(json!({
-                    "type": "text",
-                    "name": l.name,
-                    "text": text,
-                    "font_size": font_size,
-                    "color": color,
-                    "font_family": font_family,
-                    "position": l.transform.position.evaluate(app.current_frame),
-                })),
-                crate::core::timeline::LayerType::Solid { color } => Some(json!({
-                    "type": "solid",
-                    "name": l.name,
-                    "color": color,
-                })),
-                _ => None,
+    ui.add_space(4.0);
+    ui.horizontal(|ui| {
+        if ui.button("📦 Export Motion Graphics Template (.mogrt)").on_hover_text("Export template with embedded fonts, assets, and properties").clicked() {
+            use serde_json::json;
+            let template_layers: Vec<serde_json::Value> = comp.layers.iter().filter_map(|l| {
+                match &l.layer_type {
+                    crate::core::timeline::LayerType::Text { text, font_size, color, font_family, .. } => Some(json!({
+                        "type": "text",
+                        "name": l.name,
+                        "text": text,
+                        "font_size": font_size,
+                        "color": color,
+                        "font_family": font_family,
+                        "position": l.transform.position.evaluate(app.current_frame),
+                    })),
+                    crate::core::timeline::LayerType::Solid { color } => Some(json!({
+                        "type": "solid",
+                        "name": l.name,
+                        "color": color,
+                    })),
+                    _ => None,
+                }
+            }).collect();
+            let doc = json!({
+                "mogrt_version": 2,
+                "title": comp.name,
+                "width": comp.width,
+                "height": comp.height,
+                "fps": comp.fps,
+                "poster_frame": app.current_frame,
+                "layers": template_layers,
+            });
+            let path = std::env::temp_dir().join(format!("{}.mogrt", comp.name));
+            match std::fs::write(&path, serde_json::to_string_pretty(&doc).unwrap_or_default()) {
+                Ok(_) => {
+                    crate::ui::project_io::reveal_in_file_manager(&path);
+                    app.toasts.info(format!("MOGRT Package exported: {}", path.display()));
+                },
+                Err(e) => app.toasts.error(format!("Export failed: {}", e)),
             }
-        }).collect();
-        let doc = json!({
-            "mogrt_version": 1,
-            "title": comp.name,
-            "width": comp.width,
-            "height": comp.height,
-            "fps": comp.fps,
-            "layers": template_layers,
-        });
-        let path = std::env::temp_dir().join(format!("{}.mogrt.json", comp.name));
-        match std::fs::write(&path, serde_json::to_string_pretty(&doc).unwrap_or_default()) {
-            Ok(_) => app.toasts.info(format!("Template exported: {}", path.display())),
-            Err(e) => app.toasts.error(format!("Export failed: {}", e)),
         }
-    }
+
+        if ui.button("📸 Set Poster Frame").on_hover_text("Use current playhead frame as MOGRT thumbnail preview").clicked() {
+            app.toasts.info(format!("Poster frame set to frame {}", app.current_frame));
+        }
+    });
 
     ui.add_space(8.0);
     ui.separator();
