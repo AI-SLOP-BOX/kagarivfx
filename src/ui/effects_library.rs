@@ -136,9 +136,30 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                         if layer.effects.is_empty() && drag_info.is_none() {
                             ui.weak("No effects applied. Drag an effect from 'Effects & Presets' tab.");
                         } else {
+                            let mut fx_move_up = None;
+                            let mut fx_move_down = None;
+                            let mut fx_dup = None;
+                            let mut fx_del = None;
+                            let total_effects = layer.effects.len();
+
                             for (e_idx, fx) in layer.effects.iter_mut().enumerate() {
                                 ui.collapsing(format!("fx {} - {}", e_idx + 1, fx.name), |ui| {
-                                    ui.checkbox(&mut fx.enabled, "Enabled (fx)");
+                                    ui.horizontal(|ui| {
+                                        ui.checkbox(&mut fx.enabled, "Enabled (fx)");
+                                        if e_idx > 0 && ui.small_button("▲").on_hover_text("Move effect up in render order").clicked() {
+                                            fx_move_up = Some(e_idx);
+                                        }
+                                        if e_idx + 1 < total_effects && ui.small_button("▼").on_hover_text("Move effect down in render order").clicked() {
+                                            fx_move_down = Some(e_idx);
+                                        }
+                                        if ui.small_button("📋 Dup").on_hover_text("Duplicate effect").clicked() {
+                                            fx_dup = Some(e_idx);
+                                        }
+                                        if ui.small_button("🗑 Del").on_hover_text("Remove effect").clicked() {
+                                            fx_del = Some(e_idx);
+                                        }
+                                    });
+
                                     // Save individual effect as preset
                                     if ui.small_button("💾 Save as Preset").clicked() {
                                         let preset = crate::core::effect_presets::EffectPreset::from_effect(
@@ -159,6 +180,25 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                                         }
                                     }
                                 });
+                            }
+
+                            if let Some(i) = fx_move_up {
+                                layer.effects.swap(i, i - 1);
+                                project_changed = true;
+                            }
+                            if let Some(i) = fx_move_down {
+                                layer.effects.swap(i, i + 1);
+                                project_changed = true;
+                            }
+                            if let Some(i) = fx_dup {
+                                let mut cloned = layer.effects[i].clone();
+                                cloned.id = format!("{}_copy", cloned.id);
+                                layer.effects.insert(i + 1, cloned);
+                                project_changed = true;
+                            }
+                            if let Some(i) = fx_del {
+                                layer.effects.remove(i);
+                                project_changed = true;
                             }
                             // Load preset button
                             ui.add_space(4.0);
