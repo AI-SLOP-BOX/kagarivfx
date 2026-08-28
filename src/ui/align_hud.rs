@@ -100,6 +100,41 @@ pub fn draw_alignment_hud(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
             }
         }
 
+        ui.separator();
+        ui.small("Distribute: ");
+
+        // 7. Distribute Left / Horizontally
+        if ui.button("⇤⇥").on_hover_text("Distribute Horizontally (Even Spacing)").clicked() {
+            let mut temp_proj = app.history.current().clone();
+            let comp_mut = temp_proj.active_composition_mut();
+            let n = comp_mut.layers.len();
+            if n > 1 {
+                let step = comp_w / (n as f32 + 1.0);
+                for (i, layer) in comp_mut.layers.iter_mut().enumerate() {
+                    let pos = layer.transform.position.evaluate(app.current_frame);
+                    layer.transform.position = Animatable::new_constant([step * (i as f32 + 1.0), pos[1]]);
+                }
+                project_changed = true;
+                app.history.commit(temp_proj);
+            }
+        }
+
+        // 8. Distribute Vertically
+        if ui.button("⤒⤓").on_hover_text("Distribute Vertically (Even Spacing)").clicked() {
+            let mut temp_proj = app.history.current().clone();
+            let comp_mut = temp_proj.active_composition_mut();
+            let n = comp_mut.layers.len();
+            if n > 1 {
+                let step = comp_h / (n as f32 + 1.0);
+                for (i, layer) in comp_mut.layers.iter_mut().enumerate() {
+                    let pos = layer.transform.position.evaluate(app.current_frame);
+                    layer.transform.position = Animatable::new_constant([pos[0], step * (i as f32 + 1.0)]);
+                }
+                project_changed = true;
+                app.history.commit(temp_proj);
+            }
+        }
+
         if project_changed {
             crate::core::frame_cache::bump_version();
         }
