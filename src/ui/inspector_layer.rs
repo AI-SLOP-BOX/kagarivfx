@@ -50,6 +50,37 @@ pub fn draw_layer_transforms(
             }) { *next_frame = Some(nf); }
             draw_easy_ease_button(ui, &mut layer.transform_3d.scale, project_changed);
             if scale_before != layer.transform_3d.scale { *project_changed = true; }
+
+            // ── 3D Material Options ──
+            ui.add_space(4.0);
+            ui.collapsing("🧱 Material Options", |ui| {
+                let mat = &mut layer.material;
+                if ui.checkbox(&mut mat.cast_shadows, "Casts Shadows").clicked() { *project_changed = true; }
+                ui.horizontal(|ui| {
+                    ui.label("Ambient:");
+                    if ui.add(egui::Slider::new(&mut mat.ambient, 0.0..=1.0)).changed() { *project_changed = true; }
+                });
+                ui.horizontal(|ui| {
+                    ui.label("Diffuse:");
+                    if ui.add(egui::Slider::new(&mut mat.diffuse, 0.0..=1.0)).changed() { *project_changed = true; }
+                });
+                ui.horizontal(|ui| {
+                    ui.label("Specular:");
+                    if ui.add(egui::Slider::new(&mut mat.specular, 0.0..=1.0)).changed() { *project_changed = true; }
+                });
+                ui.horizontal(|ui| {
+                    ui.label("Shininess:");
+                    if ui.add(egui::Slider::new(&mut mat.specular_exponent, 1.0..=256.0)).changed() { *project_changed = true; }
+                });
+                ui.horizontal(|ui| {
+                    ui.label("Metalness:");
+                    if ui.add(egui::Slider::new(&mut mat.metalness, 0.0..=1.0)).changed() { *project_changed = true; }
+                });
+                ui.horizontal(|ui| {
+                    ui.label("Emission:");
+                    if ui.add(egui::Slider::new(&mut mat.emission, 0.0..=1.0)).changed() { *project_changed = true; }
+                });
+            });
         } else {
             ui.label("Transform 2D");
             

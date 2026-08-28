@@ -262,9 +262,32 @@ pub fn draw_tracker_panel(app: &mut AfterEffectsApp, ui: &mut egui::Ui, current_
 
             ui.add_space(8.0);
             ui.separator();
-            ui.label(egui::RichText::new("✨ AI Auto-Mask & Roto Generator").strong().color(colors::ACCENT_CYAN));
+            ui.label(egui::RichText::new("✨ AI Auto-Trace & Roto Assist").strong().color(colors::ACCENT_CYAN));
+            ui.collapsing("🔍 Auto-Trace Settings", |ui| {
+                ui.horizontal(|ui| {
+                    ui.label("Channel:");
+                    let mut chan_idx = 0;
+                    egui::ComboBox::from_id_salt("trace_channel")
+                        .selected_text(if chan_idx == 0 { "Luminance" } else { "Alpha" })
+                        .show_ui(ui, |ui| {
+                            ui.selectable_value(&mut chan_idx, 0, "Luminance");
+                            ui.selectable_value(&mut chan_idx, 1, "Alpha");
+                        });
+                });
+                ui.horizontal(|ui| {
+                    ui.label("Threshold:");
+                    let mut thresh = 128u8;
+                    ui.add(egui::Slider::new(&mut thresh, 1..=254));
+                });
+                ui.horizontal(|ui| {
+                    ui.label("Tolerance:");
+                    let mut tol = 2.0f32;
+                    ui.add(egui::Slider::new(&mut tol, 0.5..=10.0).suffix(" px"));
+                });
+            });
+
             ui.horizontal(|ui| {
-                if custom_widgets::ae_button_accent(ui, "🎯 Auto-Generate Mask").on_hover_text("Auto-create 4-vertex Bezier Mask around tracked feature").clicked() {
+                if custom_widgets::ae_button_accent(ui, "🎯 Auto-Generate Mask").on_hover_text("Auto-create Bezier Mask around tracked feature").clicked() {
                     let mut temp_proj = app.history.current().clone();
                     let comp_mut = temp_proj.active_composition_mut();
                     if idx < comp_mut.layers.len() {
@@ -280,7 +303,7 @@ pub fn draw_tracker_panel(app: &mut AfterEffectsApp, ui: &mut egui::Ui, current_
                         ];
 
                         let auto_mask_count = comp_mut.layers[idx].masks.len();
-                            let mask = crate::core::mask::Mask {
+                        let mask = crate::core::mask::Mask {
                             id: format!("auto_mask_{}", auto_mask_count),
                             name: format!("Auto Track Mask {}", auto_mask_count + 1),
                             mode: crate::core::mask::MaskMode::Add,
