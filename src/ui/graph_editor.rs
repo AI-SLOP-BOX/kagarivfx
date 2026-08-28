@@ -108,6 +108,12 @@ pub fn draw_graph_editor(
             }
 
             ui.add_space(4.0);
+            if ui.button("〰 Rove Across Time").on_hover_text("Evenly distribute keyframes in time based on spatial path distance").clicked() {
+                // Apply auto-bezier spatial timing
+                apply_preset_to_layer(layer, &active_prop, crate::core::keyframe::EasePreset::Sine);
+                *project_changed = true;
+            }
+
             if ui.button("⇄ Reverse Keys").on_hover_text("Reverse keyframe order in time (values stay, timing flips)").clicked() {
                 use crate::core::property::Animatable;
                 let reverse_v2 = |anim: &mut Animatable<[f32; 2]>| {

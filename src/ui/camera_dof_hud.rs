@@ -33,10 +33,31 @@ pub fn draw_camera_dof_hud(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
         }
 
         // 2. Quick Bokeh Aperture Adjuster
-        ui.label(egui::RichText::new("Aperture (Bokeh):").small());
-        let mut mock_aperture = 25.0f32;
+        ui.label(egui::RichText::new("Aperture:").small());
+        let mut mock_aperture = ui.ctx().data(|d| d.get_temp::<f32>(egui::Id::new("dof_aperture")).unwrap_or(25.0));
         if ui.add(egui::Slider::new(&mut mock_aperture, 0.0..=150.0).suffix(" px").show_value(true)).changed() {
+            ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("dof_aperture"), mock_aperture));
             crate::core::frame_cache::bump_version();
         }
+
+        // 3. Bokeh Iris Shape
+        ui.label(egui::RichText::new("Iris:").small());
+        let mut bokeh_shape = ui.ctx().data(|d| d.get_temp::<i32>(egui::Id::new("dof_bokeh_shape")).unwrap_or(0));
+        egui::ComboBox::from_id_salt("bokeh_shape_combo")
+            .selected_text(match bokeh_shape {
+                0 => "Round",
+                1 => "5-Blade",
+                2 => "6-Blade",
+                3 => "8-Blade",
+                4 => "Cat's Eye",
+                _ => "Round",
+            })
+            .show_ui(ui, |ui| {
+                if ui.selectable_value(&mut bokeh_shape, 0, "Round (Circular)").clicked() { ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("dof_bokeh_shape"), 0)); crate::core::frame_cache::bump_version(); }
+                if ui.selectable_value(&mut bokeh_shape, 1, "5-Blade (Pentagon)").clicked() { ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("dof_bokeh_shape"), 1)); crate::core::frame_cache::bump_version(); }
+                if ui.selectable_value(&mut bokeh_shape, 2, "6-Blade (Hexagon)").clicked() { ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("dof_bokeh_shape"), 2)); crate::core::frame_cache::bump_version(); }
+                if ui.selectable_value(&mut bokeh_shape, 3, "8-Blade (Octagon)").clicked() { ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("dof_bokeh_shape"), 3)); crate::core::frame_cache::bump_version(); }
+                if ui.selectable_value(&mut bokeh_shape, 4, "Cat's Eye (Anamorphic)").clicked() { ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("dof_bokeh_shape"), 4)); crate::core::frame_cache::bump_version(); }
+            });
     });
 }
