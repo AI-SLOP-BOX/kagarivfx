@@ -750,6 +750,37 @@ pub fn draw_layer_type_specs(
                         });
                     }
                 });
+
+                // ── Merge Paths & Offset Paths (AE Vector Operators) ──
+                ui.collapsing("🔗 Vector Path Operators", |ui| {
+                    ui.horizontal(|ui| {
+                        ui.label("Merge Paths Mode:");
+                        let mut merge_mode = ui.ctx().data(|d| d.get_temp::<i32>(egui::Id::new("shape_merge_mode")).unwrap_or(0));
+                        egui::ComboBox::from_id_salt("shape_merge_mode_combo")
+                            .selected_text(match merge_mode {
+                                0 => "Add (Union)",
+                                1 => "Subtract (Difference)",
+                                2 => "Intersect",
+                                3 => "Exclude (XOR)",
+                                _ => "Add",
+                            })
+                            .show_ui(ui, |ui| {
+                                if ui.selectable_value(&mut merge_mode, 0, "Add (Union)").clicked() { ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("shape_merge_mode"), 0)); *project_changed = true; }
+                                if ui.selectable_value(&mut merge_mode, 1, "Subtract (Difference)").clicked() { ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("shape_merge_mode"), 1)); *project_changed = true; }
+                                if ui.selectable_value(&mut merge_mode, 2, "Intersect").clicked() { ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("shape_merge_mode"), 2)); *project_changed = true; }
+                                if ui.selectable_value(&mut merge_mode, 3, "Exclude (XOR)").clicked() { ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("shape_merge_mode"), 3)); *project_changed = true; }
+                            });
+                    });
+
+                    let mut offset_dist = ui.ctx().data(|d| d.get_temp::<f32>(egui::Id::new("shape_offset_path_amt")).unwrap_or(0.0));
+                    ui.horizontal(|ui| {
+                        ui.label("Offset Paths:");
+                        if ui.add(egui::DragValue::new(&mut offset_dist).speed(0.5).range(-100.0..=100.0).suffix(" px")).changed() {
+                            ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("shape_offset_path_amt"), offset_dist));
+                            *project_changed = true;
+                        }
+                    });
+                });
             }
             LayerType::Null => {
                 ui.label("Null Object (Controller)");

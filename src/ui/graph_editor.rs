@@ -263,6 +263,35 @@ pub fn draw_graph_editor(
                     ui.ctx().data_mut(|d| d.insert_temp(mode_id, 1));
                 }
             });
+            ui.collapsing("🎯 Keyframe Velocity / Influence", |ui| {
+                let mut in_inf = ui.ctx().data(|d| d.get_temp::<f32>(egui::Id::new("ae_kf_in_inf")).unwrap_or(33.3));
+                let mut out_inf = ui.ctx().data(|d| d.get_temp::<f32>(egui::Id::new("ae_kf_out_inf")).unwrap_or(33.3));
+                let mut in_spd = ui.ctx().data(|d| d.get_temp::<f32>(egui::Id::new("ae_kf_in_spd")).unwrap_or(0.0));
+                let mut out_spd = ui.ctx().data(|d| d.get_temp::<f32>(egui::Id::new("ae_kf_out_spd")).unwrap_or(0.0));
+
+                ui.horizontal(|ui| {
+                    ui.label("Incoming:");
+                    if ui.add(egui::DragValue::new(&mut in_inf).range(0.1..=100.0).speed(0.5).prefix("Inf: ").suffix("%")).changed() {
+                        ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("ae_kf_in_inf"), in_inf));
+                        *project_changed = true;
+                    }
+                    if ui.add(egui::DragValue::new(&mut in_spd).speed(1.0).prefix("Spd: ").suffix(" px/s")).changed() {
+                        ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("ae_kf_in_spd"), in_spd));
+                        *project_changed = true;
+                    }
+                });
+                ui.horizontal(|ui| {
+                    ui.label("Outgoing:");
+                    if ui.add(egui::DragValue::new(&mut out_inf).range(0.1..=100.0).speed(0.5).prefix("Inf: ").suffix("%")).changed() {
+                        ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("ae_kf_out_inf"), out_inf));
+                        *project_changed = true;
+                    }
+                    if ui.add(egui::DragValue::new(&mut out_spd).speed(1.0).prefix("Spd: ").suffix(" px/s")).changed() {
+                        ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("ae_kf_out_spd"), out_spd));
+                        *project_changed = true;
+                    }
+                });
+            });
 
         });
 
