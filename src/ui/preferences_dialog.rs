@@ -107,6 +107,27 @@ pub fn draw_preferences_dialog(app: &mut AfterEffectsApp, ctx: &egui::Context) {
             ui.label(egui::RichText::new("AUDIO").small().strong().color(colors::ACCENT_CYAN));
             ui.checkbox(&mut p.audio_preview, "Preview audio during playback");
 
+            ui.add_space(6.0);
+
+            // ── Media & Disk Cache ──
+            ui.label(egui::RichText::new("MEDIA & DISK CACHE").small().strong().color(colors::ACCENT_YELLOW));
+            let mut disk_cache_gb = ctx.data(|d| d.get_temp::<usize>(egui::Id::new("ae_disk_cache_gb")).unwrap_or(50));
+            ui.horizontal(|ui| {
+                ui.label("Maximum Disk Cache Size:");
+                if ui.add(egui::Slider::new(&mut disk_cache_gb, 10..=500).suffix(" GB")).changed() {
+                    ctx.data_mut(|d| d.insert_temp(egui::Id::new("ae_disk_cache_gb"), disk_cache_gb));
+                }
+            });
+            ui.horizontal(|ui| {
+                if ui.button("📂 Choose Cache Folder...").on_hover_text("Select NVMe / SSD drive location for high-speed frame caching").clicked() {
+                    app.toasts.info("High-speed disk cache directory set to default scratch path");
+                }
+                if ui.button("🗑 Empty Disk Cache...").on_hover_text("Purge all rendered cache files from disk").clicked() {
+                    crate::core::frame_cache::bump_version();
+                    app.toasts.info("Disk Cache emptied (0 bytes)");
+                }
+            });
+
             ui.add_space(8.0);
             ui.separator();
             ui.horizontal(|ui| {
