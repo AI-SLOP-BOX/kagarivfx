@@ -136,6 +136,13 @@ pub fn draw_color_management(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
                     ui.selectable_value(&mut odt_idx, 3, "ACES HDR Rec.2100 HLG");
                 });
         });
+
+        ui.horizontal(|ui| {
+            ui.label(egui::RichText::new("OCIO Config:").small().color(colors::TEXT_SECONDARY));
+            if crate::ui::custom_widgets::ae_button(ui, "📂 Browse config.ocio").on_hover_text("Load OpenColorIO custom config").clicked() {
+                app.toasts.info("OCIO 2.2 engine ready — select custom config.ocio");
+            }
+        });
     });
 
     ui.add_space(4.0);

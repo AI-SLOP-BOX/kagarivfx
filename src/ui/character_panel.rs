@@ -132,6 +132,36 @@ pub fn draw_character_panel(
                                     project_changed = true;
                                 }
                         });
+
+                        // Variable Font Axes
+                        ui.separator();
+                        ui.collapsing("🧬 Variable Font Axes", |ui| {
+                            let mut vf_weight = ui.ctx().data(|d| d.get_temp::<f32>(egui::Id::new("vf_weight")).unwrap_or(400.0));
+                            let mut vf_width = ui.ctx().data(|d| d.get_temp::<f32>(egui::Id::new("vf_width")).unwrap_or(100.0));
+                            let mut vf_slant = ui.ctx().data(|d| d.get_temp::<f32>(egui::Id::new("vf_slant")).unwrap_or(0.0));
+
+                            ui.horizontal(|ui| {
+                                ui.label("Weight (wght):");
+                                if ui.add(egui::Slider::new(&mut vf_weight, 100.0..=900.0).step_by(10.0)).changed() {
+                                    ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("vf_weight"), vf_weight));
+                                    project_changed = true;
+                                }
+                            });
+                            ui.horizontal(|ui| {
+                                ui.label("Width (wdth):");
+                                if ui.add(egui::Slider::new(&mut vf_width, 50.0..=150.0).suffix(" %")).changed() {
+                                    ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("vf_width"), vf_width));
+                                    project_changed = true;
+                                }
+                            });
+                            ui.horizontal(|ui| {
+                                ui.label("Slant (slnt):");
+                                if ui.add(egui::Slider::new(&mut vf_slant, -15.0..=15.0).suffix("°")).changed() {
+                                    ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("vf_slant"), vf_slant));
+                                    project_changed = true;
+                                }
+                            });
+                        });
                     });
 
                     ui.add_space(6.0);
