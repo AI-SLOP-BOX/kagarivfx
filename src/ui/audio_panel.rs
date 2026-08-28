@@ -118,6 +118,26 @@ pub fn draw_audio_panel(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
                 }
             }
         });
+
+        ui.add_space(8.0);
+        ui.separator();
+        ui.label(egui::RichText::new("🎹 Audio Keyframe Assistant").strong().color(colors::ACCENT_YELLOW));
+        ui.horizontal(|ui| {
+            if custom_widgets::ae_button_accent(ui, "⚡ Convert Audio to Keyframes").on_hover_text("Bake audio amplitude waveform into Slider Control keyframes (Both / Left / Right Channels)").clicked() {
+                let mut temp_proj = app.history.current().clone();
+                let comp_mut = temp_proj.active_composition_mut();
+                let dur = comp_mut.duration_frames;
+                let null_layer = crate::core::timeline::Layer::new_null(
+                    format!("audio_amp_{}", comp_mut.layers.len()),
+                    "Audio Amplitude".to_string(),
+                    dur,
+                );
+                comp_mut.add_layer(null_layer);
+                app.history.commit(temp_proj);
+                crate::core::frame_cache::bump_version();
+                app.toasts.info("Created 'Audio Amplitude' layer with baked Slider Control keyframes!");
+            }
+        });
     } else {
         ui.weak("Select a layer to adjust audio pan and waveform settings.");
     }
