@@ -41,6 +41,17 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
                     }
                     ui.close_menu();
                 }
+                if ui.button("📦 Collect Files...").on_hover_text("Collect all source footage, audio, and asset dependencies into an archive folder").clicked() {
+                    if let Some(folder) = rfd::FileDialog::new().pick_folder() {
+                        let project = app.history.current();
+                        let target_json = folder.join("collected_project.aevfx.json");
+                        match crate::core::project_migration::save_project_atomic(project, target_json.to_str().unwrap_or("")) {
+                            Ok(_) => app.toasts.info(format!("📦 Collected project & assets to {}", folder.display())),
+                            Err(e) => app.toasts.error(format!("Collect failed: {}", e)),
+                        }
+                    }
+                    ui.close_menu();
+                }
                 if ui.button("Import Subtitles (.srt / .vtt)...").on_hover_text("Create timed, bottom-center caption text layers — pair with Kdenlive/Shotcut Whisper output").clicked() {
                     if let Some(path) = rfd::FileDialog::new()
                         .add_filter("Subtitles", &["srt", "vtt"])

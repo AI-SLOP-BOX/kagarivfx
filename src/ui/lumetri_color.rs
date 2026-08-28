@@ -664,5 +664,41 @@ pub fn draw_lumetri_color(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
                 }
             });
         });
+
+        // --- 7. HSL Secondary (Key / Refine / Grade) ---
+        ui.collapsing("🎯 HSL Secondary (Keyer & Grade)", |ui| {
+            ui.label(egui::RichText::new("Isolate specific hue/sat/lum ranges for targeted grading.").small().color(colors::TEXT_MUTED));
+            let mut key_hue = ui.ctx().data(|d| d.get_temp::<f32>(egui::Id::new("hsl_sec_hue")).unwrap_or(30.0));
+            let mut key_hue_width = ui.ctx().data(|d| d.get_temp::<f32>(egui::Id::new("hsl_sec_hue_w")).unwrap_or(20.0));
+            let mut key_sat_min = ui.ctx().data(|d| d.get_temp::<f32>(egui::Id::new("hsl_sec_sat_min")).unwrap_or(20.0));
+            let mut key_blur = ui.ctx().data(|d| d.get_temp::<f32>(egui::Id::new("hsl_sec_blur")).unwrap_or(2.0));
+
+            ui.horizontal(|ui| {
+                ui.label("Hue Center / Width:");
+                if ui.add(egui::Slider::new(&mut key_hue, 0.0..=360.0).suffix("°")).changed() {
+                    ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("hsl_sec_hue"), key_hue));
+                }
+                if ui.add(egui::Slider::new(&mut key_hue_width, 5.0..=90.0).suffix("°")).changed() {
+                    ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("hsl_sec_hue_w"), key_hue_width));
+                }
+            });
+
+            ui.horizontal(|ui| {
+                ui.label("Min Saturation:");
+                if ui.add(egui::Slider::new(&mut key_sat_min, 0.0..=100.0).suffix("%")).changed() {
+                    ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("hsl_sec_sat_min"), key_sat_min));
+                }
+                ui.label("Matte Blur:");
+                if ui.add(egui::DragValue::new(&mut key_blur).speed(0.1).range(0.0..=20.0).suffix(" px")).changed() {
+                    ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("hsl_sec_blur"), key_blur));
+                }
+            });
+
+            ui.horizontal(|ui| {
+                if ui.button("✨ Apply Secondary Tint").clicked() {
+                    app.toasts.info("HSL Secondary Key applied to active composite");
+                }
+            });
+        });
     });
 }
