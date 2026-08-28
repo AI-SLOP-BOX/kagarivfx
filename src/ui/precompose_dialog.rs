@@ -53,8 +53,16 @@ pub fn draw_precompose_dialog(app: &mut AfterEffectsApp, ctx: &egui::Context) {
 
                         // Move selected layers to new comp
                         let mut layers_to_keep = Vec::new();
-                        for (idx, layer) in current_comp.layers.drain(..).enumerate() {
+                        let mut extracted_effects = Vec::new();
+                        let mut extracted_masks = Vec::new();
+
+                        for (idx, mut layer) in current_comp.layers.drain(..).enumerate() {
                             if selected_indices.contains(&idx) {
+                                if !app.precompose_move_attributes {
+                                    // Leave attributes in current comp: extract effects and masks
+                                    extracted_effects.append(&mut layer.effects);
+                                    extracted_masks.append(&mut layer.masks);
+                                }
                                 new_comp.add_layer(layer);
                             } else {
                                 layers_to_keep.push(layer);
@@ -63,12 +71,16 @@ pub fn draw_precompose_dialog(app: &mut AfterEffectsApp, ctx: &egui::Context) {
                         current_comp.layers = layers_to_keep;
 
                         // Create PreComp placeholder layer in parent comp
-                        let precomp_layer = Layer::new(
+                        let mut precomp_layer = Layer::new(
                             format!("precomp_layer_{}", current_comp.layers.len() + 1),
                             app.precompose_name.clone(),
                             LayerType::PreComp { comp_id: new_comp.id.clone() },
                             duration,
                         );
+                        if !app.precompose_move_attributes {
+                            precomp_layer.effects = extracted_effects;
+                            precomp_layer.masks = extracted_masks;
+                        }
                         current_comp.add_layer(precomp_layer);
 
                         temp_proj.compositions.push(new_comp);

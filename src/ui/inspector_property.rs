@@ -385,6 +385,27 @@ pub fn draw_property_ui<T: Clone + crate::core::property::Interpolate + PartialE
             });
         }
 
+        // 🔗 Property Link / Quick Presets (@)
+        ui.menu_button("@", |ui| {
+            ui.label(egui::RichText::new("🔗 Motion Presets (@)").strong());
+            if ui.button("⚡ Easy Ease (F9)").clicked() {
+                property.easy_ease();
+                ui.close_menu();
+            }
+            if ui.button("🌊 Sine Wave Ease").clicked() {
+                if let Animatable::Animated(ref mut kfs) = property {
+                    for kf in kfs {
+                        kf.interpolation = InterpolationType::Bezier {
+                            outgoing: BezierControlPoint { influence: 0.5, speed: 0.0 },
+                            incoming: BezierControlPoint { influence: 0.5, speed: 0.0 },
+                            custom_bezier: Some([0.37, 0.0, 0.63, 1.0]),
+                        };
+                    }
+                }
+                ui.close_menu();
+            }
+        });
+
         let mut temp_val = property.evaluate(current_frame);
         draw_value_widget(ui, &mut temp_val);
 
