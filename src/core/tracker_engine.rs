@@ -277,6 +277,71 @@ impl TrackerEngine {
             comp.layers[target_layer_idx].transform.rotation = Animatable::Animated(rot_kfs);
         }
     }
+
+    /// Apply motion tracking data as reverse stabilization (camera shake compensation) to anchor point / position.
+    #[allow(dead_code)]
+    pub fn apply_stabilize_to_layer(
+        comp: &mut Composition,
+        layer_idx: usize,
+        tracker_idx: usize,
+        stabilize_position: bool,
+        stabilize_rotation: bool,
+    ) {
+        if layer_idx >= comp.layers.len() {
+            return;
+        }
+
+        let tracker_kfs = match comp.layers[layer_idx].trackers.get(tracker_idx) {
+            Some(t) => match &t.position {
+                Animatable::Animated(kfs) => kfs.clone(),
+                Animatable::Constant(pos) => vec![Keyframe::new(0, *pos, InterpolationType::Linear)],
+            },
+            None => return,
+        };
+
+        if tracker_kfs.is_empty() {
+            return;
+        }
+
+        let base_pos = tracker_kfs[0].value;
+        let init_pos = comp.layers[layer_idx].transform.position.evaluate(0);
+
+        if stabilize_position {
+            let mut stab_pos_kfs = Vec::new();
+            for kf in &tracker_kfs {
+                // Invert drift: pos(t) = init_pos - (track(t) - base_pos)
+                let dx = kf.value[0] - base_pos[0];
+                let dy = kf.value[1] - base_pos[1];
+                stab_pos_kfs.push(Keyframe::new(
+                    kf.frame,
+                    [init_pos[0] - dx, init_pos[1] - dy],
+                    InterpolationType::Linear,
+                ));
+            }
+            comp.layers[layer_idx].transform.position = Animatable::Animated(stab_pos_kfs);
+        }
+
+        if stabilize_rotation && tracker_kfs.len() > 1 {
+            let mut stab_rot_kfs = Vec::new();
+            let base_angle = (tracker_kfs[1].value[1] - tracker_kfs[0].value[1])
+                .atan2(tracker_kfs[1].value[0] - tracker_kfs[0].value[0])
+                .to_degrees();
+            let init_rot = comp.layers[layer_idx].transform.rotation.evaluate(0);
+
+            for i in 0..(tracker_kfs.len() - 1) {
+                let p1 = tracker_kfs[i].value;
+                let p2 = tracker_kfs[i + 1].value;
+                let cur_angle = (p2[1] - p1[1]).atan2(p2[0] - p1[0]).to_degrees();
+                let delta_angle = cur_angle - base_angle;
+                stab_rot_kfs.push(Keyframe::new(
+                    tracker_kfs[i].frame,
+                    init_rot - delta_angle,
+                    InterpolationType::Linear,
+                ));
+            }
+            comp.layers[layer_idx].transform.rotation = Animatable::Animated(stab_rot_kfs);
+        }
+    }
 }
 
 /// Compute real Sum of Absolute Differences (SAD) template matching between reference RGBA buffer and target RGBA buffer.
@@ -1039,5 +1104,37 @@ mod quad_track_tests {
         assert_ne!(refined.corners[3], track.corners[3]);
         let c = refined.corners[3][0];
         assert!((c[0] - 25.0).abs() < 1e-4 && (c[1] - 10.0).abs() < 1e-4, "midpoint {c:?}");
+    }
+
+    #[test]
+    fn test_tracker_apply_stabilize() {
+        let mut comp = Composition::new("c".into(), "Comp".into(), 100, 100, 30, 30);
+        let mut layer = Layer::new("l".into(), "Shaky Layer".into(), crate::core::timeline::LayerType::Null, 30);
+        layer.transform.position = Animatable::new_constant([50.0, 50.0]);
+
+        // Tracker detects camera drifted by +10px X at frame 15
+        let track_kfs = vec![
+            Keyframe::new(0, [100.0, 100.0], InterpolationType::Linear),
+            Keyframe::new(15, [110.0, 100.0], InterpolationType::Linear),
+        ];
+        layer.trackers.push(crate::core::timeline::TrackerPoint {
+            id: "t1".into(),
+            name: "Feature".into(),
+            position: Animatable::Animated(track_kfs),
+            search_size: 20.0,
+            feature_size: 10.0,
+            reference_pattern: None,
+        });
+        comp.add_layer(layer);
+
+        TrackerEngine::apply_stabilize_to_layer(&mut comp, 0, 0, true, false);
+
+        // Frame 0: position should be 50.0
+        let p0 = comp.layers[0].transform.position.evaluate(0);
+        assert_eq!(p0, [50.0, 50.0]);
+
+        // Frame 15: position must counteract the +10px drift by moving to 40.0
+        let p15 = comp.layers[0].transform.position.evaluate(15);
+        assert_eq!(p15, [40.0, 50.0]);
     }
 }
