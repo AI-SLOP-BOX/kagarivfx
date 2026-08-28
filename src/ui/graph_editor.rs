@@ -246,6 +246,9 @@ pub fn draw_graph_editor(
         let graph_prop = selected_property.clone().unwrap_or_else(|| "Position X".to_string());
         let total_f = duration_frames.max(1);
 
+        // Detect speed graph vs value graph mode (0 = speed graph, 1 = value graph)
+        let speed_graph_mode = ui.ctx().data(|d| d.get_temp::<i32>(egui::Id::new("ae_graph_mode_select")).unwrap_or(0)) == 0;
+
         // Sample values along timeline duration for drawing curve
         let mut samples = Vec::with_capacity(total_f as usize + 1);
         for f in 0..=total_f {
@@ -269,6 +272,37 @@ pub fn draw_graph_editor(
             samples.push((f, val));
         }
 
+        // Compute per-keyframe velocity when in speed graph mode
+        let keyframes_ref: Vec<(u32, f32)> = match graph_prop.as_str() {
+            "Position X" => layer.transform.position.keyframes()
+                .map(|kfs| kfs.iter().map(|kf| (kf.frame, kf.value[0])).collect())
+                .unwrap_or_default(),
+            "Position Y" => layer.transform.position.keyframes()
+                .map(|kfs| kfs.iter().map(|kf| (kf.frame, kf.value[1])).collect())
+                .unwrap_or_default(),
+            "Scale X" => layer.transform.scale.keyframes()
+                .map(|kfs| kfs.iter().map(|kf| (kf.frame, kf.value[0])).collect())
+                .unwrap_or_default(),
+            "Scale Y" => layer.transform.scale.keyframes()
+                .map(|kfs| kfs.iter().map(|kf| (kf.frame, kf.value[1])).collect())
+                .unwrap_or_default(),
+            "Rotation" => layer.transform.rotation.keyframes()
+                .map(|kfs| kfs.iter().map(|kf| (kf.frame, kf.value)).collect())
+                .unwrap_or_default(),
+            "Opacity" => layer.transform.opacity.keyframes()
+                .map(|kfs| kfs.iter().map(|kf| (kf.frame, kf.value)).collect())
+                .unwrap_or_default(),
+            p if p.starts_with("PinX:") || p.starts_with("PinY:") => {
+                let ci = usize::from(p.starts_with("PinY:"));
+                let pid = p.split(':').nth(1).unwrap_or("");
+                layer.puppet_pins.iter().find(|pp| pp.id == pid)
+                    .and_then(|pp| pp.position.keyframes())
+                    .map(|kfs| kfs.iter().map(|kf| (kf.frame, kf.value[ci])).collect())
+                    .unwrap_or_default()
+            }
+            _ => vec![],
+        };
+
         // Allocate drawing region
         let (rect, graph_response) = ui.allocate_exact_size(
             egui::vec2(ui.available_width(), graph_height),
@@ -282,7 +316,7 @@ pub fn draw_graph_editor(
         let val_range = (max_val - min_val).max(0.001);
 
         // Min/max value readouts on the right edge (curve readability)
-        {
+        if !speed_graph_mode {
             let mono = egui::FontId::monospace(9.0);
             ui.painter().text(
                 egui::pos2(rect.right() - 4.0, rect.top() + 3.0),
@@ -301,11 +335,45 @@ pub fn draw_graph_editor(
         }
 
         // Convert keyframe time/value to screen space coordinates inside the allocated rect
-        let points: Vec<egui::Pos2> = samples.iter().map(|&(f, v)| {
-            let x = rect.left() + (f as f32 / total_f as f32) * rect.width();
-            let y = rect.bottom() - 4.0 - ((v - min_val) / val_range) * (rect.height() - 8.0);
-            egui::pos2(x, y)
-        }).collect();
+        let points: Vec<egui::Pos2> = if speed_graph_mode {
+            // Speed Graph: compute velocity curve and map to screen
+            let vel_curve = compute_velocity_curve(&keyframes_ref, 30);
+            let vel_min = vel_curve.iter().map(|(_, v)| *v).fold(f32::INFINITY, f32::min);
+            let vel_max = vel_curve.iter().map(|(_, v)| *v).fold(f32::NEG_INFINITY, f32::max);
+            let vel_range = (vel_max - vel_min).abs().max(0.001);
+
+            // Update readout labels for velocity range
+            {
+                let mono = egui::FontId::monospace(9.0);
+                ui.painter().text(
+                    egui::pos2(rect.right() - 4.0, rect.top() + 3.0),
+                    egui::Align2::RIGHT_TOP,
+                    format!("{:.1} v/s", vel_max),
+                    mono.clone(),
+                    colors::TEXT_MUTED,
+                );
+                ui.painter().text(
+                    egui::pos2(rect.right() - 4.0, rect.bottom() - 3.0),
+                    egui::Align2::RIGHT_BOTTOM,
+                    format!("{:.1} v/s", vel_min),
+                    mono,
+                    colors::TEXT_MUTED,
+                );
+            }
+
+            vel_curve.iter().map(|&(frame, vel)| {
+                let x = rect.left() + (frame / total_f as f32) * rect.width();
+                let y = rect.bottom() - 4.0 - ((vel - vel_min) / vel_range) * (rect.height() - 8.0);
+                egui::pos2(x, y)
+            }).collect()
+        } else {
+            // Value Graph: original value curve
+            samples.iter().map(|&(f, v)| {
+                let x = rect.left() + (f as f32 / total_f as f32) * rect.width();
+                let y = rect.bottom() - 4.0 - ((v - min_val) / val_range) * (rect.height() - 8.0);
+                egui::pos2(x, y)
+            }).collect()
+        };
 
         // Draw graph spline segments (Value Curve)
         for window in points.windows(2) {
@@ -402,6 +470,8 @@ pub fn draw_graph_editor(
         }
 
         // Draw Speed Graph Velocity Line (First Derivative v(t) = dy/dt)
+        // Skip overlay when in speed graph mode (main curve already shows velocity)
+        if !speed_graph_mode {
         let mut max_speed = 0.0f32;
         let mut speed_pts = Vec::with_capacity(points.len());
         for win in samples.windows(2) {
@@ -434,6 +504,7 @@ pub fn draw_graph_editor(
                 egui::FontId::monospace(10.0),
                 colors::MOTION_PATH,
             );
+        }
         }
 
         // Render interactive keyframe anchor points & tangent handles (real editing)
@@ -682,4 +753,30 @@ pub fn draw_graph_editor(
             }
         }
     });
+}
+
+/// Compute velocity (derivative) at each keyframe from value keyframes.
+/// Returns Vec of (frame, velocity) pairs.
+fn compute_velocity_curve(
+    keyframes: &[(u32, f32)],
+    fps: u32,
+) -> Vec<(f32, f32)> {
+    if keyframes.len() < 2 {
+        return keyframes.iter().map(|&(frame, _)| (frame as f32, 0.0)).collect();
+    }
+    let mut velocities = Vec::with_capacity(keyframes.len());
+    for i in 0..keyframes.len() {
+        let vel = if i == 0 {
+            let dt = (keyframes[1].0 as f32 - keyframes[0].0 as f32) / fps as f32;
+            if dt > 0.0 { (keyframes[1].1 - keyframes[0].1) / dt } else { 0.0 }
+        } else if i == keyframes.len() - 1 {
+            let dt = (keyframes[i].0 as f32 - keyframes[i - 1].0 as f32) / fps as f32;
+            if dt > 0.0 { (keyframes[i].1 - keyframes[i - 1].1) / dt } else { 0.0 }
+        } else {
+            let dt = (keyframes[i + 1].0 as f32 - keyframes[i - 1].0 as f32) / fps as f32;
+            if dt > 0.0 { (keyframes[i + 1].1 - keyframes[i - 1].1) / dt } else { 0.0 }
+        };
+        velocities.push((keyframes[i].0 as f32, vel));
+    }
+    velocities
 }

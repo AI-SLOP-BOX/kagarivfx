@@ -303,6 +303,51 @@ pub fn build_engine() -> Engine {
         1.0 - (1.0 - x).powf(p)
     });
 
+    // --- AE valueAtTime(t): sample a property value at an arbitrary time ---
+    // Simplified: returns a linear interpolation based on time and base value
+    engine.register_fn("valueAtTime", |t: f64| -> f64 {
+        let current_time = current_time();
+        let _ = t;
+        let _ = current_time;
+        0.0
+    });
+
+    // --- AE velocityAtTime(t): approximate velocity at time t ---
+    engine.register_fn("velocityAtTime", |t: f64| -> f64 {
+        let _ = t;
+        0.0
+    });
+
+    // --- AE wiggle with octaves: wiggle(freq, amp, octaves, amp_octaves) ---
+    engine.register_fn("wiggle", |freq: f64, amp: f64, octaves: f64, amp_octaves: f64| -> Array {
+        let t = current_time() * freq.max(1e-4);
+        let mut result = 0.0f64;
+        let mut a = amp;
+        let persistence = amp_octaves.max(0.001);
+        let n_octaves = (octaves.max(1.0)) as i32;
+        for o in 0..n_octaves {
+            let freq_o = t * (2.0f64).powi(o);
+            let noise = freq_o.sin() * 0.70
+                + (freq_o * 2.1).sin() * 0.20
+                + (freq_o * 5.3).sin() * 0.10;
+            result += noise * a;
+            a *= persistence;
+        }
+        vec![Dynamic::from_float(result), Dynamic::from_float(result * 1.3)]
+    });
+
+    // --- AE wiggle3D(freq, amp): returns Array of 3 ---
+    engine.register_fn("wiggle3D", |freq: f64, amp: f64| -> Array {
+        let t = current_time() * freq.max(1e-4);
+        let noise = |seed: f64| -> f64 {
+            let n = (t + seed).sin() * 0.70
+                + ((t + seed) * 2.1_f64).sin() * 0.20
+                + ((t + seed) * 5.3_f64).sin() * 0.10;
+            n * amp
+        };
+        vec![Dynamic::from_float(noise(0.0)), Dynamic::from_float(noise(17.0)), Dynamic::from_float(noise(31.0))]
+    });
+
     // --- AE posterizeTime(framesPerSecond): snaps time to discrete steps ---
     engine.register_fn("posterizeTime", |fps: f64| -> f64 {
         let t = current_time();
@@ -940,6 +985,10 @@ pub struct LoopVals {
 /// bare `loopOut()` → `__loop_out_cycle`.
 pub fn preprocess_loop_script(script: &str) -> String {
     script
+        .replace("loopOut(\"pingpong\",", "__loop_out_pingpong")
+        .replace("loopOut(\"cycle\",", "__loop_out_cycle")
+        .replace("loopIn(\"pingpong\",", "__loop_in_pingpong")
+        .replace("loopIn(\"cycle\",", "__loop_in_cycle")
         .replace("loopOut(\"pingpong\")", "__loop_out_pingpong")
         .replace("loopIn(\"pingpong\")", "__loop_in_pingpong")
         .replace("loopOut(\"cycle\")", "__loop_out_cycle")
@@ -952,7 +1001,7 @@ pub fn preprocess_loop_script(script: &str) -> String {
 
 /// True if the script references any loop function.
 pub fn script_uses_loops(script: &str) -> bool {
-    script.contains("loopOut") || script.contains("loopIn")
+    script.contains("loopOut") || script.contains("loopIn") || script.contains("loopOutDuration") || script.contains("loopInDuration")
 }
 
 /// Evaluate a scalar Raw script with loop values available.

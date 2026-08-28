@@ -1,6 +1,47 @@
 use crate::core::timeline::{Composition, Layer, LayerType, BlendMode, ShapeType, TrimPaths, TrackMatteMode, LightType, Light3D};
-use crate::core::mask::point_in_polygon;
+use crate::core::mask::{point_in_polygon, MaskMode};
 use rayon::prelude::*;
+
+#[derive(Default)]
+struct CpuMaskEntry {
+    vertices: Vec<[f32; 2]>,
+    feather: f32,
+    expansion: f32,
+    inverted: bool,
+    mode: MaskMode,
+}
+
+/// Offset a polygon's vertices along their outward normals by `expansion` pixels.
+fn offset_polygon_vertices(vertices: &[[f32; 2]], expansion: f32) -> Vec<[f32; 2]> {
+    if vertices.len() < 3 || expansion.abs() < 0.01 {
+        return vertices.to_vec();
+    }
+    let n = vertices.len();
+    let mut result = Vec::with_capacity(n);
+    for i in 0..n {
+        let prev = vertices[(i + n - 1) % n];
+        let curr = vertices[i];
+        let next = vertices[(i + 1) % n];
+
+        let e1 = [curr[0] - prev[0], curr[1] - prev[1]];
+        let e2 = [next[0] - curr[0], next[1] - curr[1]];
+
+        let len1 = (e1[0] * e1[0] + e1[1] * e1[1]).sqrt().max(1e-6);
+        let len2 = (e2[0] * e2[0] + e2[1] * e2[1]).sqrt().max(1e-6);
+        let n1 = [-e1[1] / len1, e1[0] / len1];
+        let n2 = [-e2[1] / len2, e2[0] / len2];
+
+        let avg_n = [(n1[0] + n2[0]) * 0.5, (n1[1] + n2[1]) * 0.5];
+        let avg_len = (avg_n[0] * avg_n[0] + avg_n[1] * avg_n[1]).sqrt().max(1e-6);
+        let normal = [avg_n[0] / avg_len, avg_n[1] / avg_len];
+
+        result.push([
+            curr[0] + normal[0] * expansion,
+            curr[1] + normal[1] * expansion,
+        ]);
+    }
+    result
+}
 
 /// Perspective-project a 3D layer's corners onto screen space.
 /// Returns [(screen_x, screen_y, u, v)] for the 4 corners (TL, TR, BR, BL),
@@ -1248,9 +1289,7 @@ pub fn render_frame_to_pixels(comp: &Composition, frame: u32, width: u32, height
         scale: [f32; 2],
         rotation: f32,
         l_opacity: f32,
-        mask_vertices: Vec<[f32; 2]>,
-        mask_feather: f32,
-        mask_inverted: bool,
+        masks: Vec<CpuMaskEntry>,
         skip: bool,
         /// Depth-of-field blur radius in pixels (0 = sharp)
         dof_blur: f32,
@@ -1292,15 +1331,19 @@ pub fn render_frame_to_pixels(comp: &Composition, frame: u32, width: u32, height
                     0.0
                 };
 
-                let mut mask_vertices = Vec::new();
-                let mut mask_feather = 0.0;
-                let mut mask_inverted = false;
+                let mut masks = Vec::new();
                 for mask in &layer.masks {
-                    if mask.enabled && mask.mode != crate::core::mask::MaskMode::None {
-                        mask_vertices = wiggle_polygon(mask, mask.path.to_polygon(frame, 16), frame as f32 / comp.fps.max(1) as f32);
-                        mask_feather = mask.feather.evaluate(frame);
-                        mask_inverted = mask.inverted;
-                        break;
+                    if mask.enabled && mask.mode != MaskMode::None {
+                        let vertices = wiggle_polygon(mask, mask.path.to_polygon(frame, 16), frame as f32 / comp.fps.max(1) as f32);
+                        if vertices.len() >= 3 {
+                            masks.push(CpuMaskEntry {
+                                vertices,
+                                feather: mask.feather.evaluate(frame),
+                                expansion: mask.expansion.evaluate(frame),
+                                inverted: mask.inverted,
+                                mode: mask.mode,
+                            });
+                        }
                     }
                 }
 
@@ -1310,9 +1353,7 @@ pub fn render_frame_to_pixels(comp: &Composition, frame: u32, width: u32, height
                     scale,
                     rotation,
                     l_opacity,
-                    mask_vertices,
-                    mask_feather,
-                    mask_inverted,
+                    masks,
                     skip: false,
                     dof_blur,
                 }
@@ -1368,9 +1409,7 @@ pub fn render_frame_to_pixels(comp: &Composition, frame: u32, width: u32, height
         let scale = ld.scale;
         let rotation = ld.rotation;
         let l_opacity = ld.l_opacity;
-        let mask_vertices = &ld.mask_vertices;
-        let mask_feather = ld.mask_feather;
-        let mask_inverted = ld.mask_inverted;
+        let masks = &ld.masks;
 
         // Adjustment Layer: apply effects to the composite below, blended by
         // this layer's opacity and clipped to its mask region when present.
@@ -1378,14 +1417,13 @@ pub fn render_frame_to_pixels(comp: &Composition, frame: u32, width: u32, height
             if !layer.effects.is_empty() && l_opacity > 0.003 {
                 let mut adjusted = buffer.clone();
                 crate::core::cpu_effects::apply_layer_effects(&mut adjusted, width, height, &layer.effects, effective_frame, comp.fps);
-                let use_mask = !mask_vertices.is_empty();
+                let use_mask = !masks.is_empty();
                 let adj_blend = layer.blend_mode;
                 for py in 0..height {
                     for px in 0..width {
                         if use_mask {
-                            let inside = point_in_polygon(px as f32 + 0.5, py as f32 + 0.5, mask_vertices);
-                            let outside_kept = if mask_inverted { inside } else { !inside };
-                            if outside_kept { continue; }
+                            let mask_alpha = compute_combined_mask_coverage(px as f32 + 0.5, py as f32 + 0.5, masks);
+                            if mask_alpha <= 0.001 { continue; }
                         }
                         let i = ((py * width + px) * 4) as usize;
                         let src_r = adjusted[i] as f32 / 255.0;
@@ -1448,19 +1486,8 @@ pub fn render_frame_to_pixels(comp: &Composition, frame: u32, width: u32, height
                         for px in lo_x..=hi_x {
                             // Vector mask check
                             let mut mask_alpha = 1.0;
-                            if !mask_vertices.is_empty() {
-                                let inside = point_in_polygon(px as f32, py as f32, mask_vertices);
-                                let actual_inside = if mask_inverted { !inside } else { inside };
-                                if mask_feather > 0.1 {
-                                    let dist = distance_to_polygon(px as f32, py as f32, mask_vertices);
-                                    mask_alpha = if actual_inside {
-                                        (dist / mask_feather).clamp(0.0, 1.0)
-                                    } else {
-                                        (1.0 - dist / mask_feather).clamp(0.0, 1.0)
-                                    };
-                                } else if !actual_inside {
-                                    continue;
-                                }
+                            if !masks.is_empty() {
+                                mask_alpha = compute_combined_mask_coverage(px as f32, py as f32, masks);
                             }
                             if mask_alpha <= 0.001 { continue; }
 
@@ -1837,19 +1864,8 @@ pub fn render_frame_to_pixels(comp: &Composition, frame: u32, width: u32, height
                         for px in min_x..max_x {
                             // Vector mask check
                             let mut mask_alpha = 1.0;
-                            if !mask_vertices.is_empty() {
-                                let is_inside = point_in_polygon(px as f32, py as f32, mask_vertices);
-                                let actual_inside = if mask_inverted { !is_inside } else { is_inside };
-                                if mask_feather > 0.1 {
-                                    let dist = distance_to_polygon(px as f32, py as f32, mask_vertices);
-                                    mask_alpha = if actual_inside {
-                                        (dist / mask_feather).clamp(0.0, 1.0)
-                                    } else {
-                                        (1.0 - (dist / mask_feather)).clamp(0.0, 1.0)
-                                    };
-                                } else if !actual_inside {
-                                    continue;
-                                }
+                            if !masks.is_empty() {
+                                mask_alpha = compute_combined_mask_coverage(px as f32, py as f32, masks);
                             }
                             if mask_alpha <= 0.001 { continue; }
 
@@ -1935,19 +1951,8 @@ pub fn render_frame_to_pixels(comp: &Composition, frame: u32, width: u32, height
                         for px in min_x..max_x {
                             // Vector mask check
                             let mut mask_alpha = 1.0;
-                            if !mask_vertices.is_empty() {
-                                let is_inside = point_in_polygon(px as f32, py as f32, mask_vertices);
-                                let actual_inside = if mask_inverted { !is_inside } else { is_inside };
-                                if mask_feather > 0.1 {
-                                    let dist = distance_to_polygon(px as f32, py as f32, mask_vertices);
-                                    mask_alpha = if actual_inside {
-                                        (dist / mask_feather).clamp(0.0, 1.0)
-                                    } else {
-                                        (1.0 - (dist / mask_feather)).clamp(0.0, 1.0)
-                                    };
-                                } else if !actual_inside {
-                                    continue;
-                                }
+                            if !masks.is_empty() {
+                                mask_alpha = compute_combined_mask_coverage(px as f32, py as f32, masks);
                             }
                             if mask_alpha <= 0.001 { continue; }
 
@@ -1984,20 +1989,8 @@ pub fn render_frame_to_pixels(comp: &Composition, frame: u32, width: u32, height
                 for px in min_x..max_x {
                     // Vector mask check with feathering support
                     let mut mask_alpha = 1.0;
-                    if !mask_vertices.is_empty() {
-                        let is_inside = point_in_polygon(px as f32, py as f32, mask_vertices);
-                        let actual_inside = if mask_inverted { !is_inside } else { is_inside };
-
-                        if mask_feather > 0.1 {
-                            let dist = distance_to_polygon(px as f32, py as f32, mask_vertices);
-                            if actual_inside {
-                                mask_alpha = (dist / mask_feather).clamp(0.0, 1.0);
-                            } else {
-                                mask_alpha = (1.0 - (dist / mask_feather)).clamp(0.0, 1.0);
-                            }
-                        } else if !actual_inside {
-                            continue;
-                        }
+                    if !masks.is_empty() {
+                        mask_alpha = compute_combined_mask_coverage(px as f32, py as f32, masks);
                     }
 
                     if mask_alpha <= 0.001 {
@@ -2810,6 +2803,47 @@ fn distance_to_polygon(px: f32, py: f32, verts: &[[f32; 2]]) -> f32 {
         min_dist = min_dist.min(d);
     }
     min_dist
+}
+
+/// Compute combined mask coverage for a pixel using all enabled masks,
+/// matching the GPU path's `combine_mask_shapes` semantics.
+fn compute_combined_mask_coverage(px: f32, py: f32, masks: &[CpuMaskEntry]) -> f32 {
+    let mut acc = 0.0f32;
+    let mut first = true;
+    for mask in masks {
+        if mask.vertices.len() < 3 {
+            continue;
+        }
+        let expanded = offset_polygon_vertices(&mask.vertices, mask.expansion);
+        let inside = point_in_polygon(px, py, &expanded);
+        let mut cov = if mask.feather > 0.1 {
+            let dist = distance_to_polygon(px, py, &expanded);
+            if inside {
+                (dist / mask.feather).clamp(0.0, 1.0)
+            } else {
+                (1.0 - dist / mask.feather).clamp(0.0, 1.0)
+            }
+        } else if inside {
+            1.0
+        } else {
+            0.0
+        };
+        if mask.inverted {
+            cov = 1.0 - cov;
+        }
+        if first && mask.mode == MaskMode::Subtract {
+            acc = 1.0;
+        }
+        acc = match mask.mode {
+            MaskMode::Add | MaskMode::Lighten => acc + (cov * (1.0 - acc)),
+            MaskMode::Subtract => acc * (1.0 - cov),
+            MaskMode::Intersect | MaskMode::Darken => acc.min(cov),
+            MaskMode::Difference => (acc - cov).abs(),
+            MaskMode::None => acc,
+        };
+        first = false;
+    }
+    acc
 }
 
 
