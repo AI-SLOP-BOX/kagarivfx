@@ -248,6 +248,22 @@ pub fn draw_graph_editor(
                 *project_changed = true;
             }
 
+            ui.add_space(8.0);
+            // ── Speed Graph vs Value Graph Mode Switcher ──
+            let mode_id = egui::Id::new("ae_graph_mode_select");
+            let mut current_mode = ui.ctx().data(|d| d.get_temp::<i32>(mode_id).unwrap_or(0));
+            ui.horizontal(|ui| {
+                ui.label(egui::RichText::new("Mode:").small().color(colors::TEXT_SECONDARY));
+                if ui.selectable_label(current_mode == 0, "⚡ Speed Graph").clicked() {
+                    current_mode = 0;
+                    ui.ctx().data_mut(|d| d.insert_temp(mode_id, 0));
+                }
+                if ui.selectable_label(current_mode == 1, "📈 Value Graph").clicked() {
+                    current_mode = 1;
+                    ui.ctx().data_mut(|d| d.insert_temp(mode_id, 1));
+                }
+            });
+
         });
 
         let graph_prop = selected_property.clone().unwrap_or_else(|| "Position X".to_string());

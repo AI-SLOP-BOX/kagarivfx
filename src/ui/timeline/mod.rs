@@ -1126,9 +1126,12 @@ let type_icon = crate::ui::icons::layer_icon(&layer.layer_type);
                                             app.toasts.info("🔗 Pick Whip active: click a layer to set as parent");
                                         }
                                     }
-                                    let parent_text = layer.parent_id.as_deref().unwrap_or("None");
+                                    let parent_name_resolved = layer.parent_id.as_deref().and_then(|pid| {
+                                        parent_choices_ref.iter().find(|(id, _)| id == pid).map(|(_, name)| name.as_str())
+                                    }).unwrap_or("None");
+                                    let parent_prefix = if layer.is_3d { "Parent (3D)" } else { "Parent" };
                                     egui::ComboBox::from_id_salt(format!("tl_parent_{}", i))
-                                        .selected_text(format!("Parent: {}", parent_text))
+                                        .selected_text(format!("{}: {}", parent_prefix, parent_name_resolved))
                                         .show_ui(ui, |ui| {
                                             if ui.selectable_label(layer.parent_id.is_none(), "None").clicked() {
                                                 layer.parent_id = None;

@@ -145,10 +145,31 @@ pub fn draw_scripting_console(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
             .hint_text(if automation_mode {
                 "e.g. add_text(\"T\", \"Hi\", 48); key_position(\"T\", 0, 100.0, 100.0)"
             } else {
-                "e.g. wiggle(5, 50), 2 + 2"
+                "e.g. thisComp.layer(\"Layer 1\").transform.position, wiggle(5, 50)"
             })
             .desired_width(ui.available_width() - 80.0),
     );
+
+    // ── IntelliSense Dynamic Layer / Property Autocomplete ──
+    let mut autocomplete_token = None;
+    ui.horizontal_wrapped(|ui| {
+        ui.label(egui::RichText::new("💡 IntelliSense:").small().color(colors::TEXT_MUTED));
+        let comp = app.history.current().active_composition();
+        for layer in comp.layers.iter().take(4) {
+            let token = format!("thisComp.layer(\"{}\")", layer.name);
+            if ui.small_button(&layer.name).on_hover_text(&token).clicked() {
+                autocomplete_token = Some(token);
+            }
+        }
+        for prop_token in [".transform.position", ".transform.opacity", ".transform.rotation", "time", "frame", "fps"] {
+            if ui.small_button(prop_token).clicked() {
+                autocomplete_token = Some(prop_token.to_string());
+            }
+        }
+    });
+    if let Some(token) = autocomplete_token {
+        app.script_console_command.push_str(&token);
+    }
     let enter_run = response.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
 
     if enter_run && !app.script_console_command.trim().is_empty() {
