@@ -162,6 +162,22 @@ pub fn draw_timeline_header(
             let output = lines.join("\n");
             ui.output_mut(|o| o.copied_text = output);
         }
+        if ui.button("+ Camera").on_hover_text("Add 3D Camera layer").clicked() {
+            let id = format!("layer_{}", comp.layers.len());
+            let name = format!("Camera {}", comp.layers.len() + 1);
+            let mut layer = Layer::new(id, name, LayerType::Null, total_frames);
+            layer.is_3d = true;
+            comp.add_layer(layer);
+            project_changed = true;
+        }
+        if ui.button("+ Light").on_hover_text("Add Point Light layer").clicked() {
+            let id = format!("layer_{}", comp.layers.len());
+            let name = format!("Light {}", comp.layers.len() + 1);
+            let mut layer = Layer::new(id, name, LayerType::Null, total_frames);
+            layer.is_3d = true;
+            comp.add_layer(layer);
+            project_changed = true;
+        }
         if ui.button("+ Shape").clicked() {
             let id = format!("layer_{}", comp.layers.len());
             let name = format!("Shape {}", comp.layers.len());

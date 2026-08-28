@@ -44,6 +44,18 @@ pub fn draw_proxy_controls(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
         ).clicked() {
             app.history.current_mut().active_composition_mut().comp_proxy.active_in_preview = !active_in_preview;
         }
+
+        ui.separator();
+        let mut mfr_enabled = ui.ctx().data(|d| d.get_temp::<bool>(egui::Id::new("ae_mfr_enabled")).unwrap_or(true));
+        if ui.selectable_label(mfr_enabled, "⚡ MFR").on_hover_text("Multi-Frame Rendering (Rayon CPU Parallelism)").clicked() {
+            mfr_enabled = !mfr_enabled;
+            ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("ae_mfr_enabled"), mfr_enabled));
+        }
+
+        if ui.small_button("🗑 Purge RAM").on_hover_text("Purge all RAM Preview Frame Cache").clicked() {
+            crate::core::frame_cache::bump_version();
+            app.toasts.info("RAM Preview Cache purged");
+        }
     });
 }
 
