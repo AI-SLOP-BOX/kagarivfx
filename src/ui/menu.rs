@@ -46,9 +46,50 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
                         let project = app.history.current();
                         let target_json = folder.join("collected_project.aevfx.json");
                         match crate::core::project_migration::save_project_atomic(project, target_json.to_str().unwrap_or("")) {
-                            Ok(_) => app.toasts.info(format!("📦 Collected project & assets to {}", folder.display())),
+                            Ok(_) => {
+                                crate::ui::project_io::reveal_in_file_manager(&folder);
+                                app.toasts.info(format!("📦 Collected project & assets to {}", folder.display()));
+                            },
                             Err(e) => app.toasts.error(format!("Collect failed: {}", e)),
                         }
+                    }
+                    ui.close_menu();
+                }
+                if ui.button("🧹 Remove Unused Footage").on_hover_text("Remove unused footage items from project").clicked() {
+                    let mut temp_proj = app.history.current().clone();
+                    let mut used_names = std::collections::HashSet::new();
+                    for c in &temp_proj.compositions {
+                        for l in &c.layers {
+                            used_names.insert(l.name.clone());
+                            match &l.layer_type {
+                                crate::core::timeline::LayerType::Image { path } => { used_names.insert(path.clone()); }
+                                crate::core::timeline::LayerType::Video { source, .. } => { used_names.insert(source.clone()); }
+                                crate::core::timeline::LayerType::Audio { path, .. } => { used_names.insert(path.clone()); }
+                                _ => {}
+                            }
+                        }
+                    }
+                    let before = temp_proj.assets.len();
+                    temp_proj.assets.retain(|a| {
+                        matches!(a.item_type, crate::core::timeline::ProjectItemType::Composition { .. } | crate::core::timeline::ProjectItemType::Folder { .. })
+                            || used_names.contains(&a.name)
+                    });
+                    let rem = before.saturating_sub(temp_proj.assets.len());
+                    app.history.commit(temp_proj);
+                    crate::core::frame_cache::bump_version();
+                    app.toasts.info(format!("Removed {} unused footage items", rem));
+                    ui.close_menu();
+                }
+                if ui.button("🗜 Reduce Project").on_hover_text("Keep only the active composition and its dependencies").clicked() {
+                    let mut temp_proj = app.history.current().clone();
+                    let act = temp_proj.active_composition_idx;
+                    if act < temp_proj.compositions.len() {
+                        let keep = temp_proj.compositions[act].clone();
+                        temp_proj.compositions = vec![keep];
+                        temp_proj.active_composition_idx = 0;
+                        app.history.commit(temp_proj);
+                        crate::core::frame_cache::bump_version();
+                        app.toasts.info("Project reduced to active composition");
                     }
                     ui.close_menu();
                 }

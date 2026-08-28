@@ -66,6 +66,8 @@ pub fn draw(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
     let mut add_comp_requested = false;
     let mut import_file_requested: Option<std::path::PathBuf> = None;
     let mut add_folder_requested = false;
+    let mut remove_unused_requested = false;
+    let mut reduce_project_requested = false;
 
     ui.horizontal(|ui| {
         if custom_widgets::ae_button(ui, "+ New Comp").on_hover_text("Create New Composition").clicked() {
@@ -83,6 +85,14 @@ pub fn draw(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
 
         if custom_widgets::ae_button(ui, "+ New Folder").clicked() {
             add_folder_requested = true;
+        }
+
+        if custom_widgets::ae_button(ui, "🧹 Remove Unused").on_hover_text("Remove unused footage and assets from project").clicked() {
+            remove_unused_requested = true;
+        }
+
+        if custom_widgets::ae_button(ui, "🗜 Reduce Project").on_hover_text("Keep only the active composition and its dependencies").clicked() {
+            reduce_project_requested = true;
         }
     });
 
@@ -347,13 +357,47 @@ pub fn draw(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
                 ),
             };
             comp.add_layer(new_layer);
+            changed = true;
+        }
+
+        if remove_unused_requested {
+            let mut used_names = std::collections::HashSet::new();
+            for c in &temp_project.compositions {
+                for l in &c.layers {
+                    used_names.insert(l.name.clone());
+                    match &l.layer_type {
+                        LayerType::Image { path } => { used_names.insert(path.clone()); }
+                        LayerType::Video { source, .. } => { used_names.insert(source.clone()); }
+                        LayerType::Audio { path, .. } => { used_names.insert(path.clone()); }
+                        _ => {}
+                    }
+                }
+            }
+            let before_count = temp_project.assets.len();
+            temp_project.assets.retain(|a| {
+                matches!(a.item_type, ProjectItemType::Composition { .. } | ProjectItemType::Folder { .. })
+                    || used_names.contains(&a.name)
+            });
+            let removed = before_count.saturating_sub(temp_project.assets.len());
+            app.toasts.info(format!("Removed {} unused items", removed));
+            changed = true;
+        }
+
+        if reduce_project_requested {
+            let active_idx = temp_project.active_composition_idx;
+            if active_idx < temp_project.compositions.len() {
+                let keep_comp = temp_project.compositions[active_idx].clone();
+                temp_project.compositions = vec![keep_comp];
+                temp_project.active_composition_idx = 0;
+                app.toasts.info("Project reduced to active composition and its dependencies");
+                changed = true;
+            }
         }
 
         if changed {
+            app.history.commit(temp_project);
             crate::core::frame_cache::bump_version();
         }
-        app.history.commit(temp_project);
-        crate::core::frame_cache::bump_version();
     }
 }
 
