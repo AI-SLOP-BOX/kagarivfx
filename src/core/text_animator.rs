@@ -156,6 +156,8 @@ impl TextAnimatorEngine {
     fn eval_expression_amount(expr_src: &str, char_idx: usize, total_chars: usize, time: f32) -> f32 {
         let v = crate::core::expression_engine::eval_expression_f64(expr_src, &[
             ("index", char_idx as f64),
+            ("textIndex", (char_idx + 1) as f64), // AE standard: 1-based character index
+            ("textTotal", total_chars as f64),    // AE standard: total character count
             ("total", total_chars as f64),
             ("time", time as f64),
             ("value", 1.0),
@@ -553,6 +555,19 @@ mod tests {
         };
         let v = TextAnimatorEngine::compute_amount(0, 10, &sel, 0.0);
         assert!((v - 0.0).abs() < 0.01);
+    }
+
+    #[test]
+    fn test_expression_selector_text_index_text_total() {
+        let sel = RangeSelector {
+            shape: SelectorShape::Expression,
+            expression: Some("textIndex / textTotal".into()),
+            ..Default::default()
+        };
+        let a = TextAnimatorEngine::compute_amount(0, 10, &sel, 0.0); // textIndex=1, textTotal=10 -> 0.1
+        let b = TextAnimatorEngine::compute_amount(9, 10, &sel, 0.0); // textIndex=10, textTotal=10 -> 1.0
+        assert!((a - 0.1).abs() < 0.01, "a={}", a);
+        assert!((b - 1.0).abs() < 0.01, "b={}", b);
     }
 
 }

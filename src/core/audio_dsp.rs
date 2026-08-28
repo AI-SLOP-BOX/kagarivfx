@@ -302,6 +302,174 @@ pub fn apply_limiter(buf: &mut [f32], ceiling_db: f32, release_ms: f32, state: &
     }
 }
 
+// ──────────────── Multi-band Audio Keyframe Extraction ────────────────
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AudioExtractBand {
+    Master,
+    Bass,
+    Mid,
+    Treble,
+}
+
+#[derive(Debug, Clone)]
+pub struct AudioKeyframeOptions {
+    pub band: AudioExtractBand,
+    pub attack_ms: f32,
+    pub release_ms: f32,
+    pub min_db: f32,
+    pub max_db: f32,
+    pub multiplier: f32,
+}
+
+impl Default for AudioKeyframeOptions {
+    fn default() -> Self {
+        Self {
+            band: AudioExtractBand::Master,
+            attack_ms: 10.0,
+            release_ms: 100.0,
+            min_db: -48.0,
+            max_db: 0.0,
+            multiplier: 100.0,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct MultiBandAudioKeyframes {
+    pub master: Vec<crate::core::keyframe::Keyframe<f32>>,
+    pub bass: Vec<crate::core::keyframe::Keyframe<f32>>,
+    pub mid: Vec<crate::core::keyframe::Keyframe<f32>>,
+    pub treble: Vec<crate::core::keyframe::Keyframe<f32>>,
+}
+
+/// Convert an audio buffer into multi-band animated keyframes per frame (AE Parity).
+pub fn extract_multiband_audio_keyframes(
+    pcm_stereo: &[f32],
+    sample_rate: u32,
+    fps: u32,
+    total_frames: u32,
+    options: &AudioKeyframeOptions,
+) -> MultiBandAudioKeyframes {
+    if pcm_stereo.is_empty() || sample_rate == 0 || fps == 0 || total_frames == 0 {
+        return MultiBandAudioKeyframes::default();
+    }
+
+    let samples_per_frame = (sample_rate as f64 / fps as f64).round() as usize;
+
+    // Filter banks for frequency crossover:
+    // Bass: LowPass 250Hz
+    let mut bq_bass = design_biquad(
+        &EqBand { freq: 250.0, gain_db: 0.0, q: 0.707, band_type: EqBandType::LowPass },
+        sample_rate as f64,
+    );
+    // Treble: HighPass 4000Hz
+    let mut bq_treble = design_biquad(
+        &EqBand { freq: 4000.0, gain_db: 0.0, q: 0.707, band_type: EqBandType::HighPass },
+        sample_rate as f64,
+    );
+    // Mid: BandPass (LowPass 4000Hz + HighPass 250Hz)
+    let mut bq_mid_lp = design_biquad(
+        &EqBand { freq: 4000.0, gain_db: 0.0, q: 0.707, band_type: EqBandType::LowPass },
+        sample_rate as f64,
+    );
+    let mut bq_mid_hp = design_biquad(
+        &EqBand { freq: 250.0, gain_db: 0.0, q: 0.707, band_type: EqBandType::HighPass },
+        sample_rate as f64,
+    );
+
+    // Envelope followers per band
+    let mut env_master = 0.0f32;
+    let mut env_bass = 0.0f32;
+    let mut env_mid = 0.0f32;
+    let mut env_treble = 0.0f32;
+
+    let dt = 1.0f32 / fps.max(1) as f32;
+    let att_coef = (-dt / (options.attack_ms.max(1.0) * 0.001)).exp();
+    let rel_coef = (-dt / (options.release_ms.max(1.0) * 0.001)).exp();
+
+    let mut res = MultiBandAudioKeyframes::default();
+
+    for f in 0..total_frames {
+        let start_sample = (f as usize * samples_per_frame) * 2;
+        let end_sample = ((f as usize + 1) * samples_per_frame * 2).min(pcm_stereo.len());
+
+        let mut frame_buf = if start_sample < pcm_stereo.len() {
+            pcm_stereo[start_sample..end_sample].to_vec()
+        } else {
+            Vec::new()
+        };
+
+        if frame_buf.is_empty() {
+            let kf = |val: f32| crate::core::keyframe::Keyframe::new(f, val, crate::core::keyframe::InterpolationType::Linear);
+            res.master.push(kf(0.0));
+            res.bass.push(kf(0.0));
+            res.mid.push(kf(0.0));
+            res.treble.push(kf(0.0));
+            continue;
+        }
+
+        // Master RMS
+        let mut master_sq = 0.0f64;
+        for s in frame_buf.chunks_exact(2) {
+            master_sq += (s[0] as f64).powi(2) + (s[1] as f64).powi(2);
+        }
+        let peak_master = (master_sq / (frame_buf.len() as f64 * 0.5).max(1.0)).sqrt() as f32;
+
+        // Bass filtered RMS
+        let mut bass_buf = frame_buf.clone();
+        bq_bass.process_stereo(&mut bass_buf);
+        let mut bass_sq = 0.0f64;
+        for s in bass_buf.chunks_exact(2) {
+            bass_sq += (s[0] as f64).powi(2) + (s[1] as f64).powi(2);
+        }
+        let peak_bass = (bass_sq / (bass_buf.len() as f64 * 0.5).max(1.0)).sqrt() as f32;
+
+        // Mid filtered RMS
+        let mut mid_buf = frame_buf.clone();
+        bq_mid_lp.process_stereo(&mut mid_buf);
+        bq_mid_hp.process_stereo(&mut mid_buf);
+        let mut mid_sq = 0.0f64;
+        for s in mid_buf.chunks_exact(2) {
+            mid_sq += (s[0] as f64).powi(2) + (s[1] as f64).powi(2);
+        }
+        let peak_mid = (mid_sq / (mid_buf.len() as f64 * 0.5).max(1.0)).sqrt() as f32;
+
+        // Treble filtered RMS
+        let mut treble_buf = frame_buf.clone();
+        bq_treble.process_stereo(&mut treble_buf);
+        let mut treble_sq = 0.0f64;
+        for s in treble_buf.chunks_exact(2) {
+            treble_sq += (s[0] as f64).powi(2) + (s[1] as f64).powi(2);
+        }
+        let peak_treble = (treble_sq / (treble_buf.len() as f64 * 0.5).max(1.0)).sqrt() as f32;
+
+        // Update envelope followers
+        let update_env = |env: &mut f32, target: f32| {
+            if target > *env {
+                *env = target + att_coef * (*env - target);
+            } else {
+                *env = target + rel_coef * (*env - target);
+            }
+            (*env * options.multiplier).clamp(0.0, options.multiplier)
+        };
+
+        let v_master = update_env(&mut env_master, peak_master);
+        let v_bass = update_env(&mut env_bass, peak_bass);
+        let v_mid = update_env(&mut env_mid, peak_mid);
+        let v_treble = update_env(&mut env_treble, peak_treble);
+
+        let kf = |val: f32| crate::core::keyframe::Keyframe::new(f, val, crate::core::keyframe::InterpolationType::Linear);
+
+        res.master.push(kf(v_master));
+        res.bass.push(kf(v_bass));
+        res.mid.push(kf(v_mid));
+        res.treble.push(kf(v_treble));
+    }
+
+    res
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -386,5 +554,34 @@ mod tests {
         for s in &buf {
             assert!(s.abs() <= 1.001, "Limiter failed to clip: {}", s);
         }
+    }
+
+    #[test]
+    fn test_extract_multiband_audio_keyframes() {
+        let sr = 44100u32;
+        let fps = 30u32;
+        let total_frames = 10u32;
+        // Generate a 100Hz bass tone
+        let num_samples = (sr as usize / fps as usize) * (total_frames as usize);
+        let mut pcm = Vec::with_capacity(num_samples * 2);
+        for i in 0..num_samples {
+            let t = i as f32 / sr as f32;
+            let v = (2.0 * std::f32::consts::PI * 100.0 * t).sin() * 0.8;
+            pcm.push(v);
+            pcm.push(v);
+        }
+
+        let options = AudioKeyframeOptions::default();
+        let kfs = extract_multiband_audio_keyframes(&pcm, sr, fps, total_frames, &options);
+
+        assert_eq!(kfs.master.len(), total_frames as usize);
+        assert_eq!(kfs.bass.len(), total_frames as usize);
+        assert_eq!(kfs.treble.len(), total_frames as usize);
+
+        // Bass level should be significantly higher than treble level for a 100Hz sine wave
+        let mid_frame = (total_frames / 2) as usize;
+        let bass_val = kfs.bass[mid_frame].value;
+        let treble_val = kfs.treble[mid_frame].value;
+        assert!(bass_val > treble_val * 3.0, "Bass {} must be much higher than Treble {}", bass_val, treble_val);
     }
 }
