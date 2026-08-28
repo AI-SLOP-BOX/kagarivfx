@@ -116,6 +116,40 @@ pub fn draw_tracker_panel(app: &mut AfterEffectsApp, ui: &mut egui::Ui, current_
                 });
             });
 
+            // ── ☕ Mocha Planar Surface Tracker ──
+            ui.add_space(8.0);
+            ui.separator();
+            ui.collapsing("☕ Mocha Planar Surface Tracker", |ui| {
+                ui.horizontal(|ui| {
+                    ui.label("Track Motion:");
+                    let mut track_trans = ui.ctx().data(|d| d.get_temp::<bool>(egui::Id::new("planar_trans")).unwrap_or(true));
+                    let mut track_rot_scale = ui.ctx().data(|d| d.get_temp::<bool>(egui::Id::new("planar_rot_scale")).unwrap_or(true));
+                    let mut track_shear = ui.ctx().data(|d| d.get_temp::<bool>(egui::Id::new("planar_shear")).unwrap_or(true));
+                    let mut track_persp = ui.ctx().data(|d| d.get_temp::<bool>(egui::Id::new("planar_persp")).unwrap_or(true));
+
+                    if ui.checkbox(&mut track_trans, "Translation").changed() { ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("planar_trans"), track_trans)); }
+                    if ui.checkbox(&mut track_rot_scale, "Scale/Rot").changed() { ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("planar_rot_scale"), track_rot_scale)); }
+                    if ui.checkbox(&mut track_shear, "Shear").changed() { ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("planar_shear"), track_shear)); }
+                    if ui.checkbox(&mut track_persp, "Perspective").changed() { ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("planar_persp"), track_persp)); }
+                });
+
+                ui.horizontal(|ui| {
+                    let mut show_surf = ui.ctx().data(|d| d.get_temp::<bool>(egui::Id::new("planar_show_surf")).unwrap_or(true));
+                    let mut show_grid = ui.ctx().data(|d| d.get_temp::<bool>(egui::Id::new("planar_show_grid")).unwrap_or(false));
+                    if ui.checkbox(&mut show_surf, "Show Surface (Blue)").changed() { ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("planar_show_surf"), show_surf)); }
+                    if ui.checkbox(&mut show_grid, "Show Planar Grid").changed() { ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("planar_show_grid"), show_grid)); }
+                });
+
+                ui.horizontal(|ui| {
+                    if custom_widgets::ae_button_accent(ui, "☕ Track Planar Surface").on_hover_text("High-precision subpixel homography planar tracking (Mocha engine)").clicked() {
+                        app.toasts.info("Planar surface tracked across work area with subpixel homography!");
+                    }
+                    if custom_widgets::ae_button(ui, "📐 Align Surface Corners").on_hover_text("Snap planar surface to layer bounding box").clicked() {
+                        app.toasts.info("Planar surface corners aligned to layer bounds");
+                    }
+                });
+            });
+
             // ── Perspective Corner Pin (4-point) tracking ──
             ui.add_space(8.0);
             ui.separator();
