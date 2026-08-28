@@ -775,6 +775,64 @@ pub fn draw_layer_type_specs(
                         }
                     });
                 });
+
+                // ── Repeater (AE Shape Modifier) ──
+                ui.collapsing("🔁 Repeater", |ui| {
+                    let mut has_rep = ui.ctx().data(|d| d.get_temp::<bool>(egui::Id::new("has_shape_repeater")).unwrap_or(false));
+                    ui.horizontal(|ui| {
+                        if ui.checkbox(&mut has_rep, "Enable Repeater").clicked() {
+                            ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("has_shape_repeater"), has_rep));
+                            *project_changed = true;
+                        }
+                    });
+
+                    if has_rep {
+                        let mut copies = ui.ctx().data(|d| d.get_temp::<u32>(egui::Id::new("rep_copies")).unwrap_or(3));
+                        let mut offset = ui.ctx().data(|d| d.get_temp::<f32>(egui::Id::new("rep_offset")).unwrap_or(0.0));
+                        let mut rep_pos_x = ui.ctx().data(|d| d.get_temp::<f32>(egui::Id::new("rep_pos_x")).unwrap_or(100.0));
+                        let mut rep_pos_y = ui.ctx().data(|d| d.get_temp::<f32>(egui::Id::new("rep_pos_y")).unwrap_or(0.0));
+                        let mut rep_rot = ui.ctx().data(|d| d.get_temp::<f32>(egui::Id::new("rep_rot")).unwrap_or(0.0));
+                        let mut rep_scale = ui.ctx().data(|d| d.get_temp::<f32>(egui::Id::new("rep_scale")).unwrap_or(100.0));
+
+                        ui.horizontal(|ui| {
+                            ui.label("Copies:");
+                            if ui.add(egui::DragValue::new(&mut copies).range(1..=100)).changed() {
+                                ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("rep_copies"), copies));
+                                *project_changed = true;
+                            }
+                            ui.label("Offset:");
+                            if ui.add(egui::DragValue::new(&mut offset).speed(0.1)).changed() {
+                                ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("rep_offset"), offset));
+                                *project_changed = true;
+                            }
+                        });
+
+                        ui.collapsing("📐 Transform: Repeater", |ui| {
+                            ui.horizontal(|ui| {
+                                ui.label("Position:");
+                                if ui.add(egui::DragValue::new(&mut rep_pos_x).prefix("X: ")).changed() {
+                                    ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("rep_pos_x"), rep_pos_x));
+                                    *project_changed = true;
+                                }
+                                if ui.add(egui::DragValue::new(&mut rep_pos_y).prefix("Y: ")).changed() {
+                                    ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("rep_pos_y"), rep_pos_y));
+                                    *project_changed = true;
+                                }
+                            });
+                            ui.horizontal(|ui| {
+                                ui.label("Rotation / Scale:");
+                                if ui.add(egui::DragValue::new(&mut rep_rot).suffix("°")).changed() {
+                                    ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("rep_rot"), rep_rot));
+                                    *project_changed = true;
+                                }
+                                if ui.add(egui::DragValue::new(&mut rep_scale).suffix("%")).changed() {
+                                    ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("rep_scale"), rep_scale));
+                                    *project_changed = true;
+                                }
+                            });
+                        });
+                    }
+                });
             }
             LayerType::Null => {
                 ui.label("Null Object (Controller)");
