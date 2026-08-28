@@ -257,6 +257,13 @@ pub fn draw_tracker_panel(app: &mut AfterEffectsApp, ui: &mut egui::Ui, current_
                         crate::core::frame_cache::bump_version();
                         app.toasts.info(format!("Applied Corner Pin to layer {}", target_idx + 1));
                     }
+                    if custom_widgets::ae_button(ui, "🎥 Stabilize Motion").on_hover_text("Cancel camera shake by inverting motion onto target anchor/position").clicked() {
+                        app.modify_project(|p| {
+                            let comp = p.active_composition_mut();
+                            crate::core::tracker_engine::TrackerEngine::apply_tracker_to_target(comp, idx, 0, target_idx, true, true);
+                        });
+                        app.toasts.info(format!("Stabilized motion applied to layer {}", target_idx + 1));
+                    }
                 });
             }
 

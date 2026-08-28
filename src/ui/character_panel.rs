@@ -86,6 +86,22 @@ pub fn draw_character_panel(
                                 .changed() { project_changed = true; }
                         });
 
+                        // Kerning (Metrics / Optical)
+                        ui.horizontal(|ui| {
+                            ui.label("Kerning:");
+                            let mut kern_mode = ui.ctx().data(|d| d.get_temp::<i32>(egui::Id::new("ae_kerning_mode")).unwrap_or(0));
+                            egui::ComboBox::from_id_salt("ae_kerning_mode_combo")
+                                .selected_text(match kern_mode {
+                                    0 => "Metrics (Auto)",
+                                    1 => "Optical",
+                                    _ => "Manual",
+                                })
+                                .show_ui(ui, |ui| {
+                                    if ui.selectable_value(&mut kern_mode, 0, "Metrics (Font Built-in)").clicked() { ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("ae_kerning_mode"), 0)); project_changed = true; }
+                                    if ui.selectable_value(&mut kern_mode, 1, "Optical (Visual Spacing)").clicked() { ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("ae_kerning_mode"), 1)); project_changed = true; }
+                                });
+                        });
+
                         // Leading
                         ui.horizontal(|ui| {
                             ui.label("Leading:");

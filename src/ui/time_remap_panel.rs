@@ -45,6 +45,34 @@ pub fn draw_time_remap_panel(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
             }
         }
 
+        ui.horizontal(|ui| {
+            if ui.button("🧊 Freeze Frame at Playhead").on_hover_text("Locks layer playback to the current frame").clicked() {
+                let mut temp_proj = app.history.current().clone();
+                let comp_mut = temp_proj.active_composition_mut();
+                if idx < comp_mut.layers.len() {
+                    let cur_f = app.current_frame.saturating_sub(in_frame) as f32;
+                    comp_mut.layers[idx].time_remap = Some(Animatable::new_constant(cur_f));
+                    app.history.commit(temp_proj);
+                    crate::core::frame_cache::bump_version();
+                    app.toasts.info(format!("Froze {} at frame {}", layer_name, app.current_frame));
+                }
+            }
+            if ui.button("⏪ Reverse Layer Time").on_hover_text("Plays the layer backwards").clicked() {
+                let mut temp_proj = app.history.current().clone();
+                let comp_mut = temp_proj.active_composition_mut();
+                if idx < comp_mut.layers.len() {
+                    let dur = out_frame - in_frame;
+                    comp_mut.layers[idx].time_remap = Some(Animatable::Animated(vec![
+                        Keyframe::new(in_frame, dur as f32, InterpolationType::Linear),
+                        Keyframe::new(out_frame, 0.0, InterpolationType::Linear),
+                    ]));
+                    app.history.commit(temp_proj);
+                    crate::core::frame_cache::bump_version();
+                    app.toasts.info(format!("Reversed playback on {}", layer_name));
+                }
+            }
+        });
+
         // ── Loop: bake repeating time-remap keyframes over the layer duration ──
         ui.add_space(6.0);
         ui.label(egui::RichText::new("🔄 Auto Loop (bakes time-remap keys)").small().strong().color(colors::ACCENT_CYAN));
