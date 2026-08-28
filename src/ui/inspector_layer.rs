@@ -459,6 +459,33 @@ pub fn draw_layer_type_specs(
                     crate::ui::project_io::reveal_in_file_manager(std::path::Path::new(path.as_str()));
                 }
                 if val_before != *path { *project_changed = true; }
+
+                // 🧷 Puppet Mesh & Pins Tool
+                ui.collapsing("🧷 Puppet Tool & Mesh Warp", |ui| {
+                    ui.horizontal(|ui| {
+                        if ui.small_button("+ Position Pin").clicked() { *project_changed = true; }
+                        if ui.small_button("🧱 + Starch Pin").on_hover_text("Adds rigidity to mesh area").clicked() { *project_changed = true; }
+                        if ui.small_button("🔀 + Overlap Pin").on_hover_text("Controls in-front/behind depth ordering").clicked() { *project_changed = true; }
+                        if ui.small_button("🔄 + Advanced Pin").on_hover_text("Controls scale and rotation warp").clicked() { *project_changed = true; }
+                    });
+
+                    let mut mesh_density = ui.ctx().data(|d| d.get_temp::<u32>(egui::Id::new("puppet_mesh_density")).unwrap_or(50));
+                    let mut mesh_exp = ui.ctx().data(|d| d.get_temp::<f32>(egui::Id::new("puppet_mesh_exp")).unwrap_or(5.0));
+                    ui.horizontal(|ui| {
+                        ui.label("Mesh Density:");
+                        if ui.add(egui::Slider::new(&mut mesh_density, 10..=100).suffix(" tri")).changed() {
+                            ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("puppet_mesh_density"), mesh_density));
+                            *project_changed = true;
+                        }
+                    });
+                    ui.horizontal(|ui| {
+                        ui.label("Expansion:");
+                        if ui.add(egui::Slider::new(&mut mesh_exp, 0.0..=50.0).suffix(" px")).changed() {
+                            ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("puppet_mesh_exp"), mesh_exp));
+                            *project_changed = true;
+                        }
+                    });
+                });
             }
             LayerType::Video { source, frames_dir, frame_count, audio_wav, speed } => {
                 let before_src = source.clone();
