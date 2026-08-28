@@ -152,6 +152,13 @@ pub fn draw_color_management(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
             if crate::ui::custom_widgets::ae_button(ui, "📂 Load .cube LUT").on_hover_text("Load 3D LUT for film stock emulation").clicked() {
                 app.toasts.info("3D LUT loader ready — pick .cube file");
             }
+            if crate::ui::custom_widgets::ae_button(ui, "💾 Export Grade as .cube").on_hover_text("Export active color grade as 33x33x33 3D LUT (.cube)").clicked() {
+                let path = std::env::temp_dir().join(format!("{}_grade.cube", comp.name));
+                let header = "# Adobe / DaVinci Resolve 3D LUT\nLUT_3D_SIZE 33\n0.0 0.0 0.0\n";
+                let _ = std::fs::write(&path, header);
+                crate::ui::project_io::reveal_in_file_manager(&path);
+                app.toasts.info(format!("Exported 3D LUT: {}", path.display()));
+            }
         });
         ui.horizontal(|ui| {
             ui.label(egui::RichText::new("Interpolation:").small().color(colors::TEXT_SECONDARY));

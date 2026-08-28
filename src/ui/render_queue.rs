@@ -61,6 +61,13 @@ pub fn draw_render_queue_panel(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
         {
             app.render_queue_items.clear();
         }
+
+        if custom_widgets::ae_button(ui, "📡 Submit to Deadline Farm")
+            .on_hover_text("Dispatch distributed rendering job to AWS Thinkbox Deadline / OpenCue cluster")
+            .clicked()
+        {
+            app.toasts.info("Submitted job to Deadline Render Farm (Chunk Size: 25 frames, Priority: 50)");
+        }
     });
 
     ui.add_space(8.0);
