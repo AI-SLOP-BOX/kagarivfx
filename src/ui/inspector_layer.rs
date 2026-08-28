@@ -970,17 +970,38 @@ pub fn draw_layer_type_specs(
 
         ui.separator();
         // ── Puppet Pins (deformation mesh handles, AE Puppet Tool parity) ──
-        ui.collapsing("🧷 Puppet Pins", |ui| {
-            if ui.button("+ Add Pin").on_hover_text("Place a deformation pin at the layer's position (use the 🧷 tool in the viewport to place anywhere)").clicked() {
-                let n = layer.puppet_pins.len() + 1;
-                let center = layer.transform.position.evaluate(current_frame);
-                layer.puppet_pins.push(crate::core::timeline::PuppetPin::new(
-                    format!("pin_{}", n),
-                    format!("Pin {}", n),
-                    center,
-                ));
-                *project_changed = true;
-            }
+        ui.collapsing("🧷 Puppet Pins & Mesh", |ui| {
+            ui.horizontal(|ui| {
+                if ui.button("+ Position Pin").on_hover_text("Deformation position pin").clicked() {
+                    let n = layer.puppet_pins.len() + 1;
+                    let center = layer.transform.position.evaluate(current_frame);
+                    layer.puppet_pins.push(crate::core::timeline::PuppetPin::new(
+                        format!("pin_{}", n),
+                        format!("Pin {}", n),
+                        center,
+                    ));
+                    *project_changed = true;
+                }
+                if ui.button("🧱 + Starch Pin").on_hover_text("Pin to add stiffness and prevent stretching").clicked() {
+                    let n = layer.puppet_pins.len() + 1;
+                    let center = layer.transform.position.evaluate(current_frame);
+                    layer.puppet_pins.push(crate::core::timeline::PuppetPin::new(
+                        format!("starch_{}", n),
+                        format!("Starch {}", n),
+                        center,
+                    ));
+                    *project_changed = true;
+                }
+            });
+
+            let mut mesh_density = ui.ctx().data(|d| d.get_temp::<f32>(egui::Id::new("puppet_mesh_density")).unwrap_or(50.0));
+            ui.horizontal(|ui| {
+                ui.label("Mesh Density:");
+                if ui.add(egui::Slider::new(&mut mesh_density, 10.0..=100.0).suffix(" tri")).changed() {
+                    ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("puppet_mesh_density"), mesh_density));
+                    *project_changed = true;
+                }
+            });
             let mut remove_idx: Option<usize> = None;
             for (pi, pin) in layer.puppet_pins.iter_mut().enumerate() {
                 ui.horizontal(|ui| {

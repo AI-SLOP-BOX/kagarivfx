@@ -148,6 +148,20 @@ pub fn draw_timeline_header(
             });
             project_changed = true;
         }
+        if !comp.markers.is_empty() && ui.small_button("📋 YouTube Chapters").on_hover_text("Copy YouTube timestamp chapters formatted from markers").clicked() {
+            let fps = (comp.fps as f32).max(1.0);
+            let mut sorted = comp.markers.clone();
+            sorted.sort_by_key(|m| m.frame);
+            let mut lines = Vec::new();
+            for m in sorted {
+                let total_secs = (m.frame as f32 / fps).floor() as u32;
+                let mins = total_secs / 60;
+                let secs = total_secs % 60;
+                lines.push(format!("{:02}:{:02} {}", mins, secs, m.label));
+            }
+            let output = lines.join("\n");
+            ui.output_mut(|o| o.copied_text = output);
+        }
         if ui.button("+ Shape").clicked() {
             let id = format!("layer_{}", comp.layers.len());
             let name = format!("Shape {}", comp.layers.len());

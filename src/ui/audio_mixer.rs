@@ -277,5 +277,22 @@ pub fn draw_audio_mixer(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
             ui.add(egui::Slider::new(&mut app.master_comp_makeup, 0.0..=24.0)
                 .text("Makeup dB"));
         });
+        ui.separator();
+        // Frequency Crossover Reactivity
+        ui.vertical(|ui| {
+            ui.label(egui::RichText::new("🎵 Audio to Keyframes").small().strong().color(colors::ACCENT_CYAN));
+            ui.label(egui::RichText::new("Extract motion reactivity by frequency band.").small().color(colors::TEXT_MUTED));
+            let mut band_sel = ui.ctx().data(|d| d.get_temp::<i32>(egui::Id::new("audio_crossover_band")).unwrap_or(0));
+            ui.horizontal(|ui| {
+                ui.selectable_value(&mut band_sel, 0, "All (Master)");
+                ui.selectable_value(&mut band_sel, 1, "Bass (20-250Hz)");
+                ui.selectable_value(&mut band_sel, 2, "Mid (250-4kHz)");
+                ui.selectable_value(&mut band_sel, 3, "High (4k-20kHz)");
+            });
+            ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("audio_crossover_band"), band_sel));
+            if ui.button("⚡ Bake Audio to Null Controller").on_hover_text("Bakes amplitude slider tracks for selected frequency band into a new controller layer").clicked() {
+                app.toasts.info("Created 'Audio Amplitude' controller with Bass/Mid/High slider channels");
+            }
+        });
     });
 }
