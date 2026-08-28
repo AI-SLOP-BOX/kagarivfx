@@ -70,7 +70,20 @@ pub fn draw_scripting_console(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
 
     ui.add_space(4.0);
 
-    // ── Run / Clear ──
+    // ── Run / Clear / Snippets ──
+    let mut selected_snippet = None;
+    ui.horizontal(|ui| {
+        ui.label(egui::RichText::new("Snippets:").small().color(colors::TEXT_SECONDARY));
+        if ui.small_button("🌊 Wiggle").clicked() { selected_snippet = Some("wiggle(3.0, 25.0)".to_string()); }
+        if ui.small_button("🔁 LoopOut").clicked() { selected_snippet = Some("loopOut(\"cycle\")".to_string()); }
+        if ui.small_button("⏱ PingPong").clicked() { selected_snippet = Some("loopOut(\"pingpong\")".to_string()); }
+        if ui.small_button("✨ Noise").clicked() { selected_snippet = Some("sin(time * 5.0) * 20.0".to_string()); }
+    });
+    if let Some(snip) = selected_snippet {
+        app.script_console_command = snip;
+    }
+
+    ui.add_space(2.0);
     let run_requested = ui.horizontal(|ui| {
         let mut run = false;
         if crate::ui::custom_widgets::ae_button(ui, "▶ Run Script").clicked() {

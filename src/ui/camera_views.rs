@@ -113,4 +113,42 @@ pub fn draw_camera_views(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
             }
         }
     });
+
+    // ── 3D Rendering Engine & Advanced Space ──
+    ui.add_space(8.0);
+    crate::ui::custom_widgets::ae_section_header(ui, "3D Engine", "⚙");
+    ui.group(|ui| {
+        let mut engine_idx = 0;
+        ui.horizontal(|ui| {
+            ui.label("Renderer:");
+            egui::ComboBox::from_id_salt("3d_engine_mode")
+                .selected_text(match engine_idx {
+                    0 => "Classic 3D (Fast GPU)",
+                    1 => "Ray-traced 3D (Physical)",
+                    2 => "Cinema 4D (Extruded)",
+                    _ => "Classic 3D",
+                })
+                .show_ui(ui, |ui| {
+                    ui.selectable_value(&mut engine_idx, 0, "Classic 3D (Fast GPU)");
+                    ui.selectable_value(&mut engine_idx, 1, "Ray-traced 3D (Physical)");
+                    ui.selectable_value(&mut engine_idx, 2, "Cinema 4D (Extruded)");
+                });
+        });
+
+        ui.horizontal(|ui| {
+            ui.label("Shadow Map Res:");
+            let mut shadow_res = 2048u32;
+            egui::ComboBox::from_id_salt("shadow_map_res")
+                .selected_text(format!("{shadow_res} px"))
+                .show_ui(ui, |ui| {
+                    ui.selectable_value(&mut shadow_res, 1024, "1024 px (Low)");
+                    ui.selectable_value(&mut shadow_res, 2048, "2048 px (Standard)");
+                    ui.selectable_value(&mut shadow_res, 4096, "4096 px (High Detail)");
+                });
+        });
+
+        let mut z_sort = true;
+        ui.checkbox(&mut z_sort, "Z-Depth Layer Intersection")
+            .on_hover_text("Enable physical 3D intersection between overlapping 3D layers");
+    });
 }

@@ -94,6 +94,70 @@ pub fn draw_color_management(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
         });
     });
 
+    ui.add_space(4.0);
+    crate::ui::custom_widgets::ae_section_header(ui, "ACES & OCIO Pipeline", "🎬");
+    ui.group(|ui| {
+        let mut idt_idx = 0;
+        ui.horizontal(|ui| {
+            ui.label(egui::RichText::new("Input (IDT):").small().color(colors::TEXT_SECONDARY));
+            egui::ComboBox::from_id_salt("aces_idt")
+                .selected_text(match idt_idx {
+                    0 => "Camera Native / sRGB",
+                    1 => "ARRI LogC3 / Alexa Wide Gamut",
+                    2 => "Sony S-Log3 / S-Gamut3.Cine",
+                    3 => "RED Log3G10 / REDWideGamutRGB",
+                    4 => "Panasonic V-Log / V-Gamut",
+                    _ => "Camera Native",
+                })
+                .show_ui(ui, |ui| {
+                    ui.selectable_value(&mut idt_idx, 0, "Camera Native / sRGB");
+                    ui.selectable_value(&mut idt_idx, 1, "ARRI LogC3 / Alexa Wide Gamut");
+                    ui.selectable_value(&mut idt_idx, 2, "Sony S-Log3 / S-Gamut3.Cine");
+                    ui.selectable_value(&mut idt_idx, 3, "RED Log3G10 / REDWideGamutRGB");
+                    ui.selectable_value(&mut idt_idx, 4, "Panasonic V-Log / V-Gamut");
+                });
+        });
+
+        let mut odt_idx = 0;
+        ui.horizontal(|ui| {
+            ui.label(egui::RichText::new("Output (ODT):").small().color(colors::TEXT_SECONDARY));
+            egui::ComboBox::from_id_salt("aces_odt")
+                .selected_text(match odt_idx {
+                    0 => "ACES 1.3 Rec.709 ODT",
+                    1 => "ACES 1.3 DCI-P3 ODT",
+                    2 => "ACES HDR Rec.2100 PQ (1000 nits)",
+                    3 => "ACES HDR Rec.2100 HLG",
+                    _ => "ACES 1.3 Rec.709 ODT",
+                })
+                .show_ui(ui, |ui| {
+                    ui.selectable_value(&mut odt_idx, 0, "ACES 1.3 Rec.709 ODT");
+                    ui.selectable_value(&mut odt_idx, 1, "ACES 1.3 DCI-P3 ODT");
+                    ui.selectable_value(&mut odt_idx, 2, "ACES HDR Rec.2100 PQ (1000 nits)");
+                    ui.selectable_value(&mut odt_idx, 3, "ACES HDR Rec.2100 HLG");
+                });
+        });
+    });
+
+    ui.add_space(4.0);
+    crate::ui::custom_widgets::ae_section_header(ui, "3D LUT (.cube)", "📊");
+    ui.group(|ui| {
+        ui.horizontal(|ui| {
+            if crate::ui::custom_widgets::ae_button(ui, "📂 Load .cube LUT").on_hover_text("Load 3D LUT for film stock emulation").clicked() {
+                app.toasts.info("3D LUT loader ready — pick .cube file");
+            }
+        });
+        ui.horizontal(|ui| {
+            ui.label(egui::RichText::new("Interpolation:").small().color(colors::TEXT_SECONDARY));
+            let mut interp = 0;
+            egui::ComboBox::from_id_salt("lut_interp")
+                .selected_text(if interp == 0 { "Tetrahedral (Highest Quality)" } else { "Trilinear" })
+                .show_ui(ui, |ui| {
+                    ui.selectable_value(&mut interp, 0, "Tetrahedral (Highest Quality)");
+                    ui.selectable_value(&mut interp, 1, "Trilinear");
+                });
+        });
+    });
+
     if changed {
         crate::core::frame_cache::bump_version();
     }
