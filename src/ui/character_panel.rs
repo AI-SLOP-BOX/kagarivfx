@@ -173,6 +173,49 @@ pub fn draw_character_panel(
                             if ui.selectable_label(*align == 2, "[Right]").clicked()  { *align = 2; project_changed = true; }
                         });
                     });
+
+                    // ── 〰 Path Options (Text on Path) ──
+                    ui.add_space(6.0);
+                    ui.collapsing("〰 Path Options (Text on Path)", |ui| {
+                        let mut path_idx = ui.ctx().data(|d| d.get_temp::<i32>(egui::Id::new("top_path_idx")).unwrap_or(0));
+                        ui.horizontal(|ui| {
+                            ui.label("Path Mask:");
+                            egui::ComboBox::from_id_salt("top_path_combo")
+                                .selected_text(if path_idx == 0 { "None" } else { "Mask 1 (Bezier)" })
+                                .show_ui(ui, |ui| {
+                                    if ui.selectable_value(&mut path_idx, 0, "None").clicked() { ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("top_path_idx"), 0)); project_changed = true; }
+                                    if ui.selectable_value(&mut path_idx, 1, "Mask 1 (Bezier)").clicked() { ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("top_path_idx"), 1)); project_changed = true; }
+                                });
+                        });
+
+                        if path_idx > 0 {
+                            let mut rev = ui.ctx().data(|d| d.get_temp::<bool>(egui::Id::new("top_rev_path")).unwrap_or(false));
+                            let mut perp = ui.ctx().data(|d| d.get_temp::<bool>(egui::Id::new("top_perp_path")).unwrap_or(true));
+                            let mut force = ui.ctx().data(|d| d.get_temp::<bool>(egui::Id::new("top_force_align")).unwrap_or(false));
+                            let mut first_margin = ui.ctx().data(|d| d.get_temp::<f32>(egui::Id::new("top_first_margin")).unwrap_or(0.0));
+                            let mut last_margin = ui.ctx().data(|d| d.get_temp::<f32>(egui::Id::new("top_last_margin")).unwrap_or(0.0));
+
+                            ui.horizontal(|ui| {
+                                if ui.checkbox(&mut rev, "Reverse Path").changed() { ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("top_rev_path"), rev)); project_changed = true; }
+                                if ui.checkbox(&mut perp, "Perpendicular").changed() { ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("top_perp_path"), perp)); project_changed = true; }
+                                if ui.checkbox(&mut force, "Force Align").changed() { ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("top_force_align"), force)); project_changed = true; }
+                            });
+
+                            ui.horizontal(|ui| {
+                                ui.label("First Margin:");
+                                if ui.add(egui::DragValue::new(&mut first_margin).speed(1.0).suffix(" px")).changed() {
+                                    ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("top_first_margin"), first_margin));
+                                    project_changed = true;
+                                }
+                                ui.label("Last Margin:");
+                                if ui.add(egui::DragValue::new(&mut last_margin).speed(1.0).suffix(" px")).changed() {
+                                    ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("top_last_margin"), last_margin));
+                                    project_changed = true;
+                                }
+                            });
+                        }
+                    });
+
                     ui.add_space(6.0);
                     // ── AE Multi-Animator Stack (Layered Animators) ──
                     ui.group(|ui| {

@@ -79,6 +79,7 @@ pub fn draw_scripting_console(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
         if ui.small_button("⏱ PingPong").clicked() { selected_snippet = Some("loopOut(\"pingpong\")".to_string()); }
         if ui.small_button("🔤 textIndex").on_hover_text("Per-character typography wave").clicked() { selected_snippet = Some("sin(time * 6.0 + textIndex * 0.5) * 30.0".to_string()); }
         if ui.small_button("🎯 Inertial Bounce").on_hover_text("Decaying spring bounce expression").clicked() { selected_snippet = Some("amp = 0.05; freq = 4.0; decay = 5.0; amp * sin(freq * time * 2 * PI) / exp(decay * time)".to_string()); }
+        if ui.small_button("📜 ExtendScript Add Text").on_hover_text("AE JS API: Add Text layer").clicked() { selected_snippet = Some("add_text(\"New Title\", 48.0)".to_string()); }
     });
     if let Some(snip) = selected_snippet {
         app.script_console_command = snip;
