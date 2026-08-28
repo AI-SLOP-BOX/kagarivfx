@@ -172,6 +172,13 @@ pub fn draw_time_remap_panel(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
                 ui.ctx().data_mut(|d| d.insert_temp(blend_id, blend_idx));
             }
         });
+
+        ui.add_space(6.0);
+        let mut preserve_fps = ui.ctx().data(|d| d.get_temp::<bool>(egui::Id::new("ae_preserve_fps")).unwrap_or(true));
+        if ui.checkbox(&mut preserve_fps, "Preserve Frame Rate when nested or in render queue").changed() {
+            ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("ae_preserve_fps"), preserve_fps));
+            crate::core::frame_cache::bump_version();
+        }
     } else {
         ui.weak("Select a layer to adjust time stretch & remapping.");
     }
