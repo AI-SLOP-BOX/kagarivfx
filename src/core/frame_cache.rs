@@ -247,17 +247,32 @@ impl FrameCache {
 
     /// Store a rendered frame for the current global version.
     pub fn insert(&mut self, frame: u32, width: u32, height: u32, pixels: Vec<u8>) {
+        self.insert_with_layers(frame, width, height, pixels, &[]);
+    }
+
+    /// Store a rendered frame and record which layers contributed to it.
+    /// Layer tracking enables partial invalidation: future `get_with_layers`
+    /// calls can reuse this entry when only unrelated layers have changed.
+    pub fn insert_with_layers(
+        &mut self,
+        frame: u32,
+        width: u32,
+        height: u32,
+        pixels: Vec<u8>,
+        layer_indices: &[usize],
+    ) {
         let ver = current_version();
+        let key = (frame, ver);
         let bytes_size = pixels.len();
 
         // If replacing existing entry, subtract old size first
-        if let Some(old) = self.entries.remove(&(frame, ver)) {
+        if let Some(old) = self.entries.remove(&key) {
             self.current_memory_bytes = self.current_memory_bytes.saturating_sub(old.pixels.len());
         }
 
         self.current_memory_bytes += bytes_size;
         self.entries.insert(
-            (frame, ver),
+            key,
             CacheEntry {
                 version: ver,
                 width,
@@ -267,9 +282,27 @@ impl FrameCache {
             },
         );
 
+        // Record which layers contributed so get_with_layers can detect
+        // whether a previous-version frame is still valid.
+        if !layer_indices.is_empty() {
+            self.frame_layers
+                .insert(key, layer_indices.iter().copied().collect());
+        }
+
         // Trigger LRU garbage collection if budget exceeded
         if self.entries.len() > self.max_entries || self.current_memory_bytes > self.max_memory_bytes {
             self.collect_garbage();
+        }
+    }
+
+    /// Record which layers contributed to an already-inserted frame.
+    /// Use this after `insert()` when layer information becomes available
+    /// separately from the pixel data.
+    pub fn set_frame_layers(&mut self, frame: u32, layer_indices: &[usize]) {
+        let key = (frame, current_version());
+        if !layer_indices.is_empty() {
+            self.frame_layers
+                .insert(key, layer_indices.iter().copied().collect());
         }
     }
 

@@ -1,5 +1,5 @@
 use crate::core::effect_plugin::evaluate_effects;
-use crate::core::timeline::{Composition, LayerType, ShapeType};
+use crate::core::timeline::{Composition, LayerType, ShapeFillType, ShapeType};
 
 use std::sync::Arc;
 
@@ -1832,10 +1832,10 @@ impl WgpuRenderer {
                 };
 
                 // Prepare Layer Uniform details
-                let (mut layer_type, shape_type, mut color) = match &layer.layer_type {
-                    LayerType::Solid { color } => (0u32, 0u32, *color),
-                    LayerType::Image { .. } | LayerType::Video { .. } => (1u32, 0u32, [1.0, 1.0, 1.0, 1.0]),
-                    LayerType::Shape { shape_type, color, .. } => {
+                let (mut layer_type, shape_type, mut color, mut fill_type_u32, mut grad_start, mut grad_end, mut grad_colors, mut grad_center, mut grad_radius) = match &layer.layer_type {
+                    LayerType::Solid { color } => (0u32, 0u32, *color, 0u32, [0.0, 0.0], [1.0, 1.0], [[1.0,1.0,1.0,1.0],[0.0,0.0,0.0,1.0]], [0.5, 0.5], 0.5),
+                    LayerType::Image { .. } | LayerType::Video { .. } => (1u32, 0u32, [1.0, 1.0, 1.0, 1.0], 0u32, [0.0, 0.0], [1.0, 1.0], [[1.0,1.0,1.0,1.0],[0.0,0.0,0.0,1.0]], [0.5, 0.5], 0.5),
+                    LayerType::Shape { shape_type, color, fill_type, .. } => {
                         let st = match shape_type {
                             ShapeType::Rectangle { .. } => 0u32,
                             ShapeType::Ellipse { .. } => 1u32,
@@ -1843,13 +1843,27 @@ impl WgpuRenderer {
                             ShapeType::Polygon { .. } => 3u32,
                             ShapeType::FreeformBezier { .. } => 4u32,
                         };
-                        (2u32, st, *color)
+                        let (ft, ge, gs, gc, gcen, gr) = match fill_type {
+                            ShapeFillType::Solid => (0u32, [0.0, 0.0], [1.0, 1.0], [[1.0,1.0,1.0,1.0],[0.0,0.0,0.0,1.0]], [0.5, 0.5], 0.5),
+                            ShapeFillType::LinearGradient { start, end, colors, .. } => {
+                                let c1 = colors.first().copied().unwrap_or([1.0,1.0,1.0,1.0]);
+                                let c2 = colors.get(1).copied().unwrap_or([0.0,0.0,0.0,1.0]);
+                                (1u32, *start, *end, [c1, c2], [0.5, 0.5], 0.5)
+                            }
+                            ShapeFillType::RadialGradient { center, radius, colors, .. } => {
+                                let c1 = colors.first().copied().unwrap_or([1.0,1.0,1.0,1.0]);
+                                let c2 = colors.get(1).copied().unwrap_or([0.0,0.0,0.0,1.0]);
+                                (2u32, [0.0, 0.0], [1.0, 1.0], [c1, c2], *center, *radius)
+                            }
+                        };
+                        (2u32, st, *color, ft, gs, ge, gc, gcen, gr)
                     }
-                    LayerType::Text { color, .. } => (3u32, 0u32, *color),                    LayerType::Null => (4u32, 0u32, [0.0, 0.0, 0.0, 0.0]),
-                    LayerType::PreComp { .. } => (5u32, 0u32, [1.0, 1.0, 1.0, 1.0]),
-                    LayerType::AdjustmentLayer => (7u32, 0u32, [1.0, 1.0, 1.0, 1.0]),
-                    LayerType::Audio { .. } => (6u32, 0u32, [0.0, 0.0, 0.0, 0.0]),
-                    LayerType::Particle { .. } => (8u32, 0u32, [1.0, 1.0, 1.0, 1.0]),
+                    LayerType::Text { color, .. } => (3u32, 0u32, *color, 0u32, [0.0, 0.0], [1.0, 1.0], [[1.0,1.0,1.0,1.0],[0.0,0.0,0.0,1.0]], [0.5, 0.5], 0.5),
+                    LayerType::Null => (4u32, 0u32, [0.0, 0.0, 0.0, 0.0], 0u32, [0.0, 0.0], [1.0, 1.0], [[1.0,1.0,1.0,1.0],[0.0,0.0,0.0,1.0]], [0.5, 0.5], 0.5),
+                    LayerType::PreComp { .. } => (5u32, 0u32, [1.0, 1.0, 1.0, 1.0], 0u32, [0.0, 0.0], [1.0, 1.0], [[1.0,1.0,1.0,1.0],[0.0,0.0,0.0,1.0]], [0.5, 0.5], 0.5),
+                    LayerType::AdjustmentLayer => (7u32, 0u32, [1.0, 1.0, 1.0, 1.0], 0u32, [0.0, 0.0], [1.0, 1.0], [[1.0,1.0,1.0,1.0],[0.0,0.0,0.0,1.0]], [0.5, 0.5], 0.5),
+                    LayerType::Audio { .. } => (6u32, 0u32, [0.0, 0.0, 0.0, 0.0], 0u32, [0.0, 0.0], [1.0, 1.0], [[1.0,1.0,1.0,1.0],[0.0,0.0,0.0,1.0]], [0.5, 0.5], 0.5),
+                    LayerType::Particle { .. } => (8u32, 0u32, [1.0, 1.0, 1.0, 1.0], 0u32, [0.0, 0.0], [1.0, 1.0], [[1.0,1.0,1.0,1.0],[0.0,0.0,0.0,1.0]], [0.5, 0.5], 0.5),
                 };
 
                 // Textured text uses the image sampling path with unmodified texture colors
@@ -2006,22 +2020,22 @@ impl WgpuRenderer {
                     trim_offset: layer.trim_paths.as_ref().map(|t| t.offset.evaluate(frame).to_radians() / std::f32::consts::TAU).unwrap_or(0.0),
                     _pad_trim: 0.0,
 
-                    fill_type: 0,
-                    grad_start_x: 0.0,
-                    grad_start_y: 0.0,
-                    grad_end_x: 1.0,
-                    grad_end_y: 1.0,
-                    grad_color1_r: 1.0,
-                    grad_color1_g: 1.0,
-                    grad_color1_b: 1.0,
-                    grad_color1_a: 1.0,
-                    grad_color2_r: 0.0,
-                    grad_color2_g: 0.0,
-                    grad_color2_b: 0.0,
-                    grad_color2_a: 1.0,
-                    grad_center_x: 0.5,
-                    grad_center_y: 0.5,
-                    grad_radius: 0.5,
+                    fill_type: fill_type_u32,
+                    grad_start_x: grad_start[0],
+                    grad_start_y: grad_start[1],
+                    grad_end_x: grad_end[0],
+                    grad_end_y: grad_end[1],
+                    grad_color1_r: grad_colors[0][0],
+                    grad_color1_g: grad_colors[0][1],
+                    grad_color1_b: grad_colors[0][2],
+                    grad_color1_a: grad_colors[0][3],
+                    grad_color2_r: grad_colors[1][0],
+                    grad_color2_g: grad_colors[1][1],
+                    grad_color2_b: grad_colors[1][2],
+                    grad_color2_a: grad_colors[1][3],
+                    grad_center_x: grad_center[0],
+                    grad_center_y: grad_center[1],
+                    grad_radius: grad_radius,
                     _grad_pad: 0.0,
 
                     ls_stroke_width: layer.style.stroke.size,

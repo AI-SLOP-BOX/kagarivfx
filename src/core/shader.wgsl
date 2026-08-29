@@ -337,7 +337,21 @@ fn sample_layer_color(local_pos_in: vec2<f32>, tc_in: vec2<f32>, blur_extend: f3
         }
     } else if (layer.layer_type == 2u) {
         let alpha = shape_sdf_alpha(local_pos, blur_extend);
-        c = vec4<f32>(layer.color.rgb, layer.color.a * alpha);
+        var shape_color = layer.color;
+        if (layer.fill_type == 1u) {
+            let d = vec2<f32>(layer.grad_end_x - layer.grad_start_x, layer.grad_end_y - layer.grad_start_y);
+            let len_sq = dot(d, d);
+            if (len_sq > 0.001) {
+                let t = clamp(dot(local_pos - vec2<f32>(layer.grad_start_x, layer.grad_start_y), d) / len_sq, 0.0, 1.0);
+                shape_color = mix(vec4<f32>(layer.grad_color1_r, layer.grad_color1_g, layer.grad_color1_b, layer.grad_color1_a), vec4<f32>(layer.grad_color2_r, layer.grad_color2_g, layer.grad_color2_b, layer.grad_color2_a), t);
+            }
+        } else if (layer.fill_type == 2u) {
+            let center = vec2<f32>(layer.grad_center_x, layer.grad_center_y);
+            let dist = length(local_pos - center);
+            let t = clamp(dist / max(layer.grad_radius, 0.001), 0.0, 1.0);
+            shape_color = mix(vec4<f32>(layer.grad_color1_r, layer.grad_color1_g, layer.grad_color1_b, layer.grad_color1_a), vec4<f32>(layer.grad_color2_r, layer.grad_color2_g, layer.grad_color2_b, layer.grad_color2_a), t);
+        }
+        c = vec4<f32>(shape_color.rgb, shape_color.a * alpha);
     } else if (layer.layer_type == 3u) {
         c = layer.color;
     } else if (layer.layer_type == 8u) {

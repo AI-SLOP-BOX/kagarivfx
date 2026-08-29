@@ -825,7 +825,11 @@ impl eframe::App for AfterEffectsApp {
                         let px = pointer_pos.x as i32;
                         let py = pointer_pos.y as i32;
                         if px >= 0 && py >= 0 && (px as u32) < comp.width && (py as u32) < comp.height {
-                            if let Some(entry) = self.frame_cache.get(self.current_frame) {
+                            let layer_indices: Vec<usize> = comp.layers.iter().enumerate()
+                                .filter(|(_, l)| l.is_active(self.current_frame))
+                                .map(|(i, _)| i)
+                                .collect();
+                            if let Some(entry) = self.frame_cache.get_with_layers(self.current_frame, &layer_indices) {
                                 let idx = ((py as u32 * comp.width + px as u32) * 4) as usize;
                                 if idx + 3 < entry.pixels.len() {
                                     Some([entry.pixels[idx], entry.pixels[idx+1], entry.pixels[idx+2], entry.pixels[idx+3]])
