@@ -306,40 +306,39 @@ pub fn draw_character_panel(
                                             });
                                             ui.horizontal(|ui| {
                                                 ui.label("Shape:");
-                                                use crate::core::text_animator::SelectorShape as SS;
                                                 let mut shape_idx = match sel.shape {
-                                                    SS::Square => 0,
-                                                    SS::RampUp => 1,
-                                                    SS::RampDown => 2,
-                                                    SS::Triangle => 3,
-                                                    SS::Round => 4,
-                                                    SS::Smooth => 5,
-                                                    SS::Wobble => 6,
-                                                    SS::Random => 7,
-                                                    SS::Expression => 8,
+                                                    crate::core::text_animator::SelectorShape::Square => 0,
+                                                    crate::core::text_animator::SelectorShape::RampUp => 1,
+                                                    crate::core::text_animator::SelectorShape::RampDown => 2,
+                                                    crate::core::text_animator::SelectorShape::Triangle => 3,
+                                                    crate::core::text_animator::SelectorShape::Round => 4,
+                                                    crate::core::text_animator::SelectorShape::Smooth => 5,
+                                                    crate::core::text_animator::SelectorShape::Wobble => 6,
+                                                    crate::core::text_animator::SelectorShape::Random => 7,
+                                                    crate::core::text_animator::SelectorShape::Expression => 8,
                                                 };
                                                 egui::ComboBox::from_id_salt("anim_shape")
                                                     .selected_text(match sel.shape {
-                                                        SS::Square => "Square",
-                                                        SS::RampUp => "Ramp Up",
-                                                        SS::RampDown => "Ramp Down",
-                                                        SS::Triangle => "Triangle",
-                                                        SS::Round => "Round",
-                                                        SS::Smooth => "Smooth",
-                                                        SS::Wobble => "Wobble",
-                                                        SS::Random => "Random",
-                                                        SS::Expression => "Expression",
+                                                        crate::core::text_animator::SelectorShape::Square => "Square",
+                                                        crate::core::text_animator::SelectorShape::RampUp => "Ramp Up",
+                                                        crate::core::text_animator::SelectorShape::RampDown => "Ramp Down",
+                                                        crate::core::text_animator::SelectorShape::Triangle => "Triangle",
+                                                        crate::core::text_animator::SelectorShape::Round => "Round",
+                                                        crate::core::text_animator::SelectorShape::Smooth => "Smooth",
+                                                        crate::core::text_animator::SelectorShape::Wobble => "Wobble",
+                                                        crate::core::text_animator::SelectorShape::Random => "Random",
+                                                        crate::core::text_animator::SelectorShape::Expression => "Expression",
                                                     })
                                                     .show_ui(ui, |ui| {
-                                                        if ui.selectable_value(&mut shape_idx, 0, "Square").clicked() { sel.shape = SS::Square; project_changed = true; }
-                                                        if ui.selectable_value(&mut shape_idx, 1, "Ramp Up").clicked() { sel.shape = SS::RampUp; project_changed = true; }
-                                                        if ui.selectable_value(&mut shape_idx, 2, "Ramp Down").clicked() { sel.shape = SS::RampDown; project_changed = true; }
-                                                        if ui.selectable_value(&mut shape_idx, 3, "Triangle").clicked() { sel.shape = SS::Triangle; project_changed = true; }
-                                                        if ui.selectable_value(&mut shape_idx, 4, "Round").clicked() { sel.shape = SS::Round; project_changed = true; }
-                                                        if ui.selectable_value(&mut shape_idx, 5, "Smooth").clicked() { sel.shape = SS::Smooth; project_changed = true; }
-                                                        if ui.selectable_value(&mut shape_idx, 6, "Wobble").clicked() { sel.shape = SS::Wobble; project_changed = true; }
-                                                        if ui.selectable_value(&mut shape_idx, 7, "Random").clicked() { sel.shape = SS::Random; project_changed = true; }
-                                                        if ui.selectable_value(&mut shape_idx, 8, "Expression").clicked() { sel.shape = SS::Expression; project_changed = true; }
+                                                        if ui.selectable_value(&mut shape_idx, 0, "Square").clicked() { sel.shape = crate::core::text_animator::SelectorShape::Square; project_changed = true; }
+                                                        if ui.selectable_value(&mut shape_idx, 1, "Ramp Up").clicked() { sel.shape = crate::core::text_animator::SelectorShape::RampUp; project_changed = true; }
+                                                        if ui.selectable_value(&mut shape_idx, 2, "Ramp Down").clicked() { sel.shape = crate::core::text_animator::SelectorShape::RampDown; project_changed = true; }
+                                                        if ui.selectable_value(&mut shape_idx, 3, "Triangle").clicked() { sel.shape = crate::core::text_animator::SelectorShape::Triangle; project_changed = true; }
+                                                        if ui.selectable_value(&mut shape_idx, 4, "Round").clicked() { sel.shape = crate::core::text_animator::SelectorShape::Round; project_changed = true; }
+                                                        if ui.selectable_value(&mut shape_idx, 5, "Smooth").clicked() { sel.shape = crate::core::text_animator::SelectorShape::Smooth; project_changed = true; }
+                                                        if ui.selectable_value(&mut shape_idx, 6, "Wobble").clicked() { sel.shape = crate::core::text_animator::SelectorShape::Wobble; project_changed = true; }
+                                                        if ui.selectable_value(&mut shape_idx, 7, "Random").clicked() { sel.shape = crate::core::text_animator::SelectorShape::Random; project_changed = true; }
+                                                        if ui.selectable_value(&mut shape_idx, 8, "Expression").clicked() { sel.shape = crate::core::text_animator::SelectorShape::Expression; project_changed = true; }
                                                     });
                                             });
                                             ui.horizontal(|ui| {
