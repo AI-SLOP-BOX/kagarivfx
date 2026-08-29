@@ -1188,6 +1188,10 @@ pub enum EffectType {
         decay: Animatable<f32>,
         operator: crate::core::echo_effect::EchoOperator,
     },
+    /// Find Edges (AE Parity).
+    FindEdges {
+        invert: bool,
+    },
     /// Tilt-shift miniature focus band.
     TiltShift {
         focus_y: Animatable<f32>,

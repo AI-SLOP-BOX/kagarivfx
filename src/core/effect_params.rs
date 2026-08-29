@@ -285,6 +285,7 @@ impl EffectType {
                 push!("Starting Intensity", starting_intensity, Scalar);
                 push!("Decay", decay, Scalar);
             }
+            EffectType::FindEdges { .. } => {}
             // ── Newly registered effects (session 3) ──
             EffectType::BevelAlpha { depth, light_angle_deg } => {
                 push!("Depth", depth, Scalar);

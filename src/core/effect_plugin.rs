@@ -301,6 +301,7 @@ impl RenderEffectPlugin for EnumEffectPlugin {
             EffectType::PageTurn { .. } => "CC Page Turn",
             EffectType::SetMatte { .. } => "Set Matte",
             EffectType::Echo { .. } => "Echo",
+            EffectType::FindEdges { .. } => "Find Edges",
         }
     }
 
@@ -421,6 +422,7 @@ impl RenderEffectPlugin for EnumEffectPlugin {
             EffectType::PageTurn { .. } => "page_turn",
             EffectType::SetMatte { .. } => "set_matte",
             EffectType::Echo { .. } => "echo",
+            EffectType::FindEdges { .. } => "find_edges",
         }
     }
 

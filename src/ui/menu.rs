@@ -1114,6 +1114,10 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
                         apply_effect_by_name(app, "Drop Shadow");
                         ui.close_menu();
                     }
+                    if ui.button("Find Edges").on_hover_text("Emphasize color transitions and borders").clicked() {
+                        apply_effect_by_name(app, "Find Edges");
+                        ui.close_menu();
+                    }
                 });
                 ui.menu_button("Distort", |ui| {
                     if ui.button("Twirl").clicked() {
@@ -1729,6 +1733,14 @@ fn apply_effect_by_name(app: &mut crate::AfterEffectsApp, effect_name: &str) {
                             starting_intensity: crate::core::property::Animatable::new_constant(1.0),
                             decay: crate::core::property::Animatable::new_constant(0.5),
                             operator: crate::core::echo_effect::EchoOperator::Add,
+                        }, enabled: true,
+                    }
+                }
+                "Find Edges" => {
+                    crate::core::timeline::Effect {
+                        id: format!("findedges_{}", len), name: "Find Edges".to_string(),
+                        effect_type: crate::core::timeline::EffectType::FindEdges {
+                            invert: false,
                         }, enabled: true,
                     }
                 }

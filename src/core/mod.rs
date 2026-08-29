@@ -56,6 +56,7 @@ pub mod audio_to_keyframes;
 pub mod motion_tile;
 pub mod page_turn;
 pub mod echo_effect;
+pub mod find_edges;
 pub mod lut_cache;
 pub mod planar_tracker;
 pub mod posterize_time;

@@ -738,6 +738,11 @@ fn apply_one_ctx(
             let echo_copy = pixels.to_vec();
             crate::core::echo_effect::blend_echo_frame(pixels, &echo_copy, width, height, start_w * dec, *operator);
         }
+        EffectType::FindEdges { invert } => {
+            let params = crate::core::find_edges::FindEdgesParams { invert: *invert };
+            let edges = crate::core::find_edges::apply_find_edges(pixels, width, height, &params);
+            pixels.copy_from_slice(&edges);
+        }
         EffectType::TiltShift { focus_y, focus_height, max_blur } => {
             use crate::core::ae_effects_pack_v19::apply_tilt_shift;
             apply_tilt_shift(

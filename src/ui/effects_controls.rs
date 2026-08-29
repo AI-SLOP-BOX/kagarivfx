@@ -2443,6 +2443,12 @@ fn fs_main(@location(0) uv: vec2<f32>) -> @location(0) vec4<f32> {
                     });
             });
         }
+        EffectType::FindEdges { invert } => {
+            ui.label("✏️ Find Edges");
+            if ui.checkbox(invert, "Invert").changed() {
+                *project_changed = true;
+            }
+        }
     }
 }
 
