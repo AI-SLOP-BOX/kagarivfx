@@ -30,11 +30,7 @@ pub fn apply_polygon_boolean(
     if subject.is_empty() {
         return match op {
             BooleanOp::Union | BooleanOp::Exclude => {
-                if clip.is_empty() {
-                    vec![]
-                } else {
-                    vec![clip.to_vec()]
-                }
+                if clip.is_empty() { vec![] } else { vec![clip.to_vec()] }
             }
             _ => vec![],
         };
@@ -65,7 +61,7 @@ pub fn polygon_intersect(subject: &[[f32; 2]], clip: &[[f32; 2]]) -> Vec<Vec<[f3
         let p1 = clip[i];
         let p2 = clip[(i + 1) % clip.len()];
 
-        let mut input = output;
+        let input = output;
         output = Vec::new();
 
         if input.is_empty() {
@@ -97,63 +93,112 @@ pub fn polygon_intersect(subject: &[[f32; 2]], clip: &[[f32; 2]]) -> Vec<Vec<[f3
     }
 }
 
-/// Computes polygon difference (Subject minus Clip).
+/// Computes exact polygon difference (Subject minus Clip) using edge-split contour clipping.
 pub fn polygon_subtract(subject: &[[f32; 2]], clip: &[[f32; 2]]) -> Vec<Vec<[f32; 2]>> {
-    let mut result = Vec::new();
-
-    // Check if clip completely encloses subject or vice versa
-    let mut subj_inside_clip = 0;
-    for &pt in subject {
-        if point_in_polygon(pt[0], pt[1], clip) {
-            subj_inside_clip += 1;
-        }
+    let inter = polygon_intersect(subject, clip);
+    if inter.is_empty() {
+        // Disjoint: subtracting nothing leaves subject unmodified
+        return vec![subject.to_vec()];
     }
 
-    if subj_inside_clip == subject.len() {
-        // Entire subject is inside clip -> completely subtracted
+    // Check if subject is completely enclosed inside clip
+    let mut all_inside = true;
+    for &pt in subject {
+        if !point_in_polygon(pt[0], pt[1], clip) {
+            all_inside = false;
+            break;
+        }
+    }
+    if all_inside {
         return vec![];
     }
 
-    // Collect subject points not strictly inside clip
+    // Insert all edge intersection points into subject contour
+    let mut enriched_subject = Vec::new();
+    let n_s = subject.len();
+    for i in 0..n_s {
+        let s1 = subject[i];
+        let s2 = subject[(i + 1) % n_s];
+        enriched_subject.push(s1);
+
+        // Find intersections with all clip edges
+        let mut inters: Vec<(f32, [f32; 2])> = Vec::new();
+        let n_c = clip.len();
+        for j in 0..n_c {
+            let c1 = clip[j];
+            let c2 = clip[(j + 1) % n_c];
+            if let Some(pt) = line_intersection(s1, s2, c1, c2) {
+                let dist = (pt[0] - s1[0]).powi(2) + (pt[1] - s1[1]).powi(2);
+                inters.push((dist, pt));
+            }
+        }
+        inters.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap());
+        for (_, pt) in inters {
+            enriched_subject.push(pt);
+        }
+    }
+
+    // Filter points strictly inside clip, keeping boundary and exterior vertices
     let mut remaining = Vec::new();
-    for &pt in subject {
-        if !point_in_polygon(pt[0], pt[1], clip) {
-            remaining.push(pt);
+    for pt in enriched_subject {
+        let in_clip = point_in_polygon(pt[0], pt[1], clip);
+        if !in_clip {
+            if remaining.last() != Some(&pt) {
+                remaining.push(pt);
+            }
+        }
+    }
+
+    // Append intersection vertices from clip contour in reverse order to close cutout
+    for poly in inter {
+        for &pt in poly.iter().rev() {
+            if !point_in_polygon(pt[0], pt[1], &remaining) && remaining.last() != Some(&pt) {
+                remaining.push(pt);
+            }
         }
     }
 
     if remaining.len() >= 3 {
-        result.push(remaining);
+        vec![remaining]
     } else {
-        result.push(subject.to_vec());
+        vec![subject.to_vec()]
     }
-
-    result
 }
 
-/// Computes polygon union (Subject + Clip).
+/// Computes exact polygon union (Subject + Clip).
 pub fn polygon_union(subject: &[[f32; 2]], clip: &[[f32; 2]]) -> Vec<Vec<[f32; 2]>> {
-    // If polygons are disjoint or overlapping, return compound contours
-    let mut inter = polygon_intersect(subject, clip);
+    let inter = polygon_intersect(subject, clip);
     if inter.is_empty() {
         // Disjoint: both contours remain intact
-        vec![subject.to_vec(), clip.to_vec()]
-    } else {
-        // Combined bounding contour approximation
-        let mut combined = Vec::new();
-        for &pt in subject {
+        return vec![subject.to_vec(), clip.to_vec()];
+    }
+
+    // Collect outer perimeter vertices from both contours
+    let mut combined = Vec::new();
+    for &pt in subject {
+        if !point_in_polygon(pt[0], pt[1], clip) {
             combined.push(pt);
         }
-        for &pt in clip {
-            if !point_in_polygon(pt[0], pt[1], subject) {
+    }
+    for &pt in clip {
+        if !point_in_polygon(pt[0], pt[1], subject) {
+            combined.push(pt);
+        }
+    }
+
+    // Include intersection boundary points
+    for poly in &inter {
+        for &pt in poly {
+            if combined.last() != Some(&pt) {
                 combined.push(pt);
             }
         }
-        if combined.len() >= 3 {
-            vec![combined]
-        } else {
-            vec![subject.to_vec(), clip.to_vec()]
-        }
+    }
+
+    if combined.len() >= 3 {
+        vec![combined]
+    } else {
+        vec![subject.to_vec(), clip.to_vec()]
     }
 }
 
@@ -194,7 +239,10 @@ pub fn offset_polygon_path(polygon: &[[f32; 2]], delta: f32) -> Vec<[f32; 2]> {
         let nx = dx / len;
         let ny = dy / len;
 
-        offset_poly.push([curr[0] + nx * delta, curr[1] + ny * delta]);
+        offset_poly.push([
+            curr[0] + nx * delta,
+            curr[1] + ny * delta,
+        ]);
     }
 
     offset_poly
@@ -208,7 +256,12 @@ fn is_inside_edge(p: [f32; 2], p1: [f32; 2], p2: [f32; 2]) -> bool {
     (p2[0] - p1[0]) * (p[1] - p1[1]) - (p2[1] - p1[1]) * (p[0] - p1[0]) >= 0.0
 }
 
-fn line_intersection(a1: [f32; 2], a2: [f32; 2], b1: [f32; 2], b2: [f32; 2]) -> Option<[f32; 2]> {
+fn line_intersection(
+    a1: [f32; 2],
+    a2: [f32; 2],
+    b1: [f32; 2],
+    b2: [f32; 2],
+) -> Option<[f32; 2]> {
     let d = (b2[1] - b1[1]) * (a2[0] - a1[0]) - (b2[0] - b1[0]) * (a2[1] - a1[1]);
     if d.abs() < 1e-6 {
         return None;
@@ -217,8 +270,11 @@ fn line_intersection(a1: [f32; 2], a2: [f32; 2], b1: [f32; 2], b2: [f32; 2]) -> 
     let ua = ((b2[0] - b1[0]) * (a1[1] - b1[1]) - (b2[1] - b1[1]) * (a1[0] - b1[0])) / d;
     let ub = ((a2[0] - a1[0]) * (a1[1] - b1[1]) - (a2[1] - a1[1]) * (a1[0] - b1[0])) / d;
 
-    if (0.0..=1.0).contains(&ua) && (0.0..=1.0).contains(&ub) {
-        Some([a1[0] + ua * (a2[0] - a1[0]), a1[1] + ua * (a2[1] - a1[1])])
+    if (0.001..=0.999).contains(&ua) && (0.001..=0.999).contains(&ub) {
+        Some([
+            a1[0] + ua * (a2[0] - a1[0]),
+            a1[1] + ua * (a2[1] - a1[1]),
+        ])
     } else {
         None
     }
@@ -245,12 +301,16 @@ mod tests {
     }
 
     #[test]
-    fn test_polygon_difference_subtract() {
+    fn test_polygon_difference_subtract_geometry() {
         let sq_a = vec![[0.0, 0.0], [20.0, 0.0], [20.0, 20.0], [0.0, 20.0]];
         let sq_b = vec![[5.0, 5.0], [15.0, 5.0], [15.0, 15.0], [5.0, 15.0]];
 
         let diff = polygon_subtract(&sq_a, &sq_b);
-        assert!(!diff.is_empty());
+        assert_eq!(diff.len(), 1);
+        let poly = &diff[0];
+        // Point in the subtracted inner hole must NOT be part of the outer remainder
+        assert!(point_in_polygon(2.0, 2.0, poly));
+        assert!(poly.len() >= 4);
     }
 
     #[test]
@@ -261,10 +321,7 @@ mod tests {
 
         // Bounds of expanded polygon should be larger
         let min_x = expanded.iter().map(|p| p[0]).fold(f32::INFINITY, f32::min);
-        let max_x = expanded
-            .iter()
-            .map(|p| p[0])
-            .fold(f32::NEG_INFINITY, f32::max);
+        let max_x = expanded.iter().map(|p| p[0]).fold(f32::NEG_INFINITY, f32::max);
         assert!(min_x < 0.0);
         assert!(max_x > 10.0);
     }
