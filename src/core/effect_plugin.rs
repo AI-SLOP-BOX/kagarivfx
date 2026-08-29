@@ -16,7 +16,7 @@
 /// WGSL shader fragment and an arbitrary GPU buffer, enabling multi-pass
 /// compositing without touching the core renderer. This mirrors how Nuke's
 /// Blink script system or OBS's source plugin model works.
-use crate::core::timeline::{EffectType, ColorConversionMode};
+use crate::core::timeline::{ColorConversionMode, EffectType};
 
 /// The GPU-facing data that an effect plugin can read and modify.
 /// Mirrors the relevant fields of LayerUniform without GPU-specific types.
@@ -261,6 +261,7 @@ impl RenderEffectPlugin for EnumEffectPlugin {
             EffectType::Emboss { .. } => "Emboss",
             EffectType::StarField { .. } => "Star Field",
             EffectType::LightningArc { .. } => "Lightning",
+            EffectType::LaserBeam { .. } => "Laser Beam",
             EffectType::FireAutomaton { .. } => "Fire",
             EffectType::LumaKeyRange { .. } => "Luma Key Range",
             EffectType::Halftone { .. } => "Halftone",
@@ -386,6 +387,7 @@ impl RenderEffectPlugin for EnumEffectPlugin {
             EffectType::Emboss { .. } => "emboss",
             EffectType::StarField { .. } => "star_field",
             EffectType::LightningArc { .. } => "lightning_arc",
+            EffectType::LaserBeam { .. } => "laser_beam",
             EffectType::FireAutomaton { .. } => "fire_automaton",
             EffectType::LumaKeyRange { .. } => "luma_key_range",
             EffectType::Halftone { .. } => "halftone",
@@ -446,7 +448,11 @@ impl RenderEffectPlugin for EnumEffectPlugin {
                 params.tint_intensity = intensity.evaluate(frame) / 100.0;
             }
             EffectType::DropShadow {
-                color, opacity, direction, distance, softness
+                color,
+                opacity,
+                direction,
+                distance,
+                softness,
             } => {
                 params.shadow_enabled = 1;
                 params.shadow_color = color.evaluate(frame);
@@ -455,13 +461,23 @@ impl RenderEffectPlugin for EnumEffectPlugin {
                 params.shadow_distance = distance.evaluate(frame);
                 params.shadow_softness = softness.evaluate(frame);
             }
-            EffectType::ChromaticAberration { shift_r, shift_b, edge_falloff, iris_linked: _ } => {
+            EffectType::ChromaticAberration {
+                shift_r,
+                shift_b,
+                edge_falloff,
+                iris_linked: _,
+            } => {
                 params.chromatic_enabled = 1;
                 params.chromatic_shift_r = shift_r.evaluate(frame);
                 params.chromatic_shift_b = shift_b.evaluate(frame);
                 params.chromatic_edge_falloff = edge_falloff.evaluate(frame);
             }
-            EffectType::Vignette { intensity, roundness, feather, color } => {
+            EffectType::Vignette {
+                intensity,
+                roundness,
+                feather,
+                color,
+            } => {
                 params.vignette_enabled = 1;
                 params.vignette_intensity = intensity.evaluate(frame) / 100.0;
                 params.vignette_roundness = roundness.evaluate(frame);
@@ -481,12 +497,22 @@ impl RenderEffectPlugin for EnumEffectPlugin {
                 };
                 params.color_convert_mode = mode_val;
             }
-            EffectType::FilmGrain { intensity, grain_size, .. } => {
+            EffectType::FilmGrain {
+                intensity,
+                grain_size,
+                ..
+            } => {
                 params.grain_enabled = 1;
                 params.grain_intensity = intensity.evaluate(frame) / 100.0;
                 params.grain_size = *grain_size;
             }
-            EffectType::Levels { input_black, input_white, gamma, output_black, output_white } => {
+            EffectType::Levels {
+                input_black,
+                input_white,
+                gamma,
+                output_black,
+                output_white,
+            } => {
                 params.levels_enabled = 1;
                 params.levels_in_black = input_black.evaluate(frame);
                 params.levels_in_white = input_white.evaluate(frame);
@@ -494,40 +520,69 @@ impl RenderEffectPlugin for EnumEffectPlugin {
                 params.levels_out_black = output_black.evaluate(frame);
                 params.levels_out_white = output_white.evaluate(frame);
             }
-            EffectType::HueSaturation { hue_shift, saturation, lightness } => {
+            EffectType::HueSaturation {
+                hue_shift,
+                saturation,
+                lightness,
+            } => {
                 params.huesat_enabled = 1;
                 // Map percentages or values to HSL shift ratios
                 params.huesat_hue = hue_shift.evaluate(frame);
                 params.huesat_sat = 1.0 + (saturation.evaluate(frame) / 100.0);
                 params.huesat_light = 1.0 + (lightness.evaluate(frame) / 100.0);
             }
-            EffectType::Glow { threshold, radius, intensity, color } => {
+            EffectType::Glow {
+                threshold,
+                radius,
+                intensity,
+                color,
+            } => {
                 params.glow_enabled = 1;
                 params.glow_threshold = threshold.evaluate(frame) / 100.0;
                 params.glow_radius = radius.evaluate(frame);
                 params.glow_intensity = intensity.evaluate(frame) / 100.0;
                 params.glow_color = color.evaluate(frame);
             }
-            EffectType::GlowPro { threshold, radius, intensity } => {
+            EffectType::GlowPro {
+                threshold,
+                radius,
+                intensity,
+            } => {
                 // Reuse the GPU glow/bloom path; white tint comes from the default.
                 params.glow_enabled = 1;
                 params.glow_threshold = threshold.evaluate(frame).clamp(0.0, 1.0);
                 params.glow_radius = radius.evaluate(frame);
                 params.glow_intensity = (intensity.evaluate(frame) / 4.0).clamp(0.0, 1.0);
             }
-            EffectType::MeshWarp { top_left, top_right, bottom_left, bottom_right } => {
+            EffectType::MeshWarp {
+                top_left,
+                top_right,
+                bottom_left,
+                bottom_right,
+            } => {
                 params.meshwarp_enabled = 1;
                 params.corner_top_left = top_left.evaluate(frame);
                 params.corner_top_right = top_right.evaluate(frame);
                 params.corner_bottom_left = bottom_left.evaluate(frame);
                 params.corner_bottom_right = bottom_right.evaluate(frame);
             }
-            EffectType::MotionBlur { shutter_angle, samples } => {
+            EffectType::MotionBlur {
+                shutter_angle,
+                samples,
+            } => {
                 params.motionblur_enabled = 1;
                 params.motionblur_shutter = shutter_angle.evaluate(frame) / 360.0;
                 params.motionblur_samples = *samples;
             }
-            EffectType::LensFlare { enabled, position_x, position_y, intensity, threshold, color, .. } => {
+            EffectType::LensFlare {
+                enabled,
+                position_x,
+                position_y,
+                intensity,
+                threshold,
+                color,
+                ..
+            } => {
                 params.flare_enabled = if enabled.evaluate(frame) > 0.5 { 1 } else { 0 };
                 params.flare_pos_x = position_x.evaluate(frame);
                 params.flare_pos_y = position_y.evaluate(frame);
@@ -546,7 +601,9 @@ pub fn evaluate_effects(effects: &[crate::core::timeline::Effect], frame: u32) -
     let mut params = EffectParams::default();
     for effect in effects {
         if effect.enabled {
-            let plugin = EnumEffectPlugin { effect_type: effect.effect_type.clone() };
+            let plugin = EnumEffectPlugin {
+                effect_type: effect.effect_type.clone(),
+            };
             plugin.apply_to_params(frame, &mut params);
         }
     }

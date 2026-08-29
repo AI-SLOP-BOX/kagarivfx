@@ -1310,6 +1310,19 @@ pub enum EffectType {
         seed: Animatable<f32>,
         glow: Animatable<f32>,
     },
+    /// Laser beam effect with customizable core, glow, thickness, and progress.
+    LaserBeam {
+        start_x: Animatable<f32>,
+        start_y: Animatable<f32>,
+        end_x: Animatable<f32>,
+        end_y: Animatable<f32>,
+        progress: Animatable<f32>,
+        length: Animatable<f32>,
+        starting_thickness: Animatable<f32>,
+        ending_thickness: Animatable<f32>,
+        core_color: Animatable<[f32; 4]>,
+        glow_color: Animatable<[f32; 4]>,
+    },
     /// Cellular-automaton fire rising from the bottom edge.
     FireAutomaton {
         intensity: Animatable<f32>,

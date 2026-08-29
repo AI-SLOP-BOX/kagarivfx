@@ -79,7 +79,6 @@ pub fn accumulate_motion_blur_buffers(
         return;
     }
     if subframe_buffers.is_empty() {
-        out_accum[..size].fill(0);
         return;
     }
 
@@ -101,8 +100,6 @@ pub fn accumulate_motion_blur_buffers(
         for i in 0..size {
             out_accum[i] = (float_acc[i] * norm).round().clamp(0.0, 255.0) as u8;
         }
-    } else {
-        out_accum[..size].fill(0);
     }
 }
 

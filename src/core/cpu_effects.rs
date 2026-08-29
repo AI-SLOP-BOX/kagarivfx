@@ -1253,6 +1253,38 @@ fn apply_one_ctx(
             };
             crate::core::lightning_beam_engine::render_lightning_to_buffer(pixels, width, height, &config);
         }
+        EffectType::LaserBeam {
+            start_x,
+            start_y,
+            end_x,
+            end_y,
+            progress,
+            length,
+            starting_thickness,
+            ending_thickness,
+            core_color,
+            glow_color,
+        } => {
+            let start = [
+                start_x.evaluate(frame).clamp(0.0, 1.0) * width as f32,
+                start_y.evaluate(frame).clamp(0.0, 1.0) * height as f32,
+            ];
+            let end = [
+                end_x.evaluate(frame).clamp(0.0, 1.0) * width as f32,
+                end_y.evaluate(frame).clamp(0.0, 1.0) * height as f32,
+            ];
+            let config = crate::core::lightning_beam_engine::LaserBeamConfig {
+                start_point: start,
+                end_point: end,
+                time_progress: progress.evaluate(frame).clamp(0.0, 1.0),
+                beam_length_percent: length.evaluate(frame).clamp(0.0, 100.0),
+                starting_thickness: starting_thickness.evaluate(frame).max(0.1),
+                ending_thickness: ending_thickness.evaluate(frame).max(0.1),
+                core_color: core_color.evaluate(frame),
+                glow_color: glow_color.evaluate(frame),
+            };
+            crate::core::lightning_beam_engine::render_laser_beam_to_buffer(pixels, width, height, &config);
+        }
         EffectType::FireAutomaton { intensity } => {
             use crate::core::ae_effects_pack_v18::apply_fire_automaton;
             apply_fire_automaton(pixels, width, height, intensity.evaluate(frame));

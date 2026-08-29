@@ -1,9 +1,9 @@
-use eframe::egui;
-use crate::AfterEffectsApp;
-use crate::core::timeline::{Effect, EffectType, ColorConversionMode};
 use crate::core::property::Animatable;
+use crate::core::timeline::{ColorConversionMode, Effect, EffectType};
 use crate::ui::inspector_property::draw_property_ui;
 use crate::ui::theme::colors;
+use crate::AfterEffectsApp;
+use eframe::egui;
 
 #[allow(dead_code)]
 pub struct EffectPreset {
@@ -24,7 +24,9 @@ pub fn get_all_effect_presets() -> &'static [EffectPreset] {
             create_fn: |idx| Effect {
                 id: format!("blur_{}", idx),
                 name: "Gaussian Blur".to_string(),
-                effect_type: EffectType::GaussianBlur { blur_radius: Animatable::new_constant(10.0) },
+                effect_type: EffectType::GaussianBlur {
+                    blur_radius: Animatable::new_constant(10.0),
+                },
                 enabled: true,
             },
         },
@@ -264,7 +266,9 @@ pub fn get_all_effect_presets() -> &'static [EffectPreset] {
             create_fn: |idx| Effect {
                 id: format!("posterize_{}", idx),
                 name: "Posterize".to_string(),
-                effect_type: EffectType::Posterize { levels: Animatable::new_constant(4.0) },
+                effect_type: EffectType::Posterize {
+                    levels: Animatable::new_constant(4.0),
+                },
                 enabled: true,
             },
         },
@@ -276,7 +280,9 @@ pub fn get_all_effect_presets() -> &'static [EffectPreset] {
             create_fn: |idx| Effect {
                 id: format!("invert_{}", idx),
                 name: "Invert".to_string(),
-                effect_type: EffectType::Invert { invert_alpha: false },
+                effect_type: EffectType::Invert {
+                    invert_alpha: false,
+                },
                 enabled: true,
             },
         },
@@ -318,7 +324,9 @@ pub fn get_all_effect_presets() -> &'static [EffectPreset] {
             create_fn: |idx| Effect {
                 id: format!("radblur_{}", idx),
                 name: "Radial Blur".to_string(),
-                effect_type: EffectType::RadialBlur { amount: Animatable::new_constant(20.0) },
+                effect_type: EffectType::RadialBlur {
+                    amount: Animatable::new_constant(20.0),
+                },
                 enabled: true,
             },
         },
@@ -330,7 +338,9 @@ pub fn get_all_effect_presets() -> &'static [EffectPreset] {
             create_fn: |idx| Effect {
                 id: format!("sharpen_{}", idx),
                 name: "Sharpen".to_string(),
-                effect_type: EffectType::Sharpen { amount: Animatable::new_constant(50.0) },
+                effect_type: EffectType::Sharpen {
+                    amount: Animatable::new_constant(50.0),
+                },
                 enabled: true,
             },
         },
@@ -342,7 +352,9 @@ pub fn get_all_effect_presets() -> &'static [EffectPreset] {
             create_fn: |idx| Effect {
                 id: format!("threshold_{}", idx),
                 name: "Threshold".to_string(),
-                effect_type: EffectType::Threshold { threshold: Animatable::new_constant(128.0) },
+                effect_type: EffectType::Threshold {
+                    threshold: Animatable::new_constant(128.0),
+                },
                 enabled: true,
             },
         },
@@ -369,7 +381,9 @@ pub fn get_all_effect_presets() -> &'static [EffectPreset] {
             create_fn: |idx| Effect {
                 id: format!("choker_{}", idx),
                 name: "Simple Choker".to_string(),
-                effect_type: EffectType::SimpleChoker { choke_amount: Animatable::new_constant(0.0) },
+                effect_type: EffectType::SimpleChoker {
+                    choke_amount: Animatable::new_constant(0.0),
+                },
                 enabled: true,
             },
         },
@@ -940,6 +954,29 @@ pub fn get_all_effect_presets() -> &'static [EffectPreset] {
             },
         },
         EffectPreset {
+            name: "Laser Beam",
+            button_label: "+ Laser Beam",
+            search_key: "laser beam ray energy projectile blaster shoot glow core",
+            id_prefix: "laser",
+            create_fn: |idx| Effect {
+                id: format!("laser_{}", idx),
+                name: "Laser Beam".to_string(),
+                effect_type: EffectType::LaserBeam {
+                    start_x: Animatable::new_constant(0.1),
+                    start_y: Animatable::new_constant(0.5),
+                    end_x: Animatable::new_constant(0.9),
+                    end_y: Animatable::new_constant(0.5),
+                    progress: Animatable::new_constant(0.5),
+                    length: Animatable::new_constant(40.0),
+                    starting_thickness: Animatable::new_constant(12.0),
+                    ending_thickness: Animatable::new_constant(4.0),
+                    core_color: Animatable::new_constant([1.0, 1.0, 1.0, 1.0]),
+                    glow_color: Animatable::new_constant([1.0, 0.2, 0.1, 0.8]),
+                },
+                enabled: true,
+            },
+        },
+        EffectPreset {
             name: "Fire",
             button_label: "+ Fire",
             search_key: "fire flame burn cellular combustion heat",
@@ -1121,7 +1158,8 @@ pub fn get_all_effect_presets() -> &'static [EffectPreset] {
         EffectPreset {
             name: "Lens Flare (GPU)",
             button_label: "+ Lens Flare (GPU)",
-            search_key: "lens flare optical anamorphic streak star rings light source gpu screen space",
+            search_key:
+                "lens flare optical anamorphic streak star rings light source gpu screen space",
             id_prefix: "flare",
             create_fn: |idx| Effect {
                 id: format!("flare_{}", idx),
@@ -1307,9 +1345,11 @@ pub fn draw_effect_type_ui(
     match effect_type {
         EffectType::GaussianBlur { blur_radius } => {
             let val_before = blur_radius.clone();
-            if let Some(nf) = draw_property_ui(current_frame, ui, "Blur Radius", blur_radius, |ui, val| {
-                ui.add(egui::Slider::new(val, 0.0..=100.0));
-            }) {
+            if let Some(nf) =
+                draw_property_ui(current_frame, ui, "Blur Radius", blur_radius, |ui, val| {
+                    ui.add(egui::Slider::new(val, 0.0..=100.0));
+                })
+            {
                 *next_frame = Some(nf);
             }
             if val_before != *blur_radius {
@@ -1328,20 +1368,30 @@ pub fn draw_effect_type_ui(
             }
 
             let intensity_before = intensity.clone();
-            if let Some(nf) = draw_property_ui(current_frame, ui, "Intensity", intensity, |ui, val| {
-                ui.add(egui::Slider::new(val, 0.0..=100.0));
-            }) {
+            if let Some(nf) =
+                draw_property_ui(current_frame, ui, "Intensity", intensity, |ui, val| {
+                    ui.add(egui::Slider::new(val, 0.0..=100.0));
+                })
+            {
                 *next_frame = Some(nf);
             }
             if intensity_before != *intensity {
                 *project_changed = true;
             }
         }
-        EffectType::DropShadow { color, opacity, direction, distance, softness } => {
+        EffectType::DropShadow {
+            color,
+            opacity,
+            direction,
+            distance,
+            softness,
+        } => {
             let color_before = color.clone();
-            if let Some(nf) = draw_property_ui(current_frame, ui, "Shadow Color", color, |ui, val| {
-                ui.color_edit_button_rgba_unmultiplied(val);
-            }) {
+            if let Some(nf) =
+                draw_property_ui(current_frame, ui, "Shadow Color", color, |ui, val| {
+                    ui.color_edit_button_rgba_unmultiplied(val);
+                })
+            {
                 *next_frame = Some(nf);
             }
             if color_before != *color {
@@ -1359,9 +1409,11 @@ pub fn draw_effect_type_ui(
             }
 
             let direction_before = direction.clone();
-            if let Some(nf) = draw_property_ui(current_frame, ui, "Direction", direction, |ui, val| {
-                ui.add(egui::Slider::new(val, 0.0..=360.0).suffix("°"));
-            }) {
+            if let Some(nf) =
+                draw_property_ui(current_frame, ui, "Direction", direction, |ui, val| {
+                    ui.add(egui::Slider::new(val, 0.0..=360.0).suffix("°"));
+                })
+            {
                 *next_frame = Some(nf);
             }
             if direction_before != *direction {
@@ -1369,9 +1421,11 @@ pub fn draw_effect_type_ui(
             }
 
             let distance_before = distance.clone();
-            if let Some(nf) = draw_property_ui(current_frame, ui, "Distance", distance, |ui, val| {
-                ui.add(egui::Slider::new(val, 0.0..=100.0).suffix(" px"));
-            }) {
+            if let Some(nf) =
+                draw_property_ui(current_frame, ui, "Distance", distance, |ui, val| {
+                    ui.add(egui::Slider::new(val, 0.0..=100.0).suffix(" px"));
+                })
+            {
                 *next_frame = Some(nf);
             }
             if distance_before != *distance {
@@ -1379,275 +1433,567 @@ pub fn draw_effect_type_ui(
             }
 
             let softness_before = softness.clone();
-            if let Some(nf) = draw_property_ui(current_frame, ui, "Softness", softness, |ui, val| {
-                ui.add(egui::Slider::new(val, 0.0..=100.0));
-            }) {
+            if let Some(nf) =
+                draw_property_ui(current_frame, ui, "Softness", softness, |ui, val| {
+                    ui.add(egui::Slider::new(val, 0.0..=100.0));
+                })
+            {
                 *next_frame = Some(nf);
             }
             if softness_before != *softness {
                 *project_changed = true;
             }
         }
-        EffectType::ChromaticAberration { shift_r, shift_b, edge_falloff, iris_linked: _ } => {
+        EffectType::ChromaticAberration {
+            shift_r,
+            shift_b,
+            edge_falloff,
+            iris_linked: _,
+        } => {
             let shift_r_before = shift_r.clone();
-            if let Some(nf) = draw_property_ui(current_frame, ui, "Red Shift", shift_r, |ui, val| {
-                ui.add(egui::Slider::new(val, 0.0..=20.0).suffix(" px"));
-            }) { *next_frame = Some(nf); }
-            if shift_r_before != *shift_r { *project_changed = true; }
+            if let Some(nf) =
+                draw_property_ui(current_frame, ui, "Red Shift", shift_r, |ui, val| {
+                    ui.add(egui::Slider::new(val, 0.0..=20.0).suffix(" px"));
+                })
+            {
+                *next_frame = Some(nf);
+            }
+            if shift_r_before != *shift_r {
+                *project_changed = true;
+            }
 
             let shift_b_before = shift_b.clone();
-            if let Some(nf) = draw_property_ui(current_frame, ui, "Blue Shift", shift_b, |ui, val| {
-                ui.add(egui::Slider::new(val, 0.0..=20.0).suffix(" px"));
-            }) { *next_frame = Some(nf); }
-            if shift_b_before != *shift_b { *project_changed = true; }
+            if let Some(nf) =
+                draw_property_ui(current_frame, ui, "Blue Shift", shift_b, |ui, val| {
+                    ui.add(egui::Slider::new(val, 0.0..=20.0).suffix(" px"));
+                })
+            {
+                *next_frame = Some(nf);
+            }
+            if shift_b_before != *shift_b {
+                *project_changed = true;
+            }
 
             let ef_before = edge_falloff.clone();
-            if let Some(nf) = draw_property_ui(current_frame, ui, "Edge Falloff", edge_falloff, |ui, val| {
-                ui.add(egui::Slider::new(val, 0.0..=1.0));
-            }) { *next_frame = Some(nf); }
-            if ef_before != *edge_falloff { *project_changed = true; }
+            if let Some(nf) = draw_property_ui(
+                current_frame,
+                ui,
+                "Edge Falloff",
+                edge_falloff,
+                |ui, val| {
+                    ui.add(egui::Slider::new(val, 0.0..=1.0));
+                },
+            ) {
+                *next_frame = Some(nf);
+            }
+            if ef_before != *edge_falloff {
+                *project_changed = true;
+            }
         }
-        EffectType::Vignette { intensity, roundness, feather, color } => {
+        EffectType::Vignette {
+            intensity,
+            roundness,
+            feather,
+            color,
+        } => {
             let i_before = intensity.clone();
-            if let Some(nf) = draw_property_ui(current_frame, ui, "Intensity", intensity, |ui, val| {
-                ui.add(egui::Slider::new(val, 0.0..=100.0));
-            }) { *next_frame = Some(nf); }
-            if i_before != *intensity { *project_changed = true; }
+            if let Some(nf) =
+                draw_property_ui(current_frame, ui, "Intensity", intensity, |ui, val| {
+                    ui.add(egui::Slider::new(val, 0.0..=100.0));
+                })
+            {
+                *next_frame = Some(nf);
+            }
+            if i_before != *intensity {
+                *project_changed = true;
+            }
 
             let r_before = roundness.clone();
-            if let Some(nf) = draw_property_ui(current_frame, ui, "Roundness", roundness, |ui, val| {
-                ui.add(egui::Slider::new(val, 0.0..=1.0));
-            }) { *next_frame = Some(nf); }
-            if r_before != *roundness { *project_changed = true; }
+            if let Some(nf) =
+                draw_property_ui(current_frame, ui, "Roundness", roundness, |ui, val| {
+                    ui.add(egui::Slider::new(val, 0.0..=1.0));
+                })
+            {
+                *next_frame = Some(nf);
+            }
+            if r_before != *roundness {
+                *project_changed = true;
+            }
 
             let f_before = feather.clone();
             if let Some(nf) = draw_property_ui(current_frame, ui, "Feather", feather, |ui, val| {
                 ui.add(egui::Slider::new(val, 0.0..=100.0));
-            }) { *next_frame = Some(nf); }
-            if f_before != *feather { *project_changed = true; }
+            }) {
+                *next_frame = Some(nf);
+            }
+            if f_before != *feather {
+                *project_changed = true;
+            }
 
             let c_before = color.clone();
             if let Some(nf) = draw_property_ui(current_frame, ui, "Color", color, |ui, val| {
                 ui.color_edit_button_rgba_unmultiplied(val);
-            }) { *next_frame = Some(nf); }
-            if c_before != *color { *project_changed = true; }
+            }) {
+                *next_frame = Some(nf);
+            }
+            if c_before != *color {
+                *project_changed = true;
+            }
         }
-        EffectType::Levels { input_black, input_white, gamma, output_black, output_white } => {
+        EffectType::Levels {
+            input_black,
+            input_white,
+            gamma,
+            output_black,
+            output_white,
+        } => {
             let ib_before = input_black.clone();
-            if let Some(nf) = draw_property_ui(current_frame, ui, "Input Black", input_black, |ui, val| {
-                ui.add(egui::Slider::new(val, 0.0..=1.0));
-            }) { *next_frame = Some(nf); }
-            if ib_before != *input_black { *project_changed = true; }
+            if let Some(nf) =
+                draw_property_ui(current_frame, ui, "Input Black", input_black, |ui, val| {
+                    ui.add(egui::Slider::new(val, 0.0..=1.0));
+                })
+            {
+                *next_frame = Some(nf);
+            }
+            if ib_before != *input_black {
+                *project_changed = true;
+            }
 
             let iw_before = input_white.clone();
-            if let Some(nf) = draw_property_ui(current_frame, ui, "Input White", input_white, |ui, val| {
-                ui.add(egui::Slider::new(val, 0.0..=1.0));
-            }) { *next_frame = Some(nf); }
-            if iw_before != *input_white { *project_changed = true; }
+            if let Some(nf) =
+                draw_property_ui(current_frame, ui, "Input White", input_white, |ui, val| {
+                    ui.add(egui::Slider::new(val, 0.0..=1.0));
+                })
+            {
+                *next_frame = Some(nf);
+            }
+            if iw_before != *input_white {
+                *project_changed = true;
+            }
 
             let g_before = gamma.clone();
             if let Some(nf) = draw_property_ui(current_frame, ui, "Gamma", gamma, |ui, val| {
                 ui.add(egui::Slider::new(val, 0.1..=10.0));
-            }) { *next_frame = Some(nf); }
-            if g_before != *gamma { *project_changed = true; }
+            }) {
+                *next_frame = Some(nf);
+            }
+            if g_before != *gamma {
+                *project_changed = true;
+            }
 
             let ob_before = output_black.clone();
-            if let Some(nf) = draw_property_ui(current_frame, ui, "Output Black", output_black, |ui, val| {
-                ui.add(egui::Slider::new(val, 0.0..=1.0));
-            }) { *next_frame = Some(nf); }
-            if ob_before != *output_black { *project_changed = true; }
+            if let Some(nf) = draw_property_ui(
+                current_frame,
+                ui,
+                "Output Black",
+                output_black,
+                |ui, val| {
+                    ui.add(egui::Slider::new(val, 0.0..=1.0));
+                },
+            ) {
+                *next_frame = Some(nf);
+            }
+            if ob_before != *output_black {
+                *project_changed = true;
+            }
 
             let ow_before = output_white.clone();
-            if let Some(nf) = draw_property_ui(current_frame, ui, "Output White", output_white, |ui, val| {
-                ui.add(egui::Slider::new(val, 0.0..=1.0));
-            }) { *next_frame = Some(nf); }
-            if ow_before != *output_white { *project_changed = true; }
+            if let Some(nf) = draw_property_ui(
+                current_frame,
+                ui,
+                "Output White",
+                output_white,
+                |ui, val| {
+                    ui.add(egui::Slider::new(val, 0.0..=1.0));
+                },
+            ) {
+                *next_frame = Some(nf);
+            }
+            if ow_before != *output_white {
+                *project_changed = true;
+            }
         }
-        EffectType::HueSaturation { hue_shift, saturation, lightness } => {
+        EffectType::HueSaturation {
+            hue_shift,
+            saturation,
+            lightness,
+        } => {
             let h_before = hue_shift.clone();
-            if let Some(nf) = draw_property_ui(current_frame, ui, "Hue Shift", hue_shift, |ui, val| {
-                ui.add(egui::Slider::new(val, -180.0..=180.0).suffix("°"));
-            }) { *next_frame = Some(nf); }
-            if h_before != *hue_shift { *project_changed = true; }
+            if let Some(nf) =
+                draw_property_ui(current_frame, ui, "Hue Shift", hue_shift, |ui, val| {
+                    ui.add(egui::Slider::new(val, -180.0..=180.0).suffix("°"));
+                })
+            {
+                *next_frame = Some(nf);
+            }
+            if h_before != *hue_shift {
+                *project_changed = true;
+            }
 
             let s_before = saturation.clone();
-            if let Some(nf) = draw_property_ui(current_frame, ui, "Saturation", saturation, |ui, val| {
-                ui.add(egui::Slider::new(val, -100.0..=100.0));
-            }) { *next_frame = Some(nf); }
-            if s_before != *saturation { *project_changed = true; }
+            if let Some(nf) =
+                draw_property_ui(current_frame, ui, "Saturation", saturation, |ui, val| {
+                    ui.add(egui::Slider::new(val, -100.0..=100.0));
+                })
+            {
+                *next_frame = Some(nf);
+            }
+            if s_before != *saturation {
+                *project_changed = true;
+            }
 
             let l_before = lightness.clone();
-            if let Some(nf) = draw_property_ui(current_frame, ui, "Lightness", lightness, |ui, val| {
-                ui.add(egui::Slider::new(val, -100.0..=100.0));
-            }) { *next_frame = Some(nf); }
-            if l_before != *lightness { *project_changed = true; }
+            if let Some(nf) =
+                draw_property_ui(current_frame, ui, "Lightness", lightness, |ui, val| {
+                    ui.add(egui::Slider::new(val, -100.0..=100.0));
+                })
+            {
+                *next_frame = Some(nf);
+            }
+            if l_before != *lightness {
+                *project_changed = true;
+            }
         }
-        EffectType::Glow { threshold, radius, intensity, color } => {
+        EffectType::Glow {
+            threshold,
+            radius,
+            intensity,
+            color,
+        } => {
             let t_before = threshold.clone();
-            if let Some(nf) = draw_property_ui(current_frame, ui, "Threshold", threshold, |ui, val| {
-                ui.add(egui::Slider::new(val, 0.0..=100.0));
-            }) { *next_frame = Some(nf); }
-            if t_before != *threshold { *project_changed = true; }
+            if let Some(nf) =
+                draw_property_ui(current_frame, ui, "Threshold", threshold, |ui, val| {
+                    ui.add(egui::Slider::new(val, 0.0..=100.0));
+                })
+            {
+                *next_frame = Some(nf);
+            }
+            if t_before != *threshold {
+                *project_changed = true;
+            }
 
             let r_before = radius.clone();
             if let Some(nf) = draw_property_ui(current_frame, ui, "Radius", radius, |ui, val| {
                 ui.add(egui::Slider::new(val, 0.0..=200.0).suffix(" px"));
-            }) { *next_frame = Some(nf); }
-            if r_before != *radius { *project_changed = true; }
+            }) {
+                *next_frame = Some(nf);
+            }
+            if r_before != *radius {
+                *project_changed = true;
+            }
 
             let i_before = intensity.clone();
-            if let Some(nf) = draw_property_ui(current_frame, ui, "Intensity", intensity, |ui, val| {
-                ui.add(egui::Slider::new(val, 0.0..=100.0));
-            }) { *next_frame = Some(nf); }
-            if i_before != *intensity { *project_changed = true; }
+            if let Some(nf) =
+                draw_property_ui(current_frame, ui, "Intensity", intensity, |ui, val| {
+                    ui.add(egui::Slider::new(val, 0.0..=100.0));
+                })
+            {
+                *next_frame = Some(nf);
+            }
+            if i_before != *intensity {
+                *project_changed = true;
+            }
 
             let c_before = color.clone();
             if let Some(nf) = draw_property_ui(current_frame, ui, "Glow Color", color, |ui, val| {
                 ui.color_edit_button_rgba_unmultiplied(val);
-            }) { *next_frame = Some(nf); }
-            if c_before != *color { *project_changed = true; }
+            }) {
+                *next_frame = Some(nf);
+            }
+            if c_before != *color {
+                *project_changed = true;
+            }
         }
-        EffectType::LensFlare { enabled, position_x, position_y, intensity, threshold, color, .. } => {
+        EffectType::LensFlare {
+            enabled,
+            position_x,
+            position_y,
+            intensity,
+            threshold,
+            color,
+            ..
+        } => {
             let en_before = enabled.clone();
             if let Some(nf) = draw_property_ui(current_frame, ui, "Enabled", enabled, |ui, val| {
                 ui.add(egui::Slider::new(val, 0.0..=1.0).show_value(false));
-            }) { *next_frame = Some(nf); }
-            if en_before != *enabled { *project_changed = true; }
+            }) {
+                *next_frame = Some(nf);
+            }
+            if en_before != *enabled {
+                *project_changed = true;
+            }
 
             let px_before = position_x.clone();
-            if let Some(nf) = draw_property_ui(current_frame, ui, "Position X", position_x, |ui, val| {
-                ui.add(egui::Slider::new(val, 0.0..=1.0));
-            }) { *next_frame = Some(nf); }
-            if px_before != *position_x { *project_changed = true; }
+            if let Some(nf) =
+                draw_property_ui(current_frame, ui, "Position X", position_x, |ui, val| {
+                    ui.add(egui::Slider::new(val, 0.0..=1.0));
+                })
+            {
+                *next_frame = Some(nf);
+            }
+            if px_before != *position_x {
+                *project_changed = true;
+            }
 
             let py_before = position_y.clone();
-            if let Some(nf) = draw_property_ui(current_frame, ui, "Position Y", position_y, |ui, val| {
-                ui.add(egui::Slider::new(val, 0.0..=1.0));
-            }) { *next_frame = Some(nf); }
-            if py_before != *position_y { *project_changed = true; }
+            if let Some(nf) =
+                draw_property_ui(current_frame, ui, "Position Y", position_y, |ui, val| {
+                    ui.add(egui::Slider::new(val, 0.0..=1.0));
+                })
+            {
+                *next_frame = Some(nf);
+            }
+            if py_before != *position_y {
+                *project_changed = true;
+            }
 
             let i_before = intensity.clone();
-            if let Some(nf) = draw_property_ui(current_frame, ui, "Intensity", intensity, |ui, val| {
-                ui.add(egui::Slider::new(val, 0.0..=5.0));
-            }) { *next_frame = Some(nf); }
-            if i_before != *intensity { *project_changed = true; }
+            if let Some(nf) =
+                draw_property_ui(current_frame, ui, "Intensity", intensity, |ui, val| {
+                    ui.add(egui::Slider::new(val, 0.0..=5.0));
+                })
+            {
+                *next_frame = Some(nf);
+            }
+            if i_before != *intensity {
+                *project_changed = true;
+            }
 
             let th_before = threshold.clone();
-            if let Some(nf) = draw_property_ui(current_frame, ui, "Threshold", threshold, |ui, val| {
-                ui.add(egui::Slider::new(val, 0.0..=2.0));
-            }) { *next_frame = Some(nf); }
-            if th_before != *threshold { *project_changed = true; }
+            if let Some(nf) =
+                draw_property_ui(current_frame, ui, "Threshold", threshold, |ui, val| {
+                    ui.add(egui::Slider::new(val, 0.0..=2.0));
+                })
+            {
+                *next_frame = Some(nf);
+            }
+            if th_before != *threshold {
+                *project_changed = true;
+            }
 
             let c_before = color.clone();
-            if let Some(nf) = draw_property_ui(current_frame, ui, "Flare Color", color, |ui, val| {
-                ui.color_edit_button_rgba_unmultiplied(val);
-            }) { *next_frame = Some(nf); }
-            if c_before != *color { *project_changed = true; }
+            if let Some(nf) =
+                draw_property_ui(current_frame, ui, "Flare Color", color, |ui, val| {
+                    ui.color_edit_button_rgba_unmultiplied(val);
+                })
+            {
+                *next_frame = Some(nf);
+            }
+            if c_before != *color {
+                *project_changed = true;
+            }
         }
-        EffectType::MotionBlur { shutter_angle, samples } => {
+        EffectType::MotionBlur {
+            shutter_angle,
+            samples,
+        } => {
             let sa_before = shutter_angle.clone();
-            if let Some(nf) = draw_property_ui(current_frame, ui, "Shutter Angle", shutter_angle, |ui, val| {
-                ui.add(egui::Slider::new(val, 0.0..=360.0).suffix("°"));
-            }) { *next_frame = Some(nf); }
-            if sa_before != *shutter_angle { *project_changed = true; }
+            if let Some(nf) = draw_property_ui(
+                current_frame,
+                ui,
+                "Shutter Angle",
+                shutter_angle,
+                |ui, val| {
+                    ui.add(egui::Slider::new(val, 0.0..=360.0).suffix("°"));
+                },
+            ) {
+                *next_frame = Some(nf);
+            }
+            if sa_before != *shutter_angle {
+                *project_changed = true;
+            }
 
             ui.horizontal(|ui| {
                 ui.label("Samples:");
                 let before_s = *samples;
                 ui.add(egui::DragValue::new(samples).range(2..=16));
-                if before_s != *samples { *project_changed = true; }
+                if before_s != *samples {
+                    *project_changed = true;
+                }
             });
         }
-        EffectType::MeshWarp { top_left, top_right, bottom_left, bottom_right } => {
+        EffectType::MeshWarp {
+            top_left,
+            top_right,
+            bottom_left,
+            bottom_right,
+        } => {
             let tl_before = top_left.clone();
-            if let Some(nf) = draw_property_ui(current_frame, ui, "Top Left Corner", top_left, |ui, val| {
-                ui.horizontal(|ui| {
-                    ui.add(egui::DragValue::new(&mut val[0]).speed(1.0).prefix("X: "));
-                    ui.add(egui::DragValue::new(&mut val[1]).speed(1.0).prefix("Y: "));
-                });
-            }) { *next_frame = Some(nf); }
-            if tl_before != *top_left { *project_changed = true; }
+            if let Some(nf) =
+                draw_property_ui(current_frame, ui, "Top Left Corner", top_left, |ui, val| {
+                    ui.horizontal(|ui| {
+                        ui.add(egui::DragValue::new(&mut val[0]).speed(1.0).prefix("X: "));
+                        ui.add(egui::DragValue::new(&mut val[1]).speed(1.0).prefix("Y: "));
+                    });
+                })
+            {
+                *next_frame = Some(nf);
+            }
+            if tl_before != *top_left {
+                *project_changed = true;
+            }
 
             let tr_before = top_right.clone();
-            if let Some(nf) = draw_property_ui(current_frame, ui, "Top Right Corner", top_right, |ui, val| {
-                ui.horizontal(|ui| {
-                    ui.add(egui::DragValue::new(&mut val[0]).speed(1.0).prefix("X: "));
-                    ui.add(egui::DragValue::new(&mut val[1]).speed(1.0).prefix("Y: "));
-                });
-            }) { *next_frame = Some(nf); }
-            if tr_before != *top_right { *project_changed = true; }
+            if let Some(nf) = draw_property_ui(
+                current_frame,
+                ui,
+                "Top Right Corner",
+                top_right,
+                |ui, val| {
+                    ui.horizontal(|ui| {
+                        ui.add(egui::DragValue::new(&mut val[0]).speed(1.0).prefix("X: "));
+                        ui.add(egui::DragValue::new(&mut val[1]).speed(1.0).prefix("Y: "));
+                    });
+                },
+            ) {
+                *next_frame = Some(nf);
+            }
+            if tr_before != *top_right {
+                *project_changed = true;
+            }
 
             let bl_before = bottom_left.clone();
-            if let Some(nf) = draw_property_ui(current_frame, ui, "Bottom Left Corner", bottom_left, |ui, val| {
-                ui.horizontal(|ui| {
-                    ui.add(egui::DragValue::new(&mut val[0]).speed(1.0).prefix("X: "));
-                    ui.add(egui::DragValue::new(&mut val[1]).speed(1.0).prefix("Y: "));
-                });
-            }) { *next_frame = Some(nf); }
-            if bl_before != *bottom_left { *project_changed = true; }
+            if let Some(nf) = draw_property_ui(
+                current_frame,
+                ui,
+                "Bottom Left Corner",
+                bottom_left,
+                |ui, val| {
+                    ui.horizontal(|ui| {
+                        ui.add(egui::DragValue::new(&mut val[0]).speed(1.0).prefix("X: "));
+                        ui.add(egui::DragValue::new(&mut val[1]).speed(1.0).prefix("Y: "));
+                    });
+                },
+            ) {
+                *next_frame = Some(nf);
+            }
+            if bl_before != *bottom_left {
+                *project_changed = true;
+            }
 
             let br_before = bottom_right.clone();
-            if let Some(nf) = draw_property_ui(current_frame, ui, "Bottom Right Corner", bottom_right, |ui, val| {
-                ui.horizontal(|ui| {
-                    ui.add(egui::DragValue::new(&mut val[0]).speed(1.0).prefix("X: "));
-                    ui.add(egui::DragValue::new(&mut val[1]).speed(1.0).prefix("Y: "));
-                });
-            }) { *next_frame = Some(nf); }
-            if br_before != *bottom_right { *project_changed = true; }
+            if let Some(nf) = draw_property_ui(
+                current_frame,
+                ui,
+                "Bottom Right Corner",
+                bottom_right,
+                |ui, val| {
+                    ui.horizontal(|ui| {
+                        ui.add(egui::DragValue::new(&mut val[0]).speed(1.0).prefix("X: "));
+                        ui.add(egui::DragValue::new(&mut val[1]).speed(1.0).prefix("Y: "));
+                    });
+                },
+            ) {
+                *next_frame = Some(nf);
+            }
+            if br_before != *bottom_right {
+                *project_changed = true;
+            }
         }
-        EffectType::CornerPin { top_left, top_right, bottom_right, bottom_left } => {
+        EffectType::CornerPin {
+            top_left,
+            top_right,
+            bottom_right,
+            bottom_left,
+        } => {
             let tl_before = top_left.clone();
-            if let Some(nf) = draw_property_ui(current_frame, ui, "Top Left Pin", top_left, |ui, val| {
-                ui.horizontal(|ui| {
-                    ui.add(egui::DragValue::new(&mut val[0]).speed(1.0).prefix("X: "));
-                    ui.add(egui::DragValue::new(&mut val[1]).speed(1.0).prefix("Y: "));
-                });
-            }) { *next_frame = Some(nf); }
-            if tl_before != *top_left { *project_changed = true; }
+            if let Some(nf) =
+                draw_property_ui(current_frame, ui, "Top Left Pin", top_left, |ui, val| {
+                    ui.horizontal(|ui| {
+                        ui.add(egui::DragValue::new(&mut val[0]).speed(1.0).prefix("X: "));
+                        ui.add(egui::DragValue::new(&mut val[1]).speed(1.0).prefix("Y: "));
+                    });
+                })
+            {
+                *next_frame = Some(nf);
+            }
+            if tl_before != *top_left {
+                *project_changed = true;
+            }
 
             let tr_before = top_right.clone();
-            if let Some(nf) = draw_property_ui(current_frame, ui, "Top Right Pin", top_right, |ui, val| {
-                ui.horizontal(|ui| {
-                    ui.add(egui::DragValue::new(&mut val[0]).speed(1.0).prefix("X: "));
-                    ui.add(egui::DragValue::new(&mut val[1]).speed(1.0).prefix("Y: "));
-                });
-            }) { *next_frame = Some(nf); }
-            if tr_before != *top_right { *project_changed = true; }
+            if let Some(nf) =
+                draw_property_ui(current_frame, ui, "Top Right Pin", top_right, |ui, val| {
+                    ui.horizontal(|ui| {
+                        ui.add(egui::DragValue::new(&mut val[0]).speed(1.0).prefix("X: "));
+                        ui.add(egui::DragValue::new(&mut val[1]).speed(1.0).prefix("Y: "));
+                    });
+                })
+            {
+                *next_frame = Some(nf);
+            }
+            if tr_before != *top_right {
+                *project_changed = true;
+            }
 
             let br_before = bottom_right.clone();
-            if let Some(nf) = draw_property_ui(current_frame, ui, "Bottom Right Pin", bottom_right, |ui, val| {
-                ui.horizontal(|ui| {
-                    ui.add(egui::DragValue::new(&mut val[0]).speed(1.0).prefix("X: "));
-                    ui.add(egui::DragValue::new(&mut val[1]).speed(1.0).prefix("Y: "));
-                });
-            }) { *next_frame = Some(nf); }
-            if br_before != *bottom_right { *project_changed = true; }
+            if let Some(nf) = draw_property_ui(
+                current_frame,
+                ui,
+                "Bottom Right Pin",
+                bottom_right,
+                |ui, val| {
+                    ui.horizontal(|ui| {
+                        ui.add(egui::DragValue::new(&mut val[0]).speed(1.0).prefix("X: "));
+                        ui.add(egui::DragValue::new(&mut val[1]).speed(1.0).prefix("Y: "));
+                    });
+                },
+            ) {
+                *next_frame = Some(nf);
+            }
+            if br_before != *bottom_right {
+                *project_changed = true;
+            }
 
             let bl_before = bottom_left.clone();
-            if let Some(nf) = draw_property_ui(current_frame, ui, "Bottom Left Pin", bottom_left, |ui, val| {
-                ui.horizontal(|ui| {
-                    ui.add(egui::DragValue::new(&mut val[0]).speed(1.0).prefix("X: "));
-                    ui.add(egui::DragValue::new(&mut val[1]).speed(1.0).prefix("Y: "));
-                });
-            }) { *next_frame = Some(nf); }
-            if bl_before != *bottom_left { *project_changed = true; }
+            if let Some(nf) = draw_property_ui(
+                current_frame,
+                ui,
+                "Bottom Left Pin",
+                bottom_left,
+                |ui, val| {
+                    ui.horizontal(|ui| {
+                        ui.add(egui::DragValue::new(&mut val[0]).speed(1.0).prefix("X: "));
+                        ui.add(egui::DragValue::new(&mut val[1]).speed(1.0).prefix("Y: "));
+                    });
+                },
+            ) {
+                *next_frame = Some(nf);
+            }
+            if bl_before != *bottom_left {
+                *project_changed = true;
+            }
 
-            ui.label(egui::RichText::new("Pin corners in layer pixel space (animatable)").small()
-                .color(crate::ui::theme::colors::TEXT_SECONDARY));
+            ui.label(
+                egui::RichText::new("Pin corners in layer pixel space (animatable)")
+                    .small()
+                    .color(crate::ui::theme::colors::TEXT_SECONDARY),
+            );
         }
-        EffectType::ColorGradeLUT { lut_path, intensity } => {
+        EffectType::ColorGradeLUT {
+            lut_path,
+            intensity,
+        } => {
             ui.horizontal(|ui| {
                 ui.label("LUT Path:");
                 let path_before = lut_path.clone();
                 ui.text_edit_singleline(lut_path);
-                if path_before != *lut_path { *project_changed = true; }
+                if path_before != *lut_path {
+                    *project_changed = true;
+                }
             });
 
             let i_before = intensity.clone();
-            if let Some(nf) = draw_property_ui(current_frame, ui, "Intensity", intensity, |ui, val| {
-                ui.add(egui::Slider::new(val, 0.0..=100.0).suffix("%"));
-            }) { *next_frame = Some(nf); }
-            if i_before != *intensity { *project_changed = true; }
+            if let Some(nf) =
+                draw_property_ui(current_frame, ui, "Intensity", intensity, |ui, val| {
+                    ui.add(egui::Slider::new(val, 0.0..=100.0).suffix("%"));
+                })
+            {
+                *next_frame = Some(nf);
+            }
+            if i_before != *intensity {
+                *project_changed = true;
+            }
         }
         EffectType::ColorSpaceConvert { mode } => {
             let mode_before = *mode;
@@ -1663,212 +2009,852 @@ pub fn draw_effect_type_ui(
                         ui.selectable_value(mode, m, format!("{:?}", m));
                     }
                 });
-            if mode_before != *mode { *project_changed = true; }
+            if mode_before != *mode {
+                *project_changed = true;
+            }
         }
-        EffectType::FilmGrain { intensity, grain_size, color_film } => {
+        EffectType::FilmGrain {
+            intensity,
+            grain_size,
+            color_film,
+        } => {
             let i_before = intensity.clone();
-            if let Some(nf) = draw_property_ui(current_frame, ui, "Grain Intensity", intensity, |ui, val| {
-                ui.add(egui::Slider::new(val, 0.0..=100.0).suffix("%"));
-            }) { *next_frame = Some(nf); }
-            if i_before != *intensity { *project_changed = true; }
+            if let Some(nf) = draw_property_ui(
+                current_frame,
+                ui,
+                "Grain Intensity",
+                intensity,
+                |ui, val| {
+                    ui.add(egui::Slider::new(val, 0.0..=100.0).suffix("%"));
+                },
+            ) {
+                *next_frame = Some(nf);
+            }
+            if i_before != *intensity {
+                *project_changed = true;
+            }
 
             ui.horizontal(|ui| {
                 ui.label("Grain Size:");
                 let size_before = *grain_size;
                 ui.add(egui::Slider::new(grain_size, 1.0..=5.0));
-                if size_before != *grain_size { *project_changed = true; }
+                if size_before != *grain_size {
+                    *project_changed = true;
+                }
             });
 
             ui.horizontal(|ui| {
                 let c_before = *color_film;
                 ui.checkbox(color_film, "Color Film Grain");
-                if c_before != *color_film { *project_changed = true; }
+                if c_before != *color_film {
+                    *project_changed = true;
+                }
             });
         }
 
         // ── CPU pixel-effect kernels (core::cpu_effects) ──
         EffectType::Twirl { angle, radius } => {
-            draw_prop(ui, current_frame, project_changed, next_frame,
-                "Twirl Angle", angle, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=360.0).suffix("°")); });
-            draw_prop(ui, current_frame, project_changed, next_frame,
-                "Twirl Radius", radius, |ui, v| { ui.add(egui::Slider::new(v, 1.0..=300.0)); });
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Twirl Angle",
+                angle,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, 0.0..=360.0).suffix("°"));
+                },
+            );
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Twirl Radius",
+                radius,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, 1.0..=300.0));
+                },
+            );
         }
         EffectType::Bulge { amount, radius } => {
-            draw_prop(ui, current_frame, project_changed, next_frame,
-                "Bulge Amount", amount, |ui, v| { ui.add(egui::Slider::new(v, -100.0..=100.0)); });
-            draw_prop(ui, current_frame, project_changed, next_frame,
-                "Bulge Radius", radius, |ui, v| { ui.add(egui::Slider::new(v, 1.0..=300.0)); });
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Bulge Amount",
+                amount,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, -100.0..=100.0));
+                },
+            );
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Bulge Radius",
+                radius,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, 1.0..=300.0));
+                },
+            );
         }
         EffectType::Posterize { levels } => {
-            draw_prop(ui, current_frame, project_changed, next_frame,
-                "Posterize Levels", levels, |ui, v| { ui.add(egui::Slider::new(v, 2.0..=32.0)); });
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Posterize Levels",
+                levels,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, 2.0..=32.0));
+                },
+            );
         }
         EffectType::Invert { invert_alpha } => {
             ui.horizontal(|ui| {
                 let b_before = *invert_alpha;
                 ui.checkbox(invert_alpha, "Invert Alpha");
-                if b_before != *invert_alpha { *project_changed = true; }
+                if b_before != *invert_alpha {
+                    *project_changed = true;
+                }
             });
         }
         EffectType::Offset { shift_x, shift_y } => {
-            draw_prop(ui, current_frame, project_changed, next_frame,
-                "Offset X", shift_x, |ui, v| { ui.add(egui::Slider::new(v, -300.0..=300.0)); });
-            draw_prop(ui, current_frame, project_changed, next_frame,
-                "Offset Y", shift_y, |ui, v| { ui.add(egui::Slider::new(v, -300.0..=300.0)); });
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Offset X",
+                shift_x,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, -300.0..=300.0));
+                },
+            );
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Offset Y",
+                shift_y,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, -300.0..=300.0));
+                },
+            );
         }
         EffectType::DirectionalBlur { angle, length } => {
-            draw_prop(ui, current_frame, project_changed, next_frame,
-                "Direction", angle, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=360.0).suffix("°")); });
-            draw_prop(ui, current_frame, project_changed, next_frame,
-                "Length", length, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=100.0)); });
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Direction",
+                angle,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, 0.0..=360.0).suffix("°"));
+                },
+            );
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Length",
+                length,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, 0.0..=100.0));
+                },
+            );
         }
         EffectType::RadialBlur { amount } => {
-            draw_prop(ui, current_frame, project_changed, next_frame,
-                "Radial Amount", amount, |ui, v| { ui.add(egui::Slider::new(v, -100.0..=100.0)); });
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Radial Amount",
+                amount,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, -100.0..=100.0));
+                },
+            );
         }
         EffectType::Sharpen { amount } => {
-            draw_prop(ui, current_frame, project_changed, next_frame,
-                "Sharpen Amount", amount, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=100.0)); });
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Sharpen Amount",
+                amount,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, 0.0..=100.0));
+                },
+            );
         }
         EffectType::Threshold { threshold } => {
-            draw_prop(ui, current_frame, project_changed, next_frame,
-                "Threshold", threshold, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=255.0)); });
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Threshold",
+                threshold,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, 0.0..=255.0));
+                },
+            );
         }
         EffectType::LinearWipe { completion, angle } => {
-            draw_prop(ui, current_frame, project_changed, next_frame,
-                "Completion", completion, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=100.0).suffix("%")); });
-            draw_prop(ui, current_frame, project_changed, next_frame,
-                "Wipe Angle", angle, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=360.0).suffix("°")); });
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Completion",
+                completion,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, 0.0..=100.0).suffix("%"));
+                },
+            );
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Wipe Angle",
+                angle,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, 0.0..=360.0).suffix("°"));
+                },
+            );
         }
         EffectType::SimpleChoker { choke_amount } => {
-            draw_prop(ui, current_frame, project_changed, next_frame,
-                "Choke Amount", choke_amount, |ui, v| { ui.add(egui::Slider::new(v, -100.0..=100.0)); });
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Choke Amount",
+                choke_amount,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, -100.0..=100.0));
+                },
+            );
         }
-        EffectType::ChromaKey { screen_color, screen_gain, clip_black, clip_white } => {
+        EffectType::ChromaKey {
+            screen_color,
+            screen_gain,
+            clip_black,
+            clip_white,
+        } => {
             let c_before = screen_color.clone();
-            if let Some(nf) = draw_property_ui(current_frame, ui, "Key Color", screen_color, |ui, val| {
-                ui.color_edit_button_rgb(val);
-            }) { *next_frame = Some(nf); }
-            if c_before != *screen_color { *project_changed = true; }
-            draw_prop(ui, current_frame, project_changed, next_frame,
-                "Screen Gain", screen_gain, |ui, v| { ui.add(egui::Slider::new(v, 0.5..=2.0)); });
-            draw_prop(ui, current_frame, project_changed, next_frame,
-                "Clip Black", clip_black, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=1.0)); });
-            draw_prop(ui, current_frame, project_changed, next_frame,
-                "Clip White", clip_white, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=1.0)); });
+            if let Some(nf) =
+                draw_property_ui(current_frame, ui, "Key Color", screen_color, |ui, val| {
+                    ui.color_edit_button_rgb(val);
+                })
+            {
+                *next_frame = Some(nf);
+            }
+            if c_before != *screen_color {
+                *project_changed = true;
+            }
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Screen Gain",
+                screen_gain,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, 0.5..=2.0));
+                },
+            );
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Clip Black",
+                clip_black,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, 0.0..=1.0));
+                },
+            );
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Clip White",
+                clip_white,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, 0.0..=1.0));
+                },
+            );
         }
-        EffectType::Spherize { radius, refractive_index } => {
-            draw_prop(ui, current_frame, project_changed, next_frame,
-                "Radius", radius, |ui, v| { ui.add(egui::Slider::new(v, 1.0..=500.0)); });
-            draw_prop(ui, current_frame, project_changed, next_frame,
-                "Refractive Index", refractive_index, |ui, v| { ui.add(egui::Slider::new(v, 0.5..=2.0)); });
+        EffectType::Spherize {
+            radius,
+            refractive_index,
+        } => {
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Radius",
+                radius,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, 1.0..=500.0));
+                },
+            );
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Refractive Index",
+                refractive_index,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, 0.5..=2.0));
+                },
+            );
         }
-        EffectType::TurbulentDisplace { amount, size, evolution, complexity } => {
-            draw_prop(ui, current_frame, project_changed, next_frame,
-                "Amount", amount, |ui, v| { ui.add(egui::Slider::new(v, -200.0..=200.0)); });
-            draw_prop(ui, current_frame, project_changed, next_frame,
-                "Size", size, |ui, v| { ui.add(egui::Slider::new(v, 2.0..=500.0)); });
-            draw_prop(ui, current_frame, project_changed, next_frame,
-                "Evolution", evolution, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=360.0).suffix("°")); });
-            draw_prop(ui, current_frame, project_changed, next_frame,
-                "Complexity", complexity, |ui, v| { ui.add(egui::Slider::new(v, 1.0..=10.0)); });
+        EffectType::TurbulentDisplace {
+            amount,
+            size,
+            evolution,
+            complexity,
+        } => {
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Amount",
+                amount,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, -200.0..=200.0));
+                },
+            );
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Size",
+                size,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, 2.0..=500.0));
+                },
+            );
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Evolution",
+                evolution,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, 0.0..=360.0).suffix("°"));
+                },
+            );
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Complexity",
+                complexity,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, 1.0..=10.0));
+                },
+            );
         }
-        EffectType::Colorama { preset_index, cycle_phase } => {
-            draw_prop(ui, current_frame, project_changed, next_frame,
-                "Preset (0=Rainbow,1=Heat,2=Sepia,3=Solar)", preset_index, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=3.0)); });
-            draw_prop(ui, current_frame, project_changed, next_frame,
-                "Cycle Phase", cycle_phase, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=360.0).suffix("°")); });
+        EffectType::Colorama {
+            preset_index,
+            cycle_phase,
+        } => {
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Preset (0=Rainbow,1=Heat,2=Sepia,3=Solar)",
+                preset_index,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, 0.0..=3.0));
+                },
+            );
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Cycle Phase",
+                cycle_phase,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, 0.0..=360.0).suffix("°"));
+                },
+            );
         }
         // ── New AE-standard effects ──
-        EffectType::FractalNoise { fractal_type, contrast, brightness, complexity, evolution } => {
-            draw_prop(ui, current_frame, project_changed, next_frame,
-                "Type (0=Fbm,1=Turb,2=Dyn,3=Ridge)", fractal_type, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=3.0)); });
-            draw_prop(ui, current_frame, project_changed, next_frame,
-                "Contrast", contrast, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=200.0).suffix("%")); });
-            draw_prop(ui, current_frame, project_changed, next_frame,
-                "Brightness", brightness, |ui, v| { ui.add(egui::Slider::new(v, -100.0..=100.0).suffix("%")); });
-            draw_prop(ui, current_frame, project_changed, next_frame,
-                "Complexity", complexity, |ui, v| { ui.add(egui::Slider::new(v, 1.0..=10.0)); });
-            draw_prop(ui, current_frame, project_changed, next_frame,
-                "Evolution", evolution, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=360.0).suffix("°")); });
+        EffectType::FractalNoise {
+            fractal_type,
+            contrast,
+            brightness,
+            complexity,
+            evolution,
+        } => {
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Type (0=Fbm,1=Turb,2=Dyn,3=Ridge)",
+                fractal_type,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, 0.0..=3.0));
+                },
+            );
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Contrast",
+                contrast,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, 0.0..=200.0).suffix("%"));
+                },
+            );
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Brightness",
+                brightness,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, -100.0..=100.0).suffix("%"));
+                },
+            );
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Complexity",
+                complexity,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, 1.0..=10.0));
+                },
+            );
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Evolution",
+                evolution,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, 0.0..=360.0).suffix("°"));
+                },
+            );
         }
         EffectType::Curves { channel } => {
-            draw_prop(ui, current_frame, project_changed, next_frame,
-                "Channel (0=Master,1=R,2=G,3=B)", channel, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=3.0)); });
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Channel (0=Master,1=R,2=G,3=B)",
+                channel,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, 0.0..=3.0));
+                },
+            );
             ui.label("Use S-curve preset (5-point catmull-rom)");
         }
-        EffectType::DisplacementMap { source_layer, max_horizontal, max_vertical } => {
-            draw_prop(ui, current_frame, project_changed, next_frame,
-                "Source Layer ID", source_layer, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=10.0)); });
-            draw_prop(ui, current_frame, project_changed, next_frame,
-                "Max Horizontal", max_horizontal, |ui, v| { ui.add(egui::Slider::new(v, -200.0..=200.0)); });
-            draw_prop(ui, current_frame, project_changed, next_frame,
-                "Max Vertical", max_vertical, |ui, v| { ui.add(egui::Slider::new(v, -200.0..=200.0)); });
+        EffectType::DisplacementMap {
+            source_layer,
+            max_horizontal,
+            max_vertical,
+        } => {
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Source Layer ID",
+                source_layer,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, 0.0..=10.0));
+                },
+            );
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Max Horizontal",
+                max_horizontal,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, -200.0..=200.0));
+                },
+            );
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Max Vertical",
+                max_vertical,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, -200.0..=200.0));
+                },
+            );
         }
-        EffectType::CompoundBlur { source_layer, max_blur } => {
-            draw_prop(ui, current_frame, project_changed, next_frame,
-                "Source Layer ID", source_layer, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=10.0)); });
-            draw_prop(ui, current_frame, project_changed, next_frame,
-                "Max Blur", max_blur, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=100.0)); });
+        EffectType::CompoundBlur {
+            source_layer,
+            max_blur,
+        } => {
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Source Layer ID",
+                source_layer,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, 0.0..=10.0));
+                },
+            );
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Max Blur",
+                max_blur,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, 0.0..=100.0));
+                },
+            );
         }
         EffectType::Minimax { operation, radius } => {
-            draw_prop(ui, current_frame, project_changed, next_frame,
-                "Operation (0=Min,1=Max)", operation, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=1.0)); });
-            draw_prop(ui, current_frame, project_changed, next_frame,
-                "Radius", radius, |ui, v| { ui.add(egui::Slider::new(v, 1.0..=50.0)); });
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Operation (0=Min,1=Max)",
+                operation,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, 0.0..=1.0));
+                },
+            );
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Radius",
+                radius,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, 1.0..=50.0));
+                },
+            );
         }
-        EffectType::ShiftChannels { take_red, take_green, take_blue, take_alpha } => {
-            draw_prop(ui, current_frame, project_changed, next_frame,
-                "Take Red (0=R,1=G,2=B,3=A,4=Off,5=On)", take_red, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=5.0)); });
-            draw_prop(ui, current_frame, project_changed, next_frame,
-                "Take Green", take_green, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=5.0)); });
-            draw_prop(ui, current_frame, project_changed, next_frame,
-                "Take Blue", take_blue, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=5.0)); });
-            draw_prop(ui, current_frame, project_changed, next_frame,
-                "Take Alpha", take_alpha, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=5.0)); });
+        EffectType::ShiftChannels {
+            take_red,
+            take_green,
+            take_blue,
+            take_alpha,
+        } => {
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Take Red (0=R,1=G,2=B,3=A,4=Off,5=On)",
+                take_red,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, 0.0..=5.0));
+                },
+            );
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Take Green",
+                take_green,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, 0.0..=5.0));
+                },
+            );
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Take Blue",
+                take_blue,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, 0.0..=5.0));
+                },
+            );
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Take Alpha",
+                take_alpha,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, 0.0..=5.0));
+                },
+            );
         }
         // ── Effects migrated from ExtEffect (UI deferred) ──
-        EffectType::WaveWarp { wave_height, wave_width, speed, direction_deg, .. } => {
-            draw_prop(ui, current_frame, project_changed, next_frame, "Wave Height", wave_height, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=200.0)); });
-            draw_prop(ui, current_frame, project_changed, next_frame, "Wave Width", wave_width, |ui, v| { ui.add(egui::Slider::new(v, 1.0..=500.0)); });
-            draw_prop(ui, current_frame, project_changed, next_frame, "Speed", speed, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=20.0)); });
-            draw_prop(ui, current_frame, project_changed, next_frame, "Direction", direction_deg, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=360.0).suffix("°")); });
+        EffectType::WaveWarp {
+            wave_height,
+            wave_width,
+            speed,
+            direction_deg,
+            ..
+        } => {
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Wave Height",
+                wave_height,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, 0.0..=200.0));
+                },
+            );
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Wave Width",
+                wave_width,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, 1.0..=500.0));
+                },
+            );
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Speed",
+                speed,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, 0.0..=20.0));
+                },
+            );
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Direction",
+                direction_deg,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, 0.0..=360.0).suffix("°"));
+                },
+            );
         }
         EffectType::CcLens { convergence, zoom } => {
-            draw_prop(ui, current_frame, project_changed, next_frame, "Convergence", convergence, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=200.0)); });
-            draw_prop(ui, current_frame, project_changed, next_frame, "Zoom", zoom, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=5.0)); });
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Convergence",
+                convergence,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, 0.0..=200.0));
+                },
+            );
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Zoom",
+                zoom,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, 0.0..=5.0));
+                },
+            );
         }
         EffectType::PolarCoordinates { interpolation, .. } => {
-            draw_prop(ui, current_frame, project_changed, next_frame, "Interpolation", interpolation, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=100.0).suffix("%")); });
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Interpolation",
+                interpolation,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, 0.0..=100.0).suffix("%"));
+                },
+            );
         }
-        EffectType::OpticsCompensation { field_of_view_deg, zoom, .. } => {
-            draw_prop(ui, current_frame, project_changed, next_frame, "FOV", field_of_view_deg, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=180.0).suffix("°")); });
-            draw_prop(ui, current_frame, project_changed, next_frame, "Zoom", zoom, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=5.0)); });
+        EffectType::OpticsCompensation {
+            field_of_view_deg,
+            zoom,
+            ..
+        } => {
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "FOV",
+                field_of_view_deg,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, 0.0..=180.0).suffix("°"));
+                },
+            );
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Zoom",
+                zoom,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, 0.0..=5.0));
+                },
+            );
         }
-        EffectType::LightSweep { direction_deg, sweep_intensity, edge_intensity, .. } => {
-            draw_prop(ui, current_frame, project_changed, next_frame, "Direction", direction_deg, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=360.0).suffix("°")); });
-            draw_prop(ui, current_frame, project_changed, next_frame, "Sweep Intensity", sweep_intensity, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=1.0)); });
-            draw_prop(ui, current_frame, project_changed, next_frame, "Edge Intensity", edge_intensity, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=1.0)); });
+        EffectType::LightSweep {
+            direction_deg,
+            sweep_intensity,
+            edge_intensity,
+            ..
+        } => {
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Direction",
+                direction_deg,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, 0.0..=360.0).suffix("°"));
+                },
+            );
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Sweep Intensity",
+                sweep_intensity,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, 0.0..=1.0));
+                },
+            );
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Edge Intensity",
+                edge_intensity,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, 0.0..=1.0));
+                },
+            );
         }
         EffectType::RadialFastBlur { amount, .. } => {
-            draw_prop(ui, current_frame, project_changed, next_frame, "Amount", amount, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=1.0)); });
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Amount",
+                amount,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, 0.0..=1.0));
+                },
+            );
         }
-        EffectType::BendIt { top_offset, bottom_offset } => {
-            draw_prop(ui, current_frame, project_changed, next_frame, "Top Offset", top_offset, |ui, v| { ui.add(egui::Slider::new(v, -50.0..=50.0).suffix(" px")); });
-            draw_prop(ui, current_frame, project_changed, next_frame, "Bottom Offset", bottom_offset, |ui, v| { ui.add(egui::Slider::new(v, -50.0..=50.0).suffix(" px")); });
+        EffectType::BendIt {
+            top_offset,
+            bottom_offset,
+        } => {
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Top Offset",
+                top_offset,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, -50.0..=50.0).suffix(" px"));
+                },
+            );
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Bottom Offset",
+                bottom_offset,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, -50.0..=50.0).suffix(" px"));
+                },
+            );
         }
         EffectType::Tiler { scale_percent, .. } => {
-            draw_prop(ui, current_frame, project_changed, next_frame, "Scale", scale_percent, |ui, v| { ui.add(egui::Slider::new(v, 10.0..=500.0).suffix("%")); });
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Scale",
+                scale_percent,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, 10.0..=500.0).suffix("%"));
+                },
+            );
         }
-        EffectType::ColorBalance { shadows, midtones, highlights, preserve_luminosity } => {
+        EffectType::ColorBalance {
+            shadows,
+            midtones,
+            highlights,
+            preserve_luminosity,
+        } => {
             // Plain (non-Animatable) fields: edit in place, flag project change.
-            for (label, band) in [("Shadows", shadows), ("Midtones", midtones), ("Highlights", highlights)] {
+            for (label, band) in [
+                ("Shadows", shadows),
+                ("Midtones", midtones),
+                ("Highlights", highlights),
+            ] {
                 ui.small(label);
                 ui.horizontal(|ui| {
                     for (i, cname) in ["R", "G", "B"].iter().enumerate() {
                         ui.label(*cname);
                         if ui
-                            .add(egui::DragValue::new(&mut band[i]).speed(1.0).range(-100.0..=100.0))
+                            .add(
+                                egui::DragValue::new(&mut band[i])
+                                    .speed(1.0)
+                                    .range(-100.0..=100.0),
+                            )
                             .changed()
                         {
                             *project_changed = true;
@@ -1876,112 +2862,447 @@ pub fn draw_effect_type_ui(
                     }
                 });
             }
-            if ui.checkbox(preserve_luminosity, "Preserve Luminosity").changed() {
+            if ui
+                .checkbox(preserve_luminosity, "Preserve Luminosity")
+                .changed()
+            {
                 *project_changed = true;
             }
         }
         EffectType::ChannelMixer { matrix, monochrome } => {
             ui.label("Output ← Input (%)");
-            egui::Grid::new("channel_mixer_grid").num_columns(4).show(ui, |ui| {
-                let names = ["R", "G", "B"];
-                for (r, row) in matrix.iter_mut().enumerate() {
-                    ui.label(format!("←{}", names[r]));
-                    for v in row.iter_mut() {
-                        if ui
-                            .add(egui::DragValue::new(v).speed(1.0).range(-200.0..=200.0))
-                            .changed()
-                        {
-                            *project_changed = true;
+            egui::Grid::new("channel_mixer_grid")
+                .num_columns(4)
+                .show(ui, |ui| {
+                    let names = ["R", "G", "B"];
+                    for (r, row) in matrix.iter_mut().enumerate() {
+                        ui.label(format!("←{}", names[r]));
+                        for v in row.iter_mut() {
+                            if ui
+                                .add(egui::DragValue::new(v).speed(1.0).range(-200.0..=200.0))
+                                .changed()
+                            {
+                                *project_changed = true;
+                            }
                         }
+                        ui.end_row();
                     }
-                    ui.end_row();
-                }
-            });
+                });
             if ui.checkbox(monochrome, "Monochrome").changed() {
                 *project_changed = true;
             }
         }
-        EffectType::Tritone { shadow_color, mid_color, highlight_color } => {
+        EffectType::Tritone {
+            shadow_color,
+            mid_color,
+            highlight_color,
+        } => {
             // Color pickers for 3-tone mapping
             let sc_before = shadow_color.clone();
-            if let Some(nf) = draw_property_ui(current_frame, ui, "Shadow Color", shadow_color, |ui, val| {
-                ui.color_edit_button_rgb(val);
-            }) { *next_frame = Some(nf); }
-            if sc_before != *shadow_color { *project_changed = true; }
+            if let Some(nf) = draw_property_ui(
+                current_frame,
+                ui,
+                "Shadow Color",
+                shadow_color,
+                |ui, val| {
+                    ui.color_edit_button_rgb(val);
+                },
+            ) {
+                *next_frame = Some(nf);
+            }
+            if sc_before != *shadow_color {
+                *project_changed = true;
+            }
 
             let mc_before = mid_color.clone();
-            if let Some(nf) = draw_property_ui(current_frame, ui, "Mid Color", mid_color, |ui, val| {
-                ui.color_edit_button_rgb(val);
-            }) { *next_frame = Some(nf); }
-            if mc_before != *mid_color { *project_changed = true; }
+            if let Some(nf) =
+                draw_property_ui(current_frame, ui, "Mid Color", mid_color, |ui, val| {
+                    ui.color_edit_button_rgb(val);
+                })
+            {
+                *next_frame = Some(nf);
+            }
+            if mc_before != *mid_color {
+                *project_changed = true;
+            }
 
             let hc_before = highlight_color.clone();
-            if let Some(nf) = draw_property_ui(current_frame, ui, "Highlight Color", highlight_color, |ui, val| {
-                ui.color_edit_button_rgb(val);
-            }) { *next_frame = Some(nf); }
-            if hc_before != *highlight_color { *project_changed = true; }
+            if let Some(nf) = draw_property_ui(
+                current_frame,
+                ui,
+                "Highlight Color",
+                highlight_color,
+                |ui, val| {
+                    ui.color_edit_button_rgb(val);
+                },
+            ) {
+                *next_frame = Some(nf);
+            }
+            if hc_before != *highlight_color {
+                *project_changed = true;
+            }
         }
-        EffectType::MatteChoker { choke_amount, gray_level } => {
-            draw_prop(ui, current_frame, project_changed, next_frame, "Choke Amount", choke_amount, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=50.0)); });
-            draw_prop(ui, current_frame, project_changed, next_frame, "Gray Level", gray_level, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=1.0)); });
+        EffectType::MatteChoker {
+            choke_amount,
+            gray_level,
+        } => {
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Choke Amount",
+                choke_amount,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, 0.0..=50.0));
+                },
+            );
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Gray Level",
+                gray_level,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, 0.0..=1.0));
+                },
+            );
         }
         EffectType::VenetianBlinds { completion, width } => {
-            draw_prop(ui, current_frame, project_changed, next_frame, "Completion", completion, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=100.0).suffix("%")); });
-            draw_prop(ui, current_frame, project_changed, next_frame, "Width", width, |ui, v| { ui.add(egui::Slider::new(v, 2.0..=100.0).suffix(" px")); });
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Completion",
+                completion,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, 0.0..=100.0).suffix("%"));
+                },
+            );
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Width",
+                width,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, 2.0..=100.0).suffix(" px"));
+                },
+            );
         }
         // ── Lumetri Basic Correction ──
         EffectType::Vibrance { amount } => {
-            draw_prop(ui, current_frame, project_changed, next_frame, "Amount", amount, |ui, v| { ui.add(egui::Slider::new(v, -100.0..=100.0)); });
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Amount",
+                amount,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, -100.0..=100.0));
+                },
+            );
         }
         EffectType::WhiteBalance { temperature, tint } => {
-            draw_prop(ui, current_frame, project_changed, next_frame, "Temperature", temperature, |ui, v| { ui.add(egui::Slider::new(v, -100.0..=100.0)); });
-            draw_prop(ui, current_frame, project_changed, next_frame, "Tint", tint, |ui, v| { ui.add(egui::Slider::new(v, -100.0..=100.0)); });
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Temperature",
+                temperature,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, -100.0..=100.0));
+                },
+            );
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Tint",
+                tint,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, -100.0..=100.0));
+                },
+            );
         }
-        EffectType::HslAdjust { hue_deg, saturation, lightness } => {
-            draw_prop(ui, current_frame, project_changed, next_frame, "Hue", hue_deg, |ui, v| { ui.add(egui::Slider::new(v, -180.0..=180.0).suffix("°")); });
-            draw_prop(ui, current_frame, project_changed, next_frame, "Saturation", saturation, |ui, v| { ui.add(egui::Slider::new(v, -100.0..=100.0)); });
-            draw_prop(ui, current_frame, project_changed, next_frame, "Lightness", lightness, |ui, v| { ui.add(egui::Slider::new(v, -100.0..=100.0)); });
+        EffectType::HslAdjust {
+            hue_deg,
+            saturation,
+            lightness,
+        } => {
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Hue",
+                hue_deg,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, -180.0..=180.0).suffix("°"));
+                },
+            );
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Saturation",
+                saturation,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, -100.0..=100.0));
+                },
+            );
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Lightness",
+                lightness,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, -100.0..=100.0));
+                },
+            );
         }
-        EffectType::GlowPro { threshold, radius, intensity } => {
-            draw_prop(ui, current_frame, project_changed, next_frame, "Threshold", threshold, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=1.0)); });
-            draw_prop(ui, current_frame, project_changed, next_frame, "Radius", radius, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=128.0).suffix(" px")); });
-            draw_prop(ui, current_frame, project_changed, next_frame, "Intensity", intensity, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=4.0)); });
+        EffectType::GlowPro {
+            threshold,
+            radius,
+            intensity,
+        } => {
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Threshold",
+                threshold,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, 0.0..=1.0));
+                },
+            );
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Radius",
+                radius,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, 0.0..=128.0).suffix(" px"));
+                },
+            );
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Intensity",
+                intensity,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, 0.0..=4.0));
+                },
+            );
         }
-        EffectType::CrtScanlines { line_spacing, intensity } => {
-            draw_prop(ui, current_frame, project_changed, next_frame, "Line Spacing", line_spacing, |ui, v| { ui.add(egui::Slider::new(v, 1.0..=50.0).suffix(" px")); });
-            draw_prop(ui, current_frame, project_changed, next_frame, "Intensity", intensity, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=1.0)); });
+        EffectType::CrtScanlines {
+            line_spacing,
+            intensity,
+        } => {
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Line Spacing",
+                line_spacing,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, 1.0..=50.0).suffix(" px"));
+                },
+            );
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Intensity",
+                intensity,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, 0.0..=1.0));
+                },
+            );
         }
         EffectType::Vortex { radius, angle_deg } => {
-            draw_prop(ui, current_frame, project_changed, next_frame, "Radius", radius, |ui, v| { ui.add(egui::Slider::new(v, 1.0..=2000.0).suffix(" px")); });
-            draw_prop(ui, current_frame, project_changed, next_frame, "Angle", angle_deg, |ui, v| { ui.add(egui::Slider::new(v, -720.0..=720.0).suffix("°")); });
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Radius",
+                radius,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, 1.0..=2000.0).suffix(" px"));
+                },
+            );
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Angle",
+                angle_deg,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, -720.0..=720.0).suffix("°"));
+                },
+            );
         }
         EffectType::HeatDistortion { strength, speed } => {
-            draw_prop(ui, current_frame, project_changed, next_frame, "Strength", strength, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=30.0)); });
-            draw_prop(ui, current_frame, project_changed, next_frame, "Speed", speed, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=5.0).suffix("×")); });
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Strength",
+                strength,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, 0.0..=30.0));
+                },
+            );
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Speed",
+                speed,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, 0.0..=5.0).suffix("×"));
+                },
+            );
         }
-        EffectType::RainRipples { drop_count, wave_strength } => {
-            draw_prop(ui, current_frame, project_changed, next_frame, "Drop Count", drop_count, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=100.0)); });
-            draw_prop(ui, current_frame, project_changed, next_frame, "Wave Strength", wave_strength, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=20.0)); });
+        EffectType::RainRipples {
+            drop_count,
+            wave_strength,
+        } => {
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Drop Count",
+                drop_count,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, 0.0..=100.0));
+                },
+            );
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Wave Strength",
+                wave_strength,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, 0.0..=20.0));
+                },
+            );
         }
         EffectType::Fisheye { strength } => {
-            draw_prop(ui, current_frame, project_changed, next_frame, "Strength (− = pincushion)", strength, |ui, v| { ui.add(egui::Slider::new(v, -1.0..=1.0)); });
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Strength (− = pincushion)",
+                strength,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, -1.0..=1.0));
+                },
+            );
         }
         EffectType::LensCorrection { k1, k2 } => {
-            draw_prop(ui, current_frame, project_changed, next_frame, "K1 (Barrel + / Pincushion −)", k1, |ui, v| { ui.add(egui::Slider::new(v, -0.5..=0.5)); });
-            draw_prop(ui, current_frame, project_changed, next_frame, "K2", k2, |ui, v| { ui.add(egui::Slider::new(v, -0.5..=0.5)); });
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "K1 (Barrel + / Pincushion −)",
+                k1,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, -0.5..=0.5));
+                },
+            );
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "K2",
+                k2,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, -0.5..=0.5));
+                },
+            );
         }
         EffectType::GlitchDisplacement { seed, amount } => {
-            draw_prop(ui, current_frame, project_changed, next_frame, "Seed", seed, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=9999.0)); });
-            draw_prop(ui, current_frame, project_changed, next_frame, "Amount", amount, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=10.0)); });
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Seed",
+                seed,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, 0.0..=9999.0));
+                },
+            );
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Amount",
+                amount,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, 0.0..=10.0));
+                },
+            );
         }
         EffectType::MatteChokeSpread { radius, expand } => {
-            draw_prop(ui, current_frame, project_changed, next_frame, "Radius", radius, |ui, v| { ui.add(egui::Slider::new(v, 1.0..=64.0).suffix(" px")); });
-            if ui.checkbox(expand, "Expand (spread instead of choke)").changed() {
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Radius",
+                radius,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, 1.0..=64.0).suffix(" px"));
+                },
+            );
+            if ui
+                .checkbox(expand, "Expand (spread instead of choke)")
+                .changed()
+            {
                 *project_changed = true;
             }
         }
         EffectType::AlphaFeather { radius } => {
-            draw_prop(ui, current_frame, project_changed, next_frame, "Radius", radius, |ui, v| { ui.add(egui::Slider::new(v, 1.0..=64.0).suffix(" px")); });
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Radius",
+                radius,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, 1.0..=64.0).suffix(" px"));
+                },
+            );
         }
         EffectType::AlphaFromLuminance { invert } => {
             if ui.checkbox(invert, "Invert (dark = opaque)").changed() {
@@ -1989,40 +3310,261 @@ pub fn draw_effect_type_ui(
             }
         }
         EffectType::NightVision { amplification } => {
-            draw_prop(ui, current_frame, project_changed, next_frame, "Amplification", amplification, |ui, v| { ui.add(egui::Slider::new(v, 1.0..=8.0).suffix("×")); });
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Amplification",
+                amplification,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, 1.0..=8.0).suffix("×"));
+                },
+            );
         }
         EffectType::IrisWipe { completion } => {
-            draw_prop(ui, current_frame, project_changed, next_frame, "Completion", completion, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=100.0).suffix("%")); });
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Completion",
+                completion,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, 0.0..=100.0).suffix("%"));
+                },
+            );
         }
         EffectType::RadialWipe { completion } => {
-            draw_prop(ui, current_frame, project_changed, next_frame, "Completion", completion, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=100.0).suffix("%")); });
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Completion",
+                completion,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, 0.0..=100.0).suffix("%"));
+                },
+            );
         }
-        EffectType::FilmEmulation { lift, gamma, gain, hue_shift_deg } => {
-            draw_prop(ui, current_frame, project_changed, next_frame, "Lift", lift, |ui, v| { ui.add(egui::Slider::new(v, -0.5..=0.5)); });
-            draw_prop(ui, current_frame, project_changed, next_frame, "Gamma", gamma, |ui, v| { ui.add(egui::Slider::new(v, 0.1..=3.0)); });
-            draw_prop(ui, current_frame, project_changed, next_frame, "Gain", gain, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=3.0)); });
-            draw_prop(ui, current_frame, project_changed, next_frame, "Hue Shift", hue_shift_deg, |ui, v| { ui.add(egui::Slider::new(v, -180.0..=180.0).suffix("°")); });
+        EffectType::FilmEmulation {
+            lift,
+            gamma,
+            gain,
+            hue_shift_deg,
+        } => {
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Lift",
+                lift,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, -0.5..=0.5));
+                },
+            );
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Gamma",
+                gamma,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, 0.1..=3.0));
+                },
+            );
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Gain",
+                gain,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, 0.0..=3.0));
+                },
+            );
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Hue Shift",
+                hue_shift_deg,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, -180.0..=180.0).suffix("°"));
+                },
+            );
         }
-        EffectType::GodRays { sun_x, sun_y, samples, decay, weight } => {
-            draw_prop(ui, current_frame, project_changed, next_frame, "Sun X", sun_x, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=1.0)); });
-            draw_prop(ui, current_frame, project_changed, next_frame, "Sun Y", sun_y, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=1.0)); });
-            draw_prop(ui, current_frame, project_changed, next_frame, "Samples", samples, |ui, v| { ui.add(egui::Slider::new(v, 1.0..=64.0)); });
-            draw_prop(ui, current_frame, project_changed, next_frame, "Decay", decay, |ui, v| { ui.add(egui::Slider::new(v, 0.5..=1.0)); });
-            draw_prop(ui, current_frame, project_changed, next_frame, "Weight", weight, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=2.0)); });
+        EffectType::GodRays {
+            sun_x,
+            sun_y,
+            samples,
+            decay,
+            weight,
+        } => {
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Sun X",
+                sun_x,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, 0.0..=1.0));
+                },
+            );
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Sun Y",
+                sun_y,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, 0.0..=1.0));
+                },
+            );
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Samples",
+                samples,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, 1.0..=64.0));
+                },
+            );
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Decay",
+                decay,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, 0.5..=1.0));
+                },
+            );
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Weight",
+                weight,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, 0.0..=2.0));
+                },
+            );
         }
-        EffectType::AudioSpectrum { enabled: _, bands, opacity, color_start: _, color_end: _, position_x, position_y, width: spec_w, height: spec_h } => {
-            draw_prop(ui, current_frame, project_changed, next_frame, "Bands", bands, |ui, v| { ui.add(egui::Slider::new(v, 1.0..=5.0)); });
-            draw_prop(ui, current_frame, project_changed, next_frame, "Opacity", opacity, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=1.0)); });
-            draw_prop(ui, current_frame, project_changed, next_frame, "Position X", position_x, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=1.0)); });
-            draw_prop(ui, current_frame, project_changed, next_frame, "Position Y", position_y, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=1.0)); });
-            draw_prop(ui, current_frame, project_changed, next_frame, "Width", spec_w, |ui, v| { ui.add(egui::Slider::new(v, 0.01..=1.0)); });
-            draw_prop(ui, current_frame, project_changed, next_frame, "Height", spec_h, |ui, v| { ui.add(egui::Slider::new(v, 0.01..=1.0)); });
+        EffectType::AudioSpectrum {
+            enabled: _,
+            bands,
+            opacity,
+            color_start: _,
+            color_end: _,
+            position_x,
+            position_y,
+            width: spec_w,
+            height: spec_h,
+        } => {
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Bands",
+                bands,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, 1.0..=5.0));
+                },
+            );
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Opacity",
+                opacity,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, 0.0..=1.0));
+                },
+            );
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Position X",
+                position_x,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, 0.0..=1.0));
+                },
+            );
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Position Y",
+                position_y,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, 0.0..=1.0));
+                },
+            );
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Width",
+                spec_w,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, 0.01..=1.0));
+                },
+            );
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Height",
+                spec_h,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, 0.01..=1.0));
+                },
+            );
         }
         EffectType::RadialBlurZoom { amount } => {
-            draw_prop(ui, current_frame, project_changed, next_frame, "Amount", amount, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=100.0)); });
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Amount",
+                amount,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, 0.0..=100.0));
+                },
+            );
         }
         EffectType::MedianFilter { radius } => {
-            draw_prop(ui, current_frame, project_changed, next_frame, "Radius", radius, |ui, v| { ui.add(egui::Slider::new(v, 1.0..=16.0).suffix(" px")); });
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Radius",
+                radius,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, 1.0..=16.0).suffix(" px"));
+                },
+            );
         }
         EffectType::SobelEdges { invert } => {
             if ui.checkbox(invert, "Invert").changed() {
@@ -2030,122 +3572,715 @@ pub fn draw_effect_type_ui(
             }
         }
         EffectType::Mosaic { block_w, block_h } => {
-            draw_prop(ui, current_frame, project_changed, next_frame, "Block Width", block_w, |ui, v| { ui.add(egui::Slider::new(v, 1.0..=128.0).suffix(" px")); });
-            draw_prop(ui, current_frame, project_changed, next_frame, "Block Height", block_h, |ui, v| { ui.add(egui::Slider::new(v, 1.0..=128.0).suffix(" px")); });
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Block Width",
+                block_w,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, 1.0..=128.0).suffix(" px"));
+                },
+            );
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Block Height",
+                block_h,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, 1.0..=128.0).suffix(" px"));
+                },
+            );
         }
-        EffectType::TiltShift { focus_y, focus_height, max_blur } => {
-            draw_prop(ui, current_frame, project_changed, next_frame, "Focus Y", focus_y, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=1.0)); });
-            draw_prop(ui, current_frame, project_changed, next_frame, "Band Height", focus_height, |ui, v| { ui.add(egui::Slider::new(v, 0.02..=1.0)); });
-            draw_prop(ui, current_frame, project_changed, next_frame, "Max Blur", max_blur, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=32.0).suffix(" px")); });
+        EffectType::TiltShift {
+            focus_y,
+            focus_height,
+            max_blur,
+        } => {
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Focus Y",
+                focus_y,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, 0.0..=1.0));
+                },
+            );
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Band Height",
+                focus_height,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, 0.02..=1.0));
+                },
+            );
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Max Blur",
+                max_blur,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, 0.0..=32.0).suffix(" px"));
+                },
+            );
         }
         EffectType::Emboss { angle_deg, depth } => {
-            draw_prop(ui, current_frame, project_changed, next_frame, "Angle", angle_deg, |ui, v| { ui.add(egui::Slider::new(v, -180.0..=180.0).suffix("°")); });
-            draw_prop(ui, current_frame, project_changed, next_frame, "Depth", depth, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=10.0)); });
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Angle",
+                angle_deg,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, -180.0..=180.0).suffix("°"));
+                },
+            );
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Depth",
+                depth,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, 0.0..=10.0));
+                },
+            );
         }
-        EffectType::StarField { num_stars, depth_speed } => {
-            draw_prop(ui, current_frame, project_changed, next_frame, "Stars", num_stars, |ui, v| { ui.add(egui::Slider::new(v, 1.0..=2000.0)); });
-            draw_prop(ui, current_frame, project_changed, next_frame, "Depth Speed", depth_speed, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=10.0)); });
+        EffectType::StarField {
+            num_stars,
+            depth_speed,
+        } => {
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Stars",
+                num_stars,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, 1.0..=2000.0));
+                },
+            );
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Depth Speed",
+                depth_speed,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, 0.0..=10.0));
+                },
+            );
         }
-        EffectType::LightningArc { start_x, start_y, end_x, end_y, seed, glow } => {
-            draw_prop(ui, current_frame, project_changed, next_frame, "Start X", start_x, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=1.0)); });
-            draw_prop(ui, current_frame, project_changed, next_frame, "Start Y", start_y, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=1.0)); });
-            draw_prop(ui, current_frame, project_changed, next_frame, "End X", end_x, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=1.0)); });
-            draw_prop(ui, current_frame, project_changed, next_frame, "End Y", end_y, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=1.0)); });
-            draw_prop(ui, current_frame, project_changed, next_frame, "Seed", seed, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=9999.0)); });
-            draw_prop(ui, current_frame, project_changed, next_frame, "Glow", glow, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=5.0)); });
+        EffectType::LightningArc {
+            start_x,
+            start_y,
+            end_x,
+            end_y,
+            seed,
+            glow,
+        } => {
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Start X",
+                start_x,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, 0.0..=1.0));
+                },
+            );
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Start Y",
+                start_y,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, 0.0..=1.0));
+                },
+            );
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "End X",
+                end_x,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, 0.0..=1.0));
+                },
+            );
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "End Y",
+                end_y,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, 0.0..=1.0));
+                },
+            );
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Seed",
+                seed,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, 0.0..=9999.0));
+                },
+            );
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Glow",
+                glow,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, 0.0..=5.0));
+                },
+            );
+        }
+        EffectType::LaserBeam {
+            start_x,
+            start_y,
+            end_x,
+            end_y,
+            progress,
+            length,
+            starting_thickness,
+            ending_thickness,
+            core_color,
+            glow_color,
+        } => {
+            draw_prop(ui, current_frame, project_changed, next_frame, "Start X", start_x, |ui, v| {
+                ui.add(egui::Slider::new(v, 0.0..=1.0));
+            });
+            draw_prop(ui, current_frame, project_changed, next_frame, "Start Y", start_y, |ui, v| {
+                ui.add(egui::Slider::new(v, 0.0..=1.0));
+            });
+            draw_prop(ui, current_frame, project_changed, next_frame, "End X", end_x, |ui, v| {
+                ui.add(egui::Slider::new(v, 0.0..=1.0));
+            });
+            draw_prop(ui, current_frame, project_changed, next_frame, "End Y", end_y, |ui, v| {
+                ui.add(egui::Slider::new(v, 0.0..=1.0));
+            });
+            draw_prop(ui, current_frame, project_changed, next_frame, "Progress", progress, |ui, v| {
+                ui.add(egui::Slider::new(v, 0.0..=1.0));
+            });
+            draw_prop(ui, current_frame, project_changed, next_frame, "Length %", length, |ui, v| {
+                ui.add(egui::Slider::new(v, 1.0..=100.0));
+            });
+            draw_prop(ui, current_frame, project_changed, next_frame, "Start Thickness", starting_thickness, |ui, v| {
+                ui.add(egui::Slider::new(v, 0.5..=50.0));
+            });
+            draw_prop(ui, current_frame, project_changed, next_frame, "End Thickness", ending_thickness, |ui, v| {
+                ui.add(egui::Slider::new(v, 0.5..=50.0));
+            });
+            let c_before = core_color.clone();
+            if let Some(nf) = draw_property_ui(current_frame, ui, "Core Color", core_color, |ui, val| {
+                ui.color_edit_button_rgba_unmultiplied(val);
+            }) {
+                *next_frame = Some(nf);
+            }
+            if c_before != *core_color {
+                *project_changed = true;
+            }
+
+            let g_before = glow_color.clone();
+            if let Some(nf) = draw_property_ui(current_frame, ui, "Glow Color", glow_color, |ui, val| {
+                ui.color_edit_button_rgba_unmultiplied(val);
+            }) {
+                *next_frame = Some(nf);
+            }
+            if g_before != *glow_color {
+                *project_changed = true;
+            }
         }
         EffectType::FireAutomaton { intensity } => {
-            draw_prop(ui, current_frame, project_changed, next_frame, "Intensity", intensity, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=10.0)); });
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Intensity",
+                intensity,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, 0.0..=10.0));
+                },
+            );
         }
-        EffectType::LumaKeyRange { low_threshold, high_threshold, invert } => {
-            draw_prop(ui, current_frame, project_changed, next_frame, "Low Threshold", low_threshold, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=255.0)); });
-            draw_prop(ui, current_frame, project_changed, next_frame, "High Threshold", high_threshold, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=255.0)); });
+        EffectType::LumaKeyRange {
+            low_threshold,
+            high_threshold,
+            invert,
+        } => {
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Low Threshold",
+                low_threshold,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, 0.0..=255.0));
+                },
+            );
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "High Threshold",
+                high_threshold,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, 0.0..=255.0));
+                },
+            );
             if ui.checkbox(invert, "Invert").changed() {
                 *project_changed = true;
             }
         }
         EffectType::Halftone { cell_size } => {
-            draw_prop(ui, current_frame, project_changed, next_frame, "Cell Size", cell_size, |ui, v| { ui.add(egui::Slider::new(v, 2.0..=64.0).suffix(" px")); });
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Cell Size",
+                cell_size,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, 2.0..=64.0).suffix(" px"));
+                },
+            );
         }
         EffectType::Solarize { threshold } => {
-            draw_prop(ui, current_frame, project_changed, next_frame, "Threshold", threshold, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=255.0)); });
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Threshold",
+                threshold,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, 0.0..=255.0));
+                },
+            );
         }
         EffectType::PixelSort { threshold } => {
-            draw_prop(ui, current_frame, project_changed, next_frame, "Threshold", threshold, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=255.0)); });
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Threshold",
+                threshold,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, 0.0..=255.0));
+                },
+            );
         }
         EffectType::PinchPunch { radius, amount } => {
-            draw_prop(ui, current_frame, project_changed, next_frame, "Radius", radius, |ui, v| { ui.add(egui::Slider::new(v, 1.0..=2000.0).suffix(" px")); });
-            draw_prop(ui, current_frame, project_changed, next_frame, "Amount (+pinch / −punch)", amount, |ui, v| { ui.add(egui::Slider::new(v, -2.0..=2.0)); });
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Radius",
+                radius,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, 1.0..=2000.0).suffix(" px"));
+                },
+            );
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Amount (+pinch / −punch)",
+                amount,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, -2.0..=2.0));
+                },
+            );
         }
-        EffectType::ScanlineGlitch { jitter_amount, seed } => {
-            draw_prop(ui, current_frame, project_changed, next_frame, "Jitter", jitter_amount, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=50.0).suffix(" px")); });
-            draw_prop(ui, current_frame, project_changed, next_frame, "Seed", seed, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=9999.0)); });
+        EffectType::ScanlineGlitch {
+            jitter_amount,
+            seed,
+        } => {
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Jitter",
+                jitter_amount,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, 0.0..=50.0).suffix(" px"));
+                },
+            );
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Seed",
+                seed,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, 0.0..=9999.0));
+                },
+            );
         }
-        EffectType::GlassEdgeBevel { bevel_size, refraction } => {
-            draw_prop(ui, current_frame, project_changed, next_frame, "Bevel Size", bevel_size, |ui, v| { ui.add(egui::Slider::new(v, 1.0..=64.0).suffix(" px")); });
-            draw_prop(ui, current_frame, project_changed, next_frame, "Refraction", refraction, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=3.0)); });
+        EffectType::GlassEdgeBevel {
+            bevel_size,
+            refraction,
+        } => {
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Bevel Size",
+                bevel_size,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, 1.0..=64.0).suffix(" px"));
+                },
+            );
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Refraction",
+                refraction,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, 0.0..=3.0));
+                },
+            );
         }
-        EffectType::DirectionalSharpen { angle_deg, strength } => {
-            draw_prop(ui, current_frame, project_changed, next_frame, "Angle", angle_deg, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=360.0).suffix("°")); });
-            draw_prop(ui, current_frame, project_changed, next_frame, "Strength", strength, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=5.0)); });
+        EffectType::DirectionalSharpen {
+            angle_deg,
+            strength,
+        } => {
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Angle",
+                angle_deg,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, 0.0..=360.0).suffix("°"));
+                },
+            );
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Strength",
+                strength,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, 0.0..=5.0));
+                },
+            );
         }
         EffectType::RefractionLens { radius, ior } => {
-            draw_prop(ui, current_frame, project_changed, next_frame, "Radius", radius, |ui, v| { ui.add(egui::Slider::new(v, 1.0..=2000.0).suffix(" px")); });
-            draw_prop(ui, current_frame, project_changed, next_frame, "IOR", ior, |ui, v| { ui.add(egui::Slider::new(v, 1.0..=3.0)); });
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Radius",
+                radius,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, 1.0..=2000.0).suffix(" px"));
+                },
+            );
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "IOR",
+                ior,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, 1.0..=3.0));
+                },
+            );
         }
-        EffectType::GradientMap { low_color, mid_color, high_color } => {
+        EffectType::GradientMap {
+            low_color,
+            mid_color,
+            high_color,
+        } => {
             let lc_before = low_color.clone();
-            if let Some(nf) = draw_property_ui(current_frame, ui, "Shadow Color", low_color, |ui, val| {
-                ui.color_edit_button_rgb(val);
-            }) { *next_frame = Some(nf); }
-            if lc_before != *low_color { *project_changed = true; }
+            if let Some(nf) =
+                draw_property_ui(current_frame, ui, "Shadow Color", low_color, |ui, val| {
+                    ui.color_edit_button_rgb(val);
+                })
+            {
+                *next_frame = Some(nf);
+            }
+            if lc_before != *low_color {
+                *project_changed = true;
+            }
 
             let mc_before = mid_color.clone();
-            if let Some(nf) = draw_property_ui(current_frame, ui, "Mid Color", mid_color, |ui, val| {
-                ui.color_edit_button_rgb(val);
-            }) { *next_frame = Some(nf); }
-            if mc_before != *mid_color { *project_changed = true; }
+            if let Some(nf) =
+                draw_property_ui(current_frame, ui, "Mid Color", mid_color, |ui, val| {
+                    ui.color_edit_button_rgb(val);
+                })
+            {
+                *next_frame = Some(nf);
+            }
+            if mc_before != *mid_color {
+                *project_changed = true;
+            }
 
             let hc_before = high_color.clone();
-            if let Some(nf) = draw_property_ui(current_frame, ui, "Highlight Color", high_color, |ui, val| {
-                ui.color_edit_button_rgb(val);
-            }) { *next_frame = Some(nf); }
-            if hc_before != *high_color { *project_changed = true; }
+            if let Some(nf) = draw_property_ui(
+                current_frame,
+                ui,
+                "Highlight Color",
+                high_color,
+                |ui, val| {
+                    ui.color_edit_button_rgb(val);
+                },
+            ) {
+                *next_frame = Some(nf);
+            }
+            if hc_before != *high_color {
+                *project_changed = true;
+            }
         }
-        EffectType::LightLeak { pos_x, pos_y, intensity } => {
-            draw_prop(ui, current_frame, project_changed, next_frame, "Position X", pos_x, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=1.0)); });
-            draw_prop(ui, current_frame, project_changed, next_frame, "Position Y", pos_y, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=1.0)); });
-            draw_prop(ui, current_frame, project_changed, next_frame, "Intensity", intensity, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=3.0)); });
+        EffectType::LightLeak {
+            pos_x,
+            pos_y,
+            intensity,
+        } => {
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Position X",
+                pos_x,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, 0.0..=1.0));
+                },
+            );
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Position Y",
+                pos_y,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, 0.0..=1.0));
+                },
+            );
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Intensity",
+                intensity,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, 0.0..=3.0));
+                },
+            );
         }
-        EffectType::BevelAlpha { depth, light_angle_deg } => {
-            draw_prop(ui, current_frame, project_changed, next_frame, "Depth", depth, |ui, v| { ui.add(egui::Slider::new(v, 1.0..=32.0).suffix(" px")); });
-            draw_prop(ui, current_frame, project_changed, next_frame, "Light Angle", light_angle_deg, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=360.0).suffix("°")); });
+        EffectType::BevelAlpha {
+            depth,
+            light_angle_deg,
+        } => {
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Depth",
+                depth,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, 1.0..=32.0).suffix(" px"));
+                },
+            );
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Light Angle",
+                light_angle_deg,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, 0.0..=360.0).suffix("°"));
+                },
+            );
         }
-        EffectType::CrossHatch { line_gap, threshold } => {
-            draw_prop(ui, current_frame, project_changed, next_frame, "Line Gap", line_gap, |ui, v| { ui.add(egui::Slider::new(v, 2.0..=32.0).suffix(" px")); });
-            draw_prop(ui, current_frame, project_changed, next_frame, "Threshold", threshold, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=255.0)); });
+        EffectType::CrossHatch {
+            line_gap,
+            threshold,
+        } => {
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Line Gap",
+                line_gap,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, 2.0..=32.0).suffix(" px"));
+                },
+            );
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Threshold",
+                threshold,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, 0.0..=255.0));
+                },
+            );
         }
         EffectType::CmykHalftone { dot_size } => {
-            draw_prop(ui, current_frame, project_changed, next_frame, "Dot Size", dot_size, |ui, v| { ui.add(egui::Slider::new(v, 2.0..=32.0).suffix(" px")); });
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Dot Size",
+                dot_size,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, 2.0..=32.0).suffix(" px"));
+                },
+            );
         }
-        EffectType::ReflectionMap { reflect_y, fade_dist, opacity } => {
-            draw_prop(ui, current_frame, project_changed, next_frame, "Horizon Y", reflect_y, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=2000.0).suffix(" px")); });
-            draw_prop(ui, current_frame, project_changed, next_frame, "Fade Distance", fade_dist, |ui, v| { ui.add(egui::Slider::new(v, 1.0..=1000.0).suffix(" px")); });
-            draw_prop(ui, current_frame, project_changed, next_frame, "Opacity", opacity, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=1.0)); });
+        EffectType::ReflectionMap {
+            reflect_y,
+            fade_dist,
+            opacity,
+        } => {
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Horizon Y",
+                reflect_y,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, 0.0..=2000.0).suffix(" px"));
+                },
+            );
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Fade Distance",
+                fade_dist,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, 1.0..=1000.0).suffix(" px"));
+                },
+            );
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Opacity",
+                opacity,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, 0.0..=1.0));
+                },
+            );
         }
         EffectType::PerlinFlow { scale } => {
-            draw_prop(ui, current_frame, project_changed, next_frame, "Scale", scale, |ui, v| { ui.add(egui::Slider::new(v, 0.5..=20.0)); });
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Scale",
+                scale,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, 0.5..=20.0));
+                },
+            );
         }
         EffectType::FbmTurbulence { octaves, amplitude } => {
-            draw_prop(ui, current_frame, project_changed, next_frame, "Octaves", octaves, |ui, v| { ui.add(egui::Slider::new(v, 1.0..=8.0)); });
-            draw_prop(ui, current_frame, project_changed, next_frame, "Amplitude", amplitude, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=255.0)); });
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Octaves",
+                octaves,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, 1.0..=8.0));
+                },
+            );
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Amplitude",
+                amplitude,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, 0.0..=255.0));
+                },
+            );
         }
         // ── Expression Controls ──
         EffectType::SliderControl { value } => {
-            draw_prop(ui, current_frame, project_changed, next_frame, "Value", value, |ui, v| { ui.add(egui::DragValue::new(v).speed(0.1)); });
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Value",
+                value,
+                |ui, v| {
+                    ui.add(egui::DragValue::new(v).speed(0.1));
+                },
+            );
         }
         EffectType::AngleControl { angle_degrees } => {
-            draw_prop(ui, current_frame, project_changed, next_frame, "Angle", angle_degrees, |ui, v| { ui.add(egui::DragValue::new(v).speed(1.0).suffix("°")); });
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Angle",
+                angle_degrees,
+                |ui, v| {
+                    ui.add(egui::DragValue::new(v).speed(1.0).suffix("°"));
+                },
+            );
         }
         EffectType::PointControl { point } => {
             let p_before = point.clone();
@@ -2154,18 +4289,36 @@ pub fn draw_effect_type_ui(
                     ui.add(egui::DragValue::new(&mut val[0]).speed(1.0).prefix("X: "));
                     ui.add(egui::DragValue::new(&mut val[1]).speed(1.0).prefix("Y: "));
                 });
-            }) { *next_frame = Some(nf); }
-            if p_before != *point { *project_changed = true; }
+            }) {
+                *next_frame = Some(nf);
+            }
+            if p_before != *point {
+                *project_changed = true;
+            }
         }
         EffectType::Letterbox { frac } => {
-            draw_prop(ui, current_frame, project_changed, next_frame, "Bars (frame frac)", frac, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=0.45)); });
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Bars (frame frac)",
+                frac,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, 0.0..=0.45));
+                },
+            );
         }
         EffectType::ColorControl { color } => {
             let c_before = color.clone();
             if let Some(nf) = draw_property_ui(current_frame, ui, "Color", color, |ui, val| {
                 ui.color_edit_button_rgba_unmultiplied(val);
-            }) { *next_frame = Some(nf); }
-            if c_before != *color { *project_changed = true; }
+            }) {
+                *next_frame = Some(nf);
+            }
+            if c_before != *color {
+                *project_changed = true;
+            }
         }
         EffectType::CheckboxControl { checked } => {
             if ui.checkbox(checked, "Enabled").changed() {
@@ -2192,28 +4345,75 @@ pub fn draw_effect_type_ui(
                     ui.add(egui::DragValue::new(&mut val[1]).speed(1.0).prefix("Y: "));
                     ui.add(egui::DragValue::new(&mut val[2]).speed(1.0).prefix("Z: "));
                 });
-            }) { *next_frame = Some(nf); }
-            if p_before != *point { *project_changed = true; }
+            }) {
+                *next_frame = Some(nf);
+            }
+            if p_before != *point {
+                *project_changed = true;
+            }
         }
         EffectType::MergePaths { operation } => {
-            draw_prop(ui, current_frame, project_changed, next_frame, "Operation", operation, |ui, v| {
-                ui.add(egui::Slider::new(v, 0.0..=3.0).text("0=Add 1=Sub 2=Int 3=Exc"));
-            });
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Operation",
+                operation,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, 0.0..=3.0).text("0=Add 1=Sub 2=Int 3=Exc"));
+                },
+            );
         }
-        EffectType::OffsetPath { amount, line_join, miter_limit } => {
-            draw_prop(ui, current_frame, project_changed, next_frame, "Amount", amount, |ui, v| {
-                ui.add(egui::Slider::new(v, -100.0..=100.0).text("Amount (px)"));
-            });
-            draw_prop(ui, current_frame, project_changed, next_frame, "Line Join", line_join, |ui, v| {
-                ui.add(egui::Slider::new(v, 0.0..=2.0).text("Line Join"));
-            });
-            draw_prop(ui, current_frame, project_changed, next_frame, "Miter Limit", miter_limit, |ui, v| {
-                ui.add(egui::Slider::new(v, 1.0..=100.0).text("Miter Limit"));
-            });
+        EffectType::OffsetPath {
+            amount,
+            line_join,
+            miter_limit,
+        } => {
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Amount",
+                amount,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, -100.0..=100.0).text("Amount (px)"));
+                },
+            );
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Line Join",
+                line_join,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, 0.0..=2.0).text("Line Join"));
+                },
+            );
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Miter Limit",
+                miter_limit,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, 1.0..=100.0).text("Miter Limit"));
+                },
+            );
         }
-        EffectType::CustomShader { wgsl_source, uniform_values } => {
-            ui.label(egui::RichText::new("⚡ Custom WGSL Shader Plugin").strong().color(colors::ACCENT_CYAN));
-            
+        EffectType::CustomShader {
+            wgsl_source,
+            uniform_values,
+        } => {
+            ui.label(
+                egui::RichText::new("⚡ Custom WGSL Shader Plugin")
+                    .strong()
+                    .color(colors::ACCENT_CYAN),
+            );
+
             // Templates dropdown
             ui.horizontal(|ui| {
                 ui.label("Templates:");
@@ -2229,7 +4429,8 @@ fn fs_main(@location(0) uv: vec2<f32>) -> @location(0) vec4<f32> {
     let scanline = sin(uv.y * (u_params.x * 400.0 + 100.0)) * 0.5 + 0.5;
     color = vec4<f32>(color.rgb * mix(1.0, scanline, u_params.y), color.a);
     return color;
-}"#.to_string();
+}"#
+                    .to_string();
                     if uniform_values.len() < 2 {
                         *uniform_values = vec![1.0, 0.4];
                     }
@@ -2249,7 +4450,8 @@ fn fs_main(@location(0) uv: vec2<f32>) -> @location(0) vec4<f32> {
     let angle = atan2(delta.y, delta.x) + (1.0 - smoothstep(0.0, u_params.y, dist)) * u_params.x;
     let twisted_uv = center + vec2<f32>(cos(angle), sin(angle)) * dist;
     return textureSample(t_diffuse, s_diffuse, clamp(twisted_uv, vec2<f32>(0.0), vec2<f32>(1.0)));
-}"#.to_string();
+}"#
+                    .to_string();
                     if uniform_values.len() < 2 {
                         *uniform_values = vec![1.5, 0.5];
                     }
@@ -2269,7 +4471,8 @@ fn fs_main(@location(0) uv: vec2<f32>) -> @location(0) vec4<f32> {
     let diff = length(col.rgb - right.rgb) + length(col.rgb - down.rgb);
     let neon = smoothstep(u_params.x * 0.1, 0.5, diff) * u_params.y * vec3<f32>(0.1, 0.9, 1.0);
     return vec4<f32>(col.rgb + neon, col.a);
-}"#.to_string();
+}"#
+                    .to_string();
                     if uniform_values.len() < 2 {
                         *uniform_values = vec![0.5, 2.0];
                     }
@@ -2278,7 +4481,15 @@ fn fs_main(@location(0) uv: vec2<f32>) -> @location(0) vec4<f32> {
             });
 
             ui.add_space(4.0);
-            if ui.add(egui::TextEdit::multiline(wgsl_source).code_editor().desired_width(f32::INFINITY).desired_rows(8)).changed() {
+            if ui
+                .add(
+                    egui::TextEdit::multiline(wgsl_source)
+                        .code_editor()
+                        .desired_width(f32::INFINITY)
+                        .desired_rows(8),
+                )
+                .changed()
+            {
                 *project_changed = true;
             }
 
@@ -2286,11 +4497,19 @@ fn fs_main(@location(0) uv: vec2<f32>) -> @location(0) vec4<f32> {
             let is_valid = wgsl_source.contains("fn fs_main") || wgsl_source.contains("@fragment");
             ui.horizontal(|ui| {
                 if is_valid {
-                    ui.label(egui::RichText::new("✅ WGSL Syntax OK").small().color(colors::ACCENT_GREEN));
+                    ui.label(
+                        egui::RichText::new("✅ WGSL Syntax OK")
+                            .small()
+                            .color(colors::ACCENT_GREEN),
+                    );
                 } else {
-                    ui.label(egui::RichText::new("⚠ Missing @fragment entrypoint").small().color(colors::ACCENT_ORANGE));
+                    ui.label(
+                        egui::RichText::new("⚠ Missing @fragment entrypoint")
+                            .small()
+                            .color(colors::ACCENT_ORANGE),
+                    );
                 }
-                
+
                 if ui.small_button("+ Add Uniform Float").clicked() {
                     uniform_values.push(1.0);
                     *project_changed = true;
@@ -2304,67 +4523,383 @@ fn fs_main(@location(0) uv: vec2<f32>) -> @location(0) vec4<f32> {
             // Interactive dynamic uniform sliders
             for (i, v) in uniform_values.iter_mut().enumerate() {
                 ui.horizontal(|ui| {
-                    ui.label(format!("Param [{}] (u_params.{}):", i, match i { 0 => "x", 1 => "y", 2 => "z", 3 => "w", _ => "?" }));
+                    ui.label(format!(
+                        "Param [{}] (u_params.{}):",
+                        i,
+                        match i {
+                            0 => "x",
+                            1 => "y",
+                            2 => "z",
+                            3 => "w",
+                            _ => "?",
+                        }
+                    ));
                     if ui.add(egui::DragValue::new(v).speed(0.01)).changed() {
                         *project_changed = true;
                     }
                 });
             }
         }
-        EffectType::BassTreble { bass_gain, treble_gain, crossover_freq } => {
+        EffectType::BassTreble {
+            bass_gain,
+            treble_gain,
+            crossover_freq,
+        } => {
             ui.label("Bass & Treble");
-            draw_prop(ui, current_frame, project_changed, next_frame, "Bass (dB)", bass_gain, |ui, v| { ui.add(egui::Slider::new(v, -24.0..=24.0)); });
-            draw_prop(ui, current_frame, project_changed, next_frame, "Treble (dB)", treble_gain, |ui, v| { ui.add(egui::Slider::new(v, -24.0..=24.0)); });
-            draw_prop(ui, current_frame, project_changed, next_frame, "Crossover (Hz)", crossover_freq, |ui, v| { ui.add(egui::Slider::new(v, 80.0..=5000.0)); });
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Bass (dB)",
+                bass_gain,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, -24.0..=24.0));
+                },
+            );
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Treble (dB)",
+                treble_gain,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, -24.0..=24.0));
+                },
+            );
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Crossover (Hz)",
+                crossover_freq,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, 80.0..=5000.0));
+                },
+            );
         }
-        EffectType::Flanger { max_delay_ms, lfo_rate, feedback, wet_dry } => {
+        EffectType::Flanger {
+            max_delay_ms,
+            lfo_rate,
+            feedback,
+            wet_dry,
+        } => {
             ui.label("Flanger");
-            draw_prop(ui, current_frame, project_changed, next_frame, "Max Delay (ms)", max_delay_ms, |ui, v| { ui.add(egui::Slider::new(v, 1.0..=10.0)); });
-            draw_prop(ui, current_frame, project_changed, next_frame, "LFO Rate (Hz)", lfo_rate, |ui, v| { ui.add(egui::Slider::new(v, 0.1..=10.0)); });
-            draw_prop(ui, current_frame, project_changed, next_frame, "Feedback", feedback, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=0.95)); });
-            draw_prop(ui, current_frame, project_changed, next_frame, "Wet/Dry", wet_dry, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=1.0)); });
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Max Delay (ms)",
+                max_delay_ms,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, 1.0..=10.0));
+                },
+            );
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "LFO Rate (Hz)",
+                lfo_rate,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, 0.1..=10.0));
+                },
+            );
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Feedback",
+                feedback,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, 0.0..=0.95));
+                },
+            );
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Wet/Dry",
+                wet_dry,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, 0.0..=1.0));
+                },
+            );
         }
-        EffectType::Chorus { delay_ms, depth_ms, rate_hz, voices, feedback } => {
+        EffectType::Chorus {
+            delay_ms,
+            depth_ms,
+            rate_hz,
+            voices,
+            feedback,
+        } => {
             ui.label("Chorus");
-            draw_prop(ui, current_frame, project_changed, next_frame, "Delay (ms)", delay_ms, |ui, v| { ui.add(egui::Slider::new(v, 1.0..=30.0)); });
-            draw_prop(ui, current_frame, project_changed, next_frame, "Depth (ms)", depth_ms, |ui, v| { ui.add(egui::Slider::new(v, 0.5..=10.0)); });
-            draw_prop(ui, current_frame, project_changed, next_frame, "Rate (Hz)", rate_hz, |ui, v| { ui.add(egui::Slider::new(v, 0.1..=6.0)); });
-            draw_prop(ui, current_frame, project_changed, next_frame, "Voices", voices, |ui, v| { ui.add(egui::Slider::new(v, 2.0..=8.0)); });
-            draw_prop(ui, current_frame, project_changed, next_frame, "Feedback", feedback, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=0.9)); });
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Delay (ms)",
+                delay_ms,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, 1.0..=30.0));
+                },
+            );
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Depth (ms)",
+                depth_ms,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, 0.5..=10.0));
+                },
+            );
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Rate (Hz)",
+                rate_hz,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, 0.1..=6.0));
+                },
+            );
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Voices",
+                voices,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, 2.0..=8.0));
+                },
+            );
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Feedback",
+                feedback,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, 0.0..=0.9));
+                },
+            );
         }
-        EffectType::ParametricEQ { freq_hz, gain_db, q_factor } => {
+        EffectType::ParametricEQ {
+            freq_hz,
+            gain_db,
+            q_factor,
+        } => {
             ui.label("Parametric EQ");
-            draw_prop(ui, current_frame, project_changed, next_frame, "Frequency (Hz)", freq_hz, |ui, v| { ui.add(egui::Slider::new(v, 60.0..=18000.0)); });
-            draw_prop(ui, current_frame, project_changed, next_frame, "Gain (dB)", gain_db, |ui, v| { ui.add(egui::Slider::new(v, -24.0..=24.0)); });
-            draw_prop(ui, current_frame, project_changed, next_frame, "Q Factor", q_factor, |ui, v| { ui.add(egui::Slider::new(v, 0.5..=12.0)); });
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Frequency (Hz)",
+                freq_hz,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, 60.0..=18000.0));
+                },
+            );
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Gain (dB)",
+                gain_db,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, -24.0..=24.0));
+                },
+            );
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Q Factor",
+                q_factor,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, 0.5..=12.0));
+                },
+            );
         }
-        EffectType::OpticalFlares { position: _, brightness, scale } => {
+        EffectType::OpticalFlares {
+            position: _,
+            brightness,
+            scale,
+        } => {
             ui.label("✨ Optical Flares");
-            draw_prop(ui, current_frame, project_changed, next_frame, "Brightness", brightness, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=5.0)); });
-            draw_prop(ui, current_frame, project_changed, next_frame, "Scale", scale, |ui, v| { ui.add(egui::Slider::new(v, 0.1..=5.0)); });
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Brightness",
+                brightness,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, 0.0..=5.0));
+                },
+            );
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Scale",
+                scale,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, 0.1..=5.0));
+                },
+            );
         }
-        EffectType::MotionTile { tile_center: _, tile_width, tile_height, output_width, output_height, mirror_edges, phase } => {
+        EffectType::MotionTile {
+            tile_center: _,
+            tile_width,
+            tile_height,
+            output_width,
+            output_height,
+            mirror_edges,
+            phase,
+        } => {
             ui.label("🔲 Motion Tile");
-            draw_prop(ui, current_frame, project_changed, next_frame, "Tile Width", tile_width, |ui, v| { ui.add(egui::Slider::new(v, 1.0..=500.0).suffix(" %")); });
-            draw_prop(ui, current_frame, project_changed, next_frame, "Tile Height", tile_height, |ui, v| { ui.add(egui::Slider::new(v, 1.0..=500.0).suffix(" %")); });
-            draw_prop(ui, current_frame, project_changed, next_frame, "Output Width", output_width, |ui, v| { ui.add(egui::Slider::new(v, 100.0..=1000.0).suffix(" %")); });
-            draw_prop(ui, current_frame, project_changed, next_frame, "Output Height", output_height, |ui, v| { ui.add(egui::Slider::new(v, 100.0..=1000.0).suffix(" %")); });
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Tile Width",
+                tile_width,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, 1.0..=500.0).suffix(" %"));
+                },
+            );
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Tile Height",
+                tile_height,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, 1.0..=500.0).suffix(" %"));
+                },
+            );
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Output Width",
+                output_width,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, 100.0..=1000.0).suffix(" %"));
+                },
+            );
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Output Height",
+                output_height,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, 100.0..=1000.0).suffix(" %"));
+                },
+            );
             ui.checkbox(mirror_edges, "Mirror Edges");
-            draw_prop(ui, current_frame, project_changed, next_frame, "Phase", phase, |ui, v| { ui.add(egui::Slider::new(v, -360.0..=360.0).suffix(" °")); });
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Phase",
+                phase,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, -360.0..=360.0).suffix(" °"));
+                },
+            );
         }
-        EffectType::PageTurn { fold_position: _, fold_radius, fold_direction_deg, light_direction_deg, back_opacity, back_color: _ } => {
+        EffectType::PageTurn {
+            fold_position: _,
+            fold_radius,
+            fold_direction_deg,
+            light_direction_deg,
+            back_opacity,
+            back_color: _,
+        } => {
             ui.label("📖 CC Page Turn");
-            draw_prop(ui, current_frame, project_changed, next_frame, "Fold Radius", fold_radius, |ui, v| { ui.add(egui::Slider::new(v, 10.0..=500.0).suffix(" px")); });
-            draw_prop(ui, current_frame, project_changed, next_frame, "Fold Angle", fold_direction_deg, |ui, v| { ui.add(egui::Slider::new(v, -180.0..=180.0).suffix(" °")); });
-            draw_prop(ui, current_frame, project_changed, next_frame, "Light Direction", light_direction_deg, |ui, v| { ui.add(egui::Slider::new(v, -180.0..=180.0).suffix(" °")); });
-            draw_prop(ui, current_frame, project_changed, next_frame, "Back Opacity", back_opacity, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=100.0).suffix(" %")); });
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Fold Radius",
+                fold_radius,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, 10.0..=500.0).suffix(" px"));
+                },
+            );
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Fold Angle",
+                fold_direction_deg,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, -180.0..=180.0).suffix(" °"));
+                },
+            );
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Light Direction",
+                light_direction_deg,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, -180.0..=180.0).suffix(" °"));
+                },
+            );
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Back Opacity",
+                back_opacity,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, 0.0..=100.0).suffix(" %"));
+                },
+            );
         }
-        EffectType::SetMatte { source_layer_idx, source_channel, invert_matte, composite_mode } => {
+        EffectType::SetMatte {
+            source_layer_idx,
+            source_channel,
+            invert_matte,
+            composite_mode,
+        } => {
             ui.label("🎭 Set Matte");
             ui.horizontal(|ui| {
                 ui.label("Source Layer Index:");
                 let mut idx_i32 = *source_layer_idx as i32;
-                if ui.add(egui::DragValue::new(&mut idx_i32).range(0..=99)).changed() {
+                if ui
+                    .add(egui::DragValue::new(&mut idx_i32).range(0..=99))
+                    .changed()
+                {
                     *source_layer_idx = idx_i32.max(0) as usize;
                     *project_changed = true;
                 }
@@ -2382,7 +4917,10 @@ fn fs_main(@location(0) uv: vec2<f32>) -> @location(0) vec4<f32> {
                             crate::core::set_matte::MatteSourceChannel::Blue,
                             crate::core::set_matte::MatteSourceChannel::Lightness,
                         ] {
-                            if ui.selectable_value(source_channel, ch, format!("{:?}", ch)).changed() {
+                            if ui
+                                .selectable_value(source_channel, ch, format!("{:?}", ch))
+                                .changed()
+                            {
                                 *project_changed = true;
                             }
                         }
@@ -2402,16 +4940,35 @@ fn fs_main(@location(0) uv: vec2<f32>) -> @location(0) vec4<f32> {
                             crate::core::set_matte::MatteCompositeMode::Add,
                             crate::core::set_matte::MatteCompositeMode::Subtract,
                         ] {
-                            if ui.selectable_value(composite_mode, m, format!("{:?}", m)).changed() {
+                            if ui
+                                .selectable_value(composite_mode, m, format!("{:?}", m))
+                                .changed()
+                            {
                                 *project_changed = true;
                             }
                         }
                     });
             });
         }
-        EffectType::Echo { echo_time_seconds, num_echoes, starting_intensity, decay, operator } => {
+        EffectType::Echo {
+            echo_time_seconds,
+            num_echoes,
+            starting_intensity,
+            decay,
+            operator,
+        } => {
             ui.label("⏱️ Echo");
-            draw_prop(ui, current_frame, project_changed, next_frame, "Echo Time (s)", echo_time_seconds, |ui, v| { ui.add(egui::Slider::new(v, -2.0..=2.0).suffix(" s")); });
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Echo Time (s)",
+                echo_time_seconds,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, -2.0..=2.0).suffix(" s"));
+                },
+            );
             ui.horizontal(|ui| {
                 ui.label("Number of Echoes:");
                 let mut n_i32 = *num_echoes as i32;
@@ -2420,8 +4977,28 @@ fn fs_main(@location(0) uv: vec2<f32>) -> @location(0) vec4<f32> {
                     *project_changed = true;
                 }
             });
-            draw_prop(ui, current_frame, project_changed, next_frame, "Starting Intensity", starting_intensity, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=2.0)); });
-            draw_prop(ui, current_frame, project_changed, next_frame, "Decay", decay, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=1.0)); });
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Starting Intensity",
+                starting_intensity,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, 0.0..=2.0));
+                },
+            );
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Decay",
+                decay,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, 0.0..=1.0));
+                },
+            );
             ui.horizontal(|ui| {
                 ui.label("Echo Operator:");
                 egui::ComboBox::from_id_salt("echo_operator")
@@ -2436,7 +5013,10 @@ fn fs_main(@location(0) uv: vec2<f32>) -> @location(0) vec4<f32> {
                             crate::core::echo_effect::EchoOperator::CompositeInFront,
                             crate::core::echo_effect::EchoOperator::Blend,
                         ] {
-                            if ui.selectable_value(operator, op, format!("{:?}", op)).changed() {
+                            if ui
+                                .selectable_value(operator, op, format!("{:?}", op))
+                                .changed()
+                            {
                                 *project_changed = true;
                             }
                         }
@@ -2449,43 +5029,150 @@ fn fs_main(@location(0) uv: vec2<f32>) -> @location(0) vec4<f32> {
                 *project_changed = true;
             }
         }
-        EffectType::Transform { anchor_point, position, scale_width, scale_height, uniform_scale, skew_deg, skew_axis_deg, rotation_deg, opacity } => {
+        EffectType::Transform {
+            anchor_point,
+            position,
+            scale_width,
+            scale_height,
+            uniform_scale,
+            skew_deg,
+            skew_axis_deg,
+            rotation_deg,
+            opacity,
+        } => {
             ui.label("📐 Transform");
             let ap_before = anchor_point.clone();
-            if let Some(nf) = draw_property_ui(current_frame, ui, "Anchor Point", anchor_point, |ui, val| {
-                ui.horizontal(|ui| {
-                    ui.add(egui::DragValue::new(&mut val[0]).speed(1.0).prefix("X: "));
-                    ui.add(egui::DragValue::new(&mut val[1]).speed(1.0).prefix("Y: "));
-                });
-            }) { *next_frame = Some(nf); }
-            if ap_before != *anchor_point { *project_changed = true; }
+            if let Some(nf) = draw_property_ui(
+                current_frame,
+                ui,
+                "Anchor Point",
+                anchor_point,
+                |ui, val| {
+                    ui.horizontal(|ui| {
+                        ui.add(egui::DragValue::new(&mut val[0]).speed(1.0).prefix("X: "));
+                        ui.add(egui::DragValue::new(&mut val[1]).speed(1.0).prefix("Y: "));
+                    });
+                },
+            ) {
+                *next_frame = Some(nf);
+            }
+            if ap_before != *anchor_point {
+                *project_changed = true;
+            }
 
             let pos_before = position.clone();
-            if let Some(nf) = draw_property_ui(current_frame, ui, "Position", position, |ui, val| {
-                ui.horizontal(|ui| {
-                    ui.add(egui::DragValue::new(&mut val[0]).speed(1.0).prefix("X: "));
-                    ui.add(egui::DragValue::new(&mut val[1]).speed(1.0).prefix("Y: "));
-                });
-            }) { *next_frame = Some(nf); }
-            if pos_before != *position { *project_changed = true; }
+            if let Some(nf) =
+                draw_property_ui(current_frame, ui, "Position", position, |ui, val| {
+                    ui.horizontal(|ui| {
+                        ui.add(egui::DragValue::new(&mut val[0]).speed(1.0).prefix("X: "));
+                        ui.add(egui::DragValue::new(&mut val[1]).speed(1.0).prefix("Y: "));
+                    });
+                })
+            {
+                *next_frame = Some(nf);
+            }
+            if pos_before != *position {
+                *project_changed = true;
+            }
 
             ui.horizontal(|ui| {
                 if ui.checkbox(uniform_scale, "Uniform Scale").changed() {
                     *project_changed = true;
                 }
             });
-            draw_prop(ui, current_frame, project_changed, next_frame, if *uniform_scale { "Scale" } else { "Scale Width" }, scale_width, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=1000.0).suffix("%")); });
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                if *uniform_scale {
+                    "Scale"
+                } else {
+                    "Scale Width"
+                },
+                scale_width,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, 0.0..=1000.0).suffix("%"));
+                },
+            );
             if !*uniform_scale {
-                draw_prop(ui, current_frame, project_changed, next_frame, "Scale Height", scale_height, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=1000.0).suffix("%")); });
+                draw_prop(
+                    ui,
+                    current_frame,
+                    project_changed,
+                    next_frame,
+                    "Scale Height",
+                    scale_height,
+                    |ui, v| {
+                        ui.add(egui::Slider::new(v, 0.0..=1000.0).suffix("%"));
+                    },
+                );
             }
-            draw_prop(ui, current_frame, project_changed, next_frame, "Skew", skew_deg, |ui, v| { ui.add(egui::Slider::new(v, -85.0..=85.0).suffix("°")); });
-            draw_prop(ui, current_frame, project_changed, next_frame, "Skew Axis", skew_axis_deg, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=360.0).suffix("°")); });
-            draw_prop(ui, current_frame, project_changed, next_frame, "Rotation", rotation_deg, |ui, v| { ui.add(egui::Slider::new(v, -3600.0..=3600.0).suffix("°")); });
-            draw_prop(ui, current_frame, project_changed, next_frame, "Opacity", opacity, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=100.0).suffix("%")); });
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Skew",
+                skew_deg,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, -85.0..=85.0).suffix("°"));
+                },
+            );
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Skew Axis",
+                skew_axis_deg,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, 0.0..=360.0).suffix("°"));
+                },
+            );
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Rotation",
+                rotation_deg,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, -3600.0..=3600.0).suffix("°"));
+                },
+            );
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Opacity",
+                opacity,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, 0.0..=100.0).suffix("%"));
+                },
+            );
         }
-        EffectType::CameraLensBlur { blur_radius, iris_blades, iris_rotation_deg, iris_roundness, highlight_gain, highlight_threshold } => {
+        EffectType::CameraLensBlur {
+            blur_radius,
+            iris_blades,
+            iris_rotation_deg,
+            iris_roundness,
+            highlight_gain,
+            highlight_threshold,
+        } => {
             ui.label("📷 Camera Lens Blur");
-            draw_prop(ui, current_frame, project_changed, next_frame, "Blur Radius", blur_radius, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=100.0).suffix(" px")); });
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Blur Radius",
+                blur_radius,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, 0.0..=100.0).suffix(" px"));
+                },
+            );
             ui.horizontal(|ui| {
                 ui.label("Iris Blades:");
                 let mut b_i32 = *iris_blades as i32;
@@ -2494,23 +5181,78 @@ fn fs_main(@location(0) uv: vec2<f32>) -> @location(0) vec4<f32> {
                     *project_changed = true;
                 }
             });
-            draw_prop(ui, current_frame, project_changed, next_frame, "Iris Rotation", iris_rotation_deg, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=360.0).suffix("°")); });
-            draw_prop(ui, current_frame, project_changed, next_frame, "Iris Roundness", iris_roundness, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=100.0).suffix("%")); });
-            draw_prop(ui, current_frame, project_changed, next_frame, "Highlight Gain", highlight_gain, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=5.0)); });
-            draw_prop(ui, current_frame, project_changed, next_frame, "Highlight Threshold", highlight_threshold, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=1.0)); });
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Iris Rotation",
+                iris_rotation_deg,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, 0.0..=360.0).suffix("°"));
+                },
+            );
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Iris Roundness",
+                iris_roundness,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, 0.0..=100.0).suffix("%"));
+                },
+            );
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Highlight Gain",
+                highlight_gain,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, 0.0..=5.0));
+                },
+            );
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Highlight Threshold",
+                highlight_threshold,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, 0.0..=1.0));
+                },
+            );
         }
-        EffectType::LinearColorKey { key_color, match_mode, tolerance, softness } => {
+        EffectType::LinearColorKey {
+            key_color,
+            match_mode,
+            tolerance,
+            softness,
+        } => {
             ui.label("🗝️ Linear Color Key");
             let kc_before = key_color.clone();
-            if let Some(nf) = draw_property_ui(current_frame, ui, "Key Color", key_color, |ui, val| {
-                let mut col = egui::Color32::from_rgb((val[0] * 255.0) as u8, (val[1] * 255.0) as u8, (val[2] * 255.0) as u8);
-                if ui.color_edit_button_srgba(&mut col).changed() {
-                    val[0] = col.r() as f32 / 255.0;
-                    val[1] = col.g() as f32 / 255.0;
-                    val[2] = col.b() as f32 / 255.0;
-                }
-            }) { *next_frame = Some(nf); }
-            if kc_before != *key_color { *project_changed = true; }
+            if let Some(nf) =
+                draw_property_ui(current_frame, ui, "Key Color", key_color, |ui, val| {
+                    let mut col = egui::Color32::from_rgb(
+                        (val[0] * 255.0) as u8,
+                        (val[1] * 255.0) as u8,
+                        (val[2] * 255.0) as u8,
+                    );
+                    if ui.color_edit_button_srgba(&mut col).changed() {
+                        val[0] = col.r() as f32 / 255.0;
+                        val[1] = col.g() as f32 / 255.0;
+                        val[2] = col.b() as f32 / 255.0;
+                    }
+                })
+            {
+                *next_frame = Some(nf);
+            }
+            if kc_before != *key_color {
+                *project_changed = true;
+            }
 
             ui.horizontal(|ui| {
                 ui.label("Match Colors:");
@@ -2522,16 +5264,43 @@ fn fs_main(@location(0) uv: vec2<f32>) -> @location(0) vec4<f32> {
                             crate::core::linear_color_key::ColorMatchMode::UsingHue,
                             crate::core::linear_color_key::ColorMatchMode::UsingChroma,
                         ] {
-                            if ui.selectable_value(match_mode, m, format!("{:?}", m)).changed() {
+                            if ui
+                                .selectable_value(match_mode, m, format!("{:?}", m))
+                                .changed()
+                            {
                                 *project_changed = true;
                             }
                         }
                     });
             });
-            draw_prop(ui, current_frame, project_changed, next_frame, "Tolerance", tolerance, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=100.0).suffix("%")); });
-            draw_prop(ui, current_frame, project_changed, next_frame, "Softness", softness, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=100.0).suffix("%")); });
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Tolerance",
+                tolerance,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, 0.0..=100.0).suffix("%"));
+                },
+            );
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Softness",
+                softness,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, 0.0..=100.0).suffix("%"));
+                },
+            );
         }
-        EffectType::ChannelCombiner { from_channel, to_target, invert } => {
+        EffectType::ChannelCombiner {
+            from_channel,
+            to_target,
+            invert,
+        } => {
             ui.label("🔀 Channel Combiner");
             ui.horizontal(|ui| {
                 ui.label("From:");
@@ -2550,7 +5319,10 @@ fn fs_main(@location(0) uv: vec2<f32>) -> @location(0) vec4<f32> {
                             crate::core::channel_combiner::ChannelCombinerFrom::MinRGB,
                             crate::core::channel_combiner::ChannelCombinerFrom::MaxRGB,
                         ] {
-                            if ui.selectable_value(from_channel, f, format!("{:?}", f)).changed() {
+                            if ui
+                                .selectable_value(from_channel, f, format!("{:?}", f))
+                                .changed()
+                            {
                                 *project_changed = true;
                             }
                         }
@@ -2570,7 +5342,10 @@ fn fs_main(@location(0) uv: vec2<f32>) -> @location(0) vec4<f32> {
                             crate::core::channel_combiner::ChannelCombinerTo::RGBA,
                             crate::core::channel_combiner::ChannelCombinerTo::Lightness,
                         ] {
-                            if ui.selectable_value(to_target, t, format!("{:?}", t)).changed() {
+                            if ui
+                                .selectable_value(to_target, t, format!("{:?}", t))
+                                .changed()
+                            {
                                 *project_changed = true;
                             }
                         }
@@ -2618,7 +5393,9 @@ pub fn draw_particle_emitter_controls(app: &mut AfterEffectsApp, ui: &mut egui::
     use crate::core::particle_system::{EmitterShape, ParticleEmitter};
     use crate::core::timeline::LayerType;
 
-    let Some(idx) = app.selected_layer_idx else { return };
+    let Some(idx) = app.selected_layer_idx else {
+        return;
+    };
     let is_particle = matches!(
         app.history.current().active_composition().layers.get(idx),
         Some(l) if matches!(l.layer_type, LayerType::Particle { .. })
@@ -2649,7 +5426,13 @@ pub fn draw_particle_emitter_controls(app: &mut AfterEffectsApp, ui: &mut egui::
         changed |= row_f32(ui, "Rate (p/s)", &mut em.rate, 0.0..=500.0, 1.0);
         changed |= row_u32(ui, "Max particles", &mut em.max_particles, 1..=20000);
         changed |= row_f32(ui, "Lifetime (s)", &mut em.lifetime, 0.1..=30.0, 0.1);
-        changed |= row_f32(ui, "Lifetime var", &mut em.lifetime_variance, 0.0..=1.0, 0.01);
+        changed |= row_f32(
+            ui,
+            "Lifetime var",
+            &mut em.lifetime_variance,
+            0.0..=1.0,
+            0.01,
+        );
         changed |= row_f32(ui, "Speed", &mut em.speed, 0.0..=1000.0, 1.0);
         changed |= row_f32(ui, "Speed var", &mut em.speed_variance, 0.0..=2.0, 0.01);
         changed |= row_f32(ui, "Spread (°)", &mut em.spread_degrees, 0.0..=360.0, 1.0);
@@ -2666,10 +5449,7 @@ pub fn draw_particle_emitter_controls(app: &mut AfterEffectsApp, ui: &mut egui::
         ui.horizontal(|ui| {
             for (label, shape) in shapes {
                 let selected = em.shape == shape;
-                if ui
-                    .selectable_label(selected, label)
-                    .clicked()
-                {
+                if ui.selectable_label(selected, label).clicked() {
                     em.shape = shape;
                     changed = true;
                 }
@@ -2688,8 +5468,20 @@ pub fn draw_particle_emitter_controls(app: &mut AfterEffectsApp, ui: &mut egui::
             ui.label("Wind:");
             changed |= drag2(ui, &mut em.wind);
         });
-        changed |= row_f32(ui, "Gust strength", &mut em.wind_gust_strength, 0.0..=300.0, 1.0);
-        changed |= row_f32(ui, "Gust freq (Hz)", &mut em.wind_gust_frequency, 0.0..=10.0, 0.05);
+        changed |= row_f32(
+            ui,
+            "Gust strength",
+            &mut em.wind_gust_strength,
+            0.0..=300.0,
+            1.0,
+        );
+        changed |= row_f32(
+            ui,
+            "Gust freq (Hz)",
+            &mut em.wind_gust_frequency,
+            0.0..=10.0,
+            0.05,
+        );
         changed |= row_f32(ui, "Turbulence", &mut em.turbulence, 0.0..=300.0, 1.0);
         changed |= row_f32(ui, "Air drag", &mut em.drag, 0.0..=20.0, 0.05);
     });
@@ -2700,7 +5492,10 @@ pub fn draw_particle_emitter_controls(app: &mut AfterEffectsApp, ui: &mut egui::
     });
 
     ui.collapsing("Collisions", |ui| {
-        if ui.checkbox(&mut em.collision_enabled, "Boundary collisions").changed() {
+        if ui
+            .checkbox(&mut em.collision_enabled, "Boundary collisions")
+            .changed()
+        {
             changed = true;
         }
         if em.collision_enabled {
@@ -2715,11 +5510,20 @@ pub fn draw_particle_emitter_controls(app: &mut AfterEffectsApp, ui: &mut egui::
             changed |= row_f32(ui, "Restitution", &mut em.restitution, 0.0..=1.0, 0.01);
             changed |= row_f32(ui, "Friction", &mut em.surface_friction, 0.0..=1.0, 0.01);
         }
-        if ui.checkbox(&mut em.particle_collisions, "Particle ↔ particle").changed() {
+        if ui
+            .checkbox(&mut em.particle_collisions, "Particle ↔ particle")
+            .changed()
+        {
             changed = true;
         }
         if em.particle_collisions {
-            changed |= row_f32(ui, "Contact Ø (px)", &mut em.particle_diameter, 0.5..=200.0, 0.5);
+            changed |= row_f32(
+                ui,
+                "Contact Ø (px)",
+                &mut em.particle_diameter,
+                0.5..=200.0,
+                0.5,
+            );
         }
     });
 
@@ -2736,18 +5540,32 @@ pub fn draw_particle_emitter_controls(app: &mut AfterEffectsApp, ui: &mut egui::
     }
 }
 
-fn row_f32(ui: &mut egui::Ui, label: &str, val: &mut f32, range: std::ops::RangeInclusive<f32>, speed: f32) -> bool {
+fn row_f32(
+    ui: &mut egui::Ui,
+    label: &str,
+    val: &mut f32,
+    range: std::ops::RangeInclusive<f32>,
+    speed: f32,
+) -> bool {
     ui.horizontal(|ui| {
         ui.label(label);
-        ui.add(egui::DragValue::new(val).speed(speed).range(range)).changed()
-    }).inner
+        ui.add(egui::DragValue::new(val).speed(speed).range(range))
+            .changed()
+    })
+    .inner
 }
 
-fn row_u32(ui: &mut egui::Ui, label: &str, val: &mut u32, range: std::ops::RangeInclusive<u32>) -> bool {
+fn row_u32(
+    ui: &mut egui::Ui,
+    label: &str,
+    val: &mut u32,
+    range: std::ops::RangeInclusive<u32>,
+) -> bool {
     ui.horizontal(|ui| {
         ui.label(label);
         ui.add(egui::DragValue::new(val).range(range)).changed()
-    }).inner
+    })
+    .inner
 }
 
 fn drag2(ui: &mut egui::Ui, v: &mut [f32; 2]) -> bool {
