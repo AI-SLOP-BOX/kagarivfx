@@ -280,6 +280,78 @@ fn line_intersection(
     }
 }
 
+/// Vector Fill Rule (EvenOdd / NonZero) for compound multi-contour shapes with holes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, serde::Serialize, serde::Deserialize)]
+pub enum FillRule {
+    #[default]
+    NonZero,
+    EvenOdd,
+}
+
+/// Compound 2D Vector Shape consisting of multiple closed polygon contours (e.g. outer loop + holes).
+#[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
+pub struct CompoundShape2D {
+    pub contours: Vec<Vec<[f32; 2]>>,
+    pub fill_rule: FillRule,
+}
+
+impl CompoundShape2D {
+    pub fn from_single_polygon(poly: Vec<[f32; 2]>) -> Self {
+        Self {
+            contours: vec![poly],
+            fill_rule: FillRule::NonZero,
+        }
+    }
+
+    /// Evaluates whether a point is filled according to the shape's fill rule.
+    pub fn contains_point(&self, x: f32, y: f32) -> bool {
+        match self.fill_rule {
+            FillRule::EvenOdd => {
+                let mut inside = false;
+                for contour in &self.contours {
+                    if point_in_polygon(x, y, contour) {
+                        inside = !inside;
+                    }
+                }
+                inside
+            }
+            FillRule::NonZero => {
+                // If in any outer contour and not in hole contours
+                if self.contours.is_empty() {
+                    return false;
+                }
+                let in_outer = point_in_polygon(x, y, &self.contours[0]);
+                if !in_outer {
+                    return false;
+                }
+                for hole in self.contours.iter().skip(1) {
+                    if point_in_polygon(x, y, hole) {
+                        return false;
+                    }
+                }
+                true
+            }
+        }
+    }
+
+    /// Applies a Boolean operation with another compound shape.
+    pub fn apply_boolean(&self, other: &CompoundShape2D, op: BooleanOp) -> CompoundShape2D {
+        let mut result_contours = Vec::new();
+
+        for c_a in &self.contours {
+            for c_b in &other.contours {
+                let res = apply_polygon_boolean(c_a, c_b, op);
+                result_contours.extend(res);
+            }
+        }
+
+        CompoundShape2D {
+            contours: result_contours,
+            fill_rule: self.fill_rule,
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -324,5 +396,22 @@ mod tests {
         let max_x = expanded.iter().map(|p| p[0]).fold(f32::NEG_INFINITY, f32::max);
         assert!(min_x < 0.0);
         assert!(max_x > 10.0);
+    }
+
+    #[test]
+    fn test_compound_shape_with_hole() {
+        let outer = vec![[0.0, 0.0], [30.0, 0.0], [30.0, 30.0], [0.0, 30.0]];
+        let hole = vec![[10.0, 10.0], [20.0, 10.0], [20.0, 20.0], [10.0, 20.0]];
+        let shape = CompoundShape2D {
+            contours: vec![outer, hole],
+            fill_rule: FillRule::NonZero,
+        };
+
+        // Outer area should be filled
+        assert!(shape.contains_point(5.0, 5.0));
+        // Inner hole should be empty
+        assert!(!shape.contains_point(15.0, 15.0));
+        // Outside bounds should be empty
+        assert!(!shape.contains_point(35.0, 35.0));
     }
 }
