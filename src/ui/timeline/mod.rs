@@ -1,20 +1,25 @@
-pub mod utils;
-pub mod header;
-pub mod layers;
-pub mod ruler_bar;
 pub mod breadcrumb;
-pub mod precomp_children;
-pub mod pending_actions;
+pub mod header;
 pub mod keyframe_rows;
+pub mod layers;
+pub mod pending_actions;
+pub mod precomp_children;
+pub mod ruler_bar;
+pub mod utils;
 
-use eframe::egui;
-use crate::AfterEffectsApp;
 use crate::core::timeline::{BlendMode, LabelColor, LayerType, TrackMatteMode};
 use crate::ui::theme::colors;
-use utils::maybe_snap_frame;
+use crate::AfterEffectsApp;
+use eframe::egui;
 use header::draw_timeline_header;
+use utils::maybe_snap_frame;
 
-pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut u32, total_frames: u32) {
+pub fn draw(
+    app: &mut AfterEffectsApp,
+    ctx: &egui::Context,
+    current_frame: &mut u32,
+    total_frames: u32,
+) {
     egui::TopBottomPanel::bottom("timeline_panel")
         .resizable(true)
         .default_height(280.0)
@@ -476,23 +481,28 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                 for i in 0..layers_len {
                     // Safe index access (.get_mut(i))
                     if let Some(layer) = comp.layers.get_mut(i) {
-                        // ── Visibility Culling: skip off-screen rows ──
-                        // Allocate a probe rect to check if this row is in the scroll viewport.
-                        // Row height = 24px + property rows. A cheap y-range check avoids all draw calls.
-                        let row_probe = egui::Rect::from_min_size(
-                            ui.cursor().min,
-                            egui::vec2(ui.available_width(), 24.0),
-                        );
-                        if !ui.is_rect_visible(row_probe) {
-                            // Still advance cursor to keep scroll extent accurate
-                            ui.add_space(24.0);
-                            continue;
-                        }
-
                         if app.global_shy_active && layer.is_shy {
                             continue;
                         }
                         if !app.layer_filter_text.is_empty() && !layer.name.to_lowercase().contains(&app.layer_filter_text.to_lowercase()) {
+                            continue;
+                        }
+
+                        // Calculate exact estimated height for this layer based on expanded rows
+                        let mut layer_height = 24.0;
+                        if app.expanded_layers.contains(&i) {
+                            let prop_count = 5 + layer.effects.len() + layer.masks.len();
+                            layer_height += prop_count as f32 * 20.0;
+                        }
+
+                        // ── Visibility Culling: skip off-screen rows ──
+                        let row_probe = egui::Rect::from_min_size(
+                            ui.cursor().min,
+                            egui::vec2(ui.available_width(), layer_height),
+                        );
+                        if !ui.is_rect_visible(row_probe) {
+                            // Still advance cursor by exact layer height to keep scroll extent accurate
+                            ui.add_space(layer_height);
                             continue;
                         }
 

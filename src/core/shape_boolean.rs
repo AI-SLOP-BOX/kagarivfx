@@ -68,7 +68,7 @@ pub fn polygon_intersect(subject: &[[f32; 2]], clip: &[[f32; 2]]) -> Vec<Vec<[f3
             break;
         }
 
-        let mut s = *input.last().unwrap();
+        let mut s = *input.last().unwrap_or(&[0.0, 0.0]);
         for &e in &input {
             if is_inside_edge(e, p1, p2) {
                 if is_inside_edge(s, p1, p2) {

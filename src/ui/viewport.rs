@@ -895,13 +895,15 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: u32) 
         let is_armed = ctx.data_mut(|d| *d.get_temp_mut_or_insert_with(is_sketching_id, || false));
         if is_armed {
             if let Some(pp) = viewport_response.interact_pointer_pos() {
+                if viewport_response.drag_started() {
+                    app.begin_drag("Motion Sketch");
+                }
                 if viewport_response.dragged() {
                     let cx = (pp.x - origin_x) / draw_w * comp_w;
                     let cy = (pp.y - origin_y) / draw_h * comp_h;
                     if let Some(idx) = app.selected_layer_idx {
                         let cf = app.current_frame;
-                        let mut temp_proj = app.history.current().clone();
-                        let comp = temp_proj.active_composition_mut();
+                        let comp = app.history.current_mut().active_composition_mut();
                         if let Some(layer) = comp.layers.get_mut(idx) {
                             match &mut layer.transform.position {
                                 crate::core::property::Animatable::Animated(kfs) => {
@@ -918,7 +920,6 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: u32) 
                                     ]);
                                 }
                             }
-                            app.history.commit(temp_proj);
                             crate::core::frame_cache::bump_version();
                         }
                         let max_f = app.history.current().active_composition().duration_frames.saturating_sub(1);
@@ -927,6 +928,9 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: u32) 
                             ctx.request_repaint();
                         }
                     }
+                }
+                if viewport_response.drag_stopped() {
+                    app.commit_drag();
                 }
             }
         }
