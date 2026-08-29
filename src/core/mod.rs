@@ -1,118 +1,111 @@
-pub mod color;
-pub mod effect_plugin;
-pub mod effect_params;
-pub mod cpu_effects;
-pub mod cpu_effects_new;
-pub mod expression_engine;
-pub mod ffmpeg_export;
-pub mod frame_cache;
-pub mod history;
-pub mod integration;
-pub mod keyframe;
-pub mod clipboard;
-pub mod property;
-pub mod render_pipeline;
-pub mod renderer;
-pub mod timeline;
-pub mod stabilizer;
-pub mod puppet_warp;
-pub mod paint;
-pub mod camera_track;
-pub mod presets;
-pub mod subtitles;
-pub mod supersample;
-pub mod tracker_engine;
-pub mod mask;
-pub mod color_science;
-pub mod software_renderer;
-pub mod content_aware_engine;
-pub mod audio_engine;
+pub mod aces;
+pub mod aep_parser;
 pub mod audio_dsp;
-pub mod fft;
-pub mod autosave;
+pub mod audio_engine;
 #[cfg(feature = "gui")]
 pub mod audio_playback;
-pub mod video_import;
-pub mod mlt_export;
-pub mod project_migration;
-pub mod physics;
-pub mod text_animator;
-pub mod vfx_graph_compiler;
-pub mod layer_constraints;
-pub mod essential_properties;
-pub mod proxy;
-pub mod parallel_render;
-pub mod precomp_cache;
-pub mod path_text;
-pub mod continuous_rasterizer;
-pub mod spatial_keyframe;
-pub mod displacement_map;
+pub mod audio_spectrum;
+pub mod audio_to_keyframes;
 pub mod auto_orient;
 pub mod auto_trace;
-pub mod shadow_map;
-pub mod the_smoother;
-pub mod the_wiggler;
-pub mod audio_to_keyframes;
-pub mod motion_tile;
-pub mod page_turn;
-pub mod echo_effect;
-pub mod find_edges;
-pub mod transform_effect;
+pub mod automation;
+pub mod autosave;
+pub mod camera_dof;
 pub mod camera_lens_blur;
-pub mod linear_color_key;
+pub mod camera_track;
 pub mod channel_combiner;
+pub mod chroma_key;
+pub mod clipboard;
+pub mod color;
+pub mod color_science;
+pub mod colorama;
+pub mod compute_pipeline;
+pub mod content_aware_engine;
+pub mod continuous_rasterizer;
+pub mod corner_pin;
+pub mod cpu_effects;
+pub mod cpu_effects_new;
+pub mod difference_matte;
+pub mod displacement_map;
+pub mod echo_effect;
+pub mod effect_params;
+pub mod effect_plugin;
+pub mod essential_properties;
+pub mod export_presets;
+pub mod expression_engine;
+pub mod ffmpeg_export;
+pub mod fft;
+pub mod find_edges;
+pub mod font_rasterizer;
+pub mod frame_blending;
+pub mod frame_cache;
+pub mod history;
+pub mod image_cache;
+pub mod integration;
+pub mod jit_vfx_compiler;
+pub mod keyframe;
+pub mod layer_constraints;
+pub mod light_transmission;
+pub mod linear_color_key;
+pub mod lottie_exporter;
 pub mod lut_cache;
+pub mod mask;
+pub mod merkle_frame_cache;
+pub mod mlt_export;
+pub mod motion_tile;
+pub mod ocio_color;
+pub mod openfx_bridge;
+pub mod page_turn;
+pub mod paint;
+pub mod parallel_render;
+pub mod particle_system;
+pub mod path_text;
+pub mod physics;
 pub mod planar_tracker;
 pub mod posterize_time;
-pub mod camera_dof;
-pub mod shape_repeater;
-pub mod aep_parser;
-pub mod export_presets;
-pub mod tile_cache;
-pub mod compute_pipeline;
-pub mod aces;
-pub mod roto_assist;
-pub mod automation;
-pub mod wiggle_paths;
-pub mod colorama;
-pub mod light_transmission;
-pub mod frame_blending;
-pub mod turbulent_displace;
-pub mod set_matte;
-pub mod corner_pin;
-pub mod stroke_modifier;
-pub mod spherize;
-pub mod audio_spectrum;
-pub mod chroma_key;
-pub mod shape_modifiers;
-pub mod sql_timeline_db;
-pub mod jit_vfx_compiler;
-pub mod merkle_frame_cache;
-pub mod openfx_bridge;
-pub mod lottie_exporter;
-pub mod rive_runtime;
-pub mod ocio_color;
-pub mod difference_matte;
-pub mod font_rasterizer;
-pub mod image_cache;
-pub mod particle_system;
+pub mod precomp_cache;
+pub mod presets;
 pub mod project;
+pub mod project_migration;
+pub mod property;
+pub mod proxy;
+pub mod puppet_warp;
+pub mod render_pipeline;
+pub mod renderer;
+pub mod rive_runtime;
+pub mod roto_assist;
+pub mod set_matte;
+pub mod shadow_map;
+pub mod shape_modifiers;
+pub mod shape_repeater;
+pub mod software_renderer;
+pub mod spatial_keyframe;
+pub mod spherize;
+pub mod sql_timeline_db;
+pub mod stabilizer;
+pub mod stroke_modifier;
+pub mod subtitles;
+pub mod supersample;
+pub mod text_animator;
 pub mod text_layout;
+pub mod the_smoother;
+pub mod the_wiggler;
+pub mod tile_cache;
+pub mod timeline;
+pub mod tracker_engine;
+pub mod transform_effect;
+pub mod turbulent_displace;
 pub mod undo_manager;
+pub mod vfx_graph_compiler;
+pub mod video_import;
+pub mod wiggle_paths;
 // The ae_effects_pack_* modules are a library of reusable CPU pixel-effect
 // kernels (blur, glow, twirl, bulge, wipe, keying, simulation, ...). They are
 // progressively wired into the render pipeline via `core::cpu_effects`; until a
 // given kernel is referenced it is intentionally allowed to be unused rather
 // than deleted, so the library stays available for future effects.
+pub mod advanced_3d_engine;
 pub mod ae_effects_pack;
-pub mod ae_effects_pack_v2;
-pub mod ae_effects_pack_v3;
-pub mod ae_effects_pack_v4;
-pub mod ae_effects_pack_v5;
-pub mod ae_effects_pack_v6;
-pub mod ae_effects_pack_v7;
-pub mod ae_effects_pack_v8;
-pub mod ae_effects_pack_v9;
 pub mod ae_effects_pack_v10;
 pub mod ae_effects_pack_v11;
 pub mod ae_effects_pack_v12;
@@ -123,6 +116,7 @@ pub mod ae_effects_pack_v16;
 pub mod ae_effects_pack_v17;
 pub mod ae_effects_pack_v18;
 pub mod ae_effects_pack_v19;
+pub mod ae_effects_pack_v2;
 pub mod ae_effects_pack_v20;
 pub mod ae_effects_pack_v21;
 pub mod ae_effects_pack_v22;
@@ -133,60 +127,31 @@ pub mod ae_effects_pack_v26;
 pub mod ae_effects_pack_v27;
 pub mod ae_effects_pack_v28;
 pub mod ae_effects_pack_v29;
-pub mod vr_effects;
+pub mod ae_effects_pack_v3;
+pub mod ae_effects_pack_v4;
+pub mod ae_effects_pack_v5;
+pub mod ae_effects_pack_v6;
+pub mod ae_effects_pack_v7;
+pub mod ae_effects_pack_v8;
+pub mod ae_effects_pack_v9;
+pub mod ae_sdk_host;
+pub mod animation_presets;
+pub mod color_correction;
 pub mod content_aware_fill;
-pub mod puppet_engine;
+pub mod effect_presets;
+pub mod effect_registry_ext;
+pub mod exr_pipeline;
+pub mod icc_color_engine;
 pub mod mesh_extrusion;
 pub mod mogrt_engine;
-pub mod optical_flare;
-pub mod exr_pipeline;
+pub mod obj_loader;
 pub mod ofx_host;
-pub mod advanced_3d_engine;
-pub mod animation_presets;
+pub mod optical_flare;
+pub mod particle_forces;
+pub mod puppet_engine;
+pub mod roto_brush_engine;
+pub mod shape_boolean;
+pub mod shape_morph_roto;
 pub mod temporal_denoise;
 pub mod text_animator_advanced;
-pub mod particle_forces;
-pub mod color_correction;
-pub mod effect_registry_ext;
-pub mod effect_presets;
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+pub mod vr_effects;
