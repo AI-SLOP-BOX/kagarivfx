@@ -6,6 +6,14 @@
 #![allow(dead_code)]
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, serde::Serialize, serde::Deserialize)]
+pub enum AudioSpectrumType {
+    #[default]
+    DigitalBands,
+    AnalogLines,
+    AnalogDots,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, serde::Serialize, serde::Deserialize)]
 pub enum AudioSpectrumDisplayMode {
     #[default]
     DigitalLines,
@@ -22,6 +30,7 @@ pub struct AudioSpectrumOptions {
     pub is_polar: bool,
     pub polar_radius: f32,
     pub display_mode: AudioSpectrumDisplayMode,
+    pub spectrum_type: AudioSpectrumType,
     pub smoothing: f32,
     #[serde(default = "default_fft_size")]
     pub fft_size: usize,
@@ -54,6 +63,7 @@ impl Default for AudioSpectrumOptions {
             is_polar: false,
             polar_radius: 100.0,
             display_mode: AudioSpectrumDisplayMode::DigitalLines,
+            spectrum_type: AudioSpectrumType::DigitalBands,
             smoothing: 0.5,
             fft_size: 2048,
             start_frequency: 20.0,
@@ -98,11 +108,12 @@ pub fn generate_audio_spectrum_bands(
     magnitudes
 }
 
-/// Multi-band spectrum analyzer with smoothing state.
+/// Multi-band spectrum analyzer with smoothing and peak tracking state.
 #[derive(Debug, Clone)]
 pub struct SpectrumAnalyzer {
     pub band_count: usize,
     prev_bands: Vec<f32>,
+    peaks: Vec<f32>,
 }
 
 impl SpectrumAnalyzer {
@@ -110,6 +121,7 @@ impl SpectrumAnalyzer {
         Self {
             band_count,
             prev_bands: vec![0.0; band_count],
+            peaks: vec![0.0; band_count],
         }
     }
 
@@ -122,12 +134,83 @@ impl SpectrumAnalyzer {
         let current = generate_audio_spectrum_bands(samples, sample_rate, options);
         if self.prev_bands.len() != current.len() {
             self.prev_bands = vec![0.0; current.len()];
+            self.peaks = vec![0.0; current.len()];
         }
         let smooth = options.smoothing.clamp(0.0, 0.95);
         for (i, &v) in current.iter().enumerate() {
             self.prev_bands[i] = self.prev_bands[i] * smooth + v * (1.0 - smooth);
+            self.peaks[i] = self.peaks[i].max(self.prev_bands[i]) - options.peak_decay;
+            if self.peaks[i] < 0.0 { self.peaks[i] = 0.0; }
         }
         self.prev_bands.clone()
+    }
+
+    pub fn peaks(&self) -> &[f32] {
+        &self.peaks
+    }
+}
+
+/// Extract RMS waveform envelope
+pub fn extract_waveform(samples: &[f32], target_len: usize) -> Vec<f32> {
+    if samples.is_empty() || target_len == 0 {
+        return vec![0.0; target_len];
+    }
+    let chunk_size = (samples.len() / target_len).max(1);
+    let mut out = Vec::with_capacity(target_len);
+    for i in 0..target_len {
+        let start = i * chunk_size;
+        let end = (start + chunk_size).min(samples.len());
+        if start >= samples.len() {
+            out.push(0.0);
+            continue;
+        }
+        let mut max_val = 0.0f32;
+        for &s in &samples[start..end] {
+            max_val = max_val.max(s.abs());
+        }
+        out.push(max_val);
+    }
+    out
+}
+
+/// Direct RGBA buffer rasterizer for spectrum bars
+pub fn render_spectrum(
+    buffer: &mut [u8],
+    width: u32,
+    height: u32,
+    bands: &[f32],
+    _options: &AudioSpectrumOptions,
+    color_a: [u8; 3],
+    color_b: [u8; 3],
+) {
+    if bands.is_empty() || width == 0 || height == 0 {
+        return;
+    }
+    let band_w = (width as f32 / bands.len() as f32).max(1.0);
+    let cy = height as f32 * 0.5;
+
+    for (b_idx, &mag) in bands.iter().enumerate() {
+        let bx = b_idx as f32 * band_w;
+        let bh = (mag * (height as f32 * 0.45)).max(1.0);
+        let top = (cy - bh).clamp(0.0, height as f32 - 1.0) as u32;
+        let bot = (cy + bh).clamp(0.0, height as f32 - 1.0) as u32;
+
+        let t = b_idx as f32 / bands.len() as f32;
+        let r = ((1.0 - t) * color_a[0] as f32 + t * color_b[0] as f32) as u8;
+        let g = ((1.0 - t) * color_a[1] as f32 + t * color_b[1] as f32) as u8;
+        let b = ((1.0 - t) * color_a[2] as f32 + t * color_b[2] as f32) as u8;
+
+        for y in top..=bot {
+            for x in (bx as u32)..((bx + band_w * 0.8) as u32).min(width) {
+                let idx = ((y * width + x) * 4) as usize;
+                if idx + 3 < buffer.len() {
+                    buffer[idx] = r;
+                    buffer[idx + 1] = g;
+                    buffer[idx + 2] = b;
+                    buffer[idx + 3] = 255;
+                }
+            }
+        }
     }
 }
 
