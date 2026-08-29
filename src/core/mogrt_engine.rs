@@ -9,12 +9,27 @@ use crate::core::timeline::{Composition, Layer};
 
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub enum EssentialPropertyType {
-    Number { min: f32, max: f32, value: f32 },
-    Color { value: [f32; 4] },
-    Text { text: String },
-    Checkbox { value: bool },
-    Dropdown { options: Vec<String>, selected_index: usize },
-    Point2D { value: [f32; 2] },
+    Number {
+        min: f32,
+        max: f32,
+        value: f32,
+    },
+    Color {
+        value: [f32; 4],
+    },
+    Text {
+        text: String,
+    },
+    Checkbox {
+        value: bool,
+    },
+    Dropdown {
+        options: Vec<String>,
+        selected_index: usize,
+    },
+    Point2D {
+        value: [f32; 2],
+    },
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -46,37 +61,81 @@ pub fn apply_essential_property_overrides(
     properties: &[EssentialProperty],
 ) {
     for prop in properties {
-        if let Some(layer) = comp.layers.iter_mut().find(|l| l.id == prop.target_layer_id) {
+        if let Some(layer) = comp
+            .layers
+            .iter_mut()
+            .find(|l| l.id == prop.target_layer_id)
+        {
             match &prop.property_type {
                 EssentialPropertyType::Number { value, .. } => {
                     if prop.target_property_path == "transform.opacity" {
-                        layer.transform.opacity = crate::core::property::Animatable::new_constant(*value);
+                        layer.transform.opacity =
+                            crate::core::property::Animatable::new_constant(*value);
                     } else if prop.target_property_path == "transform.rotation" {
-                        layer.transform.rotation = crate::core::property::Animatable::new_constant(*value);
+                        layer.transform.rotation =
+                            crate::core::property::Animatable::new_constant(*value);
                     }
                 }
                 EssentialPropertyType::Point2D { value } => {
                     if prop.target_property_path == "transform.position" {
-                        layer.transform.position = crate::core::property::Animatable::new_constant(*value);
+                        layer.transform.position =
+                            crate::core::property::Animatable::new_constant(*value);
                     } else if prop.target_property_path == "transform.scale" {
-                        layer.transform.scale = crate::core::property::Animatable::new_constant(*value);
+                        layer.transform.scale =
+                            crate::core::property::Animatable::new_constant(*value);
                     }
                 }
                 EssentialPropertyType::Text { text } => {
-                    if let crate::core::timeline::LayerType::Text { text: ref mut layer_text, .. } = layer.layer_type {
+                    if let crate::core::timeline::LayerType::Text {
+                        text: ref mut layer_text,
+                        ..
+                    } = layer.layer_type
+                    {
                         *layer_text = text.clone();
                     }
                 }
                 EssentialPropertyType::Color { value } => {
-                    if let crate::core::timeline::LayerType::Solid { ref mut color } = layer.layer_type {
+                    if let crate::core::timeline::LayerType::Solid { ref mut color } =
+                        layer.layer_type
+                    {
                         *color = *value;
-                    } else if let crate::core::timeline::LayerType::Text { ref mut color, .. } = layer.layer_type {
+                    } else if let crate::core::timeline::LayerType::Text { ref mut color, .. } =
+                        layer.layer_type
+                    {
                         *color = *value;
                     }
                 }
                 _ => {}
             }
         }
+    }
+}
+
+/// Self-contained Motion Graphics Template (MOGRT) package containing manifest, project data, and metadata.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct MogrtPackage {
+    pub manifest: MogrtManifest,
+    pub project_json: String,
+    pub thumbnail_base64: Option<String>,
+}
+
+impl MogrtPackage {
+    pub fn new(manifest: MogrtManifest, project_json: impl Into<String>) -> Self {
+        Self {
+            manifest,
+            project_json: project_json.into(),
+            thumbnail_base64: None,
+        }
+    }
+
+    /// Serializes MOGRT package to formatted JSON string.
+    pub fn to_json(&self) -> Result<String, serde_json::Error> {
+        serde_json::to_string_pretty(self)
+    }
+
+    /// Deserializes MOGRT package from JSON string.
+    pub fn from_json(json_str: &str) -> Result<Self, serde_json::Error> {
+        serde_json::from_str(json_str)
     }
 }
 
@@ -114,7 +173,8 @@ mod tests {
             LayerType::new_text("Default Text", 48, [1.0; 4]),
             300,
         );
-        text_layer.transform.position = crate::core::property::Animatable::new_constant([960.0, 540.0]);
+        text_layer.transform.position =
+            crate::core::property::Animatable::new_constant([960.0, 540.0]);
         comp.add_layer(text_layer);
 
         let overrides = vec![
@@ -124,7 +184,9 @@ mod tests {
                 comment: None,
                 target_layer_id: "l_title".into(),
                 target_property_path: "text.content".into(),
-                property_type: EssentialPropertyType::Text { text: "Breaking News".into() },
+                property_type: EssentialPropertyType::Text {
+                    text: "Breaking News".into(),
+                },
             },
             EssentialProperty {
                 id: "p2".into(),
@@ -132,7 +194,9 @@ mod tests {
                 comment: None,
                 target_layer_id: "l_title".into(),
                 target_property_path: "transform.position".into(),
-                property_type: EssentialPropertyType::Point2D { value: [500.0, 200.0] },
+                property_type: EssentialPropertyType::Point2D {
+                    value: [500.0, 200.0],
+                },
             },
         ];
 
@@ -145,5 +209,30 @@ mod tests {
             panic!("Expected Text layer");
         }
         assert_eq!(layer.transform.position.evaluate(0), [500.0, 200.0]);
+    }
+
+    #[test]
+    fn test_mogrt_package_json_roundtrip() {
+        let comp = Composition::new("c_main".into(), "Main".into(), 1920, 1080, 60, 600);
+        let prop = EssentialProperty {
+            id: "ep_1".into(),
+            name: "Title".into(),
+            comment: Some("Main broadcast title".into()),
+            target_layer_id: "l_1".into(),
+            target_property_path: "text.content".into(),
+            property_type: EssentialPropertyType::Text {
+                text: "Summer Festival".into(),
+            },
+        };
+        let manifest = create_mogrt_manifest(&comp, "Summer Template", "AE Team", vec![prop]);
+        let pkg = MogrtPackage::new(manifest, "{\"version\": 1}");
+
+        let json = pkg.to_json().expect("Serialization should succeed");
+        let decoded = MogrtPackage::from_json(&json).expect("Deserialization should succeed");
+
+        assert_eq!(decoded.manifest.name, "Summer Template");
+        assert_eq!(decoded.manifest.fps, 60);
+        assert_eq!(decoded.manifest.essential_properties.len(), 1);
+        assert_eq!(decoded.manifest.essential_properties[0].name, "Title");
     }
 }

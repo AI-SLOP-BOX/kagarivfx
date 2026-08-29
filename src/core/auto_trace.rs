@@ -1,11 +1,18 @@
-/// Auto-trace: trace alpha boundaries from a pixel buffer into FreeformBezier shape paths.
-///
-/// Scans the alpha channel to find inside/outside transitions per scanline,
-/// then walks the boundary clockwise to produce a closed contour path.
 use crate::core::timeline::ShapeType;
 
+/// Channel to trace against in the input pixel buffer.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, serde::Serialize, serde::Deserialize)]
+pub enum AutoTraceChannel {
+    #[default]
+    Alpha,
+    Luminance,
+    Red,
+    Green,
+    Blue,
+}
+
 /// Trace alpha boundaries in an RGBA buffer and produce shape paths.
-/// `threshold` is the alpha cutoff (0.0–1.0) for boundary detection.
+/// `threshold` is the cutoff (0.0–1.0) for boundary detection.
 /// `tolerance` controls Douglas-Peucker simplification (smaller = more detail).
 pub fn auto_trace(
     pixels: &[u8],
@@ -13,6 +20,18 @@ pub fn auto_trace(
     height: u32,
     threshold: f32,
     tolerance: f32,
+) -> Vec<ShapeType> {
+    auto_trace_with_channel(pixels, width, height, threshold, tolerance, AutoTraceChannel::Alpha)
+}
+
+/// Trace boundaries in an RGBA buffer based on chosen channel and produce shape paths.
+pub fn auto_trace_with_channel(
+    pixels: &[u8],
+    width: u32,
+    height: u32,
+    threshold: f32,
+    tolerance: f32,
+    channel: AutoTraceChannel,
 ) -> Vec<ShapeType> {
     if width == 0 || height == 0 || pixels.len() < (width * height * 4) as usize {
         return Vec::new();
@@ -22,8 +41,17 @@ pub fn auto_trace(
     let h = height as usize;
 
     let inside = |x: usize, y: usize| -> bool {
-        let idx = (y * w + x) * 4 + 3;
-        pixels[idx] as f32 / 255.0 >= threshold
+        let idx = (y * w + x) * 4;
+        let val = match channel {
+            AutoTraceChannel::Alpha => pixels[idx + 3] as f32 / 255.0,
+            AutoTraceChannel::Luminance => {
+                (0.2126 * pixels[idx] as f32 + 0.7152 * pixels[idx + 1] as f32 + 0.0722 * pixels[idx + 2] as f32) / 255.0
+            }
+            AutoTraceChannel::Red => pixels[idx] as f32 / 255.0,
+            AutoTraceChannel::Green => pixels[idx + 1] as f32 / 255.0,
+            AutoTraceChannel::Blue => pixels[idx + 2] as f32 / 255.0,
+        };
+        val >= threshold
     };
 
     // Find bounding box of inside region
@@ -112,6 +140,40 @@ pub fn auto_trace(
     shapes
 }
 
+/// Traces an image buffer and attaches a new Mask to the given Layer.
+pub fn auto_trace_to_layer_mask(
+    layer: &mut crate::core::timeline::Layer,
+    pixels: &[u8],
+    width: u32,
+    height: u32,
+    threshold: f32,
+    tolerance: f32,
+    channel: AutoTraceChannel,
+) -> bool {
+    let shapes = auto_trace_with_channel(pixels, width, height, threshold, tolerance, channel);
+    if let Some(ShapeType::FreeformBezier { points, .. }) = shapes.into_iter().next() {
+        use crate::core::mask::{Mask, MaskMode, MaskPath};
+        use crate::core::property::Animatable;
+
+        let mask = Mask {
+            id: format!("auto_trace_mask_{}", layer.masks.len() + 1),
+            name: format!("Auto-trace {}", layer.masks.len() + 1),
+            enabled: true,
+            mode: MaskMode::Add,
+            path: MaskPath::new_closed(points),
+            feather: Animatable::new_constant(0.0),
+            opacity: Animatable::new_constant(100.0),
+            expansion: Animatable::new_constant(0.0),
+            inverted: false,
+            wiggle: None,
+        };
+        layer.masks.push(mask);
+        true
+    } else {
+        false
+    }
+}
+
 /// Douglas-Peucker polyline simplification.
 fn douglas_peucker(points: &[[f32; 2]], tolerance: f32) -> Vec<[f32; 2]> {
     if points.len() <= 2 {
@@ -188,7 +250,10 @@ mod tests {
             }
         }
         let shapes = auto_trace(&pixels, 20, 20, 0.5, 1.0);
-        assert!(!shapes.is_empty(), "rectangular block should produce a contour");
+        assert!(
+            !shapes.is_empty(),
+            "rectangular block should produce a contour"
+        );
         if let ShapeType::FreeformBezier { points, closed, .. } = &shapes[0] {
             assert!(*closed, "auto-traced shape should be closed");
             assert!(points.len() >= 3, "contour should have at least 3 points");
@@ -236,5 +301,37 @@ mod tests {
     fn test_point_to_line_distance_off() {
         let d = point_to_line_distance([5.0, 3.0], [0.0, 0.0], [10.0, 0.0]);
         assert!((d - 3.0).abs() < 0.001);
+    }
+
+    #[test]
+    fn test_auto_trace_luminance_channel() {
+        let mut pixels = vec![0u8; 20 * 20 * 4];
+        for y in 4..16 {
+            for x in 4..16 {
+                let idx = (y * 20 + x) * 4;
+                pixels[idx] = 255;
+                pixels[idx + 1] = 255;
+                pixels[idx + 2] = 255;
+                pixels[idx + 3] = 255;
+            }
+        }
+        let shapes = auto_trace_with_channel(&pixels, 20, 20, 0.5, 1.0, AutoTraceChannel::Luminance);
+        assert!(!shapes.is_empty());
+    }
+
+    #[test]
+    fn test_auto_trace_to_layer_mask() {
+        let mut layer = crate::core::timeline::Layer::new_null("null_l".into(), "Null".into(), 60);
+        let mut pixels = vec![0u8; 20 * 20 * 4];
+        for y in 4..16 {
+            for x in 4..16 {
+                let idx = (y * 20 + x) * 4 + 3;
+                pixels[idx] = 255;
+            }
+        }
+        let ok = auto_trace_to_layer_mask(&mut layer, &pixels, 20, 20, 0.5, 1.0, AutoTraceChannel::Alpha);
+        assert!(ok);
+        assert_eq!(layer.masks.len(), 1);
+        assert_eq!(layer.masks[0].name, "Auto-trace 1");
     }
 }
