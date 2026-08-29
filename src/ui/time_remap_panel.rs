@@ -179,6 +179,23 @@ pub fn draw_time_remap_panel(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
             ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("ae_preserve_fps"), preserve_fps));
             crate::core::frame_cache::bump_version();
         }
+
+        ui.add_space(6.0);
+        ui.separator();
+        ui.label(egui::RichText::new("🎵 Audio Time-Stretch & Pitch Correction").strong().color(colors::ACCENT_CYAN));
+        let mut preserve_pitch = ui.ctx().data(|d| d.get_temp::<bool>(egui::Id::new("ae_audio_preserve_pitch")).unwrap_or(true));
+        if ui.checkbox(&mut preserve_pitch, "Preserve Audio Pitch (WSOLA Timestretch)").changed() {
+            ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("ae_audio_preserve_pitch"), preserve_pitch));
+            crate::core::frame_cache::bump_version();
+        }
+        let mut pitch_semitones = ui.ctx().data(|d| d.get_temp::<f32>(egui::Id::new("ae_audio_pitch_shift")).unwrap_or(0.0));
+        ui.horizontal(|ui| {
+            ui.label("Pitch Shift:");
+            if ui.add(egui::DragValue::new(&mut pitch_semitones).range(-24.0..=24.0).speed(0.5).suffix(" st")).changed() {
+                ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("ae_audio_pitch_shift"), pitch_semitones));
+                crate::core::frame_cache::bump_version();
+            }
+        });
     } else {
         ui.weak("Select a layer to adjust time stretch & remapping.");
     }
