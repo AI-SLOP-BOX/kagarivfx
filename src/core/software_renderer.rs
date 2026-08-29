@@ -645,11 +645,12 @@ pub fn render_precomp_layers(
     width: u32,
     height: u32,
 ) -> Vec<u8> {
+    let content_revision = composition_content_revision(precomp_comp);
     // Cache check: skip full render if we already have this precomp's pixels
     let cached = PRECOMP_RENDER_CACHE.with(|cache| {
         cache
             .borrow_mut()
-            .get(&precomp_comp.id, frame, width, height)
+            .get(&precomp_comp.id, content_revision, frame, width, height)
     });
     if let Some(pixels) = cached {
         return pixels;
@@ -698,12 +699,26 @@ pub fn render_precomp_layers(
     // Cache the result for future lookups at the same (comp, frame, resolution)
     if !result.is_empty() {
         PRECOMP_RENDER_CACHE.with(|cache| {
-            cache
-                .borrow_mut()
-                .insert(&precomp_comp.id, frame, width, height, result.clone());
+            cache.borrow_mut().insert(
+                &precomp_comp.id,
+                content_revision,
+                frame,
+                width,
+                height,
+                result.clone(),
+            );
         });
     }
     result
+}
+
+fn composition_content_revision(comp: &Composition) -> u64 {
+    let Ok(bytes) = serde_json::to_vec(comp) else {
+        return crate::core::frame_cache::current_version();
+    };
+    bytes.iter().fold(0xcbf29ce484222325, |hash, byte| {
+        (hash ^ u64::from(*byte)).wrapping_mul(0x100000001b3)
+    })
 }
 
 fn render_precomp_layers_inner(

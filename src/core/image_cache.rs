@@ -4,6 +4,7 @@
 /// and caches them for use by the software renderer.
 use std::collections::HashMap;
 use std::sync::OnceLock;
+use std::time::SystemTime;
 
 /// Cached decoded image data.
 #[derive(Debug, Clone)]
@@ -13,9 +14,20 @@ pub struct CachedImage {
     pub pixels: Vec<u8>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct FileRevision {
+    len: u64,
+    modified: Option<SystemTime>,
+}
+
+struct CachedFile {
+    revision: FileRevision,
+    image: CachedImage,
+}
+
 /// Thread-safe image cache.
 pub struct ImageCache {
-    cache: HashMap<String, CachedImage>,
+    cache: HashMap<String, CachedFile>,
 }
 
 impl Default for ImageCache {
@@ -33,13 +45,24 @@ impl ImageCache {
 
     /// Load an image from a file path. Returns cached result on subsequent calls.
     pub fn load_image(&mut self, path: &str) -> Option<&CachedImage> {
-        if self.cache.contains_key(path) {
-            return self.cache.get(path);
+        let revision = Self::file_revision(path)?;
+        if self
+            .cache
+            .get(path)
+            .is_some_and(|cached| cached.revision == revision)
+        {
+            return self.cache.get(path).map(|cached| &cached.image);
         }
 
         let img = Self::decode_image_file(path)?;
-        self.cache.insert(path.to_string(), img);
-        self.cache.get(path)
+        self.cache.insert(
+            path.to_string(),
+            CachedFile {
+                revision,
+                image: img,
+            },
+        );
+        self.cache.get(path).map(|cached| &cached.image)
     }
 
     /// Maximum pixels per image (16384 x 16384): guards against decompression bombs
@@ -70,9 +93,17 @@ impl ImageCache {
         })
     }
 
+    fn file_revision(path: &str) -> Option<FileRevision> {
+        let metadata = std::fs::metadata(path).ok()?;
+        Some(FileRevision {
+            len: metadata.len(),
+            modified: metadata.modified().ok(),
+        })
+    }
+
     /// Get a cached image without loading.
     pub fn get(&self, path: &str) -> Option<&CachedImage> {
-        self.cache.get(path)
+        self.cache.get(path).map(|cached| &cached.image)
     }
 }
 
@@ -105,6 +136,36 @@ mod tests {
     fn test_load_nonexistent_image() {
         let mut c = ImageCache::new();
         assert!(c.load_image("/nonexistent/path/image.png").is_none());
+    }
+
+    #[test]
+    fn test_reloads_image_when_file_changes() {
+        let dir = std::env::temp_dir().join(format!(
+            "aevfx_image_cache_revision_{}_{}",
+            std::process::id(),
+            std::thread::current().name().unwrap_or("test")
+        ));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("replace.png");
+
+        image::RgbaImage::from_pixel(1, 1, image::Rgba([255, 0, 0, 255]))
+            .save(&path)
+            .unwrap();
+        let mut cache = ImageCache::new();
+        assert_eq!(
+            cache.load_image(path.to_str().unwrap()).unwrap().pixels[0],
+            255
+        );
+
+        image::RgbaImage::from_pixel(2, 1, image::Rgba([0, 255, 0, 255]))
+            .save(&path)
+            .unwrap();
+        let reloaded = cache.load_image(path.to_str().unwrap()).unwrap();
+        assert_eq!((reloaded.width, reloaded.height), (2, 1));
+        assert_eq!(&reloaded.pixels[..4], &[0, 255, 0, 255]);
+
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }
 

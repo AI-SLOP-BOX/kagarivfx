@@ -1,9 +1,10 @@
+use crate::core::timeline::Project;
 /// Forward & Backward Compatible Project Schema Migration Engine.
 ///
 /// Ensures saved project files (.json) remain 100% loadable even as
 /// fields are added, renamed, or refactored across application versions.
 use serde::{Deserialize, Serialize};
-use crate::core::timeline::Project;
+use std::io::Write;
 
 pub const CURRENT_SCHEMA_VERSION: u32 = 1;
 
@@ -67,11 +68,24 @@ pub fn save_project_atomic<P: AsRef<std::path::Path>>(proj: &Project, path: P) -
         let _ = std::fs::copy(target_path, &bak_path);
     }
 
-    std::fs::write(&tmp_path, json_str.as_bytes())
+    let mut tmp_file = std::fs::File::create(&tmp_path)
+        .map_err(|e| format!("Failed to create temporary project file: {}", e))?;
+    tmp_file
+        .write_all(json_str.as_bytes())
         .map_err(|e| format!("Failed to write temporary project file: {}", e))?;
+    tmp_file
+        .sync_all()
+        .map_err(|e| format!("Failed to sync temporary project file: {}", e))?;
+    drop(tmp_file);
 
     std::fs::rename(&tmp_path, target_path)
         .map_err(|e| format!("Failed to atomically replace project file: {}", e))?;
+
+    if let Some(parent) = target_path.parent() {
+        if let Ok(dir) = std::fs::File::open(parent) {
+            let _ = dir.sync_all();
+        }
+    }
 
     Ok(())
 }
@@ -102,7 +116,17 @@ pub fn load_project_with_backup<P: AsRef<std::path::Path>>(path: P) -> Result<(P
 }
 
 /// Migrate JSON schema from `from_version` to `CURRENT_SCHEMA_VERSION`.
-fn migrate_schema_json(from_version: u32, mut data: serde_json::Value) -> Result<serde_json::Value, String> {
+fn migrate_schema_json(
+    from_version: u32,
+    mut data: serde_json::Value,
+) -> Result<serde_json::Value, String> {
+    if from_version > CURRENT_SCHEMA_VERSION {
+        return Err(format!(
+            "Project schema version {} is newer than supported version {}",
+            from_version, CURRENT_SCHEMA_VERSION
+        ));
+    }
+
     let mut version = from_version;
 
     while version < CURRENT_SCHEMA_VERSION {
@@ -152,6 +176,18 @@ mod tests {
 
         let loaded = load_project_migrated(&v0_json).unwrap();
         assert_eq!(loaded.active_composition_idx, 0);
+    }
+
+    #[test]
+    fn test_rejects_future_schema_without_discarding_unknown_data() {
+        let wrapper = VersionedProjectFile {
+            schema_version: CURRENT_SCHEMA_VERSION + 1,
+            project_data: serde_json::to_value(Project::default()).unwrap(),
+        };
+        let json = serde_json::to_string(&wrapper).unwrap();
+
+        let error = load_project_migrated(&json).unwrap_err();
+        assert!(error.contains("newer than supported"));
     }
 }
 
