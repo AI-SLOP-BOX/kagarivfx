@@ -61,10 +61,7 @@ pub fn apply_pucker_bloat(
 }
 
 /// Applies Zig Zag (sawtooth / wave) geometric sub-division distortion to a Bezier path.
-pub fn apply_zig_zag(
-    vertices: &[MaskVertex],
-    options: &ZigZagOptions,
-) -> Vec<MaskVertex> {
+pub fn apply_zig_zag(vertices: &[MaskVertex], options: &ZigZagOptions) -> Vec<MaskVertex> {
     if vertices.len() < 2 || options.ridges_per_segment == 0 || options.size <= 0.001 {
         return vertices.to_vec();
     }
@@ -110,11 +107,7 @@ pub fn apply_zig_zag(
 }
 
 /// Applies Round Corners modifier to a Bezier vertex path.
-pub fn apply_round_corners(
-    vertices: &[MaskVertex],
-    radius: f32,
-    closed: bool,
-) -> Vec<MaskVertex> {
+pub fn apply_round_corners(vertices: &[MaskVertex], radius: f32, closed: bool) -> Vec<MaskVertex> {
     if vertices.len() < 3 || radius <= 0.001 {
         return vertices.to_vec();
     }
@@ -128,13 +121,27 @@ pub fn apply_round_corners(
             continue;
         }
 
-        let prev = if i == 0 { &vertices[n - 1] } else { &vertices[i - 1] };
+        let prev = if i == 0 {
+            &vertices[n - 1]
+        } else {
+            &vertices[i - 1]
+        };
         let curr = &vertices[i];
-        let next = if i == n - 1 { &vertices[0] } else { &vertices[i + 1] };
+        let next = if i == n - 1 {
+            &vertices[0]
+        } else {
+            &vertices[i + 1]
+        };
 
         // Vectors from curr to prev and curr to next
-        let v_prev = [prev.position[0] - curr.position[0], prev.position[1] - curr.position[1]];
-        let v_next = [next.position[0] - curr.position[0], next.position[1] - curr.position[1]];
+        let v_prev = [
+            prev.position[0] - curr.position[0],
+            prev.position[1] - curr.position[1],
+        ];
+        let v_next = [
+            next.position[0] - curr.position[0],
+            next.position[1] - curr.position[1],
+        ];
 
         let len_prev = (v_prev[0].powi(2) + v_prev[1].powi(2)).sqrt().max(0.001);
         let len_next = (v_next[0].powi(2) + v_next[1].powi(2)).sqrt().max(0.001);
@@ -194,6 +201,16 @@ impl Default for ShapeTransform {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, serde::Serialize, serde::Deserialize)]
+pub enum MergePathsMode {
+    #[default]
+    Merge,
+    Add,
+    Subtract,
+    Intersect,
+    Exclude,
+}
+
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub enum ShapeContentItem {
     Group {
@@ -236,6 +253,10 @@ pub enum ShapeContentItem {
         end: f32,    // 0.0 to 100.0%
         offset: f32, // Degrees or %
     },
+    MergePaths {
+        name: String,
+        mode: MergePathsMode,
+    },
     RoundCorners {
         name: String,
         radius: f32,
@@ -258,6 +279,90 @@ pub enum ShapeContentItem {
     },
 }
 
+/// Trims a polyline or closed Bezier path between start (0..100) and end (0..100) with offset.
+pub fn trim_path_vertices(
+    vertices: &[MaskVertex],
+    start_pct: f32,
+    end_pct: f32,
+    offset_pct: f32,
+    closed: bool,
+) -> Vec<MaskVertex> {
+    if vertices.len() < 2 {
+        return vertices.to_vec();
+    }
+
+    let start = (start_pct * 0.01 + offset_pct * 0.01).rem_euclid(1.0);
+    let end = (end_pct * 0.01 + offset_pct * 0.01).rem_euclid(1.0);
+
+    if (start - end).abs() < 1e-4 {
+        return Vec::new();
+    }
+
+    // Measure total cumulative segment lengths
+    let n = vertices.len();
+    let num_segs = if closed { n } else { n - 1 };
+    let mut cum_lens = vec![0.0f32; num_segs + 1];
+    let mut total_len = 0.0f32;
+
+    for i in 0..num_segs {
+        let p0 = vertices[i].position;
+        let p1 = vertices[(i + 1) % n].position;
+        let seg_len = ((p1[0] - p0[0]).powi(2) + (p1[1] - p0[1]).powi(2)).sqrt();
+        total_len += seg_len;
+        cum_lens[i + 1] = total_len;
+    }
+
+    if total_len < 1e-4 {
+        return vertices.to_vec();
+    }
+
+    let sample_at = |t: f32| -> MaskVertex {
+        let target_dist = t.clamp(0.0, 1.0) * total_len;
+        for i in 0..num_segs {
+            if target_dist <= cum_lens[i + 1] || i == num_segs - 1 {
+                let seg_l = (cum_lens[i + 1] - cum_lens[i]).max(1e-5);
+                let frac = ((target_dist - cum_lens[i]) / seg_l).clamp(0.0, 1.0);
+                let p0 = &vertices[i];
+                let p1 = &vertices[(i + 1) % n];
+                let px = p0.position[0] + (p1.position[0] - p0.position[0]) * frac;
+                let py = p0.position[1] + (p1.position[1] - p0.position[1]) * frac;
+                return MaskVertex::new(px, py);
+            }
+        }
+        vertices[0].clone()
+    };
+
+    let mut result = Vec::new();
+    if start < end {
+        result.push(sample_at(start));
+        for i in 0..num_segs {
+            let seg_t = cum_lens[i + 1] / total_len;
+            if seg_t > start && seg_t < end {
+                result.push(vertices[(i + 1) % n].clone());
+            }
+        }
+        result.push(sample_at(end));
+    } else {
+        // Wrapped around start > end
+        result.push(sample_at(start));
+        for i in 0..num_segs {
+            let seg_t = cum_lens[i + 1] / total_len;
+            if seg_t > start {
+                result.push(vertices[(i + 1) % n].clone());
+            }
+        }
+        for i in 0..num_segs {
+            let seg_t = cum_lens[i + 1] / total_len;
+            if seg_t < end {
+                result.push(vertices[(i + 1) % n].clone());
+            }
+        }
+        result.push(sample_at(end));
+    }
+
+    result
+}
+
 #[derive(Debug, Clone)]
 pub struct RenderableShapePath {
     pub vertices: Vec<MaskVertex>,
@@ -278,7 +383,11 @@ pub fn evaluate_shape_tree(items: &[ShapeContentItem]) -> Vec<RenderableShapePat
 
     for item in items {
         match item {
-            ShapeContentItem::Group { items: sub_items, transform, .. } => {
+            ShapeContentItem::Group {
+                items: sub_items,
+                transform,
+                ..
+            } => {
                 let sub_rendered = evaluate_shape_tree(sub_items);
                 let rad = transform.rotation.to_radians();
                 let cos_r = rad.cos();
@@ -298,10 +407,17 @@ pub fn evaluate_shape_tree(items: &[ShapeContentItem]) -> Vec<RenderableShapePat
                     output_paths.push(sp);
                 }
             }
-            ShapeContentItem::Path { vertices, closed, .. } => {
+            ShapeContentItem::Path {
+                vertices, closed, ..
+            } => {
                 current_paths.push((vertices.clone(), *closed));
             }
-            ShapeContentItem::Rectangle { size, position, roundness, .. } => {
+            ShapeContentItem::Rectangle {
+                size,
+                position,
+                roundness,
+                ..
+            } => {
                 let hw = size[0] * 0.5;
                 let hh = size[1] * 0.5;
                 let raw_rect = vec![
@@ -324,18 +440,72 @@ pub fn evaluate_shape_tree(items: &[ShapeContentItem]) -> Vec<RenderableShapePat
                 let k_y = hh * 0.5522847498;
 
                 let mut top = MaskVertex::new(position[0], position[1] - hh);
-                top.tangent_in = [-k_x, 0.0]; top.tangent_out = [k_x, 0.0];
+                top.tangent_in = [-k_x, 0.0];
+                top.tangent_out = [k_x, 0.0];
 
                 let mut right = MaskVertex::new(position[0] + hw, position[1]);
-                right.tangent_in = [0.0, -k_y]; right.tangent_out = [0.0, k_y];
+                right.tangent_in = [0.0, -k_y];
+                right.tangent_out = [0.0, k_y];
 
                 let mut bottom = MaskVertex::new(position[0], position[1] + hh);
-                bottom.tangent_in = [k_x, 0.0]; bottom.tangent_out = [-k_x, 0.0];
+                bottom.tangent_in = [k_x, 0.0];
+                bottom.tangent_out = [-k_x, 0.0];
 
                 let mut left = MaskVertex::new(position[0] - hw, position[1]);
-                left.tangent_in = [0.0, k_y]; left.tangent_out = [0.0, -k_y];
+                left.tangent_in = [0.0, k_y];
+                left.tangent_out = [0.0, -k_y];
 
                 current_paths.push((vec![top, right, bottom, left], true));
+            }
+            ShapeContentItem::TrimPaths {
+                start,
+                end,
+                offset,
+                ..
+            } => {
+                let mut trimmed = Vec::new();
+                for (verts, closed) in current_paths {
+                    let res = trim_path_vertices(&verts, *start, *end, *offset, closed);
+                    trimmed.push((res, false));
+                }
+                current_paths = trimmed;
+            }
+            ShapeContentItem::MergePaths { mode, .. } => {
+                if current_paths.len() >= 2 {
+                    let mut polys: Vec<Vec<[f32; 2]>> = current_paths
+                        .iter()
+                        .map(|(verts, _)| verts.iter().map(|v| v.position).collect())
+                        .collect();
+
+                    let boolean_op = match mode {
+                        MergePathsMode::Add | MergePathsMode::Merge => crate::core::shape_boolean::BooleanOp::Union,
+                        MergePathsMode::Subtract => crate::core::shape_boolean::BooleanOp::Subtract,
+                        MergePathsMode::Intersect => crate::core::shape_boolean::BooleanOp::Intersect,
+                        MergePathsMode::Exclude => crate::core::shape_boolean::BooleanOp::Exclude,
+                    };
+
+                    let mut acc_polys = vec![polys.remove(0)];
+                    for next_poly in polys {
+                        let mut next_acc = Vec::new();
+                        for acc in &acc_polys {
+                            let res = crate::core::shape_boolean::apply_polygon_boolean(acc, &next_poly, boolean_op);
+                            next_acc.extend(res);
+                        }
+                        if next_acc.is_empty() {
+                            acc_polys = vec![next_poly];
+                        } else {
+                            acc_polys = next_acc;
+                        }
+                    }
+
+                    current_paths = acc_polys
+                        .into_iter()
+                        .map(|poly| {
+                            let verts = poly.into_iter().map(|p| MaskVertex::new(p[0], p[1])).collect();
+                            (verts, true)
+                        })
+                        .collect();
+                }
             }
             ShapeContentItem::RoundCorners { radius, .. } => {
                 for (verts, closed) in &mut current_paths {
@@ -348,13 +518,27 @@ pub fn evaluate_shape_tree(items: &[ShapeContentItem]) -> Vec<RenderableShapePat
                     *verts = apply_pucker_bloat(verts, &opt);
                 }
             }
-            ShapeContentItem::ZigZag { size, ridges, smooth, .. } => {
-                let opt = ZigZagOptions { size: *size, ridges_per_segment: *ridges, smooth: *smooth };
+            ShapeContentItem::ZigZag {
+                size,
+                ridges,
+                smooth,
+                ..
+            } => {
+                let opt = ZigZagOptions {
+                    size: *size,
+                    ridges_per_segment: *ridges,
+                    smooth: *smooth,
+                };
                 for (verts, _) in &mut current_paths {
                     *verts = apply_zig_zag(verts, &opt);
                 }
             }
-            ShapeContentItem::Repeater { copies, offset, transform, .. } => {
+            ShapeContentItem::Repeater {
+                copies,
+                offset,
+                transform,
+                ..
+            } => {
                 let mut duplicated = Vec::new();
                 let count = (*copies).max(1);
                 for i in 0..count {
@@ -386,13 +570,17 @@ pub fn evaluate_shape_tree(items: &[ShapeContentItem]) -> Vec<RenderableShapePat
                 c[3] *= (*opacity * 0.01).clamp(0.0, 1.0);
                 active_fill = Some(c);
             }
-            ShapeContentItem::Stroke { color, width, opacity, .. } => {
+            ShapeContentItem::Stroke {
+                color,
+                width,
+                opacity,
+                ..
+            } => {
                 let mut c = *color;
                 c[3] *= (*opacity * 0.01).clamp(0.0, 1.0);
                 active_stroke = Some(c);
                 active_stroke_w = *width;
             }
-            _ => {}
         }
     }
 
@@ -416,10 +604,7 @@ mod tests {
 
     #[test]
     fn test_pucker_bloat_displacement() {
-        let vertices = vec![
-            MaskVertex::new(-10.0, -10.0),
-            MaskVertex::new(10.0, 10.0),
-        ];
+        let vertices = vec![MaskVertex::new(-10.0, -10.0), MaskVertex::new(10.0, 10.0)];
 
         let options = PuckerBloatOptions { amount: 50.0 };
         let bloat = apply_pucker_bloat(&vertices, &options);
@@ -469,5 +654,47 @@ mod tests {
         assert_eq!(paths.len(), 3);
         assert_eq!(paths[0].fill_color, Some([1.0, 0.0, 0.0, 1.0]));
         assert_eq!(paths[1].vertices[0].position[0], 75.0); // 1st copy shifted by 100
+    }
+
+    #[test]
+    fn test_evaluate_shape_tree_with_merge_paths() {
+        let tree = vec![
+            ShapeContentItem::Rectangle {
+                name: "RectA".into(),
+                size: [100.0, 100.0],
+                position: [0.0, 0.0],
+                roundness: 0.0,
+            },
+            ShapeContentItem::Rectangle {
+                name: "RectB".into(),
+                size: [100.0, 100.0],
+                position: [50.0, 50.0],
+                roundness: 0.0,
+            },
+            ShapeContentItem::MergePaths {
+                name: "Merge".into(),
+                mode: MergePathsMode::Add,
+            },
+            ShapeContentItem::Fill {
+                name: "Fill".into(),
+                color: [0.0, 1.0, 0.0, 1.0],
+                opacity: 100.0,
+            },
+        ];
+        let paths = evaluate_shape_tree(&tree);
+        assert!(!paths.is_empty());
+        assert_eq!(paths[0].fill_color, Some([0.0, 1.0, 0.0, 1.0]));
+    }
+
+    #[test]
+    fn test_trim_path_vertices_shortens_polyline() {
+        let raw = vec![
+            MaskVertex::new(0.0, 0.0),
+            MaskVertex::new(100.0, 0.0),
+        ];
+        let trimmed = trim_path_vertices(&raw, 25.0, 75.0, 0.0, false);
+        assert!(trimmed.len() >= 2);
+        assert!((trimmed[0].position[0] - 25.0).abs() < 1e-3);
+        assert!((trimmed[1].position[0] - 75.0).abs() < 1e-3);
     }
 }
