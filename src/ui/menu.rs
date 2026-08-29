@@ -1280,6 +1280,10 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
                     app.show_motion_sketch = true;
                     ui.close_menu();
                 }
+                if ui.button("⚛ Physics & Dynamics...").on_hover_text("2D Rigid Body Collision Simulation & Keyframe Baker").clicked() {
+                    app.show_physics = true;
+                    ui.close_menu();
+                }
             });
             ui.menu_button("View", |ui| {
                 // ── UI Mode (skill level) ──
@@ -1459,6 +1463,18 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
                 crate::ui::motion_sketch_panel::draw_motion_sketch_panel(app, ui);
             });
         app.show_motion_sketch = open;
+    }
+
+    if app.show_physics {
+        let mut open = app.show_physics;
+        egui::Window::new("⚛ Physics & Dynamics")
+            .open(&mut open)
+            .resizable(false)
+            .default_width(300.0)
+            .show(ctx, |ui| {
+                crate::ui::physics_panel::draw_physics_panel(app, ui);
+            });
+        app.show_physics = open;
     }
 }
 

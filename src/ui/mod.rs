@@ -83,5 +83,6 @@ pub mod precompose_dialog;
 pub mod recovery_dialog;
 pub mod panel_animation;
 pub mod custom_widgets;
+pub mod physics_panel;
 
 
