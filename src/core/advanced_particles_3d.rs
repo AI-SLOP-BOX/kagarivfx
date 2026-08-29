@@ -89,79 +89,98 @@ impl ParticleSimulation3D {
     }
 
     pub fn update(&mut self, dt: f32, config: &EmitterConfig3D) {
-        // 1. Spawning
-        self.spawn_accumulator += config.birth_rate_per_sec * dt;
-        let spawn_count = self.spawn_accumulator.floor() as usize;
-        self.spawn_accumulator -= spawn_count as f32;
+        let safe_dt = if dt.is_finite() && dt > 0.0 { dt.min(1.0) } else { 0.0 };
+        if safe_dt <= 0.0 {
+            return;
+        }
 
-        for _ in 0..spawn_count {
-            let mut pos = config.position;
-            match config.emitter_type {
-                EmitterType3D::Point => {}
-                EmitterType3D::Box { size } => {
-                    pos[0] += (self.next_f32() - 0.5) * size[0];
-                    pos[1] += (self.next_f32() - 0.5) * size[1];
-                    pos[2] += (self.next_f32() - 0.5) * size[2];
+        // 1. Spawning (guards for negative/zero lifespan and bounds on spawn rate)
+        if config.lifespan_sec > 0.0 && config.lifespan_sec.is_finite() {
+            let safe_birth_rate = if config.birth_rate_per_sec.is_finite() && config.birth_rate_per_sec > 0.0 {
+                config.birth_rate_per_sec
+            } else {
+                0.0
+            };
+            self.spawn_accumulator = (self.spawn_accumulator + safe_birth_rate * safe_dt).clamp(0.0, 50_000.0);
+            let spawn_count = (self.spawn_accumulator.floor() as usize).min(2000);
+            self.spawn_accumulator -= spawn_count as f32;
+
+            let remaining_budget = 50_000usize.saturating_sub(self.particles.len());
+            let actual_spawn = spawn_count.min(remaining_budget);
+
+            for _ in 0..actual_spawn {
+                let mut pos = config.position;
+                match config.emitter_type {
+                    EmitterType3D::Point => {}
+                    EmitterType3D::Box { size } => {
+                        pos[0] += (self.next_f32() - 0.5) * size[0];
+                        pos[1] += (self.next_f32() - 0.5) * size[1];
+                        pos[2] += (self.next_f32() - 0.5) * size[2];
+                    }
+                    EmitterType3D::Sphere { radius } => {
+                        let theta = self.next_f32() * std::f32::consts::TAU;
+                        let phi = (self.next_f32() * 2.0 - 1.0).acos();
+                        let r = radius * self.next_f32().cbrt();
+                        pos[0] += r * phi.sin() * theta.cos();
+                        pos[1] += r * phi.sin() * theta.sin();
+                        pos[2] += r * phi.cos();
+                    }
                 }
-                EmitterType3D::Sphere { radius } => {
-                    let theta = self.next_f32() * std::f32::consts::TAU;
-                    let phi = (self.next_f32() * 2.0 - 1.0).acos();
-                    let r = radius * self.next_f32().cbrt();
-                    pos[0] += r * phi.sin() * theta.cos();
-                    pos[1] += r * phi.sin() * theta.sin();
-                    pos[2] += r * phi.cos();
-                }
+
+                // Random spherical velocity
+                let theta = self.next_f32() * std::f32::consts::TAU;
+                let phi = (self.next_f32() * 2.0 - 1.0).acos();
+                let speed = config.initial_speed * (1.0 + (self.next_f32() - 0.5) * 2.0 * config.speed_random);
+                let vel = [
+                    speed * phi.sin() * theta.cos(),
+                    speed * phi.sin() * theta.sin(),
+                    speed * phi.cos(),
+                ];
+                let rot = self.next_f32() * 360.0;
+                let ang_vel = (self.next_f32() - 0.5) * 180.0;
+
+                self.particles.push(Particle3D {
+                    position: pos,
+                    velocity: vel,
+                    rotation_deg: rot,
+                    angular_velocity_deg: ang_vel,
+                    age_sec: 0.0,
+                    lifespan_sec: config.lifespan_sec,
+                    start_size: config.start_size,
+                    end_size: config.end_size,
+                    start_color: [1.0, 0.9, 0.4, 1.0],
+                    end_color: [1.0, 0.2, 0.1, 0.0],
+                    dead: false,
+                });
             }
-
-            // Random spherical velocity
-            let theta = self.next_f32() * std::f32::consts::TAU;
-            let phi = (self.next_f32() * 2.0 - 1.0).acos();
-            let speed = config.initial_speed * (1.0 + (self.next_f32() - 0.5) * 2.0 * config.speed_random);
-            let vel = [
-                speed * phi.sin() * theta.cos(),
-                speed * phi.sin() * theta.sin(),
-                speed * phi.cos(),
-            ];
-            let rot = self.next_f32() * 360.0;
-            let ang_vel = (self.next_f32() - 0.5) * 180.0;
-
-            self.particles.push(Particle3D {
-                position: pos,
-                velocity: vel,
-                rotation_deg: rot,
-                angular_velocity_deg: ang_vel,
-                age_sec: 0.0,
-                lifespan_sec: config.lifespan_sec,
-                start_size: config.start_size,
-                end_size: config.end_size,
-                start_color: [1.0, 0.9, 0.4, 1.0],
-                end_color: [1.0, 0.2, 0.1, 0.0],
-                dead: false,
-            });
         }
 
         // 2. Integration & Collision
         for p in &mut self.particles {
-            p.age_sec += dt;
+            p.age_sec += safe_dt;
             if p.age_sec >= p.lifespan_sec {
                 p.dead = true;
                 continue;
             }
 
             // Apply gravity and wind
-            p.velocity[0] += (config.gravity[0] + config.wind[0]) * dt;
-            p.velocity[1] += (config.gravity[1] + config.wind[1]) * dt;
-            p.velocity[2] += (config.gravity[2] + config.wind[2]) * dt;
+            p.velocity[0] += (config.gravity[0] + config.wind[0]) * safe_dt;
+            p.velocity[1] += (config.gravity[1] + config.wind[1]) * safe_dt;
+            p.velocity[2] += (config.gravity[2] + config.wind[2]) * safe_dt;
 
-            p.position[0] += p.velocity[0] * dt;
-            p.position[1] += p.velocity[1] * dt;
-            p.position[2] += p.velocity[2] * dt;
+            p.position[0] += p.velocity[0] * safe_dt;
+            p.position[1] += p.velocity[1] * safe_dt;
+            p.position[2] += p.velocity[2] * safe_dt;
 
-            p.rotation_deg += p.angular_velocity_deg * dt;
+            p.rotation_deg += p.angular_velocity_deg * safe_dt;
 
             // Handle collision planes
             for plane in &config.collision_planes {
-                let n = plane.normal;
+                let n_len = (plane.normal[0].powi(2) + plane.normal[1].powi(2) + plane.normal[2].powi(2)).sqrt();
+                if n_len < 1e-6 || !n_len.is_finite() {
+                    continue; // Skip zero-length or non-finite normal
+                }
+                let n = [plane.normal[0] / n_len, plane.normal[1] / n_len, plane.normal[2] / n_len];
                 let rel = [
                     p.position[0] - plane.origin[0],
                     p.position[1] - plane.origin[1],
@@ -231,5 +250,66 @@ mod tests {
         for p in &sim.particles {
             assert!(p.position[1] <= 600.1, "Particle breached floor: {}", p.position[1]);
         }
+    }
+
+    #[test]
+    fn test_negative_birth_rate_does_not_spawn_huge_particle_count() {
+        let mut sim = ParticleSimulation3D::new();
+        let config = EmitterConfig3D {
+            birth_rate_per_sec: -1.0,
+            ..Default::default()
+        };
+        sim.update(1.0, &config);
+        assert!(sim.particles.len() <= 1);
+    }
+
+    #[test]
+    fn test_non_unit_collision_normal_behaves_like_normalized_normal() {
+        let mut sim = ParticleSimulation3D::new();
+        let config = EmitterConfig3D {
+            birth_rate_per_sec: 1.0,
+            initial_speed: 0.0,
+            gravity: [0.0, 0.0, 0.0],
+            collision_planes: vec![CollisionPlane {
+                origin: [0.0, 0.0, 0.0],
+                normal: [0.0, 10.0, 0.0],
+                bounce_restitution: 0.0,
+                friction: 0.0,
+            }],
+            ..Default::default()
+        };
+        sim.update(1.0, &config);
+        assert!(sim.particles.iter().all(|p| p.position[1] >= -1e-5));
+    }
+
+    #[test]
+    fn test_large_dt_does_not_allocate_unbounded_particle_count() {
+        let mut sim = ParticleSimulation3D::new();
+        let config = EmitterConfig3D {
+            birth_rate_per_sec: 10_000.0,
+            ..Default::default()
+        };
+        sim.update(10.0, &config);
+        assert!(sim.particles.len() <= 2_000);
+    }
+
+    #[test]
+    fn test_zero_or_negative_lifespan_does_not_spawn_particles() {
+        let mut sim = ParticleSimulation3D::new();
+        let config = EmitterConfig3D {
+            birth_rate_per_sec: 100.0,
+            lifespan_sec: 0.0,
+            ..Default::default()
+        };
+        sim.update(1.0, &config);
+        assert_eq!(sim.particles.len(), 0);
+
+        let neg_config = EmitterConfig3D {
+            birth_rate_per_sec: 100.0,
+            lifespan_sec: -5.0,
+            ..Default::default()
+        };
+        sim.update(1.0, &neg_config);
+        assert_eq!(sim.particles.len(), 0);
     }
 }

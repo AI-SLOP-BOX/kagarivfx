@@ -113,7 +113,7 @@ pub fn generate_rotobrush_matte(
     let bg_mean = compute_mean_color(&bg_samples).unwrap_or([0.0, 0.0, 0.0]);
 
     let mut alpha_matte = vec![0u8; size];
-    let spatial_sigma_sq = (width.max(height) as f32 * 0.35).powi(2).max(100.0);
+    let spatial_sigma_sq = (width.max(height) as f32 * 0.35).powi(2).max(1.0);
     let contrast_pow = settings.contrast.clamp(0.1, 5.0);
 
     for y in 0..height {
@@ -141,15 +141,28 @@ pub fn generate_rotobrush_matte(
                 dx * dx + dy * dy
             }).fold(f32::INFINITY, f32::min);
 
-            let spatial_fg_weight = (-min_d_fg_pos / (2.0 * spatial_sigma_sq)).exp();
-            let spatial_bg_weight = (-min_d_bg_pos / (2.0 * spatial_sigma_sq)).exp();
+            let spatial_fg_weight = if !fg_points.is_empty() {
+                (-min_d_fg_pos / (2.0 * spatial_sigma_sq)).exp()
+            } else {
+                0.0
+            };
+            let spatial_bg_weight = if !bg_points.is_empty() {
+                (-min_d_bg_pos / (2.0 * spatial_sigma_sq)).exp()
+            } else {
+                0.0
+            };
 
             // Combined likelihood
             let color_likelihood = d_bg_color / (d_fg_color + d_bg_color + 1e-4);
-            let total_fg = color_likelihood * (1.0 + spatial_fg_weight * 2.0);
-            let total_bg = (1.0 - color_likelihood) * (1.0 + spatial_bg_weight * 2.0);
-
-            let raw_prob = total_fg / (total_fg + total_bg + 1e-4);
+            let raw_prob = if bg_points.is_empty() {
+                color_likelihood * spatial_fg_weight
+            } else if fg_points.is_empty() {
+                color_likelihood * (1.0 - spatial_bg_weight)
+            } else {
+                let total_fg = color_likelihood * (1.0 + spatial_fg_weight * 2.0);
+                let total_bg = (1.0 - color_likelihood) * (1.0 + spatial_bg_weight * 2.0);
+                total_fg / (total_fg + total_bg + 1e-4)
+            };
 
             // Apply contrast shaping
             let shaped = if raw_prob >= 0.5 {
@@ -300,5 +313,22 @@ mod tests {
         };
         let propagated = propagate_roto_boundary(&boundary, [6.0, -4.0], &settings);
         assert_eq!(propagated[0], [16.0, 6.0]);
+    }
+
+    #[test]
+    fn test_rotobrush_zero_radius_does_not_mark_entire_flat_image() {
+        let pixels = vec![255u8; 3 * 3 * 4];
+        let stroke = RotoStroke {
+            stroke_type: RotoStrokeType::Foreground,
+            points: vec![[1.0, 1.0]],
+            radius: 0.0,
+        };
+        let settings = RotoBrushSettings {
+            feather_radius: 0.0,
+            ..Default::default()
+        };
+        let matte = generate_rotobrush_matte(&pixels, 3, 3, &[stroke], &settings);
+        assert!(matte[4] > 200);
+        assert!(matte.iter().enumerate().filter(|(i, _)| *i != 4).all(|(_, a)| *a < 200));
     }
 }
