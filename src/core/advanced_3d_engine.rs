@@ -153,7 +153,11 @@ impl Advanced3DLight {
         };
 
         let factor = self.intensity * atten;
-        [self.color[0] * factor, self.color[1] * factor, self.color[2] * factor]
+        [
+            self.color[0] * factor,
+            self.color[1] * factor,
+            self.color[2] * factor,
+        ]
     }
 }
 
@@ -168,7 +172,9 @@ pub fn sample_hdri_environment(
         return [0.0, 0.0, 0.0];
     }
 
-    let len = (normal[0] * normal[0] + normal[1] * normal[1] + normal[2] * normal[2]).sqrt().max(1e-5);
+    let len = (normal[0] * normal[0] + normal[1] * normal[1] + normal[2] * normal[2])
+        .sqrt()
+        .max(1e-5);
     let n = [normal[0] / len, normal[1] / len, normal[2] / len];
 
     // Spherical coordinates

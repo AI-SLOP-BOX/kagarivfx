@@ -155,3 +155,4 @@ pub mod shape_morph_roto;
 pub mod temporal_denoise;
 pub mod text_animator_advanced;
 pub mod vr_effects;
+pub mod dynamic_link_disk_cache;
