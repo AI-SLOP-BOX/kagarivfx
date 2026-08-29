@@ -304,6 +304,47 @@ pub fn draw_character_panel(
                                                 ui.label("Offset:");
                                                 if ui.add(egui::Slider::new(&mut sel.offset, -100.0..=100.0).suffix("%")).changed() { project_changed = true; }
                                             });
+                                            ui.horizontal(|ui| {
+                                                ui.label("Shape:");
+                                                use crate::core::text_animator::SelectorShape as SS;
+                                                let mut shape_idx = match sel.shape {
+                                                    SS::Square => 0,
+                                                    SS::RampUp => 1,
+                                                    SS::RampDown => 2,
+                                                    SS::Triangle => 3,
+                                                    SS::Round => 4,
+                                                    SS::Smooth => 5,
+                                                    SS::Wobble => 6,
+                                                    SS::Random => 7,
+                                                    SS::Expression => 8,
+                                                };
+                                                egui::ComboBox::from_id_salt("anim_shape")
+                                                    .selected_text(match sel.shape {
+                                                        SS::Square => "Square",
+                                                        SS::RampUp => "Ramp Up",
+                                                        SS::RampDown => "Ramp Down",
+                                                        SS::Triangle => "Triangle",
+                                                        SS::Round => "Round",
+                                                        SS::Smooth => "Smooth",
+                                                        SS::Wobble => "Wobble",
+                                                        SS::Random => "Random",
+                                                        SS::Expression => "Expression",
+                                                    })
+                                                    .show_ui(ui, |ui| {
+                                                        if ui.selectable_value(&mut shape_idx, 0, "Square").clicked() { sel.shape = SS::Square; project_changed = true; }
+                                                        if ui.selectable_value(&mut shape_idx, 1, "Ramp Up").clicked() { sel.shape = SS::RampUp; project_changed = true; }
+                                                        if ui.selectable_value(&mut shape_idx, 2, "Ramp Down").clicked() { sel.shape = SS::RampDown; project_changed = true; }
+                                                        if ui.selectable_value(&mut shape_idx, 3, "Triangle").clicked() { sel.shape = SS::Triangle; project_changed = true; }
+                                                        if ui.selectable_value(&mut shape_idx, 4, "Round").clicked() { sel.shape = SS::Round; project_changed = true; }
+                                                        if ui.selectable_value(&mut shape_idx, 5, "Smooth").clicked() { sel.shape = SS::Smooth; project_changed = true; }
+                                                        if ui.selectable_value(&mut shape_idx, 6, "Wobble").clicked() { sel.shape = SS::Wobble; project_changed = true; }
+                                                        if ui.selectable_value(&mut shape_idx, 7, "Random").clicked() { sel.shape = SS::Random; project_changed = true; }
+                                                        if ui.selectable_value(&mut shape_idx, 8, "Expression").clicked() { sel.shape = SS::Expression; project_changed = true; }
+                                                    });
+                                            });
+                                            ui.horizontal(|ui| {
+                                                if ui.checkbox(&mut sel.random_order, "🎲 Randomize Order").clicked() { project_changed = true; }
+                                            });
                                         });
 
                                         // Property targets
@@ -319,13 +360,15 @@ pub fn draw_character_panel(
                                                 if ui.add(egui::Slider::new(&mut anim.opacity, 0.0..=1.0)).changed() { project_changed = true; }
                                             });
                                             ui.horizontal(|ui| {
+                                                ui.label("Blur:");
+                                                if ui.add(egui::DragValue::new(&mut anim.blur).range(0.0..=100.0).suffix(" px")).changed() { project_changed = true; }
                                                 ui.label("Tracking:");
                                                 if ui.add(egui::DragValue::new(&mut anim.tracking).suffix(" px")).changed() { project_changed = true; }
-                                                ui.label("Skew:");
-                                                if ui.add(egui::DragValue::new(&mut anim.advanced.skew).suffix("°")).changed() { project_changed = true; }
                                             });
                                             ui.horizontal(|ui| {
-                                                ui.label("Char Offset (Glyph Shift):");
+                                                ui.label("Skew:");
+                                                if ui.add(egui::DragValue::new(&mut anim.advanced.skew).suffix("°")).changed() { project_changed = true; }
+                                                ui.label("Char Offset:");
                                                 if ui.add(egui::DragValue::new(&mut anim.advanced.character_offset)).changed() { project_changed = true; }
                                             });
                                         });
