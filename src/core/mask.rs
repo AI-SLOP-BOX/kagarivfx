@@ -1,3 +1,5 @@
+use crate::core::keyframe::{InterpolationType, Keyframe};
+use crate::core::property::Animatable;
 /// AE-style Bezier mask system.
 ///
 /// Each Layer can have multiple named masks. Each mask is a closed or open
@@ -7,14 +9,11 @@
 /// Data model follows AE's mask architecture:
 ///   Layer → Vec<Mask> → MaskPath → Vec<MaskVertex>
 use serde::{Deserialize, Serialize};
-use crate::core::property::Animatable;
-use crate::core::keyframe::{Keyframe, InterpolationType};
 
 // ─── Mask Blend Mode ───────────────────────────────────────────────────────
 
 /// How this mask combines with masks below it on the same layer.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[derive(Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub enum MaskMode {
     /// Add to the existing alpha (default AE mode)
     #[default]
@@ -32,7 +31,6 @@ pub enum MaskMode {
     /// Disable this mask (show full layer)
     None,
 }
-
 
 // ─── Mask Vertex ───────────────────────────────────────────────────────────
 
@@ -71,7 +69,13 @@ impl MaskVertex {
 // ─── Cubic Bezier Helper ───────────────────────────────────────────────────
 
 /// Compute a point on a 2D cubic Bezier curve at parameter t in [0, 1].
-pub fn eval_cubic_bezier(p0: [f32; 2], c0: [f32; 2], c1: [f32; 2], p1: [f32; 2], t: f32) -> [f32; 2] {
+pub fn eval_cubic_bezier(
+    p0: [f32; 2],
+    c0: [f32; 2],
+    c1: [f32; 2],
+    p1: [f32; 2],
+    t: f32,
+) -> [f32; 2] {
     let t_safe = t.clamp(0.0, 1.0);
     let u = 1.0 - t_safe;
     let u2 = u * u;
@@ -99,12 +103,7 @@ pub struct MaskPath {
 
 impl MaskPath {
     pub fn new_rect(x: f32, y: f32, w: f32, h: f32) -> Self {
-        let verts = vec![
-            [x, y],
-            [x + w, y],
-            [x + w, y + h],
-            [x, y + h],
-        ];
+        let verts = vec![[x, y], [x + w, y], [x + w, y + h], [x, y + h]];
         Self {
             vertices: Animatable::new_constant(verts),
             tangents: None,
@@ -126,16 +125,16 @@ impl MaskPath {
         let kx = rx * 0.552_284_8;
         let ky = ry * 0.552_284_8;
         let verts = vec![
-            [cx, cy - ry],        // top
-            [cx + rx, cy],        // right
-            [cx, cy + ry],        // bottom
-            [cx - rx, cy],        // left
+            [cx, cy - ry], // top
+            [cx + rx, cy], // right
+            [cx, cy + ry], // bottom
+            [cx - rx, cy], // left
         ];
         let tangents = vec![
-            ([-kx, 0.0], [kx, 0.0]),   // top: in left, out right
-            ([0.0, -ky], [0.0, ky]),   // right: in up, out down
-            ([kx, 0.0], [-kx, 0.0]),   // bottom: in right, out left
-            ([0.0, ky], [0.0, -ky]),   // left: in down, out up
+            ([-kx, 0.0], [kx, 0.0]), // top: in left, out right
+            ([0.0, -ky], [0.0, ky]), // right: in up, out down
+            ([kx, 0.0], [-kx, 0.0]), // bottom: in right, out left
+            ([0.0, ky], [0.0, -ky]), // left: in down, out up
         ];
         Self {
             vertices: Animatable::new_constant(verts),
@@ -160,16 +159,25 @@ impl MaskPath {
                         let mut prev = &kfs[0];
                         let mut next = &kfs[0];
                         for kf in kfs {
-                            if kf.frame <= frame { prev = kf; }
-                            if kf.frame >= frame { next = kf; break; }
+                            if kf.frame <= frame {
+                                prev = kf;
+                            }
+                            if kf.frame >= frame {
+                                next = kf;
+                                break;
+                            }
                         }
                         if prev.frame == next.frame {
                             prev.value.clone()
                         } else {
                             let t = (frame - prev.frame) as f32 / (next.frame - prev.frame) as f32;
-                            prev.value.iter().zip(next.value.iter()).map(|(&p0, &p1)| {
-                                [p0[0] + (p1[0] - p0[0]) * t, p0[1] + (p1[1] - p0[1]) * t]
-                            }).collect()
+                            prev.value
+                                .iter()
+                                .zip(next.value.iter())
+                                .map(|(&p0, &p1)| {
+                                    [p0[0] + (p1[0] - p0[0]) * t, p0[1] + (p1[1] - p0[1]) * t]
+                                })
+                                .collect()
                         }
                     }
                 } else {
@@ -247,16 +255,25 @@ impl MaskPath {
                         let mut prev = &kfs[0];
                         let mut next = &kfs[0];
                         for kf in kfs {
-                            if kf.frame <= frame { prev = kf; }
-                            if kf.frame >= frame { next = kf; break; }
+                            if kf.frame <= frame {
+                                prev = kf;
+                            }
+                            if kf.frame >= frame {
+                                next = kf;
+                                break;
+                            }
                         }
                         if prev.frame == next.frame {
                             prev.value.clone()
                         } else {
                             let t = (frame - prev.frame) as f32 / (next.frame - prev.frame) as f32;
-                            prev.value.iter().zip(next.value.iter()).map(|(&p0, &p1)| {
-                                [p0[0] + (p1[0] - p0[0]) * t, p0[1] + (p1[1] - p0[1]) * t]
-                            }).collect()
+                            prev.value
+                                .iter()
+                                .zip(next.value.iter())
+                                .map(|(&p0, &p1)| {
+                                    [p0[0] + (p1[0] - p0[0]) * t, p0[1] + (p1[1] - p0[1]) * t]
+                                })
+                                .collect()
                         }
                     }
                 } else {
@@ -380,7 +397,31 @@ impl Mask {
 #[allow(dead_code)]
 pub fn point_in_polygon(px: f32, py: f32, verts: &[[f32; 2]]) -> bool {
     let n = verts.len();
-    if n < 3 { return false; }
+    if n < 3 {
+        return false;
+    }
+
+    // Check if point is directly on any polygon boundary edge within tolerance
+    for i in 0..n {
+        let j = (i + 1) % n;
+        let x1 = verts[i][0];
+        let y1 = verts[i][1];
+        let x2 = verts[j][0];
+        let y2 = verts[j][1];
+        let dx = x2 - x1;
+        let dy = y2 - y1;
+        let len_sq = dx * dx + dy * dy;
+        if len_sq > 1e-6 {
+            let t = (((px - x1) * dx + (py - y1) * dy) / len_sq).clamp(0.0, 1.0);
+            let proj_x = x1 + t * dx;
+            let proj_y = y1 + t * dy;
+            let dist_sq = (px - proj_x).powi(2) + (py - proj_y).powi(2);
+            if dist_sq < 1e-4 {
+                return true;
+            }
+        }
+    }
+
     let mut inside = false;
     let mut j = n - 1;
     for i in 0..n {
@@ -403,7 +444,10 @@ mod tests {
     #[test]
     fn test_point_in_polygon_square() {
         let square = vec![[0.0, 0.0], [100.0, 0.0], [100.0, 100.0], [0.0, 100.0]];
-        assert!(point_in_polygon(50.0, 50.0, &square), "center should be inside");
+        assert!(
+            point_in_polygon(50.0, 50.0, &square),
+            "center should be inside"
+        );
         assert!(!point_in_polygon(150.0, 50.0, &square), "outside right");
         assert!(!point_in_polygon(-10.0, 50.0, &square), "outside left");
     }
@@ -446,8 +490,15 @@ mod tests {
     #[test]
     fn test_mask_ellipse_bezier_sampling() {
         let path = MaskPath::new_ellipse(100.0, 100.0, 50.0, 50.0);
-        assert!(path.tangents.is_some(), "ellipse mask should have tangent handles");
+        assert!(
+            path.tangents.is_some(),
+            "ellipse mask should have tangent handles"
+        );
         let poly = path.to_polygon(0, 8);
-        assert_eq!(poly.len(), 4 * 8 + 1, "sampled polygon should contain curve segments");
+        assert_eq!(
+            poly.len(),
+            4 * 8 + 1,
+            "sampled polygon should contain curve segments"
+        );
     }
 }

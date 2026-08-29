@@ -61,20 +61,23 @@ impl PuppetPin {
 }
 
 /// Deforms a single 2D vertex point using Moving Least Squares (MLS) affine & rigid transformation.
-pub fn deform_point_mls(
-    vertex: [f32; 2],
-    pins: &[PuppetPin],
-) -> [f32; 2] {
+pub fn deform_point_mls(vertex: [f32; 2], pins: &[PuppetPin]) -> [f32; 2] {
     if pins.is_empty() {
         return vertex;
     }
 
-    let pos_pins: Vec<&PuppetPin> = pins.iter().filter(|p| p.pin_type == PuppetPinType::Position).collect();
+    let pos_pins: Vec<&PuppetPin> = pins
+        .iter()
+        .filter(|p| p.pin_type == PuppetPinType::Position)
+        .collect();
     if pos_pins.is_empty() {
         return vertex;
     }
 
-    let starch_pins: Vec<&PuppetPin> = pins.iter().filter(|p| p.pin_type == PuppetPinType::Starch).collect();
+    let starch_pins: Vec<&PuppetPin> = pins
+        .iter()
+        .filter(|p| p.pin_type == PuppetPinType::Starch)
+        .collect();
 
     // Compute weights w_i = 1 / |v - p_i|^(2*alpha)
     let mut weights = Vec::with_capacity(pos_pins.len());
@@ -152,13 +155,11 @@ pub fn deform_point_mls(
 }
 
 /// Applies Puppet Mesh Warp to an RGBA pixel buffer using inverse MLS mapping and bilinear sampling.
-pub fn apply_puppet_mesh_warp(
-    src: &[u8],
-    width: u32,
-    height: u32,
-    pins: &[PuppetPin],
-) -> Vec<u8> {
-    if pins.is_empty() || width == 0 || height == 0 || src.len() != (width * height * 4) as usize {
+pub fn apply_puppet_mesh_warp(src: &[u8], width: u32, height: u32, pins: &[PuppetPin]) -> Vec<u8> {
+    let Some(expected_len) = (width as usize).checked_mul(height as usize).and_then(|s| s.checked_mul(4)) else {
+        return src.to_vec();
+    };
+    if pins.is_empty() || width == 0 || height == 0 || src.len() != expected_len {
         return src.to_vec();
     }
 
@@ -257,5 +258,23 @@ mod tests {
 
         // Starched vertex must stay much closer to original 110.0 than unstarched
         assert!((starched[0] - vertex[0]).abs() < (unstarched[0] - vertex[0]).abs());
+    }
+
+    #[test]
+    fn test_apply_puppet_mesh_warp_buffer_transformation() {
+        let mut src = vec![0u8; 10 * 10 * 4];
+        // Set red pixel at (5, 5)
+        let idx = (5 * 10 + 5) * 4;
+        src[idx] = 255;
+        src[idx + 3] = 255;
+
+        let mut pin = PuppetPin::new_position("p1", [5.0, 5.0]);
+        pin.current_position = [6.0, 5.0]; // Shift right by 1px
+
+        let warped = apply_puppet_mesh_warp(&src, 10, 10, &[pin]);
+        assert_eq!(warped.len(), src.len());
+        // Destination pixel at (6, 5) should now receive the red color
+        let dst_idx = (5 * 10 + 6) * 4;
+        assert!(warped[dst_idx] > 0);
     }
 }

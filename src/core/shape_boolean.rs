@@ -52,6 +52,11 @@ pub fn apply_polygon_boolean(
 
 /// Computes polygon intersection using Sutherland-Hodgman convex/concave clipping.
 pub fn polygon_intersect(subject: &[[f32; 2]], clip: &[[f32; 2]]) -> Vec<Vec<[f32; 2]>> {
+    if subject.len() < 3 || clip.len() < 3 {
+        return vec![];
+    }
+
+    let is_ccw = signed_polygon_area(clip) >= 0.0;
     let mut output = subject.to_vec();
 
     for i in 0..clip.len() {
@@ -68,17 +73,20 @@ pub fn polygon_intersect(subject: &[[f32; 2]], clip: &[[f32; 2]]) -> Vec<Vec<[f3
             break;
         }
 
-        let mut s = *input.last().unwrap_or(&[0.0, 0.0]);
+        let mut s = *input.last().unwrap();
         for &e in &input {
-            if is_inside_edge(e, p1, p2) {
-                if is_inside_edge(s, p1, p2) {
-                    output.push(e);
-                } else if let Some(inter) = line_intersection(s, e, p1, p2) {
-                    output.push(inter);
-                    output.push(e);
+            let e_in = is_inside_edge(e, p1, p2, is_ccw);
+            let s_in = is_inside_edge(s, p1, p2, is_ccw);
+
+            if e_in {
+                if !s_in {
+                    if let Some(inter) = line_intersection_edge(s, e, p1, p2) {
+                        output.push(inter);
+                    }
                 }
-            } else if is_inside_edge(s, p1, p2) {
-                if let Some(inter) = line_intersection(s, e, p1, p2) {
+                output.push(e);
+            } else if s_in {
+                if let Some(inter) = line_intersection_edge(s, e, p1, p2) {
                     output.push(inter);
                 }
             }
@@ -86,8 +94,21 @@ pub fn polygon_intersect(subject: &[[f32; 2]], clip: &[[f32; 2]]) -> Vec<Vec<[f3
         }
     }
 
-    if output.len() >= 3 {
-        vec![output]
+    // Deduplicate consecutive identical points
+    let mut clean_output: Vec<[f32; 2]> = Vec::new();
+    for p in output {
+        if let Some(last) = clean_output.last() {
+            let d_sq = (p[0] - last[0]).powi(2) + (p[1] - last[1]).powi(2);
+            if d_sq > 1e-4 {
+                clean_output.push(p);
+            }
+        } else {
+            clean_output.push(p);
+        }
+    }
+
+    if clean_output.len() >= 3 {
+        vec![clean_output]
     } else {
         vec![]
     }
@@ -111,7 +132,23 @@ pub fn polygon_subtract(subject: &[[f32; 2]], clip: &[[f32; 2]]) -> Vec<Vec<[f32
         // Check if clip is an enclosed inner hole inside subject
         let clip_is_inner_hole = clip.iter().all(|&pt| point_in_polygon(pt[0], pt[1], subject));
         if clip_is_inner_hole {
-            return vec![subject.to_vec(), clip.to_vec()];
+            // Partition region around hole using horizontal bounding band cuts
+            let min_y = clip.iter().map(|p| p[1]).fold(f32::INFINITY, f32::min);
+            let max_y = clip.iter().map(|p| p[1]).fold(f32::NEG_INFINITY, f32::max);
+            let min_x = clip.iter().map(|p| p[0]).fold(f32::INFINITY, f32::min);
+            let max_x = clip.iter().map(|p| p[0]).fold(f32::NEG_INFINITY, f32::max);
+
+            let sub_min_x = subject.iter().map(|p| p[0]).fold(f32::INFINITY, f32::min);
+            let sub_max_x = subject.iter().map(|p| p[0]).fold(f32::NEG_INFINITY, f32::max);
+            let sub_min_y = subject.iter().map(|p| p[1]).fold(f32::INFINITY, f32::min);
+            let sub_max_y = subject.iter().map(|p| p[1]).fold(f32::NEG_INFINITY, f32::max);
+
+            return vec![
+                vec![[sub_min_x, sub_min_y], [sub_max_x, sub_min_y], [sub_max_x, min_y], [sub_min_x, min_y]], // Bottom
+                vec![[sub_min_x, max_y], [sub_max_x, max_y], [sub_max_x, sub_max_y], [sub_min_x, sub_max_y]], // Top
+                vec![[sub_min_x, min_y], [min_x, min_y], [min_x, max_y], [sub_min_x, max_y]],                 // Left
+                vec![[max_x, min_y], [sub_max_x, min_y], [sub_max_x, max_y], [max_x, max_y]],                 // Right
+            ];
         }
         return vec![subject.to_vec()];
     }
@@ -165,8 +202,14 @@ pub fn polygon_subtract(subject: &[[f32; 2]], clip: &[[f32; 2]]) -> Vec<Vec<[f32
 
     // Check if clip is an enclosed inner hole (all clip vertices inside subject)
     let clip_is_inner_hole = clip.iter().all(|&pt| point_in_polygon(pt[0], pt[1], subject));
-    if clip_is_inner_hole && remaining.len() == subject.len() {
-        return vec![subject.to_vec(), clip.to_vec()];
+    if clip_is_inner_hole {
+        let mut bridged = Vec::new();
+        bridged.extend_from_slice(subject);
+        let mut reversed_clip = clip.to_vec();
+        reversed_clip.reverse();
+        bridged.push(reversed_clip[0]);
+        bridged.extend(reversed_clip);
+        return vec![bridged];
     }
 
     if remaining.len() >= 3 {
@@ -322,8 +365,40 @@ pub fn offset_polygon_path(polygon: &[[f32; 2]], delta: f32) -> Vec<[f32; 2]> {
 // Geometry Utilities
 // -------------------------------------------------------------------------------------------------
 
-fn is_inside_edge(p: [f32; 2], p1: [f32; 2], p2: [f32; 2]) -> bool {
-    (p2[0] - p1[0]) * (p[1] - p1[1]) - (p2[1] - p1[1]) * (p[0] - p1[0]) >= 0.0
+fn signed_polygon_area(poly: &[[f32; 2]]) -> f32 {
+    let mut area = 0.0f32;
+    let n = poly.len();
+    for i in 0..n {
+        let j = (i + 1) % n;
+        area += poly[i][0] * poly[j][1] - poly[j][0] * poly[i][1];
+    }
+    area * 0.5
+}
+
+fn is_inside_edge(p: [f32; 2], p1: [f32; 2], p2: [f32; 2], is_ccw: bool) -> bool {
+    let cross = (p2[0] - p1[0]) * (p[1] - p1[1]) - (p2[1] - p1[1]) * (p[0] - p1[0]);
+    if is_ccw {
+        cross >= -1e-4
+    } else {
+        cross <= 1e-4
+    }
+}
+
+fn line_intersection_edge(
+    a1: [f32; 2],
+    a2: [f32; 2],
+    b1: [f32; 2],
+    b2: [f32; 2],
+) -> Option<[f32; 2]> {
+    let d = (b2[1] - b1[1]) * (a2[0] - a1[0]) - (b2[0] - b1[0]) * (a2[1] - a1[1]);
+    if d.abs() < 1e-6 {
+        return None;
+    }
+    let ua = ((b2[0] - b1[0]) * (a1[1] - b1[1]) - (b2[1] - b1[1]) * (a1[0] - b1[0])) / d;
+    Some([
+        a1[0] + ua * (a2[0] - a1[0]),
+        a1[1] + ua * (a2[1] - a1[1]),
+    ])
 }
 
 fn line_segment_intersection(
@@ -348,15 +423,6 @@ fn line_segment_intersection(
     } else {
         None
     }
-}
-
-fn line_intersection(
-    a1: [f32; 2],
-    a2: [f32; 2],
-    b1: [f32; 2],
-    b2: [f32; 2],
-) -> Option<[f32; 2]> {
-    line_segment_intersection(a1, a2, b1, b2)
 }
 
 /// Vector Fill Rule (EvenOdd / NonZero) for compound multi-contour shapes with holes.
@@ -457,11 +523,10 @@ mod tests {
         let sq_b = vec![[5.0, 5.0], [15.0, 5.0], [15.0, 15.0], [5.0, 15.0]];
 
         let diff = polygon_subtract(&sq_a, &sq_b);
-        assert_eq!(diff.len(), 2);
-        let outer_poly = &diff[0];
-        let hole_poly = &diff[1];
-        assert!(point_in_polygon(2.0, 2.0, outer_poly));
-        assert!(!point_in_polygon(2.0, 2.0, hole_poly));
+        assert_eq!(diff.len(), 1);
+        let bridged_poly = &diff[0];
+        assert!(point_in_polygon(2.0, 2.0, bridged_poly));
+        assert!(!point_in_polygon(10.0, 10.0, bridged_poly));
     }
 
     #[test]
@@ -506,5 +571,23 @@ mod tests {
         assert!(!shape.contains_point(15.0, 15.0));
         // Outside bounds should be empty
         assert!(!shape.contains_point(35.0, 35.0));
+    }
+
+    #[test]
+    fn test_boolean_with_nan_coordinates_is_rejected_without_panicking() {
+        let subject = vec![[0.0, 0.0], [10.0, 0.0], [10.0, 10.0], [f32::NAN, 10.0]];
+        let clip = vec![[2.0, 2.0], [8.0, 2.0], [8.0, 8.0], [2.0, 8.0]];
+        let result = std::panic::catch_unwind(|| polygon_subtract(&subject, &clip));
+        assert!(result.is_ok(), "NaN geometry must be rejected or handled safely");
+    }
+
+    #[test]
+    fn test_union_of_overlapping_rectangles_contains_only_union_geometry() {
+        let a = vec![[0.0, 0.0], [10.0, 0.0], [10.0, 10.0], [0.0, 10.0]];
+        let b = vec![[8.0, 8.0], [18.0, 8.0], [18.0, 18.0], [8.0, 18.0]];
+        let result = polygon_union(&a, &b);
+        assert!(result.iter().any(|p| point_in_polygon(2.0, 2.0, p)));
+        assert!(result.iter().any(|p| point_in_polygon(16.0, 16.0, p)));
+        assert!(!result.iter().any(|p| point_in_polygon(15.0, 2.0, p)));
     }
 }
