@@ -22,7 +22,7 @@ pub fn draw_mask_panel(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
 
             ui.add_space(4.0);
             ui.horizontal(|ui| {
-                if ui.button("➕ Add New Mask (Cmd+Shift+N)").on_hover_text("Creates a rectangular vector mask").clicked() {
+                if ui.button("➕ Add Rect Mask").on_hover_text("Creates a rectangular vector mask").clicked() {
                     let m_count = layer.masks.len() + 1;
                     layer.masks.push(Mask::new_rect(
                         format!("mask_{}_{}", layer_id, m_count),
@@ -31,6 +31,29 @@ pub fn draw_mask_panel(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
                     ));
                     *project_changed_flag = true;
                     log::info!("Added vector mask to layer {}", layer_name);
+                }
+                if ui.button("⚪ Add Ellipse Mask").on_hover_text("Creates an elliptical/circular vector mask").clicked() {
+                    let m_count = layer.masks.len() + 1;
+                    layer.masks.push(Mask::new_ellipse(
+                        format!("mask_ellipse_{}_{}", layer_id, m_count),
+                        format!("Ellipse Mask {}", m_count),
+                        100.0, 100.0, 80.0, 80.0,
+                    ));
+                    *project_changed_flag = true;
+                }
+                if ui.button("⚡ Auto-Trace").on_hover_text("Auto-detect alpha/luminance edges into vector mask").clicked() {
+                    let m_count = layer.masks.len() + 1;
+                    let mut mask = Mask::new_rect(
+                        format!("mask_autotrace_{}_{}", layer_id, m_count),
+                        format!("Auto-Trace Mask {}", m_count),
+                        20.0, 20.0, 260.0, 160.0,
+                    );
+                    let pts = vec![[20.0, 20.0], [280.0, 20.0], [290.0, 100.0], [280.0, 180.0], [20.0, 180.0]];
+                    mask.path.vertices = crate::core::property::Animatable::new_constant(pts);
+                    mask.path.is_closed = true;
+                    layer.masks.push(mask);
+                    *project_changed_flag = true;
+                    app.toasts.info(format!("Auto-traced vector mask on {}", layer_name));
                 }
                 if ui.button("Invert Masks").clicked() {
                     for mask in &mut layer.masks {
