@@ -1213,6 +1213,13 @@ pub enum EffectType {
         highlight_gain: Animatable<f32>,
         highlight_threshold: Animatable<f32>,
     },
+    /// Linear Color Key (AE Parity - Keying > Linear Color Key).
+    LinearColorKey {
+        key_color: Animatable<[f32; 3]>,
+        match_mode: crate::core::linear_color_key::ColorMatchMode,
+        tolerance: Animatable<f32>,
+        softness: Animatable<f32>,
+    },
     /// Tilt-shift miniature focus band.
     TiltShift {
         focus_y: Animatable<f32>,

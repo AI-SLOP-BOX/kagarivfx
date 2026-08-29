@@ -304,6 +304,7 @@ impl RenderEffectPlugin for EnumEffectPlugin {
             EffectType::FindEdges { .. } => "Find Edges",
             EffectType::Transform { .. } => "Transform",
             EffectType::CameraLensBlur { .. } => "Camera Lens Blur",
+            EffectType::LinearColorKey { .. } => "Linear Color Key",
         }
     }
 
@@ -427,6 +428,7 @@ impl RenderEffectPlugin for EnumEffectPlugin {
             EffectType::FindEdges { .. } => "find_edges",
             EffectType::Transform { .. } => "transform",
             EffectType::CameraLensBlur { .. } => "camera_lens_blur",
+            EffectType::LinearColorKey { .. } => "linear_color_key",
         }
     }
 

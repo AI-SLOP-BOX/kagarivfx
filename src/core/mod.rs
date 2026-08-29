@@ -59,6 +59,7 @@ pub mod echo_effect;
 pub mod find_edges;
 pub mod transform_effect;
 pub mod camera_lens_blur;
+pub mod linear_color_key;
 pub mod lut_cache;
 pub mod planar_tracker;
 pub mod posterize_time;

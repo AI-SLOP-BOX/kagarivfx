@@ -1054,6 +1054,12 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
                         ui.close_menu();
                     }
                 });
+                ui.menu_button("Keying", |ui| {
+                    if ui.button("Linear Color Key").on_hover_text("Key out specific color ranges in RGB, Hue, or Chroma space").clicked() {
+                        apply_effect_by_name(app, "Linear Color Key");
+                        ui.close_menu();
+                    }
+                });
                 ui.menu_button("Time", |ui| {
                     if ui.button("Echo").on_hover_text("Temporal visual trail blending across multiple frames").clicked() {
                         apply_effect_by_name(app, "Echo");
@@ -1778,6 +1784,17 @@ fn apply_effect_by_name(app: &mut crate::AfterEffectsApp, effect_name: &str) {
                             iris_roundness: crate::core::property::Animatable::new_constant(0.0),
                             highlight_gain: crate::core::property::Animatable::new_constant(1.5),
                             highlight_threshold: crate::core::property::Animatable::new_constant(0.8),
+                        }, enabled: true,
+                    }
+                }
+                "Linear Color Key" => {
+                    crate::core::timeline::Effect {
+                        id: format!("linearcolorkey_{}", len), name: "Linear Color Key".to_string(),
+                        effect_type: crate::core::timeline::EffectType::LinearColorKey {
+                            key_color: crate::core::property::Animatable::new_constant([0.0, 1.0, 0.0]),
+                            match_mode: crate::core::linear_color_key::ColorMatchMode::UsingRGB,
+                            tolerance: crate::core::property::Animatable::new_constant(15.0),
+                            softness: crate::core::property::Animatable::new_constant(10.0),
                         }, enabled: true,
                     }
                 }

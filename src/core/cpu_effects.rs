@@ -770,6 +770,15 @@ fn apply_one_ctx(
             let blurred = crate::core::camera_lens_blur::apply_camera_lens_blur(pixels, width, height, &params);
             pixels.copy_from_slice(&blurred);
         }
+        EffectType::LinearColorKey { key_color, match_mode, tolerance, softness } => {
+            let params = crate::core::linear_color_key::LinearColorKeyParams {
+                key_color: key_color.evaluate(frame),
+                match_mode: *match_mode,
+                tolerance: tolerance.evaluate(frame),
+                softness: softness.evaluate(frame),
+            };
+            crate::core::linear_color_key::apply_linear_color_key(pixels, width, height, &params);
+        }
         EffectType::TiltShift { focus_y, focus_height, max_blur } => {
             use crate::core::ae_effects_pack_v19::apply_tilt_shift;
             apply_tilt_shift(

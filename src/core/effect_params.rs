@@ -303,6 +303,11 @@ impl EffectType {
                 push!("Highlight Gain", highlight_gain, Scalar);
                 push!("Highlight Threshold", highlight_threshold, Scalar);
             }
+            EffectType::LinearColorKey { key_color, tolerance, softness, .. } => {
+                push!("Key Color", key_color, Vec3);
+                push!("Tolerance", tolerance, Scalar);
+                push!("Softness", softness, Scalar);
+            }
             // ── Newly registered effects (session 3) ──
             EffectType::BevelAlpha { depth, light_angle_deg } => {
                 push!("Depth", depth, Scalar);

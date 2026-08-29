@@ -2483,8 +2483,12 @@ fn fs_main(@location(0) uv: vec2<f32>) -> @location(0) vec4<f32> {
             draw_prop(ui, current_frame, project_changed, next_frame, "Rotation", rotation_deg, |ui, v| { ui.add(egui::Slider::new(v, -3600.0..=3600.0).suffix("°")); });
             draw_prop(ui, current_frame, project_changed, next_frame, "Opacity", opacity, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=100.0).suffix("%")); });
         }
-        EffectType::CameraLensBlur { blur_radius, num_blades, roundness, aspect_ratio, rotation_deg, gain, threshold } => {
+        EffectType::CameraLensBlur { blur_radius, iris_blades, iris_rotation_deg, iris_roundness, highlight_gain, highlight_threshold } => {
             ui.label("📷 Camera Lens Blur");
+            draw_prop(ui, current_frame, project_changed, next_frame, "Blur Radius", blur_radius, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=100.0).suffix(" px")); });
+            ui.horizontal(|ui| {
+                ui.label("Iris Blades:");
+                let mut b_i32 = *iris_blades as i32;
                 if ui.add(egui::Slider::new(&mut b_i32, 3..=16)).changed() {
                     *iris_blades = b_i32.clamp(3, 16) as u32;
                     *project_changed = true;
@@ -2494,6 +2498,38 @@ fn fs_main(@location(0) uv: vec2<f32>) -> @location(0) vec4<f32> {
             draw_prop(ui, current_frame, project_changed, next_frame, "Iris Roundness", iris_roundness, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=100.0).suffix("%")); });
             draw_prop(ui, current_frame, project_changed, next_frame, "Highlight Gain", highlight_gain, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=5.0)); });
             draw_prop(ui, current_frame, project_changed, next_frame, "Highlight Threshold", highlight_threshold, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=1.0)); });
+        }
+        EffectType::LinearColorKey { key_color, match_mode, tolerance, softness } => {
+            ui.label("🗝️ Linear Color Key");
+            let kc_before = key_color.clone();
+            if let Some(nf) = draw_property_ui(current_frame, ui, "Key Color", key_color, |ui, val| {
+                let mut col = egui::Color32::from_rgb((val[0] * 255.0) as u8, (val[1] * 255.0) as u8, (val[2] * 255.0) as u8);
+                if ui.color_edit_button_srgba(&mut col).changed() {
+                    val[0] = col.r() as f32 / 255.0;
+                    val[1] = col.g() as f32 / 255.0;
+                    val[2] = col.b() as f32 / 255.0;
+                }
+            }) { *next_frame = Some(nf); }
+            if kc_before != *key_color { *project_changed = true; }
+
+            ui.horizontal(|ui| {
+                ui.label("Match Colors:");
+                egui::ComboBox::from_id_salt("key_match_mode")
+                    .selected_text(format!("{:?}", match_mode))
+                    .show_ui(ui, |ui| {
+                        for m in [
+                            crate::core::linear_color_key::ColorMatchMode::UsingRGB,
+                            crate::core::linear_color_key::ColorMatchMode::UsingHue,
+                            crate::core::linear_color_key::ColorMatchMode::UsingChroma,
+                        ] {
+                            if ui.selectable_value(match_mode, m, format!("{:?}", m)).changed() {
+                                *project_changed = true;
+                            }
+                        }
+                    });
+            });
+            draw_prop(ui, current_frame, project_changed, next_frame, "Tolerance", tolerance, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=100.0).suffix("%")); });
+            draw_prop(ui, current_frame, project_changed, next_frame, "Softness", softness, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=100.0).suffix("%")); });
         }
     }
 }
