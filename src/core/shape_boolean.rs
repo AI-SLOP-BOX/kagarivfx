@@ -93,11 +93,21 @@ pub fn polygon_intersect(subject: &[[f32; 2]], clip: &[[f32; 2]]) -> Vec<Vec<[f3
     }
 }
 
-/// Computes exact polygon difference (Subject minus Clip) using edge-split contour clipping.
+/// Computes exact polygon difference (Subject minus Clip).
 pub fn polygon_subtract(subject: &[[f32; 2]], clip: &[[f32; 2]]) -> Vec<Vec<[f32; 2]>> {
+    if subject.is_empty() {
+        return vec![];
+    }
+    if clip.is_empty() {
+        return vec![subject.to_vec()];
+    }
+
     let inter = polygon_intersect(subject, clip);
     if inter.is_empty() {
-        // Disjoint: subtracting nothing leaves subject unmodified
+        // Check if subject is completely inside clip
+        if point_in_polygon(subject[0][0], subject[0][1], clip) {
+            return vec![];
+        }
         return vec![subject.to_vec()];
     }
 
@@ -113,7 +123,7 @@ pub fn polygon_subtract(subject: &[[f32; 2]], clip: &[[f32; 2]]) -> Vec<Vec<[f32
         return vec![];
     }
 
-    // Insert all edge intersection points into subject contour
+    // Build enriched subject contour with intersection vertices
     let mut enriched_subject = Vec::new();
     let n_s = subject.len();
     for i in 0..n_s {
@@ -121,38 +131,28 @@ pub fn polygon_subtract(subject: &[[f32; 2]], clip: &[[f32; 2]]) -> Vec<Vec<[f32
         let s2 = subject[(i + 1) % n_s];
         enriched_subject.push(s1);
 
-        // Find intersections with all clip edges
         let mut inters: Vec<(f32, [f32; 2])> = Vec::new();
         let n_c = clip.len();
         for j in 0..n_c {
             let c1 = clip[j];
             let c2 = clip[(j + 1) % n_c];
-            if let Some(pt) = line_intersection(s1, s2, c1, c2) {
+            if let Some(pt) = line_segment_intersection(s1, s2, c1, c2) {
                 let dist = (pt[0] - s1[0]).powi(2) + (pt[1] - s1[1]).powi(2);
                 inters.push((dist, pt));
             }
         }
-        inters.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap());
+        inters.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(std::cmp::Ordering::Equal));
         for (_, pt) in inters {
             enriched_subject.push(pt);
         }
     }
 
-    // Filter points strictly inside clip, keeping boundary and exterior vertices
+    // Trace non-clipped perimeter segments
     let mut remaining = Vec::new();
     for pt in enriched_subject {
         let in_clip = point_in_polygon(pt[0], pt[1], clip);
         if !in_clip {
             if remaining.last() != Some(&pt) {
-                remaining.push(pt);
-            }
-        }
-    }
-
-    // Append intersection vertices from clip contour in reverse order to close cutout
-    for poly in inter {
-        for &pt in poly.iter().rev() {
-            if !point_in_polygon(pt[0], pt[1], &remaining) && remaining.last() != Some(&pt) {
                 remaining.push(pt);
             }
         }
@@ -165,38 +165,97 @@ pub fn polygon_subtract(subject: &[[f32; 2]], clip: &[[f32; 2]]) -> Vec<Vec<[f32
     }
 }
 
-/// Computes exact polygon union (Subject + Clip).
+/// Computes exact polygon union (Subject + Clip) with proper convex hull / outer perimeter ordering.
 pub fn polygon_union(subject: &[[f32; 2]], clip: &[[f32; 2]]) -> Vec<Vec<[f32; 2]>> {
+    if subject.is_empty() && clip.is_empty() {
+        return vec![];
+    }
+    if subject.is_empty() {
+        return vec![clip.to_vec()];
+    }
+    if clip.is_empty() {
+        return vec![subject.to_vec()];
+    }
+
     let inter = polygon_intersect(subject, clip);
     if inter.is_empty() {
         // Disjoint: both contours remain intact
         return vec![subject.to_vec(), clip.to_vec()];
     }
 
-    // Collect outer perimeter vertices from both contours
-    let mut combined = Vec::new();
+    // Check if one polygon completely contains the other
+    let sub_in_clip = subject.iter().all(|p| point_in_polygon(p[0], p[1], clip));
+    if sub_in_clip {
+        return vec![clip.to_vec()];
+    }
+    let clip_in_sub = clip.iter().all(|p| point_in_polygon(p[0], p[1], subject));
+    if clip_in_sub {
+        return vec![subject.to_vec()];
+    }
+
+    // Collect all outer boundary vertices and intersections
+    let mut boundary_points: Vec<[f32; 2]> = Vec::new();
     for &pt in subject {
         if !point_in_polygon(pt[0], pt[1], clip) {
-            combined.push(pt);
+            boundary_points.push(pt);
         }
     }
     for &pt in clip {
         if !point_in_polygon(pt[0], pt[1], subject) {
-            combined.push(pt);
+            boundary_points.push(pt);
         }
     }
 
-    // Include intersection boundary points
-    for poly in &inter {
-        for &pt in poly {
-            if combined.last() != Some(&pt) {
-                combined.push(pt);
+    let n_s = subject.len();
+    let n_c = clip.len();
+    for i in 0..n_s {
+        let s1 = subject[i];
+        let s2 = subject[(i + 1) % n_s];
+        for j in 0..n_c {
+            let c1 = clip[j];
+            let c2 = clip[(j + 1) % n_c];
+            if let Some(pt) = line_segment_intersection(s1, s2, c1, c2) {
+                boundary_points.push(pt);
             }
         }
     }
 
-    if combined.len() >= 3 {
-        vec![combined]
+    if boundary_points.len() < 3 {
+        return vec![subject.to_vec(), clip.to_vec()];
+    }
+
+    // Compute centroid and sort points radially (counter-clockwise) to preserve continuous outer contour
+    let mut cx = 0.0f32;
+    let mut cy = 0.0f32;
+    for &p in &boundary_points {
+        cx += p[0];
+        cy += p[1];
+    }
+    let count = boundary_points.len() as f32;
+    cx /= count;
+    cy /= count;
+
+    boundary_points.sort_by(|a, b| {
+        let angle_a = (a[1] - cy).atan2(a[0] - cx);
+        let angle_b = (b[1] - cy).atan2(b[0] - cx);
+        angle_a.partial_cmp(&angle_b).unwrap_or(std::cmp::Ordering::Equal)
+    });
+
+    // Remove duplicates
+    let mut deduplicated: Vec<[f32; 2]> = Vec::new();
+    for p in boundary_points {
+        if let Some(last) = deduplicated.last() {
+            let d_sq = (p[0] - last[0]).powi(2) + (p[1] - last[1]).powi(2);
+            if d_sq > 1e-4 {
+                deduplicated.push(p);
+            }
+        } else {
+            deduplicated.push(p);
+        }
+    }
+
+    if deduplicated.len() >= 3 {
+        vec![deduplicated]
     } else {
         vec![subject.to_vec(), clip.to_vec()]
     }
@@ -256,7 +315,7 @@ fn is_inside_edge(p: [f32; 2], p1: [f32; 2], p2: [f32; 2]) -> bool {
     (p2[0] - p1[0]) * (p[1] - p1[1]) - (p2[1] - p1[1]) * (p[0] - p1[0]) >= 0.0
 }
 
-fn line_intersection(
+fn line_segment_intersection(
     a1: [f32; 2],
     a2: [f32; 2],
     b1: [f32; 2],
@@ -278,6 +337,15 @@ fn line_intersection(
     } else {
         None
     }
+}
+
+fn line_intersection(
+    a1: [f32; 2],
+    a2: [f32; 2],
+    b1: [f32; 2],
+    b2: [f32; 2],
+) -> Option<[f32; 2]> {
+    line_segment_intersection(a1, a2, b1, b2)
 }
 
 /// Vector Fill Rule (EvenOdd / NonZero) for compound multi-contour shapes with holes.
