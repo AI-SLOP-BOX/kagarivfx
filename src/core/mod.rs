@@ -135,6 +135,7 @@ pub mod mesh_extrusion;
 pub mod mogrt_engine;
 pub mod optical_flare;
 pub mod exr_pipeline;
+pub mod ofx_host;
 pub mod animation_presets;
 pub mod temporal_denoise;
 pub mod text_animator_advanced;

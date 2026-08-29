@@ -1040,6 +1040,16 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
                         ui.close_menu();
                     }
                 });
+                ui.menu_button("Channel", |ui| {
+                    if ui.button("Set Matte").on_hover_text("Replace or composite alpha channel with another layer").clicked() {
+                        apply_effect_by_name(app, "Set Matte");
+                        ui.close_menu();
+                    }
+                    if ui.button("Shift Channels").clicked() {
+                        apply_effect_by_name(app, "Shift Channels");
+                        ui.close_menu();
+                    }
+                });
                 if crate::ui::mode::menu_visible(app.ui_mode, "OpenFX Plugins") { ui.menu_button("OpenFX Plugins", |ui| {
                     if ui.button("Scan Standard Paths...").on_hover_text("Search /Library/OFX/Plugins and $OFX_PLUGIN_PATH for plugin bundles, then probe their ABI exports").clicked() {
                         let found = crate::core::openfx_bridge::discover_all_ofx_plugins();
@@ -1690,6 +1700,17 @@ fn apply_effect_by_name(app: &mut crate::AfterEffectsApp, effect_name: &str) {
                             light_direction_deg: crate::core::property::Animatable::new_constant(-45.0),
                             back_opacity: crate::core::property::Animatable::new_constant(100.0),
                             back_color: crate::core::property::Animatable::new_constant([0.92, 0.92, 0.94, 1.0]),
+                        }, enabled: true,
+                    }
+                }
+                "Set Matte" => {
+                    crate::core::timeline::Effect {
+                        id: format!("setmatte_{}", len), name: "Set Matte".to_string(),
+                        effect_type: crate::core::timeline::EffectType::SetMatte {
+                            source_layer_idx: 0,
+                            source_channel: crate::core::set_matte::MatteSourceChannel::Alpha,
+                            invert_matte: false,
+                            composite_mode: crate::core::set_matte::MatteCompositeMode::Replace,
                         }, enabled: true,
                     }
                 }

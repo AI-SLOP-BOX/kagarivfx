@@ -279,6 +279,7 @@ impl EffectType {
                 push!("Light Direction", light_direction_deg, Scalar);
                 push!("Back Opacity", back_opacity, Scalar);
             }
+            EffectType::SetMatte { .. } => {}
             // ── Newly registered effects (session 3) ──
             EffectType::BevelAlpha { depth, light_angle_deg } => {
                 push!("Depth", depth, Scalar);

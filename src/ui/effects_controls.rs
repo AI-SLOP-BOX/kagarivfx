@@ -2359,6 +2359,56 @@ fn fs_main(@location(0) uv: vec2<f32>) -> @location(0) vec4<f32> {
             draw_prop(ui, current_frame, project_changed, next_frame, "Light Direction", light_direction_deg, |ui, v| { ui.add(egui::Slider::new(v, -180.0..=180.0).suffix(" °")); });
             draw_prop(ui, current_frame, project_changed, next_frame, "Back Opacity", back_opacity, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=100.0).suffix(" %")); });
         }
+        EffectType::SetMatte { source_layer_idx, source_channel, invert_matte, composite_mode } => {
+            ui.label("🎭 Set Matte");
+            ui.horizontal(|ui| {
+                ui.label("Source Layer Index:");
+                let mut idx_i32 = *source_layer_idx as i32;
+                if ui.add(egui::DragValue::new(&mut idx_i32).range(0..=99)).changed() {
+                    *source_layer_idx = idx_i32.max(0) as usize;
+                    *project_changed = true;
+                }
+            });
+            ui.horizontal(|ui| {
+                ui.label("Use For Matte:");
+                egui::ComboBox::from_id_salt("set_matte_channel")
+                    .selected_text(format!("{:?}", source_channel))
+                    .show_ui(ui, |ui| {
+                        for ch in [
+                            crate::core::set_matte::MatteSourceChannel::Alpha,
+                            crate::core::set_matte::MatteSourceChannel::Luminance,
+                            crate::core::set_matte::MatteSourceChannel::Red,
+                            crate::core::set_matte::MatteSourceChannel::Green,
+                            crate::core::set_matte::MatteSourceChannel::Blue,
+                            crate::core::set_matte::MatteSourceChannel::Lightness,
+                        ] {
+                            if ui.selectable_value(source_channel, ch, format!("{:?}", ch)).changed() {
+                                *project_changed = true;
+                            }
+                        }
+                    });
+            });
+            if ui.checkbox(invert_matte, "Invert Matte").changed() {
+                *project_changed = true;
+            }
+            ui.horizontal(|ui| {
+                ui.label("Composite Mode:");
+                egui::ComboBox::from_id_salt("set_matte_mode")
+                    .selected_text(format!("{:?}", composite_mode))
+                    .show_ui(ui, |ui| {
+                        for m in [
+                            crate::core::set_matte::MatteCompositeMode::Replace,
+                            crate::core::set_matte::MatteCompositeMode::Intersect,
+                            crate::core::set_matte::MatteCompositeMode::Add,
+                            crate::core::set_matte::MatteCompositeMode::Subtract,
+                        ] {
+                            if ui.selectable_value(composite_mode, m, format!("{:?}", m)).changed() {
+                                *project_changed = true;
+                            }
+                        }
+                    });
+            });
+        }
     }
 }
 

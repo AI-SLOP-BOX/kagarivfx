@@ -1173,6 +1173,13 @@ pub enum EffectType {
         back_opacity: Animatable<f32>,
         back_color: Animatable<[f32; 4]>,
     },
+    /// Set Matte channel composite (AE Parity).
+    SetMatte {
+        source_layer_idx: usize,
+        source_channel: crate::core::set_matte::MatteSourceChannel,
+        invert_matte: bool,
+        composite_mode: crate::core::set_matte::MatteCompositeMode,
+    },
     /// Tilt-shift miniature focus band.
     TiltShift {
         focus_y: Animatable<f32>,

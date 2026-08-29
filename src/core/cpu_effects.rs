@@ -722,6 +722,16 @@ fn apply_one_ctx(
             let turned = crate::core::page_turn::apply_page_turn(pixels, width, height, &params);
             pixels.copy_from_slice(&turned);
         }
+        EffectType::SetMatte { source_layer_idx, source_channel, invert_matte, composite_mode } => {
+            let params = crate::core::set_matte::SetMatteParams {
+                source_layer_idx: *source_layer_idx,
+                source_channel: *source_channel,
+                invert_matte: *invert_matte,
+                composite_mode: *composite_mode,
+            };
+            let dummy_src = pixels.to_vec();
+            crate::core::set_matte::apply_set_matte(pixels, width, height, &dummy_src, width, height, &params);
+        }
         EffectType::TiltShift { focus_y, focus_height, max_blur } => {
             use crate::core::ae_effects_pack_v19::apply_tilt_shift;
             apply_tilt_shift(

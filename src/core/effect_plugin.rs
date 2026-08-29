@@ -299,6 +299,7 @@ impl RenderEffectPlugin for EnumEffectPlugin {
             EffectType::OpticalFlares { .. } => "Optical Flares",
             EffectType::MotionTile { .. } => "Motion Tile",
             EffectType::PageTurn { .. } => "CC Page Turn",
+            EffectType::SetMatte { .. } => "Set Matte",
         }
     }
 
@@ -417,6 +418,7 @@ impl RenderEffectPlugin for EnumEffectPlugin {
             EffectType::OpticalFlares { .. } => "optical_flares",
             EffectType::MotionTile { .. } => "motion_tile",
             EffectType::PageTurn { .. } => "page_turn",
+            EffectType::SetMatte { .. } => "set_matte",
         }
     }
 
