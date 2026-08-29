@@ -1,6 +1,6 @@
-use eframe::egui;
-use crate::AfterEffectsApp;
 use crate::ui::theme::colors;
+use crate::AfterEffectsApp;
+use eframe::egui;
 
 pub struct PaletteCommand {
     pub name: &'static str,
@@ -20,14 +20,18 @@ pub fn get_all_commands() -> Vec<PaletteCommand> {
                 if let Some(idx) = app.selected_layer_idx {
                     if idx < comp.layers.len() {
                         let len = comp.layers[idx].effects.len();
-                        comp.layers[idx].effects.push(crate::core::timeline::Effect {
-                            id: format!("blur_{}", len),
-                            name: "Gaussian Blur".to_string(),
-                            effect_type: crate::core::timeline::EffectType::GaussianBlur {
-                                blur_radius: crate::core::property::Animatable::new_constant(10.0),
-                            },
-                            enabled: true,
-                        });
+                        comp.layers[idx]
+                            .effects
+                            .push(crate::core::timeline::Effect {
+                                id: format!("blur_{}", len),
+                                name: "Gaussian Blur".to_string(),
+                                effect_type: crate::core::timeline::EffectType::GaussianBlur {
+                                    blur_radius: crate::core::property::Animatable::new_constant(
+                                        10.0,
+                                    ),
+                                },
+                                enabled: true,
+                            });
                         crate::core::frame_cache::bump_version();
                     }
                 }
@@ -42,17 +46,21 @@ pub fn get_all_commands() -> Vec<PaletteCommand> {
                 if let Some(idx) = app.selected_layer_idx {
                     if idx < comp.layers.len() {
                         let len = comp.layers[idx].effects.len();
-                        comp.layers[idx].effects.push(crate::core::timeline::Effect {
-                            id: format!("glow_{}", len),
-                            name: "Glow / Bloom".to_string(),
-                            effect_type: crate::core::timeline::EffectType::Glow {
-                                threshold: crate::core::property::Animatable::new_constant(0.7),
-                                radius: crate::core::property::Animatable::new_constant(15.0),
-                                intensity: crate::core::property::Animatable::new_constant(1.5),
-                                color: crate::core::property::Animatable::new_constant([1.0, 1.0, 1.0, 1.0]),
-                            },
-                            enabled: true,
-                        });
+                        comp.layers[idx]
+                            .effects
+                            .push(crate::core::timeline::Effect {
+                                id: format!("glow_{}", len),
+                                name: "Glow / Bloom".to_string(),
+                                effect_type: crate::core::timeline::EffectType::Glow {
+                                    threshold: crate::core::property::Animatable::new_constant(0.7),
+                                    radius: crate::core::property::Animatable::new_constant(15.0),
+                                    intensity: crate::core::property::Animatable::new_constant(1.5),
+                                    color: crate::core::property::Animatable::new_constant([
+                                        1.0, 1.0, 1.0, 1.0,
+                                    ]),
+                                },
+                                enabled: true,
+                            });
                         crate::core::frame_cache::bump_version();
                     }
                 }
@@ -67,15 +75,19 @@ pub fn get_all_commands() -> Vec<PaletteCommand> {
                 if let Some(idx) = app.selected_layer_idx {
                     if idx < comp.layers.len() {
                         let len = comp.layers[idx].effects.len();
-                        comp.layers[idx].effects.push(crate::core::timeline::Effect {
-                            id: format!("tint_{}", len),
-                            name: "Color Tint".to_string(),
-                            effect_type: crate::core::timeline::EffectType::ColorTint {
-                                color: crate::core::property::Animatable::new_constant([1.0, 0.2, 0.4, 1.0]),
-                                intensity: crate::core::property::Animatable::new_constant(1.0),
-                            },
-                            enabled: true,
-                        });
+                        comp.layers[idx]
+                            .effects
+                            .push(crate::core::timeline::Effect {
+                                id: format!("tint_{}", len),
+                                name: "Color Tint".to_string(),
+                                effect_type: crate::core::timeline::EffectType::ColorTint {
+                                    color: crate::core::property::Animatable::new_constant([
+                                        1.0, 0.2, 0.4, 1.0,
+                                    ]),
+                                    intensity: crate::core::property::Animatable::new_constant(1.0),
+                                },
+                                enabled: true,
+                            });
                         crate::core::frame_cache::bump_version();
                     }
                 }
@@ -92,7 +104,9 @@ pub fn get_all_commands() -> Vec<PaletteCommand> {
                 let layer = crate::core::timeline::Layer::new(
                     format!("solid_{}", len),
                     format!("Solid Layer {}", len + 1),
-                    crate::core::timeline::LayerType::Solid { color: [0.2, 0.6, 0.9, 1.0] },
+                    crate::core::timeline::LayerType::Solid {
+                        color: [0.2, 0.6, 0.9, 1.0],
+                    },
                     dur,
                 );
                 comp.add_layer(layer);
@@ -111,8 +125,11 @@ pub fn get_all_commands() -> Vec<PaletteCommand> {
                 let layer = crate::core::timeline::Layer::new(
                     format!("text_{}", len),
                     format!("Text Layer {}", len + 1),
-                    crate::core::timeline::LayerType::new_text("New Text", 48, [1.0, 1.0, 1.0, 1.0]),
-
+                    crate::core::timeline::LayerType::new_text(
+                        "New Text",
+                        48,
+                        [1.0, 1.0, 1.0, 1.0],
+                    ),
                     dur,
                 );
                 comp.add_layer(layer);
@@ -173,7 +190,7 @@ pub fn get_all_commands() -> Vec<PaletteCommand> {
             action: Box::new(|app| {
                 let comp = app.history.current_mut().active_composition_mut();
                 let keyframes = crate::core::audio_engine::convert_audio_to_keyframes(comp);
-                
+
                 let dur = comp.duration_frames;
                 let mut null_layer = crate::core::timeline::Layer::new_null(
                     format!("audio_amp_{}", comp.layers.len()),
@@ -190,8 +207,8 @@ pub fn get_all_commands() -> Vec<PaletteCommand> {
                         interpolation: crate::core::keyframe::InterpolationType::Linear,
                     });
                 }
-                null_layer.transform.position = crate::core::property::Animatable::new_animated(pos_kf);
-
+                null_layer.transform.position =
+                    crate::core::property::Animatable::new_animated(pos_kf);
 
                 comp.add_layer(null_layer);
                 app.selected_layer_idx = Some(comp.layers.len() - 1);
@@ -211,7 +228,9 @@ pub fn get_all_commands() -> Vec<PaletteCommand> {
                                     // AE roving: interior keyframes slide along time
                                     // so velocity stays constant across the path.
                                     let rove: Vec<usize> = (1..kfs.len() - 1).collect();
-                                    crate::core::spatial_keyframe::smooth_keyframe_velocity(kfs, &rove);
+                                    crate::core::spatial_keyframe::smooth_keyframe_velocity(
+                                        kfs, &rove,
+                                    );
                                 }
                             }
                         }
@@ -234,9 +253,13 @@ pub fn get_all_commands() -> Vec<PaletteCommand> {
                     });
                     if baked_count > 0 {
                         crate::core::frame_cache::bump_version();
-                        app.toasts.info(format!("Stabilized: {} position keyframes baked", baked_count));
+                        app.toasts.info(format!(
+                            "Stabilized: {} position keyframes baked",
+                            baked_count
+                        ));
                     } else {
-                        app.toasts.error("Layer has no tracked data — run the Tracker first");
+                        app.toasts
+                            .error("Layer has no tracked data — run the Tracker first");
                     }
                 } else {
                     app.toasts.info("Select a layer first");
@@ -249,10 +272,14 @@ pub fn get_all_commands() -> Vec<PaletteCommand> {
             shortcut_hint: "",
             action: Box::new(|app| {
                 if let Some(idx) = app.selected_layer_idx {
-                    let dims = { let c = app.history.current().active_composition(); (c.width as f32 / 2.0, c.height as f32 / 2.0) };
+                    let dims = {
+                        let c = app.history.current().active_composition();
+                        (c.width as f32 / 2.0, c.height as f32 / 2.0)
+                    };
                     app.modify_project(move |p| {
                         if let Some(l) = p.active_composition_mut().layers.get_mut(idx) {
-                            l.transform.position = crate::core::property::Animatable::new_constant([dims.0, dims.1]);
+                            l.transform.position =
+                                crate::core::property::Animatable::new_constant([dims.0, dims.1]);
                         }
                     });
                 }
@@ -264,14 +291,22 @@ pub fn get_all_commands() -> Vec<PaletteCommand> {
             shortcut_hint: "",
             action: Box::new(|app| {
                 if let Some(idx) = app.selected_layer_idx {
-                    let dims = { let c = app.history.current().active_composition(); (c.width as f32, c.height as f32) };
+                    let dims = {
+                        let c = app.history.current().active_composition();
+                        (c.width as f32, c.height as f32)
+                    };
                     app.modify_project(move |p| {
                         if let Some(l) = p.active_composition_mut().layers.get_mut(idx) {
                             let bs = l.bounding_size();
                             if bs[0] > 1.0 && bs[1] > 1.0 {
                                 let s = (dims.0 / bs[0]).max(dims.1 / bs[1]) * 100.0;
-                                l.transform.scale = crate::core::property::Animatable::new_constant([s, s]);
-                                l.transform.position = crate::core::property::Animatable::new_constant([dims.0 / 2.0, dims.1 / 2.0]);
+                                l.transform.scale =
+                                    crate::core::property::Animatable::new_constant([s, s]);
+                                l.transform.position =
+                                    crate::core::property::Animatable::new_constant([
+                                        dims.0 / 2.0,
+                                        dims.1 / 2.0,
+                                    ]);
                             }
                         }
                     });
@@ -288,7 +323,8 @@ pub fn get_all_commands() -> Vec<PaletteCommand> {
                     app.modify_project(move |p| {
                         if let Some(l) = p.active_composition_mut().layers.get_mut(idx) {
                             let s = l.transform.scale.evaluate(cf);
-                            l.transform.scale = crate::core::property::Animatable::new_constant([-s[0], s[1]]);
+                            l.transform.scale =
+                                crate::core::property::Animatable::new_constant([-s[0], s[1]]);
                         }
                     });
                 }
@@ -300,7 +336,8 @@ pub fn get_all_commands() -> Vec<PaletteCommand> {
             shortcut_hint: "",
             action: Box::new(|app| {
                 app.export_codec_idx = 3;
-                app.toasts.info("Codec set to PNG Sequence — open Export to render");
+                app.toasts
+                    .info("Codec set to PNG Sequence — open Export to render");
             }),
         },
         PaletteCommand {
@@ -323,7 +360,8 @@ pub fn get_all_commands() -> Vec<PaletteCommand> {
                             let bs = l.bounding_size();
                             if bs[0] > 1.0 {
                                 let s = cw / bs[0] * 100.0;
-                                l.transform.scale = crate::core::property::Animatable::new_constant([s, s]);
+                                l.transform.scale =
+                                    crate::core::property::Animatable::new_constant([s, s]);
                             }
                         }
                     });
@@ -342,7 +380,8 @@ pub fn get_all_commands() -> Vec<PaletteCommand> {
                             let bs = l.bounding_size();
                             if bs[1] > 1.0 {
                                 let s = ch / bs[1] * 100.0;
-                                l.transform.scale = crate::core::property::Animatable::new_constant([s, s]);
+                                l.transform.scale =
+                                    crate::core::property::Animatable::new_constant([s, s]);
                             }
                         }
                     });
@@ -355,7 +394,8 @@ pub fn get_all_commands() -> Vec<PaletteCommand> {
             shortcut_hint: "Cmd+P",
             action: Box::new(|app| {
                 app.active_tool = crate::ui::toolbar::ActiveTool::PuppetPin;
-                app.toasts.info("Puppet Pin tool — click viewport to place pins");
+                app.toasts
+                    .info("Puppet Pin tool — click viewport to place pins");
             }),
         },
         PaletteCommand {
@@ -364,15 +404,21 @@ pub fn get_all_commands() -> Vec<PaletteCommand> {
             shortcut_hint: "",
             action: Box::new(|app| {
                 if let Some(idx) = app.selected_layer_idx {
-                    let center = app.history.current().active_composition()
-                        .layers.get(idx)
+                    let center = app
+                        .history
+                        .current()
+                        .active_composition()
+                        .layers
+                        .get(idx)
                         .map(|l| l.transform.position.evaluate(app.current_frame))
                         .unwrap_or([0.0, 0.0]);
                     let proj = app.history.current_mut().active_composition_mut();
                     if let Some(l) = proj.layers.get_mut(idx) {
                         let n = l.puppet_pins.len() + 1;
                         l.puppet_pins.push(crate::core::timeline::PuppetPin::new(
-                            format!("pin_{}", n), format!("Pin {}", n), center,
+                            format!("pin_{}", n),
+                            format!("Pin {}", n),
+                            center,
                         ));
                         app.toasts.info(format!("Puppet pin {} added", n));
                     }
@@ -387,7 +433,8 @@ pub fn get_all_commands() -> Vec<PaletteCommand> {
             shortcut_hint: "",
             action: Box::new(|app| {
                 app.active_tool = crate::ui::toolbar::ActiveTool::Brush;
-                app.toasts.info("Brush — drag in viewport to paint on the selected layer");
+                app.toasts
+                    .info("Brush — drag in viewport to paint on the selected layer");
             }),
         },
         PaletteCommand {
@@ -417,7 +464,8 @@ pub fn get_all_commands() -> Vec<PaletteCommand> {
                                 baked = track.apply_to_comp(p.active_composition_mut(), true);
                             });
                             crate::core::frame_cache::bump_version();
-                            app.toasts.info(format!("Camera track baked: {} kfs", baked));
+                            app.toasts
+                                .info(format!("Camera track baked: {} kfs", baked));
                         }
                         Err(e) => app.toasts.error(e),
                     }
@@ -435,15 +483,24 @@ pub fn get_all_commands() -> Vec<PaletteCommand> {
                 {
                     match std::fs::read_to_string(&path)
                         .map_err(|e| e.to_string())
-                        .map(|s| crate::core::subtitles::parse_srt(&s, app.history.current().active_composition().fps))
-                    {
+                        .map(|s| {
+                            crate::core::subtitles::parse_srt(
+                                &s,
+                                app.history.current().active_composition().fps,
+                            )
+                        }) {
                         Ok(cues) if !cues.is_empty() => {
-                            let (cw, ch) = { let cc = app.history.current().active_composition(); (cc.width as f32, cc.height as f32) };
+                            let (cw, ch) = {
+                                let cc = app.history.current().active_composition();
+                                (cc.width as f32, cc.height as f32)
+                            };
                             let layers = crate::core::subtitles::cues_to_layers(&cues, cw, ch, 48);
                             let n = layers.len();
                             let proj = app.history.current_mut();
                             let comp = proj.active_composition_mut();
-                            for l in layers { comp.add_layer(l); }
+                            for l in layers {
+                                comp.add_layer(l);
+                            }
                             crate::core::frame_cache::bump_version();
                             app.toasts.info(format!("{} caption layers created", n));
                         }
@@ -496,7 +553,12 @@ pub fn get_all_commands() -> Vec<PaletteCommand> {
             action: Box::new(|app| {
                 let count = app.history.current().compositions.len();
                 let new_comp = crate::core::timeline::Composition::new(
-                    format!("comp_{}", count), "Composition 1".to_string(), 1920, 1080, 30, 300,
+                    format!("comp_{}", count),
+                    "Composition 1".to_string(),
+                    1920,
+                    1080,
+                    30,
+                    300,
                 );
                 let proj = app.history.current_mut();
                 proj.compositions.push(new_comp);
@@ -523,9 +585,20 @@ pub fn get_all_commands() -> Vec<PaletteCommand> {
                 let frame = app.current_frame;
                 let out = dir.join(format!("{}_f{}.png", comp.name, frame));
                 let pixels = crate::core::software_renderer::render_frame_to_pixels(
-                    &comp, frame, comp.width, comp.height, 0.0, 0,
+                    &comp,
+                    frame,
+                    comp.width,
+                    comp.height,
+                    0.0,
+                    0,
                 );
-                match image::save_buffer(&out, &pixels, comp.width, comp.height, image::ColorType::Rgba8) {
+                match image::save_buffer(
+                    &out,
+                    &pixels,
+                    comp.width,
+                    comp.height,
+                    image::ColorType::Rgba8,
+                ) {
                     Ok(_) => app.toasts.info(format!("Frame saved: {}", out.display())),
                     Err(e) => app.toasts.error(format!("Save failed: {}", e)),
                 }
@@ -540,7 +613,8 @@ pub fn get_all_commands() -> Vec<PaletteCommand> {
                 let comp = app.history.current_mut().active_composition_mut();
                 if let Some(idx) = app.selected_layer_idx {
                     if idx < comp.layers.len() {
-                        comp.layers[idx].style.stroke.enabled = !comp.layers[idx].style.stroke.enabled;
+                        comp.layers[idx].style.stroke.enabled =
+                            !comp.layers[idx].style.stroke.enabled;
                         crate::core::frame_cache::bump_version();
                     }
                 }
@@ -554,7 +628,8 @@ pub fn get_all_commands() -> Vec<PaletteCommand> {
                 let comp = app.history.current_mut().active_composition_mut();
                 if let Some(idx) = app.selected_layer_idx {
                     if idx < comp.layers.len() {
-                        comp.layers[idx].style.drop_shadow.enabled = !comp.layers[idx].style.drop_shadow.enabled;
+                        comp.layers[idx].style.drop_shadow.enabled =
+                            !comp.layers[idx].style.drop_shadow.enabled;
                         crate::core::frame_cache::bump_version();
                     }
                 }
@@ -568,7 +643,8 @@ pub fn get_all_commands() -> Vec<PaletteCommand> {
                 let comp = app.history.current_mut().active_composition_mut();
                 if let Some(idx) = app.selected_layer_idx {
                     if idx < comp.layers.len() {
-                        comp.layers[idx].style.color_overlay.enabled = !comp.layers[idx].style.color_overlay.enabled;
+                        comp.layers[idx].style.color_overlay.enabled =
+                            !comp.layers[idx].style.color_overlay.enabled;
                         crate::core::frame_cache::bump_version();
                     }
                 }
@@ -582,7 +658,8 @@ pub fn get_all_commands() -> Vec<PaletteCommand> {
                 let comp = app.history.current_mut().active_composition_mut();
                 if let Some(idx) = app.selected_layer_idx {
                     if idx < comp.layers.len() {
-                        comp.layers[idx].style.gradient_overlay.enabled = !comp.layers[idx].style.gradient_overlay.enabled;
+                        comp.layers[idx].style.gradient_overlay.enabled =
+                            !comp.layers[idx].style.gradient_overlay.enabled;
                         crate::core::frame_cache::bump_version();
                     }
                 }
@@ -596,7 +673,8 @@ pub fn get_all_commands() -> Vec<PaletteCommand> {
                 let comp = app.history.current_mut().active_composition_mut();
                 if let Some(idx) = app.selected_layer_idx {
                     if idx < comp.layers.len() {
-                        comp.layers[idx].style.bevel_emboss.enabled = !comp.layers[idx].style.bevel_emboss.enabled;
+                        comp.layers[idx].style.bevel_emboss.enabled =
+                            !comp.layers[idx].style.bevel_emboss.enabled;
                         crate::core::frame_cache::bump_version();
                     }
                 }
@@ -613,13 +691,22 @@ pub fn get_all_commands() -> Vec<PaletteCommand> {
                     if idx < comp.layers.len() {
                         let layer = &mut comp.layers[idx];
                         let pts = crate::core::keyframe::EasePreset::Standard.control_points();
-                        if let crate::core::property::Animatable::Animated(ref mut kfs) = layer.transform.position {
+                        if let crate::core::property::Animatable::Animated(ref mut kfs) =
+                            layer.transform.position
+                        {
                             for kf in kfs.iter_mut() {
-                                kf.interpolation = crate::core::keyframe::InterpolationType::Bezier {
-                                    outgoing: crate::core::keyframe::BezierControlPoint { influence: 0.333, speed: 0.0 },
-                                    incoming: crate::core::keyframe::BezierControlPoint { influence: 0.333, speed: 0.0 },
-                                    custom_bezier: Some(pts),
-                                };
+                                kf.interpolation =
+                                    crate::core::keyframe::InterpolationType::Bezier {
+                                        outgoing: crate::core::keyframe::BezierControlPoint {
+                                            influence: 0.333,
+                                            speed: 0.0,
+                                        },
+                                        incoming: crate::core::keyframe::BezierControlPoint {
+                                            influence: 0.333,
+                                            speed: 0.0,
+                                        },
+                                        custom_bezier: Some(pts),
+                                    };
                             }
                         }
                         crate::core::frame_cache::bump_version();
@@ -637,13 +724,22 @@ pub fn get_all_commands() -> Vec<PaletteCommand> {
                     if idx < comp.layers.len() {
                         let layer = &mut comp.layers[idx];
                         let pts = crate::core::keyframe::EasePreset::Bounce.control_points();
-                        if let crate::core::property::Animatable::Animated(ref mut kfs) = layer.transform.position {
+                        if let crate::core::property::Animatable::Animated(ref mut kfs) =
+                            layer.transform.position
+                        {
                             for kf in kfs.iter_mut() {
-                                kf.interpolation = crate::core::keyframe::InterpolationType::Bezier {
-                                    outgoing: crate::core::keyframe::BezierControlPoint { influence: 0.333, speed: 0.0 },
-                                    incoming: crate::core::keyframe::BezierControlPoint { influence: 0.333, speed: 0.0 },
-                                    custom_bezier: Some(pts),
-                                };
+                                kf.interpolation =
+                                    crate::core::keyframe::InterpolationType::Bezier {
+                                        outgoing: crate::core::keyframe::BezierControlPoint {
+                                            influence: 0.333,
+                                            speed: 0.0,
+                                        },
+                                        incoming: crate::core::keyframe::BezierControlPoint {
+                                            influence: 0.333,
+                                            speed: 0.0,
+                                        },
+                                        custom_bezier: Some(pts),
+                                    };
                             }
                         }
                         crate::core::frame_cache::bump_version();
@@ -661,13 +757,22 @@ pub fn get_all_commands() -> Vec<PaletteCommand> {
                     if idx < comp.layers.len() {
                         let layer = &mut comp.layers[idx];
                         let pts = crate::core::keyframe::EasePreset::Elastic.control_points();
-                        if let crate::core::property::Animatable::Animated(ref mut kfs) = layer.transform.position {
+                        if let crate::core::property::Animatable::Animated(ref mut kfs) =
+                            layer.transform.position
+                        {
                             for kf in kfs.iter_mut() {
-                                kf.interpolation = crate::core::keyframe::InterpolationType::Bezier {
-                                    outgoing: crate::core::keyframe::BezierControlPoint { influence: 0.333, speed: 0.0 },
-                                    incoming: crate::core::keyframe::BezierControlPoint { influence: 0.333, speed: 0.0 },
-                                    custom_bezier: Some(pts),
-                                };
+                                kf.interpolation =
+                                    crate::core::keyframe::InterpolationType::Bezier {
+                                        outgoing: crate::core::keyframe::BezierControlPoint {
+                                            influence: 0.333,
+                                            speed: 0.0,
+                                        },
+                                        incoming: crate::core::keyframe::BezierControlPoint {
+                                            influence: 0.333,
+                                            speed: 0.0,
+                                        },
+                                        custom_bezier: Some(pts),
+                                    };
                             }
                         }
                         crate::core::frame_cache::bump_version();
@@ -687,7 +792,9 @@ pub fn get_all_commands() -> Vec<PaletteCommand> {
                 let mut layer = crate::core::timeline::Layer::new(
                     format!("adj_{}", len),
                     format!("Adjustment Layer {}", len + 1),
-                    crate::core::timeline::LayerType::Solid { color: [1.0, 1.0, 1.0, 1.0] },
+                    crate::core::timeline::LayerType::Solid {
+                        color: [1.0, 1.0, 1.0, 1.0],
+                    },
                     dur,
                 );
                 layer.is_adjustment_layer = true;
@@ -715,9 +822,145 @@ pub fn get_all_commands() -> Vec<PaletteCommand> {
                 crate::core::frame_cache::bump_version();
             }),
         },
+        PaletteCommand {
+            name: "Add Effect: Lightning Arc",
+            category: "Effects",
+            shortcut_hint: "",
+            action: Box::new(|app| {
+                let comp = app.history.current_mut().active_composition_mut();
+                if let Some(idx) = app.selected_layer_idx {
+                    if idx < comp.layers.len() {
+                        let len = comp.layers[idx].effects.len();
+                        comp.layers[idx].effects.push(crate::core::timeline::Effect {
+                            id: format!("lightning_{}", len),
+                            name: "Lightning".to_string(),
+                            effect_type: crate::core::timeline::EffectType::LightningArc {
+                                start_x: crate::core::property::Animatable::new_constant(0.2),
+                                start_y: crate::core::property::Animatable::new_constant(0.2),
+                                end_x: crate::core::property::Animatable::new_constant(0.8),
+                                end_y: crate::core::property::Animatable::new_constant(0.8),
+                                seed: crate::core::property::Animatable::new_constant(12345.0),
+                                glow: crate::core::property::Animatable::new_constant(1.0),
+                            },
+                            enabled: true,
+                        });
+                        crate::core::frame_cache::bump_version();
+                    }
+                }
+            }),
+        },
+        PaletteCommand {
+            name: "Add Effect: Laser Beam",
+            category: "Effects",
+            shortcut_hint: "",
+            action: Box::new(|app| {
+                let comp = app.history.current_mut().active_composition_mut();
+                if let Some(idx) = app.selected_layer_idx {
+                    if idx < comp.layers.len() {
+                        let len = comp.layers[idx].effects.len();
+                        comp.layers[idx].effects.push(crate::core::timeline::Effect {
+                            id: format!("laser_{}", len),
+                            name: "Laser Beam".to_string(),
+                            effect_type: crate::core::timeline::EffectType::LaserBeam {
+                                start_x: crate::core::property::Animatable::new_constant(0.1),
+                                start_y: crate::core::property::Animatable::new_constant(0.5),
+                                end_x: crate::core::property::Animatable::new_constant(0.9),
+                                end_y: crate::core::property::Animatable::new_constant(0.5),
+                                progress: crate::core::property::Animatable::new_constant(0.5),
+                                length: crate::core::property::Animatable::new_constant(40.0),
+                                starting_thickness: crate::core::property::Animatable::new_constant(12.0),
+                                ending_thickness: crate::core::property::Animatable::new_constant(4.0),
+                                core_color: crate::core::property::Animatable::new_constant([1.0, 1.0, 1.0, 1.0]),
+                                glow_color: crate::core::property::Animatable::new_constant([1.0, 0.2, 0.1, 0.8]),
+                            },
+                            enabled: true,
+                        });
+                        crate::core::frame_cache::bump_version();
+                    }
+                }
+            }),
+        },
+        PaletteCommand {
+            name: "Keyframe Assistant: Convert Multi-Band Audio",
+            category: "Animation",
+            shortcut_hint: "",
+            action: Box::new(|app| {
+                let mut audio_source: Option<String> = None;
+                let comp = app.history.current().active_composition();
+                if let Some(idx) = app.selected_layer_idx {
+                    if let Some(l) = comp.layers.get(idx) {
+                        if let crate::core::timeline::LayerType::Audio { path, .. } = &l.layer_type {
+                            audio_source = Some(path.clone());
+                        } else if let crate::core::timeline::LayerType::Video { audio_wav: Some(w), .. } = &l.layer_type {
+                            audio_source = Some(w.clone());
+                        }
+                    }
+                }
+                if let Some(src) = audio_source {
+                    let mut temp_proj = app.history.current().clone();
+                    match crate::core::audio_to_keyframes::convert_multiband_audio_to_keyframes(temp_proj.active_composition_mut(), &src, None) {
+                        Ok(name) => {
+                            app.history.commit(temp_proj);
+                            crate::core::frame_cache::bump_version();
+                            app.toasts.info(format!("Created '{}' with Master/Bass/Mid/Treble", name));
+                        }
+                        Err(e) => app.toasts.error(e),
+                    }
+                } else {
+                    app.toasts.error("Select an Audio or Video layer first");
+                }
+            }),
+        },
+        PaletteCommand {
+            name: "Tracker: Apply Motion to New Null",
+            category: "Tracking",
+            shortcut_hint: "",
+            action: Box::new(|app| {
+                if let Some(idx) = app.selected_layer_idx {
+                    app.modify_project(|p| {
+                        let comp = p.active_composition_mut();
+                        let null_idx = comp.layers.len();
+                        let dur = comp.duration_frames;
+                        let null_layer = crate::core::timeline::Layer::new(
+                            format!("null_track_{}", null_idx + 1),
+                            format!("Tracker {} Null", idx + 1),
+                            crate::core::timeline::LayerType::Null,
+                            dur,
+                        );
+                        comp.add_layer(null_layer);
+                        crate::core::tracker_engine::TrackerEngine::apply_tracker_to_target(comp, idx, 0, null_idx, true, false);
+                    });
+                    crate::core::frame_cache::bump_version();
+                    app.toasts.info("Created new Null layer with tracked motion!");
+                }
+            }),
+        },
+        PaletteCommand {
+            name: "View: Switch to Audio Mixer Panel",
+            category: "View",
+            shortcut_hint: "",
+            action: Box::new(|app| {
+                app.right_tab_idx = 7;
+            }),
+        },
+        PaletteCommand {
+            name: "View: Switch to Motion Tracker Panel",
+            category: "View",
+            shortcut_hint: "",
+            action: Box::new(|app| {
+                app.right_tab_idx = 8;
+            }),
+        },
+        PaletteCommand {
+            name: "View: Switch to Effect Controls Panel",
+            category: "View",
+            shortcut_hint: "F3",
+            action: Box::new(|app| {
+                app.right_tab_idx = 30;
+            }),
+        },
     ]
 }
-
 
 pub fn draw_command_palette(app: &mut AfterEffectsApp, ctx: &egui::Context) {
     if !app.show_command_palette {
@@ -774,7 +1017,8 @@ pub fn draw_command_palette(app: &mut AfterEffectsApp, ctx: &egui::Context) {
 
             if !filtered.is_empty() {
                 if input.0 {
-                    app.command_palette_selected_idx = (app.command_palette_selected_idx + 1) % filtered.len();
+                    app.command_palette_selected_idx =
+                        (app.command_palette_selected_idx + 1) % filtered.len();
                 }
                 if input.1 {
                     app.command_palette_selected_idx = if app.command_palette_selected_idx == 0 {
@@ -783,59 +1027,72 @@ pub fn draw_command_palette(app: &mut AfterEffectsApp, ctx: &egui::Context) {
                         app.command_palette_selected_idx - 1
                     };
                 }
-                if input.2
-                    && app.command_palette_selected_idx < filtered.len() {
-                        executed_command_idx = Some(app.command_palette_selected_idx);
-                    }
+                if input.2 && app.command_palette_selected_idx < filtered.len() {
+                    executed_command_idx = Some(app.command_palette_selected_idx);
+                }
             }
 
-            egui::ScrollArea::vertical().max_height(260.0).show(ui, |ui| {
-                if filtered.is_empty() {
-                    ui.add_space(20.0);
-                    ui.centered_and_justified(|ui| {
-                        ui.weak("No matching commands found");
-                    });
-                } else {
-                    for (idx, cmd) in filtered.iter().enumerate() {
-                        let is_selected = idx == app.command_palette_selected_idx;
-                        
-                        let bg_color = if is_selected {
-                            colors::BG_ACTIVE
-                        } else {
-                            egui::Color32::TRANSPARENT
-                        };
-
-                        let frame = egui::Frame::none()
-                            .fill(bg_color)
-                            .inner_margin(egui::Margin::symmetric(8.0, 4.0))
-                            .rounding(4.0);
-
-                        frame.show(ui, |ui| {
-                            ui.horizontal(|ui| {
-                                let category_text = egui::RichText::new(format!("[{}] ", cmd.category))
-                                    .small()
-                                    .color(if is_selected { egui::Color32::WHITE } else { colors::TEXT_SECONDARY });
-                                ui.label(category_text);
-
-                                let name_text = egui::RichText::new(cmd.name)
-                                    .strong()
-                                    .color(if is_selected { egui::Color32::WHITE } else { colors::TEXT_PRIMARY });
-                                let item_resp = ui.selectable_label(is_selected, name_text);
-
-                                if item_resp.clicked() {
-                                    executed_command_idx = Some(idx);
-                                }
-
-                                if !cmd.shortcut_hint.is_empty() {
-                                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                                        ui.weak(cmd.shortcut_hint);
-                                    });
-                                }
-                            });
+            egui::ScrollArea::vertical()
+                .max_height(260.0)
+                .show(ui, |ui| {
+                    if filtered.is_empty() {
+                        ui.add_space(20.0);
+                        ui.centered_and_justified(|ui| {
+                            ui.weak("No matching commands found");
                         });
+                    } else {
+                        for (idx, cmd) in filtered.iter().enumerate() {
+                            let is_selected = idx == app.command_palette_selected_idx;
+
+                            let bg_color = if is_selected {
+                                colors::BG_ACTIVE
+                            } else {
+                                egui::Color32::TRANSPARENT
+                            };
+
+                            let frame = egui::Frame::none()
+                                .fill(bg_color)
+                                .inner_margin(egui::Margin::symmetric(8.0, 4.0))
+                                .rounding(4.0);
+
+                            frame.show(ui, |ui| {
+                                ui.horizontal(|ui| {
+                                    let category_text =
+                                        egui::RichText::new(format!("[{}] ", cmd.category))
+                                            .small()
+                                            .color(if is_selected {
+                                                egui::Color32::WHITE
+                                            } else {
+                                                colors::TEXT_SECONDARY
+                                            });
+                                    ui.label(category_text);
+
+                                    let name_text = egui::RichText::new(cmd.name).strong().color(
+                                        if is_selected {
+                                            egui::Color32::WHITE
+                                        } else {
+                                            colors::TEXT_PRIMARY
+                                        },
+                                    );
+                                    let item_resp = ui.selectable_label(is_selected, name_text);
+
+                                    if item_resp.clicked() {
+                                        executed_command_idx = Some(idx);
+                                    }
+
+                                    if !cmd.shortcut_hint.is_empty() {
+                                        ui.with_layout(
+                                            egui::Layout::right_to_left(egui::Align::Center),
+                                            |ui| {
+                                                ui.weak(cmd.shortcut_hint);
+                                            },
+                                        );
+                                    }
+                                });
+                            });
+                        }
                     }
-                }
-            });
+                });
 
             if let Some(exec_idx) = executed_command_idx {
                 if exec_idx < filtered.len() {
@@ -843,7 +1100,8 @@ pub fn draw_command_palette(app: &mut AfterEffectsApp, ctx: &egui::Context) {
                     app.show_command_palette = false;
                     app.command_palette_search.clear();
                     app.command_palette_selected_idx = 0;
-                    app.toasts.info(format!("Executed: {}", filtered[exec_idx].name));
+                    app.toasts
+                        .info(format!("Executed: {}", filtered[exec_idx].name));
                 }
             }
         });
