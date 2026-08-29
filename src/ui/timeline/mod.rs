@@ -894,6 +894,11 @@ let type_icon = crate::ui::icons::layer_icon(&layer.layer_type);
                                             project_changed = true;
                                             ui.close_menu();
                                         }
+                                        if ui.button(if layer.is_guide_layer { "📐 Remove Guide Layer" } else { "📐 Guide Layer" }).on_hover_text("Guide layers appear in composition preview but are excluded from exports and pre-comps").clicked() {
+                                            layer.is_guide_layer = !layer.is_guide_layer;
+                                            project_changed = true;
+                                            ui.close_menu();
+                                        }
                                         if ui.button("⏪ Time-Reverse Keyframes").on_hover_text("Reverse the order of all animated keyframes on this layer").clicked() {
                                             fn rev<T: Clone>(a: &mut crate::core::property::Animatable<T>, in_f: u32, out_f: u32) {
                                                 if let crate::core::property::Animatable::Animated(kfs) = a {
