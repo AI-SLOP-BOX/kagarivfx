@@ -948,23 +948,49 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: u32) 
                             .stroke(egui::Stroke::new(1.0, colors::BORDER_MEDIUM))
                             .inner_margin(8.0);
                         hud_frame.show(ui, |ui: &mut egui::Ui| {
-                            ui.set_min_width(150.0);
-                            let is_fg = !ctx.input(|i| i.modifiers.alt);
-                            ui.label(egui::RichText::new(if is_fg { "🟢 Roto Brush (FG)" } else { "🔴 Roto Brush (BG)" }).strong().small());
+                            ui.set_min_width(170.0);
+                            let alt_held = ctx.input(|i| i.modifiers.alt);
+                            let mut fg_mode = ctx.data_mut(|d| d.get_temp::<bool>(egui::Id::new("roto_fg_mode")).unwrap_or(true));
+                            if alt_held {
+                                fg_mode = false;
+                            }
+                            ui.horizontal(|ui| {
+                                if ui.selectable_label(fg_mode, "🟢 FG").on_hover_text("Foreground subject mark (Green)").clicked() {
+                                    fg_mode = true;
+                                    ctx.data_mut(|d| d.insert_temp(egui::Id::new("roto_fg_mode"), true));
+                                }
+                                if ui.selectable_label(!fg_mode, "🔴 BG").on_hover_text("Background mark (Red / Alt+Drag)").clicked() {
+                                    fg_mode = false;
+                                    ctx.data_mut(|d| d.insert_temp(egui::Id::new("roto_fg_mode"), false));
+                                }
+                            });
+
                             let mut radius = ctx.data_mut(|d| {
                                 d.get_temp::<f32>(egui::Id::new("roto_brush_radius")).unwrap_or(8.0)
                             });
-                            if ui.add(
-                                egui::Slider::new(&mut radius, 1.0..=50.0).suffix(" px"),
-                            ).changed() {
-                                ctx.data_mut(|d| d.insert_temp(egui::Id::new("roto_brush_radius"), radius));
+                            ui.horizontal(|ui| {
+                                ui.label("Radius:");
+                                if ui.add(
+                                    egui::Slider::new(&mut radius, 1.0..=50.0).suffix(" px"),
+                                ).changed() {
+                                    ctx.data_mut(|d| d.insert_temp(egui::Id::new("roto_brush_radius"), radius));
+                                }
+                            });
+
+                            let mut matte_preview = ctx.data_mut(|d| {
+                                d.get_temp::<bool>(egui::Id::new("roto_matte_preview")).unwrap_or(false)
+                            });
+                            if ui.checkbox(&mut matte_preview, "Matte Preview").on_hover_text("Show high-contrast black/white silhouette matte").changed() {
+                                ctx.data_mut(|d| d.insert_temp(egui::Id::new("roto_matte_preview"), matte_preview));
                             }
                         });
                     });
             }
             if let Some(sel_li) = app.selected_layer_idx {
                 let stroke_id = egui::Id::new(("roto_live_stroke", sel_li));
-                let is_fg = !ctx.input(|i| i.modifiers.alt);
+                let alt_held = ctx.input(|i| i.modifiers.alt);
+                let fg_pref = ctx.data_mut(|d| d.get_temp::<bool>(egui::Id::new("roto_fg_mode")).unwrap_or(true));
+                let is_fg = if alt_held { false } else { fg_pref };
                 if viewport_response.drag_started() {
                     if let Some(pp) = viewport_response.interact_pointer_pos() {
                         let cx = (pp.x - origin_x) / draw_w * comp_w;
