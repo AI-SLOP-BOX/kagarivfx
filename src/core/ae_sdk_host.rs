@@ -83,7 +83,7 @@ pub struct SafeEffectWorld {
 
 impl SafeEffectWorld {
     pub fn new_rgba8(width: i32, height: i32) -> Self {
-        if width <= 0 || height <= 0 {
+        if width <= 0 || height <= 0 || width > (i32::MAX / 4) || height > 65536 {
             let raw = PF_EffectWorld {
                 format: 0, // PF_PixelFormat_ARGB32
                 data: std::ptr::null_mut(),
@@ -98,11 +98,11 @@ impl SafeEffectWorld {
 
         let w = width as usize;
         let h = height as usize;
-        let rowbytes = match (w).checked_mul(4) {
-            Some(rb) if rb <= i32::MAX as usize => rb as i32,
+        let rowbytes = (w * 4) as i32;
+        let total_bytes = match (rowbytes as usize).checked_mul(h) {
+            Some(tb) if tb <= 512 * 1024 * 1024 => tb,
             _ => 0,
         };
-        let total_bytes = (rowbytes as usize).checked_mul(h).unwrap_or(0);
         let mut buffer = vec![0u8; total_bytes];
         let data_ptr = if total_bytes > 0 { buffer.as_mut_ptr() } else { std::ptr::null_mut() };
 

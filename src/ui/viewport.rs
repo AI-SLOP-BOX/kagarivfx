@@ -1,9 +1,9 @@
-use crate::AfterEffectsApp;
-use crate::core::timeline::Layer;
 use crate::core::property::Animatable;
-use crate::core::roto_assist::{RotoStroke, segment_roto_brush, trace_contour_to_polygon};
-use crate::ViewportMode;
+use crate::core::roto_assist::{segment_roto_brush, trace_contour_to_polygon, RotoStroke};
+use crate::core::timeline::Layer;
 use crate::ui::theme::colors;
+use crate::AfterEffectsApp;
+use crate::ViewportMode;
 use eframe::egui;
 
 pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: u32) {
@@ -1870,7 +1870,6 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: u32) 
 
         draw_inline_text_editor(app, ctx, current_frame, origin_x, origin_y, draw_w, draw_h, comp_w, comp_h);
     });
-
 }
 
 /// Inline source-text editor opened by double-clicking a text layer in the viewport.
@@ -1886,7 +1885,9 @@ fn draw_inline_text_editor(
     comp_w: f32,
     comp_h: f32,
 ) {
-    let Some(idx) = app.inline_text_edit_layer else { return };
+    let Some(idx) = app.inline_text_edit_layer else {
+        return;
+    };
 
     let (seed, screen_x, screen_y, layer_w) = {
         let comp = app.history.current().active_composition();
@@ -1916,7 +1917,10 @@ fn draw_inline_text_editor(
     };
 
     let buf_id = egui::Id::new(("inline_text_buf", idx));
-    let mut buf = ctx.data_mut(|d| d.get_temp_mut_or_insert_with(buf_id, || seed.clone()).clone());
+    let mut buf = ctx.data_mut(|d| {
+        d.get_temp_mut_or_insert_with(buf_id, || seed.clone())
+            .clone()
+    });
     let mut should_close = false;
     let mut should_commit = false;
 
@@ -1952,10 +1956,9 @@ fn draw_inline_text_editor(
                         should_close = true;
                     }
 
-                    // Live-update text on the layer as the user types
+                    // Live-update text on the layer as the user types (zero-clone in-place mutation)
                     if edit_response.changed() {
-                        let mut temp_proj = app.history.current().clone();
-                        let comp_mut = temp_proj.active_composition_mut();
+                        let comp_mut = app.history.current_mut().active_composition_mut();
                         if let Some(l) = comp_mut.layers.get_mut(idx) {
                             if let crate::core::timeline::LayerType::Text { text: t, .. } =
                                 &mut l.layer_type
@@ -1963,7 +1966,6 @@ fn draw_inline_text_editor(
                                 *t = buf.clone();
                             }
                         }
-                        *app.history.current_mut() = temp_proj;
                         crate::core::frame_cache::bump_version();
                         ctx.request_repaint();
                     }

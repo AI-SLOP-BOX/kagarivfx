@@ -103,35 +103,22 @@ impl PersistentDiskCache {
             if let Ok(bytes) = fs::read(&file_path) {
                 let size = bytes.len();
                 if size <= self.budget_bytes {
-                    // Evict existing entries so this loaded entry fits budget
-                    self.evict_for_bytes(size);
+                    // Try parsing metadata; if metadata file is missing or corrupted, discard corrupted cache
+                    let meta_res = fs::read_to_string(&meta_path)
+                        .ok()
+                        .and_then(|json| serde_json::from_str::<DiskCacheMetadata>(&json).ok());
 
-                    let mut meta = if let Ok(meta_json) = fs::read_to_string(&meta_path) {
-                        serde_json::from_str::<DiskCacheMetadata>(&meta_json).unwrap_or_else(|_| DiskCacheMetadata {
-                            cache_key: key,
-                            comp_id: String::new(),
-                            frame: 0,
-                            width: 0,
-                            height: 0,
-                            size_bytes: size,
-                            last_access_epoch: current_epoch,
-                        })
+                    if let Some(mut meta) = meta_res {
+                        meta.last_access_epoch = current_epoch;
+                        self.evict_for_bytes(size);
+                        self.current_bytes += size;
+                        self.entries.insert(key, (meta, bytes));
+                        return self.entries.get(&key).map(|(_, d)| d.as_slice());
                     } else {
-                        DiskCacheMetadata {
-                            cache_key: key,
-                            comp_id: String::new(),
-                            frame: 0,
-                            width: 0,
-                            height: 0,
-                            size_bytes: size,
-                            last_access_epoch: current_epoch,
-                        }
-                    };
-                    meta.last_access_epoch = current_epoch;
-
-                    self.current_bytes += size;
-                    self.entries.insert(key, (meta, bytes));
-                    return self.entries.get(&key).map(|(_, d)| d.as_slice());
+                        // Corrupted cache: remove both files
+                        let _ = fs::remove_file(&file_path);
+                        let _ = fs::remove_file(&meta_path);
+                    }
                 }
             }
         }
@@ -182,14 +169,29 @@ impl PersistentDiskCache {
             last_access_epoch: current_epoch,
         };
 
-        // Persist to disk file if directory is configured
+        // Persist to disk file atomically if directory is configured
         if let Some(ref dir) = self.cache_dir {
             let file_path = dir.join(format!("{:016x}.cache", key));
             let meta_path = dir.join(format!("{:016x}.meta", key));
-            fs::write(&file_path, &data)?;
-            if let Ok(meta_json) = serde_json::to_string(&meta) {
-                let _ = fs::write(&meta_path, meta_json);
+            let tmp_file_path = dir.join(format!("{:016x}.cache.tmp", key));
+            let tmp_meta_path = dir.join(format!("{:016x}.meta.tmp", key));
+
+            // Write to temporary files first
+            if let Err(e) = fs::write(&tmp_file_path, &data) {
+                let _ = fs::remove_file(&tmp_file_path);
+                return Err(e);
             }
+            if let Ok(meta_json) = serde_json::to_string(&meta) {
+                if let Err(e) = fs::write(&tmp_meta_path, meta_json) {
+                    let _ = fs::remove_file(&tmp_file_path);
+                    let _ = fs::remove_file(&tmp_meta_path);
+                    return Err(e);
+                }
+            }
+
+            // Atomic rename to final file destinations
+            let _ = fs::rename(&tmp_file_path, &file_path);
+            let _ = fs::rename(&tmp_meta_path, &meta_path);
         }
 
         self.current_bytes += size;

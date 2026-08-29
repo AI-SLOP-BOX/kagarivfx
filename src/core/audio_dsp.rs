@@ -439,21 +439,18 @@ pub fn extract_multiband_audio_keyframes(
     };
 
     for f in 0..total_frames {
-        let start_sample_idx = ((f as f64 * sample_rate as f64) / fps as f64).floor() as usize;
-        let mut end_sample_idx = (((f + 1) as f64 * sample_rate as f64) / fps as f64).ceil() as usize;
+        let start_sample_idx = ((f as f64 * sample_rate as f64) / fps.max(1) as f64).floor() as usize;
+        let mut end_sample_idx = (((f as u64 + 1) as f64 * sample_rate as f64) / fps.max(1) as f64).ceil() as usize;
         if end_sample_idx == start_sample_idx {
-            end_sample_idx = (start_sample_idx + 1).min(total_stereo_samples);
+            end_sample_idx = start_sample_idx.saturating_add(1);
         }
-        let start_sample = (start_sample_idx * 2).min(pcm_stereo.len());
-        let end_sample = (end_sample_idx * 2).min(pcm_stereo.len());
+        let start_sample = (start_sample_idx.saturating_mul(2)).min(pcm_stereo.len());
+        let end_sample = (end_sample_idx.saturating_mul(2)).min(pcm_stereo.len());
 
-        let mut frame_buf = if start_sample < pcm_stereo.len() && start_sample < end_sample {
+        let frame_buf = if start_sample < pcm_stereo.len() && start_sample < end_sample {
             pcm_stereo[start_sample..end_sample].to_vec()
-        } else if !pcm_stereo.is_empty() {
-            // Pick nearest single stereo sample
-            let sample_idx = (start_sample_idx % total_stereo_samples.max(1)) * 2;
-            pcm_stereo[sample_idx..sample_idx + 2].to_vec()
         } else {
+            // Beyond audio stream end -> silence (zero-filled, never loops)
             Vec::new()
         };
 

@@ -141,7 +141,7 @@ pub fn polygon_subtract(subject: &[[f32; 2]], clip: &[[f32; 2]]) -> Vec<Vec<[f32
                 inters.push((dist, pt));
             }
         }
-        inters.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(std::cmp::Ordering::Equal));
+        inters.sort_by(|a, b| a.0.total_cmp(&b.0));
         for (_, pt) in inters {
             enriched_subject.push(pt);
         }
@@ -193,7 +193,7 @@ pub fn polygon_union(subject: &[[f32; 2]], clip: &[[f32; 2]]) -> Vec<Vec<[f32; 2
         return vec![subject.to_vec()];
     }
 
-    // Collect all outer boundary vertices and intersections
+    // Collect outer perimeter vertices from both contours
     let mut boundary_points: Vec<[f32; 2]> = Vec::new();
     for &pt in subject {
         if !point_in_polygon(pt[0], pt[1], clip) {
@@ -238,7 +238,7 @@ pub fn polygon_union(subject: &[[f32; 2]], clip: &[[f32; 2]]) -> Vec<Vec<[f32; 2
     boundary_points.sort_by(|a, b| {
         let angle_a = (a[1] - cy).atan2(a[0] - cx);
         let angle_b = (b[1] - cy).atan2(b[0] - cx);
-        angle_a.partial_cmp(&angle_b).unwrap_or(std::cmp::Ordering::Equal)
+        angle_a.total_cmp(&angle_b)
     });
 
     // Remove duplicates

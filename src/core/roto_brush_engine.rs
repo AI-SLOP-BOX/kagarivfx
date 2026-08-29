@@ -52,8 +52,13 @@ pub fn generate_rotobrush_matte(
     strokes: &[RotoStroke],
     settings: &RotoBrushSettings,
 ) -> Vec<u8> {
-    let size = (width * height) as usize;
-    if src_pixels.len() != size * 4 || strokes.is_empty() {
+    let Some(size) = (width as usize).checked_mul(height as usize) else {
+        return Vec::new();
+    };
+    let Some(expected_len) = size.checked_mul(4) else {
+        return vec![0u8; size];
+    };
+    if src_pixels.len() != expected_len || strokes.is_empty() {
         return vec![0u8; size];
     }
 

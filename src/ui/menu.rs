@@ -193,12 +193,14 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
                         let name = path.file_stem().map(|s| s.to_string_lossy().to_string())
                             .unwrap_or_else(|| "video".to_string());
                         let dest = std::env::temp_dir().join("aevfx_media").join(&name);
+                        let src = path.to_string_lossy().to_string();
+                        app.toasts.info(format!("Extracting video frames for '{}' via FFmpeg...", name));
                         ui.ctx().request_repaint();
+
                         match crate::core::video_import::import_video(
-                            &path.to_string_lossy(), &dest, fps,
+                            &src, &dest, fps,
                         ) {
                             Ok(asset) => {
-                                let src = path.to_string_lossy().to_string();
                                 app.modify_project(|p| {
                                     let layer_count = p.compositions.len();
                                     let comp = p.active_composition_mut();
@@ -1395,31 +1397,79 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
             .show(ctx, |ui| {
                 ui.heading("After Effects OSS - Shortcuts");
                 ui.separator();
-                egui::Grid::new("shortcuts_grid").striped(true).show(ui, |ui| {
-                    ui.label("Spacebar"); ui.label("Play / Pause RAM Preview"); ui.end_row();
-                    ui.label("V"); ui.label("Selection Tool"); ui.end_row();
-                    ui.label("H"); ui.label("Hand Tool (Pan)"); ui.end_row();
-                    ui.label("Z"); ui.label("Zoom Tool"); ui.end_row();
-                    ui.label("W"); ui.label("Rotation Tool"); ui.end_row();
-                    ui.label("Y"); ui.label("Anchor Point Tool"); ui.end_row();
-                    ui.label("Cmd + Z"); ui.label("Undo"); ui.end_row();
-                    ui.label("Cmd + Shift + Z"); ui.label("Redo"); ui.end_row();
-                    ui.label("J / K / L"); ui.label("Prev Keyframe / Stop / Next Keyframe"); ui.end_row();
-                    ui.label("Arrow Keys"); ui.label("Nudge Selected Layer 1px (Shift = 10px)"); ui.end_row();
-                    ui.label("PageUp / PageDown"); ui.label("Step Frame Backward / Forward"); ui.end_row();
-                    ui.label("Home / End"); ui.label("First / Last Frame"); ui.end_row();
-                    ui.label("B / N"); ui.label("Set Work Area Start / End"); ui.end_row();
-                    ui.label("= / -"); ui.label("Timeline Zoom In / Out (Cmd+Scroll on ruler)"); ui.end_row();
-                    ui.label("F9"); ui.label("Apply Easy Ease to Keyframes"); ui.end_row();
-                    ui.label("Click / Shift+Click"); ui.label("Select / Add to Selection (keyframes)"); ui.end_row();
-                    ui.label(", / ."); ui.label("Nudge Selected Keyframes (Shift = x10)"); ui.end_row();
-                    ui.label("Delete"); ui.label("Delete Selected Keyframes"); ui.end_row();
-                    ui.label("Cmd + C / V"); ui.label("Copy / Paste Selected Keyframes"); ui.end_row();
-                    ui.label("Cmd + A"); ui.label("Select All Keyframes of Layer"); ui.end_row();
-                    ui.label("Esc"); ui.label("Deselect (Keyframes, then Layers)"); ui.end_row();
-                    ui.label("M"); ui.label("Add / Remove Timeline Marker"); ui.end_row();
-                    ui.label("[ / ]"); ui.label("Jump to Prev / Next Marker"); ui.end_row();
-                });
+                egui::Grid::new("shortcuts_grid")
+                    .striped(true)
+                    .show(ui, |ui| {
+                        ui.label("Spacebar");
+                        ui.label("Play / Pause RAM Preview");
+                        ui.end_row();
+                        ui.label("V");
+                        ui.label("Selection Tool");
+                        ui.end_row();
+                        ui.label("H");
+                        ui.label("Hand Tool (Pan)");
+                        ui.end_row();
+                        ui.label("Z");
+                        ui.label("Zoom Tool");
+                        ui.end_row();
+                        ui.label("W");
+                        ui.label("Rotation Tool");
+                        ui.end_row();
+                        ui.label("Y");
+                        ui.label("Anchor Point Tool");
+                        ui.end_row();
+                        ui.label("Cmd + Z");
+                        ui.label("Undo");
+                        ui.end_row();
+                        ui.label("Cmd + Shift + Z");
+                        ui.label("Redo");
+                        ui.end_row();
+                        ui.label("J / K / L");
+                        ui.label("Prev Keyframe / Stop / Next Keyframe");
+                        ui.end_row();
+                        ui.label("Arrow Keys");
+                        ui.label("Nudge Selected Layer 1px (Shift = 10px)");
+                        ui.end_row();
+                        ui.label("PageUp / PageDown");
+                        ui.label("Step Frame Backward / Forward");
+                        ui.end_row();
+                        ui.label("Home / End");
+                        ui.label("First / Last Frame");
+                        ui.end_row();
+                        ui.label("B / N");
+                        ui.label("Set Work Area Start / End");
+                        ui.end_row();
+                        ui.label("= / -");
+                        ui.label("Timeline Zoom In / Out (Cmd+Scroll on ruler)");
+                        ui.end_row();
+                        ui.label("F9");
+                        ui.label("Apply Easy Ease to Keyframes");
+                        ui.end_row();
+                        ui.label("Click / Shift+Click");
+                        ui.label("Select / Add to Selection (keyframes)");
+                        ui.end_row();
+                        ui.label(", / .");
+                        ui.label("Nudge Selected Keyframes (Shift = x10)");
+                        ui.end_row();
+                        ui.label("Delete");
+                        ui.label("Delete Selected Keyframes");
+                        ui.end_row();
+                        ui.label("Cmd + C / V");
+                        ui.label("Copy / Paste Selected Keyframes");
+                        ui.end_row();
+                        ui.label("Cmd + A");
+                        ui.label("Select All Keyframes of Layer");
+                        ui.end_row();
+                        ui.label("Esc");
+                        ui.label("Deselect (Keyframes, then Layers)");
+                        ui.end_row();
+                        ui.label("M");
+                        ui.label("Add / Remove Timeline Marker");
+                        ui.end_row();
+                        ui.label("[ / ]");
+                        ui.label("Jump to Prev / Next Marker");
+                        ui.end_row();
+                    });
             });
         ctx.data_mut(|d| d.insert_temp(help_id, show_help));
     }
@@ -1486,352 +1536,450 @@ fn apply_effect_by_name(app: &mut crate::AfterEffectsApp, effect_name: &str) {
             let len = layer.effects.len();
             let effect = match effect_name {
                 "Slider Control" => crate::core::timeline::Effect {
-                    id: format!("slider_{}", len), name: "Slider Control".to_string(),
+                    id: format!("slider_{}", len),
+                    name: "Slider Control".to_string(),
                     effect_type: crate::core::timeline::EffectType::SliderControl {
                         value: crate::core::property::Animatable::new_constant(50.0),
-                    }, enabled: true,
+                    },
+                    enabled: true,
                 },
                 "Angle Control" => crate::core::timeline::Effect {
-                    id: format!("angle_{}", len), name: "Angle Control".to_string(),
+                    id: format!("angle_{}", len),
+                    name: "Angle Control".to_string(),
                     effect_type: crate::core::timeline::EffectType::AngleControl {
                         angle_degrees: crate::core::property::Animatable::new_constant(0.0),
-                    }, enabled: true,
+                    },
+                    enabled: true,
                 },
                 "Point Control" => crate::core::timeline::Effect {
-                    id: format!("point_{}", len), name: "Point Control".to_string(),
+                    id: format!("point_{}", len),
+                    name: "Point Control".to_string(),
                     effect_type: crate::core::timeline::EffectType::PointControl {
                         point: crate::core::property::Animatable::new_constant([960.0, 540.0]),
-                    }, enabled: true,
+                    },
+                    enabled: true,
                 },
                 "Color Control" => crate::core::timeline::Effect {
-                    id: format!("color_{}", len), name: "Color Control".to_string(),
+                    id: format!("color_{}", len),
+                    name: "Color Control".to_string(),
                     effect_type: crate::core::timeline::EffectType::ColorControl {
-                        color: crate::core::property::Animatable::new_constant([1.0, 1.0, 1.0, 1.0]),
-                    }, enabled: true,
+                        color: crate::core::property::Animatable::new_constant([
+                            1.0, 1.0, 1.0, 1.0,
+                        ]),
+                    },
+                    enabled: true,
                 },
                 "Checkbox Control" => crate::core::timeline::Effect {
-                    id: format!("checkbox_{}", len), name: "Checkbox Control".to_string(),
+                    id: format!("checkbox_{}", len),
+                    name: "Checkbox Control".to_string(),
                     effect_type: crate::core::timeline::EffectType::CheckboxControl {
                         checked: false,
-                    }, enabled: true,
+                    },
+                    enabled: true,
                 },
                 "Dropdown Control" => crate::core::timeline::Effect {
-                    id: format!("dropdown_{}", len), name: "Dropdown Control".to_string(),
+                    id: format!("dropdown_{}", len),
+                    name: "Dropdown Control".to_string(),
                     effect_type: crate::core::timeline::EffectType::DropdownControl {
                         value: 0,
-                        options: vec!["Option 1".to_string(), "Option 2".to_string(), "Option 3".to_string()],
-                    }, enabled: true,
+                        options: vec![
+                            "Option 1".to_string(),
+                            "Option 2".to_string(),
+                            "Option 3".to_string(),
+                        ],
+                    },
+                    enabled: true,
                 },
                 "3D Point Control" => crate::core::timeline::Effect {
-                    id: format!("point3d_{}", len), name: "3D Point Control".to_string(),
+                    id: format!("point3d_{}", len),
+                    name: "3D Point Control".to_string(),
                     effect_type: crate::core::timeline::EffectType::Point3DControl {
                         point: crate::core::property::Animatable::new_constant([0.0, 0.0, 0.0]),
-                    }, enabled: true,
+                    },
+                    enabled: true,
                 },
                 "Lens Flare" => crate::core::timeline::Effect {
-                    id: format!("flare_{}", len), name: "Lens Flare".to_string(),
+                    id: format!("flare_{}", len),
+                    name: "Lens Flare".to_string(),
                     effect_type: crate::core::timeline::EffectType::LensFlare {
                         enabled: crate::core::property::Animatable::new_constant(1.0),
                         position_x: crate::core::property::Animatable::new_constant(0.5),
                         position_y: crate::core::property::Animatable::new_constant(0.35),
                         intensity: crate::core::property::Animatable::new_constant(1.0),
                         threshold: crate::core::property::Animatable::new_constant(0.8),
-                        color: crate::core::property::Animatable::new_constant([1.0, 0.95, 0.9, 1.0]),
+                        color: crate::core::property::Animatable::new_constant([
+                            1.0, 0.95, 0.9, 1.0,
+                        ]),
                         link_to_light: None,
-                    }, enabled: true,
+                    },
+                    enabled: true,
                 },
                 "Gaussian Blur" => crate::core::timeline::Effect {
-                    id: format!("blur_{}", len), name: "Gaussian Blur".to_string(),
+                    id: format!("blur_{}", len),
+                    name: "Gaussian Blur".to_string(),
                     effect_type: crate::core::timeline::EffectType::GaussianBlur {
                         blur_radius: crate::core::property::Animatable::new_constant(5.0),
-                    }, enabled: true,
+                    },
+                    enabled: true,
                 },
                 "Directional Blur" => crate::core::timeline::Effect {
-                    id: format!("dirblur_{}", len), name: "Directional Blur".to_string(),
+                    id: format!("dirblur_{}", len),
+                    name: "Directional Blur".to_string(),
                     effect_type: crate::core::timeline::EffectType::DirectionalBlur {
                         angle: crate::core::property::Animatable::new_constant(0.0),
                         length: crate::core::property::Animatable::new_constant(10.0),
-                    }, enabled: true,
+                    },
+                    enabled: true,
                 },
                 "Radial Blur" => crate::core::timeline::Effect {
-                    id: format!("radblur_{}", len), name: "Radial Blur".to_string(),
+                    id: format!("radblur_{}", len),
+                    name: "Radial Blur".to_string(),
                     effect_type: crate::core::timeline::EffectType::RadialBlur {
                         amount: crate::core::property::Animatable::new_constant(10.0),
-                    }, enabled: true,
+                    },
+                    enabled: true,
                 },
                 "Sharpen" => crate::core::timeline::Effect {
-                    id: format!("sharp_{}", len), name: "Sharpen".to_string(),
+                    id: format!("sharp_{}", len),
+                    name: "Sharpen".to_string(),
                     effect_type: crate::core::timeline::EffectType::Sharpen {
                         amount: crate::core::property::Animatable::new_constant(50.0),
-                    }, enabled: true,
+                    },
+                    enabled: true,
                 },
                 "Color Tint" => crate::core::timeline::Effect {
-                    id: format!("tint_{}", len), name: "Color Tint".to_string(),
+                    id: format!("tint_{}", len),
+                    name: "Color Tint".to_string(),
                     effect_type: crate::core::timeline::EffectType::ColorTint {
-                        color: crate::core::property::Animatable::new_constant([1.0, 0.2, 0.4, 1.0]),
+                        color: crate::core::property::Animatable::new_constant([
+                            1.0, 0.2, 0.4, 1.0,
+                        ]),
                         intensity: crate::core::property::Animatable::new_constant(1.0),
-                    }, enabled: true,
+                    },
+                    enabled: true,
                 },
                 "Levels" => crate::core::timeline::Effect {
-                    id: format!("levels_{}", len), name: "Levels".to_string(),
+                    id: format!("levels_{}", len),
+                    name: "Levels".to_string(),
                     effect_type: crate::core::timeline::EffectType::Levels {
                         input_black: crate::core::property::Animatable::new_constant(0.0),
                         input_white: crate::core::property::Animatable::new_constant(255.0),
                         gamma: crate::core::property::Animatable::new_constant(1.0),
                         output_black: crate::core::property::Animatable::new_constant(0.0),
                         output_white: crate::core::property::Animatable::new_constant(255.0),
-                    }, enabled: true,
+                    },
+                    enabled: true,
                 },
                 "Hue/Saturation" => crate::core::timeline::Effect {
-                    id: format!("hs_{}", len), name: "Hue/Saturation".to_string(),
+                    id: format!("hs_{}", len),
+                    name: "Hue/Saturation".to_string(),
                     effect_type: crate::core::timeline::EffectType::HueSaturation {
                         hue_shift: crate::core::property::Animatable::new_constant(0.0),
                         saturation: crate::core::property::Animatable::new_constant(0.0),
                         lightness: crate::core::property::Animatable::new_constant(0.0),
-                    }, enabled: true,
+                    },
+                    enabled: true,
                 },
                 "Vibrance" => crate::core::timeline::Effect {
-                    id: format!("vib_{}", len), name: "Vibrance".to_string(),
+                    id: format!("vib_{}", len),
+                    name: "Vibrance".to_string(),
                     effect_type: crate::core::timeline::EffectType::Vibrance {
                         amount: crate::core::property::Animatable::new_constant(50.0),
-                    }, enabled: true,
+                    },
+                    enabled: true,
                 },
                 "Glow" => crate::core::timeline::Effect {
-                    id: format!("glow_{}", len), name: "Glow".to_string(),
+                    id: format!("glow_{}", len),
+                    name: "Glow".to_string(),
                     effect_type: crate::core::timeline::EffectType::Glow {
                         threshold: crate::core::property::Animatable::new_constant(60.0),
                         radius: crate::core::property::Animatable::new_constant(10.0),
                         intensity: crate::core::property::Animatable::new_constant(1.0),
-                        color: crate::core::property::Animatable::new_constant([1.0, 1.0, 1.0, 1.0]),
-                    }, enabled: true,
+                        color: crate::core::property::Animatable::new_constant([
+                            1.0, 1.0, 1.0, 1.0,
+                        ]),
+                    },
+                    enabled: true,
                 },
                 "Vignette" => crate::core::timeline::Effect {
-                    id: format!("vig_{}", len), name: "Vignette".to_string(),
+                    id: format!("vig_{}", len),
+                    name: "Vignette".to_string(),
                     effect_type: crate::core::timeline::EffectType::Vignette {
                         intensity: crate::core::property::Animatable::new_constant(0.5),
                         roundness: crate::core::property::Animatable::new_constant(0.5),
                         feather: crate::core::property::Animatable::new_constant(0.5),
-                        color: crate::core::property::Animatable::new_constant([0.0, 0.0, 0.0, 1.0]),
-                    }, enabled: true,
+                        color: crate::core::property::Animatable::new_constant([
+                            0.0, 0.0, 0.0, 1.0,
+                        ]),
+                    },
+                    enabled: true,
                 },
                 "Film Grain" => crate::core::timeline::Effect {
-                    id: format!("grain_{}", len), name: "Film Grain".to_string(),
+                    id: format!("grain_{}", len),
+                    name: "Film Grain".to_string(),
                     effect_type: crate::core::timeline::EffectType::FilmGrain {
                         intensity: crate::core::property::Animatable::new_constant(0.1),
                         grain_size: 2.0,
                         color_film: false,
-                    }, enabled: true,
+                    },
+                    enabled: true,
                 },
                 "Drop Shadow" => crate::core::timeline::Effect {
-                    id: format!("ds_{}", len), name: "Drop Shadow".to_string(),
+                    id: format!("ds_{}", len),
+                    name: "Drop Shadow".to_string(),
                     effect_type: crate::core::timeline::EffectType::DropShadow {
-                        color: crate::core::property::Animatable::new_constant([0.0, 0.0, 0.0, 1.0]),
+                        color: crate::core::property::Animatable::new_constant([
+                            0.0, 0.0, 0.0, 1.0,
+                        ]),
                         opacity: crate::core::property::Animatable::new_constant(75.0),
                         direction: crate::core::property::Animatable::new_constant(120.0),
                         distance: crate::core::property::Animatable::new_constant(5.0),
                         softness: crate::core::property::Animatable::new_constant(5.0),
-                    }, enabled: true,
+                    },
+                    enabled: true,
                 },
                 "Twirl" => crate::core::timeline::Effect {
-                    id: format!("twirl_{}", len), name: "Twirl".to_string(),
+                    id: format!("twirl_{}", len),
+                    name: "Twirl".to_string(),
                     effect_type: crate::core::timeline::EffectType::Twirl {
                         angle: crate::core::property::Animatable::new_constant(50.0),
                         radius: crate::core::property::Animatable::new_constant(100.0),
-                    }, enabled: true,
+                    },
+                    enabled: true,
                 },
                 "Bulge" => crate::core::timeline::Effect {
-                    id: format!("bulge_{}", len), name: "Bulge".to_string(),
+                    id: format!("bulge_{}", len),
+                    name: "Bulge".to_string(),
                     effect_type: crate::core::timeline::EffectType::Bulge {
                         amount: crate::core::property::Animatable::new_constant(50.0),
                         radius: crate::core::property::Animatable::new_constant(100.0),
-                    }, enabled: true,
+                    },
+                    enabled: true,
                 },
                 "Mesh Warp" => crate::core::timeline::Effect {
-                    id: format!("meshwarp_{}", len), name: "Mesh Warp".to_string(),
+                    id: format!("meshwarp_{}", len),
+                    name: "Mesh Warp".to_string(),
                     effect_type: crate::core::timeline::EffectType::MeshWarp {
                         top_left: crate::core::property::Animatable::new_constant([0.0, 0.0]),
                         top_right: crate::core::property::Animatable::new_constant([1.0, 0.0]),
                         bottom_left: crate::core::property::Animatable::new_constant([0.0, 1.0]),
                         bottom_right: crate::core::property::Animatable::new_constant([1.0, 1.0]),
-                    }, enabled: true,
+                    },
+                    enabled: true,
                 },
                 "Corner Pin" => {
                     let (cw, ch) = (comp.width as f32, comp.height as f32);
                     crate::core::timeline::Effect {
-                        id: format!("cornerpin_{}", len), name: "Corner Pin".to_string(),
+                        id: format!("cornerpin_{}", len),
+                        name: "Corner Pin".to_string(),
                         effect_type: crate::core::timeline::EffectType::CornerPin {
                             top_left: crate::core::property::Animatable::new_constant([0.0, 0.0]),
                             top_right: crate::core::property::Animatable::new_constant([cw, 0.0]),
                             bottom_right: crate::core::property::Animatable::new_constant([cw, ch]),
                             bottom_left: crate::core::property::Animatable::new_constant([0.0, ch]),
-                        }, enabled: true,
+                        },
+                        enabled: true,
                     }
                 }
                 "Chromatic Aberration" => crate::core::timeline::Effect {
-                    id: format!("ca_{}", len), name: "Chromatic Aberration".to_string(),
+                    id: format!("ca_{}", len),
+                    name: "Chromatic Aberration".to_string(),
                     effect_type: crate::core::timeline::EffectType::ChromaticAberration {
                         shift_r: crate::core::property::Animatable::new_constant(5.0),
                         shift_b: crate::core::property::Animatable::new_constant(-5.0),
                         edge_falloff: crate::core::property::Animatable::new_constant(0.5),
                         iris_linked: true,
-                    }, enabled: true,
+                    },
+                    enabled: true,
                 },
                 "Bass & Treble" => crate::core::timeline::Effect {
-                    id: format!("bass_treble_{}", len), name: "Bass & Treble".to_string(),
+                    id: format!("bass_treble_{}", len),
+                    name: "Bass & Treble".to_string(),
                     effect_type: crate::core::timeline::EffectType::BassTreble {
                         bass_gain: crate::core::property::Animatable::new_constant(0.0),
                         treble_gain: crate::core::property::Animatable::new_constant(0.0),
                         crossover_freq: crate::core::property::Animatable::new_constant(300.0),
-                    }, enabled: true,
+                    },
+                    enabled: true,
                 },
                 "Flanger" => crate::core::timeline::Effect {
-                    id: format!("flanger_{}", len), name: "Flanger".to_string(),
+                    id: format!("flanger_{}", len),
+                    name: "Flanger".to_string(),
                     effect_type: crate::core::timeline::EffectType::Flanger {
                         max_delay_ms: crate::core::property::Animatable::new_constant(5.0),
                         lfo_rate: crate::core::property::Animatable::new_constant(0.5),
                         feedback: crate::core::property::Animatable::new_constant(0.5),
                         wet_dry: crate::core::property::Animatable::new_constant(0.5),
-                    }, enabled: true,
+                    },
+                    enabled: true,
                 },
                 "Chorus" => crate::core::timeline::Effect {
-                    id: format!("chorus_{}", len), name: "Chorus".to_string(),
+                    id: format!("chorus_{}", len),
+                    name: "Chorus".to_string(),
                     effect_type: crate::core::timeline::EffectType::Chorus {
                         delay_ms: crate::core::property::Animatable::new_constant(15.0),
                         depth_ms: crate::core::property::Animatable::new_constant(5.0),
                         rate_hz: crate::core::property::Animatable::new_constant(1.0),
                         voices: crate::core::property::Animatable::new_constant(3.0),
                         feedback: crate::core::property::Animatable::new_constant(0.3),
-                    }, enabled: true,
+                    },
+                    enabled: true,
                 },
                 "Parametric EQ" => crate::core::timeline::Effect {
-                    id: format!("peq_{}", len), name: "Parametric EQ".to_string(),
+                    id: format!("peq_{}", len),
+                    name: "Parametric EQ".to_string(),
                     effect_type: crate::core::timeline::EffectType::ParametricEQ {
                         freq_hz: crate::core::property::Animatable::new_constant(1000.0),
                         gain_db: crate::core::property::Animatable::new_constant(0.0),
                         q_factor: crate::core::property::Animatable::new_constant(1.0),
-                    }, enabled: true,
+                    },
+                    enabled: true,
                 },
                 "Optical Flares" => {
                     let (cw, ch) = (comp.width as f32, comp.height as f32);
                     crate::core::timeline::Effect {
-                        id: format!("optflare_{}", len), name: "Optical Flares".to_string(),
+                        id: format!("optflare_{}", len),
+                        name: "Optical Flares".to_string(),
                         effect_type: crate::core::timeline::EffectType::OpticalFlares {
-                            position: crate::core::property::Animatable::new_constant([cw * 0.5, ch * 0.5]),
+                            position: crate::core::property::Animatable::new_constant([
+                                cw * 0.5,
+                                ch * 0.5,
+                            ]),
                             brightness: crate::core::property::Animatable::new_constant(1.0),
                             scale: crate::core::property::Animatable::new_constant(1.0),
-                        }, enabled: true,
+                        },
+                        enabled: true,
                     }
                 }
                 "Motion Tile" => {
                     let (cw, ch) = (comp.width as f32, comp.height as f32);
                     crate::core::timeline::Effect {
-                        id: format!("motiontile_{}", len), name: "Motion Tile".to_string(),
+                        id: format!("motiontile_{}", len),
+                        name: "Motion Tile".to_string(),
                         effect_type: crate::core::timeline::EffectType::MotionTile {
-                            tile_center: crate::core::property::Animatable::new_constant([cw * 0.5, ch * 0.5]),
+                            tile_center: crate::core::property::Animatable::new_constant([
+                                cw * 0.5,
+                                ch * 0.5,
+                            ]),
                             tile_width: crate::core::property::Animatable::new_constant(100.0),
                             tile_height: crate::core::property::Animatable::new_constant(100.0),
                             output_width: crate::core::property::Animatable::new_constant(100.0),
                             output_height: crate::core::property::Animatable::new_constant(100.0),
                             mirror_edges: true,
                             phase: crate::core::property::Animatable::new_constant(0.0),
-                        }, enabled: true,
+                        },
+                        enabled: true,
                     }
                 }
                 "CC Page Turn" => {
                     let (cw, ch) = (comp.width as f32, comp.height as f32);
                     crate::core::timeline::Effect {
-                        id: format!("pageturn_{}", len), name: "CC Page Turn".to_string(),
+                        id: format!("pageturn_{}", len),
+                        name: "CC Page Turn".to_string(),
                         effect_type: crate::core::timeline::EffectType::PageTurn {
-                            fold_position: crate::core::property::Animatable::new_constant([cw, ch]),
+                            fold_position: crate::core::property::Animatable::new_constant([
+                                cw, ch,
+                            ]),
                             fold_radius: crate::core::property::Animatable::new_constant(120.0),
-                            fold_direction_deg: crate::core::property::Animatable::new_constant(-45.0),
-                            light_direction_deg: crate::core::property::Animatable::new_constant(-45.0),
+                            fold_direction_deg: crate::core::property::Animatable::new_constant(
+                                -45.0,
+                            ),
+                            light_direction_deg: crate::core::property::Animatable::new_constant(
+                                -45.0,
+                            ),
                             back_opacity: crate::core::property::Animatable::new_constant(100.0),
-                            back_color: crate::core::property::Animatable::new_constant([0.92, 0.92, 0.94, 1.0]),
-                        }, enabled: true,
+                            back_color: crate::core::property::Animatable::new_constant([
+                                0.92, 0.92, 0.94, 1.0,
+                            ]),
+                        },
+                        enabled: true,
                     }
                 }
-                "Set Matte" => {
-                    crate::core::timeline::Effect {
-                        id: format!("setmatte_{}", len), name: "Set Matte".to_string(),
-                        effect_type: crate::core::timeline::EffectType::SetMatte {
-                            source_layer_idx: 0,
-                            source_channel: crate::core::set_matte::MatteSourceChannel::Alpha,
-                            invert_matte: false,
-                            composite_mode: crate::core::set_matte::MatteCompositeMode::Replace,
-                        }, enabled: true,
-                    }
-                }
-                "Echo" => {
-                    crate::core::timeline::Effect {
-                        id: format!("echo_{}", len), name: "Echo".to_string(),
-                        effect_type: crate::core::timeline::EffectType::Echo {
-                            echo_time_seconds: crate::core::property::Animatable::new_constant(-0.033),
-                            num_echoes: 3,
-                            starting_intensity: crate::core::property::Animatable::new_constant(1.0),
-                            decay: crate::core::property::Animatable::new_constant(0.5),
-                            operator: crate::core::echo_effect::EchoOperator::Add,
-                        }, enabled: true,
-                    }
-                }
-                "Find Edges" => {
-                    crate::core::timeline::Effect {
-                        id: format!("findedges_{}", len), name: "Find Edges".to_string(),
-                        effect_type: crate::core::timeline::EffectType::FindEdges {
-                            invert: false,
-                        }, enabled: true,
-                    }
-                }
-                "Transform" => {
-                    crate::core::timeline::Effect {
-                        id: format!("transform_{}", len), name: "Transform".to_string(),
-                        effect_type: crate::core::timeline::EffectType::Transform {
-                            anchor_point: crate::core::property::Animatable::new_constant([layer.transform.anchor_point.evaluate(0)[0], layer.transform.anchor_point.evaluate(0)[1]]),
-                            position: crate::core::property::Animatable::new_constant([layer.transform.position.evaluate(0)[0], layer.transform.position.evaluate(0)[1]]),
-                            scale_width: crate::core::property::Animatable::new_constant(100.0),
-                            scale_height: crate::core::property::Animatable::new_constant(100.0),
-                            uniform_scale: true,
-                            skew_deg: crate::core::property::Animatable::new_constant(0.0),
-                            skew_axis_deg: crate::core::property::Animatable::new_constant(0.0),
-                            rotation_deg: crate::core::property::Animatable::new_constant(0.0),
-                            opacity: crate::core::property::Animatable::new_constant(100.0),
-                        }, enabled: true,
-                    }
-                }
-                "Camera Lens Blur" => {
-                    crate::core::timeline::Effect {
-                        id: format!("cameralensblur_{}", len), name: "Camera Lens Blur".to_string(),
-                        effect_type: crate::core::timeline::EffectType::CameraLensBlur {
-                            blur_radius: crate::core::property::Animatable::new_constant(15.0),
-                            iris_blades: 6,
-                            iris_rotation_deg: crate::core::property::Animatable::new_constant(0.0),
-                            iris_roundness: crate::core::property::Animatable::new_constant(0.0),
-                            highlight_gain: crate::core::property::Animatable::new_constant(1.5),
-                            highlight_threshold: crate::core::property::Animatable::new_constant(0.8),
-                        }, enabled: true,
-                    }
-                }
-                "Linear Color Key" => {
-                    crate::core::timeline::Effect {
-                        id: format!("linearcolorkey_{}", len), name: "Linear Color Key".to_string(),
-                        effect_type: crate::core::timeline::EffectType::LinearColorKey {
-                            key_color: crate::core::property::Animatable::new_constant([0.0, 1.0, 0.0]),
-                            match_mode: crate::core::linear_color_key::ColorMatchMode::UsingRGB,
-                            tolerance: crate::core::property::Animatable::new_constant(15.0),
-                            softness: crate::core::property::Animatable::new_constant(10.0),
-                        }, enabled: true,
-                    }
-                }
-                "Channel Combiner" => {
-                    crate::core::timeline::Effect {
-                        id: format!("channelcombiner_{}", len), name: "Channel Combiner".to_string(),
-                        effect_type: crate::core::timeline::EffectType::ChannelCombiner {
-                            from_channel: crate::core::channel_combiner::ChannelCombinerFrom::Luminance,
-                            to_target: crate::core::channel_combiner::ChannelCombinerTo::Alpha,
-                            invert: false,
-                        }, enabled: true,
-                    }
-                }
+                "Set Matte" => crate::core::timeline::Effect {
+                    id: format!("setmatte_{}", len),
+                    name: "Set Matte".to_string(),
+                    effect_type: crate::core::timeline::EffectType::SetMatte {
+                        source_layer_idx: 0,
+                        source_channel: crate::core::set_matte::MatteSourceChannel::Alpha,
+                        invert_matte: false,
+                        composite_mode: crate::core::set_matte::MatteCompositeMode::Replace,
+                    },
+                    enabled: true,
+                },
+                "Echo" => crate::core::timeline::Effect {
+                    id: format!("echo_{}", len),
+                    name: "Echo".to_string(),
+                    effect_type: crate::core::timeline::EffectType::Echo {
+                        echo_time_seconds: crate::core::property::Animatable::new_constant(-0.033),
+                        num_echoes: 3,
+                        starting_intensity: crate::core::property::Animatable::new_constant(1.0),
+                        decay: crate::core::property::Animatable::new_constant(0.5),
+                        operator: crate::core::echo_effect::EchoOperator::Add,
+                    },
+                    enabled: true,
+                },
+                "Find Edges" => crate::core::timeline::Effect {
+                    id: format!("findedges_{}", len),
+                    name: "Find Edges".to_string(),
+                    effect_type: crate::core::timeline::EffectType::FindEdges { invert: false },
+                    enabled: true,
+                },
+                "Transform" => crate::core::timeline::Effect {
+                    id: format!("transform_{}", len),
+                    name: "Transform".to_string(),
+                    effect_type: crate::core::timeline::EffectType::Transform {
+                        anchor_point: crate::core::property::Animatable::new_constant([
+                            layer.transform.anchor_point.evaluate(0)[0],
+                            layer.transform.anchor_point.evaluate(0)[1],
+                        ]),
+                        position: crate::core::property::Animatable::new_constant([
+                            layer.transform.position.evaluate(0)[0],
+                            layer.transform.position.evaluate(0)[1],
+                        ]),
+                        scale_width: crate::core::property::Animatable::new_constant(100.0),
+                        scale_height: crate::core::property::Animatable::new_constant(100.0),
+                        uniform_scale: true,
+                        skew_deg: crate::core::property::Animatable::new_constant(0.0),
+                        skew_axis_deg: crate::core::property::Animatable::new_constant(0.0),
+                        rotation_deg: crate::core::property::Animatable::new_constant(0.0),
+                        opacity: crate::core::property::Animatable::new_constant(100.0),
+                    },
+                    enabled: true,
+                },
+                "Camera Lens Blur" => crate::core::timeline::Effect {
+                    id: format!("cameralensblur_{}", len),
+                    name: "Camera Lens Blur".to_string(),
+                    effect_type: crate::core::timeline::EffectType::CameraLensBlur {
+                        blur_radius: crate::core::property::Animatable::new_constant(15.0),
+                        iris_blades: 6,
+                        iris_rotation_deg: crate::core::property::Animatable::new_constant(0.0),
+                        iris_roundness: crate::core::property::Animatable::new_constant(0.0),
+                        highlight_gain: crate::core::property::Animatable::new_constant(1.5),
+                        highlight_threshold: crate::core::property::Animatable::new_constant(0.8),
+                    },
+                    enabled: true,
+                },
+                "Linear Color Key" => crate::core::timeline::Effect {
+                    id: format!("linearcolorkey_{}", len),
+                    name: "Linear Color Key".to_string(),
+                    effect_type: crate::core::timeline::EffectType::LinearColorKey {
+                        key_color: crate::core::property::Animatable::new_constant([0.0, 1.0, 0.0]),
+                        match_mode: crate::core::linear_color_key::ColorMatchMode::UsingRGB,
+                        tolerance: crate::core::property::Animatable::new_constant(15.0),
+                        softness: crate::core::property::Animatable::new_constant(10.0),
+                    },
+                    enabled: true,
+                },
+                "Channel Combiner" => crate::core::timeline::Effect {
+                    id: format!("channelcombiner_{}", len),
+                    name: "Channel Combiner".to_string(),
+                    effect_type: crate::core::timeline::EffectType::ChannelCombiner {
+                        from_channel: crate::core::channel_combiner::ChannelCombinerFrom::Luminance,
+                        to_target: crate::core::channel_combiner::ChannelCombinerTo::Alpha,
+                        invert: false,
+                    },
+                    enabled: true,
+                },
                 _ => return,
             };
             layer.effects.push(effect);
