@@ -45,7 +45,14 @@ impl PlanarSurface {
     }
 
     /// Extract the warped patch pixels from `src` into `patch` (w×h RGB).
-    pub fn extract_patch(&self, src: &[u8], src_w: u32, src_h: u32, patch_w: u32, patch_h: u32) -> Vec<[f32; 3]> {
+    pub fn extract_patch(
+        &self,
+        src: &[u8],
+        src_w: u32,
+        src_h: u32,
+        patch_w: u32,
+        patch_h: u32,
+    ) -> Vec<[f32; 3]> {
         let mut patch = vec![[0.0f32; 3]; (patch_w * patch_h) as usize];
         for py in 0..patch_h {
             for px in 0..patch_w {
@@ -65,7 +72,10 @@ impl PlanarSurface {
         let tr = self.corners[1];
         let bl = self.corners[2];
         let br = self.corners[3];
-        tl[0] * (1.0 - u) * (1.0 - v) + tr[0] * u * (1.0 - v) + bl[0] * (1.0 - u) * v + br[0] * u * v
+        tl[0] * (1.0 - u) * (1.0 - v)
+            + tr[0] * u * (1.0 - v)
+            + bl[0] * (1.0 - u) * v
+            + br[0] * u * v
     }
 
     fn bilerp_y(&self, u: f32, v: f32) -> f32 {
@@ -73,7 +83,10 @@ impl PlanarSurface {
         let tr = self.corners[1];
         let bl = self.corners[2];
         let br = self.corners[3];
-        tl[1] * (1.0 - u) * (1.0 - v) + tr[1] * u * (1.0 - v) + bl[1] * (1.0 - u) * v + br[1] * u * v
+        tl[1] * (1.0 - u) * (1.0 - v)
+            + tr[1] * u * (1.0 - v)
+            + bl[1] * (1.0 - u) * v
+            + br[1] * u * v
     }
 
     /// Apply an affine transform (2×3 matrix) to the corners.
@@ -163,17 +176,28 @@ pub fn compute_homography(src_pts: &[[f32; 2]], dst_pts: &[[f32; 2]]) -> Option<
     }
 
     Some([
-        [h[0] as f32 / h33 as f32, h[1] as f32 / h33 as f32, h[2] as f32 / h33 as f32],
-        [h[3] as f32 / h33 as f32, h[4] as f32 / h33 as f32, h[5] as f32 / h33 as f32],
+        [
+            h[0] as f32 / h33 as f32,
+            h[1] as f32 / h33 as f32,
+            h[2] as f32 / h33 as f32,
+        ],
+        [
+            h[3] as f32 / h33 as f32,
+            h[4] as f32 / h33 as f32,
+            h[5] as f32 / h33 as f32,
+        ],
         [h[6] as f32 / h33 as f32, h[7] as f32 / h33 as f32, 1.0],
     ])
 }
 
-pub fn track_planar(
-    config: &TrackConfig,
-    surface: &PlanarSurface,
-) -> Option<[f32; 6]> {
-    let ref_patch = surface.extract_patch(&config.ref_pixels, config.ref_w, config.ref_h, config.patch_size, config.patch_size);
+pub fn track_planar(config: &TrackConfig, surface: &PlanarSurface) -> Option<[f32; 6]> {
+    let ref_patch = surface.extract_patch(
+        &config.ref_pixels,
+        config.ref_w,
+        config.ref_h,
+        config.patch_size,
+        config.patch_size,
+    );
 
     // Search in a window around the reference surface
     let search_radius = config.patch_size as i32 / 4;
@@ -184,7 +208,13 @@ pub fn track_planar(
         for dx in -search_radius..=search_radius {
             let mut shifted = surface.clone();
             shifted.apply_affine([1.0, 0.0, 0.0, 1.0, dx as f32, dy as f32]);
-            let target_patch = shifted.extract_patch(&config.target_pixels, config.target_w, config.target_h, config.patch_size, config.patch_size);
+            let target_patch = shifted.extract_patch(
+                &config.target_pixels,
+                config.target_w,
+                config.target_h,
+                config.patch_size,
+                config.patch_size,
+            );
 
             let mut sad = 0.0f32;
             for (r, t) in ref_patch.iter().zip(target_patch.iter()) {
@@ -223,10 +253,14 @@ pub fn corner_pin_warp(
             let v = dy as f32 / dst_h as f32;
 
             // Map destination UV to source position
-            let sx = from[0][0] * (1.0 - u) * (1.0 - v) + from[1][0] * u * (1.0 - v)
-                + from[2][0] * (1.0 - u) * v + from[3][0] * u * v;
-            let sy = from[0][1] * (1.0 - u) * (1.0 - v) + from[1][1] * u * (1.0 - v)
-                + from[2][1] * (1.0 - u) * v + from[3][1] * u * v;
+            let sx = from[0][0] * (1.0 - u) * (1.0 - v)
+                + from[1][0] * u * (1.0 - v)
+                + from[2][0] * (1.0 - u) * v
+                + from[3][0] * u * v;
+            let sy = from[0][1] * (1.0 - u) * (1.0 - v)
+                + from[1][1] * u * (1.0 - v)
+                + from[2][1] * (1.0 - u) * v
+                + from[3][1] * u * v;
 
             if sx >= 0.0 && sx < src_w as f32 && sy >= 0.0 && sy < src_h as f32 {
                 let sample = PlanarSurface::bilinear_sample(src, src_w, src_h, sx, sy);
@@ -239,6 +273,42 @@ pub fn corner_pin_warp(
         }
     }
     out
+}
+
+/// Applies tracked planar surface sequence to a Layer's Corner Pin effect keyframes.
+pub fn apply_tracked_planar_to_layer_corner_pin(
+    layer: &mut crate::core::timeline::Layer,
+    tracked_surfaces: &[(u32, PlanarSurface)],
+) {
+    use crate::core::keyframe::{InterpolationType, Keyframe};
+    use crate::core::property::Animatable;
+    use crate::core::timeline::{Effect, EffectType};
+
+    let mut kf_tl = Vec::new();
+    let mut kf_tr = Vec::new();
+    let mut kf_bl = Vec::new();
+    let mut kf_br = Vec::new();
+
+    for (f, surf) in tracked_surfaces {
+        kf_tl.push(Keyframe::new(*f, surf.corners[0], InterpolationType::Linear));
+        kf_tr.push(Keyframe::new(*f, surf.corners[1], InterpolationType::Linear));
+        kf_bl.push(Keyframe::new(*f, surf.corners[2], InterpolationType::Linear));
+        kf_br.push(Keyframe::new(*f, surf.corners[3], InterpolationType::Linear));
+    }
+
+    let effect = Effect {
+        id: format!("corner_pin_{}", layer.effects.len() + 1),
+        name: "Corner Pin (Planar Tracked)".to_string(),
+        effect_type: EffectType::CornerPin {
+            top_left: Animatable::Animated(kf_tl),
+            top_right: Animatable::Animated(kf_tr),
+            bottom_left: Animatable::Animated(kf_bl),
+            bottom_right: Animatable::Animated(kf_br),
+        },
+        enabled: true,
+    };
+
+    layer.effects.push(effect);
 }
 
 #[cfg(test)]
@@ -297,8 +367,12 @@ mod tests {
         }
         let surf = PlanarSurface::new([[10.0, 10.0], [30.0, 10.0], [10.0, 30.0], [30.0, 30.0]]);
         let config = TrackConfig {
-            ref_pixels: ref_img, ref_w: 40, ref_h: 40,
-            target_pixels: target_img, target_w: 40, target_h: 40,
+            ref_pixels: ref_img,
+            ref_w: 40,
+            ref_h: 40,
+            target_pixels: target_img,
+            target_w: 40,
+            target_h: 40,
             patch_size: 8,
         };
         let result = track_planar(&config, &surf);
@@ -315,5 +389,23 @@ mod tests {
         // Center should be red
         let center = ((5 * 10 + 5) * 4) as usize;
         assert!(out[center] > 200);
+    }
+
+    #[test]
+    fn test_apply_tracked_planar_to_layer_corner_pin() {
+        let mut layer = crate::core::timeline::Layer::new_null("test_l".into(), "Test".into(), 60);
+        let surf0 = PlanarSurface::new([[0.0, 0.0], [100.0, 0.0], [0.0, 100.0], [100.0, 100.0]]);
+        let surf1 = PlanarSurface::new([[10.0, 10.0], [110.0, 10.0], [10.0, 110.0], [110.0, 110.0]]);
+        apply_tracked_planar_to_layer_corner_pin(&mut layer, &[(0, surf0), (1, surf1)]);
+
+        assert_eq!(layer.effects.len(), 1);
+        let eff = &layer.effects[0];
+        assert!(eff.name.contains("Corner Pin"));
+        if let crate::core::timeline::EffectType::CornerPin { top_left, .. } = &eff.effect_type {
+            assert_eq!(top_left.evaluate(0), [0.0, 0.0]);
+            assert_eq!(top_left.evaluate(1), [10.0, 10.0]);
+        } else {
+            panic!("Expected CornerPin effect");
+        }
     }
 }

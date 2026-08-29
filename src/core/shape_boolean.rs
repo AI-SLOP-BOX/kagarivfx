@@ -108,6 +108,11 @@ pub fn polygon_subtract(subject: &[[f32; 2]], clip: &[[f32; 2]]) -> Vec<Vec<[f32
         if point_in_polygon(subject[0][0], subject[0][1], clip) {
             return vec![];
         }
+        // Check if clip is an enclosed inner hole inside subject
+        let clip_is_inner_hole = clip.iter().all(|&pt| point_in_polygon(pt[0], pt[1], subject));
+        if clip_is_inner_hole {
+            return vec![subject.to_vec(), clip.to_vec()];
+        }
         return vec![subject.to_vec()];
     }
 
@@ -156,6 +161,12 @@ pub fn polygon_subtract(subject: &[[f32; 2]], clip: &[[f32; 2]]) -> Vec<Vec<[f32
                 remaining.push(pt);
             }
         }
+    }
+
+    // Check if clip is an enclosed inner hole (all clip vertices inside subject)
+    let clip_is_inner_hole = clip.iter().all(|&pt| point_in_polygon(pt[0], pt[1], subject));
+    if clip_is_inner_hole && remaining.len() == subject.len() {
+        return vec![subject.to_vec(), clip.to_vec()];
     }
 
     if remaining.len() >= 3 {
@@ -446,11 +457,25 @@ mod tests {
         let sq_b = vec![[5.0, 5.0], [15.0, 5.0], [15.0, 15.0], [5.0, 15.0]];
 
         let diff = polygon_subtract(&sq_a, &sq_b);
-        assert_eq!(diff.len(), 1);
-        let poly = &diff[0];
-        // Point in the subtracted inner hole must NOT be part of the outer remainder
-        assert!(point_in_polygon(2.0, 2.0, poly));
-        assert!(poly.len() >= 4);
+        assert_eq!(diff.len(), 2);
+        let outer_poly = &diff[0];
+        let hole_poly = &diff[1];
+        assert!(point_in_polygon(2.0, 2.0, outer_poly));
+        assert!(!point_in_polygon(2.0, 2.0, hole_poly));
+    }
+
+    #[test]
+    fn test_subtract_preserves_outer_region_but_removes_inner_region() {
+        let outer = vec![[0.0, 0.0], [20.0, 0.0], [20.0, 20.0], [0.0, 20.0]];
+        let cutout = vec![[5.0, 5.0], [15.0, 5.0], [15.0, 15.0], [5.0, 15.0]];
+        let result = polygon_subtract(&outer, &cutout);
+        let compound = CompoundShape2D {
+            contours: result,
+            fill_rule: FillRule::NonZero,
+        };
+
+        assert!(compound.contains_point(2.0, 2.0));
+        assert!(!compound.contains_point(10.0, 10.0));
     }
 
     #[test]
