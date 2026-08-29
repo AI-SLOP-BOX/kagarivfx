@@ -59,5 +59,20 @@ pub fn draw_camera_dof_hud(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
                 if ui.selectable_value(&mut bokeh_shape, 3, "8-Blade (Octagon)").clicked() { ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("dof_bokeh_shape"), 3)); crate::core::frame_cache::bump_version(); }
                 if ui.selectable_value(&mut bokeh_shape, 4, "Cat's Eye (Anamorphic)").clicked() { ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("dof_bokeh_shape"), 4)); crate::core::frame_cache::bump_version(); }
             });
+
+        // 4. F-Stop and Blur Level
+        ui.label(egui::RichText::new("F-Stop:").small());
+        let mut f_stop = ui.ctx().data(|d| d.get_temp::<f32>(egui::Id::new("dof_f_stop")).unwrap_or(2.8));
+        if ui.add(egui::DragValue::new(&mut f_stop).range(1.0..=22.0).speed(0.1).prefix("f/")).changed() {
+            ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("dof_f_stop"), f_stop));
+            crate::core::frame_cache::bump_version();
+        }
+
+        ui.label(egui::RichText::new("Blur Level:").small());
+        let mut blur_level = ui.ctx().data(|d| d.get_temp::<f32>(egui::Id::new("dof_blur_level")).unwrap_or(100.0));
+        if ui.add(egui::DragValue::new(&mut blur_level).range(0.0..=300.0).speed(1.0).suffix("%")).changed() {
+            ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("dof_blur_level"), blur_level));
+            crate::core::frame_cache::bump_version();
+        }
     });
 }
