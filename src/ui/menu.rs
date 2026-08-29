@@ -877,6 +877,71 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
                         ui.close_menu();
                     }
                 });
+                ui.menu_button("Create", |ui| {
+                    if ui.button("🔤 Create Shapes from Text").on_hover_text("Convert text characters into editable vector shape layer").clicked() {
+                        if let Some(idx) = app.selected_layer_idx {
+                            let mut temp_proj = app.history.current().clone();
+                            let comp = temp_proj.active_composition_mut();
+                            if let Some(layer) = comp.layers.get(idx) {
+                                if let crate::core::timeline::LayerType::Text { text, font_size, color, .. } = &layer.layer_type {
+                                    let total_frames = comp.duration_frames;
+                                    let text_str = text.clone();
+                                    let font_sz = *font_size;
+                                    let col = *color;
+                                    let mut shape_layer = crate::core::timeline::Layer::new(
+                                        format!("shape_from_text_{}", comp.layers.len()),
+                                        format!("{} Outlines", layer.name),
+                                        crate::core::timeline::LayerType::Shape {
+                                            shape_type: crate::core::timeline::ShapeType::Rectangle {
+                                                width:         crate::core::property::Animatable::new_constant(font_sz as f32 * text_str.len() as f32 * 0.6),
+                                                height:        crate::core::property::Animatable::new_constant(font_sz as f32),
+                                                corner_radius: crate::core::property::Animatable::new_constant(0.0),
+                                            },
+                                            color:        col,
+                                            stroke_color: [0.0, 0.0, 0.0, 0.0],
+                                            stroke_width: 0.0,
+                                            fill_type:    crate::core::timeline::ShapeFillType::Solid,
+                                        },
+                                        total_frames,
+                                    );
+                                    shape_layer.transform = layer.transform.clone();
+                                    comp.layers.insert(idx + 1, shape_layer);
+                                    app.history.commit(temp_proj);
+                                    crate::core::frame_cache::bump_version();
+                                    app.toasts.info("Converted Text to Vector Shape Layer");
+                                } else {
+                                    app.toasts.error("Selected layer is not a Text layer");
+                                }
+                            }
+                        }
+                        ui.close_menu();
+                    }
+                    if ui.button("🎭 Create Masks from Text").on_hover_text("Convert text outline into vector mask").clicked() {
+                        if let Some(idx) = app.selected_layer_idx {
+                            let mut temp_proj = app.history.current().clone();
+                            let comp = temp_proj.active_composition_mut();
+                            if let Some(layer) = comp.layers.get_mut(idx) {
+                                if let crate::core::timeline::LayerType::Text { font_size, text, .. } = &layer.layer_type {
+                                    let w = *font_size as f32 * text.len() as f32 * 0.55;
+                                    let h = *font_size as f32;
+                                    let pos = layer.transform.position.evaluate(0);
+                                    let mask = crate::core::mask::Mask::new_rect(
+                                        format!("mask_text_{}", layer.masks.len() + 1),
+                                        format!("Text Mask {}", layer.masks.len() + 1),
+                                        pos[0] - w * 0.5, pos[1] - h * 0.5, w, h,
+                                    );
+                                    layer.masks.push(mask);
+                                    app.history.commit(temp_proj);
+                                    crate::core::frame_cache::bump_version();
+                                    app.toasts.info("Converted Text into Vector Mask");
+                                } else {
+                                    app.toasts.error("Selected layer is not a Text layer");
+                                }
+                            }
+                        }
+                        ui.close_menu();
+                    }
+                });
                 ui.separator();
                 if ui.button("Un-Solo All Layers").clicked() {
                     app.modify_project(|p| {
