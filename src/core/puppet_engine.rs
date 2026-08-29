@@ -151,6 +151,74 @@ pub fn deform_point_mls(
     result
 }
 
+/// Applies Puppet Mesh Warp to an RGBA pixel buffer using inverse MLS mapping and bilinear sampling.
+pub fn apply_puppet_mesh_warp(
+    src: &[u8],
+    width: u32,
+    height: u32,
+    pins: &[PuppetPin],
+) -> Vec<u8> {
+    if pins.is_empty() || width == 0 || height == 0 || src.len() != (width * height * 4) as usize {
+        return src.to_vec();
+    }
+
+    // Inverted pins: mapping from deformed space (current) back to source space (rest)
+    let inv_pins: Vec<PuppetPin> = pins
+        .iter()
+        .map(|p| PuppetPin {
+            id: p.id.clone(),
+            pin_type: p.pin_type,
+            rest_position: p.current_position,
+            current_position: p.rest_position,
+            extent: p.extent,
+            stiffness_or_depth: p.stiffness_or_depth,
+        })
+        .collect();
+
+    let mut dst = vec![0u8; src.len()];
+
+    let sample_bilinear = |x: f32, y: f32| -> [u8; 4] {
+        if x < 0.0 || x >= (width - 1) as f32 || y < 0.0 || y >= (height - 1) as f32 {
+            let cx = (x.round() as i32).clamp(0, width as i32 - 1) as u32;
+            let cy = (y.round() as i32).clamp(0, height as i32 - 1) as u32;
+            let idx = ((cy * width + cx) * 4) as usize;
+            return [src[idx], src[idx + 1], src[idx + 2], src[idx + 3]];
+        }
+
+        let x0 = x.floor() as u32;
+        let y0 = y.floor() as u32;
+        let x1 = x0 + 1;
+        let y1 = y0 + 1;
+
+        let fx = x - x0 as f32;
+        let fy = y - y0 as f32;
+
+        let i00 = ((y0 * width + x0) * 4) as usize;
+        let i10 = ((y0 * width + x1) * 4) as usize;
+        let i01 = ((y1 * width + x0) * 4) as usize;
+        let i11 = ((y1 * width + x1) * 4) as usize;
+
+        let mut out = [0u8; 4];
+        for c in 0..4 {
+            let top = src[i00 + c] as f32 * (1.0 - fx) + src[i10 + c] as f32 * fx;
+            let bot = src[i01 + c] as f32 * (1.0 - fx) + src[i11 + c] as f32 * fx;
+            out[c] = (top * (1.0 - fy) + bot * fy).clamp(0.0, 255.0) as u8;
+        }
+        out
+    };
+
+    for y in 0..height {
+        for x in 0..width {
+            let src_pt = deform_point_mls([x as f32, y as f32], &inv_pins);
+            let pixel = sample_bilinear(src_pt[0], src_pt[1]);
+            let idx = ((y * width + x) * 4) as usize;
+            dst[idx..idx + 4].copy_from_slice(&pixel);
+        }
+    }
+
+    dst
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

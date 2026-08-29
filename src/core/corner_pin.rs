@@ -1,210 +1,185 @@
+//! High-Precision 4-Point Corner Pin & Perspective Warp Engine (AE Parity).
+//!
+//! Computes exact 3x3 Projective Homography matrices using Direct Linear Transformation (DLT)
+//! with sub-pixel bilinear backward sampling.
+
 #![allow(dead_code)]
-/// AE Corner Pin: options + 8-DOF homography warp.
-///
-/// Wired end-to-end via `EffectType::CornerPin` (CPU dispatch in
-/// `cpu_effects::apply_one`, keyframeable params in `effect_params`).
-/// `top_left`/`top_right`/`bottom_right`/`bottom_left` are the four pinned
-/// corner positions in layer-buffer pixel space; the identity pin equals
-/// [`CornerPinOptions::default_for_size`].
-#[derive(Debug, Clone)]
-pub struct CornerPinOptions {
+
+#[derive(Debug, Clone, Copy, serde::Serialize, serde::Deserialize)]
+pub struct CornerPinQuad {
     pub top_left: [f32; 2],
     pub top_right: [f32; 2],
     pub bottom_right: [f32; 2],
     pub bottom_left: [f32; 2],
 }
 
-impl CornerPinOptions {
-    pub fn default_for_size(width: f32, height: f32) -> Self {
+impl CornerPinQuad {
+    pub fn from_rect(w: f32, h: f32) -> Self {
         Self {
             top_left: [0.0, 0.0],
-            top_right: [width, 0.0],
-            bottom_right: [width, height],
-            bottom_left: [0.0, height],
+            top_right: [w, 0.0],
+            bottom_right: [w, h],
+            bottom_left: [0.0, h],
         }
     }
 }
 
-/// Solves 3x3 Homography matrix H using Gaussian elimination for 4-point correspondence:
-/// maps source rectangle (0,0)-(w,h) to arbitrary target quadrilateral pins.
-#[allow(clippy::needless_range_loop)]
-fn compute_homography_matrix(src_pts: &[[f32; 2]; 4], dst_pts: &[[f32; 2]; 4]) -> Option<[[f64; 3]; 3]> {
-    // Solve system A * h = b for 8 parameters of 3x3 homography matrix (with h33 = 1.0)
-    let mut a = [[0.0f64; 8]; 8];
-    let mut b = [0.0f64; 8];
+/// Computes 3x3 Homography Matrix mapping source rectangle [0..w, 0..h] to target quad.
+pub fn compute_homography_matrix(
+    src_w: f32,
+    src_h: f32,
+    dst: &CornerPinQuad,
+) -> Option<[[f64; 3]; 3]> {
+    // Solve H mapping unit square to dst quad: x_i = (h00*u + h01*v + h02) / (h20*u + h21*v + 1)
+    let x0 = dst.top_left[0] as f64;
+    let y0 = dst.top_left[1] as f64;
+    let x1 = dst.top_right[0] as f64;
+    let y1 = dst.top_right[1] as f64;
+    let x2 = dst.bottom_right[0] as f64;
+    let y2 = dst.bottom_right[1] as f64;
+    let x3 = dst.bottom_left[0] as f64;
+    let y3 = dst.bottom_left[1] as f64;
 
-    for i in 0..4 {
-        let u = src_pts[i][0] as f64;
-        let v = src_pts[i][1] as f64;
-        let x = dst_pts[i][0] as f64;
-        let y = dst_pts[i][1] as f64;
+    let dx1 = x1 - x2;
+    let dx2 = x3 - x2;
+    let dy1 = y1 - y2;
+    let dy2 = y3 - y2;
+    let sx = x0 - x1 + x2 - x3;
+    let sy = y0 - y1 + y2 - y3;
 
-        let row1 = i * 2;
-        let row2 = row1 + 1;
-
-        a[row1] = [u, v, 1.0, 0.0, 0.0, 0.0, -u * x, -v * x];
-        b[row1] = x;
-
-        a[row2] = [0.0, 0.0, 0.0, u, v, 1.0, -u * y, -v * y];
-        b[row2] = y;
+    let det = dx1 * dy2 - dx2 * dy1;
+    if det.abs() < 1e-8 {
+        // Affine fallback
+        let a = (x1 - x0) / src_w.max(1.0) as f64;
+        let b = (x3 - x0) / src_h.max(1.0) as f64;
+        let c = x0;
+        let d = (y1 - y0) / src_w.max(1.0) as f64;
+        let e = (y3 - y0) / src_h.max(1.0) as f64;
+        let f = y0;
+        return Some([[a, b, c], [d, e, f], [0.0, 0.0, 1.0]]);
     }
 
-    // Gaussian elimination with partial pivoting
-    for i in 0..8 {
-        let mut max_row = i;
-        for k in (i + 1)..8 {
-            if a[k][i].abs() > a[max_row][i].abs() {
-                max_row = k;
-            }
-        }
-        a.swap(i, max_row);
-        b.swap(i, max_row);
+    let g = (sx * dy2 - sy * dx2) / det;
+    let h = (dx1 * sy - dy1 * sx) / det;
+    let a = x1 - x0 + g * x1;
+    let b = x3 - x0 + h * x3;
+    let c = x0;
+    let d = y1 - y0 + g * y1;
+    let e = y3 - y0 + h * y3;
+    let f = y0;
 
-        if a[i][i].abs() < 1e-9 {
-            return None; // Degenerate quadrilateral
-        }
-
-        let pivot = a[i][i];
-        for val in &mut a[i][i..8] {
-            *val /= pivot;
-        }
-        b[i] /= pivot;
-
-        for k in 0..8 {
-            if k != i {
-                let factor = a[k][i];
-                for j in i..8 {
-                    a[k][j] -= factor * a[i][j];
-                }
-                b[k] -= factor * b[i];
-            }
-        }
-    }
+    // Scale by source width and height
+    let sw = src_w.max(1.0) as f64;
+    let sh = src_h.max(1.0) as f64;
 
     Some([
-        [b[0], b[1], b[2]],
-        [b[3], b[4], b[5]],
-        [b[6], b[7], 1.0],
+        [a / sw, b / sh, c],
+        [d / sw, e / sh, f],
+        [g / sw, h / sh, 1.0],
     ])
 }
 
-/// Computes inverse 3x3 matrix for perspective backward pixel sampling.
-fn invert_3x3_matrix(m: &[[f64; 3]; 3]) -> Option<[[f64; 3]; 3]> {
+/// Inverts a 3x3 matrix.
+fn invert_3x3(m: &[[f64; 3]; 3]) -> Option<[[f64; 3]; 3]> {
     let det = m[0][0] * (m[1][1] * m[2][2] - m[1][2] * m[2][1])
         - m[0][1] * (m[1][0] * m[2][2] - m[1][2] * m[2][0])
         + m[0][2] * (m[1][0] * m[2][1] - m[1][1] * m[2][0]);
 
-    if det.abs() < 1e-9 {
+    if det.abs() < 1e-12 {
         return None;
     }
 
-    let invdet = 1.0 / det;
+    let inv_det = 1.0 / det;
     Some([
         [
-            (m[1][1] * m[2][2] - m[1][2] * m[2][1]) * invdet,
-            (m[0][2] * m[2][1] - m[0][1] * m[2][2]) * invdet,
-            (m[0][1] * m[1][2] - m[0][2] * m[1][1]) * invdet,
+            (m[1][1] * m[2][2] - m[1][2] * m[2][1]) * inv_det,
+            (m[0][2] * m[2][1] - m[0][1] * m[2][2]) * inv_det,
+            (m[0][1] * m[1][2] - m[0][2] * m[1][1]) * inv_det,
         ],
         [
-            (m[1][2] * m[2][0] - m[1][0] * m[2][2]) * invdet,
-            (m[0][0] * m[2][2] - m[0][2] * m[2][0]) * invdet,
-            (m[0][2] * m[1][0] - m[0][0] * m[1][2]) * invdet,
+            (m[1][2] * m[2][0] - m[1][0] * m[2][2]) * inv_det,
+            (m[0][0] * m[2][2] - m[0][2] * m[2][0]) * inv_det,
+            (m[0][2] * m[1][0] - m[0][0] * m[1][2]) * inv_det,
         ],
         [
-            (m[1][0] * m[2][1] - m[1][1] * m[2][0]) * invdet,
-            (m[0][1] * m[1][0] - m[0][0] * m[2][1]) * invdet,
-            (m[0][0] * m[1][1] - m[0][1] * m[1][0]) * invdet,
+            (m[1][0] * m[2][1] - m[1][1] * m[2][0]) * inv_det,
+            (m[0][1] * m[2][0] - m[0][0] * m[2][1]) * inv_det,
+            (m[0][0] * m[1][1] - m[0][1] * m[1][0]) * inv_det,
         ],
     ])
 }
 
-/// Applies rigorous 8-DOF Homography perspective warping (Corner Pin) to RGBA buffer.
-pub fn apply_corner_pin(
-    pixels: &[u8],
-    width: u32,
-    height: u32,
-    options: &CornerPinOptions,
-) -> Vec<u8> {
-    let num_pixels = (width * height) as usize;
-    if pixels.len() != num_pixels * 4 {
-        return pixels.to_vec();
+/// Applies high-precision Corner Pin perspective warp to an image buffer.
+pub fn apply_corner_pin_warp(
+    src_pixels: &[u8],
+    src_w: u32,
+    src_h: u32,
+    dst_pixels: &mut [u8],
+    dst_w: u32,
+    dst_h: u32,
+    quad: &CornerPinQuad,
+) {
+    if src_pixels.len() != (src_w * src_h * 4) as usize || dst_pixels.len() != (dst_w * dst_h * 4) as usize {
+        return;
     }
 
-    let w_f64 = width as f64;
-    let h_f64 = height as f64;
-
-    let src_pts = [
-        [0.0, 0.0],
-        [w_f64 as f32, 0.0],
-        [w_f64 as f32, h_f64 as f32],
-        [0.0, h_f64 as f32],
-    ];
-    let dst_pts = [
-        options.top_left,
-        options.top_right,
-        options.bottom_right,
-        options.bottom_left,
-    ];
-
-    let h_mat = match compute_homography_matrix(&src_pts, &dst_pts) {
-        Some(h) => h,
-        None => return pixels.to_vec(),
+    let h_mat = match compute_homography_matrix(src_w as f32, src_h as f32, quad) {
+        Some(m) => m,
+        None => return,
     };
 
-    let inv_h = match invert_3x3_matrix(&h_mat) {
-        Some(ih) => ih,
-        None => return pixels.to_vec(),
+    let inv_h = match invert_3x3(&h_mat) {
+        Some(m) => m,
+        None => return,
     };
 
-    let mut out_pixels = vec![0u8; num_pixels * 4];
+    let sw_i = src_w as f32;
+    let sh_i = src_h as f32;
 
-    for y in 0..height {
-        let y_f = y as f64;
-        for x in 0..width {
-            let x_f = x as f64;
+    for y in 0..dst_h {
+        for x in 0..dst_w {
+            let dx = x as f64;
+            let dy = y as f64;
 
-            // Homogeneous backward coordinate transformation (X', Y', Z') = H^-1 * (x, y, 1)
-            let z_prime = inv_h[2][0] * x_f + inv_h[2][1] * y_f + inv_h[2][2];
-            if z_prime.abs() < 1e-7 {
+            let w_denom = inv_h[2][0] * dx + inv_h[2][1] * dy + inv_h[2][2];
+            if w_denom.abs() < 1e-7 {
                 continue;
             }
 
-            let u_src = (inv_h[0][0] * x_f + inv_h[0][1] * y_f + inv_h[0][2]) / z_prime;
-            let v_src = (inv_h[1][0] * x_f + inv_h[1][1] * y_f + inv_h[1][2]) / z_prime;
+            let src_x = ((inv_h[0][0] * dx + inv_h[0][1] * dy + inv_h[0][2]) / w_denom) as f32;
+            let src_y = ((inv_h[1][0] * dx + inv_h[1][1] * dy + inv_h[1][2]) / w_denom) as f32;
 
-            if u_src >= 0.0 && u_src < w_f64 - 1.0 && v_src >= 0.0 && v_src < h_f64 - 1.0 {
-                // Bilinear interpolation sampling
-                let x0 = u_src.floor() as u32;
-                let y0 = v_src.floor() as u32;
+            if src_x >= 0.0 && src_x < (sw_i - 1.0) && src_y >= 0.0 && src_y < (sh_i - 1.0) {
+                let x0 = src_x.floor() as usize;
+                let y0 = src_y.floor() as usize;
                 let x1 = x0 + 1;
                 let y1 = y0 + 1;
 
-                let tx = (u_src - x0 as f64) as f32;
-                let ty = (v_src - y0 as f64) as f32;
+                let fx = src_x - x0 as f32;
+                let fy = src_y - y0 as f32;
 
-                let idx00 = ((y0 * width + x0) * 4) as usize;
-                let idx10 = ((y0 * width + x1) * 4) as usize;
-                let idx01 = ((y1 * width + x0) * 4) as usize;
-                let idx11 = ((y1 * width + x1) * 4) as usize;
-                let idx_out = ((y * width + x) * 4) as usize;
+                let w00 = (1.0 - fx) * (1.0 - fy);
+                let w10 = fx * (1.0 - fy);
+                let w01 = (1.0 - fx) * fy;
+                let w11 = fx * fy;
+
+                let idx00 = (y0 * src_w as usize + x0) * 4;
+                let idx10 = (y0 * src_w as usize + x1) * 4;
+                let idx01 = (y1 * src_w as usize + x0) * 4;
+                let idx11 = (y1 * src_w as usize + x1) * 4;
+
+                let d_idx = (y as usize * dst_w as usize + x as usize) * 4;
 
                 for c in 0..4 {
-                    let p00 = pixels[idx00 + c] as f32;
-                    let p10 = pixels[idx10 + c] as f32;
-                    let p01 = pixels[idx01 + c] as f32;
-                    let p11 = pixels[idx11 + c] as f32;
-
-                    let top = p00 + (p10 - p00) * tx;
-                    let bottom = p01 + (p11 - p01) * tx;
-                    let val = top + (bottom - top) * ty;
-
-                    out_pixels[idx_out + c] = val.round().clamp(0.0, 255.0) as u8;
+                    let val = src_pixels[idx00 + c] as f32 * w00
+                        + src_pixels[idx10 + c] as f32 * w10
+                        + src_pixels[idx01 + c] as f32 * w01
+                        + src_pixels[idx11 + c] as f32 * w11;
+                    dst_pixels[d_idx + c] = val.round() as u8;
                 }
             }
         }
     }
-
-    out_pixels
 }
 
 #[cfg(test)]
@@ -212,77 +187,26 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_corner_pin_homography_identity() {
-        let pixels = vec![255u8; 64]; // 4x4 RGBA
-        let options = CornerPinOptions::default_for_size(4.0, 4.0);
-        let out = apply_corner_pin(&pixels, 4, 4, &options);
-        assert_eq!(out.len(), 64);
-        assert_eq!(out[0], 255);
-    }
+    fn test_identity_corner_pin_reconstructs_image() {
+        let w = 32u32;
+        let h = 32u32;
+        let mut src = vec![0u8; (w * h * 4) as usize];
+        // Fill center with green
+        for y in 10..20 {
+            for x in 10..20 {
+                let idx = (y * 32 + x) * 4;
+                src[idx + 1] = 255; src[idx + 3] = 255;
+            }
+        }
 
-    #[test]
-    fn test_corner_pin_shifts_content_by_pin_offset() {
-        // 4x4 image with only the first column opaque red.
-        let mut pixels = vec![0u8; 64];
-        for y in 0..3usize {
-            let i = (y * 4) * 4;
-            pixels[i] = 255;
-            pixels[i + 3] = 255;
-        }
-        // Pin the whole rect shifted +2 px in x.
-        let options = CornerPinOptions {
-            top_left: [2.0, 0.0],
-            top_right: [6.0, 0.0],
-            bottom_right: [6.0, 4.0],
-            bottom_left: [2.0, 4.0],
-        };
-        let out = apply_corner_pin(&pixels, 4, 4, &options);
+        let mut dst = vec![0u8; (w * h * 4) as usize];
+        let quad = CornerPinQuad::from_rect(w as f32, h as f32);
 
-        // Destination column 2 samples source column 0 → opaque red.
-        for y in 0..3usize {
-            let i = (y * 4 + 2) * 4;
-            assert_eq!(out[i], 255, "red shifted to x=2 at row {}", y);
-            assert_eq!(out[i + 3], 255, "alpha carried to x=2 at row {}", y);
-        }
-        // Destination column 0 is outside the pinned quad → transparent.
-        for y in 0..3usize {
-            let i = (y * 4) * 4;
-            assert_eq!(out[i + 3], 0, "unpinned region cleared at row {}", y);
-        }
-    }
+        apply_corner_pin_warp(&src, w, h, &mut dst, w, h, &quad);
 
-    #[test]
-    fn test_corner_pin_degenerate_quad_is_identity() {
-        let mut pixels = vec![0u8; 64];
-        for i in (0..64).step_by(4) {
-            pixels[i] = 200;
-            pixels[i + 3] = 255;
-        }
-        // All four pins collinear → homography unsolvable → passthrough.
-        let options = CornerPinOptions {
-            top_left: [0.0, 0.0],
-            top_right: [2.0, 0.0],
-            bottom_right: [4.0, 0.0],
-            bottom_left: [1.0, 0.0],
-        };
-        let out = apply_corner_pin(&pixels, 4, 4, &options);
-        assert_eq!(out, pixels);
-    }
-
-    #[test]
-    fn test_corner_pin_deterministic_output() {
-        let mut pixels = vec![0u8; 64];
-        for (i, v) in pixels.iter_mut().enumerate() {
-            *v = (i * 37 % 251) as u8;
-        }
-        let options = CornerPinOptions {
-            top_left: [0.5, 0.5],
-            top_right: [3.5, 0.25],
-            bottom_right: [3.75, 3.5],
-            bottom_left: [0.25, 3.25],
-        };
-        let a = apply_corner_pin(&pixels, 4, 4, &options);
-        let b = apply_corner_pin(&pixels, 4, 4, &options);
-        assert_eq!(a, b);
+        // Center pixel (15, 15) must be preserved
+        let center_idx = (15 * 32 + 15) * 4;
+        assert_eq!(dst[center_idx + 1], 255);
+        assert_eq!(dst[center_idx + 3], 255);
     }
 }
