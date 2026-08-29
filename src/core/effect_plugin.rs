@@ -303,6 +303,7 @@ impl RenderEffectPlugin for EnumEffectPlugin {
             EffectType::Echo { .. } => "Echo",
             EffectType::FindEdges { .. } => "Find Edges",
             EffectType::Transform { .. } => "Transform",
+            EffectType::CameraLensBlur { .. } => "Camera Lens Blur",
         }
     }
 
@@ -425,6 +426,7 @@ impl RenderEffectPlugin for EnumEffectPlugin {
             EffectType::Echo { .. } => "echo",
             EffectType::FindEdges { .. } => "find_edges",
             EffectType::Transform { .. } => "transform",
+            EffectType::CameraLensBlur { .. } => "camera_lens_blur",
         }
     }
 

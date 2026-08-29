@@ -758,6 +758,18 @@ fn apply_one_ctx(
             let transformed = crate::core::transform_effect::apply_transform_effect(pixels, width, height, &params);
             pixels.copy_from_slice(&transformed);
         }
+        EffectType::CameraLensBlur { blur_radius, iris_blades, iris_rotation_deg, iris_roundness, highlight_gain, highlight_threshold } => {
+            let params = crate::core::camera_lens_blur::CameraLensBlurParams {
+                blur_radius: blur_radius.evaluate(frame),
+                iris_blades: *iris_blades,
+                iris_rotation_deg: iris_rotation_deg.evaluate(frame),
+                iris_roundness: iris_roundness.evaluate(frame),
+                highlight_gain: highlight_gain.evaluate(frame),
+                highlight_threshold: highlight_threshold.evaluate(frame),
+            };
+            let blurred = crate::core::camera_lens_blur::apply_camera_lens_blur(pixels, width, height, &params);
+            pixels.copy_from_slice(&blurred);
+        }
         EffectType::TiltShift { focus_y, focus_height, max_blur } => {
             use crate::core::ae_effects_pack_v19::apply_tilt_shift;
             apply_tilt_shift(

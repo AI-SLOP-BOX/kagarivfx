@@ -1021,6 +1021,10 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
                         apply_effect_by_name(app, "Sharpen");
                         ui.close_menu();
                     }
+                    if ui.button("Camera Lens Blur").on_hover_text("Optical camera aperture defocus with iris polygonal blade shapes and highlight gain").clicked() {
+                        apply_effect_by_name(app, "Camera Lens Blur");
+                        ui.close_menu();
+                    }
                 });
                 ui.menu_button("Color Correction", |ui| {
                     if ui.button("Color Tint").clicked() {
@@ -1761,6 +1765,19 @@ fn apply_effect_by_name(app: &mut crate::AfterEffectsApp, effect_name: &str) {
                             skew_axis_deg: crate::core::property::Animatable::new_constant(0.0),
                             rotation_deg: crate::core::property::Animatable::new_constant(0.0),
                             opacity: crate::core::property::Animatable::new_constant(100.0),
+                        }, enabled: true,
+                    }
+                }
+                "Camera Lens Blur" => {
+                    crate::core::timeline::Effect {
+                        id: format!("cameralensblur_{}", len), name: "Camera Lens Blur".to_string(),
+                        effect_type: crate::core::timeline::EffectType::CameraLensBlur {
+                            blur_radius: crate::core::property::Animatable::new_constant(15.0),
+                            iris_blades: 6,
+                            iris_rotation_deg: crate::core::property::Animatable::new_constant(0.0),
+                            iris_roundness: crate::core::property::Animatable::new_constant(0.0),
+                            highlight_gain: crate::core::property::Animatable::new_constant(1.5),
+                            highlight_threshold: crate::core::property::Animatable::new_constant(0.8),
                         }, enabled: true,
                     }
                 }

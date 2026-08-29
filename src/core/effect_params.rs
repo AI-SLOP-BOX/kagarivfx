@@ -296,6 +296,13 @@ impl EffectType {
                 push!("Rotation", rotation_deg, Scalar);
                 push!("Opacity", opacity, Scalar);
             }
+            EffectType::CameraLensBlur { blur_radius, iris_rotation_deg, iris_roundness, highlight_gain, highlight_threshold, .. } => {
+                push!("Blur Radius", blur_radius, Scalar);
+                push!("Iris Rotation", iris_rotation_deg, Scalar);
+                push!("Iris Roundness", iris_roundness, Scalar);
+                push!("Highlight Gain", highlight_gain, Scalar);
+                push!("Highlight Threshold", highlight_threshold, Scalar);
+            }
             // ── Newly registered effects (session 3) ──
             EffectType::BevelAlpha { depth, light_angle_deg } => {
                 push!("Depth", depth, Scalar);

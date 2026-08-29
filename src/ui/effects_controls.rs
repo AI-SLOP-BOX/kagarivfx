@@ -2483,6 +2483,18 @@ fn fs_main(@location(0) uv: vec2<f32>) -> @location(0) vec4<f32> {
             draw_prop(ui, current_frame, project_changed, next_frame, "Rotation", rotation_deg, |ui, v| { ui.add(egui::Slider::new(v, -3600.0..=3600.0).suffix("°")); });
             draw_prop(ui, current_frame, project_changed, next_frame, "Opacity", opacity, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=100.0).suffix("%")); });
         }
+        EffectType::CameraLensBlur { blur_radius, num_blades, roundness, aspect_ratio, rotation_deg, gain, threshold } => {
+            ui.label("📷 Camera Lens Blur");
+                if ui.add(egui::Slider::new(&mut b_i32, 3..=16)).changed() {
+                    *iris_blades = b_i32.clamp(3, 16) as u32;
+                    *project_changed = true;
+                }
+            });
+            draw_prop(ui, current_frame, project_changed, next_frame, "Iris Rotation", iris_rotation_deg, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=360.0).suffix("°")); });
+            draw_prop(ui, current_frame, project_changed, next_frame, "Iris Roundness", iris_roundness, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=100.0).suffix("%")); });
+            draw_prop(ui, current_frame, project_changed, next_frame, "Highlight Gain", highlight_gain, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=5.0)); });
+            draw_prop(ui, current_frame, project_changed, next_frame, "Highlight Threshold", highlight_threshold, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=1.0)); });
+        }
     }
 }
 

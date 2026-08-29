@@ -1204,6 +1204,15 @@ pub enum EffectType {
         rotation_deg: Animatable<f32>,
         opacity: Animatable<f32>,
     },
+    /// Camera Lens Blur (AE Parity - Blur & Sharpen > Camera Lens Blur).
+    CameraLensBlur {
+        blur_radius: Animatable<f32>,
+        iris_blades: u32,
+        iris_rotation_deg: Animatable<f32>,
+        iris_roundness: Animatable<f32>,
+        highlight_gain: Animatable<f32>,
+        highlight_threshold: Animatable<f32>,
+    },
     /// Tilt-shift miniature focus band.
     TiltShift {
         focus_y: Animatable<f32>,
