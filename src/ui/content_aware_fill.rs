@@ -75,10 +75,20 @@ pub fn draw_content_aware_fill(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
         // Write the synthesized frame as a PNG via the image crate
         let out_path = std::env::temp_dir().join(format!("caf_frame_{}.png", frame_idx));
         match image::save_buffer(&out_path, &pixels, w, h, image::ColorType::Rgba8) {
-            Ok(_) => app.toasts.info(format!(
-                "Fill generated: {} (add it as an image layer to composite)",
-                out_path.display()
-            )),
+            Ok(_) => {
+                let mut temp_proj = app.history.current().clone();
+                let comp_mut = temp_proj.active_composition_mut();
+                let new_layer = crate::core::timeline::Layer::new(
+                    format!("fill_layer_{}", frame_idx),
+                    format!("Fill Layer [CAF] (Frame {})", frame_idx),
+                    crate::core::timeline::LayerType::Image { path: out_path.to_string_lossy().to_string() },
+                    comp_mut.duration_frames,
+                );
+                comp_mut.layers.insert(layer_idx, new_layer);
+                app.history.commit(temp_proj);
+                crate::core::frame_cache::bump_version();
+                app.toasts.info(format!("Synthesized & inserted Fill Layer for frame {}", frame_idx));
+            }
             Err(e) => app.toasts.error(format!("Failed to write fill: {}", e)),
         }
     }
