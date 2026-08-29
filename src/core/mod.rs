@@ -156,3 +156,7 @@ pub mod temporal_denoise;
 pub mod text_animator_advanced;
 pub mod vr_effects;
 pub mod dynamic_link_disk_cache;
+pub mod advanced_particles_3d;
+pub mod lightning_beam_engine;
+pub mod bend_warp_engine;
+pub mod advanced_motion_blur;

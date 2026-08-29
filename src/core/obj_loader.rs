@@ -168,9 +168,9 @@ pub fn parse_obj_str(content: &str) -> Result<Mesh3D, String> {
 
         match tag {
             "v" => {
-                let x: f32 = parts.next().and_then(|s| s.parse().ok()).unwrap_or(0.0);
-                let y: f32 = parts.next().and_then(|s| s.parse().ok()).unwrap_or(0.0);
-                let z: f32 = parts.next().and_then(|s| s.parse().ok()).unwrap_or(0.0);
+                let x: f32 = parts.next().ok_or_else(|| "missing vertex x".to_string())?.parse().map_err(|_| "invalid vertex coordinate".to_string())?;
+                let y: f32 = parts.next().ok_or_else(|| "missing vertex y".to_string())?.parse().map_err(|_| "invalid vertex coordinate".to_string())?;
+                let z: f32 = parts.next().ok_or_else(|| "missing vertex z".to_string())?.parse().map_err(|_| "invalid vertex coordinate".to_string())?;
                 raw_positions.push([x, y, z]);
             }
             "vt" => {
@@ -318,5 +318,16 @@ f 1 2 3
         let (t, tri) = hit.unwrap();
         assert!((t - 5.0).abs() < 1e-3);
         assert_eq!(tri, 0);
+    }
+
+    #[test]
+    fn test_obj_negative_indices_reference_previous_vertices() {
+        let mesh = parse_obj_str("v 0 0 0\nv 1 0 0\nv 0 1 0\nf -3 -2 -1\n").unwrap();
+        assert_eq!(mesh.indices, vec![0, 1, 2]);
+    }
+
+    #[test]
+    fn test_obj_invalid_face_index_is_rejected() {
+        assert!(parse_obj_str("v 0 0 0\nv 1 0 0\nv 0 1 0\nf 1 2 9\n").is_err());
     }
 }
