@@ -1164,6 +1164,15 @@ pub enum EffectType {
         mirror_edges: bool,
         phase: Animatable<f32>,
     },
+    /// CC Page Turn 3D cylindrical paper curl & peel (AE Parity).
+    PageTurn {
+        fold_position: Animatable<[f32; 2]>,
+        fold_radius: Animatable<f32>,
+        fold_direction_deg: Animatable<f32>,
+        light_direction_deg: Animatable<f32>,
+        back_opacity: Animatable<f32>,
+        back_color: Animatable<[f32; 4]>,
+    },
     /// Tilt-shift miniature focus band.
     TiltShift {
         focus_y: Animatable<f32>,

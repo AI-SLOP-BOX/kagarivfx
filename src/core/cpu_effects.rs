@@ -710,6 +710,18 @@ fn apply_one_ctx(
             let tiled = crate::core::motion_tile::apply_motion_tile(pixels, width, height, &params);
             pixels.copy_from_slice(&tiled);
         }
+        EffectType::PageTurn { fold_position, fold_radius, fold_direction_deg, light_direction_deg, back_opacity, back_color } => {
+            let params = crate::core::page_turn::PageTurnParams {
+                fold_position: fold_position.evaluate(frame),
+                fold_radius: fold_radius.evaluate(frame),
+                fold_direction_deg: fold_direction_deg.evaluate(frame),
+                light_direction_deg: light_direction_deg.evaluate(frame),
+                back_opacity: back_opacity.evaluate(frame),
+                back_color: back_color.evaluate(frame),
+            };
+            let turned = crate::core::page_turn::apply_page_turn(pixels, width, height, &params);
+            pixels.copy_from_slice(&turned);
+        }
         EffectType::TiltShift { focus_y, focus_height, max_blur } => {
             use crate::core::ae_effects_pack_v19::apply_tilt_shift;
             apply_tilt_shift(

@@ -1120,6 +1120,10 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
                         apply_effect_by_name(app, "Motion Tile");
                         ui.close_menu();
                     }
+                    if ui.button("CC Page Turn").on_hover_text("3D cylindrical page peel & curl deformation").clicked() {
+                        apply_effect_by_name(app, "CC Page Turn");
+                        ui.close_menu();
+                    }
                 });
             });
             ui.menu_button("Animation", |ui| {
@@ -1672,6 +1676,20 @@ fn apply_effect_by_name(app: &mut crate::AfterEffectsApp, effect_name: &str) {
                             output_height: crate::core::property::Animatable::new_constant(100.0),
                             mirror_edges: true,
                             phase: crate::core::property::Animatable::new_constant(0.0),
+                        }, enabled: true,
+                    }
+                }
+                "CC Page Turn" => {
+                    let (cw, ch) = (comp.width as f32, comp.height as f32);
+                    crate::core::timeline::Effect {
+                        id: format!("pageturn_{}", len), name: "CC Page Turn".to_string(),
+                        effect_type: crate::core::timeline::EffectType::PageTurn {
+                            fold_position: crate::core::property::Animatable::new_constant([cw, ch]),
+                            fold_radius: crate::core::property::Animatable::new_constant(120.0),
+                            fold_direction_deg: crate::core::property::Animatable::new_constant(-45.0),
+                            light_direction_deg: crate::core::property::Animatable::new_constant(-45.0),
+                            back_opacity: crate::core::property::Animatable::new_constant(100.0),
+                            back_color: crate::core::property::Animatable::new_constant([0.92, 0.92, 0.94, 1.0]),
                         }, enabled: true,
                     }
                 }

@@ -272,6 +272,13 @@ impl EffectType {
                 push!("Output Height", output_height, Scalar);
                 push!("Phase", phase, Scalar);
             }
+            EffectType::PageTurn { fold_position, fold_radius, fold_direction_deg, light_direction_deg, back_opacity, .. } => {
+                push!("Fold Position", fold_position, Vec2);
+                push!("Fold Radius", fold_radius, Scalar);
+                push!("Fold Direction", fold_direction_deg, Scalar);
+                push!("Light Direction", light_direction_deg, Scalar);
+                push!("Back Opacity", back_opacity, Scalar);
+            }
             // ── Newly registered effects (session 3) ──
             EffectType::BevelAlpha { depth, light_angle_deg } => {
                 push!("Depth", depth, Scalar);

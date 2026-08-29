@@ -2352,6 +2352,13 @@ fn fs_main(@location(0) uv: vec2<f32>) -> @location(0) vec4<f32> {
             ui.checkbox(mirror_edges, "Mirror Edges");
             draw_prop(ui, current_frame, project_changed, next_frame, "Phase", phase, |ui, v| { ui.add(egui::Slider::new(v, -360.0..=360.0).suffix(" °")); });
         }
+        EffectType::PageTurn { fold_position: _, fold_radius, fold_direction_deg, light_direction_deg, back_opacity, back_color: _ } => {
+            ui.label("📖 CC Page Turn");
+            draw_prop(ui, current_frame, project_changed, next_frame, "Fold Radius", fold_radius, |ui, v| { ui.add(egui::Slider::new(v, 10.0..=500.0).suffix(" px")); });
+            draw_prop(ui, current_frame, project_changed, next_frame, "Fold Angle", fold_direction_deg, |ui, v| { ui.add(egui::Slider::new(v, -180.0..=180.0).suffix(" °")); });
+            draw_prop(ui, current_frame, project_changed, next_frame, "Light Direction", light_direction_deg, |ui, v| { ui.add(egui::Slider::new(v, -180.0..=180.0).suffix(" °")); });
+            draw_prop(ui, current_frame, project_changed, next_frame, "Back Opacity", back_opacity, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=100.0).suffix(" %")); });
+        }
     }
 }
 

@@ -298,6 +298,7 @@ impl RenderEffectPlugin for EnumEffectPlugin {
             EffectType::ParametricEQ { .. } => "Parametric EQ",
             EffectType::OpticalFlares { .. } => "Optical Flares",
             EffectType::MotionTile { .. } => "Motion Tile",
+            EffectType::PageTurn { .. } => "CC Page Turn",
         }
     }
 
@@ -415,6 +416,7 @@ impl RenderEffectPlugin for EnumEffectPlugin {
             EffectType::ParametricEQ { .. } => "parametric_eq",
             EffectType::OpticalFlares { .. } => "optical_flares",
             EffectType::MotionTile { .. } => "motion_tile",
+            EffectType::PageTurn { .. } => "page_turn",
         }
     }
 
