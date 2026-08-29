@@ -1051,6 +1051,10 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
                     app.show_sequence_layers = true;
                     ui.close_menu();
                 }
+                if ui.button("🌊 The Smoother...").on_hover_text("Reduce keyframe density with RDP curve simplification").clicked() {
+                    app.show_the_smoother = true;
+                    ui.close_menu();
+                }
             });
             ui.menu_button("View", |ui| {
                 // ── UI Mode (skill level) ──
@@ -1195,6 +1199,18 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
     crate::ui::precompose_dialog::draw_precompose_dialog(app, ctx);
     crate::ui::recovery_dialog::draw_recovery_dialog(app, ctx);
     crate::ui::sequence_layers_dialog::draw_sequence_layers_dialog(app, ctx);
+
+    if app.show_the_smoother {
+        let mut open = app.show_the_smoother;
+        egui::Window::new("🌊 The Smoother")
+            .open(&mut open)
+            .resizable(false)
+            .default_width(280.0)
+            .show(ctx, |ui| {
+                crate::ui::the_smoother_panel::draw_the_smoother_panel(app, ui);
+            });
+        app.show_the_smoother = open;
+    }
 }
 
 fn apply_effect_by_name(app: &mut crate::AfterEffectsApp, effect_name: &str) {
