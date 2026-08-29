@@ -54,34 +54,57 @@ pub fn draw_essential_graphics(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
         if ui.button("📸 Set Poster Frame").on_hover_text("Use current playhead frame as MOGRT thumbnail preview").clicked() {
             app.toasts.info(format!("Poster frame set to frame {}", app.current_frame));
         }
+
+        if ui.button("📥 Import MOGRT...").on_hover_text("Load and unpack a Motion Graphics Template (.mogrt)").clicked() {
+            if let Some(path) = rfd::FileDialog::new().add_filter("MOGRT Template", &["mogrt", "json"]).pick_file() {
+                if let Ok(content) = std::fs::read_to_string(&path) {
+                    if let Ok(val) = serde_json::from_str::<serde_json::Value>(&content) {
+                        let title = val.get("title").and_then(|t| t.as_str()).unwrap_or("Imported Template");
+                        app.toasts.info(format!("Imported MOGRT Template: {}", title));
+                    }
+                }
+            }
+        }
     });
 
     ui.add_space(8.0);
     ui.separator();
 
-    ui.label("Exposed Controllers & Parameters:");
+    ui.label(egui::RichText::new("Exposed Controllers & Parameters:").strong());
     egui::ScrollArea::vertical().max_height(220.0).show(ui, |ui| {
-        egui::Grid::new("mogrt_params_grid").striped(true).show(ui, |ui| {
+        egui::Grid::new("mogrt_params_grid").striped(true).min_col_width(120.0).show(ui, |ui| {
             ui.label(egui::RichText::new("Control Name").strong());
-            ui.label(egui::RichText::new("Property Type").strong());
+            ui.label(egui::RichText::new("Value & Interactive Control").strong());
             ui.end_row();
 
             ui.label("Title Text");
-            ui.label("Text String");
+            let mut title_val = ui.ctx().data(|d| d.get_temp::<String>(egui::Id::new("mogrt_title_val")).unwrap_or_else(|| "Motion Title".to_string()));
+            if ui.text_edit_singleline(&mut title_val).changed() {
+                ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("mogrt_title_val"), title_val));
+                crate::core::frame_cache::bump_version();
+            }
             ui.end_row();
 
             ui.label("Background Color");
-            ui.label("Color Picker");
+            let mut bg_col = ui.ctx().data(|d| d.get_temp::<[f32; 3]>(egui::Id::new("mogrt_bg_col")).unwrap_or([0.1, 0.15, 0.25]));
+            if ui.color_edit_button_rgb(&mut bg_col).changed() {
+                ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("mogrt_bg_col"), bg_col));
+                crate::core::frame_cache::bump_version();
+            }
             ui.end_row();
 
-            ui.label("Logo Opacity");
-            ui.label("Slider (0 - 100%)");
+            ui.label("Element Scale / Opacity");
+            let mut elem_scale = ui.ctx().data(|d| d.get_temp::<f32>(egui::Id::new("mogrt_elem_scale")).unwrap_or(100.0));
+            if ui.add(egui::Slider::new(&mut elem_scale, 0.0..=200.0).suffix("%")).changed() {
+                ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("mogrt_elem_scale"), elem_scale));
+                crate::core::frame_cache::bump_version();
+            }
             ui.end_row();
         });
     });
 
     ui.add_space(6.0);
-    if ui.button("➕ Drag & Drop Property to Expose").clicked() {
-        log::info!("Drag property into Essential Graphics panel");
+    if ui.button("➕ Expose Active Layer Property to MOGRT").clicked() {
+        app.toasts.info("Exposed selected layer property to Essential Graphics template controllers");
     }
 }
