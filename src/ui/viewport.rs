@@ -763,6 +763,47 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: u32) 
             }
         }
 
+        // ── Motion Sketch live path recording ──
+        let is_sketching_id = egui::Id::new("ae_motion_sketch_armed");
+        let is_armed = ctx.data_mut(|d| *d.get_temp_mut_or_insert_with(is_sketching_id, || false));
+        if is_armed {
+            if let Some(pp) = viewport_response.interact_pointer_pos() {
+                if viewport_response.dragged() {
+                    let cx = (pp.x - origin_x) / draw_w * comp_w;
+                    let cy = (pp.y - origin_y) / draw_h * comp_h;
+                    if let Some(idx) = app.selected_layer_idx {
+                        let cf = app.current_frame;
+                        let mut temp_proj = app.history.current().clone();
+                        let comp = temp_proj.active_composition_mut();
+                        if let Some(layer) = comp.layers.get_mut(idx) {
+                            match &mut layer.transform.position {
+                                crate::core::property::Animatable::Animated(kfs) => {
+                                    if let Some(existing) = kfs.iter_mut().find(|k| k.frame == cf) {
+                                        existing.value = [cx, cy];
+                                    } else {
+                                        kfs.push(crate::core::keyframe::Keyframe::new(cf, [cx, cy], crate::core::keyframe::InterpolationType::Linear));
+                                        kfs.sort_by_key(|k| k.frame);
+                                    }
+                                }
+                                _ => {
+                                    layer.transform.position = crate::core::property::Animatable::Animated(vec![
+                                        crate::core::keyframe::Keyframe::new(cf, [cx, cy], crate::core::keyframe::InterpolationType::Linear),
+                                    ]);
+                                }
+                            }
+                            app.history.commit(temp_proj);
+                            crate::core::frame_cache::bump_version();
+                        }
+                        let max_f = app.history.current().active_composition().duration_frames.saturating_sub(1);
+                        if app.current_frame < max_f {
+                            app.current_frame += 1;
+                            ctx.request_repaint();
+                        }
+                    }
+                }
+            }
+        }
+
         // ── Interactive Layer & Mask Drag ──────────────────────────
         let mut pen_commit = false;
         if let Some(pointer_pos) = viewport_response.interact_pointer_pos() {

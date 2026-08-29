@@ -690,6 +690,23 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
                             ui.close_menu();
                         }
                     }
+                    ui.separator();
+                    if ui.add(egui::Button::new("Auto-Orient...").shortcut_text("Cmd+Alt+O")).on_hover_text("Rotate layer automatically along its motion path direction").clicked() {
+                        if let Some(idx) = app.selected_layer_idx {
+                            app.modify_project(move |p| {
+                                if let Some(l) = p.active_composition_mut().layers.get_mut(idx) {
+                                    l.auto_orient = match l.auto_orient {
+                                        crate::core::auto_orient::AutoOrientMode::Off => crate::core::auto_orient::AutoOrientMode::OrientAlongPath,
+                                        crate::core::auto_orient::AutoOrientMode::OrientAlongPath => crate::core::auto_orient::AutoOrientMode::Off,
+                                        crate::core::auto_orient::AutoOrientMode::OrientTowardsPoint { .. } => crate::core::auto_orient::AutoOrientMode::Off,
+                                    };
+                                }
+                            });
+                            crate::core::frame_cache::bump_version();
+                            app.toasts.info("Toggled Auto-Orient along Motion Path");
+                        }
+                        ui.close_menu();
+                    }
                 });
                 ui.menu_button("Time", |ui| {
                     if ui.add(egui::Button::new("Enable Time Remapping").shortcut_text("Cmd+Alt+T")).clicked() {
@@ -1098,30 +1115,115 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
                 });
             });
             ui.menu_button("Animation", |ui| {
-                if ui.add(egui::Button::new("Easy Ease").shortcut_text("F9")).clicked() {
-                    if let Some(idx) = app.selected_layer_idx {
-                        app.modify_project(move |p| {
-                            if let Some(l) = p.active_composition_mut().layers.get_mut(idx) {
-                                l.easy_ease_transform();
+                ui.menu_button("Keyframe Assistant", |ui| {
+                    if ui.button("🎵 Convert Audio to Keyframes").on_hover_text("Extract RMS amplitude from audio layer into Slider Controls").clicked() {
+                        let mut audio_source: Option<String> = None;
+                        let comp = app.history.current().active_composition();
+                        if let Some(idx) = app.selected_layer_idx {
+                            if let Some(l) = comp.layers.get(idx) {
+                                if let crate::core::timeline::LayerType::Audio { path, .. } = &l.layer_type {
+                                    audio_source = Some(path.clone());
+                                } else if let crate::core::timeline::LayerType::Video { audio_wav: Some(w), .. } = &l.layer_type {
+                                    audio_source = Some(w.clone());
+                                }
                             }
-                        });
-                        crate::core::frame_cache::bump_version();
-                        app.toasts.info("Easy Ease applied to transform keyframes");
-                    } else {
-                        app.toasts.info("Select a layer first");
+                        }
+                        if let Some(src) = audio_source {
+                            let mut temp_proj = app.history.current().clone();
+                            match crate::core::audio_to_keyframes::convert_audio_to_keyframes(temp_proj.active_composition_mut(), &src) {
+                                Ok(name) => {
+                                    app.history.commit(temp_proj);
+                                    crate::core::frame_cache::bump_version();
+                                    app.toasts.info(format!("Created '{}' with Left/Right/Both channels", name));
+                                }
+                                Err(e) => app.toasts.error(e),
+                            }
+                        } else {
+                            app.toasts.error("Select an Audio or Video-with-Audio layer first");
+                        }
+                        ui.close_menu();
                     }
-                    ui.close_menu();
-                }
-                if ui.button("Sequence Layers...").on_hover_text("Arrange selected layers to play one after another").clicked() {
-                    app.show_sequence_layers = true;
-                    ui.close_menu();
-                }
+                    if ui.button("📈 Exponential Scale").on_hover_text("Convert linear scale keyframes into exponential logarithmic zoom").clicked() {
+                        if let Some(idx) = app.selected_layer_idx {
+                            let mut temp_proj = app.history.current().clone();
+                            let comp = temp_proj.active_composition_mut();
+                            if let Some(layer) = comp.layers.get_mut(idx) {
+                                if let crate::core::property::Animatable::Animated(ref mut kfs) = layer.transform.scale {
+                                    if kfs.len() >= 2 {
+                                        let first = kfs.first().unwrap().clone();
+                                        let last = kfs.last().unwrap().clone();
+                                        let (f0, f1) = (first.frame as f32, last.frame as f32);
+                                        let (s0, s1) = (first.value[0].max(0.01), last.value[0].max(0.01));
+                                        let mut exp_kfs = Vec::new();
+                                        let count = (last.frame - first.frame).max(1);
+                                        for step in 0..=count {
+                                            let f = first.frame + step;
+                                            let t = (f as f32 - f0) / (f1 - f0).max(1.0);
+                                            let log_val = (s0.ln() + t * (s1.ln() - s0.ln())).exp();
+                                            exp_kfs.push(crate::core::keyframe::Keyframe::new(f, [log_val, log_val], crate::core::keyframe::InterpolationType::Linear));
+                                        }
+                                        *kfs = exp_kfs;
+                                        app.history.commit(temp_proj);
+                                        crate::core::frame_cache::bump_version();
+                                        app.toasts.info("Converted scale to Exponential Zoom curve");
+                                    }
+                                }
+                            }
+                        }
+                        ui.close_menu();
+                    }
+                    if ui.button("⏪ Time-Reverse Keyframes").clicked() {
+                        if let Some(idx) = app.selected_layer_idx {
+                            let mut temp_proj = app.history.current().clone();
+                            let comp = temp_proj.active_composition_mut();
+                            if let Some(layer) = comp.layers.get_mut(idx) {
+                                fn rev_vec2(a: &mut crate::core::property::Animatable<[f32; 2]>, in_f: u32, out_f: u32) {
+                                    if let crate::core::property::Animatable::Animated(kfs) = a {
+                                        let span = out_f.saturating_sub(in_f);
+                                        for k in kfs.iter_mut() {
+                                            k.frame = in_f + span.saturating_sub(k.frame.saturating_sub(in_f));
+                                        }
+                                        kfs.sort_by_key(|k| k.frame);
+                                    }
+                                }
+                                let (inf, outf) = (layer.in_frame, layer.out_frame);
+                                rev_vec2(&mut layer.transform.position, inf, outf);
+                                rev_vec2(&mut layer.transform.scale, inf, outf);
+                                app.history.commit(temp_proj);
+                                crate::core::frame_cache::bump_version();
+                                app.toasts.info("Keyframes time-reversed");
+                            }
+                        }
+                        ui.close_menu();
+                    }
+                    ui.separator();
+                    if ui.add(egui::Button::new("Easy Ease").shortcut_text("F9")).clicked() {
+                        if let Some(idx) = app.selected_layer_idx {
+                            app.modify_project(move |p| {
+                                if let Some(l) = p.active_composition_mut().layers.get_mut(idx) {
+                                    l.easy_ease_transform();
+                                }
+                            });
+                            crate::core::frame_cache::bump_version();
+                            app.toasts.info("Easy Ease applied to transform keyframes");
+                        }
+                        ui.close_menu();
+                    }
+                    if ui.button("Sequence Layers...").clicked() {
+                        app.show_sequence_layers = true;
+                        ui.close_menu();
+                    }
+                });
                 if ui.button("🌊 The Smoother...").on_hover_text("Reduce keyframe density with RDP curve simplification").clicked() {
                     app.show_the_smoother = true;
                     ui.close_menu();
                 }
                 if ui.button("🎲 The Wiggler...").on_hover_text("Bake procedural noise keyframes into layer properties").clicked() {
                     app.show_the_wiggler = true;
+                    ui.close_menu();
+                }
+                if ui.button("✏️ Motion Sketch...").on_hover_text("Record real-time mouse dragging in viewport to position keyframes").clicked() {
+                    app.show_motion_sketch = true;
                     ui.close_menu();
                 }
             });
@@ -1291,6 +1393,18 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
                 crate::ui::the_wiggler_panel::draw_the_wiggler_panel(app, ui);
             });
         app.show_the_wiggler = open;
+    }
+
+    if app.show_motion_sketch {
+        let mut open = app.show_motion_sketch;
+        egui::Window::new("✏️ Motion Sketch")
+            .open(&mut open)
+            .resizable(false)
+            .default_width(280.0)
+            .show(ctx, |ui| {
+                crate::ui::motion_sketch_panel::draw_motion_sketch_panel(app, ui);
+            });
+        app.show_motion_sketch = open;
     }
 }
 
