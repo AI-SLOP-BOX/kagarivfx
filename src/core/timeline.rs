@@ -1,5 +1,5 @@
-use crate::core::property::Animatable;
 use crate::core::expression_engine;
+use crate::core::property::Animatable;
 use crate::core::text_animator_advanced::AnimatorStack;
 use serde::{Deserialize, Serialize};
 
@@ -38,10 +38,18 @@ impl TrackerPoint {
 
 // ─── Serde default helpers for LayerType::Text new fields ────────────────
 
-fn default_font_family() -> String { "Inter".to_string() }
-fn default_leading() -> f32 { 1.2 }
-fn default_stroke_color() -> [f32; 4] { [0.0, 0.0, 0.0, 1.0] }
-fn default_video_speed() -> f32 { 1.0 }
+fn default_font_family() -> String {
+    "Inter".to_string()
+}
+fn default_leading() -> f32 {
+    1.2
+}
+fn default_stroke_color() -> [f32; 4] {
+    [0.0, 0.0, 0.0, 1.0]
+}
+fn default_video_speed() -> f32 {
+    1.0
+}
 
 // ─── Layer Type ────────────────────────────────────────────────────────────
 
@@ -156,8 +164,12 @@ impl TrimPaths {
 
         start_pct = (start_pct + offset_norm).fract();
         end_pct = (end_pct + offset_norm).fract();
-        if start_pct < 0.0 { start_pct += 1.0; }
-        if end_pct < 0.0 { end_pct += 1.0; }
+        if start_pct < 0.0 {
+            start_pct += 1.0;
+        }
+        if end_pct < 0.0 {
+            end_pct += 1.0;
+        }
 
         if (start_pct - end_pct).abs() < 0.001 {
             return Vec::new();
@@ -207,8 +219,14 @@ impl TrimPaths {
                     1.0
                 };
 
-                let sub_p0 = [p0[0] + (p1[0] - p0[0]) * t_start, p0[1] + (p1[1] - p0[1]) * t_start];
-                let sub_p1 = [p0[0] + (p1[0] - p0[0]) * t_end, p0[1] + (p1[1] - p0[1]) * t_end];
+                let sub_p0 = [
+                    p0[0] + (p1[0] - p0[0]) * t_start,
+                    p0[1] + (p1[1] - p0[1]) * t_start,
+                ];
+                let sub_p1 = [
+                    p0[0] + (p1[0] - p0[0]) * t_end,
+                    p0[1] + (p1[1] - p0[1]) * t_end,
+                ];
 
                 if trimmed.is_empty() {
                     trimmed.push(sub_p0);
@@ -222,7 +240,6 @@ impl TrimPaths {
         trimmed
     }
 }
-
 
 impl LayerType {
     /// Convenience constructor for a new text layer with sensible defaults.
@@ -358,16 +375,16 @@ pub enum LabelColor {
 impl LabelColor {
     pub fn to_rgb(self) -> [f32; 3] {
         match self {
-            LabelColor::None      => [0.35, 0.35, 0.35],
-            LabelColor::Red       => [0.90, 0.25, 0.25],
-            LabelColor::Yellow    => [0.95, 0.85, 0.10],
-            LabelColor::Aqua      => [0.20, 0.85, 0.80],
-            LabelColor::Pink      => [0.95, 0.45, 0.70],
-            LabelColor::Lavender  => [0.65, 0.55, 0.90],
-            LabelColor::Peach     => [0.95, 0.70, 0.45],
-            LabelColor::Sea       => [0.30, 0.70, 0.55],
-            LabelColor::Blue      => [0.35, 0.55, 0.95],
-            LabelColor::Purple    => [0.70, 0.35, 0.90],
+            LabelColor::None => [0.35, 0.35, 0.35],
+            LabelColor::Red => [0.90, 0.25, 0.25],
+            LabelColor::Yellow => [0.95, 0.85, 0.10],
+            LabelColor::Aqua => [0.20, 0.85, 0.80],
+            LabelColor::Pink => [0.95, 0.45, 0.70],
+            LabelColor::Lavender => [0.65, 0.55, 0.90],
+            LabelColor::Peach => [0.95, 0.70, 0.45],
+            LabelColor::Sea => [0.30, 0.70, 0.55],
+            LabelColor::Blue => [0.35, 0.55, 0.95],
+            LabelColor::Purple => [0.70, 0.35, 0.90],
         }
     }
 }
@@ -387,21 +404,19 @@ impl Expression {
     pub fn evaluate_f32(&self, base: f32, frame: u32, fps: u32) -> f32 {
         let time = frame as f32 / fps.max(1) as f32;
         match self {
-            Expression::Wiggle { frequency, amplitude } => {
+            Expression::Wiggle {
+                frequency,
+                amplitude,
+            } => {
                 let seed = (frame as f32 * frequency * 1.618_034) % std::f32::consts::TAU;
                 let noise = seed.sin() * 0.7 + (seed * 2.1).sin() * 0.2 + (seed * 5.3).sin() * 0.1;
                 base + noise * amplitude
             }
-            Expression::TimeDriver { multiplier, offset } => {
-                time * multiplier + offset
-            }
+            Expression::TimeDriver { multiplier, offset } => time * multiplier + offset,
             // Raw Rhai script — evaluated by the Rhai expression engine.
             // Supports full AE-compatible API: time, frame, fps, value, wiggle(), etc.
-            Expression::Raw(script) => {
-                RHAI_ENGINE.with(|engine| {
-                    expression_engine::eval_f32(engine, script, base, frame, fps)
-                })
-            }
+            Expression::Raw(script) => RHAI_ENGINE
+                .with(|engine| expression_engine::eval_f32(engine, script, base, frame, fps)),
             _ => base,
         }
     }
@@ -409,7 +424,10 @@ impl Expression {
     pub fn evaluate_v2(&self, base: [f32; 2], frame: u32, fps: u32) -> [f32; 2] {
         let time = frame as f32 / fps.max(1) as f32;
         match self {
-            Expression::Wiggle { frequency, amplitude } => {
+            Expression::Wiggle {
+                frequency,
+                amplitude,
+            } => {
                 let t = frame as f32 * frequency * 1.618_034;
                 let nx = t.sin() * 0.7 + (t * 2.1).sin() * 0.2 + (t * 5.3).sin() * 0.1;
                 let ny = (t + 100.0).sin() * 0.7 + ((t + 100.0) * 2.1).sin() * 0.2;
@@ -419,11 +437,8 @@ impl Expression {
                 [base[0] + time * multiplier + offset, base[1]]
             }
             // Raw Rhai script — evaluated by the Rhai expression engine.
-            Expression::Raw(script) => {
-                RHAI_ENGINE.with(|engine| {
-                    expression_engine::eval_v2(engine, script, base, frame, fps)
-                })
-            }
+            Expression::Raw(script) => RHAI_ENGINE
+                .with(|engine| expression_engine::eval_v2(engine, script, base, frame, fps)),
             _ => base,
         }
     }
@@ -493,10 +508,19 @@ enum LoopProp {
 }
 
 impl Transform2D {
-    fn remap_loop_frame(frame: u32, expression: &Option<Expression>, first_frame: u32, last_frame: u32) -> u32 {
+    fn remap_loop_frame(
+        frame: u32,
+        expression: &Option<Expression>,
+        first_frame: u32,
+        last_frame: u32,
+    ) -> u32 {
         match expression {
-            Some(Expression::LoopOut) => remap_frame_for_loop(frame, first_frame, last_frame, false),
-            Some(Expression::PingPong) => remap_frame_for_loop(frame, first_frame, last_frame, true),
+            Some(Expression::LoopOut) => {
+                remap_frame_for_loop(frame, first_frame, last_frame, false)
+            }
+            Some(Expression::PingPong) => {
+                remap_frame_for_loop(frame, first_frame, last_frame, true)
+            }
             _ => frame,
         }
     }
@@ -504,12 +528,17 @@ impl Transform2D {
     pub fn eval_position(&self, frame: u32, fps: u32) -> [f32; 2] {
         let eval_frame = if let Some(kfs) = self.position.keyframes() {
             match (kfs.first(), kfs.last()) {
-                (Some(first), Some(last)) => {
-                    Self::remap_loop_frame(frame, &self.position_expression, first.frame, last.frame)
-                }
+                (Some(first), Some(last)) => Self::remap_loop_frame(
+                    frame,
+                    &self.position_expression,
+                    first.frame,
+                    last.frame,
+                ),
                 _ => frame,
             }
-        } else { frame };
+        } else {
+            frame
+        };
         let base = self.position.evaluate(eval_frame);
         match &self.position_expression {
             Some(Expression::Raw(script)) if expression_engine::script_uses_loops(script) => {
@@ -522,11 +551,17 @@ impl Transform2D {
     }
 
     /// Computes loopOut/loopIn reference values from this property's keyframes for Raw scripts.
-    fn compute_loop_vals(&self, frame: u32, _fps: u32, prop: LoopProp) -> expression_engine::LoopVals {
+    fn compute_loop_vals(
+        &self,
+        frame: u32,
+        _fps: u32,
+        prop: LoopProp,
+    ) -> expression_engine::LoopVals {
         use crate::core::expression_engine::LoopVals;
         let mut vals = LoopVals::default();
         // Sample the animatable at one cycle past the last keyframe for each loop mode
-        let mut compute = |kfs: &[crate::core::keyframe::Keyframe<[f32; 2]>], sample: &dyn Fn(u32) -> [f32; 2]| {
+        let mut compute = |kfs: &[crate::core::keyframe::Keyframe<[f32; 2]>],
+                           sample: &dyn Fn(u32) -> [f32; 2]| {
             if let (Some(first), Some(last)) = (kfs.first(), kfs.last()) {
                 let first = first.frame;
                 let last = last.frame;
@@ -551,9 +586,14 @@ impl Transform2D {
             }
             LoopProp::Rotation | LoopProp::Opacity => {
                 // Scalar properties: expose the scalar in both X and Y slots
-                type ScalarKfs<'a> = (Option<&'a [crate::core::keyframe::Keyframe<f32>]>, &'a dyn Fn(u32) -> f32);
+                type ScalarKfs<'a> = (
+                    Option<&'a [crate::core::keyframe::Keyframe<f32>]>,
+                    &'a dyn Fn(u32) -> f32,
+                );
                 let (kfs, anim): ScalarKfs = match prop {
-                    LoopProp::Rotation => (self.rotation.keyframes(), &|f| self.rotation.evaluate(f)),
+                    LoopProp::Rotation => {
+                        (self.rotation.keyframes(), &|f| self.rotation.evaluate(f))
+                    }
                     _ => (self.opacity.keyframes(), &|f| self.opacity.evaluate(f)),
                 };
                 if let Some(kfs) = kfs {
@@ -575,12 +615,17 @@ impl Transform2D {
     pub fn eval_rotation(&self, frame: u32, fps: u32) -> f32 {
         let eval_frame = if let Some(kfs) = self.rotation.keyframes() {
             match (kfs.first(), kfs.last()) {
-                (Some(first), Some(last)) => {
-                    Self::remap_loop_frame(frame, &self.rotation_expression, first.frame, last.frame)
-                }
+                (Some(first), Some(last)) => Self::remap_loop_frame(
+                    frame,
+                    &self.rotation_expression,
+                    first.frame,
+                    last.frame,
+                ),
                 _ => frame,
             }
-        } else { frame };
+        } else {
+            frame
+        };
         let base = self.rotation.evaluate(eval_frame);
         match &self.rotation_expression {
             Some(Expression::Raw(script)) if expression_engine::script_uses_loops(script) => {
@@ -600,7 +645,9 @@ impl Transform2D {
                 }
                 _ => frame,
             }
-        } else { frame };
+        } else {
+            frame
+        };
         let base = self.scale.evaluate(eval_frame);
         match &self.scale_expression {
             Some(Expression::Raw(script)) if expression_engine::script_uses_loops(script) => {
@@ -620,7 +667,9 @@ impl Transform2D {
                 }
                 _ => frame,
             }
-        } else { frame };
+        } else {
+            frame
+        };
         let base = self.opacity.evaluate(eval_frame);
         match &self.opacity_expression {
             Some(Expression::Raw(script)) if expression_engine::script_uses_loops(script) => {
@@ -671,7 +720,9 @@ pub struct Camera3D {
     pub dof_iris_sides: u32,
 }
 
-fn default_dof_max_blur() -> f32 { 16.0 }
+fn default_dof_max_blur() -> f32 {
+    16.0
+}
 
 impl Default for Camera3D {
     fn default() -> Self {
@@ -746,8 +797,12 @@ pub struct MaterialOptions {
     pub cast_shadows: bool,
 }
 
-fn default_true() -> bool { true }
-fn default_shadow_darkness() -> f32 { 60.0 }
+fn default_true() -> bool {
+    true
+}
+fn default_shadow_darkness() -> f32 {
+    60.0
+}
 
 impl Default for MaterialOptions {
     fn default() -> Self {
@@ -1673,7 +1728,7 @@ pub struct Layer {
 
     pub is_3d: bool,
     pub transform_3d: Transform3D,
-    
+
     #[serde(default)]
     pub material: MaterialOptions,
 
@@ -1769,11 +1824,14 @@ pub struct PuppetPin {
 
 impl PuppetPin {
     pub fn new(id: String, name: String, source: [f32; 2]) -> Self {
-        Self { id, name, comp_source: source, position: Animatable::new_constant(source) }
+        Self {
+            id,
+            name,
+            comp_source: source,
+            position: Animatable::new_constant(source),
+        }
     }
 }
-
-
 
 impl Layer {
     pub fn new(id: String, name: String, layer_type: LayerType, duration_frames: u32) -> Self {
@@ -1829,19 +1887,22 @@ impl Layer {
         l
     }
 
-
     pub fn new_adjustment(id: String, name: String, duration_frames: u32) -> Self {
         let mut l = Self::new(id, name, LayerType::AdjustmentLayer, duration_frames);
         l.label = LabelColor::Lavender;
         l
     }
 
-
     /// Computes the accurate, unscaled bounding box dimensions (width, height) of the layer based on its LayerType.
     pub fn bounding_size(&self) -> [f32; 2] {
         match &self.layer_type {
             LayerType::Solid { color: _ } => [1920.0, 1080.0],
-            LayerType::Text { text, font_size, tracking, .. } => {
+            LayerType::Text {
+                text,
+                font_size,
+                tracking,
+                ..
+            } => {
                 let char_count = text.chars().count().max(1) as f32;
                 let fs = *font_size as f32;
                 let approx_w = char_count * fs * 0.6 + (char_count - 1.0) * tracking;
@@ -1851,9 +1912,6 @@ impl Layer {
             _ => [100.0, 100.0],
         }
     }
-
-
-
 
     pub fn is_active(&self, frame: u32) -> bool {
         self.visible && frame >= self.in_frame && frame <= self.out_frame
@@ -1965,7 +2023,10 @@ pub struct TimelineMarker {
 pub enum LightType {
     Ambient,
     Point,
-    Spot { cone_angle_deg: f32, cone_feather_pct: f32 },
+    Spot {
+        cone_angle_deg: f32,
+        cone_feather_pct: f32,
+    },
     Parallel,
 }
 
@@ -2006,7 +2067,9 @@ impl Default for Light3D {
     }
 }
 
-// ─── Composition ───────────────────────────────────────────────────────────
+fn default_shutter_phase() -> f32 {
+    -90.0
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Composition {
@@ -2019,6 +2082,8 @@ pub struct Composition {
     pub layers: Vec<Layer>,
 
     pub motion_blur_shutter_angle: f32,
+    #[serde(default = "default_shutter_phase")]
+    pub motion_blur_shutter_phase: f32,
     pub background_color: [f32; 4],
     pub active_camera: Camera3D,
     /// Additional scene cameras for multi-camera switching. The camera with
@@ -2062,6 +2127,7 @@ impl Composition {
             duration_frames,
             layers: Vec::new(),
             motion_blur_shutter_angle: 180.0,
+            motion_blur_shutter_phase: -90.0,
             background_color: [0.05, 0.05, 0.08, 1.0],
             active_camera: Camera3D::default(),
             cameras: Vec::new(),
@@ -2071,7 +2137,7 @@ impl Composition {
 
             blend_linear: false,
 
-dither_output: false,
+            dither_output: false,
             comp_proxy: crate::core::proxy::CompProxy::default(),
         }
     }
@@ -2106,7 +2172,11 @@ dither_output: false,
     }
 
     /// Depth-limited recursive lookup: guards against cyclic sub_compositions graphs.
-    fn find_sub_comp_limited<'a>(comp: &'a Composition, comp_id: &str, depth: u32) -> Option<&'a Composition> {
+    fn find_sub_comp_limited<'a>(
+        comp: &'a Composition,
+        comp_id: &str,
+        depth: u32,
+    ) -> Option<&'a Composition> {
         const MAX_SUB_COMP_DEPTH: u32 = 32;
         if depth > MAX_SUB_COMP_DEPTH {
             return None;
@@ -2188,19 +2258,55 @@ dither_output: false,
             }
             let base_pos = layer.transform.eval_position(frame, fps);
             let pos = raw_script(&layer.transform.position_expression)
-                .map(|s| expression_engine::eval_v2_with_comp(s, base_pos, frame, fps, &comp_snap, this_snap.as_ref()))
+                .map(|s| {
+                    expression_engine::eval_v2_with_comp(
+                        s,
+                        base_pos,
+                        frame,
+                        fps,
+                        &comp_snap,
+                        this_snap.as_ref(),
+                    )
+                })
                 .unwrap_or(base_pos);
             let base_scale = layer.transform.eval_scale(frame, fps);
             let scale = raw_script(&layer.transform.scale_expression)
-                .map(|s| expression_engine::eval_v2_with_comp(s, base_scale, frame, fps, &comp_snap, this_snap.as_ref()))
+                .map(|s| {
+                    expression_engine::eval_v2_with_comp(
+                        s,
+                        base_scale,
+                        frame,
+                        fps,
+                        &comp_snap,
+                        this_snap.as_ref(),
+                    )
+                })
                 .unwrap_or(base_scale);
             let base_rot = layer.transform.eval_rotation(frame, fps);
             let rot = raw_script(&layer.transform.rotation_expression)
-                .map(|s| expression_engine::eval_f32_with_comp(s, base_rot, frame, fps, &comp_snap, this_snap.as_ref()))
+                .map(|s| {
+                    expression_engine::eval_f32_with_comp(
+                        s,
+                        base_rot,
+                        frame,
+                        fps,
+                        &comp_snap,
+                        this_snap.as_ref(),
+                    )
+                })
                 .unwrap_or(base_rot);
             let base_opa = layer.transform.eval_opacity(frame, fps);
             let opa = raw_script(&layer.transform.opacity_expression)
-                .map(|s| expression_engine::eval_f32_with_comp(s, base_opa, frame, fps, &comp_snap, this_snap.as_ref()))
+                .map(|s| {
+                    expression_engine::eval_f32_with_comp(
+                        s,
+                        base_opa,
+                        frame,
+                        fps,
+                        &comp_snap,
+                        this_snap.as_ref(),
+                    )
+                })
                 .unwrap_or(base_opa);
             (pos, scale, rot, opa)
         } else {
@@ -2221,11 +2327,14 @@ dither_output: false,
 
         if let Some(pid) = &layer.parent_id {
             if let Some(parent) = self.layers.iter().find(|l| &l.id == pid) {
-                let (ppos, pscale, prot, popa) = self.resolve_world_transform_limited(parent, frame, depth + 1);
+                let (ppos, pscale, prot, popa) =
+                    self.resolve_world_transform_limited(parent, frame, depth + 1);
                 let rot_rad = prot.to_radians();
                 let (s, c) = rot_rad.sin_cos();
-                let world_x = pos[0] * pscale[0] / 100.0 * c - pos[1] * pscale[1] / 100.0 * s + ppos[0];
-                let world_y = pos[0] * pscale[0] / 100.0 * s + pos[1] * pscale[1] / 100.0 * c + ppos[1];
+                let world_x =
+                    pos[0] * pscale[0] / 100.0 * c - pos[1] * pscale[1] / 100.0 * s + ppos[0];
+                let world_y =
+                    pos[0] * pscale[0] / 100.0 * s + pos[1] * pscale[1] / 100.0 * c + ppos[1];
                 return (
                     [world_x, world_y],
                     [scale[0] * pscale[0] / 100.0, scale[1] * pscale[1] / 100.0],
@@ -2299,7 +2408,10 @@ dither_output: false,
 
         let broken_count = to_clear.len();
         for idx in to_clear {
-            log::warn!("Broken circular parent reference detected on layer idx {}. Clearing parent_id.", idx);
+            log::warn!(
+                "Broken circular parent reference detected on layer idx {}. Clearing parent_id.",
+                idx
+            );
             self.layers[idx].parent_id = None;
         }
         broken_count
@@ -2326,7 +2438,13 @@ dither_output: false,
         for layer in &self.layers {
             if !cache.contains_key(&layer.id) {
                 visited.clear();
-                self.resolve_layer_transform_recursive(layer, frame, &mut cache, &mut visited, &id_map);
+                self.resolve_layer_transform_recursive(
+                    layer,
+                    frame,
+                    &mut cache,
+                    &mut visited,
+                    &id_map,
+                );
             }
         }
         cache
@@ -2358,11 +2476,14 @@ dither_output: false,
         let res = if let Some(pid) = &layer.parent_id {
             if let Some(&parent_idx) = id_map.get(pid.as_str()) {
                 let parent = &self.layers[parent_idx];
-                let (ppos, pscale, prot, popa) = self.resolve_layer_transform_recursive(parent, frame, cache, visited, id_map);
+                let (ppos, pscale, prot, popa) =
+                    self.resolve_layer_transform_recursive(parent, frame, cache, visited, id_map);
                 let rot_rad = prot.to_radians();
                 let (s, c) = (rot_rad.sin(), rot_rad.cos());
-                let world_x = pos[0] * pscale[0] / 100.0 * c - pos[1] * pscale[1] / 100.0 * s + ppos[0];
-                let world_y = pos[0] * pscale[0] / 100.0 * s + pos[1] * pscale[1] / 100.0 * c + ppos[1];
+                let world_x =
+                    pos[0] * pscale[0] / 100.0 * c - pos[1] * pscale[1] / 100.0 * s + ppos[0];
+                let world_y =
+                    pos[0] * pscale[0] / 100.0 * s + pos[1] * pscale[1] / 100.0 * c + ppos[1];
                 (
                     [world_x, world_y],
                     [scale[0] * pscale[0] / 100.0, scale[1] * pscale[1] / 100.0],
@@ -2381,11 +2502,7 @@ dither_output: false,
         res
     }
 
-    pub fn resolve_world_transform_3d(
-        &self,
-        layer: &Layer,
-        frame: u32,
-    ) -> [[f32; 4]; 4] {
+    pub fn resolve_world_transform_3d(&self, layer: &Layer, frame: u32) -> [[f32; 4]; 4] {
         let pos3d = layer.transform_3d.position.evaluate(frame);
         let rot3d = layer.transform_3d.rotation.evaluate(frame);
         let scale3d = layer.transform_3d.scale.evaluate(frame);
@@ -2394,10 +2511,13 @@ dither_output: false,
         let fov_rad = self.active_camera.fov_degrees.to_radians();
         let aspect = self.width as f32 / self.height.max(1) as f32;
         // Guard against degenerate FOV (e.g. fov_degrees=0 → tan(0)=0 → division by zero)
-        let f = if fov_rad.abs() < 1e-4 { 1e6 } else { 1.0 / (fov_rad * 0.5).tan() };
+        let f = if fov_rad.abs() < 1e-4 {
+            1e6
+        } else {
+            1.0 / (fov_rad * 0.5).tan()
+        };
         let near = 0.1f32;
         let far = 10000.0f32;
-
 
         let proj_3d = [
             [f / aspect, 0.0, 0.0, 0.0],
@@ -2410,9 +2530,12 @@ dither_output: false,
         let rad_y = rot3d[1].to_radians();
         let rad_z = rot3d[2].to_radians();
 
-        let cx = rad_x.cos(); let sx = rad_x.sin();
-        let cy = rad_y.cos(); let sy = rad_y.sin();
-        let cz = rad_z.cos(); let sz = rad_z.sin();
+        let cx = rad_x.cos();
+        let sx = rad_x.sin();
+        let cy = rad_y.cos();
+        let sy = rad_y.sin();
+        let cz = rad_z.cos();
+        let sz = rad_z.sin();
 
         // Euler rotation matrix Z * Y * X
         let rot_matrix = [
@@ -2433,24 +2556,40 @@ dither_output: false,
             [1.0, 0.0, 0.0, 0.0],
             [0.0, 1.0, 0.0, 0.0],
             [0.0, 0.0, 1.0, 0.0],
-            [pos3d[0] / (self.width as f32 * 0.5), pos3d[1] / (self.height as f32 * 0.5), pos3d[2] / 1000.0, 1.0],
+            [
+                pos3d[0] / (self.width as f32 * 0.5),
+                pos3d[1] / (self.height as f32 * 0.5),
+                pos3d[2] / 1000.0,
+                1.0,
+            ],
         ];
 
         fn m4_mul(a: [[f32; 4]; 4], b: [[f32; 4]; 4]) -> [[f32; 4]; 4] {
             let mut out = [[0.0; 4]; 4];
             for r in 0..4 {
                 for c in 0..4 {
-                    out[r][c] = a[r][0] * b[0][c] + a[r][1] * b[1][c] + a[r][2] * b[2][c] + a[r][3] * b[3][c];
+                    out[r][c] = a[r][0] * b[0][c]
+                        + a[r][1] * b[1][c]
+                        + a[r][2] * b[2][c]
+                        + a[r][3] * b[3][c];
                 }
             }
             out
         }
 
-        m4_mul(proj_3d, m4_mul(pos_matrix, m4_mul(rot_matrix, scale_matrix)))
+        m4_mul(
+            proj_3d,
+            m4_mul(pos_matrix, m4_mul(rot_matrix, scale_matrix)),
+        )
     }
 
     /// Evenly distribute selected layers spatially along horizontal (X) or vertical (Y) axes.
-    pub fn distribute_selected_layers(&mut self, selected_indices: &[usize], horizontal: bool, frame: u32) {
+    pub fn distribute_selected_layers(
+        &mut self,
+        selected_indices: &[usize],
+        horizontal: bool,
+        frame: u32,
+    ) {
         if selected_indices.len() < 3 {
             return;
         }
@@ -2473,7 +2612,10 @@ dither_output: false,
 
         layers_info.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal));
 
-        let (Some(min_pos), Some(max_pos)) = (layers_info.first().map(|e| e.1), layers_info.last().map(|e| e.1)) else {
+        let (Some(min_pos), Some(max_pos)) = (
+            layers_info.first().map(|e| e.1),
+            layers_info.last().map(|e| e.1),
+        ) else {
             return;
         };
         let count = layers_info.len();
@@ -2493,7 +2635,8 @@ dither_output: false,
             } else {
                 [current_pos[0], target_coord]
             };
-            self.layers[layer_idx].transform.position = crate::core::property::Animatable::new_constant(new_pos);
+            self.layers[layer_idx].transform.position =
+                crate::core::property::Animatable::new_constant(new_pos);
         }
     }
 
@@ -2541,10 +2684,13 @@ dither_output: false,
         let mut precomp_layer = Layer::new(
             format!("layer_precomp_{}", new_comp_id),
             new_comp_name,
-            LayerType::PreComp { comp_id: new_comp_id.clone() },
+            LayerType::PreComp {
+                comp_id: new_comp_id.clone(),
+            },
             self.duration_frames,
         );
-        precomp_layer.transform.position = Animatable::new_constant([self.width as f32 * 0.5, self.height as f32 * 0.5]);
+        precomp_layer.transform.position =
+            Animatable::new_constant([self.width as f32 * 0.5, self.height as f32 * 0.5]);
 
         match mode {
             PrecompAttributesMode::MoveToNewComp => {
@@ -2584,12 +2730,28 @@ pub enum PrecompAttributesMode {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum ProjectItemType {
-    Composition { comp_idx: usize },
-    Image { path: String, width: u32, height: u32 },
-    Video { path: String, duration_sec: f32 },
-    Audio { path: String, duration_sec: f32 },
-    Solid { color: [f32; 4] },
-    Folder { name: String },
+    Composition {
+        comp_idx: usize,
+    },
+    Image {
+        path: String,
+        width: u32,
+        height: u32,
+    },
+    Video {
+        path: String,
+        duration_sec: f32,
+    },
+    Audio {
+        path: String,
+        duration_sec: f32,
+    },
+    Solid {
+        color: [f32; 4],
+    },
+    Folder {
+        name: String,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -2673,11 +2835,42 @@ impl Default for Project {
         comp.add_layer(null_ctrl);
 
         let default_assets = vec![
-            ProjectItem::new("item_comp1", "Main Comp 1", ProjectItemType::Composition { comp_idx: 0 }),
-            ProjectItem::new("item_bg_solid", "Dark Solid Background", ProjectItemType::Solid { color: [0.08, 0.08, 0.12, 1.0] }),
-            ProjectItem::new("item_logo", "Logo_Vector.svg", ProjectItemType::Image { path: "assets/logo.svg".to_string(), width: 512, height: 512 }),
-            ProjectItem::new("item_audio", "Intro_BGM.wav", ProjectItemType::Audio { path: "assets/audio.wav".to_string(), duration_sec: 10.0 }),
-            ProjectItem::new("item_solids_folder", "Solids", ProjectItemType::Folder { name: "Solids".to_string() }),
+            ProjectItem::new(
+                "item_comp1",
+                "Main Comp 1",
+                ProjectItemType::Composition { comp_idx: 0 },
+            ),
+            ProjectItem::new(
+                "item_bg_solid",
+                "Dark Solid Background",
+                ProjectItemType::Solid {
+                    color: [0.08, 0.08, 0.12, 1.0],
+                },
+            ),
+            ProjectItem::new(
+                "item_logo",
+                "Logo_Vector.svg",
+                ProjectItemType::Image {
+                    path: "assets/logo.svg".to_string(),
+                    width: 512,
+                    height: 512,
+                },
+            ),
+            ProjectItem::new(
+                "item_audio",
+                "Intro_BGM.wav",
+                ProjectItemType::Audio {
+                    path: "assets/audio.wav".to_string(),
+                    duration_sec: 10.0,
+                },
+            ),
+            ProjectItem::new(
+                "item_solids_folder",
+                "Solids",
+                ProjectItemType::Folder {
+                    name: "Solids".to_string(),
+                },
+            ),
         ];
 
         Self {
@@ -2691,12 +2884,16 @@ impl Default for Project {
 
 impl Project {
     pub fn active_composition(&self) -> &Composition {
-        let idx = self.active_composition_idx.min(self.compositions.len().saturating_sub(1));
+        let idx = self
+            .active_composition_idx
+            .min(self.compositions.len().saturating_sub(1));
         &self.compositions[idx]
     }
 
     pub fn active_composition_mut(&mut self) -> &mut Composition {
-        let idx = self.active_composition_idx.min(self.compositions.len().saturating_sub(1));
+        let idx = self
+            .active_composition_idx
+            .min(self.compositions.len().saturating_sub(1));
         &mut self.compositions[idx]
     }
 
@@ -2725,7 +2922,9 @@ impl Project {
                             deps.insert(path.clone());
                         }
                     }
-                    LayerType::Video { source, frames_dir, .. } => {
+                    LayerType::Video {
+                        source, frames_dir, ..
+                    } => {
                         if !source.is_empty() {
                             deps.insert(source.clone());
                         }
@@ -2803,10 +3002,26 @@ pub fn sequence_layers(layers: &mut [Layer], overlap_frames: u32, crossfade: boo
             // Build crossfade opacity keyframes
             let fade = overlap_frames.min(duration / 2);
             let mut kfs = Vec::new();
-            kfs.push(crate::core::keyframe::Keyframe::new(cur_in, 0.0, crate::core::keyframe::InterpolationType::Linear));
-            kfs.push(crate::core::keyframe::Keyframe::new(cur_in + fade, 100.0, crate::core::keyframe::InterpolationType::Linear));
-            kfs.push(crate::core::keyframe::Keyframe::new(layer.out_frame.saturating_sub(fade), 100.0, crate::core::keyframe::InterpolationType::Linear));
-            kfs.push(crate::core::keyframe::Keyframe::new(layer.out_frame, 0.0, crate::core::keyframe::InterpolationType::Linear));
+            kfs.push(crate::core::keyframe::Keyframe::new(
+                cur_in,
+                0.0,
+                crate::core::keyframe::InterpolationType::Linear,
+            ));
+            kfs.push(crate::core::keyframe::Keyframe::new(
+                cur_in + fade,
+                100.0,
+                crate::core::keyframe::InterpolationType::Linear,
+            ));
+            kfs.push(crate::core::keyframe::Keyframe::new(
+                layer.out_frame.saturating_sub(fade),
+                100.0,
+                crate::core::keyframe::InterpolationType::Linear,
+            ));
+            kfs.push(crate::core::keyframe::Keyframe::new(
+                layer.out_frame,
+                0.0,
+                crate::core::keyframe::InterpolationType::Linear,
+            ));
             layer.transform.opacity = Animatable::new_animated(kfs);
         }
 
@@ -2832,7 +3047,11 @@ pub fn export_youtube_chapters(markers: &[TimelineMarker], fps: u32) -> String {
         let sec = total_sec % 60;
         let min = (total_sec / 60) % 60;
         let hrs = total_sec / 3600;
-        let comment = if m.label.is_empty() { format!("Chapter {}", lines.len() + 1) } else { m.label.clone() };
+        let comment = if m.label.is_empty() {
+            format!("Chapter {}", lines.len() + 1)
+        } else {
+            m.label.clone()
+        };
 
         let time_str = if hrs > 0 {
             format!("{:02}:{:02}:{:02}", hrs, min, sec)
@@ -2898,15 +3117,30 @@ mod tests {
         comp.add_layer(l2);
 
         assert!(comp.set_layer_parent("l2", Some("l1".into())));
-        assert!(!comp.set_layer_parent("l1", Some("l2".into())), "Cycle parent assignment must be rejected");
+        assert!(
+            !comp.set_layer_parent("l1", Some("l2".into())),
+            "Cycle parent assignment must be rejected"
+        );
     }
 
     #[test]
     fn test_rove_across_time() {
         let mut kfs = vec![
-            crate::core::keyframe::Keyframe::new(0, [0.0, 0.0], crate::core::keyframe::InterpolationType::Linear),
-            crate::core::keyframe::Keyframe::new(10, [100.0, 0.0], crate::core::keyframe::InterpolationType::Linear), // Intermediate point at 50% distance
-            crate::core::keyframe::Keyframe::new(60, [200.0, 0.0], crate::core::keyframe::InterpolationType::Linear),
+            crate::core::keyframe::Keyframe::new(
+                0,
+                [0.0, 0.0],
+                crate::core::keyframe::InterpolationType::Linear,
+            ),
+            crate::core::keyframe::Keyframe::new(
+                10,
+                [100.0, 0.0],
+                crate::core::keyframe::InterpolationType::Linear,
+            ), // Intermediate point at 50% distance
+            crate::core::keyframe::Keyframe::new(
+                60,
+                [200.0, 0.0],
+                crate::core::keyframe::InterpolationType::Linear,
+            ),
         ];
         rove_across_time(&mut kfs);
         // Distance 0->100 is 100, 100->200 is 100 => midpoint should be remapped from 10 to 30
@@ -2918,9 +3152,11 @@ mod tests {
     #[test]
     fn test_sequence_layers() {
         let mut l1 = Layer::new("1".into(), "L1".into(), LayerType::Null, 30);
-        l1.in_frame = 0; l1.out_frame = 30;
+        l1.in_frame = 0;
+        l1.out_frame = 30;
         let mut l2 = Layer::new("2".into(), "L2".into(), LayerType::Null, 30);
-        l2.in_frame = 0; l2.out_frame = 30;
+        l2.in_frame = 0;
+        l2.out_frame = 30;
 
         let mut layers = vec![l1, l2];
         sequence_layers(&mut layers, 5, true);
@@ -2934,8 +3170,16 @@ mod tests {
     #[test]
     fn test_export_youtube_chapters() {
         let markers = vec![
-            TimelineMarker { frame: 0, label: "Introduction".into(), color: [1.0, 1.0, 1.0] },
-            TimelineMarker { frame: 90, label: "Main Feature".into(), color: [1.0, 1.0, 1.0] },
+            TimelineMarker {
+                frame: 0,
+                label: "Introduction".into(),
+                color: [1.0, 1.0, 1.0],
+            },
+            TimelineMarker {
+                frame: 90,
+                label: "Main Feature".into(),
+                color: [1.0, 1.0, 1.0],
+            },
         ];
         let chapters = export_youtube_chapters(&markers, 30);
         assert!(chapters.contains("00:00 Introduction"));
@@ -2949,17 +3193,25 @@ mod tests {
         l1.transform.position = Animatable::new_constant([123.0, 456.0]);
         comp.add_layer(l1);
 
-        let sub_comp = comp.precompose_layers(
-            &["l1".into()],
-            "sub1".into(),
-            "Sub Comp 1".into(),
-            PrecompAttributesMode::MoveToNewComp,
-        ).expect("precompose should succeed");
+        let sub_comp = comp
+            .precompose_layers(
+                &["l1".into()],
+                "sub1".into(),
+                "Sub Comp 1".into(),
+                PrecompAttributesMode::MoveToNewComp,
+            )
+            .expect("precompose should succeed");
 
         assert_eq!(comp.layers.len(), 1);
-        assert!(matches!(comp.layers[0].layer_type, LayerType::PreComp { .. }));
+        assert!(matches!(
+            comp.layers[0].layer_type,
+            LayerType::PreComp { .. }
+        ));
         assert_eq!(sub_comp.layers.len(), 1);
-        assert_eq!(sub_comp.layers[0].transform.position.evaluate(0), [123.0, 456.0]);
+        assert_eq!(
+            sub_comp.layers[0].transform.position.evaluate(0),
+            [123.0, 456.0]
+        );
     }
 }
 
@@ -2970,7 +3222,11 @@ mod multi_camera_tests {
     #[test]
     fn test_resolve_camera_prefers_active_flag() {
         let mut comp = Composition::new("c".into(), "C".into(), 100, 100, 30, 30);
-        assert_eq!(comp.resolve_camera().name, "Active Camera", "legacy fallback");
+        assert_eq!(
+            comp.resolve_camera().name,
+            "Active Camera",
+            "legacy fallback"
+        );
 
         let mut wide = Camera3D::default();
         wide.name = "Wide".into();
@@ -3070,7 +3326,6 @@ mod projection_tests {
     }
 }
 
-
 #[cfg(test)]
 mod robustness_tests {
     use super::*;
@@ -3080,7 +3335,12 @@ mod robustness_tests {
     fn test_cyclic_parent_chain_does_not_recurse_forever() {
         // Hand-edited / corrupted project: A -> B -> A
         let mut comp = Composition::new("c".into(), "Comp".into(), 64, 64, 30, 30);
-        let mut a = Layer::new("a".into(), "A".into(), LayerType::Solid { color: [1.0; 4] }, 30);
+        let mut a = Layer::new(
+            "a".into(),
+            "A".into(),
+            LayerType::Solid { color: [1.0; 4] },
+            30,
+        );
         let mut b = Layer::new("b".into(), "B".into(), LayerType::Null, 30);
         a.parent_id = Some("b".to_string());
         b.parent_id = Some("a".to_string());
@@ -3097,11 +3357,17 @@ mod robustness_tests {
     #[test]
     fn test_self_parent_is_safe_at_render() {
         let mut comp = Composition::new("c".into(), "Comp".into(), 32, 32, 30, 30);
-        let mut l = Layer::new("s".into(), "SelfParent".into(), LayerType::Solid { color: [1.0; 4] }, 30);
+        let mut l = Layer::new(
+            "s".into(),
+            "SelfParent".into(),
+            LayerType::Solid { color: [1.0; 4] },
+            30,
+        );
         l.parent_id = Some("s".to_string());
         comp.layers.push(l);
 
-        let pixels = crate::core::software_renderer::render_frame_to_pixels(&comp, 0, 32, 32, 0.0, 0);
+        let pixels =
+            crate::core::software_renderer::render_frame_to_pixels(&comp, 0, 32, 32, 0.0, 0);
         assert_eq!(pixels.len(), 32 * 32 * 4);
     }
 
@@ -3110,32 +3376,61 @@ mod robustness_tests {
         // Sub-comp A contains a PreComp layer pointing to B, B points back to A
         let mut comp_a = Composition::new("A".into(), "CompA".into(), 32, 32, 30, 30);
         let comp_b = Composition::new("B".into(), "CompB".into(), 32, 32, 30, 30);
-        let pc = Layer::new("pc".into(), "Nested".into(), LayerType::PreComp { comp_id: "B".into() }, 30);
+        let pc = Layer::new(
+            "pc".into(),
+            "Nested".into(),
+            LayerType::PreComp {
+                comp_id: "B".into(),
+            },
+            30,
+        );
         comp_a.layers.push(pc);
         comp_a.sub_compositions.push(comp_b);
-        let pc_back = Layer::new("pcb".into(), "Back".into(), LayerType::PreComp { comp_id: "A".into() }, 30);
+        let pc_back = Layer::new(
+            "pcb".into(),
+            "Back".into(),
+            LayerType::PreComp {
+                comp_id: "A".into(),
+            },
+            30,
+        );
         comp_a.sub_compositions[0].layers.push(pc_back);
 
         // Must terminate without stack overflow
-        let pixels = crate::core::software_renderer::render_frame_to_pixels(&comp_a, 0, 32, 32, 0.0, 0);
+        let pixels =
+            crate::core::software_renderer::render_frame_to_pixels(&comp_a, 0, 32, 32, 0.0, 0);
         assert_eq!(pixels.len(), 32 * 32 * 4);
     }
 
     #[test]
     fn test_nan_and_infinite_property_values_render_safely() {
         let mut comp = Composition::new("c".into(), "Comp".into(), 32, 32, 30, 30);
-        let mut l = Layer::new("n".into(), "NaN Layer".into(), LayerType::Solid { color: [1.0; 4] }, 30);
+        let mut l = Layer::new(
+            "n".into(),
+            "NaN Layer".into(),
+            LayerType::Solid { color: [1.0; 4] },
+            30,
+        );
         // Corrupted values via extreme keyframes
         l.transform.position = Animatable::new_animated(vec![
-            crate::core::keyframe::Keyframe::new(0, [f32::NAN, f32::INFINITY], crate::core::keyframe::InterpolationType::Linear),
-            crate::core::keyframe::Keyframe::new(10, [f32::NEG_INFINITY, 1e30], crate::core::keyframe::InterpolationType::Linear),
+            crate::core::keyframe::Keyframe::new(
+                0,
+                [f32::NAN, f32::INFINITY],
+                crate::core::keyframe::InterpolationType::Linear,
+            ),
+            crate::core::keyframe::Keyframe::new(
+                10,
+                [f32::NEG_INFINITY, 1e30],
+                crate::core::keyframe::InterpolationType::Linear,
+            ),
         ]);
         l.transform.scale = Animatable::new_constant([f32::NAN, -1e20]);
         l.transform.opacity = Animatable::new_constant(f32::NAN);
         comp.layers.push(l);
 
         // Must not panic or hang
-        let pixels = crate::core::software_renderer::render_frame_to_pixels(&comp, 5, 32, 32, 0.0, 0);
+        let pixels =
+            crate::core::software_renderer::render_frame_to_pixels(&comp, 5, 32, 32, 0.0, 0);
         assert_eq!(pixels.len(), 32 * 32 * 4);
     }
 
@@ -3151,7 +3446,11 @@ mod robustness_tests {
         ];
         for payload in bad_payloads {
             let result: Result<Project, _> = serde_json::from_str(payload);
-            assert!(result.is_err(), "malformed JSON must be rejected: {:?}", payload);
+            assert!(
+                result.is_err(),
+                "malformed JSON must be rejected: {:?}",
+                payload
+            );
         }
     }
 
@@ -3163,7 +3462,7 @@ mod robustness_tests {
         // Deep recursion attempt — should be capped or error out, never crash
         let evil = "fn f(n) { if n <= 0 { 0 } else { f(n-1) + 1 } } f(100000)";
         let _ = eval_f32(&engine, evil, 0.0, 0, 30); // must return fallback, not crash
-        // Huge loop via string building — capped by max_operations
+                                                     // Huge loop via string building — capped by max_operations
         let evil2 = "let s = \\\"\\\"; for i in 0..1000000 { s += \\\"x\\\"; } 42";
         let _ = eval_f32(&engine, evil2, 0.0, 0, 30);
     }
@@ -3177,7 +3476,9 @@ mod layer_time_ops_tests {
         let mut l = Layer::new(
             "l".into(),
             "L".into(),
-            LayerType::Solid { color: [0.5, 0.5, 0.5, 1.0] },
+            LayerType::Solid {
+                color: [0.5, 0.5, 0.5, 1.0],
+            },
             60,
         );
         l.in_frame = 10;
@@ -3256,7 +3557,10 @@ mod layer_time_ops_tests {
             panic!("position should be animated");
         }
         if let Some(kfs) = l.transform.rotation.keyframes() {
-            assert!(matches!(kfs[0].interpolation, InterpolationType::Bezier { .. }));
+            assert!(matches!(
+                kfs[0].interpolation,
+                InterpolationType::Bezier { .. }
+            ));
         }
         // Opacity has an expression: keyframes keep linear interpolation.
         if let Some(kfs) = l.transform.opacity.keyframes() {
@@ -3296,4 +3600,3 @@ mod layer_time_ops_tests {
         assert!(l.transform.position.keyframes().is_none());
     }
 }
-

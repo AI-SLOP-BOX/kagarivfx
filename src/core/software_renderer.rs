@@ -2871,7 +2871,7 @@ pub fn render_frame_to_pixels(
             flare_light_screen,
         );
 
-        // Phase 2.5: velocity-based motion blur (AE-style shutter angle).
+        // Phase 2.5: velocity-based motion blur (AE-style shutter angle and phase).
         // Computes the layer's positional velocity across neighboring frames and
         // smears the layer buffer along the motion vector.
         if layer.motion_blur && comp.motion_blur_shutter_angle > 0.0 {
@@ -2884,7 +2884,7 @@ pub fn render_frame_to_pixels(
             let vel_y = (p_next[1] - p_prev[1]) * 0.5;
             let speed = (vel_x * vel_x + vel_y * vel_y).sqrt();
             if speed > 0.05 {
-                let shutter = (comp.motion_blur_shutter_angle / 360.0).clamp(0.0, 1.0);
+                let shutter = (comp.motion_blur_shutter_angle / 360.0).clamp(0.0, 2.0);
                 let samples = ((speed * shutter).ceil() as u32).clamp(2, 32);
                 crate::core::ae_effects_pack_v17::apply_motion_blur_vector(
                     &mut layer_buf,

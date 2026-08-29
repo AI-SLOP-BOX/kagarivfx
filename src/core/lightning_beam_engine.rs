@@ -223,6 +223,148 @@ pub fn evaluate_laser_beam_segment(config: &LaserBeamConfig) -> Option<([f32; 2]
     Some((tail_pos, head_pos, tail_thick, head_thick))
 }
 
+/// Renders lightning branches onto an RGBA pixel buffer with core line drawing and glowing falloff.
+pub fn render_lightning_to_buffer(
+    pixels: &mut [u8],
+    width: u32,
+    height: u32,
+    config: &AdvancedLightningConfig,
+) {
+    let Some(expected_len) = (width as usize).checked_mul(height as usize).and_then(|s| s.checked_mul(4)) else {
+        return;
+    };
+    if pixels.len() != expected_len || width == 0 || height == 0 {
+        return;
+    }
+
+    let branches = generate_lightning_arcs(config);
+    let glow_col = [
+        (config.glow_color[0] * 255.0).clamp(0.0, 255.0),
+        (config.glow_color[1] * 255.0).clamp(0.0, 255.0),
+        (config.glow_color[2] * 255.0).clamp(0.0, 255.0),
+        (config.glow_color[3] * 255.0).clamp(0.0, 255.0),
+    ];
+    let core_col = [
+        (config.core_color[0] * 255.0).clamp(0.0, 255.0),
+        (config.core_color[1] * 255.0).clamp(0.0, 255.0),
+        (config.core_color[2] * 255.0).clamp(0.0, 255.0),
+        (config.core_color[3] * 255.0).clamp(0.0, 255.0),
+    ];
+
+    for branch in &branches {
+        let n = branch.points.len();
+        if n < 2 {
+            continue;
+        }
+        let thick = branch.thickness.max(0.5);
+        let glow_rad = thick * 3.5;
+
+        for seg_idx in 0..n - 1 {
+            let p0 = branch.points[seg_idx];
+            let p1 = branch.points[seg_idx + 1];
+            let min_x = ((p0[0].min(p1[0]) - glow_rad).floor() as i32).clamp(0, width as i32 - 1) as u32;
+            let max_x = ((p0[0].max(p1[0]) + glow_rad).ceil() as i32).clamp(0, width as i32 - 1) as u32;
+            let min_y = ((p0[1].min(p1[1]) - glow_rad).floor() as i32).clamp(0, height as i32 - 1) as u32;
+            let max_y = ((p0[1].max(p1[1]) + glow_rad).ceil() as i32).clamp(0, height as i32 - 1) as u32;
+
+            let vx = p1[0] - p0[0];
+            let vy = p1[1] - p0[1];
+            let seg_len_sq = (vx * vx + vy * vy).max(1e-5);
+
+            for y in min_y..=max_y {
+                for x in min_x..=max_x {
+                    let px = x as f32 + 0.5;
+                    let py = y as f32 + 0.5;
+                    let t = (((px - p0[0]) * vx + (py - p0[1]) * vy) / seg_len_sq).clamp(0.0, 1.0);
+                    let proj_x = p0[0] + t * vx;
+                    let proj_y = p0[1] + t * vy;
+                    let dist = ((px - proj_x).powi(2) + (py - proj_y).powi(2)).sqrt();
+
+                    if dist < glow_rad {
+                        let idx = ((y * width + x) * 4) as usize;
+                        let glow_factor = (1.0 - dist / glow_rad).powi(2) * branch.alpha;
+                        let core_factor = if dist < thick { (1.0 - dist / thick) * branch.alpha } else { 0.0 };
+
+                        pixels[idx] = (pixels[idx] as f32 + glow_col[0] * glow_factor + core_col[0] * core_factor).clamp(0.0, 255.0) as u8;
+                        pixels[idx + 1] = (pixels[idx + 1] as f32 + glow_col[1] * glow_factor + core_col[1] * core_factor).clamp(0.0, 255.0) as u8;
+                        pixels[idx + 2] = (pixels[idx + 2] as f32 + glow_col[2] * glow_factor + core_col[2] * core_factor).clamp(0.0, 255.0) as u8;
+                        pixels[idx + 3] = (pixels[idx + 3] as f32 + (glow_col[3] * glow_factor + core_col[3] * core_factor) * 0.7).clamp(0.0, 255.0) as u8;
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// Renders a laser beam onto an RGBA pixel buffer with variable thickness, core, and glow.
+pub fn render_laser_beam_to_buffer(
+    pixels: &mut [u8],
+    width: u32,
+    height: u32,
+    config: &LaserBeamConfig,
+) {
+    let Some(expected_len) = (width as usize).checked_mul(height as usize).and_then(|s| s.checked_mul(4)) else {
+        return;
+    };
+    if pixels.len() != expected_len || width == 0 || height == 0 {
+        return;
+    }
+
+    let Some((tail, head, tail_thick, head_thick)) = evaluate_laser_beam_segment(config) else {
+        return;
+    };
+
+    let max_thick = tail_thick.max(head_thick).max(1.0);
+    let glow_rad = max_thick * 3.0;
+
+    let min_x = ((tail[0].min(head[0]) - glow_rad).floor() as i32).clamp(0, width as i32 - 1) as u32;
+    let max_x = ((tail[0].max(head[0]) + glow_rad).ceil() as i32).clamp(0, width as i32 - 1) as u32;
+    let min_y = ((tail[1].min(head[1]) - glow_rad).floor() as i32).clamp(0, height as i32 - 1) as u32;
+    let max_y = ((tail[1].max(head[1]) + glow_rad).ceil() as i32).clamp(0, height as i32 - 1) as u32;
+
+    let vx = head[0] - tail[0];
+    let vy = head[1] - tail[1];
+    let seg_len_sq = (vx * vx + vy * vy).max(1e-5);
+
+    let glow_col = [
+        (config.glow_color[0] * 255.0).clamp(0.0, 255.0),
+        (config.glow_color[1] * 255.0).clamp(0.0, 255.0),
+        (config.glow_color[2] * 255.0).clamp(0.0, 255.0),
+        (config.glow_color[3] * 255.0).clamp(0.0, 255.0),
+    ];
+    let core_col = [
+        (config.core_color[0] * 255.0).clamp(0.0, 255.0),
+        (config.core_color[1] * 255.0).clamp(0.0, 255.0),
+        (config.core_color[2] * 255.0).clamp(0.0, 255.0),
+        (config.core_color[3] * 255.0).clamp(0.0, 255.0),
+    ];
+
+    for y in min_y..=max_y {
+        for x in min_x..=max_x {
+            let px = x as f32 + 0.5;
+            let py = y as f32 + 0.5;
+            let t = (((px - tail[0]) * vx + (py - tail[1]) * vy) / seg_len_sq).clamp(0.0, 1.0);
+            let proj_x = tail[0] + t * vx;
+            let proj_y = tail[1] + t * vy;
+            let dist = ((px - proj_x).powi(2) + (py - proj_y).powi(2)).sqrt();
+
+            let local_thick = tail_thick + (head_thick - tail_thick) * t;
+            let local_glow = local_thick * 3.0;
+
+            if dist < local_glow {
+                let idx = ((y * width + x) * 4) as usize;
+                let glow_factor = (1.0 - dist / local_glow).powi(2);
+                let core_factor = if dist < local_thick { 1.0 - dist / local_thick } else { 0.0 };
+
+                pixels[idx] = (pixels[idx] as f32 + glow_col[0] * glow_factor + core_col[0] * core_factor).clamp(0.0, 255.0) as u8;
+                pixels[idx + 1] = (pixels[idx + 1] as f32 + glow_col[1] * glow_factor + core_col[1] * core_factor).clamp(0.0, 255.0) as u8;
+                pixels[idx + 2] = (pixels[idx + 2] as f32 + glow_col[2] * glow_factor + core_col[2] * core_factor).clamp(0.0, 255.0) as u8;
+                pixels[idx + 3] = (pixels[idx + 3] as f32 + (glow_col[3] * glow_factor + core_col[3] * core_factor) * 0.8).clamp(0.0, 255.0) as u8;
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
