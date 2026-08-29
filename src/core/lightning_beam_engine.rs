@@ -113,32 +113,35 @@ pub fn generate_lightning_arcs(config: &AdvancedLightningConfig) -> Vec<Lightnin
         alpha: 1.0,
     });
 
-    // Generate sub-branches from main nodes
-    for i in 1..main_pts.len() - 1 {
-        if next_f32() < branch_prob {
-            let start = main_pts[i];
-            let dir = [
-                (next_f32() - 0.5) * 200.0,
-                (next_f32() - 0.5) * 200.0,
-            ];
-            let branch_dest = [start[0] + dir[0], start[1] + dir[1]];
+    // Generate sub-branches from interior main nodes
+    let num_main = main_pts.len();
+    if num_main >= 3 {
+        for i in 1..num_main - 1 {
+            if next_f32() < branch_prob {
+                let start = main_pts[i];
+                let dir = [
+                    (next_f32() - 0.5) * 200.0,
+                    (next_f32() - 0.5) * 200.0,
+                ];
+                let branch_dest = [start[0] + dir[0], start[1] + dir[1]];
 
-            let mut fork_pts = vec![start];
-            displace_segment(
-                start,
-                branch_dest,
-                0,
-                3,
-                amp * 0.5,
-                &mut next_f32,
-                &mut fork_pts,
-            );
+                let mut fork_pts = vec![start];
+                displace_segment(
+                    start,
+                    branch_dest,
+                    0,
+                    3,
+                    amp * 0.5,
+                    &mut next_f32,
+                    &mut fork_pts,
+                );
 
-            branches.push(LightningBranch {
-                points: fork_pts,
-                thickness: config.main_thickness * 0.45,
-                alpha: 0.7,
-            });
+                branches.push(LightningBranch {
+                    points: fork_pts,
+                    thickness: config.main_thickness * 0.45,
+                    alpha: 0.7,
+                });
+            }
         }
     }
 
@@ -186,6 +189,12 @@ pub fn evaluate_laser_beam_segment(config: &LaserBeamConfig) -> Option<([f32; 2]
 
     let p0 = config.start_point;
     let p1 = config.end_point;
+    let dx = p1[0] - p0[0];
+    let dy = p1[1] - p0[1];
+    if (dx * dx + dy * dy) < 1e-6 {
+        return None;
+    }
+
     let t = config.time_progress.clamp(0.0, 1.0);
     let len_frac = (config.beam_length_percent / 100.0).clamp(0.0, 1.0);
     if len_frac <= 0.0 {
