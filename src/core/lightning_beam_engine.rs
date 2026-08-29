@@ -201,8 +201,8 @@ pub fn evaluate_laser_beam_segment(config: &LaserBeamConfig) -> Option<([f32; 2]
         return None;
     }
 
-    let head_t = (t * (1.0 + len_frac)).clamp(0.0, 1.0);
-    let tail_t = (head_t - len_frac).clamp(0.0, 1.0);
+    let tail_t = (t * (1.0 - len_frac)).clamp(0.0, 1.0);
+    let head_t = (tail_t + len_frac).clamp(0.0, 1.0);
 
     if (head_t - tail_t).abs() < 1e-4 {
         return None;

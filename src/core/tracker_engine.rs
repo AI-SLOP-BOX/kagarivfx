@@ -1,7 +1,7 @@
 #![allow(dead_code)]
-use crate::core::timeline::{Composition, Layer};
+use crate::core::keyframe::{InterpolationType, Keyframe};
 use crate::core::property::Animatable;
-use crate::core::keyframe::{Keyframe, InterpolationType};
+use crate::core::timeline::{Composition, Layer};
 
 /// Simple CPU-based Motion Tracking Engine inspired by SAD (Sum of Absolute Differences).
 /// Refines and tracks TrackerPoints frame-by-frame.
@@ -21,7 +21,13 @@ impl TrackerEngine {
             Self::load_tracker_frames(layer, current_frame)
         {
             return Self::track_next_frame_pixels(
-                layer, tracker_idx, current_frame, &curr_img, &next_img, img_w, img_h,
+                layer,
+                tracker_idx,
+                current_frame,
+                &curr_img,
+                &next_img,
+                img_w,
+                img_h,
             );
         }
         // Fallback: transform-velocity extrapolation (Null/Shape/etc.)
@@ -30,19 +36,28 @@ impl TrackerEngine {
 
     /// Loads the RGBA buffers for `frame` and `frame + 1` from the layer's media.
     /// Video layers use their extracted sequence; image layers reuse the same file.
-    fn load_tracker_frames(
-        layer: &Layer,
-        frame: u32,
-    ) -> Option<(Vec<u8>, Vec<u8>, usize, usize)> {
+    fn load_tracker_frames(layer: &Layer, frame: u32) -> Option<(Vec<u8>, Vec<u8>, usize, usize)> {
         use crate::core::image_cache::with_image_cache;
 
         let (dir_a, dir_b): (Option<String>, Option<String>) = match &layer.layer_type {
-            crate::core::timeline::LayerType::Video { frames_dir, frame_count, .. } => {
+            crate::core::timeline::LayerType::Video {
+                frames_dir,
+                frame_count,
+                ..
+            } => {
                 let seq_a = frame.min(frame_count.saturating_sub(1));
                 let seq_b = (frame + 1).min(frame_count.saturating_sub(1));
                 (
-                    Some(format!("{}/frame_{:05}.png", frames_dir.trim_end_matches('/'), seq_a)),
-                    Some(format!("{}/frame_{:05}.png", frames_dir.trim_end_matches('/'), seq_b)),
+                    Some(format!(
+                        "{}/frame_{:05}.png",
+                        frames_dir.trim_end_matches('/'),
+                        seq_a
+                    )),
+                    Some(format!(
+                        "{}/frame_{:05}.png",
+                        frames_dir.trim_end_matches('/'),
+                        seq_b
+                    )),
                 )
             }
             crate::core::timeline::LayerType::Image { path } => {
@@ -122,9 +137,15 @@ impl TrackerEngine {
 
         let search_radius = (tracker.search_size as i32).clamp(2, 64);
         let [bx, by] = compute_sad_match(
-            &ref_patch, feature, feature,
-            next_img, img_w, img_h,
-            cx, cy, search_radius,
+            &ref_patch,
+            feature,
+            feature,
+            next_img,
+            img_w,
+            img_h,
+            cx,
+            cy,
+            search_radius,
         );
 
         // Subpixel refinement along each axis
@@ -206,7 +227,7 @@ impl TrackerEngine {
 
         let fps = comp.fps;
         let mut current_positions = Vec::new();
-        
+
         {
             let layer = &comp.layers[layer_idx];
             if tracker_idx >= layer.trackers.len() {
@@ -231,7 +252,7 @@ impl TrackerEngine {
 
         let tracker = &mut comp.layers[layer_idx].trackers[tracker_idx];
         let mut keyframes = Vec::new();
-        
+
         for (f, pos) in current_positions {
             keyframes.push(Keyframe::new(f, pos, InterpolationType::Linear));
         }
@@ -256,13 +277,16 @@ impl TrackerEngine {
         let tracker_kfs = match comp.layers[source_layer_idx].trackers.get(tracker_idx) {
             Some(t) => match &t.position {
                 Animatable::Animated(kfs) => kfs.clone(),
-                Animatable::Constant(pos) => vec![Keyframe::new(0, *pos, InterpolationType::Linear)],
+                Animatable::Constant(pos) => {
+                    vec![Keyframe::new(0, *pos, InterpolationType::Linear)]
+                }
             },
             None => return,
         };
 
         if apply_position {
-            comp.layers[target_layer_idx].transform.position = Animatable::Animated(tracker_kfs.clone());
+            comp.layers[target_layer_idx].transform.position =
+                Animatable::Animated(tracker_kfs.clone());
         }
 
         if apply_rotation && tracker_kfs.len() > 1 {
@@ -272,7 +296,11 @@ impl TrackerEngine {
                 let p2 = tracker_kfs[i + 1].value;
                 let angle_rad = (p2[1] - p1[1]).atan2(p2[0] - p1[0]);
                 let angle_deg = angle_rad.to_degrees();
-                rot_kfs.push(Keyframe::new(tracker_kfs[i].frame, angle_deg, InterpolationType::Linear));
+                rot_kfs.push(Keyframe::new(
+                    tracker_kfs[i].frame,
+                    angle_deg,
+                    InterpolationType::Linear,
+                ));
             }
             comp.layers[target_layer_idx].transform.rotation = Animatable::Animated(rot_kfs);
         }
@@ -294,7 +322,9 @@ impl TrackerEngine {
         let tracker_kfs = match comp.layers[layer_idx].trackers.get(tracker_idx) {
             Some(t) => match &t.position {
                 Animatable::Animated(kfs) => kfs.clone(),
-                Animatable::Constant(pos) => vec![Keyframe::new(0, *pos, InterpolationType::Linear)],
+                Animatable::Constant(pos) => {
+                    vec![Keyframe::new(0, *pos, InterpolationType::Linear)]
+                }
             },
             None => return,
         };
@@ -369,7 +399,11 @@ pub fn compute_sad_match(
             let cx = search_center_x + dx;
             let cy = search_center_y + dy;
 
-            if cx - half_pw < 0 || cx + half_pw >= img_w as i32 || cy - half_ph < 0 || cy + half_ph >= img_h as i32 {
+            if cx - half_pw < 0
+                || cx + half_pw >= img_w as i32
+                || cy - half_ph < 0
+                || cy + half_ph >= img_h as i32
+            {
                 continue;
             }
 
@@ -386,8 +420,10 @@ pub fn compute_sad_match(
 
                     if ref_idx + 3 < ref_patch.len() && tgt_idx + 3 < target_img.len() {
                         let diff_r = (ref_patch[ref_idx] as f32 - target_img[tgt_idx] as f32).abs();
-                        let diff_g = (ref_patch[ref_idx + 1] as f32 - target_img[tgt_idx + 1] as f32).abs();
-                        let diff_b = (ref_patch[ref_idx + 2] as f32 - target_img[tgt_idx + 2] as f32).abs();
+                        let diff_g =
+                            (ref_patch[ref_idx + 1] as f32 - target_img[tgt_idx + 1] as f32).abs();
+                        let diff_b =
+                            (ref_patch[ref_idx + 2] as f32 - target_img[tgt_idx + 2] as f32).abs();
                         sad += diff_r + diff_g + diff_b;
                     }
                 }
@@ -398,8 +434,9 @@ pub fn compute_sad_match(
             // corner always won, causing spurious drift.
             let is_better = sad < min_sad
                 || ((sad - min_sad).abs() <= 1e-3
-                    && (dx.abs() + dy.abs()) < (best_x as i32 - search_center_x).abs()
-                        + (best_y as i32 - search_center_y).abs());
+                    && (dx.abs() + dy.abs())
+                        < (best_x as i32 - search_center_x).abs()
+                            + (best_y as i32 - search_center_y).abs());
             if is_better {
                 min_sad = sad;
                 best_x = cx as f32;
@@ -418,8 +455,20 @@ mod tests {
 
     #[test]
     fn test_tracker_apply_to_target() {
-        let mut comp = Composition::new("comp_1".to_string(), "TestComp".to_string(), 1920, 1080, 30, 100);
-        let mut src_layer = Layer::new("src".to_string(), "Source".to_string(), LayerType::Null, 100);
+        let mut comp = Composition::new(
+            "comp_1".to_string(),
+            "TestComp".to_string(),
+            1920,
+            1080,
+            30,
+            100,
+        );
+        let mut src_layer = Layer::new(
+            "src".to_string(),
+            "Source".to_string(),
+            LayerType::Null,
+            100,
+        );
         let mut tp = TrackerPoint::new("tp_1".to_string(), "Point1".to_string(), [100.0, 100.0]);
         tp.position = Animatable::Animated(vec![
             Keyframe::new(0, [100.0, 100.0], InterpolationType::Linear),
@@ -428,12 +477,23 @@ mod tests {
         src_layer.trackers.push(tp);
         comp.layers.push(src_layer);
 
-        let target_layer = Layer::new("target".to_string(), "Target".to_string(), LayerType::Null, 100);
+        let target_layer = Layer::new(
+            "target".to_string(),
+            "Target".to_string(),
+            LayerType::Null,
+            100,
+        );
         comp.layers.push(target_layer);
 
         TrackerEngine::apply_tracker_to_target(&mut comp, 0, 0, 1, true, true);
-        assert_eq!(comp.layers[1].transform.position.evaluate(0), [100.0, 100.0]);
-        assert_eq!(comp.layers[1].transform.position.evaluate(10), [200.0, 150.0]);
+        assert_eq!(
+            comp.layers[1].transform.position.evaluate(0),
+            [100.0, 100.0]
+        );
+        assert_eq!(
+            comp.layers[1].transform.position.evaluate(10),
+            [200.0, 150.0]
+        );
     }
 
     #[test]
@@ -454,18 +514,18 @@ mod tests {
         let ref_patch = vec![255u8; 2 * 2 * 4];
 
         let matched = compute_sad_match(&ref_patch, 2, 2, &target_img, 10, 10, 3, 3, 4);
-        assert_eq!(matched, [6.0, 6.0], "SAD template matching should find the feature at (6, 6)");
+        assert_eq!(
+            matched,
+            [6.0, 6.0],
+            "SAD template matching should find the feature at (6, 6)"
+        );
     }
 }
 
 /// Subpixel refinement: parabola fit through the SAD cost at (x-1, x, x+1)
 /// along each axis. Returns the refined offset in [-0.5, 0.5] per axis.
 /// Ported concept from NextVFX's dense optical flow post-processing.
-pub fn subpixel_refine(
-    sad_at: &dyn Fn(i32, i32) -> f32,
-    best_x: i32,
-    best_y: i32,
-) -> [f32; 2] {
+pub fn subpixel_refine(sad_at: &dyn Fn(i32, i32) -> f32, best_x: i32, best_y: i32) -> [f32; 2] {
     let fit = |minus: f32, center: f32, plus: f32| -> f32 {
         let denom = (minus - 2.0 * center + plus).abs();
         if denom < 1e-9 {
@@ -474,8 +534,16 @@ pub fn subpixel_refine(
         // Vertex of the parabola through the three samples
         (0.5 * (minus - plus) / denom).clamp(-0.5, 0.5)
     };
-    let dx = fit(sad_at(best_x - 1, best_y), sad_at(best_x, best_y), sad_at(best_x + 1, best_y));
-    let dy = fit(sad_at(best_x, best_y - 1), sad_at(best_x, best_y), sad_at(best_x, best_y + 1));
+    let dx = fit(
+        sad_at(best_x - 1, best_y),
+        sad_at(best_x, best_y),
+        sad_at(best_x + 1, best_y),
+    );
+    let dy = fit(
+        sad_at(best_x, best_y - 1),
+        sad_at(best_x, best_y),
+        sad_at(best_x, best_y + 1),
+    );
     [dx, dy]
 }
 
@@ -483,7 +551,11 @@ pub fn subpixel_refine(
 /// distinctive peak (good), near 1 means a flat valley (ambiguous match).
 pub fn match_confidence(min_sad: f32, second_min_sad: f32) -> f32 {
     if second_min_sad <= 1e-9 {
-        if min_sad <= 1e-9 { return 1.0; } else { return 0.0; }
+        if min_sad <= 1e-9 {
+            return 1.0;
+        } else {
+            return 0.0;
+        }
     }
     (min_sad / second_min_sad).clamp(0.0, 1.0)
 }
@@ -535,7 +607,9 @@ pub fn blend_template(template: &mut [u8], current: &[u8], blend: f32) {
         return;
     }
     for (t, &c) in template.iter_mut().zip(current.iter()) {
-        *t = (*t as f32 * (1.0 - b) + c as f32 * b).round().clamp(0.0, 255.0) as u8;
+        *t = (*t as f32 * (1.0 - b) + c as f32 * b)
+            .round()
+            .clamp(0.0, 255.0) as u8;
     }
 }
 
@@ -555,10 +629,7 @@ pub struct QuadTrackData {
 /// Solves the 3×3 planar homography H mapping `from` → `to` via the Direct
 /// Linear Transform with h33 normalised to 1. Returns None when the point
 /// configuration is degenerate (duplicates or collinear corners).
-pub fn compute_homography(
-    from: [[f32; 2]; 4],
-    to: [[f32; 2]; 4],
-) -> Option<[[f64; 3]; 3]> {
+pub fn compute_homography(from: [[f32; 2]; 4], to: [[f32; 2]; 4]) -> Option<[[f64; 3]; 3]> {
     let mut a = [[0.0f64; 8]; 8];
     let mut b = [0.0f64; 8];
     for i in 0..4 {
@@ -576,7 +647,10 @@ pub fn compute_homography(
     for col in 0..8 {
         let pivot_row = (col..8)
             .max_by(|&l, &r| {
-                a[l][col].abs().partial_cmp(&a[r][col].abs()).unwrap_or(std::cmp::Ordering::Equal)
+                a[l][col]
+                    .abs()
+                    .partial_cmp(&a[r][col].abs())
+                    .unwrap_or(std::cmp::Ordering::Equal)
             })
             .unwrap_or(col);
         if a[pivot_row][col].abs() < 1e-10 {
@@ -605,11 +679,7 @@ pub fn compute_homography(
         h[row] = (b[row] - sum) / a[row][row];
     }
 
-    let result = [
-        [h[0], h[1], h[2]],
-        [h[3], h[4], h[5]],
-        [h[6], h[7], 1.0],
-    ];
+    let result = [[h[0], h[1], h[2]], [h[3], h[4], h[5]], [h[6], h[7], 1.0]];
 
     // Residual validation: the linear system can be solvable even when no
     // true homography exists (e.g. two source corners mapped to one target).
@@ -704,23 +774,60 @@ pub fn smooth_quad_track(track: &QuadTrackData, max_jump: f32) -> QuadTrackData 
             let d_prev = (cur[0] - prev[0]).hypot(cur[1] - prev[1]);
             let d_next = (next[0] - cur[0]).hypot(next[1] - cur[1]);
             if d_prev > max_jump && d_next > max_jump {
-                out.corners[i][corner] = [
-                    (prev[0] + next[0]) * 0.5,
-                    (prev[1] + next[1]) * 0.5,
-                ];
+                out.corners[i][corner] = [(prev[0] + next[0]) * 0.5, (prev[1] + next[1]) * 0.5];
             }
         }
     }
     out
 }
 
+/// Smooths 2D tracker keyframes using a Gaussian / weighted moving average window.
+pub fn smooth_tracker_keyframes(
+    kfs: &[crate::core::keyframe::Keyframe<[f32; 2]>],
+    window_radius: usize,
+) -> Vec<crate::core::keyframe::Keyframe<[f32; 2]>> {
+    if kfs.len() <= 2 || window_radius == 0 {
+        return kfs.to_vec();
+    }
+
+    let n = kfs.len();
+    let mut smoothed = Vec::with_capacity(n);
+
+    for i in 0..n {
+        let min_idx = i.saturating_sub(window_radius);
+        let max_idx = (i + window_radius).min(n - 1);
+
+        let mut sum_x = 0.0f32;
+        let mut sum_y = 0.0f32;
+        let mut weight_sum = 0.0f32;
+
+        for j in min_idx..=max_idx {
+            let dist = (i as isize - j as isize).abs() as f32;
+            let sigma = (window_radius as f32 * 0.5).max(1.0);
+            let weight = (-dist * dist / (2.0 * sigma * sigma)).exp();
+
+            sum_x += kfs[j].value[0] * weight;
+            sum_y += kfs[j].value[1] * weight;
+            weight_sum += weight;
+        }
+
+        let avg_x = if weight_sum > 0.0 { sum_x / weight_sum } else { kfs[i].value[0] };
+        let avg_y = if weight_sum > 0.0 { sum_y / weight_sum } else { kfs[i].value[1] };
+
+        smoothed.push(crate::core::keyframe::Keyframe::new(
+            kfs[i].frame,
+            [avg_x, avg_y],
+            kfs[i].interpolation,
+        ));
+    }
+
+    smoothed
+}
+
 /// Per-frame tracking quality in 0..1: how well the tracked quad preserves the
 /// source rectangle's area and convexity. Flipped or collapsed quads (failed
 /// SAD matches) score near zero.
-pub fn quad_track_confidence(
-    track: &QuadTrackData,
-    source_rect: [[f32; 2]; 4],
-) -> Vec<f32> {
+pub fn quad_track_confidence(track: &QuadTrackData, source_rect: [[f32; 2]; 4]) -> Vec<f32> {
     fn signed_area(quad: &[[f32; 2]; 4]) -> f32 {
         let mut sum = 0.0;
         for i in 0..4 {
@@ -746,8 +853,16 @@ pub fn quad_track_confidence(
             let e32 = (quad[2][0] - quad[3][0]).hypot(quad[2][1] - quad[3][1]);
             let e12 = (quad[2][0] - quad[1][0]).hypot(quad[2][1] - quad[1][1]);
             let e03 = (quad[3][0] - quad[0][0]).hypot(quad[3][1] - quad[0][1]);
-            let r1 = if e01.max(e32) > 1e-6 { e01.min(e32) / e01.max(e32) } else { 0.0 };
-            let r2 = if e12.max(e03) > 1e-6 { e12.min(e03) / e12.max(e03) } else { 0.0 };
+            let r1 = if e01.max(e32) > 1e-6 {
+                e01.min(e32) / e01.max(e32)
+            } else {
+                0.0
+            };
+            let r2 = if e12.max(e03) > 1e-6 {
+                e12.min(e03) / e12.max(e03)
+            } else {
+                0.0
+            };
             let shape_score = (r1 + r2) * 0.5;
             (area_score * 0.7 + shape_score * 0.3).clamp(0.0, 1.0)
         })
@@ -795,8 +910,18 @@ mod subpixel_tests {
         let [dx, dy] = subpixel_refine(&sad, 10, 8);
         let refined_x = 10.0 + dx;
         let refined_y = 8.0 + dy;
-        assert!((refined_x - true_x).abs() < 0.15, "x {} vs {}", refined_x, true_x);
-        assert!((refined_y - true_y).abs() < 0.15, "y {} vs {}", refined_y, true_y);
+        assert!(
+            (refined_x - true_x).abs() < 0.15,
+            "x {} vs {}",
+            refined_x,
+            true_x
+        );
+        assert!(
+            (refined_y - true_y).abs() < 0.15,
+            "y {} vs {}",
+            refined_y,
+            true_y
+        );
     }
 
     #[test]
@@ -812,8 +937,8 @@ mod subpixel_tests {
 #[cfg(test)]
 mod pixel_tracking_tests {
     use super::*;
-    use crate::core::timeline::{Layer, LayerType, TrackerPoint};
     use crate::core::property::Animatable;
+    use crate::core::timeline::{Layer, LayerType, TrackerPoint};
 
     /// Builds a 64x64 gray frame with a bright square at `sq_x`.
     fn frame_with_square(sq_x: usize) -> Vec<u8> {
@@ -862,7 +987,11 @@ mod pixel_tracking_tests {
             new_pos[0]
         );
         // Y should stay put
-        assert!((new_pos[1] - 32.0).abs() < 1.5, "expected y≈32, got {}", new_pos[1]);
+        assert!(
+            (new_pos[1] - 32.0).abs() < 1.5,
+            "expected y≈32, got {}",
+            new_pos[1]
+        );
     }
 
     #[test]
@@ -877,8 +1006,13 @@ mod pixel_tracking_tests {
             feature_size: 12.0,
             reference_pattern: None,
         });
-        let r = TrackerEngine::track_next_frame_pixels(&layer, 0, 0, &f, &f.clone(), 64, 64).unwrap();
-        assert!((r[0] - 20.0).abs() < 0.6 && (r[1] - 32.0).abs() < 0.6, "{:?}", r);
+        let r =
+            TrackerEngine::track_next_frame_pixels(&layer, 0, 0, &f, &f.clone(), 64, 64).unwrap();
+        assert!(
+            (r[0] - 20.0).abs() < 0.6 && (r[1] - 32.0).abs() < 0.6,
+            "{:?}",
+            r
+        );
     }
 }
 
@@ -906,7 +1040,10 @@ mod quad_track_tests {
         let to: [[f32; 2]; 4] = RECT.map(|p| [p[0] + 25.0, p[1] - 15.0]);
         let h = compute_homography(RECT, to).expect("translation solvable");
         let m = apply_homography(&h, [60.0, 60.0]);
-        assert!((m[0] - 85.0).abs() < 1e-3 && (m[1] - 45.0).abs() < 1e-3, "{m:?}");
+        assert!(
+            (m[0] - 85.0).abs() < 1e-3 && (m[1] - 45.0).abs() < 1e-3,
+            "{m:?}"
+        );
     }
 
     #[test]
@@ -915,10 +1052,16 @@ mod quad_track_tests {
         let h = compute_homography(RECT, dst).expect("perspective solvable");
         for (s, d) in RECT.iter().zip(dst.iter()) {
             let m = apply_homography(&h, *s);
-            assert!((m[0] - d[0]).abs() < 1e-3 && (m[1] - d[1]).abs() < 1e-3, "{m:?} vs {d:?}");
+            assert!(
+                (m[0] - d[0]).abs() < 1e-3 && (m[1] - d[1]).abs() < 1e-3,
+                "{m:?} vs {d:?}"
+            );
         }
         let bad = [[0.0, 0.0], [0.0, 0.0], [84.0, 62.0], [4.0, 58.0]];
-        assert!(compute_homography(RECT, bad).is_none(), "duplicates degenerate");
+        assert!(
+            compute_homography(RECT, bad).is_none(),
+            "duplicates degenerate"
+        );
     }
 
     #[test]
@@ -928,9 +1071,16 @@ mod quad_track_tests {
         let base: [[f32; 2]; 4] = [[40.0, 30.0], [280.0, 30.0], [280.0, 210.0], [40.0, 210.0]];
         for (i, b) in base.iter().enumerate() {
             let kfs = (0..=10u32)
-                .map(|f| Keyframe::new(f, [b[0] + f as f32, b[1] - f as f32], InterpolationType::Linear))
+                .map(|f| {
+                    Keyframe::new(
+                        f,
+                        [b[0] + f as f32, b[1] - f as f32],
+                        InterpolationType::Linear,
+                    )
+                })
                 .collect();
-            let mut tp = crate::core::timeline::TrackerPoint::new(format!("t{i}"), format!("T{i}"), *b);
+            let mut tp =
+                crate::core::timeline::TrackerPoint::new(format!("t{i}"), format!("T{i}"), *b);
             tp.position = Animatable::Animated(kfs);
             layer.trackers.push(tp);
         }
@@ -947,11 +1097,20 @@ mod quad_track_tests {
         let hs = quad_homographies(&track, base);
         assert_eq!(hs.len(), 11);
         let centre = apply_homography(hs[5].as_ref().expect("frame 5 H"), [160.0, 120.0]);
-        assert!(centre[0] > 160.0 && centre[1] < 120.0, "centre follows motion: {centre:?}");
+        assert!(
+            centre[0] > 160.0 && centre[1] < 120.0,
+            "centre follows motion: {centre:?}"
+        );
 
         // Bad indices → empty.
-        assert!(TrackerEngine::analyze_quad_track(&comp, 0, [0, 1, 2, 9], 0, 5).frames.is_empty());
-        assert!(TrackerEngine::analyze_quad_track(&comp, 7, [0; 4], 0, 5).frames.is_empty());
+        assert!(
+            TrackerEngine::analyze_quad_track(&comp, 0, [0, 1, 2, 9], 0, 5)
+                .frames
+                .is_empty()
+        );
+        assert!(TrackerEngine::analyze_quad_track(&comp, 7, [0; 4], 0, 5)
+            .frames
+            .is_empty());
     }
 
     #[test]
@@ -970,7 +1129,10 @@ mod quad_track_tests {
         // Clean frames untouched.
         assert_eq!(smoothed.corners[2][0], track.corners[2][0]);
         // Short/degenerate inputs pass through unchanged.
-        assert_eq!(smooth_quad_track(&QuadTrackData::default(), 10.0), QuadTrackData::default());
+        assert_eq!(
+            smooth_quad_track(&QuadTrackData::default(), 10.0),
+            QuadTrackData::default()
+        );
     }
 
     #[test]
@@ -993,7 +1155,8 @@ mod quad_track_tests {
         // Flipped quad (corner crossing) → zero confidence.
         let mut bad = QuadTrackData::default();
         bad.frames.push(0);
-        bad.corners.push([[0.0, 0.0], [100.0, 0.0], [0.0, 100.0], [100.0, 100.0]]);
+        bad.corners
+            .push([[0.0, 0.0], [100.0, 0.0], [0.0, 100.0], [100.0, 100.0]]);
         assert!(
             quad_track_confidence(&bad, RECT).iter().all(|&c| c == 0.0),
             "flipped quad must score zero"
@@ -1089,7 +1252,12 @@ mod quad_track_tests {
             let quad = if f == 3 {
                 [[50.0, 50.0]; 4]
             } else {
-                [[10.0 + o, 10.0], [60.0 + o, 10.0], [60.0 + o, 60.0], [10.0 + o, 60.0]]
+                [
+                    [10.0 + o, 10.0],
+                    [60.0 + o, 10.0],
+                    [60.0 + o, 60.0],
+                    [10.0 + o, 60.0],
+                ]
             };
             track.frames.push(f);
             track.corners.push(quad);
@@ -1103,13 +1271,21 @@ mod quad_track_tests {
         // corner-0 positions are (20,10)/(30,10) → midpoint (25,10).
         assert_ne!(refined.corners[3], track.corners[3]);
         let c = refined.corners[3][0];
-        assert!((c[0] - 25.0).abs() < 1e-4 && (c[1] - 10.0).abs() < 1e-4, "midpoint {c:?}");
+        assert!(
+            (c[0] - 25.0).abs() < 1e-4 && (c[1] - 10.0).abs() < 1e-4,
+            "midpoint {c:?}"
+        );
     }
 
     #[test]
     fn test_tracker_apply_stabilize() {
         let mut comp = Composition::new("c".into(), "Comp".into(), 100, 100, 30, 30);
-        let mut layer = Layer::new("l".into(), "Shaky Layer".into(), crate::core::timeline::LayerType::Null, 30);
+        let mut layer = Layer::new(
+            "l".into(),
+            "Shaky Layer".into(),
+            crate::core::timeline::LayerType::Null,
+            30,
+        );
         layer.transform.position = Animatable::new_constant([50.0, 50.0]);
 
         // Tracker detects camera drifted by +10px X at frame 15
@@ -1136,5 +1312,18 @@ mod quad_track_tests {
         // Frame 15: position must counteract the +10px drift by moving to 40.0
         let p15 = comp.layers[0].transform.position.evaluate(15);
         assert_eq!(p15, [40.0, 50.0]);
+    }
+
+    #[test]
+    fn test_smooth_tracker_keyframes_reduces_noise() {
+        let kfs = vec![
+            Keyframe::new(0, [10.0, 10.0], InterpolationType::Linear),
+            Keyframe::new(1, [100.0, 10.0], InterpolationType::Linear), // Noise spike
+            Keyframe::new(2, [10.0, 10.0], InterpolationType::Linear),
+        ];
+        let smoothed = smooth_tracker_keyframes(&kfs, 1);
+        assert_eq!(smoothed.len(), 3);
+        // Spike at frame 1 should be damped significantly by its neighbours
+        assert!(smoothed[1].value[0] < 100.0);
     }
 }

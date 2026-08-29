@@ -37,7 +37,6 @@ pub fn evaluate_subframe_samples(
     if fps == 0
         || !settings.shutter_angle_deg.is_finite()
         || !settings.shutter_phase_deg.is_finite()
-        || settings.samples_per_frame == 0
     {
         return Vec::new();
     }

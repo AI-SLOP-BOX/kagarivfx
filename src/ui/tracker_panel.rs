@@ -1,7 +1,7 @@
-use eframe::egui;
-use crate::AfterEffectsApp;
-use crate::ui::theme::colors;
 use crate::ui::custom_widgets;
+use crate::ui::theme::colors;
+use crate::AfterEffectsApp;
+use eframe::egui;
 
 pub fn draw_tracker_panel(app: &mut AfterEffectsApp, ui: &mut egui::Ui, current_frame: u32) {
     ui.heading("Tracker");
@@ -14,7 +14,11 @@ pub fn draw_tracker_panel(app: &mut AfterEffectsApp, ui: &mut egui::Ui, current_
             Some(l) => (
                 l.name.clone(),
                 l.trackers.len(),
-                matches!(l.layer_type, crate::core::timeline::LayerType::Video { .. } | crate::core::timeline::LayerType::Image { .. }),
+                matches!(
+                    l.layer_type,
+                    crate::core::timeline::LayerType::Video { .. }
+                        | crate::core::timeline::LayerType::Image { .. }
+                ),
                 l.transform.position.evaluate(current_frame),
                 l.masks.len(),
             ),
@@ -29,7 +33,10 @@ pub fn draw_tracker_panel(app: &mut AfterEffectsApp, ui: &mut egui::Ui, current_
             ui.add_space(4.0);
             // ── Tracker point management ──
             ui.label(format!("Tracker points: {}", tracker_count));
-            if custom_widgets::ae_button_accent(ui, "+ Add Tracker Point").on_hover_text("Add a track point at the playhead position").clicked() {
+            if custom_widgets::ae_button_accent(ui, "+ Add Tracker Point")
+                .on_hover_text("Add a track point at the playhead position")
+                .clicked()
+            {
                 let pos = layer_pos_at_head;
                 let tp = crate::core::timeline::TrackerPoint {
                     id: format!("tracker_{}", tracker_count),
@@ -122,30 +129,83 @@ pub fn draw_tracker_panel(app: &mut AfterEffectsApp, ui: &mut egui::Ui, current_
             ui.collapsing("☕ Mocha Planar Surface Tracker", |ui| {
                 ui.horizontal(|ui| {
                     ui.label("Track Motion:");
-                    let mut track_trans = ui.ctx().data(|d| d.get_temp::<bool>(egui::Id::new("planar_trans")).unwrap_or(true));
-                    let mut track_rot_scale = ui.ctx().data(|d| d.get_temp::<bool>(egui::Id::new("planar_rot_scale")).unwrap_or(true));
-                    let mut track_shear = ui.ctx().data(|d| d.get_temp::<bool>(egui::Id::new("planar_shear")).unwrap_or(true));
-                    let mut track_persp = ui.ctx().data(|d| d.get_temp::<bool>(egui::Id::new("planar_persp")).unwrap_or(true));
+                    let mut track_trans = ui.ctx().data(|d| {
+                        d.get_temp::<bool>(egui::Id::new("planar_trans"))
+                            .unwrap_or(true)
+                    });
+                    let mut track_rot_scale = ui.ctx().data(|d| {
+                        d.get_temp::<bool>(egui::Id::new("planar_rot_scale"))
+                            .unwrap_or(true)
+                    });
+                    let mut track_shear = ui.ctx().data(|d| {
+                        d.get_temp::<bool>(egui::Id::new("planar_shear"))
+                            .unwrap_or(true)
+                    });
+                    let mut track_persp = ui.ctx().data(|d| {
+                        d.get_temp::<bool>(egui::Id::new("planar_persp"))
+                            .unwrap_or(true)
+                    });
 
-                    if ui.checkbox(&mut track_trans, "Translation").changed() { ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("planar_trans"), track_trans)); }
-                    if ui.checkbox(&mut track_rot_scale, "Scale/Rot").changed() { ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("planar_rot_scale"), track_rot_scale)); }
-                    if ui.checkbox(&mut track_shear, "Shear").changed() { ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("planar_shear"), track_shear)); }
-                    if ui.checkbox(&mut track_persp, "Perspective").changed() { ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("planar_persp"), track_persp)); }
-                });
-
-                ui.horizontal(|ui| {
-                    let mut show_surf = ui.ctx().data(|d| d.get_temp::<bool>(egui::Id::new("planar_show_surf")).unwrap_or(true));
-                    let mut show_grid = ui.ctx().data(|d| d.get_temp::<bool>(egui::Id::new("planar_show_grid")).unwrap_or(false));
-                    if ui.checkbox(&mut show_surf, "Show Surface (Blue)").changed() { ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("planar_show_surf"), show_surf)); }
-                    if ui.checkbox(&mut show_grid, "Show Planar Grid").changed() { ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("planar_show_grid"), show_grid)); }
-                });
-
-                ui.horizontal(|ui| {
-                    if custom_widgets::ae_button_accent(ui, "☕ Track Planar Surface").on_hover_text("High-precision subpixel homography planar tracking (Mocha engine)").clicked() {
-                        app.toasts.info("Planar surface tracked across work area with subpixel homography!");
+                    if ui.checkbox(&mut track_trans, "Translation").changed() {
+                        ui.ctx().data_mut(|d| {
+                            d.insert_temp(egui::Id::new("planar_trans"), track_trans)
+                        });
                     }
-                    if custom_widgets::ae_button(ui, "📐 Align Surface Corners").on_hover_text("Snap planar surface to layer bounding box").clicked() {
-                        app.toasts.info("Planar surface corners aligned to layer bounds");
+                    if ui.checkbox(&mut track_rot_scale, "Scale/Rot").changed() {
+                        ui.ctx().data_mut(|d| {
+                            d.insert_temp(egui::Id::new("planar_rot_scale"), track_rot_scale)
+                        });
+                    }
+                    if ui.checkbox(&mut track_shear, "Shear").changed() {
+                        ui.ctx().data_mut(|d| {
+                            d.insert_temp(egui::Id::new("planar_shear"), track_shear)
+                        });
+                    }
+                    if ui.checkbox(&mut track_persp, "Perspective").changed() {
+                        ui.ctx().data_mut(|d| {
+                            d.insert_temp(egui::Id::new("planar_persp"), track_persp)
+                        });
+                    }
+                });
+
+                ui.horizontal(|ui| {
+                    let mut show_surf = ui.ctx().data(|d| {
+                        d.get_temp::<bool>(egui::Id::new("planar_show_surf"))
+                            .unwrap_or(true)
+                    });
+                    let mut show_grid = ui.ctx().data(|d| {
+                        d.get_temp::<bool>(egui::Id::new("planar_show_grid"))
+                            .unwrap_or(false)
+                    });
+                    if ui.checkbox(&mut show_surf, "Show Surface (Blue)").changed() {
+                        ui.ctx().data_mut(|d| {
+                            d.insert_temp(egui::Id::new("planar_show_surf"), show_surf)
+                        });
+                    }
+                    if ui.checkbox(&mut show_grid, "Show Planar Grid").changed() {
+                        ui.ctx().data_mut(|d| {
+                            d.insert_temp(egui::Id::new("planar_show_grid"), show_grid)
+                        });
+                    }
+                });
+
+                ui.horizontal(|ui| {
+                    if custom_widgets::ae_button_accent(ui, "☕ Track Planar Surface")
+                        .on_hover_text(
+                            "High-precision subpixel homography planar tracking (Mocha engine)",
+                        )
+                        .clicked()
+                    {
+                        app.toasts.info(
+                            "Planar surface tracked across work area with subpixel homography!",
+                        );
+                    }
+                    if custom_widgets::ae_button(ui, "📐 Align Surface Corners")
+                        .on_hover_text("Snap planar surface to layer bounding box")
+                        .clicked()
+                    {
+                        app.toasts
+                            .info("Planar surface corners aligned to layer bounds");
                     }
                 });
             });
@@ -189,7 +249,9 @@ pub fn draw_tracker_panel(app: &mut AfterEffectsApp, ui: &mut egui::Ui, current_
                     app.modify_project(|p| {
                         let comp = p.active_composition_mut();
                         // 1) Seed rectangle from the four trackers at the start frame.
-                        let Some(layer0) = comp.layers.get(idx) else { return };
+                        let Some(layer0) = comp.layers.get(idx) else {
+                            return;
+                        };
                         if layer0.trackers.len() < 4 {
                             return;
                         }
@@ -201,24 +263,22 @@ pub fn draw_tracker_panel(app: &mut AfterEffectsApp, ui: &mut egui::Ui, current_
                             r
                         };
                         // 2) Track all four corners over the work area.
-                        let track =
-                            crate::core::tracker_engine::TrackerEngine::analyze_quad_track(
-                                comp,
-                                idx,
-                                [0, 1, 2, 3],
-                                current_frame,
-                                wa_out,
-                            );
-                        avg = crate::core::tracker_engine::quad_track_confidence(
-                            &track,
-                            src_rect,
-                        )
-                        .iter()
-                        .sum::<f32>()
+                        let track = crate::core::tracker_engine::TrackerEngine::analyze_quad_track(
+                            comp,
+                            idx,
+                            [0, 1, 2, 3],
+                            current_frame,
+                            wa_out,
+                        );
+                        avg = crate::core::tracker_engine::quad_track_confidence(&track, src_rect)
+                            .iter()
+                            .sum::<f32>()
                             / track.frames.len().max(1) as f32;
                         frames = track.frames.len() as u32;
                         // 3) Bake per-corner keyframes back onto the trackers.
-                        let Some(layer) = comp.layers.get_mut(idx) else { return };
+                        let Some(layer) = comp.layers.get_mut(idx) else {
+                            return;
+                        };
                         for slot in 0..4usize {
                             let kfs: Vec<crate::core::keyframe::Keyframe<[f32; 2]>> = track
                                 .frames
@@ -242,26 +302,49 @@ pub fn draw_tracker_panel(app: &mut AfterEffectsApp, ui: &mut egui::Ui, current_
                     crate::core::frame_cache::bump_version();
                     let pct = format!("{:.0}% over {} frames", avg * 100.0, frames);
                     ui.memory_mut(|m| m.data.insert_temp(quad_conf_id, pct.clone()));
-                    app.toasts.info(format!("Quad tracking complete — avg lock {pct}"));
+                    app.toasts
+                        .info(format!("Quad tracking complete — avg lock {pct}"));
                 } else {
-                    app.toasts.error("Nothing to analyze: extend the work area past the playhead");
+                    app.toasts
+                        .error("Nothing to analyze: extend the work area past the playhead");
                 }
             }
 
             ui.horizontal(|ui| {
-                if custom_widgets::ae_button(ui, "◀◀ 1f").on_hover_text("Analyze 1 Frame Backward").clicked() && current_frame > 0 {
+                if custom_widgets::ae_button(ui, "◀◀ 1f")
+                    .on_hover_text("Analyze 1 Frame Backward")
+                    .clicked()
+                    && current_frame > 0
+                {
                     let f = current_frame - 1;
                     app.modify_project(|p| {
                         let comp = p.active_composition_mut();
-                        crate::core::tracker_engine::TrackerEngine::analyze_track_cancellable(comp, idx, 0, f.saturating_sub(1), f, None);
+                        crate::core::tracker_engine::TrackerEngine::analyze_track_cancellable(
+                            comp,
+                            idx,
+                            0,
+                            f.saturating_sub(1),
+                            f,
+                            None,
+                        );
                     });
                 }
-                if custom_widgets::ae_button(ui, "1f ▶▶").on_hover_text("Analyze 1 Frame Forward").clicked() {
+                if custom_widgets::ae_button(ui, "1f ▶▶")
+                    .on_hover_text("Analyze 1 Frame Forward")
+                    .clicked()
+                {
                     let total = app.history.current().active_composition().duration_frames;
                     let f = (current_frame + 1).min(total.saturating_sub(1));
                     app.modify_project(|p| {
                         let comp = p.active_composition_mut();
-                        crate::core::tracker_engine::TrackerEngine::analyze_track_cancellable(comp, idx, 0, current_frame, f, None);
+                        crate::core::tracker_engine::TrackerEngine::analyze_track_cancellable(
+                            comp,
+                            idx,
+                            0,
+                            current_frame,
+                            f,
+                            None,
+                        );
                     });
                 }
             });
@@ -271,31 +354,56 @@ pub fn draw_tracker_panel(app: &mut AfterEffectsApp, ui: &mut egui::Ui, current_
             ui.label("Apply:");
 
             ui.horizontal(|ui| {
-                if custom_widgets::ae_button(ui, "Reset Track").on_hover_text("Remove all tracked keyframes from this tracker").clicked() {
+                if custom_widgets::ae_button(ui, "Reset Track")
+                    .on_hover_text("Remove all tracked keyframes from this tracker")
+                    .clicked()
+                {
                     app.modify_project(|p| {
                         let comp = p.active_composition_mut();
                         if let Some(tp) = comp.layers.get_mut(idx) {
                             for t in tp.trackers.iter_mut() {
-                                t.position = crate::core::property::Animatable::new_constant(t.position.evaluate(current_frame));
+                                t.position = crate::core::property::Animatable::new_constant(
+                                    t.position.evaluate(current_frame),
+                                );
                             }
                         }
                     });
                     app.toasts.info("Tracker keyframes reset");
                 }
-                if custom_widgets::ae_button(ui, "Apply to Position").on_hover_text("Bake tracker motion into a target layer's position (pick below)").clicked() {
-                    app.toasts.info("Select the target layer in 'Apply to Layer' dropdown");
+                if custom_widgets::ae_button(ui, "Apply to Position")
+                    .on_hover_text(
+                        "Bake tracker motion into a target layer's position (pick below)",
+                    )
+                    .clicked()
+                {
+                    app.toasts
+                        .info("Select the target layer in 'Apply to Layer' dropdown");
                 }
             });
 
             // Target picker + apply
             egui::ComboBox::from_id_salt("tracker_apply_target")
-                .selected_text(app.tracker_apply_target.map(|i| format!("Layer {}", i + 1)).unwrap_or_else(|| "Target layer...".into()))
+                .selected_text(
+                    app.tracker_apply_target
+                        .map(|i| format!("Layer {}", i + 1))
+                        .unwrap_or_else(|| "Target layer...".into()),
+                )
                 .show_ui(ui, |ui| {
-                    let names: Vec<(usize, String)> = app.history.current().active_composition()
-                        .layers.iter().enumerate()
-                        .map(|(i, l)| (i, l.name.clone())).collect();
+                    let names: Vec<(usize, String)> = app
+                        .history
+                        .current()
+                        .active_composition()
+                        .layers
+                        .iter()
+                        .enumerate()
+                        .map(|(i, l)| (i, l.name.clone()))
+                        .collect();
                     for (ti, tname) in names {
-                        ui.selectable_value(&mut app.tracker_apply_target, Some(ti), format!("{}. {}", ti + 1, tname));
+                        ui.selectable_value(
+                            &mut app.tracker_apply_target,
+                            Some(ti),
+                            format!("{}. {}", ti + 1, tname),
+                        );
                     }
                 });
             if let Some(target_idx) = app.tracker_apply_target {
@@ -345,9 +453,54 @@ pub fn draw_tracker_panel(app: &mut AfterEffectsApp, ui: &mut egui::Ui, current_
                 });
             }
 
+            ui.horizontal(|ui| {
+                if custom_widgets::ae_button_accent(ui, "📦 Apply Motion → New Null").on_hover_text("Create a new Null layer and bind the tracked motion keyframes to it").clicked() {
+                    app.modify_project(|p| {
+                        let comp = p.active_composition_mut();
+                        let null_idx = comp.layers.len();
+                        let dur = comp.duration_frames;
+                        let null_layer = crate::core::timeline::Layer::new(
+                            format!("null_track_{}", null_idx + 1),
+                            format!("Tracker {} Null", idx + 1),
+                            crate::core::timeline::LayerType::Null,
+                            dur,
+                        );
+                        comp.add_layer(null_layer);
+                        crate::core::tracker_engine::TrackerEngine::apply_tracker_to_target(comp, idx, 0, null_idx, true, false);
+                    });
+                    crate::core::frame_cache::bump_version();
+                    app.toasts.info("Created new Null layer with tracked motion!");
+                }
+                if custom_widgets::ae_button(ui, "🌊 Smooth Track").on_hover_text("Apply Gaussian temporal filter to reduce jitter in tracked keyframes").clicked() {
+                    let mut smoothed = false;
+                    app.modify_project(|p| {
+                        let comp = p.active_composition_mut();
+                        if let Some(src_layer) = comp.layers.get_mut(idx) {
+                            for tracker in &mut src_layer.trackers {
+                                if let crate::core::property::Animatable::Animated(ref kfs) = tracker.position {
+                                    let new_kfs = crate::core::tracker_engine::smooth_tracker_keyframes(kfs, 2);
+                                    tracker.position = crate::core::property::Animatable::Animated(new_kfs);
+                                    smoothed = true;
+                                }
+                            }
+                        }
+                    });
+                    if smoothed {
+                        crate::core::frame_cache::bump_version();
+                        app.toasts.info("Tracked keyframes smoothed with Gaussian temporal filter");
+                    } else {
+                        app.toasts.error("No animated keyframes found on tracker");
+                    }
+                }
+            });
+
             ui.add_space(8.0);
             ui.separator();
-            ui.label(egui::RichText::new("✨ AI Auto-Trace & Roto Assist").strong().color(colors::ACCENT_CYAN));
+            ui.label(
+                egui::RichText::new("✨ AI Auto-Trace & Roto Assist")
+                    .strong()
+                    .color(colors::ACCENT_CYAN),
+            );
             ui.collapsing("🔍 Auto-Trace Settings", |ui| {
                 ui.horizontal(|ui| {
                     ui.label("Channel:");
@@ -373,48 +526,99 @@ pub fn draw_tracker_panel(app: &mut AfterEffectsApp, ui: &mut egui::Ui, current_
 
             // ── Roto Brush & Refine Edge (Matte Cleanup) ──
             ui.collapsing("✂ Roto Brush & Refine Edge", |ui| {
-                let mut refine_smooth = ui.ctx().data(|d| d.get_temp::<f32>(egui::Id::new("roto_smooth")).unwrap_or(2.0));
-                let mut refine_feather = ui.ctx().data(|d| d.get_temp::<f32>(egui::Id::new("roto_feather")).unwrap_or(5.0));
-                let mut refine_contrast = ui.ctx().data(|d| d.get_temp::<f32>(egui::Id::new("roto_contrast")).unwrap_or(80.0));
-                let mut shift_edge = ui.ctx().data(|d| d.get_temp::<f32>(egui::Id::new("roto_shift_edge")).unwrap_or(0.0));
-                let mut decontaminate = ui.ctx().data(|d| d.get_temp::<bool>(egui::Id::new("roto_decontaminate")).unwrap_or(true));
+                let mut refine_smooth = ui.ctx().data(|d| {
+                    d.get_temp::<f32>(egui::Id::new("roto_smooth"))
+                        .unwrap_or(2.0)
+                });
+                let mut refine_feather = ui.ctx().data(|d| {
+                    d.get_temp::<f32>(egui::Id::new("roto_feather"))
+                        .unwrap_or(5.0)
+                });
+                let mut refine_contrast = ui.ctx().data(|d| {
+                    d.get_temp::<f32>(egui::Id::new("roto_contrast"))
+                        .unwrap_or(80.0)
+                });
+                let mut shift_edge = ui.ctx().data(|d| {
+                    d.get_temp::<f32>(egui::Id::new("roto_shift_edge"))
+                        .unwrap_or(0.0)
+                });
+                let mut decontaminate = ui.ctx().data(|d| {
+                    d.get_temp::<bool>(egui::Id::new("roto_decontaminate"))
+                        .unwrap_or(true)
+                });
 
                 ui.horizontal(|ui| {
                     ui.label("Smoothness:");
-                    if ui.add(egui::Slider::new(&mut refine_smooth, 0.0..=10.0)).changed() {
-                        ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("roto_smooth"), refine_smooth));
+                    if ui
+                        .add(egui::Slider::new(&mut refine_smooth, 0.0..=10.0))
+                        .changed()
+                    {
+                        ui.ctx().data_mut(|d| {
+                            d.insert_temp(egui::Id::new("roto_smooth"), refine_smooth)
+                        });
                     }
                 });
                 ui.horizontal(|ui| {
                     ui.label("Feather:");
-                    if ui.add(egui::Slider::new(&mut refine_feather, 0.0..=50.0).suffix(" px")).changed() {
-                        ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("roto_feather"), refine_feather));
+                    if ui
+                        .add(egui::Slider::new(&mut refine_feather, 0.0..=50.0).suffix(" px"))
+                        .changed()
+                    {
+                        ui.ctx().data_mut(|d| {
+                            d.insert_temp(egui::Id::new("roto_feather"), refine_feather)
+                        });
                     }
                 });
                 ui.horizontal(|ui| {
                     ui.label("Contrast:");
-                    if ui.add(egui::Slider::new(&mut refine_contrast, 0.0..=100.0).suffix(" %")).changed() {
-                        ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("roto_contrast"), refine_contrast));
+                    if ui
+                        .add(egui::Slider::new(&mut refine_contrast, 0.0..=100.0).suffix(" %"))
+                        .changed()
+                    {
+                        ui.ctx().data_mut(|d| {
+                            d.insert_temp(egui::Id::new("roto_contrast"), refine_contrast)
+                        });
                     }
                 });
                 ui.horizontal(|ui| {
                     ui.label("Shift Edge:");
-                    if ui.add(egui::Slider::new(&mut shift_edge, -100.0..=100.0).suffix(" %")).changed() {
-                        ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("roto_shift_edge"), shift_edge));
+                    if ui
+                        .add(egui::Slider::new(&mut shift_edge, -100.0..=100.0).suffix(" %"))
+                        .changed()
+                    {
+                        ui.ctx().data_mut(|d| {
+                            d.insert_temp(egui::Id::new("roto_shift_edge"), shift_edge)
+                        });
                     }
                 });
-                ui.checkbox(&mut decontaminate, "Decontaminate Edge Colors (Fringe Removal)");
-                if decontaminate != ui.ctx().data(|d| d.get_temp::<bool>(egui::Id::new("roto_decontaminate")).unwrap_or(true)) {
-                    ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("roto_decontaminate"), decontaminate));
+                ui.checkbox(
+                    &mut decontaminate,
+                    "Decontaminate Edge Colors (Fringe Removal)",
+                );
+                if decontaminate
+                    != ui.ctx().data(|d| {
+                        d.get_temp::<bool>(egui::Id::new("roto_decontaminate"))
+                            .unwrap_or(true)
+                    })
+                {
+                    ui.ctx().data_mut(|d| {
+                        d.insert_temp(egui::Id::new("roto_decontaminate"), decontaminate)
+                    });
                 }
             });
 
             ui.horizontal(|ui| {
-                if custom_widgets::ae_button_accent(ui, "🎯 Auto-Generate Mask").on_hover_text("Auto-create Bezier Mask around tracked feature").clicked() {
+                if custom_widgets::ae_button_accent(ui, "🎯 Auto-Generate Mask")
+                    .on_hover_text("Auto-create Bezier Mask around tracked feature")
+                    .clicked()
+                {
                     let mut temp_proj = app.history.current().clone();
                     let comp_mut = temp_proj.active_composition_mut();
                     if idx < comp_mut.layers.len() {
-                        let target_pos = comp_mut.layers[idx].transform.position.evaluate(current_frame);
+                        let target_pos = comp_mut.layers[idx]
+                            .transform
+                            .position
+                            .evaluate(current_frame);
                         let (cx, cy) = (target_pos[0], target_pos[1]);
                         let (hw, hh) = (60.0f32, 60.0f32);
 
@@ -446,11 +650,11 @@ pub fn draw_tracker_panel(app: &mut AfterEffectsApp, ui: &mut egui::Ui, current_
                         comp_mut.layers[idx].masks.push(mask);
                         app.history.commit(temp_proj);
                         crate::core::frame_cache::bump_version();
-                        app.toasts.info(format!("Auto-generated Bezier Mask on {}", layer_name));
+                        app.toasts
+                            .info(format!("Auto-generated Bezier Mask on {}", layer_name));
                     }
                 }
             });
-
         } else {
             ui.weak("Select a layer to perform motion tracking.");
         }
