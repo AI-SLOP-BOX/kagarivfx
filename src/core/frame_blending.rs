@@ -38,6 +38,28 @@ pub fn evaluate_frame_blend_weights(
     }
 }
 
+/// Resolves effective sample frame and fractional blend weight for Time Remapped layers.
+pub fn evaluate_time_remap_seconds(
+    remap_sec: f32,
+    source_fps: u32,
+    source_total_frames: u32,
+    blend_mode: FrameBlendMode,
+) -> ((u32, f32), (u32, f32)) {
+    let exact_frame = (remap_sec * source_fps as f32).max(0.0);
+    let max_frame = source_total_frames.saturating_sub(1);
+
+    let f0 = (exact_frame.floor() as u32).min(max_frame);
+    let f1 = (f0 + 1).min(max_frame);
+    let frac = (exact_frame - f0 as f32).clamp(0.0, 1.0);
+
+    match blend_mode {
+        FrameBlendMode::Off => ((f0, 1.0), (f0, 0.0)),
+        FrameBlendMode::FrameMix | FrameBlendMode::PixelMotion => {
+            ((f0, 1.0 - frac), (f1, frac))
+        }
+    }
+}
+
 /// Alpha-correct temporal cross-fade: RGB is blended in premultiplied space so
 /// semi-transparent edges never produce dark halos (the naive per-channel lerp
 /// does).
@@ -346,5 +368,23 @@ mod tests {
         let small = vec![1u8; 16];
         let fallback = blend_pixel_motion(&f0, &small, 0.5, 32, 32, &opts);
         assert_eq!(fallback, f0);
+    }
+
+    #[test]
+    fn test_time_remap_seconds_evaluation() {
+        // 30fps source, 100 frames total.
+        // Remap to 1.5 seconds -> exact frame 45.0
+        let ((f0, w0), (f1, w1)) = evaluate_time_remap_seconds(1.5, 30, 100, FrameBlendMode::FrameMix);
+        assert_eq!(f0, 45);
+        assert_eq!(f1, 46);
+        assert_eq!(w0, 1.0);
+        assert_eq!(w1, 0.0);
+
+        // Remap to 1.55 seconds -> frame 46.5
+        let ((f0, w0), (f1, w1)) = evaluate_time_remap_seconds(1.55, 30, 100, FrameBlendMode::FrameMix);
+        assert_eq!(f0, 46);
+        assert_eq!(f1, 47);
+        assert!((w0 - 0.5).abs() < 1e-4);
+        assert!((w1 - 0.5).abs() < 1e-4);
     }
 }

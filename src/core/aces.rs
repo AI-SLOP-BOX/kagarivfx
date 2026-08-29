@@ -96,6 +96,53 @@ pub fn acescc_to_acescg(rgb: [f32; 3]) -> [f32; 3] {
     [conv_full(rgb[0]), conv_full(rgb[1]), conv_full(rgb[2])]
 }
 
+/// ACEScct quasi-logarithmic encoding with toe curve for color grading (S-2016-001).
+pub fn acescg_to_acescct(rgb: [f32; 3]) -> [f32; 3] {
+    let conv = |v: f32| -> f32 {
+        if v > 0.0078125 {
+            (v.log2() + 9.72) / 17.52
+        } else {
+            10.5402377416545 * v + 0.0729055341958355
+        }
+    };
+    [conv(rgb[0]), conv(rgb[1]), conv(rgb[2])]
+}
+
+/// ACEScct decoding to ACEScg linear.
+pub fn acescc_to_acescct_inv(rgb: [f32; 3]) -> [f32; 3] {
+    let conv = |v: f32| -> f32 {
+        if v > 0.155251141552511 {
+            (v * 17.52 - 9.72).exp2()
+        } else {
+            (v - 0.0729055341958355) / 10.5402377416545
+        }
+    };
+    [conv(rgb[0]), conv(rgb[1]), conv(rgb[2])]
+}
+
+const REC2020_2_XYZ: [[f32; 3]; 3] = [
+    [0.6369580, 0.1446169, 0.1688810],
+    [0.2627002, 0.6779981, 0.0593017],
+    [0.0000000, 0.0280727, 1.0609851],
+];
+const XYZ_2_REC2020: [[f32; 3]; 3] = [
+    [1.7166512, -0.3556708, -0.2533663],
+    [-0.6666844, 1.6164812, 0.0157685],
+    [0.0176399, -0.0427706, 0.9421031],
+];
+
+/// Linear Rec.2020 → ACEScg (AP1 linear).
+pub fn rec2020_to_aces_cg(rgb: [f32; 3]) -> [f32; 3] {
+    let xyz = mat_mul(&REC2020_2_XYZ, rgb);
+    mat_mul(&XYZ_2_AP1, xyz)
+}
+
+/// ACEScg → Linear Rec.2020.
+pub fn aces_cg_to_rec2020(rgb: [f32; 3]) -> [f32; 3] {
+    let xyz = mat_mul(&AP1_2_XYZ, rgb);
+    mat_mul(&XYZ_2_REC2020, xyz)
+}
+
 /// RRT + Rec.709 ODT tone mapping approximation (Narkowicz fit).
 /// Input/output are linear [0..inf) → display-linear [0..1].
 pub fn aces_filmic_tonemap(x: [f32; 3]) -> [f32; 3] {
@@ -175,5 +222,21 @@ mod tests {
         assert!((bright[0] - 1.0).abs() < 1e-4, "highlights clip to white");
         let dark = aces_filmic_tonemap([0.0, 0.0, 0.0]);
         assert_eq!(dark[0], 0.0);
+    }
+
+    #[test]
+    fn test_acescct_and_rec2020_roundtrip() {
+        let rgb = [0.2, 0.4, 0.8];
+        let cct = acescg_to_acescct(rgb);
+        let back_cg = acescc_to_acescct_inv(cct);
+        for c in 0..3 {
+            assert!((back_cg[c] - rgb[c]).abs() < 1e-4);
+        }
+
+        let rec2020_cg = rec2020_to_aces_cg(rgb);
+        let back_rec2020 = aces_cg_to_rec2020(rec2020_cg);
+        for c in 0..3 {
+            assert!((back_rec2020[c] - rgb[c]).abs() < 1e-4);
+        }
     }
 }
