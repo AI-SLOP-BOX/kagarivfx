@@ -141,6 +141,7 @@ pub mod mogrt_engine;
 pub mod optical_flare;
 pub mod exr_pipeline;
 pub mod ofx_host;
+pub mod advanced_3d_engine;
 pub mod animation_presets;
 pub mod temporal_denoise;
 pub mod text_animator_advanced;
