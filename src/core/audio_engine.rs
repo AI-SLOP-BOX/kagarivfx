@@ -4,7 +4,7 @@
 /// - Real PCM stereo AudioBuffer storage & multi-track mixing
 /// - Per-layer animated volume/gain evaluation (`volume.evaluate(frame)`)
 /// - Peak RMS VU meter calculation for audio mixers
-use crate::core::timeline::{Composition, LayerType};
+use crate::core::timeline::{Composition, EffectType, Layer, LayerType};
 
 #[allow(dead_code)]
 #[derive(Debug, Clone)]
@@ -364,6 +364,40 @@ mod wav_tests {
     }
 }
 
+/// Apply per-layer audio effects (BassTreble) to stereo interleaved samples.
+/// Called on each layer's audio samples BEFORE mixing them together.
+pub fn apply_layer_audio_effects(samples: &mut [f32], layer: &Layer, sample_rate: f32, frame: u32) {
+    if !layer.effects_enabled || samples.is_empty() {
+        return;
+    }
+    use crate::core::audio_dsp;
+    for effect in &layer.effects {
+        if !effect.enabled {
+            continue;
+        }
+        if let EffectType::BassTreble { bass_gain, treble_gain, crossover_freq } = &effect.effect_type {
+            let bass_db = bass_gain.evaluate(frame);
+            let treble_db = treble_gain.evaluate(frame);
+            let crossover = crossover_freq.evaluate(frame).clamp(80.0, 12000.0);
+            let bands = vec![
+                audio_dsp::EqBand {
+                    freq: crossover,
+                    gain_db: bass_db,
+                    q: 0.707,
+                    band_type: audio_dsp::EqBandType::LowShelf,
+                },
+                audio_dsp::EqBand {
+                    freq: crossover,
+                    gain_db: treble_db,
+                    q: 0.707,
+                    band_type: audio_dsp::EqBandType::HighShelf,
+                },
+            ];
+            audio_dsp::apply_eq(samples, &bands, sample_rate as u32);
+        }
+    }
+}
+
 // ── Multi-track mixing: real audio sources ──────────────────────────────────
 
 /// Recursively mix audio from a sub-composition (PreComp) into the stereo output.
@@ -550,14 +584,11 @@ pub fn mix_audio_sources_for_frame(
             None => None,
         };
 
-        let frame_len_sec = buffer_size as f32 / sample_rate as f32;
+        let mut layer_samples = vec![0.0f32; buffer_size * 2];
         for i in 0..buffer_size {
             let t = time_start + i as f32 / sample_rate as f32;
             let (sample_l, sample_r) = match &source {
                 Some(buf) => {
-                    // Layer in_frame offsets into the source timeline
-                    let src_time = (frame as f32 / fps) + (i as f32 / sample_rate as f32);
-                    let _ = src_time;
                     let idx = (t.max(0.0) * buf.sample_rate as f32) as usize * buf.channels as usize;
                     let l = buf.samples.get(idx).copied().unwrap_or(0.0);
                     let r = if buf.channels > 1 {
@@ -565,19 +596,24 @@ pub fn mix_audio_sources_for_frame(
                     } else {
                         l
                     };
-                    let gl = gain * (1.0 - pan.max(0.0));
-                    let gr = gain * (1.0 - (-pan).max(0.0));
-                    (l * gl, r * gr)
+                    (l, r)
                 }
                 None => (0.0, 0.0),
             };
-            let _ = frame_len_sec;
             let l_idx = i * 2;
             let r_idx = i * 2 + 1;
-            stereo_output[l_idx] += sample_l;
-            stereo_output[r_idx] += sample_r;
+            layer_samples[l_idx] = sample_l;
+            layer_samples[r_idx] = sample_r;
         }
-        let _ = frame_len_sec;
+        apply_layer_audio_effects(&mut layer_samples, layer, sample_rate as f32, frame);
+        for i in 0..buffer_size {
+            let l_idx = i * 2;
+            let r_idx = i * 2 + 1;
+            let gl = gain * (1.0 - pan.max(0.0));
+            let gr = gain * (1.0 - (-pan).max(0.0));
+            stereo_output[l_idx] += layer_samples[l_idx] * gl;
+            stereo_output[r_idx] += layer_samples[r_idx] * gr;
+        }
     }
 
     // ── Master DSP processing (EQ → Compressor → Limiter) ──

@@ -1,6 +1,7 @@
 use crate::AfterEffectsApp;
 use crate::core::timeline::Layer;
 use crate::core::property::Animatable;
+use crate::core::roto_assist::{RotoStroke, segment_roto_brush, trace_contour_to_polygon};
 use crate::ViewportMode;
 use crate::ui::theme::colors;
 use eframe::egui;
@@ -671,6 +672,132 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: u32) 
             }
         }
 
+        // ── Clone Stamp tool: paint strokes onto the selected layer from a source offset ──
+        if app.active_tool == crate::ui::toolbar::ActiveTool::CloneStamp {
+            // HUD for clone stamp settings
+            {
+                let hud_id = egui::Id::new("clone_stamp_hud");
+                egui::Area::new(hud_id)
+                    .anchor(egui::Align2::RIGHT_TOP, [-14.0, 60.0])
+                    .show(ctx, |ui| {
+                        let hud_frame = egui::Frame::default()
+                            .fill(egui::Color32::from_rgba_premultiplied(18, 22, 30, 225))
+                            .stroke(egui::Stroke::new(1.0, colors::BORDER_MEDIUM))
+                            .inner_margin(8.0);
+                        hud_frame.show(ui, |ui: &mut egui::Ui| {
+                            ui.set_min_width(150.0);
+                            ui.label(egui::RichText::new("📋 Clone Stamp").strong().small());
+                            let mut size = ctx.data_mut(|d| {
+                                d.get_temp::<f32>(egui::Id::new("clone_stamp_size")).unwrap_or(15.0)
+                            });
+                            if ui.add(egui::Slider::new(&mut size, 1.0..=100.0).suffix(" px")).changed() {
+                                ctx.data_mut(|d| d.insert_temp(egui::Id::new("clone_stamp_size"), size));
+                            }
+                            ui.label(egui::RichText::new("Alt+Click to set source").small().color(colors::TEXT_SECONDARY));
+                        });
+                    });
+            }
+            if let Some(sel_li) = app.selected_layer_idx {
+                let pointer = viewport_response.interact_pointer_pos();
+                let comp_pt: Option<[f32; 2]> = pointer.map(|pp| {
+                    [(pp.x - origin_x) / draw_w * comp_w, (pp.y - origin_y) / draw_h * comp_h]
+                });
+                // Alt+Click to set source offset
+                if viewport_response.clicked() && ctx.input(|i| i.modifiers.alt) {
+                    if let Some(pt) = comp_pt {
+                        ctx.data_mut(|d| d.insert_temp(egui::Id::new("clone_source_offset"), pt));
+                        app.toasts.info("Clone source set");
+                    }
+                } else if viewport_response.drag_started() {
+                    if let Some(pt) = comp_pt {
+                        let local = {
+                            let comp_ro = app.history.current().active_composition();
+                            match comp_ro.layers.get(sel_li) {
+                                Some(l) => {
+                                    let (pos, scl, rot, _) =
+                                        comp_ro.resolve_world_transform(l, current_frame);
+                                    let rad = rot.to_radians();
+                                    let (cr, sr) = rad.sin_cos();
+                                    let dx = (pt[0] - pos[0]) * 100.0;
+                                    let dy = (pt[1] - pos[1]) * 100.0;
+                                    let lx = (dx * cr + dy * sr) / scl[0].abs().max(0.001);
+                                    let ly = (-dx * sr + dy * cr) / scl[1].abs().max(0.001);
+                                    [lx, ly]
+                                }
+                                None => pt,
+                            }
+                        };
+                        let source_offset = ctx.data_mut(|d| {
+                            d.get_temp::<[f32; 2]>(egui::Id::new("clone_source_offset")).unwrap_or([0.0, 0.0])
+                        });
+                        ctx.data_mut(|d| d.insert_temp(egui::Id::new(("clone_live", sel_li)), vec![local]));
+                        ctx.data_mut(|d| d.insert_temp(egui::Id::new(("clone_src_offset_live", sel_li)), source_offset));
+                        app.begin_drag("Clone Stamp Stroke");
+                    }
+                } else if viewport_response.dragged() {
+                    if let Some(pt) = comp_pt {
+                        let has = ctx.data_mut(|d| d.get_temp::<Vec<[f32; 2]>>(egui::Id::new(("clone_live", sel_li))).is_some());
+                        if has {
+                            let local = {
+                                let comp_ro = app.history.current().active_composition();
+                                match comp_ro.layers.get(sel_li) {
+                                    Some(l) => {
+                                        let (pos, scl, rot, _) =
+                                            comp_ro.resolve_world_transform(l, current_frame);
+                                        let rad = rot.to_radians();
+                                        let (cr, sr) = rad.sin_cos();
+                                        let dx = (pt[0] - pos[0]) * 100.0;
+                                        let dy = (pt[1] - pos[1]) * 100.0;
+                                        let lx = (dx * cr + dy * sr) / scl[0].abs().max(0.001);
+                                        let ly = (-dx * sr + dy * cr) / scl[1].abs().max(0.001);
+                                        [lx, ly]
+                                    }
+                                    None => pt,
+                                }
+                            };
+                            ctx.data_mut(|d| {
+                                let mut pts = d.get_temp::<Vec<[f32; 2]>>(egui::Id::new(("clone_live", sel_li))).unwrap_or_default();
+                                if pts.last().map(|last| {
+                                    let dx = last[0] - local[0];
+                                    let dy = last[1] - local[1];
+                                    dx * dx + dy * dy >= 4.0
+                                }).unwrap_or(true) {
+                                    pts.push(local);
+                                    d.insert_temp(egui::Id::new(("clone_live", sel_li)), pts);
+                                }
+                            });
+                        }
+                    }
+                } else if viewport_response.drag_stopped() {
+                    let pts_opt = ctx.data_mut(|d| d.remove_temp::<Vec<[f32; 2]>>(egui::Id::new(("clone_live", sel_li))));
+                    let src_opt = ctx.data_mut(|d| d.remove_temp::<[f32; 2]>(egui::Id::new(("clone_src_offset_live", sel_li))));
+                    if let Some(pts) = pts_opt {
+                        if !pts.is_empty() {
+                            let bsize = ctx.data_mut(|d| {
+                                d.get_temp::<f32>(egui::Id::new("clone_stamp_size")).unwrap_or(15.0)
+                            });
+                            let src_off = src_opt.unwrap_or([0.0, 0.0]);
+                            let proj = app.history.current_mut().active_composition_mut();
+                            if let Some(layer) = proj.layers.get_mut(sel_li) {
+                                layer.paint_strokes.push(crate::core::timeline::PaintStroke {
+                                    color: [1.0, 1.0, 1.0, 1.0],
+                                    size: bsize,
+                                    points: pts,
+                                    start_frame: current_frame,
+                                    end_frame: 0,
+                                });
+                                crate::core::frame_cache::bump_version();
+                                app.commit_drag();
+                                app.toasts.info("Clone stamp stroke applied");
+                            }
+                        } else {
+                            app.cancel_drag();
+                        }
+                    }
+                }
+            }
+        }
+
         // ── Puppet Pin tool: draw / place / drag pins on the selected layer ──
         if app.active_tool == crate::ui::toolbar::ActiveTool::PuppetPin {
             if let Some(sel_li) = app.selected_layer_idx {
@@ -806,6 +933,31 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: u32) 
 
         // ── Roto Brush Tool (Interactive Green/Red Strokes -> Auto-Mask) ──
         if app.active_tool == crate::ui::toolbar::ActiveTool::RotoBrush {
+            // Radius HUD
+            {
+                let hud_id = egui::Id::new("roto_brush_hud");
+                egui::Area::new(hud_id)
+                    .anchor(egui::Align2::RIGHT_TOP, [-14.0, 60.0])
+                    .show(ctx, |ui| {
+                        let hud_frame = egui::Frame::default()
+                            .fill(egui::Color32::from_rgba_premultiplied(18, 22, 30, 225))
+                            .stroke(egui::Stroke::new(1.0, colors::BORDER_MEDIUM))
+                            .inner_margin(8.0);
+                        hud_frame.show(ui, |ui: &mut egui::Ui| {
+                            ui.set_min_width(150.0);
+                            let is_fg = !ctx.input(|i| i.modifiers.alt);
+                            ui.label(egui::RichText::new(if is_fg { "🟢 Roto Brush (FG)" } else { "🔴 Roto Brush (BG)" }).strong().small());
+                            let mut radius = ctx.data_mut(|d| {
+                                d.get_temp::<f32>(egui::Id::new("roto_brush_radius")).unwrap_or(8.0)
+                            });
+                            if ui.add(
+                                egui::Slider::new(&mut radius, 1.0..=50.0).suffix(" px"),
+                            ).changed() {
+                                ctx.data_mut(|d| d.insert_temp(egui::Id::new("roto_brush_radius"), radius));
+                            }
+                        });
+                    });
+            }
             if let Some(sel_li) = app.selected_layer_idx {
                 let stroke_id = egui::Id::new(("roto_live_stroke", sel_li));
                 let is_fg = !ctx.input(|i| i.modifiers.alt);
@@ -829,25 +981,40 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: u32) 
                     let pts_opt = ctx.data_mut(|d| d.remove_temp::<Vec<[f32; 2]>>(stroke_id));
                     if let Some(pts) = pts_opt {
                         if pts.len() >= 2 {
-                            let mut temp_proj = app.history.current().clone();
-                            let comp = temp_proj.active_composition_mut();
-                            if let Some(layer) = comp.layers.get_mut(sel_li) {
-                                let mut mask_verts = Vec::new();
-                                for p in &pts {
-                                    mask_verts.push([p[0] - 15.0, p[1] - 15.0]);
+                            let comp_ro = app.history.current().active_composition();
+                            let cw = comp_ro.width;
+                            let ch = comp_ro.height;
+                            let pixels = crate::core::software_renderer::render_frame_to_pixels(
+                                &comp_ro, current_frame, cw, ch, 0.0, 0,
+                            );
+                            if !pixels.is_empty() && pixels.len() == (cw * ch * 4) as usize {
+                                let radius = ctx.data_mut(|d| {
+                                    d.get_temp::<f32>(egui::Id::new("roto_brush_radius")).unwrap_or(8.0)
+                                });
+                                let strokes = vec![RotoStroke {
+                                    is_foreground: is_fg,
+                                    points: pts.clone(),
+                                    radius,
+                                }];
+                                let mask_buf = segment_roto_brush(&pixels, cw, ch, &strokes);
+                                let polygon = trace_contour_to_polygon(&mask_buf, cw, ch, 2.0);
+                                if polygon.len() >= 3 {
+                                    let mut temp_proj = app.history.current().clone();
+                                    let comp = temp_proj.active_composition_mut();
+                                    if let Some(layer) = comp.layers.get_mut(sel_li) {
+                                        let mask_name = format!("Roto Mask {}", layer.masks.len() + 1);
+                                        layer.masks.push(crate::core::mask::Mask::new_closed(
+                                            format!("roto_mask_{}", layer.masks.len() + 1),
+                                            mask_name,
+                                            polygon,
+                                        ));
+                                        app.history.commit(temp_proj);
+                                        crate::core::frame_cache::bump_version();
+                                        app.toasts.info(if is_fg { "Roto Brush: Segmented Foreground Matte" } else { "Roto Brush: Segmented Background Matte" });
+                                    }
+                                } else {
+                                    app.toasts.info("Roto Brush: No distinct region found — try broader strokes");
                                 }
-                                for p in pts.iter().rev() {
-                                    mask_verts.push([p[0] + 15.0, p[1] + 15.0]);
-                                }
-                                let mask_name = format!("Roto Mask {}", layer.masks.len() + 1);
-                                layer.masks.push(crate::core::mask::Mask::new_closed(
-                                    format!("roto_mask_{}", layer.masks.len() + 1),
-                                    mask_name,
-                                    mask_verts,
-                                ));
-                                app.history.commit(temp_proj);
-                                crate::core::frame_cache::bump_version();
-                                app.toasts.info(if is_fg { "Roto Brush: Added Foreground Matte" } else { "Roto Brush: Subtracted Background Matte" });
                             }
                         }
                     }

@@ -1053,6 +1053,10 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
                         apply_effect_by_name(app, "Shift Channels");
                         ui.close_menu();
                     }
+                    if ui.button("Channel Combiner").on_hover_text("Extract and remap color and alpha channels (Luma, Hue, Sat, RGB)").clicked() {
+                        apply_effect_by_name(app, "Channel Combiner");
+                        ui.close_menu();
+                    }
                 });
                 ui.menu_button("Keying", |ui| {
                     if ui.button("Linear Color Key").on_hover_text("Key out specific color ranges in RGB, Hue, or Chroma space").clicked() {
@@ -1795,6 +1799,16 @@ fn apply_effect_by_name(app: &mut crate::AfterEffectsApp, effect_name: &str) {
                             match_mode: crate::core::linear_color_key::ColorMatchMode::UsingRGB,
                             tolerance: crate::core::property::Animatable::new_constant(15.0),
                             softness: crate::core::property::Animatable::new_constant(10.0),
+                        }, enabled: true,
+                    }
+                }
+                "Channel Combiner" => {
+                    crate::core::timeline::Effect {
+                        id: format!("channelcombiner_{}", len), name: "Channel Combiner".to_string(),
+                        effect_type: crate::core::timeline::EffectType::ChannelCombiner {
+                            from_channel: crate::core::channel_combiner::ChannelCombinerFrom::Luminance,
+                            to_target: crate::core::channel_combiner::ChannelCombinerTo::Alpha,
+                            invert: false,
                         }, enabled: true,
                     }
                 }

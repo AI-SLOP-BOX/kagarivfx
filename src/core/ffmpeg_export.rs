@@ -40,6 +40,8 @@ pub enum VideoCodec {
     H265,
     /// GIF animation
     Gif,
+    /// WebP animation
+    WebP,
 }
 
 #[derive(Clone)]
@@ -143,6 +145,7 @@ where
                 }
                 VideoCodec::H265 => { cmd.args(["-c:v", "libx265", "-preset", "medium", "-crf", "23", "-pix_fmt", "yuv420p"]); }
                 VideoCodec::Gif => { /* GIF uses separate pipeline */ }
+                VideoCodec::WebP => { cmd.args(["-c:v", "libwebp", "-quality", "80", "-lossless", "0", "-pix_fmt", "rgba"]); }
             }
             if config.audio_wav.is_some() {
                 // Video is input 1 when audio present; encode audio to AAC

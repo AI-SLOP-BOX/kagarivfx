@@ -305,6 +305,7 @@ impl RenderEffectPlugin for EnumEffectPlugin {
             EffectType::Transform { .. } => "Transform",
             EffectType::CameraLensBlur { .. } => "Camera Lens Blur",
             EffectType::LinearColorKey { .. } => "Linear Color Key",
+            EffectType::ChannelCombiner { .. } => "Channel Combiner",
         }
     }
 
@@ -429,6 +430,7 @@ impl RenderEffectPlugin for EnumEffectPlugin {
             EffectType::Transform { .. } => "transform",
             EffectType::CameraLensBlur { .. } => "camera_lens_blur",
             EffectType::LinearColorKey { .. } => "linear_color_key",
+            EffectType::ChannelCombiner { .. } => "channel_combiner",
         }
     }
 

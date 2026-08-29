@@ -1220,6 +1220,12 @@ pub enum EffectType {
         tolerance: Animatable<f32>,
         softness: Animatable<f32>,
     },
+    /// Channel Combiner (AE Parity - Channel > Channel Combiner).
+    ChannelCombiner {
+        from_channel: crate::core::channel_combiner::ChannelCombinerFrom,
+        to_target: crate::core::channel_combiner::ChannelCombinerTo,
+        invert: bool,
+    },
     /// Tilt-shift miniature focus band.
     TiltShift {
         focus_y: Animatable<f32>,

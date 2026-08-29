@@ -98,6 +98,7 @@ pub fn start_comp_export(app: &mut crate::AfterEffectsApp, ctx: &egui::Context, 
     let codec = match codec_idx {
         1 => crate::core::ffmpeg_export::VideoCodec::ProRes422,
         2 => crate::core::ffmpeg_export::VideoCodec::ProRes4444,
+        4 => crate::core::ffmpeg_export::VideoCodec::WebP,
         _ => crate::core::ffmpeg_export::VideoCodec::H264,
     };
     let config = crate::core::ffmpeg_export::ExportConfig {
@@ -399,6 +400,7 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
                     let bitrate_mbps = match app.export_codec_idx {
                         1 => 147.0, // ProRes 422
                         2 => 330.0, // ProRes 4444
+                        4 => 5.0,   // WebP Animation
                         _ => 10.0,   // H.264
                     };
                     let duration_sec = shown_total as f32 / comp.fps.max(1) as f32;
@@ -441,6 +443,7 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
                     ui.selectable_value(&mut app.export_codec_idx, 1, "ProRes 422");
                     ui.selectable_value(&mut app.export_codec_idx, 2, "ProRes 4444");
                     ui.selectable_value(&mut app.export_codec_idx, 3, "PNG Sequence");
+                    ui.selectable_value(&mut app.export_codec_idx, 4, "WebP Animation (.webp)");
                 });
                 // ── Quality: supersampled anti-aliasing ──
                 ui.horizontal(|ui| {

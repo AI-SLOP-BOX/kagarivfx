@@ -133,6 +133,107 @@ pub fn segment_roto_brush(
     mask
 }
 
+/// Trace the boundary of a binary mask (0/255) and return simplified polygon vertices.
+/// Uses Moore-neighborhood contour tracing with Douglas-Peucker simplification.
+pub fn trace_contour_to_polygon(mask: &[u8], width: u32, height: u32, simplify_tolerance: f32) -> Vec<[f32; 2]> {
+    let w = width as i32;
+    let h = height as i32;
+    if mask.is_empty() || w == 0 || h == 0 {
+        return Vec::new();
+    }
+    let at = |x: i32, y: i32| -> u8 {
+        if x >= 0 && x < w && y >= 0 && y < h {
+            mask[(y * w + x) as usize]
+        } else {
+            0
+        }
+    };
+    // Find a starting border pixel (leftmost foreground pixel on the topmost row)
+    let mut start: Option<(i32, i32)> = None;
+    'outer: for y in 0..h {
+        for x in 0..w {
+            if at(x, y) == 255 {
+                start = Some((x, y));
+                break 'outer;
+            }
+        }
+    }
+    let (sx, sy) = match start {
+        Some(s) => s,
+        None => return Vec::new(),
+    };
+    // Moore neighborhood directions: E, NE, N, NW, W, SW, S, SE
+    let dirs: [(i32, i32); 8] = [(1, 0), (1, -1), (0, -1), (-1, -1), (-1, 0), (-1, 1), (0, 1), (1, 1)];
+    let mut contour: Vec<[f32; 2]> = Vec::new();
+    let mut bx = sx;
+    let mut by = sy;
+    let mut dir = 6usize; // start searching from S (we came from the left)
+    let max_iters = (w * h * 4) as usize;
+    for _ in 0..max_iters {
+        contour.push([bx as f32 + 0.5, by as f32 + 0.5]);
+        // Search neighbors starting from (dir + 5) % 8 (turn left from entry direction)
+        let mut found = false;
+        for step in 0..8 {
+            let nd = (dir + 5 + step) % 8;
+            let nx = bx + dirs[nd].0;
+            let ny = by + dirs[nd].1;
+            if at(nx, ny) == 255 {
+                bx = nx;
+                by = ny;
+                dir = nd;
+                found = true;
+                break;
+            }
+        }
+        if !found {
+            break;
+        }
+        if bx == sx && by == sy {
+            break;
+        }
+    }
+    if contour.len() < 3 {
+        return contour;
+    }
+    // Douglas-Peucker simplification
+    fn dp_simplify(pts: &[[f32; 2]], eps: f32) -> Vec<[f32; 2]> {
+        if pts.len() <= 2 {
+            return pts.to_vec();
+        }
+        let mut max_d = 0.0f32;
+        let mut max_i = 0usize;
+        let (p0, p1) = (pts[0], pts[pts.len() - 1]);
+        let dx = p1[0] - p0[0];
+        let dy = p1[1] - p0[1];
+        let len_sq = dx * dx + dy * dy;
+        for (i, pt) in pts.iter().enumerate().skip(1).take(pts.len() - 2) {
+            let d = if len_sq < 1e-12 {
+                ((pt[0] - p0[0]).powi(2) + (pt[1] - p0[1]).powi(2)).sqrt()
+            } else {
+                let t = ((pt[0] - p0[0]) * dx + (pt[1] - p0[1]) * dy) / len_sq;
+                let t = t.clamp(0.0, 1.0);
+                let proj_x = p0[0] + t * dx;
+                let proj_y = p0[1] + t * dy;
+                ((pt[0] - proj_x).powi(2) + (pt[1] - proj_y).powi(2)).sqrt()
+            };
+            if d > max_d {
+                max_d = d;
+                max_i = i;
+            }
+        }
+        if max_d > eps {
+            let left = dp_simplify(&pts[..=max_i], eps);
+            let right = dp_simplify(&pts[max_i..], eps);
+            let mut result = left;
+            result.extend_from_slice(&right[1..]);
+            result
+        } else {
+            vec![pts[0], pts[pts.len() - 1]]
+        }
+    }
+    dp_simplify(&contour, simplify_tolerance)
+}
+
 /// Refines hair and soft translucent edges using a Guided Filter against the RGB guide image.
 pub fn refine_edge_guided_filter(
     guide_image: &[u8],

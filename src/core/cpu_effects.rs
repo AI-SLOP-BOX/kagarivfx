@@ -779,6 +779,14 @@ fn apply_one_ctx(
             };
             crate::core::linear_color_key::apply_linear_color_key(pixels, width, height, &params);
         }
+        EffectType::ChannelCombiner { from_channel, to_target, invert } => {
+            let params = crate::core::channel_combiner::ChannelCombinerParams {
+                from_channel: *from_channel,
+                to_target: *to_target,
+                invert: *invert,
+            };
+            crate::core::channel_combiner::apply_channel_combiner(pixels, width, height, &params);
+        }
         EffectType::TiltShift { focus_y, focus_height, max_blur } => {
             use crate::core::ae_effects_pack_v19::apply_tilt_shift;
             apply_tilt_shift(

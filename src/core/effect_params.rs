@@ -308,6 +308,7 @@ impl EffectType {
                 push!("Tolerance", tolerance, Scalar);
                 push!("Softness", softness, Scalar);
             }
+            EffectType::ChannelCombiner { .. } => {}
             // ── Newly registered effects (session 3) ──
             EffectType::BevelAlpha { depth, light_angle_deg } => {
                 push!("Depth", depth, Scalar);
