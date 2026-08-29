@@ -1050,6 +1050,12 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
                         ui.close_menu();
                     }
                 });
+                ui.menu_button("Time", |ui| {
+                    if ui.button("Echo").on_hover_text("Temporal visual trail blending across multiple frames").clicked() {
+                        apply_effect_by_name(app, "Echo");
+                        ui.close_menu();
+                    }
+                });
                 if crate::ui::mode::menu_visible(app.ui_mode, "OpenFX Plugins") { ui.menu_button("OpenFX Plugins", |ui| {
                     if ui.button("Scan Standard Paths...").on_hover_text("Search /Library/OFX/Plugins and $OFX_PLUGIN_PATH for plugin bundles, then probe their ABI exports").clicked() {
                         let found = crate::core::openfx_bridge::discover_all_ofx_plugins();
@@ -1711,6 +1717,18 @@ fn apply_effect_by_name(app: &mut crate::AfterEffectsApp, effect_name: &str) {
                             source_channel: crate::core::set_matte::MatteSourceChannel::Alpha,
                             invert_matte: false,
                             composite_mode: crate::core::set_matte::MatteCompositeMode::Replace,
+                        }, enabled: true,
+                    }
+                }
+                "Echo" => {
+                    crate::core::timeline::Effect {
+                        id: format!("echo_{}", len), name: "Echo".to_string(),
+                        effect_type: crate::core::timeline::EffectType::Echo {
+                            echo_time_seconds: crate::core::property::Animatable::new_constant(-0.033),
+                            num_echoes: 3,
+                            starting_intensity: crate::core::property::Animatable::new_constant(1.0),
+                            decay: crate::core::property::Animatable::new_constant(0.5),
+                            operator: crate::core::echo_effect::EchoOperator::Add,
                         }, enabled: true,
                     }
                 }

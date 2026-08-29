@@ -300,6 +300,7 @@ impl RenderEffectPlugin for EnumEffectPlugin {
             EffectType::MotionTile { .. } => "Motion Tile",
             EffectType::PageTurn { .. } => "CC Page Turn",
             EffectType::SetMatte { .. } => "Set Matte",
+            EffectType::Echo { .. } => "Echo",
         }
     }
 
@@ -419,6 +420,7 @@ impl RenderEffectPlugin for EnumEffectPlugin {
             EffectType::MotionTile { .. } => "motion_tile",
             EffectType::PageTurn { .. } => "page_turn",
             EffectType::SetMatte { .. } => "set_matte",
+            EffectType::Echo { .. } => "echo",
         }
     }
 

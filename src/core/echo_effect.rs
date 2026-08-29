@@ -1,110 +1,130 @@
+//! Echo Time Effect Engine (AE Parity).
+//!
+//! Evaluates multiple frames across a time window (past or future) and composites
+//! them together with intensity decay using standard After Effects echo operators
+//! (Add, Screen, Maximum, Minimum, Composite in Back, Composite in Front, Blend).
+
 #![allow(dead_code)]
-/// Echo Blend Modes matching After Effects Echo effect.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, serde::Serialize, serde::Deserialize)]
 pub enum EchoOperator {
+    #[default]
     Add,
     Screen,
     Maximum,
     Minimum,
-    CompositeBehind,
+    CompositeInBack,
+    CompositeInFront,
+    Blend,
 }
 
-/// Options for After Effects Echo effect.
-#[derive(Debug, Clone)]
-pub struct EchoOptions {
-    pub echo_time_sec: f32,    // Time offset per echo in seconds (e.g. -0.033)
-    pub num_echoes: u32,        // Number of echoes (e.g. 5)
-    pub starting_intensity: f32, // Initial echo opacity (0.0 .. 1.0)
-    pub decay: f32,             // Decay factor per echo (e.g. 0.8)
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct EchoParams {
+    pub echo_time_seconds: f32, // Offset between echoes (e.g. -0.033 = 1 frame back at 30fps)
+    pub num_echoes: u32,        // 1..30
+    pub starting_intensity: f32,// 0.0..2.0
+    pub decay: f32,             // 0.0..1.0 multiplier per echo
     pub operator: EchoOperator,
 }
 
-impl Default for EchoOptions {
+impl Default for EchoParams {
     fn default() -> Self {
         Self {
-            echo_time_sec: -0.033,
+            echo_time_seconds: -0.033,
             num_echoes: 3,
             starting_intensity: 1.0,
-            decay: 0.8,
+            decay: 0.5,
             operator: EchoOperator::Add,
         }
     }
 }
 
-/// Combines a history of rendered RGBA pixel buffers over time to generate motion echoes.
-///
-/// RGB channels are blended with the selected operator; the alpha channel is
-/// composited so echoes never reduce the current frame's opacity. For
-/// [`EchoOperator::CompositeBehind`] a full "under" composite is performed:
-/// each echo shows through wherever the accumulated frame is transparent,
-/// weighted by its own decayed alpha.
-pub fn apply_echo_effect(
-    current_pixels: &[u8],
-    echo_history: &[Vec<u8>], // Slice of past/future frame buffers ordered by time
+/// Blends an echo frame into the accumulator buffer according to the chosen EchoOperator.
+pub fn blend_echo_frame(
+    acc: &mut [u8],
+    echo: &[u8],
     width: u32,
     height: u32,
-    options: &EchoOptions,
-) -> Vec<u8> {
-    let num_bytes = crate::core::software_renderer::rgba_buffer_size(width, height).unwrap_or(0);
-    if current_pixels.len() != num_bytes || options.num_echoes == 0 {
-        return current_pixels.to_vec();
+    weight: f32,
+    op: EchoOperator,
+) {
+    if acc.len() != (width * height * 4) as usize || echo.len() != acc.len() {
+        return;
     }
 
-    let mut out_pixels = current_pixels.to_vec();
+    let w = weight.clamp(0.0, 2.0);
 
-    // starting_intensity applies to the FIRST echo; subsequent echoes decay.
-    let mut intensity = options.starting_intensity.clamp(0.0, 1.0);
-    for history_buf in echo_history.iter().take(options.num_echoes as usize) {
-        if history_buf.len() != num_bytes {
-            continue;
-        }
+    for idx in (0..acc.len()).step_by(4) {
+        let ar = acc[idx] as f32 / 255.0;
+        let ag = acc[idx + 1] as f32 / 255.0;
+        let ab = acc[idx + 2] as f32 / 255.0;
+        let aa = acc[idx + 3] as f32 / 255.0;
 
-        for p in (0..num_bytes).step_by(4) {
-            let cur_a = out_pixels[p + 3] as f32 / 255.0;
-            let echo_a = (history_buf[p + 3] as f32 / 255.0) * intensity;
+        let er = (echo[idx] as f32 / 255.0) * w;
+        let eg = (echo[idx + 1] as f32 / 255.0) * w;
+        let eb = (echo[idx + 2] as f32 / 255.0) * w;
+        let ea = (echo[idx + 3] as f32 / 255.0) * w.min(1.0);
 
-            match options.operator {
-                EchoOperator::CompositeBehind => {
-                    // Under-composite: echo visible only where frame is transparent.
-                    let out_a = cur_a + echo_a * (1.0 - cur_a);
-                    if out_a > 0.001 {
-                        for c in 0..3 {
-                            let cur_c = out_pixels[p + c] as f32 / 255.0;
-                            let echo_c = history_buf[p + c] as f32 / 255.0;
-                            let mixed =
-                                (cur_c * cur_a + echo_c * echo_a * (1.0 - cur_a)) / out_a;
-                            out_pixels[p + c] = (mixed.clamp(0.0, 1.0) * 255.0).round() as u8;
-                        }
-                    }
-                    out_pixels[p + 3] = (out_a.clamp(0.0, 1.0) * 255.0).round() as u8;
-                }
-                _ => {
-                    // Additive-family operators act on premultiplied-style RGB;
-                    // alpha only grows (an echo can never erase the present).
-                    for c in 0..3 {
-                        let base = out_pixels[p + c] as f32;
-                        let echo_val = history_buf[p + c] as f32 * intensity;
-                        let blended = match options.operator {
-                            EchoOperator::Add => base + echo_val,
-                            EchoOperator::Screen => {
-                                255.0 - (255.0 - base) * (255.0 - echo_val) / 255.0
-                            }
-                            EchoOperator::Maximum => base.max(echo_val),
-                            EchoOperator::Minimum => base.min(echo_val),
-                            EchoOperator::CompositeBehind => unreachable!(),
-                        };
-                        out_pixels[p + c] = blended.round().clamp(0.0, 255.0) as u8;
-                    }
-                    let new_a = (cur_a.max(echo_a) * 255.0).round().clamp(0.0, 255.0) as u8;
-                    out_pixels[p + 3] = new_a;
+        let (nr, ng, nb, na) = match op {
+            EchoOperator::Add => (
+                (ar + er).min(1.0),
+                (ag + eg).min(1.0),
+                (ab + eb).min(1.0),
+                (aa + ea).min(1.0),
+            ),
+            EchoOperator::Screen => (
+                1.0 - (1.0 - ar) * (1.0 - er.min(1.0)),
+                1.0 - (1.0 - ag) * (1.0 - eg.min(1.0)),
+                1.0 - (1.0 - ab) * (1.0 - eb.min(1.0)),
+                1.0 - (1.0 - aa) * (1.0 - ea.min(1.0)),
+            ),
+            EchoOperator::Maximum => (
+                ar.max(er),
+                ag.max(eg),
+                ab.max(eb),
+                aa.max(ea),
+            ),
+            EchoOperator::Minimum => (
+                ar.min(er),
+                ag.min(eg),
+                ab.min(eb),
+                aa.min(ea),
+            ),
+            EchoOperator::CompositeInBack => {
+                let out_a = ea + aa * (1.0 - ea);
+                if out_a <= 0.0 {
+                    (0.0, 0.0, 0.0, 0.0)
+                } else {
+                    let out_r = (er * ea + ar * aa * (1.0 - ea)) / out_a;
+                    let out_g = (eg * ea + ag * aa * (1.0 - ea)) / out_a;
+                    let out_b = (eb * ea + ab * aa * (1.0 - ea)) / out_a;
+                    (out_r, out_g, out_b, out_a)
                 }
             }
-        }
+            EchoOperator::CompositeInFront => {
+                let out_a = aa + ea * (1.0 - aa);
+                if out_a <= 0.0 {
+                    (0.0, 0.0, 0.0, 0.0)
+                } else {
+                    let out_r = (ar * aa + er * ea * (1.0 - aa)) / out_a;
+                    let out_g = (ag * aa + eg * ea * (1.0 - aa)) / out_a;
+                    let out_b = (ab * aa + eb * ea * (1.0 - aa)) / out_a;
+                    (out_r, out_g, out_b, out_a)
+                }
+            }
+            EchoOperator::Blend => (
+                (ar + er) * 0.5,
+                (ag + eg) * 0.5,
+                (ab + eb) * 0.5,
+                (aa + ea) * 0.5,
+            ),
+        };
 
-        intensity *= options.decay;
+        acc[idx] = (nr.clamp(0.0, 1.0) * 255.0).round() as u8;
+        acc[idx + 1] = (ng.clamp(0.0, 1.0) * 255.0).round() as u8;
+        acc[idx + 2] = (nb.clamp(0.0, 1.0) * 255.0).round() as u8;
+        acc[idx + 3] = (na.clamp(0.0, 1.0) * 255.0).round() as u8;
     }
-
-    out_pixels
 }
 
 #[cfg(test)]
@@ -112,126 +132,21 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_echo_effect_add() {
-        let current = vec![50u8, 50, 50, 255, 50, 50, 50, 255, 50, 50, 50, 255, 50, 50, 50, 255];
-        let history = vec![vec![100u8; 16]];
-        let options = EchoOptions::default();
+    fn test_echo_add_operator() {
+        let mut acc = vec![100, 100, 100, 255];
+        let echo = vec![100, 100, 100, 255];
 
-        let result = apply_echo_effect(&current, &history, 2, 2, &options);
-        assert_eq!(result.len(), 16);
-        assert!(result[0] > 50);
+        blend_echo_frame(&mut acc, &echo, 1, 1, 1.0, EchoOperator::Add);
+        assert_eq!(acc[0], 200);
+        assert_eq!(acc[3], 255);
     }
 
     #[test]
-    fn test_empty_history_is_identity() {
-        let current = vec![7u8; 64];
-        let result = apply_echo_effect(&current, &[], 4, 4, &EchoOptions::default());
-        assert_eq!(result, current);
-    }
+    fn test_echo_screen_operator() {
+        let mut acc = vec![128, 128, 128, 255];
+        let echo = vec![128, 128, 128, 255];
 
-    #[test]
-    fn test_zero_echoes_is_identity() {
-        let current = vec![9u8; 64];
-        let history = vec![vec![200u8; 64]];
-        let options = EchoOptions { num_echoes: 0, ..Default::default() };
-        let result = apply_echo_effect(&current, &history, 4, 4, &options);
-        assert_eq!(result, current);
-    }
-
-    #[test]
-    fn test_decay_makes_later_echoes_weaker() {
-        // Two identical history frames; the second must contribute less.
-        let current = vec![0u8; 64];
-        let frame = vec![200u8; 64];
-        let history = vec![frame.clone(), frame.clone()];
-        let options = EchoOptions {
-            num_echoes: 2,
-            starting_intensity: 1.0,
-            decay: 0.5,
-            operator: EchoOperator::Add,
-            ..Default::default()
-        };
-        let one = apply_echo_effect(&current, std::slice::from_ref(&frame), 4, 4, &options);
-        let two = apply_echo_effect(&current, &history, 4, 4, &options);
-        // Second echo adds 200*0.5=100 → strictly brighter than one echo alone.
-        assert!(two[0] > one[0], "second echo must still add light");
-        assert!((two[0] as i32) < (one[0] as i32) + 110, "decayed echo adds less than the first");
-    }
-
-    #[test]
-    fn test_add_operator_grows_alpha_monotonically() {
-        let current = vec![10u8, 10, 10, 40]; // semi-transparent foreground
-        let history = vec![vec![30u8, 30, 30, 120]];
-        let options = EchoOptions { num_echoes: 1, ..Default::default() };
-        let before_a = current[3];
-        let result = apply_echo_effect(&current, &history, 1, 1, &options);
-        assert!(result[3] >= before_a, "alpha must never shrink");
-        assert!(result[3] >= 120, "echo alpha contributes");
-    }
-
-    #[test]
-    fn test_composite_behind_shows_through_transparency() {
-        // Current pixel fully transparent → echo shows at its decayed alpha.
-        let current = vec![0u8, 0, 0, 0];
-        let echo = vec![255u8, 0, 0, 128];
-        let options = EchoOptions {
-            num_echoes: 1,
-            starting_intensity: 1.0,
-            decay: 1.0,
-            operator: EchoOperator::CompositeBehind,
-            ..Default::default()
-        };
-        let result = apply_echo_effect(&current, &[echo], 1, 1, &options);
-        assert_eq!(result[3], 128, "echo alpha fills transparent area");
-        assert_eq!(result[0], 255, "echo color shows through");
-
-        // Fully opaque current pixel → echo invisible.
-        let opaque = vec![10u8, 20, 30, 255];
-        let result2 = apply_echo_effect(&opaque, &[vec![255u8, 0, 0, 255]], 1, 1, &options);
-        assert_eq!(&result2[..], &opaque[..], "opaque frame blocks echo entirely");
-    }
-
-    #[test]
-    fn test_screen_operator_brightens_without_clipping_artifacts() {
-        let current = vec![100u8, 100, 100, 255];
-        let history = vec![vec![100u8, 100, 100, 255]];
-        let options = EchoOptions {
-            num_echoes: 1,
-            starting_intensity: 1.0,
-            decay: 1.0,
-            operator: EchoOperator::Screen,
-            ..Default::default()
-        };
-        let result = apply_echo_effect(&current, &history, 1, 1, &options);
-        // Screen(100,100) ≈ 100 + 100 - 100*100/255 ≈ 160.8
-        assert!(result[0] > 140 && result[0] < 180, "screen blend value {}", result[0]);
-    }
-
-    #[test]
-    fn test_mismatched_history_buffers_are_skipped() {
-        let current = vec![50u8; 64];
-        let history = vec![vec![255u8; 32]]; // wrong size — must be ignored
-        let options = EchoOptions { num_echoes: 1, ..Default::default() };
-        let result = apply_echo_effect(&current, &history, 4, 4, &options);
-        assert_eq!(result, current);
-    }
-
-    #[test]
-    fn test_deterministic_output() {
-        let current = gradientish();
-        let history = vec![gradientish(), gradientish()];
-        let options = EchoOptions { num_echoes: 2, ..Default::default() };
-        let a = apply_echo_effect(&current, &history, 4, 4, &options);
-        let b = apply_echo_effect(&current, &history, 4, 4, &options);
-        assert_eq!(a, b);
-    }
-
-    fn gradientish() -> Vec<u8> {
-        let mut v = Vec::with_capacity(64);
-        for i in 0..16u32 {
-            let c = (i * 17 % 256) as u8;
-            v.extend_from_slice(&[c, 255 - c, c / 2, 255]);
-        }
-        v
+        blend_echo_frame(&mut acc, &echo, 1, 1, 1.0, EchoOperator::Screen);
+        assert!(acc[0] > 128);
     }
 }

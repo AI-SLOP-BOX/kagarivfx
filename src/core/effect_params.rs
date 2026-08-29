@@ -280,6 +280,11 @@ impl EffectType {
                 push!("Back Opacity", back_opacity, Scalar);
             }
             EffectType::SetMatte { .. } => {}
+            EffectType::Echo { echo_time_seconds, starting_intensity, decay, .. } => {
+                push!("Echo Time (s)", echo_time_seconds, Scalar);
+                push!("Starting Intensity", starting_intensity, Scalar);
+                push!("Decay", decay, Scalar);
+            }
             // ── Newly registered effects (session 3) ──
             EffectType::BevelAlpha { depth, light_angle_deg } => {
                 push!("Depth", depth, Scalar);

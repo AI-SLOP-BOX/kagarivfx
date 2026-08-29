@@ -1180,6 +1180,14 @@ pub enum EffectType {
         invert_matte: bool,
         composite_mode: crate::core::set_matte::MatteCompositeMode,
     },
+    /// Echo Time Effect (AE Parity).
+    Echo {
+        echo_time_seconds: Animatable<f32>,
+        num_echoes: u32,
+        starting_intensity: Animatable<f32>,
+        decay: Animatable<f32>,
+        operator: crate::core::echo_effect::EchoOperator,
+    },
     /// Tilt-shift miniature focus band.
     TiltShift {
         focus_y: Animatable<f32>,

@@ -2409,6 +2409,40 @@ fn fs_main(@location(0) uv: vec2<f32>) -> @location(0) vec4<f32> {
                     });
             });
         }
+        EffectType::Echo { echo_time_seconds, num_echoes, starting_intensity, decay, operator } => {
+            ui.label("⏱️ Echo");
+            draw_prop(ui, current_frame, project_changed, next_frame, "Echo Time (s)", echo_time_seconds, |ui, v| { ui.add(egui::Slider::new(v, -2.0..=2.0).suffix(" s")); });
+            ui.horizontal(|ui| {
+                ui.label("Number of Echoes:");
+                let mut n_i32 = *num_echoes as i32;
+                if ui.add(egui::Slider::new(&mut n_i32, 1..=30)).changed() {
+                    *num_echoes = n_i32.max(1) as u32;
+                    *project_changed = true;
+                }
+            });
+            draw_prop(ui, current_frame, project_changed, next_frame, "Starting Intensity", starting_intensity, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=2.0)); });
+            draw_prop(ui, current_frame, project_changed, next_frame, "Decay", decay, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=1.0)); });
+            ui.horizontal(|ui| {
+                ui.label("Echo Operator:");
+                egui::ComboBox::from_id_salt("echo_operator")
+                    .selected_text(format!("{:?}", operator))
+                    .show_ui(ui, |ui| {
+                        for op in [
+                            crate::core::echo_effect::EchoOperator::Add,
+                            crate::core::echo_effect::EchoOperator::Screen,
+                            crate::core::echo_effect::EchoOperator::Maximum,
+                            crate::core::echo_effect::EchoOperator::Minimum,
+                            crate::core::echo_effect::EchoOperator::CompositeInBack,
+                            crate::core::echo_effect::EchoOperator::CompositeInFront,
+                            crate::core::echo_effect::EchoOperator::Blend,
+                        ] {
+                            if ui.selectable_value(operator, op, format!("{:?}", op)).changed() {
+                                *project_changed = true;
+                            }
+                        }
+                    });
+            });
+        }
     }
 }
 

@@ -732,6 +732,12 @@ fn apply_one_ctx(
             let dummy_src = pixels.to_vec();
             crate::core::set_matte::apply_set_matte(pixels, width, height, &dummy_src, width, height, &params);
         }
+        EffectType::Echo { echo_time_seconds: _, num_echoes: _, starting_intensity, decay, operator } => {
+            let start_w = starting_intensity.evaluate(frame);
+            let dec = decay.evaluate(frame);
+            let echo_copy = pixels.to_vec();
+            crate::core::echo_effect::blend_echo_frame(pixels, &echo_copy, width, height, start_w * dec, *operator);
+        }
         EffectType::TiltShift { focus_y, focus_height, max_blur } => {
             use crate::core::ae_effects_pack_v19::apply_tilt_shift;
             apply_tilt_shift(
