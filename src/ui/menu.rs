@@ -389,6 +389,8 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
                                         stroke_color: [1.0, 1.0, 1.0, 1.0],
                                         stroke_width: 2.0,
                                         fill_type: Default::default(),
+                                        extrusion_depth: 0.0,
+                                        bevel_depth: 0.0,
                                     },
                                     dur,
                                 );
@@ -918,6 +920,8 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
                                             stroke_color: [0.0, 0.0, 0.0, 0.0],
                                             stroke_width: 0.0,
                                             fill_type:    crate::core::timeline::ShapeFillType::Solid,
+                                            extrusion_depth: 0.0,
+                                            bevel_depth: 0.0,
                                         },
                                         total_frames,
                                     );

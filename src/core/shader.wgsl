@@ -163,7 +163,14 @@ struct Layer {
     _ls_pad1: f32,
     _ls_pad2: f32,
     _ls_pad3: f32,
-    _padding_align: array<vec4<f32>, 7>,
+
+    // 3D Extrusion (pseudo-3D depth shading for shape layers)
+    extrusion_depth: f32,
+    bevel_depth: f32,
+
+    _padding_align: array<vec4<f32>, 6>,
+    _ls_pad4: f32,
+    _ls_pad5: f32,
 };
 
 @group(0) @binding(0) var<uniform> globals: Globals;
@@ -352,6 +359,32 @@ fn sample_layer_color(local_pos_in: vec2<f32>, tc_in: vec2<f32>, blur_extend: f3
             shape_color = mix(vec4<f32>(layer.grad_color1_r, layer.grad_color1_g, layer.grad_color1_b, layer.grad_color1_a), vec4<f32>(layer.grad_color2_r, layer.grad_color2_g, layer.grad_color2_b, layer.grad_color2_a), t);
         }
         c = vec4<f32>(shape_color.rgb, shape_color.a * alpha);
+
+        // 3D Extrusion: pseudo-3D depth shading based on distance from shape edge
+        if (layer.extrusion_depth > 0.01 && alpha > 0.01) {
+            // Compute distance from edge (0 at edge, 1 at center) using SDF
+            var edge_dist = 0.0;
+            if (layer.shape_type == 0u) {
+                let d_x = abs(local_pos.x) - 0.5;
+                let d_y = abs(local_pos.y) - 0.5;
+                edge_dist = -max(d_x, d_y); // positive inside, negative outside
+            } else if (layer.shape_type == 1u) {
+                edge_dist = 0.5 - length(local_pos);
+            } else {
+                edge_dist = 0.1; // fallback for star/polygon
+            }
+            edge_dist = clamp(edge_dist * 2.0, 0.0, 1.0); // normalize to 0..1
+
+            // Extrusion depth: front cap brightest, back cap darkest
+            let depth_factor = 1.0 - layer.extrusion_depth * 0.003;
+            let extrusion_shade = mix(depth_factor, 1.0, edge_dist);
+
+            // Bevel: brighten near edges for a rounded edge effect
+            let bevel_factor = 1.0 + layer.bevel_depth * 0.02 * (1.0 - smoothstep(0.0, 0.3, edge_dist));
+
+            let final_shade = clamp(extrusion_shade * bevel_factor, 0.2, 1.0);
+            c = vec4<f32>(c.rgb * final_shade, c.a);
+        }
     } else if (layer.layer_type == 3u) {
         c = layer.color;
     } else if (layer.layer_type == 8u) {

@@ -228,7 +228,11 @@ struct LayerUniform {
     _ls_pad2: f32,
     _ls_pad3: f32,
 
-    _padding_align: [f32; 28], // Keep total size a multiple of 256 (768 bytes) for WGPU dynamic uniform offsets
+    // 3D Extrusion
+    extrusion_depth: f32,
+    bevel_depth: f32,
+
+    _padding_align: [f32; 26], // Keep total size a multiple of 256 (768 bytes) for WGPU dynamic uniform offsets
 }
 
 // ─── GPU Layer Mask Rasterization (CPU-baked coverage → group(3) texture) ──
@@ -2089,7 +2093,17 @@ impl WgpuRenderer {
                     _ls_pad1: 0.0,
                     _ls_pad2: 0.0,
                     _ls_pad3: 0.0,
-                    _padding_align: [0.0; 28],
+
+                    extrusion_depth: match &layer.layer_type {
+                        crate::core::timeline::LayerType::Shape { extrusion_depth, .. } => *extrusion_depth,
+                        _ => 0.0,
+                    },
+                    bevel_depth: match &layer.layer_type {
+                        crate::core::timeline::LayerType::Shape { bevel_depth, .. } => *bevel_depth,
+                        _ => 0.0,
+                    },
+
+                    _padding_align: [0.0; 26],
                 };
 
                 layer_mask_plans.push(collect_mask_shapes(

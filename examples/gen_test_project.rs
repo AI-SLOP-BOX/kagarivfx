@@ -26,6 +26,8 @@ fn main() {
         stroke_color: [0.0, 0.0, 0.0, 1.0],
         stroke_width: 0.0,
         fill_type: Default::default(),
+        extrusion_depth: 0.0,
+        bevel_depth: 0.0,
     }, 30);
     // Horizontal motion for motion blur testing
     moving.motion_blur = true;

@@ -99,6 +99,10 @@ pub enum LayerType {
         stroke_width: f32,
         #[serde(default)]
         fill_type: ShapeFillType,
+        #[serde(default)]
+        extrusion_depth: f32,
+        #[serde(default)]
+        bevel_depth: f32,
     },
     Null,
     PreComp {

@@ -315,40 +315,23 @@ pub fn draw_layer_transforms(
                 // ── 3D Geometry Options (Extrusion & Bevel) ──
                 ui.separator();
                 ui.collapsing("📐 Geometry Options (Extrusion & Bevel)", |ui| {
-                    let mut extrusion_depth = ui.ctx().data(|d| d.get_temp::<f32>(egui::Id::new("3d_extrusion_depth")).unwrap_or(0.0));
-                    ui.horizontal(|ui| {
-                        ui.label("Extrusion Depth:");
-                        if ui.add(egui::DragValue::new(&mut extrusion_depth).speed(1.0).range(0.0..=500.0).suffix(" px")).changed() {
-                            ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("3d_extrusion_depth"), extrusion_depth));
-                            *project_changed = true;
-                        }
-                    });
+                    if let LayerType::Shape { extrusion_depth, bevel_depth, .. } = &mut layer.layer_type {
+                        ui.horizontal(|ui| {
+                            ui.label("Extrusion Depth:");
+                            if ui.add(egui::DragValue::new(extrusion_depth).speed(1.0).range(0.0..=500.0).suffix(" px")).changed() {
+                                *project_changed = true;
+                            }
+                        });
 
-                    let mut bevel_depth = ui.ctx().data(|d| d.get_temp::<f32>(egui::Id::new("3d_bevel_depth")).unwrap_or(0.0));
-                    ui.horizontal(|ui| {
-                        ui.label("Bevel Depth:");
-                        if ui.add(egui::DragValue::new(&mut bevel_depth).speed(0.5).range(0.0..=50.0).suffix(" px")).changed() {
-                            ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("3d_bevel_depth"), bevel_depth));
-                            *project_changed = true;
-                        }
-                    });
-
-                    let mut bevel_style = ui.ctx().data(|d| d.get_temp::<i32>(egui::Id::new("3d_bevel_style")).unwrap_or(0));
-                    ui.horizontal(|ui| {
-                        ui.label("Bevel Style:");
-                        egui::ComboBox::from_id_salt("3d_bevel_style_combo")
-                            .selected_text(match bevel_style {
-                                0 => "Flat",
-                                1 => "Round",
-                                2 => "Angular",
-                                _ => "Flat",
-                            })
-                            .show_ui(ui, |ui| {
-                                if ui.selectable_value(&mut bevel_style, 0, "Flat").clicked() { ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("3d_bevel_style"), 0)); *project_changed = true; }
-                                if ui.selectable_value(&mut bevel_style, 1, "Round").clicked() { ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("3d_bevel_style"), 1)); *project_changed = true; }
-                                if ui.selectable_value(&mut bevel_style, 2, "Angular").clicked() { ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("3d_bevel_style"), 2)); *project_changed = true; }
-                            });
-                    });
+                        ui.horizontal(|ui| {
+                            ui.label("Bevel Depth:");
+                            if ui.add(egui::DragValue::new(bevel_depth).speed(0.5).range(0.0..=50.0).suffix(" px")).changed() {
+                                *project_changed = true;
+                            }
+                        });
+                    } else {
+                        ui.label("Extrusion is only available for Shape layers.");
+                    }
                 });
             }
         }

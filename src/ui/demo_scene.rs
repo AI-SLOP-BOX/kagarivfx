@@ -42,6 +42,8 @@ pub fn build(app: &mut crate::AfterEffectsApp) {
             stroke_color: [1.0, 1.0, 1.0, 1.0],
             stroke_width: 0.0,
             fill_type: Default::default(),
+            extrusion_depth: 0.0,
+            bevel_depth: 0.0,
         },
         comp.duration_frames,
     );

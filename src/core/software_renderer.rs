@@ -666,7 +666,7 @@ fn render_precomp_layers_inner(_comp: &Composition, precomp_comp: &Composition, 
         let mut layer_buf = vec![0u8; buf_size];
 
         match &layer.layer_type {
-            LayerType::Shape { shape_type, color, stroke_color, stroke_width, fill_type } => {
+            LayerType::Shape { shape_type, color, stroke_color, stroke_width, fill_type, .. } => {
                 // SDF shape rendering (same path as the main renderer)
                 rasterize_shape_sdf(
                     &mut layer_buf, bw, bh, min_x, min_y,
@@ -3251,6 +3251,8 @@ mod tests {
             stroke_color: [0.0, 0.0, 0.0, 1.0],
             stroke_width: 0.0,
             fill_type: Default::default(),
+            extrusion_depth: 0.0,
+            bevel_depth: 0.0,
         }, 30);
         shape.transform.position = Animatable::new_constant([32.0, 32.0]);
         sub.layers.push(shape);
@@ -3507,7 +3509,7 @@ mod tests {
             LayerType::Shape { shape_type: crate::core::timeline::ShapeType::Ellipse {
                 width: crate::core::property::Animatable::new_constant(100.0),
                 height: crate::core::property::Animatable::new_constant(100.0),
-            }, color: [1.0, 0.0, 0.0, 1.0], stroke_color: [0.0, 0.0, 0.0, 1.0], stroke_width: 0.0, fill_type: Default::default() },
+            }, color: [1.0, 0.0, 0.0, 1.0], stroke_color: [0.0, 0.0, 0.0, 1.0], stroke_width: 0.0, fill_type: Default::default(), extrusion_depth: 0.0, bevel_depth: 0.0 },
             30,
         );
         layer.transform.position = crate::core::property::Animatable::new_constant([32.0, 32.0]);
@@ -3532,7 +3534,7 @@ mod tests {
                 width: crate::core::property::Animatable::new_constant(100.0),
                 height: crate::core::property::Animatable::new_constant(100.0),
                 corner_radius: crate::core::property::Animatable::new_constant(0.0),
-            }, color: [0.0, 1.0, 0.0, 1.0], stroke_color: [0.0, 0.0, 0.0, 1.0], stroke_width: 0.0, fill_type: Default::default() },
+            }, color: [0.0, 1.0, 0.0, 1.0], stroke_color: [0.0, 0.0, 0.0, 1.0], stroke_width: 0.0, fill_type: Default::default(), extrusion_depth: 0.0, bevel_depth: 0.0 },
             30,
         );
         layer.transform.position = crate::core::property::Animatable::new_constant([32.0, 32.0]);
@@ -3910,6 +3912,8 @@ mod shadow_tests {
                 stroke_color: [0.0; 4],
                 stroke_width: 0.0,
                 fill_type: Default::default(),
+                extrusion_depth: 0.0,
+                bevel_depth: 0.0,
             },
             30,
         );
