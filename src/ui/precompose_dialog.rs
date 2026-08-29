@@ -31,6 +31,12 @@ pub fn draw_precompose_dialog(app: &mut AfterEffectsApp, ctx: &egui::Context) {
             ui.radio_value(&mut app.precompose_move_attributes, true, "Move all attributes into the new composition");
             ui.radio_value(&mut app.precompose_move_attributes, false, "Leave all attributes in current composition");
 
+            ui.add_space(4.0);
+            let mut open_new_tab = ui.ctx().data(|d| d.get_temp::<bool>(egui::Id::new("precomp_open_new_tab")).unwrap_or(true));
+            if ui.checkbox(&mut open_new_tab, "Open in New Composition Viewer").changed() {
+                ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("precomp_open_new_tab"), open_new_tab));
+            }
+
             ui.add_space(10.0);
             ui.separator();
 
@@ -84,6 +90,9 @@ pub fn draw_precompose_dialog(app: &mut AfterEffectsApp, ctx: &egui::Context) {
                         current_comp.add_layer(precomp_layer);
 
                         temp_proj.compositions.push(new_comp);
+                        if open_new_tab {
+                            temp_proj.active_composition_idx = temp_proj.compositions.len() - 1;
+                        }
                         app.history.commit(temp_proj);
                         crate::core::frame_cache::bump_version();
                         app.toasts.info(format!("Pre-composed into '{}'", app.precompose_name));

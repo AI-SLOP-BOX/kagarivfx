@@ -216,7 +216,7 @@ pub fn draw_expression_selector(
                 // Preset dropdown
                 let presets = [
                     ("wiggle(4, 30)", "Wiggle"),
-                    ("loopOut(\"cycle\")", "Loop"),
+                    ("loopOut(\"cycle\")", "Loop Cycle"),
                     ("loopOut(\"pingpong\")", "PingPong"),
                     ("value * 2", "Double"),
                     ("time * 100", "Time×100"),
@@ -235,6 +235,44 @@ pub fn draw_expression_selector(
                             }
                         }
                     });
+
+                // Expression Language Menu (AE Flyout Triangle)
+                let lang_menu_id = ui.make_persistent_id(format!("expr_lang_menu_{}", label));
+                ui.menu_button("▶ Language ▾", |ui| {
+                    ui.label(egui::RichText::new("📖 Expression Language Library").strong().color(colors::ACCENT_CYAN));
+                    ui.separator();
+                    
+                    ui.menu_button("🌐 Global & Comp", |ui| {
+                        if ui.button("time (seconds)").clicked() { *script = format!("{}\ntime", script); *project_changed = true; ui.close_menu(); }
+                        if ui.button("thisComp.duration").clicked() { *script = format!("{}\nthisComp.duration", script); *project_changed = true; ui.close_menu(); }
+                        if ui.button("thisLayer.index").clicked() { *script = format!("{}\nthisLayer.index", script); *project_changed = true; ui.close_menu(); }
+                        if ui.button("valueAtTime(time - 0.1)").clicked() { *script = format!("{}\nvalueAtTime(time - 0.1)", script); *project_changed = true; ui.close_menu(); }
+                    });
+
+                    ui.menu_button("🎲 Random Numbers", |ui| {
+                        if ui.button("wiggle(freq, amp)").clicked() { *script = format!("{}\nwiggle(4, 25)", script); *project_changed = true; ui.close_menu(); }
+                        if ui.button("random(min, max)").clicked() { *script = format!("{}\nrandom(0.0, 100.0)", script); *project_changed = true; ui.close_menu(); }
+                        if ui.button("noise(time)").clicked() { *script = format!("{}\nnoise(time * 2.0)", script); *project_changed = true; ui.close_menu(); }
+                    });
+
+                    ui.menu_button("📈 Interpolation", |ui| {
+                        if ui.button("linear(t, tMin, tMax, val1, val2)").clicked() { *script = format!("{}\nlinear(time, 0.0, 2.0, 0.0, 100.0)", script); *project_changed = true; ui.close_menu(); }
+                        if ui.button("ease(t, tMin, tMax, val1, val2)").clicked() { *script = format!("{}\nease(time, 0.0, 1.5, 0.0, 200.0)", script); *project_changed = true; ui.close_menu(); }
+                        if ui.button("easeIn(t, 0, 1, 0, 100)").clicked() { *script = format!("{}\neaseIn(time, 0.0, 1.0, 0.0, 100.0)", script); *project_changed = true; ui.close_menu(); }
+                    });
+
+                    ui.menu_button("🔁 Looping & PingPong", |ui| {
+                        if ui.button("loopOut(\"cycle\")").clicked() { *script = format!("{}\nloopOut(\"cycle\")", script); *project_changed = true; ui.close_menu(); }
+                        if ui.button("loopOut(\"pingpong\")").clicked() { *script = format!("{}\nloopOut(\"pingpong\")", script); *project_changed = true; ui.close_menu(); }
+                        if ui.button("loopIn(\"cycle\")").clicked() { *script = format!("{}\nloopIn(\"cycle\")", script); *project_changed = true; ui.close_menu(); }
+                    });
+
+                    ui.menu_button("📐 Vector & Trigonometry Math", |ui| {
+                        if ui.button("Math.sin(time * 3.0) * 50.0").clicked() { *script = format!("{}\nMath.sin(time * 3.0) * 50.0", script); *project_changed = true; ui.close_menu(); }
+                        if ui.button("Math.atan2(y, x)").clicked() { *script = format!("{}\nMath.atan2(y, x)", script); *project_changed = true; ui.close_menu(); }
+                        if ui.button("clamp(val, min, max)").clicked() { *script = format!("{}\nclamp(value, 0.0, 100.0)", script); *project_changed = true; ui.close_menu(); }
+                    });
+                });
 
                 // Live syntax validation badge
                 let engine = crate::core::expression_engine::build_engine();
