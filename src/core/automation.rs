@@ -19,6 +19,30 @@ thread_local! {
     static CURRENT_PROJECT: RefCell<*mut Project> = const { RefCell::new(std::ptr::null_mut()) };
 }
 
+#[derive(Debug)]
+struct ProjectScope;
+
+impl ProjectScope {
+    fn enter(project: &mut Project) -> Result<Self, String> {
+        CURRENT_PROJECT.with(|current| {
+            let mut ptr = current.borrow_mut();
+            if !ptr.is_null() {
+                return Err("nested automation execution is not supported".to_string());
+            }
+            *ptr = project as *mut Project;
+            Ok(Self)
+        })
+    }
+}
+
+impl Drop for ProjectScope {
+    fn drop(&mut self) {
+        CURRENT_PROJECT.with(|current| {
+            *current.borrow_mut() = std::ptr::null_mut();
+        });
+    }
+}
+
 fn with_project<R>(f: impl FnOnce(&mut Project) -> R) -> Option<R> {
     CURRENT_PROJECT.with(|p| {
         let ptr = *p.borrow();
@@ -36,10 +60,10 @@ pub fn run_script(project: &mut Project, source: &str) -> Result<Vec<String>, St
     let log_sink: Arc<Mutex<Vec<String>>> = Arc::new(Mutex::new(Vec::new()));
     let engine = build_engine(Arc::clone(&log_sink));
 
-    CURRENT_PROJECT.with(|p| *p.borrow_mut() = project as *mut Project);
-    let result = engine.run(source).map_err(|e| format!("script error: {e}"));
-    CURRENT_PROJECT.with(|p| *p.borrow_mut() = std::ptr::null_mut());
-    result?;
+    let _scope = ProjectScope::enter(project)?;
+    engine
+        .run(source)
+        .map_err(|e| format!("script error: {e}"))?;
 
     let logs = log_sink.lock().map(|g| g.clone()).unwrap_or_default();
     Ok(logs)
@@ -295,5 +319,27 @@ mod tests {
         assert!(err.contains("script error"));
         // Pointer cleared: further calls safe
         assert!(with_project(|_| 1).is_none());
+    }
+
+    #[test]
+    fn test_project_scope_clears_pointer_during_unwind() {
+        let mut project = Project::default();
+        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            let _scope = ProjectScope::enter(&mut project).unwrap();
+            panic!("simulated native callback panic");
+        }));
+
+        assert!(result.is_err());
+        assert!(with_project(|_| 1).is_none());
+    }
+
+    #[test]
+    fn test_nested_project_scope_is_rejected() {
+        let mut first = Project::default();
+        let mut second = Project::default();
+        let _scope = ProjectScope::enter(&mut first).unwrap();
+
+        let error = ProjectScope::enter(&mut second).unwrap_err();
+        assert!(error.contains("nested automation"));
     }
 }
