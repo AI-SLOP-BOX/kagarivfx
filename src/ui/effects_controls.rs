@@ -2212,12 +2212,102 @@ pub fn draw_effect_type_ui(
             });
         }
         EffectType::CustomShader { wgsl_source, uniform_values } => {
-            ui.label("Custom WGSL Shader");
-            ui.add(egui::TextEdit::multiline(wgsl_source).desired_width(f32::INFINITY).desired_rows(6));
+            ui.label(egui::RichText::new("⚡ Custom WGSL Shader Plugin").strong().color(colors::ACCENT_CYAN));
+            
+            // Templates dropdown
+            ui.horizontal(|ui| {
+                ui.label("Templates:");
+                if ui.small_button("📺 CRT Scanlines").clicked() {
+                    *wgsl_source = r#"// CRT Scanlines Shader
+@group(0) @binding(0) var t_diffuse: texture_2d<f32>;
+@group(0) @binding(1) var s_diffuse: sampler;
+@group(0) @binding(2) var<uniform> u_params: vec4<f32>; // x: density, y: opacity
+
+@fragment
+fn fs_main(@location(0) uv: vec2<f32>) -> @location(0) vec4<f32> {
+    var color = textureSample(t_diffuse, s_diffuse, uv);
+    let scanline = sin(uv.y * (u_params.x * 400.0 + 100.0)) * 0.5 + 0.5;
+    color = vec4<f32>(color.rgb * mix(1.0, scanline, u_params.y), color.a);
+    return color;
+}"#.to_string();
+                    if uniform_values.len() < 2 {
+                        *uniform_values = vec![1.0, 0.4];
+                    }
+                    *project_changed = true;
+                }
+                if ui.small_button("🌀 Chromatic Twist").clicked() {
+                    *wgsl_source = r#"// Chromatic Twist Shader
+@group(0) @binding(0) var t_diffuse: texture_2d<f32>;
+@group(0) @binding(1) var s_diffuse: sampler;
+@group(0) @binding(2) var<uniform> u_params: vec4<f32>; // x: strength, y: radius
+
+@fragment
+fn fs_main(@location(0) uv: vec2<f32>) -> @location(0) vec4<f32> {
+    let center = vec2<f32>(0.5, 0.5);
+    let delta = uv - center;
+    let dist = length(delta);
+    let angle = atan2(delta.y, delta.x) + (1.0 - smoothstep(0.0, u_params.y, dist)) * u_params.x;
+    let twisted_uv = center + vec2<f32>(cos(angle), sin(angle)) * dist;
+    return textureSample(t_diffuse, s_diffuse, clamp(twisted_uv, vec2<f32>(0.0), vec2<f32>(1.0)));
+}"#.to_string();
+                    if uniform_values.len() < 2 {
+                        *uniform_values = vec![1.5, 0.5];
+                    }
+                    *project_changed = true;
+                }
+                if ui.small_button("⚡ Neon Edge").clicked() {
+                    *wgsl_source = r#"// Neon Edge Glow
+@group(0) @binding(0) var t_diffuse: texture_2d<f32>;
+@group(0) @binding(1) var s_diffuse: sampler;
+@group(0) @binding(2) var<uniform> u_params: vec4<f32>; // x: edge_thresh, y: intensity
+
+@fragment
+fn fs_main(@location(0) uv: vec2<f32>) -> @location(0) vec4<f32> {
+    let col = textureSample(t_diffuse, s_diffuse, uv);
+    let right = textureSample(t_diffuse, s_diffuse, uv + vec2<f32>(0.002, 0.0));
+    let down = textureSample(t_diffuse, s_diffuse, uv + vec2<f32>(0.0, 0.002));
+    let diff = length(col.rgb - right.rgb) + length(col.rgb - down.rgb);
+    let neon = smoothstep(u_params.x * 0.1, 0.5, diff) * u_params.y * vec3<f32>(0.1, 0.9, 1.0);
+    return vec4<f32>(col.rgb + neon, col.a);
+}"#.to_string();
+                    if uniform_values.len() < 2 {
+                        *uniform_values = vec![0.5, 2.0];
+                    }
+                    *project_changed = true;
+                }
+            });
+
+            ui.add_space(4.0);
+            if ui.add(egui::TextEdit::multiline(wgsl_source).code_editor().desired_width(f32::INFINITY).desired_rows(8)).changed() {
+                *project_changed = true;
+            }
+
+            // Quick validation badge
+            let is_valid = wgsl_source.contains("fn fs_main") || wgsl_source.contains("@fragment");
+            ui.horizontal(|ui| {
+                if is_valid {
+                    ui.label(egui::RichText::new("✅ WGSL Syntax OK").small().color(colors::ACCENT_GREEN));
+                } else {
+                    ui.label(egui::RichText::new("⚠ Missing @fragment entrypoint").small().color(colors::ACCENT_ORANGE));
+                }
+                
+                if ui.small_button("+ Add Uniform Float").clicked() {
+                    uniform_values.push(1.0);
+                    *project_changed = true;
+                }
+                if !uniform_values.is_empty() && ui.small_button("- Remove").clicked() {
+                    uniform_values.pop();
+                    *project_changed = true;
+                }
+            });
+
+            // Interactive dynamic uniform sliders
             for (i, v) in uniform_values.iter_mut().enumerate() {
                 ui.horizontal(|ui| {
-                    ui.label(format!("Uniform{}", i));
-                    ui.add(egui::DragValue::new(v).speed(0.01));
+                    ui.label(format!("Param [{}] (u_params.{}):", i, match i { 0 => "x", 1 => "y", 2 => "z", 3 => "w", _ => "?" }));
+                    if ui.add(egui::DragValue::new(v).speed(0.01)).changed() {
+                        *project_changed = true;
+                    }
                 });
             }
         }
