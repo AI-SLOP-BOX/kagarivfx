@@ -464,6 +464,7 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
             let drag_info = app.dragging_effect.clone();
             // Collect pending effect drops to apply after the closure
             let mut pending_effect_drops: Vec<(usize, String, usize)> = Vec::new();
+            let mut pending_select_label_group: Option<crate::core::timeline::LabelColor> = None;
 
             let _scroll_resp = egui::ScrollArea::vertical().max_height(200.0).show(ui, |ui| {
                 let layers_len = comp.layers.len();
@@ -541,6 +542,9 @@ let type_icon = crate::ui::icons::layer_icon(&layer.layer_type);
                                             // Direct mutation: layer is already &mut from the row loop
                                             layer.label = next;
                                             project_changed = true;
+                                        }
+                                        if chip_resp.secondary_clicked() {
+                                            pending_select_label_group = Some(layer.label);
                                         }
                                         if chip_resp.hovered() {
                                             ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
@@ -942,6 +946,10 @@ let type_icon = crate::ui::icons::layer_icon(&layer.layer_type);
                                         }
                                         if ui.button("⬚ Select All Keyframes").on_hover_text("Select every keyframe on this layer (transform, effects, pins)").clicked() {
                                             pending_select_all_kfs = Some(i);
+                                            ui.close_menu();
+                                        }
+                                        if ui.button("🎨 Select Label Group").on_hover_text("Select all layers with the same label color").clicked() {
+                                            pending_select_label_group = Some(layer.label);
                                             ui.close_menu();
                                         }
                                         // ── ✨ Animation Presets ──
@@ -1630,7 +1638,19 @@ let type_icon = crate::ui::icons::layer_icon(&layer.layer_type);
                     for (pk, f) in collected {
                         app.selected_keyframes.insert((idx, pk, f));
                     }
+                }
+            }
 
+            if let Some(target_label) = pending_select_label_group {
+                app.selected_layers.clear();
+                for (idx, l) in comp.layers.iter().enumerate() {
+                    if l.label == target_label {
+                        app.selected_layers.insert(idx);
+                        app.selected_layer_idx = Some(idx);
+                    }
+                }
+                app.toasts.info(format!("Selected {} layers in label group", app.selected_layers.len()));
+            }
 
             crate::ui::timeline::pending_actions::apply_effect_drops(app, pending_effect_drops, &mut project_changed);
 
@@ -1667,10 +1687,6 @@ let type_icon = crate::ui::icons::layer_icon(&layer.layer_type);
                 pending_split_layer,
                 pending_precomp_indices,
             );
-
-                    app.toasts.info("Selected all keyframes on layer");
-                }
-            }
 
             // ── Apply pending pick whip ──
             if let Some((child_idx, parent_idx)) = pending_pick_whip {
