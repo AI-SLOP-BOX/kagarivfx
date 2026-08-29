@@ -743,6 +743,21 @@ fn apply_one_ctx(
             let edges = crate::core::find_edges::apply_find_edges(pixels, width, height, &params);
             pixels.copy_from_slice(&edges);
         }
+        EffectType::Transform { anchor_point, position, scale_width, scale_height, uniform_scale, skew_deg, skew_axis_deg, rotation_deg, opacity } => {
+            let params = crate::core::transform_effect::TransformEffectParams {
+                anchor_point: anchor_point.evaluate(frame),
+                position: position.evaluate(frame),
+                scale_width: scale_width.evaluate(frame),
+                scale_height: scale_height.evaluate(frame),
+                uniform_scale: *uniform_scale,
+                skew_deg: skew_deg.evaluate(frame),
+                skew_axis_deg: skew_axis_deg.evaluate(frame),
+                rotation_deg: rotation_deg.evaluate(frame),
+                opacity: opacity.evaluate(frame),
+            };
+            let transformed = crate::core::transform_effect::apply_transform_effect(pixels, width, height, &params);
+            pixels.copy_from_slice(&transformed);
+        }
         EffectType::TiltShift { focus_y, focus_height, max_blur } => {
             use crate::core::ae_effects_pack_v19::apply_tilt_shift;
             apply_tilt_shift(

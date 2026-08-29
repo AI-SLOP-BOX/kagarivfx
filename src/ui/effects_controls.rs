@@ -2449,6 +2449,40 @@ fn fs_main(@location(0) uv: vec2<f32>) -> @location(0) vec4<f32> {
                 *project_changed = true;
             }
         }
+        EffectType::Transform { anchor_point, position, scale_width, scale_height, uniform_scale, skew_deg, skew_axis_deg, rotation_deg, opacity } => {
+            ui.label("📐 Transform");
+            let ap_before = anchor_point.clone();
+            if let Some(nf) = draw_property_ui(current_frame, ui, "Anchor Point", anchor_point, |ui, val| {
+                ui.horizontal(|ui| {
+                    ui.add(egui::DragValue::new(&mut val[0]).speed(1.0).prefix("X: "));
+                    ui.add(egui::DragValue::new(&mut val[1]).speed(1.0).prefix("Y: "));
+                });
+            }) { *next_frame = Some(nf); }
+            if ap_before != *anchor_point { *project_changed = true; }
+
+            let pos_before = position.clone();
+            if let Some(nf) = draw_property_ui(current_frame, ui, "Position", position, |ui, val| {
+                ui.horizontal(|ui| {
+                    ui.add(egui::DragValue::new(&mut val[0]).speed(1.0).prefix("X: "));
+                    ui.add(egui::DragValue::new(&mut val[1]).speed(1.0).prefix("Y: "));
+                });
+            }) { *next_frame = Some(nf); }
+            if pos_before != *position { *project_changed = true; }
+
+            ui.horizontal(|ui| {
+                if ui.checkbox(uniform_scale, "Uniform Scale").changed() {
+                    *project_changed = true;
+                }
+            });
+            draw_prop(ui, current_frame, project_changed, next_frame, if *uniform_scale { "Scale" } else { "Scale Width" }, scale_width, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=1000.0).suffix("%")); });
+            if !*uniform_scale {
+                draw_prop(ui, current_frame, project_changed, next_frame, "Scale Height", scale_height, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=1000.0).suffix("%")); });
+            }
+            draw_prop(ui, current_frame, project_changed, next_frame, "Skew", skew_deg, |ui, v| { ui.add(egui::Slider::new(v, -85.0..=85.0).suffix("°")); });
+            draw_prop(ui, current_frame, project_changed, next_frame, "Skew Axis", skew_axis_deg, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=360.0).suffix("°")); });
+            draw_prop(ui, current_frame, project_changed, next_frame, "Rotation", rotation_deg, |ui, v| { ui.add(egui::Slider::new(v, -3600.0..=3600.0).suffix("°")); });
+            draw_prop(ui, current_frame, project_changed, next_frame, "Opacity", opacity, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=100.0).suffix("%")); });
+        }
     }
 }
 

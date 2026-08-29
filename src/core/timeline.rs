@@ -1192,6 +1192,18 @@ pub enum EffectType {
     FindEdges {
         invert: bool,
     },
+    /// Transform Effect (AE Parity - Distort > Transform).
+    Transform {
+        anchor_point: Animatable<[f32; 2]>,
+        position: Animatable<[f32; 2]>,
+        scale_width: Animatable<f32>,
+        scale_height: Animatable<f32>,
+        uniform_scale: bool,
+        skew_deg: Animatable<f32>,
+        skew_axis_deg: Animatable<f32>,
+        rotation_deg: Animatable<f32>,
+        opacity: Animatable<f32>,
+    },
     /// Tilt-shift miniature focus band.
     TiltShift {
         focus_y: Animatable<f32>,

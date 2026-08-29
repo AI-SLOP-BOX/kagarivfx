@@ -286,6 +286,16 @@ impl EffectType {
                 push!("Decay", decay, Scalar);
             }
             EffectType::FindEdges { .. } => {}
+            EffectType::Transform { anchor_point, position, scale_width, scale_height, skew_deg, skew_axis_deg, rotation_deg, opacity, .. } => {
+                push!("Anchor Point", anchor_point, Vec2);
+                push!("Position", position, Vec2);
+                push!("Scale Width", scale_width, Scalar);
+                push!("Scale Height", scale_height, Scalar);
+                push!("Skew", skew_deg, Scalar);
+                push!("Skew Axis", skew_axis_deg, Scalar);
+                push!("Rotation", rotation_deg, Scalar);
+                push!("Opacity", opacity, Scalar);
+            }
             // ── Newly registered effects (session 3) ──
             EffectType::BevelAlpha { depth, light_angle_deg } => {
                 push!("Depth", depth, Scalar);

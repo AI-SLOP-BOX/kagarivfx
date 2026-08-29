@@ -302,6 +302,7 @@ impl RenderEffectPlugin for EnumEffectPlugin {
             EffectType::SetMatte { .. } => "Set Matte",
             EffectType::Echo { .. } => "Echo",
             EffectType::FindEdges { .. } => "Find Edges",
+            EffectType::Transform { .. } => "Transform",
         }
     }
 
@@ -423,6 +424,7 @@ impl RenderEffectPlugin for EnumEffectPlugin {
             EffectType::SetMatte { .. } => "set_matte",
             EffectType::Echo { .. } => "echo",
             EffectType::FindEdges { .. } => "find_edges",
+            EffectType::Transform { .. } => "transform",
         }
     }
 

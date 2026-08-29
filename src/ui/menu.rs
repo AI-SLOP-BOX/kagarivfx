@@ -1144,6 +1144,10 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
                         apply_effect_by_name(app, "CC Page Turn");
                         ui.close_menu();
                     }
+                    if ui.button("Transform").on_hover_text("2D Affine transform (Anchor, Position, Scale, Skew, Rotation, Opacity) in effect chain").clicked() {
+                        apply_effect_by_name(app, "Transform");
+                        ui.close_menu();
+                    }
                 });
             });
             ui.menu_button("Animation", |ui| {
@@ -1741,6 +1745,22 @@ fn apply_effect_by_name(app: &mut crate::AfterEffectsApp, effect_name: &str) {
                         id: format!("findedges_{}", len), name: "Find Edges".to_string(),
                         effect_type: crate::core::timeline::EffectType::FindEdges {
                             invert: false,
+                        }, enabled: true,
+                    }
+                }
+                "Transform" => {
+                    crate::core::timeline::Effect {
+                        id: format!("transform_{}", len), name: "Transform".to_string(),
+                        effect_type: crate::core::timeline::EffectType::Transform {
+                            anchor_point: crate::core::property::Animatable::new_constant([layer.transform.anchor_point.evaluate(0)[0], layer.transform.anchor_point.evaluate(0)[1]]),
+                            position: crate::core::property::Animatable::new_constant([layer.transform.position.evaluate(0)[0], layer.transform.position.evaluate(0)[1]]),
+                            scale_width: crate::core::property::Animatable::new_constant(100.0),
+                            scale_height: crate::core::property::Animatable::new_constant(100.0),
+                            uniform_scale: true,
+                            skew_deg: crate::core::property::Animatable::new_constant(0.0),
+                            skew_axis_deg: crate::core::property::Animatable::new_constant(0.0),
+                            rotation_deg: crate::core::property::Animatable::new_constant(0.0),
+                            opacity: crate::core::property::Animatable::new_constant(100.0),
                         }, enabled: true,
                     }
                 }
