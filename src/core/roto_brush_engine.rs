@@ -43,7 +43,8 @@ impl Default for RotoBrushSettings {
     }
 }
 
-/// Computes an automatic foreground alpha matte from user strokes and image pixels.
+/// Computes an automatic foreground alpha matte from user strokes and image pixels
+/// with spatial distance priors, color modeling, edge sensitivity, and contrast shaping.
 pub fn generate_rotobrush_matte(
     src_pixels: &[u8],
     width: u32,
@@ -58,11 +59,19 @@ pub fn generate_rotobrush_matte(
 
     let mut fg_samples = Vec::new();
     let mut bg_samples = Vec::new();
+    let mut fg_points = Vec::new();
+    let mut bg_points = Vec::new();
 
-    // Collect color samples from brush strokes
+    // Collect color samples and point coordinates from brush strokes
     for stroke in strokes {
         let r_sq = stroke.radius * stroke.radius;
         for &pt in &stroke.points {
+            if stroke.stroke_type == RotoStrokeType::Foreground {
+                fg_points.push(pt);
+            } else {
+                bg_points.push(pt);
+            }
+
             let px = pt[0] as i32;
             let py = pt[1] as i32;
             let rad = stroke.radius.ceil() as i32;
@@ -99,47 +108,88 @@ pub fn generate_rotobrush_matte(
     let bg_mean = compute_mean_color(&bg_samples).unwrap_or([0.0, 0.0, 0.0]);
 
     let mut alpha_matte = vec![0u8; size];
+    let spatial_sigma_sq = (width.max(height) as f32 * 0.35).powi(2).max(100.0);
+    let contrast_pow = settings.contrast.clamp(0.1, 5.0);
 
-    // Compute pixel probability distance to FG vs BG color clusters
-    for i in 0..size {
-        let idx = i * 4;
-        let r = src_pixels[idx] as f32;
-        let g = src_pixels[idx + 1] as f32;
-        let b = src_pixels[idx + 2] as f32;
+    for y in 0..height {
+        for x in 0..width {
+            let i = (y * width + x) as usize;
+            let idx = i * 4;
+            let r = src_pixels[idx] as f32;
+            let g = src_pixels[idx + 1] as f32;
+            let b = src_pixels[idx + 2] as f32;
 
-        let d_fg = color_dist_sq([r, g, b], fg_mean);
-        let d_bg = color_dist_sq([r, g, b], bg_mean);
+            let d_fg_color = color_dist_sq([r, g, b], fg_mean);
+            let d_bg_color = color_dist_sq([r, g, b], bg_mean);
 
-        // Soft sigmoid transition
-        let ratio = d_bg / (d_fg + d_bg + 1e-4);
-        let alpha = (ratio * 255.0).clamp(0.0, 255.0) as u8;
-        alpha_matte[i] = alpha;
+            // Spatial distance to nearest FG/BG strokes
+            let p_curr = [x as f32, y as f32];
+            let min_d_fg_pos = fg_points.iter().map(|&p| {
+                let dx = p[0] - p_curr[0];
+                let dy = p[1] - p_curr[1];
+                dx * dx + dy * dy
+            }).fold(f32::INFINITY, f32::min);
+
+            let min_d_bg_pos = bg_points.iter().map(|&p| {
+                let dx = p[0] - p_curr[0];
+                let dy = p[1] - p_curr[1];
+                dx * dx + dy * dy
+            }).fold(f32::INFINITY, f32::min);
+
+            let spatial_fg_weight = (-min_d_fg_pos / (2.0 * spatial_sigma_sq)).exp();
+            let spatial_bg_weight = (-min_d_bg_pos / (2.0 * spatial_sigma_sq)).exp();
+
+            // Combined likelihood
+            let color_likelihood = d_bg_color / (d_fg_color + d_bg_color + 1e-4);
+            let total_fg = color_likelihood * (1.0 + spatial_fg_weight * 2.0);
+            let total_bg = (1.0 - color_likelihood) * (1.0 + spatial_bg_weight * 2.0);
+
+            let raw_prob = total_fg / (total_fg + total_bg + 1e-4);
+
+            // Apply contrast shaping
+            let shaped = if raw_prob >= 0.5 {
+                0.5 + 0.5 * ((raw_prob - 0.5) * 2.0).powf(contrast_pow)
+            } else {
+                0.5 - 0.5 * ((0.5 - raw_prob) * 2.0).powf(contrast_pow)
+            };
+
+            let alpha = (shaped.clamp(0.0, 1.0) * 255.0).round() as u8;
+            alpha_matte[i] = alpha;
+        }
     }
 
-    // Apply edge refinement & feather
-    if settings.feather_radius > 0.5 {
-        refine_edge_matte(&mut alpha_matte, width, height, settings.feather_radius);
+    // Apply edge refinement & feather adjusted by sensitivity
+    let effective_feather = settings.feather_radius * (1.2 - settings.edge_detection_sensitivity.clamp(0.0, 1.0) * 0.4);
+    if effective_feather > 0.5 {
+        refine_edge_matte(&mut alpha_matte, width, height, effective_feather);
     }
 
     alpha_matte
 }
 
-/// Propagates a rotobrush boundary polygon across adjacent time frames using motion delta.
+/// Propagates a rotobrush boundary polygon across adjacent time frames using motion delta
+/// with sub-step temporal smoothing and subdivision quality.
 pub fn propagate_roto_boundary(
     prev_boundary: &[[f32; 2]],
     motion_vector: [f32; 2],
-    damping: f32,
+    settings: &RotoBrushSettings,
 ) -> Vec<[f32; 2]> {
-    let factor = (1.0 - damping).clamp(0.0, 1.0);
-    prev_boundary
-        .iter()
-        .map(|p| {
-            [
-                p[0] + motion_vector[0] * factor,
-                p[1] + motion_vector[1] * factor,
-            ]
-        })
-        .collect()
+    let damping = settings.temporal_smoothing.clamp(0.0, 1.0);
+    let factor = (1.0 - damping * 0.5).clamp(0.0, 1.0);
+    let steps = settings.propagation_quality.clamp(1, 10);
+    let step_motion = [
+        motion_vector[0] * factor / steps as f32,
+        motion_vector[1] * factor / steps as f32,
+    ];
+
+    let mut boundary = prev_boundary.to_vec();
+    for _ in 0..steps {
+        for p in &mut boundary {
+            p[0] += step_motion[0];
+            p[1] += step_motion[1];
+        }
+    }
+    boundary
 }
 
 fn compute_mean_color(samples: &[[f32; 3]]) -> Option<[f32; 3]> {
@@ -238,7 +288,12 @@ mod tests {
     #[test]
     fn test_boundary_temporal_propagation() {
         let boundary = vec![[10.0, 10.0], [20.0, 10.0], [20.0, 20.0]];
-        let propagated = propagate_roto_boundary(&boundary, [5.0, -2.0], 0.0);
-        assert_eq!(propagated[0], [15.0, 8.0]);
+        let settings = RotoBrushSettings {
+            temporal_smoothing: 0.0,
+            propagation_quality: 2,
+            ..Default::default()
+        };
+        let propagated = propagate_roto_boundary(&boundary, [6.0, -4.0], &settings);
+        assert_eq!(propagated[0], [16.0, 6.0]);
     }
 }

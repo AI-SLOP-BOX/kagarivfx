@@ -83,19 +83,35 @@ pub struct SafeEffectWorld {
 
 impl SafeEffectWorld {
     pub fn new_rgba8(width: i32, height: i32) -> Self {
-        let w = width.max(1);
-        let h = height.max(1);
-        let rowbytes = w * 4;
-        let total_bytes = (rowbytes as usize) * (h as usize);
+        if width <= 0 || height <= 0 {
+            let raw = PF_EffectWorld {
+                format: 0, // PF_PixelFormat_ARGB32
+                data: std::ptr::null_mut(),
+                rowbytes: 0,
+                width: width.max(0),
+                height: height.max(0),
+                origin_x: 0,
+                origin_y: 0,
+            };
+            return Self { raw, buffer: Vec::new() };
+        }
+
+        let w = width as usize;
+        let h = height as usize;
+        let rowbytes = match (w).checked_mul(4) {
+            Some(rb) if rb <= i32::MAX as usize => rb as i32,
+            _ => 0,
+        };
+        let total_bytes = (rowbytes as usize).checked_mul(h).unwrap_or(0);
         let mut buffer = vec![0u8; total_bytes];
-        let data_ptr = buffer.as_mut_ptr();
+        let data_ptr = if total_bytes > 0 { buffer.as_mut_ptr() } else { std::ptr::null_mut() };
 
         let raw = PF_EffectWorld {
             format: 0, // PF_PixelFormat_ARGB32
             data: data_ptr,
             rowbytes,
-            width: w,
-            height: h,
+            width,
+            height,
             origin_x: 0,
             origin_y: 0,
         };
@@ -106,6 +122,10 @@ impl SafeEffectWorld {
     /// Converts standard RGBA buffer into AE ARGB8 format inside `PF_EffectWorld`.
     pub fn from_rgba_slice(rgba: &[u8], width: u32, height: u32) -> Self {
         let mut world = Self::new_rgba8(width as i32, height as i32);
+        if world.buffer.is_empty() {
+            return world;
+        }
+
         let pixels = (width as usize)
             .saturating_mul(height as usize)
             .min(rgba.len() / 4);
@@ -124,9 +144,9 @@ impl SafeEffectWorld {
         world
     }
 
-    /// Converts ARGB8 effect output back into standard linear RGBA8 buffer.
+    /// Converts ARGB8 effect output back into standard RGBA8 buffer [R, G, B, A].
     pub fn to_rgba_vec(&self) -> Vec<u8> {
-        let pixels = (self.raw.width as usize) * (self.raw.height as usize);
+        let pixels = (self.raw.width.max(0) as usize).saturating_mul(self.raw.height.max(0) as usize);
         let mut out = vec![0u8; pixels * 4];
 
         for i in 0..pixels {
@@ -139,7 +159,6 @@ impl SafeEffectWorld {
                 out[dst + 3] = self.buffer[src]; // A
             }
         }
-
         out
     }
 

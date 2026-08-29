@@ -63,7 +63,32 @@ impl PersistentDiskCache {
         h
     }
 
-    /// Retrieves frame from disk cache if present.
+    /// Helper to evict oldest LRU entries until `needed_bytes` fits within budget.
+    fn evict_for_bytes(&mut self, needed_bytes: usize) {
+        while self.current_bytes + needed_bytes > self.budget_bytes && !self.entries.is_empty() {
+            let oldest_key = self
+                .entries
+                .iter()
+                .min_by_key(|(_, (meta, _))| meta.last_access_epoch)
+                .map(|(&k, _)| k);
+
+            if let Some(k) = oldest_key {
+                if let Some((meta, _)) = self.entries.remove(&k) {
+                    self.current_bytes = self.current_bytes.saturating_sub(meta.size_bytes);
+                    if let Some(ref dir) = self.cache_dir {
+                        let file_path = dir.join(format!("{:016x}.cache", k));
+                        let meta_path = dir.join(format!("{:016x}.meta", k));
+                        let _ = fs::remove_file(file_path);
+                        let _ = fs::remove_file(meta_path);
+                    }
+                }
+            } else {
+                break;
+            }
+        }
+    }
+
+    /// Retrieves frame from disk cache if present, evicting LRU if needed when loading from disk.
     pub fn get_frame(&mut self, key: u64, current_epoch: u64) -> Option<&[u8]> {
         if self.entries.contains_key(&key) {
             let (meta, data) = self.entries.get_mut(&key).unwrap();
@@ -74,18 +99,36 @@ impl PersistentDiskCache {
         if let Some(ref dir) = self.cache_dir {
             // Attempt reload from persistent disk file if present
             let file_path = dir.join(format!("{:016x}.cache", key));
+            let meta_path = dir.join(format!("{:016x}.meta", key));
             if let Ok(bytes) = fs::read(&file_path) {
                 let size = bytes.len();
                 if size <= self.budget_bytes {
-                    let meta = DiskCacheMetadata {
-                        cache_key: key,
-                        comp_id: String::new(),
-                        frame: 0,
-                        width: 0,
-                        height: 0,
-                        size_bytes: size,
-                        last_access_epoch: current_epoch,
+                    // Evict existing entries so this loaded entry fits budget
+                    self.evict_for_bytes(size);
+
+                    let mut meta = if let Ok(meta_json) = fs::read_to_string(&meta_path) {
+                        serde_json::from_str::<DiskCacheMetadata>(&meta_json).unwrap_or_else(|_| DiskCacheMetadata {
+                            cache_key: key,
+                            comp_id: String::new(),
+                            frame: 0,
+                            width: 0,
+                            height: 0,
+                            size_bytes: size,
+                            last_access_epoch: current_epoch,
+                        })
+                    } else {
+                        DiskCacheMetadata {
+                            cache_key: key,
+                            comp_id: String::new(),
+                            frame: 0,
+                            width: 0,
+                            height: 0,
+                            size_bytes: size,
+                            last_access_epoch: current_epoch,
+                        }
                     };
+                    meta.last_access_epoch = current_epoch;
+
                     self.current_bytes += size;
                     self.entries.insert(key, (meta, bytes));
                     return self.entries.get(&key).map(|(_, d)| d.as_slice());
@@ -107,12 +150,12 @@ impl PersistentDiskCache {
         height: u32,
         data: Vec<u8>,
         current_epoch: u64,
-    ) {
+    ) -> Result<(), std::io::Error> {
         let size = data.len();
 
         // If the single frame exceeds total cache budget, reject insertion
         if size > self.budget_bytes {
-            return;
+            return Ok(());
         }
 
         // If key already exists, remove it and subtract its size first
@@ -120,36 +163,14 @@ impl PersistentDiskCache {
             self.current_bytes = self.current_bytes.saturating_sub(old_meta.size_bytes);
             if let Some(ref dir) = self.cache_dir {
                 let file_path = dir.join(format!("{:016x}.cache", key));
+                let meta_path = dir.join(format!("{:016x}.meta", key));
                 let _ = fs::remove_file(file_path);
+                let _ = fs::remove_file(meta_path);
             }
         }
 
         // Evict LRU entries if adding new size exceeds budget
-        while self.current_bytes + size > self.budget_bytes && !self.entries.is_empty() {
-            let oldest_key = self
-                .entries
-                .iter()
-                .min_by_key(|(_, (meta, _))| meta.last_access_epoch)
-                .map(|(&k, _)| k);
-
-            if let Some(k) = oldest_key {
-                if let Some((meta, _)) = self.entries.remove(&k) {
-                    self.current_bytes = self.current_bytes.saturating_sub(meta.size_bytes);
-                    if let Some(ref dir) = self.cache_dir {
-                        let file_path = dir.join(format!("{:016x}.cache", k));
-                        let _ = fs::remove_file(file_path);
-                    }
-                }
-            } else {
-                break;
-            }
-        }
-
-        // Persist to disk file if directory is configured
-        if let Some(ref dir) = self.cache_dir {
-            let file_path = dir.join(format!("{:016x}.cache", key));
-            let _ = fs::write(file_path, &data);
-        }
+        self.evict_for_bytes(size);
 
         let meta = DiskCacheMetadata {
             cache_key: key,
@@ -161,8 +182,19 @@ impl PersistentDiskCache {
             last_access_epoch: current_epoch,
         };
 
+        // Persist to disk file if directory is configured
+        if let Some(ref dir) = self.cache_dir {
+            let file_path = dir.join(format!("{:016x}.cache", key));
+            let meta_path = dir.join(format!("{:016x}.meta", key));
+            fs::write(&file_path, &data)?;
+            if let Ok(meta_json) = serde_json::to_string(&meta) {
+                let _ = fs::write(&meta_path, meta_json);
+            }
+        }
+
         self.current_bytes += size;
         self.entries.insert(key, (meta, data));
+        Ok(())
     }
 
     /// Clears all memory and disk cache files.
@@ -209,13 +241,13 @@ mod tests {
         let k1 = PersistentDiskCache::compute_cache_key("comp1", 1, 1);
         let k2 = PersistentDiskCache::compute_cache_key("comp1", 2, 1);
 
-        cache.put_frame(k0, "comp1".into(), 0, 10, 10, f0, 1000);
-        cache.put_frame(k1, "comp1".into(), 1, 10, 10, f1, 1001);
+        let _ = cache.put_frame(k0, "comp1".into(), 0, 10, 10, f0, 1000);
+        let _ = cache.put_frame(k1, "comp1".into(), 1, 10, 10, f1, 1001);
         assert_eq!(cache.entries.len(), 2);
         assert_eq!(cache.current_bytes, 200);
 
         // Storing 3rd frame must evict k0 (epoch 1000)
-        cache.put_frame(k2, "comp1".into(), 2, 10, 10, f2, 1002);
+        let _ = cache.put_frame(k2, "comp1".into(), 2, 10, 10, f2, 1002);
         assert_eq!(cache.entries.len(), 2);
         assert_eq!(cache.current_bytes, 200);
         assert!(cache.get_frame(k0, 1003).is_none());
@@ -227,11 +259,11 @@ mod tests {
     fn test_disk_cache_reinsertion_deducts_old_size() {
         let mut cache = PersistentDiskCache::new(200);
         let k0 = 42;
-        cache.put_frame(k0, "c".into(), 0, 1, 1, vec![0u8; 100], 100);
+        let _ = cache.put_frame(k0, "c".into(), 0, 1, 1, vec![0u8; 100], 100);
         assert_eq!(cache.current_bytes, 100);
 
         // Reinsert same key with new size (80 bytes)
-        cache.put_frame(k0, "c".into(), 0, 1, 1, vec![0u8; 80], 101);
+        let _ = cache.put_frame(k0, "c".into(), 0, 1, 1, vec![0u8; 80], 101);
         assert_eq!(cache.current_bytes, 80);
         assert_eq!(cache.entries.len(), 1);
     }
@@ -241,8 +273,38 @@ mod tests {
         let mut cache = PersistentDiskCache::new(100);
         let k0 = 99;
         // 150 bytes > 100 bytes budget
-        cache.put_frame(k0, "c".into(), 0, 1, 1, vec![0u8; 150], 100);
+        let _ = cache.put_frame(k0, "c".into(), 0, 1, 1, vec![0u8; 150], 100);
         assert_eq!(cache.entries.len(), 0);
         assert_eq!(cache.current_bytes, 0);
+    }
+
+    #[test]
+    fn test_disk_cache_filesystem_persistence_and_metadata_reload() {
+        let tmp_dir = std::env::temp_dir().join(format!("ae_test_cache_{}", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()));
+        let _ = fs::create_dir_all(&tmp_dir);
+
+        let mut cache = PersistentDiskCache::with_directory(500, tmp_dir.clone());
+        let k0 = 12345;
+        let data = vec![7u8; 64];
+        let _ = cache.put_frame(k0, "comp_main".into(), 5, 1920, 1080, data.clone(), 100);
+
+        // Clear memory cache only
+        cache.entries.clear();
+        cache.current_bytes = 0;
+
+        // Reload from filesystem
+        let loaded = cache.get_frame(k0, 200);
+        assert!(loaded.is_some());
+        assert_eq!(loaded.unwrap(), data.as_slice());
+
+        // Check restored metadata
+        let (meta, _) = cache.entries.get(&k0).unwrap();
+        assert_eq!(meta.comp_id, "comp_main");
+        assert_eq!(meta.frame, 5);
+        assert_eq!(meta.width, 1920);
+        assert_eq!(meta.height, 1080);
+
+        cache.clear();
+        let _ = fs::remove_dir_all(&tmp_dir);
     }
 }

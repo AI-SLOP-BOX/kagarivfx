@@ -50,10 +50,19 @@ struct Biquad {
 impl Biquad {
     fn new() -> Self {
         Self {
-            b0: 1.0, b1: 0.0, b2: 0.0,
-            a1: 0.0, a2: 0.0,
-            x1_l: 0.0, x2_l: 0.0, y1_l: 0.0, y2_l: 0.0,
-            x1_r: 0.0, x2_r: 0.0, y1_r: 0.0, y2_r: 0.0,
+            b0: 1.0,
+            b1: 0.0,
+            b2: 0.0,
+            a1: 0.0,
+            a2: 0.0,
+            x1_l: 0.0,
+            x2_l: 0.0,
+            y1_l: 0.0,
+            y2_l: 0.0,
+            x1_r: 0.0,
+            x2_r: 0.0,
+            y1_r: 0.0,
+            y2_r: 0.0,
         }
     }
 
@@ -63,9 +72,11 @@ impl Biquad {
             let x_r = sample[1] as f64;
 
             let y_l = self.b0 * x_l + self.b1 * self.x1_l + self.b2 * self.x2_l
-                       - self.a1 * self.y1_l - self.a2 * self.y2_l;
+                - self.a1 * self.y1_l
+                - self.a2 * self.y2_l;
             let y_r = self.b0 * x_r + self.b1 * self.x1_r + self.b2 * self.x2_r
-                       - self.a1 * self.y1_r - self.a2 * self.y2_r;
+                - self.a1 * self.y1_r
+                - self.a2 * self.y2_r;
 
             self.x2_l = self.x1_l;
             self.x1_l = x_l;
@@ -181,7 +192,8 @@ pub fn apply_eq(buf: &mut [f32], bands: &[EqBand], sample_rate: u32) {
     }
     let fs = sample_rate as f64;
     let nyquist = fs * 0.5;
-    let filters: Vec<Biquad> = bands.iter()
+    let filters: Vec<Biquad> = bands
+        .iter()
         .filter(|b| {
             // Skip pass filters at extreme frequencies (bypass mode)
             match b.band_type {
@@ -235,7 +247,12 @@ impl Default for CompressorParams {
 }
 
 /// Apply compressor to a stereo interleaved buffer.
-pub fn apply_compressor(buf: &mut [f32], params: &CompressorParams, state: &mut CompressorState, sample_rate: u32) {
+pub fn apply_compressor(
+    buf: &mut [f32],
+    params: &CompressorParams,
+    state: &mut CompressorState,
+    sample_rate: u32,
+) {
     if buf.is_empty() {
         return;
     }
@@ -285,7 +302,13 @@ pub fn apply_compressor(buf: &mut [f32], params: &CompressorParams, state: &mut 
 }
 
 /// Apply a simple limiter (hard-knee compressor with very high ratio).
-pub fn apply_limiter(buf: &mut [f32], ceiling_db: f32, release_ms: f32, state: &mut CompressorState, sample_rate: u32) {
+pub fn apply_limiter(
+    buf: &mut [f32],
+    ceiling_db: f32,
+    release_ms: f32,
+    state: &mut CompressorState,
+    sample_rate: u32,
+) {
     let params = CompressorParams {
         threshold_db: ceiling_db,
         ratio: 20.0,
@@ -355,26 +378,46 @@ pub fn extract_multiband_audio_keyframes(
         return MultiBandAudioKeyframes::default();
     }
 
-    let samples_per_frame = (sample_rate as f64 / fps as f64).round() as usize;
+    let total_stereo_samples = pcm_stereo.len() / 2;
 
     // Filter banks for frequency crossover:
     // Bass: LowPass 250Hz
     let mut bq_bass = design_biquad(
-        &EqBand { freq: 250.0, gain_db: 0.0, q: 0.707, band_type: EqBandType::LowPass },
+        &EqBand {
+            freq: 250.0,
+            gain_db: 0.0,
+            q: 0.707,
+            band_type: EqBandType::LowPass,
+        },
         sample_rate as f64,
     );
     // Treble: HighPass 4000Hz
     let mut bq_treble = design_biquad(
-        &EqBand { freq: 4000.0, gain_db: 0.0, q: 0.707, band_type: EqBandType::HighPass },
+        &EqBand {
+            freq: 4000.0,
+            gain_db: 0.0,
+            q: 0.707,
+            band_type: EqBandType::HighPass,
+        },
         sample_rate as f64,
     );
     // Mid: BandPass (LowPass 4000Hz + HighPass 250Hz)
     let mut bq_mid_lp = design_biquad(
-        &EqBand { freq: 4000.0, gain_db: 0.0, q: 0.707, band_type: EqBandType::LowPass },
+        &EqBand {
+            freq: 4000.0,
+            gain_db: 0.0,
+            q: 0.707,
+            band_type: EqBandType::LowPass,
+        },
         sample_rate as f64,
     );
     let mut bq_mid_hp = design_biquad(
-        &EqBand { freq: 250.0, gain_db: 0.0, q: 0.707, band_type: EqBandType::HighPass },
+        &EqBand {
+            freq: 250.0,
+            gain_db: 0.0,
+            q: 0.707,
+            band_type: EqBandType::HighPass,
+        },
         sample_rate as f64,
     );
 
@@ -389,19 +432,39 @@ pub fn extract_multiband_audio_keyframes(
     let rel_coef = (-dt / (options.release_ms.max(1.0) * 0.001)).exp();
 
     let mut res = MultiBandAudioKeyframes::default();
+    let db_to_value = |amplitude: f32| {
+        let db = 20.0 * amplitude.max(1.0e-8).log10();
+        let span = (options.max_db - options.min_db).max(f32::EPSILON);
+        ((db - options.min_db) / span).clamp(0.0, 1.0) * options.multiplier.max(0.0)
+    };
 
     for f in 0..total_frames {
-        let start_sample = (f as usize * samples_per_frame) * 2;
-        let end_sample = ((f as usize + 1) * samples_per_frame * 2).min(pcm_stereo.len());
+        let start_sample_idx = ((f as f64 * sample_rate as f64) / fps as f64).floor() as usize;
+        let mut end_sample_idx = (((f + 1) as f64 * sample_rate as f64) / fps as f64).ceil() as usize;
+        if end_sample_idx == start_sample_idx {
+            end_sample_idx = (start_sample_idx + 1).min(total_stereo_samples);
+        }
+        let start_sample = (start_sample_idx * 2).min(pcm_stereo.len());
+        let end_sample = (end_sample_idx * 2).min(pcm_stereo.len());
 
-        let mut frame_buf = if start_sample < pcm_stereo.len() {
+        let mut frame_buf = if start_sample < pcm_stereo.len() && start_sample < end_sample {
             pcm_stereo[start_sample..end_sample].to_vec()
+        } else if !pcm_stereo.is_empty() {
+            // Pick nearest single stereo sample
+            let sample_idx = (start_sample_idx % total_stereo_samples.max(1)) * 2;
+            pcm_stereo[sample_idx..sample_idx + 2].to_vec()
         } else {
             Vec::new()
         };
 
         if frame_buf.is_empty() {
-            let kf = |val: f32| crate::core::keyframe::Keyframe::new(f, val, crate::core::keyframe::InterpolationType::Linear);
+            let kf = |val: f32| {
+                crate::core::keyframe::Keyframe::new(
+                    f,
+                    val,
+                    crate::core::keyframe::InterpolationType::Linear,
+                )
+            };
             res.master.push(kf(0.0));
             res.bass.push(kf(0.0));
             res.mid.push(kf(0.0));
@@ -454,12 +517,21 @@ pub fn extract_multiband_audio_keyframes(
             (*env * options.multiplier).clamp(0.0, options.multiplier)
         };
 
-        let v_master = update_env(&mut env_master, peak_master);
-        let v_bass = update_env(&mut env_bass, peak_bass);
-        let v_mid = update_env(&mut env_mid, peak_mid);
-        let v_treble = update_env(&mut env_treble, peak_treble);
+        let v_master =
+            db_to_value(update_env(&mut env_master, peak_master) / options.multiplier.max(1.0));
+        let v_bass =
+            db_to_value(update_env(&mut env_bass, peak_bass) / options.multiplier.max(1.0));
+        let v_mid = db_to_value(update_env(&mut env_mid, peak_mid) / options.multiplier.max(1.0));
+        let v_treble =
+            db_to_value(update_env(&mut env_treble, peak_treble) / options.multiplier.max(1.0));
 
-        let kf = |val: f32| crate::core::keyframe::Keyframe::new(f, val, crate::core::keyframe::InterpolationType::Linear);
+        let kf = |val: f32| {
+            crate::core::keyframe::Keyframe::new(
+                f,
+                val,
+                crate::core::keyframe::InterpolationType::Linear,
+            )
+        };
 
         res.master.push(kf(v_master));
         res.bass.push(kf(v_bass));
@@ -511,11 +583,18 @@ mod tests {
             buf.push(v);
             buf.push(v);
         }
-        let rms_before: f64 = buf.iter().map(|s| (*s as f64).powi(2)).sum::<f64>().sqrt() / (len as f64);
+        let rms_before: f64 =
+            buf.iter().map(|s| (*s as f64).powi(2)).sum::<f64>().sqrt() / (len as f64);
         apply_eq(&mut buf, &bands, sr);
-        let rms_after: f64 = buf.iter().map(|s| (*s as f64).powi(2)).sum::<f64>().sqrt() / (len as f64);
+        let rms_after: f64 =
+            buf.iter().map(|s| (*s as f64).powi(2)).sum::<f64>().sqrt() / (len as f64);
         // 12dB boost should increase RMS significantly
-        assert!(rms_after > rms_before * 1.5, "Bell boost did not increase level: before={:.4} after={:.4}", rms_before, rms_after);
+        assert!(
+            rms_after > rms_before * 1.5,
+            "Bell boost did not increase level: before={:.4} after={:.4}",
+            rms_before,
+            rms_after
+        );
     }
 
     #[test]
@@ -537,9 +616,19 @@ mod tests {
         }
         let rms_before: f64 = 0.8;
         apply_compressor(&mut buf_loud, &params, &mut state, 44100);
-        let rms_after: f64 = buf_loud.iter().map(|s| (*s as f64).powi(2)).sum::<f64>().sqrt() / 2048.0;
+        let rms_after: f64 = buf_loud
+            .iter()
+            .map(|s| (*s as f64).powi(2))
+            .sum::<f64>()
+            .sqrt()
+            / 2048.0;
         // Compressor with 4:1 ratio above -20dB threshold should reduce level
-        assert!(rms_after < rms_before, "Compressor did not reduce loud signal: before={:.4} after={:.4}", rms_before, rms_after);
+        assert!(
+            rms_after < rms_before,
+            "Compressor did not reduce loud signal: before={:.4} after={:.4}",
+            rms_before,
+            rms_after
+        );
     }
 
     #[test]
@@ -582,6 +671,26 @@ mod tests {
         let mid_frame = (total_frames / 2) as usize;
         let bass_val = kfs.bass[mid_frame].value;
         let treble_val = kfs.treble[mid_frame].value;
-        assert!(bass_val > treble_val * 3.0, "Bass {} must be much higher than Treble {}", bass_val, treble_val);
+        assert!(
+            bass_val > treble_val * 3.0,
+            "Bass {} must be much higher than Treble {}",
+            bass_val,
+            treble_val
+        );
+    }
+
+    #[test]
+    fn test_extract_multiband_audio_keyframes_low_sample_rate() {
+        // sample_rate (20 Hz) < fps (60 fps)
+        let sr = 20u32;
+        let fps = 60u32;
+        let total_frames = 30u32;
+        let pcm = vec![0.8f32; 100]; // 50 stereo samples
+        let options = AudioKeyframeOptions::default();
+        let kfs = extract_multiband_audio_keyframes(&pcm, sr, fps, total_frames, &options);
+
+        assert_eq!(kfs.master.len(), total_frames as usize);
+        // Master values must not be zero/empty
+        assert!(kfs.master.iter().any(|kf| kf.value > 0.0));
     }
 }
