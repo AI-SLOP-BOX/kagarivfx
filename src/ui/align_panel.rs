@@ -30,70 +30,111 @@ pub fn draw_align_panel(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
     let comp_mut = temp_proj.active_composition_mut();
     let current_frame = app.current_frame;
 
-    if let Some(idx) = app.selected_layer_idx {
-        if idx < comp_mut.layers.len() {
-            ui.horizontal(|ui| {
-                if ui.button("⇤ Left").on_hover_text("Align Left Edge to Comp Left").clicked() {
-                    let cur = comp_mut.layers[idx].transform.position.evaluate(current_frame);
-                    comp_mut.layers[idx].transform.position = crate::core::property::Animatable::new_constant([0.0, cur[1]]);
-                    project_changed = true;
-                }
-                if ui.button("↔ Center H").on_hover_text("Align Center Horizontally").clicked() {
-                    let cur = comp_mut.layers[idx].transform.position.evaluate(current_frame);
-                    comp_mut.layers[idx].transform.position = crate::core::property::Animatable::new_constant([comp_w / 2.0, cur[1]]);
-                    project_changed = true;
-                }
-                if ui.button("⇥ Right").on_hover_text("Align Right Edge to Comp Right").clicked() {
-                    let cur = comp_mut.layers[idx].transform.position.evaluate(current_frame);
-                    comp_mut.layers[idx].transform.position = crate::core::property::Animatable::new_constant([comp_w, cur[1]]);
-                    project_changed = true;
-                }
-            });
+    let mut sel_vec: Vec<usize> = app.selected_layers.iter().copied().collect();
+    if let Some(i) = app.selected_layer_idx {
+        if !sel_vec.contains(&i) {
+            sel_vec.push(i);
+        }
+    }
 
-            ui.add_space(4.0);
-            ui.horizontal(|ui| {
-                if ui.button("↟ Top").on_hover_text("Align Top Edge to Comp Top").clicked() {
-                    let cur = comp_mut.layers[idx].transform.position.evaluate(current_frame);
-                    comp_mut.layers[idx].transform.position = crate::core::property::Animatable::new_constant([cur[0], 0.0]);
-                    project_changed = true;
+    if !sel_vec.is_empty() {
+        let (bounds_min_x, bounds_max_x, bounds_min_y, bounds_max_y) = if align_to_comp {
+            (0.0, comp_w, 0.0, comp_h)
+        } else {
+            let mut min_x = f32::INFINITY;
+            let mut max_x = f32::NEG_INFINITY;
+            let mut min_y = f32::INFINITY;
+            let mut max_y = f32::NEG_INFINITY;
+            for &idx in &sel_vec {
+                if let Some(l) = comp_mut.layers.get(idx) {
+                    let pos = l.transform.position.evaluate(current_frame);
+                    min_x = min_x.min(pos[0]);
+                    max_x = max_x.max(pos[0]);
+                    min_y = min_y.min(pos[1]);
+                    max_y = max_y.max(pos[1]);
                 }
-                if ui.button("↕ Center V").on_hover_text("Align Center Vertically").clicked() {
-                    let cur = comp_mut.layers[idx].transform.position.evaluate(current_frame);
-                    comp_mut.layers[idx].transform.position = crate::core::property::Animatable::new_constant([cur[0], comp_h / 2.0]);
-                    project_changed = true;
-                }
-                if ui.button("↡ Bottom").on_hover_text("Align Bottom Edge to Comp Bottom").clicked() {
-                    let cur = comp_mut.layers[idx].transform.position.evaluate(current_frame);
-                    comp_mut.layers[idx].transform.position = crate::core::property::Animatable::new_constant([cur[0], comp_h]);
-                    project_changed = true;
-                }
-            });
+            }
+            (min_x, max_x, min_y, max_y)
+        };
 
-            ui.add_space(8.0);
-            ui.separator();
-            ui.label("Distribute Layers:");
-            ui.horizontal(|ui| {
-                let mut sel_vec: Vec<usize> = app.selected_layers.iter().copied().collect();
-                if let Some(i) = app.selected_layer_idx {
-                    if !sel_vec.contains(&i) {
-                        sel_vec.push(i);
+        ui.horizontal(|ui| {
+            if ui.button("⇤ Left").on_hover_text("Align Left Edge").clicked() {
+                for &idx in &sel_vec {
+                    if let Some(l) = comp_mut.layers.get_mut(idx) {
+                        let cur = l.transform.position.evaluate(current_frame);
+                        l.transform.position = crate::core::property::Animatable::new_constant([bounds_min_x, cur[1]]);
                     }
                 }
+                project_changed = true;
+            }
+            if ui.button("↔ Center H").on_hover_text("Align Center Horizontally").clicked() {
+                let target_x = (bounds_min_x + bounds_max_x) * 0.5;
+                for &idx in &sel_vec {
+                    if let Some(l) = comp_mut.layers.get_mut(idx) {
+                        let cur = l.transform.position.evaluate(current_frame);
+                        l.transform.position = crate::core::property::Animatable::new_constant([target_x, cur[1]]);
+                    }
+                }
+                project_changed = true;
+            }
+            if ui.button("⇥ Right").on_hover_text("Align Right Edge").clicked() {
+                for &idx in &sel_vec {
+                    if let Some(l) = comp_mut.layers.get_mut(idx) {
+                        let cur = l.transform.position.evaluate(current_frame);
+                        l.transform.position = crate::core::property::Animatable::new_constant([bounds_max_x, cur[1]]);
+                    }
+                }
+                project_changed = true;
+            }
+        });
 
-                if ui.button("⤚ Distribute H").on_hover_text("Distribute Horizontal Centers").clicked() {
-                    comp_mut.distribute_selected_layers(&sel_vec, true, current_frame);
-                    project_changed = true;
+        ui.add_space(4.0);
+        ui.horizontal(|ui| {
+            if ui.button("↟ Top").on_hover_text("Align Top Edge").clicked() {
+                for &idx in &sel_vec {
+                    if let Some(l) = comp_mut.layers.get_mut(idx) {
+                        let cur = l.transform.position.evaluate(current_frame);
+                        l.transform.position = crate::core::property::Animatable::new_constant([cur[0], bounds_min_y]);
+                    }
                 }
-                if ui.button("⤛ Distribute V").on_hover_text("Distribute Vertical Centers").clicked() {
-                    comp_mut.distribute_selected_layers(&sel_vec, false, current_frame);
-                    project_changed = true;
+                project_changed = true;
+            }
+            if ui.button("↕ Center V").on_hover_text("Align Center Vertically").clicked() {
+                let target_y = (bounds_min_y + bounds_max_y) * 0.5;
+                for &idx in &sel_vec {
+                    if let Some(l) = comp_mut.layers.get_mut(idx) {
+                        let cur = l.transform.position.evaluate(current_frame);
+                        l.transform.position = crate::core::property::Animatable::new_constant([cur[0], target_y]);
+                    }
                 }
-            });
-        } else {
-            ui.weak("Select a layer to perform alignment.");
-        }
+                project_changed = true;
+            }
+            if ui.button("↡ Bottom").on_hover_text("Align Bottom Edge").clicked() {
+                for &idx in &sel_vec {
+                    if let Some(l) = comp_mut.layers.get_mut(idx) {
+                        let cur = l.transform.position.evaluate(current_frame);
+                        l.transform.position = crate::core::property::Animatable::new_constant([cur[0], bounds_max_y]);
+                    }
+                }
+                project_changed = true;
+            }
+        });
+
+        ui.add_space(8.0);
+        ui.separator();
+        ui.label("Distribute Layers:");
+        ui.horizontal(|ui| {
+            if ui.button("⤚ Distribute H").on_hover_text("Distribute Horizontal Centers").clicked() {
+                comp_mut.distribute_selected_layers(&sel_vec, true, current_frame);
+                project_changed = true;
+            }
+            if ui.button("⤛ Distribute V").on_hover_text("Distribute Vertical Centers").clicked() {
+                comp_mut.distribute_selected_layers(&sel_vec, false, current_frame);
+                project_changed = true;
+            }
+        });
     } else {
-        ui.weak("No layer selected. Select a layer in timeline.");
+        ui.weak("No layers selected. Select one or more layers in timeline.");
     }
 
     if project_changed {

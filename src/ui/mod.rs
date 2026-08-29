@@ -49,6 +49,7 @@ pub mod essential_properties_panel;
 pub mod proxy_panel;
 pub mod content_aware_fill;
 pub mod the_smoother_panel;
+pub mod the_wiggler_panel;
 pub mod metadata_panel;
 pub mod scripting_console;
 pub mod workspace_manager;

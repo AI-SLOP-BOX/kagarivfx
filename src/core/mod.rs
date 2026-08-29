@@ -51,6 +51,7 @@ pub mod auto_orient;
 pub mod auto_trace;
 pub mod shadow_map;
 pub mod the_smoother;
+pub mod the_wiggler;
 pub mod lut_cache;
 pub mod planar_tracker;
 pub mod posterize_time;

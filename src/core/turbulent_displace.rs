@@ -61,7 +61,7 @@ fn grad(hash: u8, x: f64, y: f64) -> f64 {
 }
 
 /// Standard 2D Perlin Gradient Noise evaluation
-fn perlin_noise_2d(x: f64, y: f64) -> f64 {
+pub fn perlin_noise_2d(x: f64, y: f64) -> f64 {
     let xi = (x.floor() as i32 & 255) as usize;
     let yi = (y.floor() as i32 & 255) as usize;
 

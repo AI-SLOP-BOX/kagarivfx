@@ -1120,6 +1120,10 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
                     app.show_the_smoother = true;
                     ui.close_menu();
                 }
+                if ui.button("🎲 The Wiggler...").on_hover_text("Bake procedural noise keyframes into layer properties").clicked() {
+                    app.show_the_wiggler = true;
+                    ui.close_menu();
+                }
             });
             ui.menu_button("View", |ui| {
                 // ── UI Mode (skill level) ──
@@ -1275,6 +1279,18 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
                 crate::ui::the_smoother_panel::draw_the_smoother_panel(app, ui);
             });
         app.show_the_smoother = open;
+    }
+
+    if app.show_the_wiggler {
+        let mut open = app.show_the_wiggler;
+        egui::Window::new("🎲 The Wiggler")
+            .open(&mut open)
+            .resizable(false)
+            .default_width(280.0)
+            .show(ctx, |ui| {
+                crate::ui::the_wiggler_panel::draw_the_wiggler_panel(app, ui);
+            });
+        app.show_the_wiggler = open;
     }
 }
 
