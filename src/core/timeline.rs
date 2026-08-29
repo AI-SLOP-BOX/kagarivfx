@@ -1148,6 +1148,22 @@ pub enum EffectType {
         block_w: Animatable<f32>,
         block_h: Animatable<f32>,
     },
+    /// Physical Optical Lens Flare generator (AE Parity).
+    OpticalFlares {
+        position: Animatable<[f32; 2]>,
+        brightness: Animatable<f32>,
+        scale: Animatable<f32>,
+    },
+    /// Motion Tile & CC RepeTile (AE Parity).
+    MotionTile {
+        tile_center: Animatable<[f32; 2]>,
+        tile_width: Animatable<f32>,
+        tile_height: Animatable<f32>,
+        output_width: Animatable<f32>,
+        output_height: Animatable<f32>,
+        mirror_edges: bool,
+        phase: Animatable<f32>,
+    },
     /// Tilt-shift miniature focus band.
     TiltShift {
         focus_y: Animatable<f32>,

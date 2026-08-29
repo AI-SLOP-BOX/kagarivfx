@@ -1082,6 +1082,10 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
                         apply_effect_by_name(app, "Lens Flare");
                         ui.close_menu();
                     }
+                    if ui.button("Optical Flares (Cinematic)").on_hover_text("Multi-element physical lens flare with anamorphic streaks and iris ghosts").clicked() {
+                        apply_effect_by_name(app, "Optical Flares");
+                        ui.close_menu();
+                    }
                     if ui.button("Vignette").clicked() {
                         apply_effect_by_name(app, "Vignette");
                         ui.close_menu();
@@ -1110,6 +1114,10 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
                     }
                     if ui.button("Chromatic Aberration").clicked() {
                         apply_effect_by_name(app, "Chromatic Aberration");
+                        ui.close_menu();
+                    }
+                    if ui.button("Motion Tile").on_hover_text("Seamlessly replicate layer content with mirror edges and phase").clicked() {
+                        apply_effect_by_name(app, "Motion Tile");
                         ui.close_menu();
                     }
                 });
@@ -1641,6 +1649,32 @@ fn apply_effect_by_name(app: &mut crate::AfterEffectsApp, effect_name: &str) {
                         q_factor: crate::core::property::Animatable::new_constant(1.0),
                     }, enabled: true,
                 },
+                "Optical Flares" => {
+                    let (cw, ch) = (comp.width as f32, comp.height as f32);
+                    crate::core::timeline::Effect {
+                        id: format!("optflare_{}", len), name: "Optical Flares".to_string(),
+                        effect_type: crate::core::timeline::EffectType::OpticalFlares {
+                            position: crate::core::property::Animatable::new_constant([cw * 0.5, ch * 0.5]),
+                            brightness: crate::core::property::Animatable::new_constant(1.0),
+                            scale: crate::core::property::Animatable::new_constant(1.0),
+                        }, enabled: true,
+                    }
+                }
+                "Motion Tile" => {
+                    let (cw, ch) = (comp.width as f32, comp.height as f32);
+                    crate::core::timeline::Effect {
+                        id: format!("motiontile_{}", len), name: "Motion Tile".to_string(),
+                        effect_type: crate::core::timeline::EffectType::MotionTile {
+                            tile_center: crate::core::property::Animatable::new_constant([cw * 0.5, ch * 0.5]),
+                            tile_width: crate::core::property::Animatable::new_constant(100.0),
+                            tile_height: crate::core::property::Animatable::new_constant(100.0),
+                            output_width: crate::core::property::Animatable::new_constant(100.0),
+                            output_height: crate::core::property::Animatable::new_constant(100.0),
+                            mirror_edges: true,
+                            phase: crate::core::property::Animatable::new_constant(0.0),
+                        }, enabled: true,
+                    }
+                }
                 _ => return,
             };
             layer.effects.push(effect);

@@ -259,6 +259,19 @@ impl EffectType {
                 push!("Weight", weight, Scalar);
             }
             EffectType::RadialBlurZoom { amount } => push!("Zoom Amount", amount, Scalar),
+            EffectType::OpticalFlares { position, brightness, scale } => {
+                push!("Position", position, Vec2);
+                push!("Brightness", brightness, Scalar);
+                push!("Scale", scale, Scalar);
+            }
+            EffectType::MotionTile { tile_center, tile_width, tile_height, output_width, output_height, phase, .. } => {
+                push!("Tile Center", tile_center, Vec2);
+                push!("Tile Width", tile_width, Scalar);
+                push!("Tile Height", tile_height, Scalar);
+                push!("Output Width", output_width, Scalar);
+                push!("Output Height", output_height, Scalar);
+                push!("Phase", phase, Scalar);
+            }
             // ── Newly registered effects (session 3) ──
             EffectType::BevelAlpha { depth, light_angle_deg } => {
                 push!("Depth", depth, Scalar);

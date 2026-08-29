@@ -279,13 +279,14 @@ fn apply_one_ctx(
             );
         }
         EffectType::CornerPin { top_left, top_right, bottom_right, bottom_left } => {
-            let opts = crate::core::corner_pin::CornerPinOptions {
+            let quad = crate::core::corner_pin::CornerPinQuad {
                 top_left: top_left.evaluate(frame),
                 top_right: top_right.evaluate(frame),
                 bottom_right: bottom_right.evaluate(frame),
                 bottom_left: bottom_left.evaluate(frame),
             };
-            let out = crate::core::corner_pin::apply_corner_pin(pixels, width, height, &opts);
+            let mut out = vec![0u8; pixels.len()];
+            crate::core::corner_pin::apply_corner_pin_warp(pixels, width, height, &mut out, width, height, &quad);
             pixels.copy_from_slice(&out);
         }
         EffectType::ColorGradeLUT { lut_path, intensity } => {
@@ -681,6 +682,33 @@ fn apply_one_ctx(
                 block_w.evaluate(frame).round().clamp(1.0, 256.0) as u32,
                 block_h.evaluate(frame).round().clamp(1.0, 256.0) as u32,
             );
+        }
+        EffectType::OpticalFlares { position, brightness, scale } => {
+            let pos = position.evaluate(frame);
+            let bright = brightness.evaluate(frame);
+            let scl = scale.evaluate(frame);
+            let cfg = crate::core::optical_flare::OpticalFlareConfig {
+                position: pos,
+                overall_scale: scl,
+                overall_brightness: bright,
+                ..Default::default()
+            };
+            crate::core::optical_flare::render_optical_flare(pixels, width, height, &cfg);
+        }
+        EffectType::MotionTile {
+            tile_center, tile_width, tile_height, output_width, output_height, mirror_edges, phase,
+        } => {
+            let params = crate::core::motion_tile::MotionTileParams {
+                tile_center: tile_center.evaluate(frame),
+                tile_width: tile_width.evaluate(frame),
+                tile_height: tile_height.evaluate(frame),
+                output_width: output_width.evaluate(frame),
+                output_height: output_height.evaluate(frame),
+                mirror_edges: *mirror_edges,
+                phase: phase.evaluate(frame),
+            };
+            let tiled = crate::core::motion_tile::apply_motion_tile(pixels, width, height, &params);
+            pixels.copy_from_slice(&tiled);
         }
         EffectType::TiltShift { focus_y, focus_height, max_blur } => {
             use crate::core::ae_effects_pack_v19::apply_tilt_shift;

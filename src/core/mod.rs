@@ -53,6 +53,7 @@ pub mod shadow_map;
 pub mod the_smoother;
 pub mod the_wiggler;
 pub mod audio_to_keyframes;
+pub mod motion_tile;
 pub mod lut_cache;
 pub mod planar_tracker;
 pub mod posterize_time;

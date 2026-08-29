@@ -296,6 +296,8 @@ impl RenderEffectPlugin for EnumEffectPlugin {
             EffectType::Flanger { .. } => "Flanger",
             EffectType::Chorus { .. } => "Chorus",
             EffectType::ParametricEQ { .. } => "Parametric EQ",
+            EffectType::OpticalFlares { .. } => "Optical Flares",
+            EffectType::MotionTile { .. } => "Motion Tile",
         }
     }
 
@@ -411,6 +413,8 @@ impl RenderEffectPlugin for EnumEffectPlugin {
             EffectType::Flanger { .. } => "flanger",
             EffectType::Chorus { .. } => "chorus",
             EffectType::ParametricEQ { .. } => "parametric_eq",
+            EffectType::OpticalFlares { .. } => "optical_flares",
+            EffectType::MotionTile { .. } => "motion_tile",
         }
     }
 

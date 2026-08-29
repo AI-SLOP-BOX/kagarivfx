@@ -2338,6 +2338,20 @@ fn fs_main(@location(0) uv: vec2<f32>) -> @location(0) vec4<f32> {
             draw_prop(ui, current_frame, project_changed, next_frame, "Gain (dB)", gain_db, |ui, v| { ui.add(egui::Slider::new(v, -24.0..=24.0)); });
             draw_prop(ui, current_frame, project_changed, next_frame, "Q Factor", q_factor, |ui, v| { ui.add(egui::Slider::new(v, 0.5..=12.0)); });
         }
+        EffectType::OpticalFlares { position: _, brightness, scale } => {
+            ui.label("✨ Optical Flares");
+            draw_prop(ui, current_frame, project_changed, next_frame, "Brightness", brightness, |ui, v| { ui.add(egui::Slider::new(v, 0.0..=5.0)); });
+            draw_prop(ui, current_frame, project_changed, next_frame, "Scale", scale, |ui, v| { ui.add(egui::Slider::new(v, 0.1..=5.0)); });
+        }
+        EffectType::MotionTile { tile_center: _, tile_width, tile_height, output_width, output_height, mirror_edges, phase } => {
+            ui.label("🔲 Motion Tile");
+            draw_prop(ui, current_frame, project_changed, next_frame, "Tile Width", tile_width, |ui, v| { ui.add(egui::Slider::new(v, 1.0..=500.0).suffix(" %")); });
+            draw_prop(ui, current_frame, project_changed, next_frame, "Tile Height", tile_height, |ui, v| { ui.add(egui::Slider::new(v, 1.0..=500.0).suffix(" %")); });
+            draw_prop(ui, current_frame, project_changed, next_frame, "Output Width", output_width, |ui, v| { ui.add(egui::Slider::new(v, 100.0..=1000.0).suffix(" %")); });
+            draw_prop(ui, current_frame, project_changed, next_frame, "Output Height", output_height, |ui, v| { ui.add(egui::Slider::new(v, 100.0..=1000.0).suffix(" %")); });
+            ui.checkbox(mirror_edges, "Mirror Edges");
+            draw_prop(ui, current_frame, project_changed, next_frame, "Phase", phase, |ui, v| { ui.add(egui::Slider::new(v, -360.0..=360.0).suffix(" °")); });
+        }
     }
 }
 
