@@ -804,6 +804,71 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: u32) 
             }
         }
 
+        // ── Roto Brush Tool (Interactive Green/Red Strokes -> Auto-Mask) ──
+        if app.active_tool == crate::ui::toolbar::ActiveTool::RotoBrush {
+            if let Some(sel_li) = app.selected_layer_idx {
+                let stroke_id = egui::Id::new(("roto_live_stroke", sel_li));
+                let is_fg = !ctx.input(|i| i.modifiers.alt);
+                if viewport_response.drag_started() {
+                    if let Some(pp) = viewport_response.interact_pointer_pos() {
+                        let cx = (pp.x - origin_x) / draw_w * comp_w;
+                        let cy = (pp.y - origin_y) / draw_h * comp_h;
+                        ctx.data_mut(|d| d.insert_temp(stroke_id, vec![[cx, cy]]));
+                    }
+                }
+                if viewport_response.dragged() {
+                    if let Some(pp) = viewport_response.interact_pointer_pos() {
+                        let cx = (pp.x - origin_x) / draw_w * comp_w;
+                        let cy = (pp.y - origin_y) / draw_h * comp_h;
+                        let mut pts = ctx.data_mut(|d| d.get_temp::<Vec<[f32; 2]>>(stroke_id).unwrap_or_default());
+                        pts.push([cx, cy]);
+                        ctx.data_mut(|d| d.insert_temp(stroke_id, pts));
+                    }
+                }
+                if viewport_response.drag_stopped() {
+                    let pts_opt = ctx.data_mut(|d| d.remove_temp::<Vec<[f32; 2]>>(stroke_id));
+                    if let Some(pts) = pts_opt {
+                        if pts.len() >= 2 {
+                            let mut temp_proj = app.history.current().clone();
+                            let comp = temp_proj.active_composition_mut();
+                            if let Some(layer) = comp.layers.get_mut(sel_li) {
+                                let mut mask_verts = Vec::new();
+                                for p in &pts {
+                                    mask_verts.push([p[0] - 15.0, p[1] - 15.0]);
+                                }
+                                for p in pts.iter().rev() {
+                                    mask_verts.push([p[0] + 15.0, p[1] + 15.0]);
+                                }
+                                let mask_name = format!("Roto Mask {}", layer.masks.len() + 1);
+                                layer.masks.push(crate::core::mask::Mask::new_closed(
+                                    format!("roto_mask_{}", layer.masks.len() + 1),
+                                    mask_name,
+                                    mask_verts,
+                                ));
+                                app.history.commit(temp_proj);
+                                crate::core::frame_cache::bump_version();
+                                app.toasts.info(if is_fg { "Roto Brush: Added Foreground Matte" } else { "Roto Brush: Subtracted Background Matte" });
+                            }
+                        }
+                    }
+                }
+
+                // Render live green (FG) or red (BG) stroke preview
+                let preview = ctx.data(|d| d.get_temp::<Vec<[f32; 2]>>(stroke_id));
+                if let Some(pts) = preview {
+                    if pts.len() >= 2 {
+                        let stroke_col = if is_fg { colors::ACCENT_GREEN } else { colors::ACCENT_RED };
+                        let screen_pts: Vec<egui::Pos2> = pts.iter().map(|p| {
+                            egui::pos2(origin_x + p[0] / comp_w * draw_w, origin_y + p[1] / comp_h * draw_h)
+                        }).collect();
+                        for w in screen_pts.windows(2) {
+                            ui.painter().line_segment([w[0], w[1]], egui::Stroke::new(6.0, stroke_col));
+                        }
+                    }
+                }
+            }
+        }
+
         // ── Interactive Layer & Mask Drag ──────────────────────────
         let mut pen_commit = false;
         if let Some(pointer_pos) = viewport_response.interact_pointer_pos() {

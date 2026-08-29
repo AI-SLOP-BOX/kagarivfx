@@ -112,6 +112,14 @@ impl MaskPath {
         }
     }
 
+    pub fn new_closed(verts: Vec<[f32; 2]>) -> Self {
+        Self {
+            vertices: Animatable::new_constant(verts),
+            tangents: None,
+            is_closed: true,
+        }
+    }
+
     pub fn new_ellipse(cx: f32, cy: f32, rx: f32, ry: f32) -> Self {
         // Approximate circle/ellipse with 4 cubic bezier segments
         // Control point distance k ≈ 0.55228475 * radius
@@ -341,6 +349,21 @@ impl Mask {
             enabled: true,
             mode: MaskMode::Add,
             path: MaskPath::new_ellipse(cx, cy, rx, ry),
+            feather: Animatable::new_constant(0.0),
+            opacity: Animatable::new_constant(100.0),
+            expansion: Animatable::new_constant(0.0),
+            inverted: false,
+            wiggle: None,
+        }
+    }
+
+    pub fn new_closed(id: String, name: String, verts: Vec<[f32; 2]>) -> Self {
+        Self {
+            id,
+            name,
+            enabled: true,
+            mode: MaskMode::Add,
+            path: MaskPath::new_closed(verts),
             feather: Animatable::new_constant(0.0),
             opacity: Animatable::new_constant(100.0),
             expansion: Animatable::new_constant(0.0),
