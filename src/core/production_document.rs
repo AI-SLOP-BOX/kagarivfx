@@ -325,6 +325,14 @@ fn validate_composition(
         {
             return Err("layer 3D transform animation values must be finite".into());
         }
+        if let LayerType::Video {
+            frame_count, speed, ..
+        } = &layer.layer_type
+        {
+            if *frame_count == 0 || !speed.is_finite() || *speed <= 0.0 {
+                return Err("video layer frame count or speed is invalid".into());
+            }
+        }
         let mut effect_ids = HashSet::new();
         for effect in &layer.effects {
             if effect.id.trim().is_empty() || !effect_ids.insert(effect.id.clone()) {
@@ -729,6 +737,21 @@ mod tests {
         let mut invalid_project = Project::default();
         invalid_project.compositions[0].layers[0].transform_3d.position =
             crate::core::property::Animatable::new_constant([0.0, f32::INFINITY, 0.0]);
+        assert!(ProductionDocument::new(invalid_project).validate().is_err());
+
+        let mut invalid_project = Project::default();
+        invalid_project.compositions[0].layers.push(crate::core::timeline::Layer::new(
+            "invalid-video".into(),
+            "Invalid Video".into(),
+            LayerType::Video {
+                source: "video.mp4".into(),
+                frames_dir: "frames".into(),
+                frame_count: 0,
+                audio_wav: None,
+                speed: 1.0,
+            },
+            300,
+        ));
         assert!(ProductionDocument::new(invalid_project).validate().is_err());
 
         let mut invalid_project = Project::default();
