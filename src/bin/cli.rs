@@ -154,8 +154,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         Commands::Info { project } => {
             cmd_info(&project)?;
         }
-        Commands::ProductionInfo { project } => {
-            cmd_production_info(&project)?;
+        Commands::ProductionInfo { project, json } => {
+            cmd_production_info(&project, json)?;
         }
         Commands::Validate { project } => {
             cmd_validate(&project)?;
@@ -507,11 +507,30 @@ fn cmd_info(project_path: &str) -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-fn cmd_production_info(project_path: &str) -> Result<(), Box<dyn std::error::Error>> {
+fn cmd_production_info(
+    project_path: &str,
+    json_output: bool,
+) -> Result<(), Box<dyn std::error::Error>> {
     let json = std::fs::read_to_string(project_path)?;
     let document = aftereffects_oss::core::production_document::ProductionDocument::from_json(&json)
         .map_err(|error| format!("Not a valid production document: {error}"))?;
     let clock = document.clock();
+    if json_output {
+        let output = serde_json::json!({
+            "schema_version": document.schema_version,
+            "sample_rate": document.audio.sample_rate,
+            "audio_channels": document.audio.channels.len(),
+            "tempo_changes": document.tempo.changes.len(),
+            "initial_bpm": document.tempo.changes[0].bpm,
+            "automation_bindings": document.bindings.iter().map(|binding| serde_json::json!({
+                "source": binding.source,
+                "target": binding.target,
+                "points": binding.curve.points.len(),
+            })).collect::<Vec<_>>(),
+        });
+        println!("{}", serde_json::to_string_pretty(&output)?);
+        return Ok(());
+    }
     println!("Production document schema: {}", document.schema_version);
     println!("Audio sample rate: {} Hz", document.audio.sample_rate);
     println!("Audio channels: {}", document.audio.channels.len());
