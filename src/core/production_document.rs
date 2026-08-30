@@ -269,14 +269,11 @@ fn validate_composition(
     if !composition_ids.insert(composition.id.clone()) {
         return Err(format!("duplicate composition id: {}", composition.id));
     }
-    if !(1..=65_535).contains(&composition.width)
-        || !(1..=65_535).contains(&composition.height)
-    {
+    if !(1..=65_535).contains(&composition.width) || !(1..=65_535).contains(&composition.height) {
         return Err("composition dimensions are outside the supported range".into());
     }
     if !(1..=240).contains(&composition.fps)
-        || !(1..=ProductionDocument::MAX_COMPOSITION_FRAMES)
-            .contains(&composition.duration_frames)
+        || !(1..=ProductionDocument::MAX_COMPOSITION_FRAMES).contains(&composition.duration_frames)
     {
         return Err("composition frame rate or duration is invalid".into());
     }
@@ -285,7 +282,11 @@ fn validate_composition(
     {
         return Err("composition motion blur settings must be finite".into());
     }
-    if composition.background_color.iter().any(|channel| !channel.is_finite()) {
+    if composition
+        .background_color
+        .iter()
+        .any(|channel| !channel.is_finite())
+    {
         return Err("composition background color must be finite".into());
     }
     validate_camera(&composition.active_camera)?;
@@ -309,7 +310,12 @@ fn validate_composition(
             return Err("layer ids must be non-empty and unique within a composition".into());
         }
         if let Some(parent_id) = &layer.parent_id {
-            if !layer_ids.contains(parent_id) && !composition.layers.iter().any(|candidate| candidate.id == *parent_id) {
+            if !layer_ids.contains(parent_id)
+                && !composition
+                    .layers
+                    .iter()
+                    .any(|candidate| candidate.id == *parent_id)
+            {
                 return Err("layer parent reference is invalid".into());
             }
             layer_parents.insert(layer.id.as_str(), parent_id.as_str());
@@ -394,13 +400,40 @@ fn validate_composition(
                 if points
                     .iter()
                     .flatten()
-                    .chain(tangents.iter().flat_map(|(incoming, outgoing)| {
-                        incoming.iter().chain(outgoing.iter())
-                    }))
+                    .chain(
+                        tangents.iter().flat_map(|(incoming, outgoing)| {
+                            incoming.iter().chain(outgoing.iter())
+                        }),
+                    )
                     .any(|value| !value.is_finite())
                 {
                     return Err("shape geometry coordinates must be finite".into());
                 }
+            }
+            let shape_animation_values = match shape_type {
+                crate::core::timeline::ShapeType::FreeformBezier { .. } => Vec::new(),
+                crate::core::timeline::ShapeType::Rectangle {
+                    width,
+                    height,
+                    corner_radius,
+                } => vec![width, height, corner_radius],
+                crate::core::timeline::ShapeType::Ellipse { width, height } => {
+                    vec![width, height]
+                }
+                crate::core::timeline::ShapeType::Star {
+                    points,
+                    inner_radius,
+                    outer_radius,
+                } => vec![points, inner_radius, outer_radius],
+                crate::core::timeline::ShapeType::Polygon { sides, radius } => {
+                    vec![sides, radius]
+                }
+            };
+            if shape_animation_values
+                .iter()
+                .any(|value| !scalar_animation_is_finite(value))
+            {
+                return Err("shape animation values must be finite".into());
             }
         }
         let mut effect_ids = HashSet::new();
@@ -480,12 +513,8 @@ fn validate_camera(camera: &crate::core::timeline::Camera3D) -> Result<(), Strin
 }
 
 fn validate_mask(mask: &crate::core::mask::Mask) -> Result<(), String> {
-    let validate_vertices = |vertices: &[[f32; 2]]| {
-        vertices
-            .iter()
-            .flatten()
-            .all(|value| value.is_finite())
-    };
+    let validate_vertices =
+        |vertices: &[[f32; 2]]| vertices.iter().flatten().all(|value| value.is_finite());
     match &mask.path.vertices {
         crate::core::property::Animatable::Constant(vertices) => {
             if !validate_vertices(vertices) {
@@ -493,7 +522,10 @@ fn validate_mask(mask: &crate::core::mask::Mask) -> Result<(), String> {
             }
         }
         crate::core::property::Animatable::Animated(keyframes) => {
-            if keyframes.iter().any(|keyframe| !validate_vertices(&keyframe.value)) {
+            if keyframes
+                .iter()
+                .any(|keyframe| !validate_vertices(&keyframe.value))
+            {
                 return Err("mask vertex coordinates must be finite".into());
             }
         }
@@ -524,24 +556,22 @@ fn scalar_animation_is_finite(value: &crate::core::property::Animatable<f32>) ->
     }
 }
 
-fn vector_animation_is_finite(
-    value: &crate::core::property::Animatable<[f32; 2]>,
-) -> bool {
+fn vector_animation_is_finite(value: &crate::core::property::Animatable<[f32; 2]>) -> bool {
     match value {
-        crate::core::property::Animatable::Constant(value) =>
-            value.iter().all(|component| component.is_finite()),
+        crate::core::property::Animatable::Constant(value) => {
+            value.iter().all(|component| component.is_finite())
+        }
         crate::core::property::Animatable::Animated(keyframes) => keyframes
             .iter()
             .all(|keyframe| keyframe.value.iter().all(|component| component.is_finite())),
     }
 }
 
-fn vector3_animation_is_finite(
-    value: &crate::core::property::Animatable<[f32; 3]>,
-) -> bool {
+fn vector3_animation_is_finite(value: &crate::core::property::Animatable<[f32; 3]>) -> bool {
     match value {
-        crate::core::property::Animatable::Constant(value) =>
-            value.iter().all(|component| component.is_finite()),
+        crate::core::property::Animatable::Constant(value) => {
+            value.iter().all(|component| component.is_finite())
+        }
         crate::core::property::Animatable::Animated(keyframes) => keyframes
             .iter()
             .all(|keyframe| keyframe.value.iter().all(|component| component.is_finite())),
@@ -667,52 +697,62 @@ mod tests {
         assert!(ProductionDocument::new(invalid_project).validate().is_err());
 
         let mut invalid_project = Project::default();
-        invalid_project.assets.push(crate::core::timeline::ProjectItem::new(
-            "bad-comp",
-            "Bad Comp",
-            ProjectItemType::Composition { comp_idx: 99 },
-        ));
+        invalid_project
+            .assets
+            .push(crate::core::timeline::ProjectItem::new(
+                "bad-comp",
+                "Bad Comp",
+                ProjectItemType::Composition { comp_idx: 99 },
+            ));
         assert!(ProductionDocument::new(invalid_project).validate().is_err());
 
         let mut invalid_project = Project::default();
-        invalid_project.assets.push(crate::core::timeline::ProjectItem::new(
-            "bad-image",
-            "Bad Image",
-            ProjectItemType::Image {
-                path: "image.png".into(),
-                width: 0,
-                height: 1080,
-            },
-        ));
+        invalid_project
+            .assets
+            .push(crate::core::timeline::ProjectItem::new(
+                "bad-image",
+                "Bad Image",
+                ProjectItemType::Image {
+                    path: "image.png".into(),
+                    width: 0,
+                    height: 1080,
+                },
+            ));
         assert!(ProductionDocument::new(invalid_project).validate().is_err());
 
         let mut invalid_project = Project::default();
-        invalid_project.assets.push(crate::core::timeline::ProjectItem::new(
-            "empty-media",
-            "Empty Media",
-            ProjectItemType::Audio {
-                path: "  ".into(),
-                duration_sec: 1.0,
-            },
-        ));
+        invalid_project
+            .assets
+            .push(crate::core::timeline::ProjectItem::new(
+                "empty-media",
+                "Empty Media",
+                ProjectItemType::Audio {
+                    path: "  ".into(),
+                    duration_sec: 1.0,
+                },
+            ));
         assert!(ProductionDocument::new(invalid_project).validate().is_err());
 
         let mut invalid_project = Project::default();
-        invalid_project.assets.push(crate::core::timeline::ProjectItem::new(
-            "bad-solid",
-            "Bad Solid",
-            ProjectItemType::Solid {
-                color: [f32::INFINITY, 0.0, 0.0, 1.0],
-            },
-        ));
+        invalid_project
+            .assets
+            .push(crate::core::timeline::ProjectItem::new(
+                "bad-solid",
+                "Bad Solid",
+                ProjectItemType::Solid {
+                    color: [f32::INFINITY, 0.0, 0.0, 1.0],
+                },
+            ));
         assert!(ProductionDocument::new(invalid_project).validate().is_err());
 
         let mut invalid_project = Project::default();
-        invalid_project.assets.push(crate::core::timeline::ProjectItem::new(
-            "item_comp1",
-            "Duplicate",
-            ProjectItemType::Folder { name: "x".into() },
-        ));
+        invalid_project
+            .assets
+            .push(crate::core::timeline::ProjectItem::new(
+                "item_comp1",
+                "Duplicate",
+                ProjectItemType::Folder { name: "x".into() },
+            ));
         assert!(ProductionDocument::new(invalid_project).validate().is_err());
 
         let mut invalid_project = Project::default();
@@ -742,26 +782,30 @@ mod tests {
         assert!(ProductionDocument::new(invalid_project).validate().is_err());
 
         let mut invalid_project = Project::default();
-        invalid_project.compositions[0].layers.push(crate::core::timeline::Layer::new(
-            "missing-precomp".into(),
-            "Missing Precomp".into(),
-            LayerType::PreComp {
-                comp_id: "does-not-exist".into(),
-            },
-            300,
-        ));
+        invalid_project.compositions[0]
+            .layers
+            .push(crate::core::timeline::Layer::new(
+                "missing-precomp".into(),
+                "Missing Precomp".into(),
+                LayerType::PreComp {
+                    comp_id: "does-not-exist".into(),
+                },
+                300,
+            ));
         assert!(ProductionDocument::new(invalid_project).validate().is_err());
 
         let mut invalid_project = Project::default();
-        invalid_project.compositions[0].layers.push(crate::core::timeline::Layer::new(
-            "invalid-audio".into(),
-            "Invalid Audio".into(),
-            LayerType::Audio {
-                path: "".into(),
-                volume: crate::core::property::Animatable::new_constant(f32::NAN),
-            },
-            300,
-        ));
+        invalid_project.compositions[0]
+            .layers
+            .push(crate::core::timeline::Layer::new(
+                "invalid-audio".into(),
+                "Invalid Audio".into(),
+                LayerType::Audio {
+                    path: "".into(),
+                    volume: crate::core::property::Animatable::new_constant(f32::NAN),
+                },
+                300,
+            ));
         assert!(ProductionDocument::new(invalid_project).validate().is_err());
 
         let mut invalid_project = Project::default();
@@ -776,12 +820,14 @@ mod tests {
 
         let mut invalid_project = Project::default();
         let comp_id = invalid_project.compositions[0].id.clone();
-        invalid_project.compositions[0].layers.push(crate::core::timeline::Layer::new(
-            "self-precomp".into(),
-            "Self Precomp".into(),
-            LayerType::PreComp { comp_id },
-            300,
-        ));
+        invalid_project.compositions[0]
+            .layers
+            .push(crate::core::timeline::Layer::new(
+                "self-precomp".into(),
+                "Self Precomp".into(),
+                LayerType::PreComp { comp_id },
+                300,
+            ));
         assert!(ProductionDocument::new(invalid_project).validate().is_err());
 
         let mut invalid_project = Project::default();
@@ -823,8 +869,9 @@ mod tests {
         assert!(ProductionDocument::new(invalid_project).validate().is_err());
 
         let mut invalid_project = Project::default();
-        invalid_project.compositions[0].layers[0].transform_3d.position =
-            crate::core::property::Animatable::new_constant([0.0, f32::INFINITY, 0.0]);
+        invalid_project.compositions[0].layers[0]
+            .transform_3d
+            .position = crate::core::property::Animatable::new_constant([0.0, f32::INFINITY, 0.0]);
         assert!(ProductionDocument::new(invalid_project).validate().is_err());
 
         let mut invalid_project = Project::default();
@@ -836,23 +883,50 @@ mod tests {
         assert!(ProductionDocument::new(invalid_project).validate().is_err());
 
         let mut invalid_project = Project::default();
-        invalid_project.compositions[0].layers.push(crate::core::timeline::Layer::new(
-            "invalid-video".into(),
-            "Invalid Video".into(),
-            LayerType::Video {
-                source: "video.mp4".into(),
-                frames_dir: "frames".into(),
-                frame_count: 0,
-                audio_wav: None,
-                speed: 1.0,
-            },
-            300,
-        ));
+        invalid_project.compositions[0]
+            .layers
+            .push(crate::core::timeline::Layer::new(
+                "invalid-shape-animation".into(),
+                "Invalid Shape Animation".into(),
+                LayerType::Shape {
+                    shape_type: crate::core::timeline::ShapeType::Star {
+                        points: crate::core::property::Animatable::new_constant(f32::NAN),
+                        inner_radius: crate::core::property::Animatable::new_constant(10.0),
+                        outer_radius: crate::core::property::Animatable::new_constant(20.0),
+                    },
+                    color: [1.0, 1.0, 1.0, 1.0],
+                    stroke_color: [0.0, 0.0, 0.0, 1.0],
+                    stroke_width: 0.0,
+                    fill_type: Default::default(),
+                    extrusion_depth: 0.0,
+                    bevel_depth: 0.0,
+                },
+                300,
+            ));
+        assert!(ProductionDocument::new(invalid_project).validate().is_err());
+
+        let mut invalid_project = Project::default();
+        invalid_project.compositions[0]
+            .layers
+            .push(crate::core::timeline::Layer::new(
+                "invalid-video".into(),
+                "Invalid Video".into(),
+                LayerType::Video {
+                    source: "video.mp4".into(),
+                    frames_dir: "frames".into(),
+                    frame_count: 0,
+                    audio_wav: None,
+                    speed: 1.0,
+                },
+                300,
+            ));
         assert!(ProductionDocument::new(invalid_project).validate().is_err());
 
         let mut invalid_project = Project::default();
         let duplicate_camera = invalid_project.compositions[0].active_camera.clone();
-        invalid_project.compositions[0].cameras.push(duplicate_camera);
+        invalid_project.compositions[0]
+            .cameras
+            .push(duplicate_camera);
         assert!(ProductionDocument::new(invalid_project).validate().is_err());
 
         let mut invalid_project = Project::default();
@@ -868,11 +942,14 @@ mod tests {
             100.0,
             100.0,
         );
-        if let crate::core::property::Animatable::Constant(vertices) = &mut invalid_mask.path.vertices
+        if let crate::core::property::Animatable::Constant(vertices) =
+            &mut invalid_mask.path.vertices
         {
             vertices[0][0] = f32::NAN;
         }
-        invalid_project.compositions[0].layers[0].masks.push(invalid_mask);
+        invalid_project.compositions[0].layers[0]
+            .masks
+            .push(invalid_mask);
         assert!(ProductionDocument::new(invalid_project).validate().is_err());
 
         let mut invalid_project = Project::default();
@@ -885,17 +962,19 @@ mod tests {
             100.0,
         );
         invalid_mask.opacity = crate::core::property::Animatable::new_constant(f32::NAN);
-        invalid_project.compositions[0].layers[0].masks.push(invalid_mask);
+        invalid_project.compositions[0].layers[0]
+            .masks
+            .push(invalid_mask);
         assert!(ProductionDocument::new(invalid_project).validate().is_err());
     }
 
     #[test]
     fn rejects_unbounded_audio_and_binding_collections() {
         let mut document = ProductionDocument::new(Project::default());
-        document
-            .audio
-            .channels
-            .resize(ProductionDocument::MAX_AUDIO_CHANNELS + 1, MixerChannel::default());
+        document.audio.channels.resize(
+            ProductionDocument::MAX_AUDIO_CHANNELS + 1,
+            MixerChannel::default(),
+        );
         assert!(document.validate().is_err());
 
         let mut document = ProductionDocument::new(Project::default());
@@ -957,7 +1036,10 @@ mod tests {
             .map(|entry| entry.file_name())
             .filter(|name| name.to_string_lossy().starts_with("session.production."))
             .collect::<Vec<_>>();
-        assert!(temporary_files.is_empty(), "temporary files: {temporary_files:?}");
+        assert!(
+            temporary_files.is_empty(),
+            "temporary files: {temporary_files:?}"
+        );
 
         let _ = std::fs::remove_dir_all(directory);
     }
@@ -994,7 +1076,12 @@ mod tests {
         let document =
             ProductionDocument::from_json(&serde_json::to_string(&value).unwrap()).unwrap();
         assert_eq!(document.audio.sample_rate, 48_000);
-        assert_eq!(document.tempo.beat_at(crate::core::unified_time::Time::new(1, 1)), 2.0);
+        assert_eq!(
+            document
+                .tempo
+                .beat_at(crate::core::unified_time::Time::new(1, 1)),
+            2.0
+        );
         assert!(document.bindings.is_empty());
     }
 }
