@@ -607,6 +607,27 @@ pub struct MarkerlessPose3DTrack {
     pub bones: Vec<[usize; 2]>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct PoseCameraModel {
+    pub focal_length: f32,
+    pub principal_point: [f32; 2],
+    pub position: [f32; 3],
+}
+
+pub fn project_pose3d_point(point: [f32; 3], camera: PoseCameraModel) -> Option<[f32; 2]> {
+    if !point.iter().all(|value| value.is_finite()) || !camera.focal_length.is_finite() || camera.focal_length <= 0.0
+        || !camera.principal_point.iter().all(|value| value.is_finite()) || !camera.position.iter().all(|value| value.is_finite()) {
+        return None;
+    }
+    let depth = point[2] - camera.position[2];
+    if !depth.is_finite() || depth <= f32::EPSILON { return None; }
+    let projected = [
+        camera.principal_point[0] + camera.focal_length * (point[0] - camera.position[0]) / depth,
+        camera.principal_point[1] + camera.focal_length * (point[1] - camera.position[1]) / depth,
+    ];
+    projected.iter().all(|value| value.is_finite()).then_some(projected)
+}
+
 pub trait Pose3DInferenceBackend {
     fn infer_joints_3d(&mut self, rgb: &[f32], width: u32, height: u32) -> Vec<([f32; 3], f32)>;
 }
@@ -1456,6 +1477,14 @@ mod tests {
         assert_eq!(pose.frames[0].joints, vec![[1.0, 2.0, 3.0]]);
         assert_eq!(pose.frames[0].confidence, 1.0);
         assert!(pose.bones.is_empty());
+    }
+
+    #[test]
+    fn pose_3d_projection_matches_pinhole_camera_and_rejects_behind_points() {
+        let camera = PoseCameraModel { focal_length: 100.0, principal_point: [50.0, 40.0], position: [0.0, 0.0, 0.0] };
+        assert_eq!(project_pose3d_point([1.0, 2.0, 10.0], camera), Some([60.0, 60.0]));
+        assert_eq!(project_pose3d_point([1.0, 2.0, 0.0], camera), None);
+        assert_eq!(project_pose3d_point([f32::NAN, 2.0, 10.0], camera), None);
     }
 
     #[test]
