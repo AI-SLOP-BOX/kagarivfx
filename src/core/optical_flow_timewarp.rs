@@ -590,6 +590,39 @@ pub fn rgba_to_normalized_rgb(frame_rgba: &[u8], width: u32, height: u32) -> Opt
     Some(rgb)
 }
 
+pub trait NormalizedPoseInferenceBackend {
+    fn infer_normalized_rgb(&mut self, rgb: &[f32], width: u32, height: u32) -> Vec<([f32; 2], f32)>;
+}
+
+pub fn estimate_pose_with_normalized_backend<B: NormalizedPoseInferenceBackend>(
+    backend: &mut B,
+    frames: &[&[u8]],
+    width: u32,
+    height: u32,
+) -> MarkerlessPoseTrack {
+    let normalized = frames.iter().map(|frame| rgba_to_normalized_rgb(frame, width, height)).collect::<Option<Vec<_>>>();
+    let Some(normalized) = normalized else {
+        return MarkerlessPoseTrack { frames: Vec::new(), bones: Vec::new(), bone_lengths: Vec::new() };
+    };
+    let mut raw = Vec::with_capacity(normalized.len());
+    for rgb in &normalized {
+        raw.push(backend.infer_normalized_rgb(rgb, width, height));
+    }
+    let raw_refs = raw.iter().map(Vec::as_slice).collect::<Vec<_>>();
+    let mut pose_backend = RawPoseResultsBackend { results: &raw_refs, index: 0 };
+    estimate_pose_with_backend(&mut pose_backend, frames, width, height)
+}
+
+struct RawPoseResultsBackend<'a> { results: &'a [&'a [([f32; 2], f32)]], index: usize }
+
+impl PoseInferenceBackend for RawPoseResultsBackend<'_> {
+    fn infer_joints(&mut self, _frame_rgba: &[u8], _width: u32, _height: u32) -> Vec<([f32; 2], f32)> {
+        let result = self.results.get(self.index).copied().unwrap_or(&[]);
+        self.index = self.index.saturating_add(1);
+        result.to_vec()
+    }
+}
+
 pub fn estimate_pose_with_backend<B: PoseInferenceBackend>(
     backend: &mut B,
     frames: &[&[u8]],
@@ -1272,6 +1305,14 @@ mod tests {
         }
     }
 
+    struct TestNormalizedPoseBackend;
+
+    impl NormalizedPoseInferenceBackend for TestNormalizedPoseBackend {
+        fn infer_normalized_rgb(&mut self, rgb: &[f32], _width: u32, _height: u32) -> Vec<([f32; 2], f32)> {
+            if rgb.iter().all(|value| (0.0..=1.0).contains(value)) { vec![([1.0, 1.0], 1.0)] } else { Vec::new() }
+        }
+    }
+
     #[test]
     fn pose_backend_adapter_filters_invalid_joints_and_clamps_confidence() {
         let frame = vec![0u8; 2 * 2 * 4];
@@ -1307,6 +1348,16 @@ mod tests {
         assert!((rgb[3] - 1.0).abs() < f32::EPSILON);
         assert!(rgba_to_normalized_rgb(&input, 0, 1).is_none());
         assert!(rgba_to_normalized_rgb(&input[..7], 2, 1).is_none());
+    }
+
+    #[test]
+    fn normalized_pose_backend_receives_rgb_tensor_for_each_frame() {
+        let frame = vec![255u8, 0, 128, 9];
+        let mut backend = TestNormalizedPoseBackend;
+        let pose = estimate_pose_with_normalized_backend(&mut backend, &[&frame, &frame], 1, 1);
+        assert_eq!(pose.frames.len(), 2);
+        assert_eq!(pose.frames[0].joints, vec![[1.0, 1.0]]);
+        assert_eq!(pose.frames[1].frame, 1);
     }
 
     #[test]
