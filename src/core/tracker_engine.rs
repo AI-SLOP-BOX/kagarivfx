@@ -49,6 +49,46 @@ impl TrackerEngine {
         created
     }
 
+    pub fn apply_pose3d_as_tracker_points(
+        layer: &mut Layer,
+        pose: &crate::core::optical_flow_timewarp::MarkerlessPose3DTrack,
+        camera: crate::core::optical_flow_timewarp::PoseCameraModel,
+        rotation_degrees: [f32; 3],
+        minimum_confidence: f32,
+    ) -> usize {
+        if pose.frames.is_empty() { return 0; }
+        let threshold = if minimum_confidence.is_finite() { minimum_confidence.clamp(0.0, 1.0) } else { 0.0 };
+        let names = crate::core::optical_flow_timewarp::standard_humanoid_joint_names(
+            pose.frames.iter().map(|frame| frame.joints.len()).max().unwrap_or(0),
+        );
+        let mut active_ids = std::collections::HashSet::new();
+        let mut created = 0;
+        for (joint, name) in names.into_iter().enumerate() {
+            let keyframes = pose.frames.iter().filter_map(|frame| {
+                let point = *frame.joints.get(joint)?;
+                let position = crate::core::optical_flow_timewarp::project_pose3d_point_with_rotation(point, camera, rotation_degrees)?;
+                (frame.confidence >= threshold).then(|| Keyframe::new(frame.frame, position, InterpolationType::Linear))
+            }).collect::<Vec<_>>();
+            if keyframes.is_empty() { continue; }
+            let id = format!("pose3d_{}", name);
+            active_ids.insert(id.clone());
+            let initial = keyframes[0].value;
+            let position = if keyframes.len() == 1 { Animatable::Constant(initial) } else { Animatable::Animated(keyframes) };
+            if let Some(tracker) = layer.trackers.iter_mut().find(|tracker| tracker.id == id) {
+                tracker.position = position;
+            } else {
+                let mut tracker = crate::core::timeline::TrackerPoint::new(id, format!("Pose 3D {}", name.replace('_', " ")), initial);
+                tracker.position = position;
+                layer.trackers.push(tracker);
+            }
+            created += 1;
+        }
+        if created > 0 {
+            layer.trackers.retain(|tracker| !tracker.id.starts_with("pose3d_") || active_ids.contains(&tracker.id));
+        }
+        created
+    }
+
     pub fn estimate_markerless_pose(
         layer: &Layer,
         start_frame: u32,
@@ -1590,5 +1630,21 @@ mod quad_track_tests {
         };
         assert_eq!(TrackerEngine::apply_pose_as_tracker_points(&mut layer, &invalid, 0.5), 0);
         assert_eq!(layer.trackers.len(), 1);
+    }
+
+    #[test]
+    fn projected_3d_pose_becomes_editable_tracker_keyframes() {
+        let mut layer = Layer::new(
+            "l".into(), "3D Pose Layer".into(), crate::core::timeline::LayerType::Null, 10,
+        );
+        let pose = crate::core::optical_flow_timewarp::MarkerlessPose3DTrack {
+            frames: vec![
+                crate::core::optical_flow_timewarp::MarkerlessPose3DFrame { frame: 2, joints: vec![[0.0, 0.0, 10.0]], confidence: 1.0 },
+                crate::core::optical_flow_timewarp::MarkerlessPose3DFrame { frame: 3, joints: vec![[1.0, 0.0, 10.0]], confidence: 1.0 },
+            ], bones: vec![],
+        };
+        let camera = crate::core::optical_flow_timewarp::PoseCameraModel { focal_length: 100.0, principal_point: [50.0, 40.0], position: [0.0, 0.0, 0.0] };
+        assert_eq!(TrackerEngine::apply_pose3d_as_tracker_points(&mut layer, &pose, camera, [0.0; 3], 0.5), 1);
+        assert_eq!(layer.trackers[0].position.evaluate(3), [60.0, 40.0]);
     }
 }
