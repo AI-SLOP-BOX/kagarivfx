@@ -375,9 +375,9 @@ fn validate_composition(
         if layer
             .time_remap
             .as_ref()
-            .is_some_and(|value| !scalar_animation_is_finite(value))
+            .is_some_and(|value| !scalar_animation_is_nonnegative(value))
         {
-            return Err("layer time remap values must be finite".into());
+            return Err("layer time remap values must be finite and non-negative".into());
         }
         if let LayerType::Video {
             frame_count, speed, ..
@@ -1239,6 +1239,11 @@ mod tests {
         let mut invalid_project = Project::default();
         invalid_project.compositions[0].layers[0].time_remap =
             Some(crate::core::property::Animatable::new_constant(f32::NAN));
+        assert!(ProductionDocument::new(invalid_project).validate().is_err());
+
+        let mut invalid_project = Project::default();
+        invalid_project.compositions[0].layers[0].time_remap =
+            Some(crate::core::property::Animatable::new_constant(-1.0));
         assert!(ProductionDocument::new(invalid_project).validate().is_err());
 
         let mut invalid_project = Project::default();
