@@ -43,7 +43,9 @@ impl TrackerEngine {
             }
             created += 1;
         }
-        layer.trackers.retain(|tracker| !tracker.id.starts_with("pose_") || active_ids.contains(&tracker.id));
+        if created > 0 {
+            layer.trackers.retain(|tracker| !tracker.id.starts_with("pose_") || active_ids.contains(&tracker.id));
+        }
         created
     }
 
@@ -1573,5 +1575,20 @@ mod quad_track_tests {
         assert_eq!(TrackerEngine::apply_pose_as_tracker_points(&mut layer, &empty, 0.5), 0);
         assert_eq!(layer.trackers.len(), 1);
         assert_eq!(layer.trackers[0].id, "pose_head");
+    }
+
+    #[test]
+    fn all_invalid_pose_frames_do_not_delete_existing_pose_points() {
+        let mut layer = Layer::new(
+            "l".into(), "Pose Layer".into(), crate::core::timeline::LayerType::Null, 10,
+        );
+        layer.trackers.push(crate::core::timeline::TrackerPoint::new("pose_head".into(), "Pose head".into(), [1.0, 2.0]));
+        let invalid = crate::core::optical_flow_timewarp::MarkerlessPoseTrack {
+            frames: vec![crate::core::optical_flow_timewarp::MarkerlessPoseFrame {
+                frame: 0, joints: vec![[f32::NAN, f32::NAN]], root: [0.0, 0.0], confidence: 0.0,
+            }], bones: vec![], bone_lengths: vec![],
+        };
+        assert_eq!(TrackerEngine::apply_pose_as_tracker_points(&mut layer, &invalid, 0.5), 0);
+        assert_eq!(layer.trackers.len(), 1);
     }
 }
