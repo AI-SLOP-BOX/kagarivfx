@@ -8,12 +8,12 @@
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct CameraLensBlurParams {
-    pub blur_radius: f32,       // 0.0..100.0
-    pub iris_blades: u32,       // 3..16
-    pub iris_rotation_deg: f32, // 0.0..360.0
-    pub iris_roundness: f32,    // 0.0..100.0%
-    pub highlight_gain: f32,    // 0.0..5.0
-    pub highlight_threshold: f32,// 0.0..1.0
+    pub blur_radius: f32,         // 0.0..100.0
+    pub iris_blades: u32,         // 3..16
+    pub iris_rotation_deg: f32,   // 0.0..360.0
+    pub iris_roundness: f32,      // 0.0..100.0%
+    pub highlight_gain: f32,      // 0.0..5.0
+    pub highlight_threshold: f32, // 0.0..1.0
 }
 
 impl Default for CameraLensBlurParams {
@@ -36,14 +36,26 @@ pub fn generate_iris_kernel(
     rotation_deg: f32,
     roundness_pct: f32,
 ) -> (Vec<f32>, i32) {
-    let r = radius.max(1.0);
+    let r = if radius.is_finite() {
+        radius.clamp(1.0, 1024.0)
+    } else {
+        1.0
+    };
     let k_size = (r.ceil() as i32) * 2 + 1;
     let half = k_size / 2;
     let mut kernel = vec![0.0f32; (k_size * k_size) as usize];
 
     let n = blades.clamp(3, 16) as f32;
-    let rot = rotation_deg.to_radians();
-    let roundness = (roundness_pct / 100.0).clamp(0.0, 1.0);
+    let rot = if rotation_deg.is_finite() {
+        rotation_deg.to_radians()
+    } else {
+        0.0
+    };
+    let roundness = if roundness_pct.is_finite() {
+        (roundness_pct / 100.0).clamp(0.0, 1.0)
+    } else {
+        0.0
+    };
 
     let mut sum = 0.0f32;
 
@@ -97,7 +109,18 @@ pub fn apply_camera_lens_blur(
     height: u32,
     params: &CameraLensBlurParams,
 ) -> Vec<u8> {
-    if src.len() != (width * height * 4) as usize || width == 0 || height == 0 || params.blur_radius < 0.5 {
+    let Some(pixel_count) = (width as usize)
+        .checked_mul(height as usize)
+        .filter(|&count| count <= usize::MAX / 4)
+    else {
+        return src.to_vec();
+    };
+    if src.len() != pixel_count * 4
+        || width == 0
+        || height == 0
+        || !params.blur_radius.is_finite()
+        || params.blur_radius < 0.5
+    {
         return src.to_vec();
     }
 
@@ -111,8 +134,17 @@ pub fn apply_camera_lens_blur(
     let k_size = half * 2 + 1;
     let mut dst = vec![0u8; src.len()];
 
-    let gain = params.highlight_gain;
-    let thresh = params.highlight_threshold * 255.0;
+    let gain = if params.highlight_gain.is_finite() {
+        params.highlight_gain.clamp(0.0, 100.0)
+    } else {
+        1.0
+    };
+    let threshold = if params.highlight_threshold.is_finite() {
+        params.highlight_threshold.clamp(0.0, 1.0)
+    } else {
+        1.0
+    };
+    let thresh = threshold * 255.0;
 
     for y in 0..height {
         let iy = y as i32;
@@ -172,6 +204,22 @@ pub fn apply_camera_lens_blur(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_camera_blur_sanitizes_extreme_parameters() {
+        let src = vec![128u8; 16];
+        let params = CameraLensBlurParams {
+            blur_radius: f32::NAN,
+            iris_rotation_deg: f32::INFINITY,
+            iris_roundness: f32::NAN,
+            highlight_gain: f32::INFINITY,
+            highlight_threshold: f32::NAN,
+            ..Default::default()
+        };
+        assert_eq!(apply_camera_lens_blur(&src, 2, 2, &params), src);
+        let (kernel, _) = generate_iris_kernel(f32::INFINITY, 0, f32::NAN, f32::NAN);
+        assert!(kernel.iter().all(|value| value.is_finite()));
+    }
 
     #[test]
     fn test_iris_kernel_generation() {
