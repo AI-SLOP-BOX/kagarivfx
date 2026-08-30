@@ -1234,6 +1234,13 @@ mod tests {
     }
 
     #[test]
+    fn normalization_gain_handles_extreme_finite_samples() {
+        let gain = normalization_gain_db(&[f32::MAX, -f32::MAX], -12.0, -1.0);
+        assert!(gain.is_finite());
+        assert!((-60.0..=60.0).contains(&gain));
+    }
+
+    #[test]
     fn audio_clipping_merges_consecutive_samples() {
         let ranges = detect_audio_clipping(&[0.0, 1.0, 1.0, 0.0, -1.0, -1.0], 10, 0.99, 2);
         assert_eq!(
