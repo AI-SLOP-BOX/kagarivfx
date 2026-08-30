@@ -723,39 +723,39 @@ pub fn detect_audio_beats(
         return Vec::new();
     }
     let window = (sample_rate as usize / 100).max(1);
-    let energies: Vec<f32> = samples
+    let energies: Vec<f64> = samples
         .chunks(window)
         .map(|chunk| {
             chunk
                 .iter()
                 .map(|sample| {
                     if sample.is_finite() {
-                        sample * sample
+                        f64::from(*sample) * f64::from(*sample)
                     } else {
                         0.0
                     }
                 })
-                .sum::<f32>()
-                / chunk.len() as f32
+                .sum::<f64>()
+                / chunk.len() as f64
         })
         .collect();
     if energies.len() < 3 {
         return Vec::new();
     }
-    let onsets: Vec<f32> = energies
+    let onsets: Vec<f64> = energies
         .windows(2)
         .map(|pair| (pair[1] - pair[0]).max(0.0))
         .collect();
-    let mean = onsets.iter().sum::<f32>() / onsets.len() as f32;
+    let mean = onsets.iter().sum::<f64>() / onsets.len() as f64;
     let variance = onsets
         .iter()
         .map(|value| (value - mean).powi(2))
-        .sum::<f32>()
-        / onsets.len() as f32;
+        .sum::<f64>()
+        / onsets.len() as f64;
     let sensitivity = if sensitivity.is_finite() {
-        sensitivity.clamp(0.0, 4.0)
+        f64::from(sensitivity.clamp(0.0, 4.0))
     } else {
-        1.5
+        1.5f64
     };
     let threshold = mean + variance.sqrt() * sensitivity;
     let minimum_samples = (minimum_interval_seconds * sample_rate as f64) as usize;
