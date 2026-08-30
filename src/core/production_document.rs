@@ -365,7 +365,7 @@ fn validate_composition(
             || !vector_animation_is_finite(&layer.transform.position)
             || !vector_animation_is_finite(&layer.transform.scale)
             || !scalar_animation_is_finite(&layer.transform.rotation)
-            || !scalar_animation_is_unit_interval(&layer.transform.opacity)
+            || !scalar_animation_is_percentage(&layer.transform.opacity)
         {
             return Err("layer transform animation values must be finite".into());
         }
@@ -666,8 +666,8 @@ fn validate_mask(mask: &crate::core::mask::Mask) -> Result<(), String> {
             return Err("mask animation values must be finite".into());
         }
     }
-    if !scalar_animation_is_unit_interval(&mask.opacity) {
-        return Err("mask opacity must be within 0..1".into());
+    if !scalar_animation_is_percentage(&mask.opacity) {
+        return Err("mask opacity must be within 0..100".into());
     }
     Ok(())
 }
@@ -690,14 +690,14 @@ fn scalar_animation_is_nonnegative(value: &crate::core::property::Animatable<f32
     }
 }
 
-fn scalar_animation_is_unit_interval(value: &crate::core::property::Animatable<f32>) -> bool {
+fn scalar_animation_is_percentage(value: &crate::core::property::Animatable<f32>) -> bool {
     match value {
         crate::core::property::Animatable::Constant(value) => {
-            value.is_finite() && (0.0..=1.0).contains(value)
+            value.is_finite() && (0.0..=100.0).contains(value)
         }
         crate::core::property::Animatable::Animated(keyframes) => keyframes
             .iter()
-            .all(|keyframe| keyframe.value.is_finite() && (0.0..=1.0).contains(&keyframe.value)),
+            .all(|keyframe| keyframe.value.is_finite() && (0.0..=100.0).contains(&keyframe.value)),
     }
 }
 
@@ -1241,7 +1241,7 @@ mod tests {
 
         let mut invalid_project = Project::default();
         invalid_project.compositions[0].layers[0].transform.opacity =
-            crate::core::property::Animatable::new_constant(1.1);
+            crate::core::property::Animatable::new_constant(100.1);
         assert!(ProductionDocument::new(invalid_project).validate().is_err());
 
         let mut invalid_project = Project::default();
