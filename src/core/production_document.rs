@@ -104,8 +104,11 @@ impl ProductionDocument {
             })
             .collect::<HashSet<_>>();
         for asset in &self.project.assets {
-            if asset.id.trim().is_empty() || !asset_ids.insert(asset.id.clone()) {
-                return Err("asset ids must be non-empty and unique".into());
+            if asset.id.trim().is_empty()
+                || asset.name.trim().is_empty()
+                || !asset_ids.insert(asset.id.clone())
+            {
+                return Err("asset ids and names must be non-empty; ids must be unique".into());
             }
             if let Some(parent_folder) = &asset.parent_folder {
                 if !folder_ids.contains(parent_folder.as_str()) {
@@ -299,7 +302,10 @@ fn validate_composition(
     let mut layer_ids = HashSet::new();
     let mut layer_parents = HashMap::new();
     for layer in &composition.layers {
-        if layer.id.trim().is_empty() || !layer_ids.insert(layer.id.clone()) {
+        if layer.id.trim().is_empty()
+            || layer.name.trim().is_empty()
+            || !layer_ids.insert(layer.id.clone())
+        {
             return Err("layer ids must be non-empty and unique within a composition".into());
         }
         if let Some(parent_id) = &layer.parent_id {
@@ -383,13 +389,19 @@ fn validate_composition(
         }
         let mut effect_ids = HashSet::new();
         for effect in &layer.effects {
-            if effect.id.trim().is_empty() || !effect_ids.insert(effect.id.clone()) {
+            if effect.id.trim().is_empty()
+                || effect.name.trim().is_empty()
+                || !effect_ids.insert(effect.id.clone())
+            {
                 return Err("effect ids must be non-empty and unique within a layer".into());
             }
         }
         let mut mask_ids = HashSet::new();
         for mask in &layer.masks {
-            if mask.id.trim().is_empty() || !mask_ids.insert(mask.id.clone()) {
+            if mask.id.trim().is_empty()
+                || mask.name.trim().is_empty()
+                || !mask_ids.insert(mask.id.clone())
+            {
                 return Err("mask ids must be non-empty and unique within a layer".into());
             }
             validate_mask(mask)?;
