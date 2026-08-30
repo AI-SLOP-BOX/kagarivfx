@@ -1341,6 +1341,17 @@ mod tests {
         assert!(ProductionDocument::new(invalid_project).validate().is_err());
 
         let mut invalid_project = Project::default();
+        let duration_frames = invalid_project.compositions[0].duration_frames;
+        invalid_project.compositions[0]
+            .markers
+            .push(crate::core::timeline::TimelineMarker {
+                frame: duration_frames,
+                label: "  ".into(),
+                color: [0.0, 0.0, 0.0],
+            });
+        assert!(ProductionDocument::new(invalid_project).validate().is_err());
+
+        let mut invalid_project = Project::default();
         let mut invalid_mask = crate::core::mask::Mask::new_rect(
             "invalid-mask".into(),
             "Mask".into(),
