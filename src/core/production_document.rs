@@ -47,6 +47,9 @@ impl ProductionDocument {
     pub const MAX_COMPOSITIONS: usize = 10_000;
     pub const MAX_LAYERS_PER_COMPOSITION: usize = 100_000;
     pub const MAX_SUB_COMPOSITIONS_PER_COMPOSITION: usize = 10_000;
+    pub const MAX_CAMERAS_PER_COMPOSITION: usize = 10_000;
+    pub const MAX_LIGHTS_PER_COMPOSITION: usize = 10_000;
+    pub const MAX_MARKERS_PER_COMPOSITION: usize = 100_000;
     pub const MAX_COMPOSITION_FRAMES: u32 = 10_000_000;
     pub const MAX_ASSET_DURATION_SEC: f32 = 10_000_000.0;
 
@@ -282,6 +285,15 @@ fn validate_composition(
     if composition.sub_compositions.len() > ProductionDocument::MAX_SUB_COMPOSITIONS_PER_COMPOSITION
     {
         return Err("composition contains too many nested compositions".into());
+    }
+    if composition.cameras.len() > ProductionDocument::MAX_CAMERAS_PER_COMPOSITION {
+        return Err("composition contains too many cameras".into());
+    }
+    if composition.lights.len() > ProductionDocument::MAX_LIGHTS_PER_COMPOSITION {
+        return Err("composition contains too many lights".into());
+    }
+    if composition.markers.len() > ProductionDocument::MAX_MARKERS_PER_COMPOSITION {
+        return Err("composition contains too many markers".into());
     }
     if composition.id.trim().is_empty() {
         return Err("composition id must not be empty".into());
