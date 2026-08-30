@@ -28,21 +28,28 @@ pub fn convert_audio_to_keyframes(
     let mut both_kfs = Vec::with_capacity(total_frames as usize);
 
     for f in 0..total_frames {
-        let start_sample = (f as usize) * samples_per_frame;
-        let end_sample = (start_sample + samples_per_frame).min(buf.samples.len());
+        let Some(start_sample) = (f as usize).checked_mul(samples_per_frame) else {
+            break;
+        };
+        let end_sample = start_sample
+            .saturating_add(samples_per_frame)
+            .min(buf.samples.len());
 
-        let (mut sum_sq_l, mut sum_sq_r) = (0.0f32, 0.0f32);
-        let count = (end_sample.saturating_sub(start_sample)).max(1) as f32;
+        let (mut sum_sq_l, mut sum_sq_r) = (0.0f64, 0.0f64);
+        let count = (end_sample.saturating_sub(start_sample)).max(1) as f64;
 
         if start_sample < buf.samples.len() {
             for &s in &buf.samples[start_sample..end_sample] {
-                sum_sq_l += s * s;
-                sum_sq_r += s * s; // Mono/interleaved RMS proxy
+                if s.is_finite() {
+                    let square = f64::from(s) * f64::from(s);
+                    sum_sq_l += square;
+                    sum_sq_r += square; // Mono/interleaved RMS proxy
+                }
             }
         }
 
-        let rms_l = (sum_sq_l / count).sqrt() * 50.0;
-        let rms_r = (sum_sq_r / count).sqrt() * 50.0;
+        let rms_l = ((sum_sq_l / count).sqrt() * 50.0) as f32;
+        let rms_r = ((sum_sq_r / count).sqrt() * 50.0) as f32;
         let rms_both = (rms_l + rms_r) * 0.5;
 
         left_kfs.push(Keyframe::new(f, rms_l, InterpolationType::Linear));
@@ -206,7 +213,11 @@ pub fn bind_audio_amplitude_to_layer_transform(
             let current_pos = layer.transform.position.evaluate(0);
             for kf in keyframes {
                 let y = current_pos[1] + (kf.value * multiplier);
-                pos_kfs.push(Keyframe::new(kf.frame, [current_pos[0], y], InterpolationType::Linear));
+                pos_kfs.push(Keyframe::new(
+                    kf.frame,
+                    [current_pos[0], y],
+                    InterpolationType::Linear,
+                ));
             }
             layer.transform.position = Animatable::Animated(pos_kfs);
         }
