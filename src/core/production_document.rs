@@ -2,7 +2,7 @@
 
 use crate::core::audio_types::MixerChannel;
 use crate::core::automation_binding::{AutomationBinding, ProductionClock};
-use crate::core::timeline::{LayerType, Project, ProjectItemType};
+use crate::core::timeline::{EffectType, LayerType, Project, ProjectItemType};
 use crate::core::unified_time::TempoMap;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
@@ -300,6 +300,12 @@ fn validate_composition(
         if layer.in_frame >= layer.out_frame {
             return Err("layer frame range must have a positive duration".into());
         }
+        let mut effect_ids = HashSet::new();
+        for effect in &layer.effects {
+            if effect.id.trim().is_empty() || !effect_ids.insert(effect.id.clone()) {
+                return Err("effect ids must be non-empty and unique within a layer".into());
+            }
+        }
     }
     for layer_id in layer_parents.keys() {
         let mut current = Some(*layer_id);
@@ -561,6 +567,20 @@ mod tests {
         let mut invalid_project = Project::default();
         let layer_id = invalid_project.compositions[0].layers[0].id.clone();
         invalid_project.compositions[0].layers[0].parent_id = Some(layer_id);
+        assert!(ProductionDocument::new(invalid_project).validate().is_err());
+
+        let mut invalid_project = Project::default();
+        let effect = crate::core::timeline::Effect {
+            id: "duplicate-effect".into(),
+            name: "Blur".into(),
+            effect_type: EffectType::GaussianBlur {
+                blur_radius: crate::core::property::Animatable::new_constant(4.0),
+            },
+            enabled: true,
+        };
+        invalid_project.compositions[0].layers[0]
+            .effects
+            .extend([effect.clone(), effect]);
         assert!(ProductionDocument::new(invalid_project).validate().is_err());
     }
 
