@@ -6,6 +6,7 @@
 //! than propagated to the user.
 
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, Instant};
 
 use crate::core::timeline::Project;
@@ -20,6 +21,8 @@ struct AutosaveSnapshot {
 
 /// Number of rotating recovery files kept on disk.
 pub const MAX_AUTOSAVE_SLOTS: usize = 5;
+
+static AUTOSAVE_SEQUENCE: AtomicU64 = AtomicU64::new(0);
 
 /// Autosave manager: tracks dirty state and writes rotating recovery snapshots.
 pub struct AutosaveManager {
@@ -125,16 +128,24 @@ impl AutosaveManager {
         let path = self.slot_path(self.next_slot % MAX_AUTOSAVE_SLOTS);
         self.next_slot = (self.next_slot + 1) % MAX_AUTOSAVE_SLOTS;
 
-        // Atomic write: temp file + rename so a crash mid-write cannot truncate the slot.
-        let tmp = path.with_extension("json.tmp");
+        // Atomic write: a unique temp file prevents concurrent managers from
+        // overwriting each other's in-flight snapshot.
+        let sequence = AUTOSAVE_SEQUENCE.fetch_add(1, Ordering::Relaxed);
+        let tmp = path.with_extension(format!("json.{}.{}.tmp", std::process::id(), sequence));
         let json = serde_json::to_string(&AutosaveSnapshot {
             project: project.clone(),
             production_document: production_document.cloned(),
         })
             .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
-        std::fs::write(&tmp, json)?;
-        std::fs::rename(&tmp, &path)?;
-        Ok(path)
+        let result = (|| {
+            std::fs::write(&tmp, json)?;
+            std::fs::rename(&tmp, &path)?;
+            Ok(path)
+        })();
+        if result.is_err() {
+            let _ = std::fs::remove_file(&tmp);
+        }
+        result
     }
 
     /// Loads the newest valid recovery snapshot, if one exists.
@@ -294,6 +305,31 @@ mod tests {
         std::fs::remove_file(&path).unwrap();
         assert!(manager.tick(&sample_project()).is_some());
         let _ = std::fs::remove_dir_all(&path);
+    }
+
+    #[test]
+    fn failed_snapshot_replace_removes_unique_temp_file() {
+        let dir = std::env::temp_dir().join(format!(
+            "aevfx_autosave_replace_failure_{}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::create_dir(dir.join("recovery_0.json")).unwrap();
+
+        let mut manager = AutosaveManager::new(&dir).with_interval(Duration::ZERO);
+        manager.mark_dirty();
+        assert!(manager.tick(&sample_project()).is_none());
+
+        let temporary_files = std::fs::read_dir(&dir)
+            .unwrap()
+            .filter_map(Result::ok)
+            .map(|entry| entry.file_name())
+            .filter(|name| name.to_string_lossy().contains(".json."))
+            .collect::<Vec<_>>();
+        assert!(temporary_files.is_empty(), "temporary files: {temporary_files:?}");
+
+        let _ = std::fs::remove_dir_all(dir);
     }
 
     #[test]
