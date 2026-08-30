@@ -615,15 +615,38 @@ pub struct PoseCameraModel {
 }
 
 pub fn project_pose3d_point(point: [f32; 3], camera: PoseCameraModel) -> Option<[f32; 2]> {
+    project_pose3d_point_with_rotation(point, camera, [0.0, 0.0, 0.0])
+}
+
+pub fn project_pose3d_point_with_rotation(
+    point: [f32; 3],
+    camera: PoseCameraModel,
+    rotation_degrees: [f32; 3],
+) -> Option<[f32; 2]> {
     if !point.iter().all(|value| value.is_finite()) || !camera.focal_length.is_finite() || camera.focal_length <= 0.0
-        || !camera.principal_point.iter().all(|value| value.is_finite()) || !camera.position.iter().all(|value| value.is_finite()) {
+        || !camera.principal_point.iter().all(|value| value.is_finite()) || !camera.position.iter().all(|value| value.is_finite())
+        || !rotation_degrees.iter().all(|value| value.is_finite()) {
         return None;
     }
-    let depth = point[2] - camera.position[2];
+    let mut relative = [point[0] - camera.position[0], point[1] - camera.position[1], point[2] - camera.position[2]];
+    let radians = rotation_degrees.map(f32::to_radians);
+    let (sin_x, cos_x) = radians[0].sin_cos();
+    let (sin_y, cos_y) = radians[1].sin_cos();
+    let (sin_z, cos_z) = radians[2].sin_cos();
+    let y = relative[1] * cos_x - relative[2] * sin_x;
+    let z = relative[1] * sin_x + relative[2] * cos_x;
+    relative[1] = y; relative[2] = z;
+    let x = relative[0] * cos_y + relative[2] * sin_y;
+    let z = -relative[0] * sin_y + relative[2] * cos_y;
+    relative[0] = x; relative[2] = z;
+    let x = relative[0] * cos_z - relative[1] * sin_z;
+    let y = relative[0] * sin_z + relative[1] * cos_z;
+    relative[0] = x; relative[1] = y;
+    let depth = relative[2];
     if !depth.is_finite() || depth <= f32::EPSILON { return None; }
     let projected = [
-        camera.principal_point[0] + camera.focal_length * (point[0] - camera.position[0]) / depth,
-        camera.principal_point[1] + camera.focal_length * (point[1] - camera.position[1]) / depth,
+        camera.principal_point[0] + camera.focal_length * relative[0] / depth,
+        camera.principal_point[1] + camera.focal_length * relative[1] / depth,
     ];
     projected.iter().all(|value| value.is_finite()).then_some(projected)
 }
@@ -1485,6 +1508,8 @@ mod tests {
         assert_eq!(project_pose3d_point([1.0, 2.0, 10.0], camera), Some([60.0, 60.0]));
         assert_eq!(project_pose3d_point([1.0, 2.0, 0.0], camera), None);
         assert_eq!(project_pose3d_point([f32::NAN, 2.0, 10.0], camera), None);
+        let rotated = project_pose3d_point_with_rotation([1.0, 0.0, 10.0], camera, [0.0, 90.0, 0.0]);
+        assert!(rotated.is_none());
     }
 
     #[test]
