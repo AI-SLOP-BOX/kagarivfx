@@ -286,8 +286,15 @@ fn validate_composition(
         return Err("composition background color must be finite".into());
     }
     validate_camera(&composition.active_camera)?;
+    let mut camera_names = HashSet::new();
+    if !camera_names.insert(composition.active_camera.name.clone()) {
+        return Err("camera names must be unique within a composition".into());
+    }
     for camera in &composition.cameras {
         validate_camera(camera)?;
+        if !camera_names.insert(camera.name.clone()) {
+            return Err("camera names must be unique within a composition".into());
+        }
     }
     let mut layer_ids = HashSet::new();
     let mut layer_parents = HashMap::new();
@@ -722,6 +729,12 @@ mod tests {
         let mut invalid_project = Project::default();
         invalid_project.compositions[0].layers[0].transform_3d.position =
             crate::core::property::Animatable::new_constant([0.0, f32::INFINITY, 0.0]);
+        assert!(ProductionDocument::new(invalid_project).validate().is_err());
+
+        let mut invalid_project = Project::default();
+        invalid_project.compositions[0].cameras.push(
+            invalid_project.compositions[0].active_camera.clone(),
+        );
         assert!(ProductionDocument::new(invalid_project).validate().is_err());
 
         let mut invalid_project = Project::default();
