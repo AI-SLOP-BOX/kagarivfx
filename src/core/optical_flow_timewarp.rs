@@ -799,14 +799,22 @@ pub fn repair_markerless_pose_track(
                 index += 1;
             }
             let end = index;
-            if start == 0 || end >= pose.frames.len() || end - start > max_gap {
+            let missing_frames = if start == 0 || end >= pose.frames.len() {
+                usize::MAX
+            } else {
+                pose.frames[end].frame.saturating_sub(pose.frames[start - 1].frame).saturating_sub(1) as usize
+            };
+            if start == 0 || end >= pose.frames.len() || missing_frames > max_gap {
                 continue;
             }
             let before = pose.frames[start - 1].joints[joint];
             let after = pose.frames[end].joints[joint];
-            let span = (end - start + 1) as f32;
+            let before_frame = pose.frames[start - 1].frame;
+            let after_frame = pose.frames[end].frame;
+            let span = (after_frame.saturating_sub(before_frame)) as f32;
             for offset in 0..(end - start) {
-                let t = (offset + 1) as f32 / span;
+                let current_frame = pose.frames[start + offset].frame;
+                let t = if span > 0.0 { current_frame.saturating_sub(before_frame) as f32 / span } else { 0.0 };
                 pose.frames[start + offset].joints[joint] = [
                     before[0] + (after[0] - before[0]) * t,
                     before[1] + (after[1] - before[1]) * t,
@@ -1240,6 +1248,19 @@ mod tests {
         assert_eq!(repair_markerless_pose_track(&mut pose, 1), 1);
         assert_eq!(pose.frames[1].joints[0], [1.0, 0.0]);
         assert!(pose.frames[1].confidence < 1.0);
+    }
+
+    #[test]
+    fn pose_repair_uses_frame_numbers_for_sparse_sequences() {
+        let mut pose = MarkerlessPoseTrack {
+            frames: vec![
+                MarkerlessPoseFrame { frame: 10, joints: vec![[0.0, 0.0]], root: [0.0, 0.0], confidence: 1.0 },
+                MarkerlessPoseFrame { frame: 12, joints: vec![[f32::NAN, f32::NAN]], root: [0.0, 0.0], confidence: 1.0 },
+                MarkerlessPoseFrame { frame: 14, joints: vec![[8.0, 0.0]], root: [8.0, 0.0], confidence: 1.0 },
+            ], bones: vec![], bone_lengths: vec![],
+        };
+        assert_eq!(repair_markerless_pose_track(&mut pose, 3), 1);
+        assert_eq!(pose.frames[1].joints[0], [4.0, 0.0]);
     }
 
     #[test]
