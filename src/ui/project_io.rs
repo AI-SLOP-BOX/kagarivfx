@@ -37,11 +37,20 @@ pub fn push_recent(path: &std::path::Path) {
 }
 
 /// Load a project file into app state. Returns Ok(()) or an error message.
-pub fn open_project_from_path(app: &mut AfterEffectsApp, path: &std::path::Path) -> Result<(), String> {
+pub fn open_project_from_path(
+    app: &mut AfterEffectsApp,
+    path: &std::path::Path,
+) -> Result<(), String> {
     let json = std::fs::read_to_string(path).map_err(|e| format!("Could not read file: {}", e))?;
-    let project = crate::core::project_migration::load_project_migrated(&json)
-        .map_err(|e| format!("Failed to parse project file: {}", e))?;
+    let production_document =
+        crate::core::production_document::ProductionDocument::from_json(&json).ok();
+    let project = match &production_document {
+        Some(document) => document.project().clone(),
+        None => crate::core::project_migration::load_project_migrated(&json)
+            .map_err(|e| format!("Failed to parse project file: {}", e))?,
+    };
     app.history = crate::core::history::ProjectHistory::new(project);
+    app.production_document = production_document;
     // Restore the persisted GPU-compute preference (respects adapter availability)
     let gpu_pref = app.history.current().use_gpu_compute;
     crate::core::compute_pipeline::set_gpu_effects_enabled(gpu_pref);
@@ -58,11 +67,21 @@ pub fn open_project_from_path(app: &mut AfterEffectsApp, path: &std::path::Path)
 }
 
 /// Atomically save the current project. Returns Ok(()) or an error message.
-pub fn save_project_to_path(app: &mut AfterEffectsApp, path: &std::path::Path) -> Result<(), String> {
-    let project = app.history.current();
-    crate::core::project_migration::save_project_atomic(project, path)?;
+pub fn save_project_to_path(
+    app: &mut AfterEffectsApp,
+    path: &std::path::Path,
+) -> Result<(), String> {
+    let project_snapshot = app.history.current().clone();
+    if let Some(existing) = app.production_document.as_mut() {
+        *existing.project_mut() = project_snapshot.clone();
+        existing
+            .save_atomic(path)
+            .map_err(|e| format!("Failed to save production document: {}", e))?;
+    } else {
+        crate::core::project_migration::save_project_atomic(&project_snapshot, path)?;
+    }
     app.project_path = path.to_string_lossy().to_string();
-    let _ = app.autosave.save_now(project);
+    let _ = app.autosave.save_now(&project_snapshot);
     push_recent(path);
     app.toasts.info(format!(
         "Project saved: {}",

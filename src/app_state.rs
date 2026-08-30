@@ -196,6 +196,8 @@ pub struct AfterEffectsApp {
     pub rx_connection: Option<std::sync::mpsc::Receiver<Option<String>>>,
     pub connected_app: Option<String>,
     pub project_path: String,
+    /// Preserves unified audio/timeline metadata when the GUI opens and saves a project.
+    pub production_document: Option<crate::core::production_document::ProductionDocument>,
     pub otio_path: String,
     pub expanded_layers: std::collections::HashSet<usize>,
     pub expanded_waveform_layers: std::collections::HashSet<usize>,
@@ -406,6 +408,7 @@ impl Default for AfterEffectsApp {
             rx_connection: None,
             connected_app: None,
             project_path: "project.aevfx.json".to_string(),
+            production_document: None,
             otio_path: "timeline.otio.json".to_string(),
             expanded_layers: std::collections::HashSet::new(),
             expanded_waveform_layers: std::collections::HashSet::new(),
