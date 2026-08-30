@@ -174,8 +174,9 @@ impl ProductionDocument {
         if !(1..=384_000).contains(&self.audio.sample_rate) {
             return Err("audio sample rate is outside the supported range".into());
         }
-        if !self.audio.master_gain.is_finite() || self.audio.master_gain < 0.0 {
-            return Err("audio master gain must be finite and non-negative".into());
+        if !self.audio.master_gain.is_finite() || !(0.0..=1_000.0).contains(&self.audio.master_gain)
+        {
+            return Err("audio master gain is out of range".into());
         }
         if self.audio.channels.len() > Self::MAX_AUDIO_CHANNELS {
             return Err("production document contains too many audio channels".into());
@@ -995,6 +996,10 @@ mod tests {
 
         let mut document = ProductionDocument::new(Project::default());
         document.audio.master_gain = -0.1;
+        assert!(document.validate().is_err());
+
+        let mut document = ProductionDocument::new(Project::default());
+        document.audio.master_gain = 1_000.1;
         assert!(document.validate().is_err());
 
         let mut document = ProductionDocument::new(Project::default());
