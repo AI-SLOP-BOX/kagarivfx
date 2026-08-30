@@ -447,6 +447,9 @@ fn validate_composition(
                 points, tangents, ..
             } = shape_type
             {
+                if points.len() != tangents.len() {
+                    return Err("shape points and tangents must have matching lengths".into());
+                }
                 if points
                     .iter()
                     .flatten()
@@ -993,6 +996,29 @@ mod tests {
                     path: "video.mp4".into(),
                     duration_sec: ProductionDocument::MAX_ASSET_DURATION_SEC + 1.0,
                 },
+            ));
+        assert!(ProductionDocument::new(invalid_project).validate().is_err());
+
+        let mut invalid_project = Project::default();
+        invalid_project.compositions[0]
+            .layers
+            .push(crate::core::timeline::Layer::new(
+                "mismatched-shape-tangents".into(),
+                "Mismatched Shape Tangents".into(),
+                LayerType::Shape {
+                    shape_type: crate::core::timeline::ShapeType::FreeformBezier {
+                        points: vec![[0.0, 0.0], [10.0, 0.0]],
+                        tangents: vec![([0.0, 0.0], [0.0, 0.0])],
+                        closed: false,
+                    },
+                    color: [1.0, 1.0, 1.0, 1.0],
+                    stroke_color: [0.0, 0.0, 0.0, 1.0],
+                    stroke_width: 0.0,
+                    fill_type: Default::default(),
+                    extrusion_depth: 0.0,
+                    bevel_depth: 0.0,
+                },
+                300,
             ));
         assert!(ProductionDocument::new(invalid_project).validate().is_err());
 
