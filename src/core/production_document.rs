@@ -50,6 +50,8 @@ impl ProductionDocument {
     pub const MAX_CAMERAS_PER_COMPOSITION: usize = 10_000;
     pub const MAX_LIGHTS_PER_COMPOSITION: usize = 10_000;
     pub const MAX_MARKERS_PER_COMPOSITION: usize = 100_000;
+    pub const MAX_EFFECTS_PER_LAYER: usize = 10_000;
+    pub const MAX_MASKS_PER_LAYER: usize = 10_000;
     pub const MAX_COMPOSITION_FRAMES: u32 = 10_000_000;
     pub const MAX_ASSET_DURATION_SEC: f32 = 10_000_000.0;
 
@@ -610,6 +612,12 @@ fn validate_composition(
             if !particle_emitter_is_valid(emitter) {
                 return Err("particle emitter settings are invalid".into());
             }
+        }
+        if layer.effects.len() > ProductionDocument::MAX_EFFECTS_PER_LAYER {
+            return Err("layer contains too many effects".into());
+        }
+        if layer.masks.len() > ProductionDocument::MAX_MASKS_PER_LAYER {
+            return Err("layer contains too many masks".into());
         }
         let mut effect_ids = HashSet::new();
         for effect in &layer.effects {
@@ -1724,6 +1732,27 @@ mod tests {
         document.project.compositions[0].lights.resize(
             ProductionDocument::MAX_LIGHTS_PER_COMPOSITION + 1,
             Default::default(),
+        );
+        assert!(document.validate().is_err());
+
+        let mut document = ProductionDocument::new(Project::default());
+        document.project.compositions[0].layers[0].effects.resize(
+            ProductionDocument::MAX_EFFECTS_PER_LAYER + 1,
+            crate::core::timeline::Effect {
+                id: "effect".into(),
+                name: "Blur".into(),
+                effect_type: EffectType::GaussianBlur {
+                    blur_radius: crate::core::property::Animatable::new_constant(1.0),
+                },
+                enabled: true,
+            },
+        );
+        assert!(document.validate().is_err());
+
+        let mut document = ProductionDocument::new(Project::default());
+        document.project.compositions[0].layers[0].masks.resize(
+            ProductionDocument::MAX_MASKS_PER_LAYER + 1,
+            crate::core::mask::Mask::new_rect("mask".into(), "Mask".into(), 0.0, 0.0, 1.0, 1.0),
         );
         assert!(document.validate().is_err());
     }
