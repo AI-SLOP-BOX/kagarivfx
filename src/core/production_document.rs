@@ -171,6 +171,9 @@ fn validate_composition(
     if depth > 1024 {
         return Err("production document composition nesting is too deep".into());
     }
+    if composition.id.trim().is_empty() {
+        return Err("composition id must not be empty".into());
+    }
     if !(1..=65_535).contains(&composition.width)
         || !(1..=65_535).contains(&composition.height)
     {
@@ -259,6 +262,10 @@ mod tests {
         let mut invalid_project = Project::default();
         invalid_project.compositions[0].duration_frames =
             ProductionDocument::MAX_COMPOSITION_FRAMES + 1;
+        assert!(ProductionDocument::new(invalid_project).validate().is_err());
+
+        let mut invalid_project = Project::default();
+        invalid_project.compositions[0].id.clear();
         assert!(ProductionDocument::new(invalid_project).validate().is_err());
     }
 
