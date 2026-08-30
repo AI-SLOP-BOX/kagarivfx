@@ -24,14 +24,31 @@ impl LutCache {
 
     #[inline]
     fn cache_key(r: f32, g: f32, b: f32, size: usize) -> u64 {
-        let s = (size - 1) as f32;
+        let s = size.saturating_sub(1) as f32;
         let ri = ((r * s).clamp(0.0, s) * 1000.0) as u32;
         let gi = ((g * s).clamp(0.0, s) * 1000.0) as u32;
         let bi = ((b * s).clamp(0.0, s) * 1000.0) as u32;
-        (ri as u64) << 32 | (gi as u64) << 16 | bi as u64
+        let mut hash = 0xcbf29ce484222325u64;
+        for value in [size as u64, ri as u64, gi as u64, bi as u64] {
+            for byte in value.to_le_bytes() {
+                hash ^= u64::from(byte);
+                hash = hash.wrapping_mul(0x100000001b3);
+            }
+        }
+        hash
     }
 
-    pub fn get_or_insert(&mut self, r: f32, g: f32, b: f32, size: usize, f: impl FnOnce(f32, f32, f32) -> (f32, f32, f32)) -> (f32, f32, f32) {
+    pub fn get_or_insert(
+        &mut self,
+        r: f32,
+        g: f32,
+        b: f32,
+        size: usize,
+        f: impl FnOnce(f32, f32, f32) -> (f32, f32, f32),
+    ) -> (f32, f32, f32) {
+        if self.capacity == 0 || size == 0 {
+            return f(r, g, b);
+        }
         let key = Self::cache_key(r, g, b, size);
         if let Some(&cached) = self.entries.get(&key) {
             // Move to most-recently-used (O(n) scan but small n in practice)
@@ -86,7 +103,9 @@ pub fn apply_lut_batch_f32(
 ) {
     let size = lut.size;
     for pixel in pixels.iter_mut() {
-        let (lr, lg, lb) = cache.get_or_insert(pixel[0], pixel[1], pixel[2], size, |r, g, b| lut.apply(r, g, b));
+        let (lr, lg, lb) = cache.get_or_insert(pixel[0], pixel[1], pixel[2], size, |r, g, b| {
+            lut.apply(r, g, b)
+        });
         pixel[0] = lr.clamp(0.0, 1.0);
         pixel[1] = lg.clamp(0.0, 1.0);
         pixel[2] = lb.clamp(0.0, 1.0);
@@ -123,7 +142,10 @@ mod tests {
         cache.get_or_insert(0.3, 0.3, 0.3, 33, |r, g, b| (r, g, b));
         assert_eq!(cache.entries.len(), 2);
         // First entry should have been evicted
-        assert!(cache.entries.get(&LutCache::cache_key(0.1, 0.1, 0.1, 33)).is_none());
+        assert!(cache
+            .entries
+            .get(&LutCache::cache_key(0.1, 0.1, 0.1, 33))
+            .is_none());
     }
 
     #[test]
@@ -143,8 +165,35 @@ mod tests {
     }
 
     #[test]
+    fn cache_key_includes_lut_size_and_full_quantized_channels() {
+        assert_ne!(
+            LutCache::cache_key(0.5, 0.3, 0.7, 33),
+            LutCache::cache_key(0.5, 0.3, 0.7, 34)
+        );
+        assert_ne!(
+            LutCache::cache_key(0.5, 0.3, 0.7, 33),
+            LutCache::cache_key(0.5, 0.3, 0.8, 33)
+        );
+    }
+
+    #[test]
+    fn zero_capacity_and_zero_size_bypass_cache() {
+        let mut cache = LutCache::new(0);
+        let mut calls = 0;
+        cache.get_or_insert(0.5, 0.5, 0.5, 0, |r, g, b| {
+            calls += 1;
+            (r, g, b)
+        });
+        assert_eq!(calls, 1);
+        assert!(cache.entries.is_empty());
+    }
+
+    #[test]
     fn test_batch_apply_f32() {
-        let lut = crate::core::ocio_color::Lut3D { size: 2, data: vec![0.0; 24] };
+        let lut = crate::core::ocio_color::Lut3D {
+            size: 2,
+            data: vec![0.0; 24],
+        };
         let mut cache = LutCache::new(64);
         let mut pixels = [[0.5f32; 3]; 8];
         apply_lut_batch_f32(&lut, &mut pixels, &mut cache);
