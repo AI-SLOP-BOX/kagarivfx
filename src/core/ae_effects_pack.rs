@@ -3,7 +3,9 @@ use rayon::prelude::*;
 /// Pack of 20 Essential Adobe After Effects Effects & Filters.
 // 1. Fast Box Blur (Separable 2-pass with O(n) sliding window per pass)
 pub fn apply_fast_box_blur(pixels: &mut [u8], width: u32, height: u32, radius: u32) {
-    if radius == 0 || width == 0 || height == 0 { return; }
+    if radius == 0 || width == 0 || height == 0 {
+        return;
+    }
     let r = radius as i32;
     let w = width as usize;
     let h = height as usize;
@@ -19,25 +21,35 @@ pub fn apply_fast_box_blur(pixels: &mut [u8], width: u32, height: u32, radius: u
         for dx in -r..=r {
             let px = dx.clamp(0, w as i32 - 1) as usize;
             let idx = row + px * 4;
-            for c in 0..4 { acc[c] += pixels[idx + c] as f32; }
+            for c in 0..4 {
+                acc[c] += pixels[idx + c] as f32;
+            }
             count += 1.0;
         }
-        for c in 0..4 { temp_h[row + c] = (acc[c] / count).round() as u8; }
+        for c in 0..4 {
+            temp_h[row + c] = (acc[c] / count).round() as u8;
+        }
 
         // Slide the window across the row
         for x in 1..w {
             // Add new right edge
             let add_px = (x as i32 + r).min(w as i32 - 1) as usize;
             let add_idx = row + add_px * 4;
-            for c in 0..4 { acc[c] += pixels[add_idx + c] as f32; }
+            for c in 0..4 {
+                acc[c] += pixels[add_idx + c] as f32;
+            }
 
             // Remove old left edge
             let rem_px = (x as i32 - r - 1).max(0) as usize;
             let rem_idx = row + rem_px * 4;
-            for c in 0..4 { acc[c] -= pixels[rem_idx + c] as f32; }
+            for c in 0..4 {
+                acc[c] -= pixels[rem_idx + c] as f32;
+            }
 
             let out_idx = row + x * 4;
-            for c in 0..4 { temp_h[out_idx + c] = (acc[c] / count).round() as u8; }
+            for c in 0..4 {
+                temp_h[out_idx + c] = (acc[c] / count).round() as u8;
+            }
         }
     }
 
@@ -50,34 +62,51 @@ pub fn apply_fast_box_blur(pixels: &mut [u8], width: u32, height: u32, radius: u
         for dy in -r..=r {
             let py = dy.clamp(0, h as i32 - 1) as usize;
             let idx = py * stride + col;
-            for c in 0..4 { acc[c] += temp_h[idx + c] as f32; }
+            for c in 0..4 {
+                acc[c] += temp_h[idx + c] as f32;
+            }
             count += 1.0;
         }
         let out_idx = col;
-        for c in 0..4 { pixels[out_idx + c] = (acc[c] / count).round() as u8; }
+        for c in 0..4 {
+            pixels[out_idx + c] = (acc[c] / count).round() as u8;
+        }
 
         // Slide the window down the column
         for y in 1..h {
             // Add new bottom edge
             let add_py = (y as i32 + r).min(h as i32 - 1) as usize;
             let add_idx = add_py * stride + col;
-            for c in 0..4 { acc[c] += temp_h[add_idx + c] as f32; }
+            for c in 0..4 {
+                acc[c] += temp_h[add_idx + c] as f32;
+            }
 
             // Remove old top edge
             let rem_py = (y as i32 - r - 1).max(0) as usize;
             let rem_idx = rem_py * stride + col;
-            for c in 0..4 { acc[c] -= temp_h[rem_idx + c] as f32; }
+            for c in 0..4 {
+                acc[c] -= temp_h[rem_idx + c] as f32;
+            }
 
             let out_idx = y * stride + col;
-            for c in 0..4 { pixels[out_idx + c] = (acc[c] / count).round() as u8; }
+            for c in 0..4 {
+                pixels[out_idx + c] = (acc[c] / count).round() as u8;
+            }
         }
     }
 }
 
-
 // 2. Directional Blur (rayon-parallelized)
-pub fn apply_directional_blur(pixels: &mut [u8], width: u32, height: u32, angle_deg: f32, length: f32) {
-    if length <= 0.01 || width == 0 || height == 0 { return; }
+pub fn apply_directional_blur(
+    pixels: &mut [u8],
+    width: u32,
+    height: u32,
+    angle_deg: f32,
+    length: f32,
+) {
+    if length <= 0.01 || width == 0 || height == 0 {
+        return;
+    }
     let rad = angle_deg.to_radians();
     let dx = rad.sin();
     let dy = -rad.cos();
@@ -93,9 +122,12 @@ pub fn apply_directional_blur(pixels: &mut [u8], width: u32, height: u32, angle_
         *w = (-t * t * 0.5).exp();
         w_sum += *w;
     }
-    for w in weights.iter_mut() { *w /= w_sum; }
+    for w in weights.iter_mut() {
+        *w /= w_sum;
+    }
 
-    pixels.par_chunks_exact_mut(4)
+    pixels
+        .par_chunks_exact_mut(4)
         .enumerate()
         .for_each(|(i, px)| {
             let x = (i % width as usize) as u32;
@@ -103,18 +135,28 @@ pub fn apply_directional_blur(pixels: &mut [u8], width: u32, height: u32, angle_
             let mut acc = [0f32; 4];
             for (s, &wt) in weights.iter().enumerate() {
                 let offset = (s as f32) - (samples as f32 * 0.5);
-                let sx = (x as f32 + dx * offset).round().clamp(0.0, width as f32 - 1.0) as u32;
-                let sy = (y as f32 + dy * offset).round().clamp(0.0, height as f32 - 1.0) as u32;
+                let sx = (x as f32 + dx * offset)
+                    .round()
+                    .clamp(0.0, width as f32 - 1.0) as u32;
+                let sy = (y as f32 + dy * offset)
+                    .round()
+                    .clamp(0.0, height as f32 - 1.0) as u32;
                 let idx = ((sy * width + sx) * 4) as usize;
-                for c in 0..4 { acc[c] += temp[idx + c] as f32 * wt; }
+                for c in 0..4 {
+                    acc[c] += temp[idx + c] as f32 * wt;
+                }
             }
-            for c in 0..4 { px[c] = acc[c].round().clamp(0.0, 255.0) as u8; }
+            for c in 0..4 {
+                px[c] = acc[c].round().clamp(0.0, 255.0) as u8;
+            }
         });
 }
 
 // 3. Radial Blur (Spin) (rayon-parallelized)
 pub fn apply_radial_blur(pixels: &mut [u8], width: u32, height: u32, amount: f32) {
-    if amount.abs() < 0.01 || width == 0 || height == 0 { return; }
+    if amount.abs() < 0.01 || width == 0 || height == 0 {
+        return;
+    }
     let cx = width as f32 * 0.5;
     let cy = height as f32 * 0.5;
     let temp = pixels.to_vec();
@@ -128,9 +170,12 @@ pub fn apply_radial_blur(pixels: &mut [u8], width: u32, height: u32, amount: f32
         *w = (-t * t * 0.5).exp();
         w_sum += *w;
     }
-    for w in weights.iter_mut() { *w /= w_sum; }
+    for w in weights.iter_mut() {
+        *w /= w_sum;
+    }
 
-    pixels.par_chunks_exact_mut(4)
+    pixels
+        .par_chunks_exact_mut(4)
         .enumerate()
         .for_each(|(i, px)| {
             let x = (i % width as usize) as u32;
@@ -147,9 +192,13 @@ pub fn apply_radial_blur(pixels: &mut [u8], width: u32, height: u32, amount: f32
                 let sx = (cx + a.cos() * dist).clamp(0.0, width as f32 - 1.0) as u32;
                 let sy = (cy + a.sin() * dist).clamp(0.0, height as f32 - 1.0) as u32;
                 let idx = ((sy * width + sx) * 4) as usize;
-                for c in 0..4 { acc[c] += temp[idx + c] as f32 * wt; }
+                for c in 0..4 {
+                    acc[c] += temp[idx + c] as f32 * wt;
+                }
             }
-            for c in 0..4 { px[c] = acc[c].round().clamp(0.0, 255.0) as u8; }
+            for c in 0..4 {
+                px[c] = acc[c].round().clamp(0.0, 255.0) as u8;
+            }
         });
 }
 
@@ -174,7 +223,14 @@ pub fn apply_sharpen(pixels: &mut [u8], width: u32, height: u32, amount: f32) {
 }
 
 // 6. Glow
-pub fn apply_glow(pixels: &mut [u8], width: u32, height: u32, threshold: f32, radius: u32, intensity: f32) {
+pub fn apply_glow(
+    pixels: &mut [u8],
+    width: u32,
+    height: u32,
+    threshold: f32,
+    radius: u32,
+    intensity: f32,
+) {
     let num_bytes = pixels.len();
     let mut glow_map = vec![0u8; num_bytes];
 
@@ -182,7 +238,8 @@ pub fn apply_glow(pixels: &mut [u8], width: u32, height: u32, threshold: f32, ra
     // the harsh banding edge a hard binary threshold produces.
     let soft_width = (radius.max(2) as f32 * 8.0).min(64.0);
     for i in (0..num_bytes).step_by(4) {
-        let luma = pixels[i] as f32 * 0.299 + pixels[i + 1] as f32 * 0.587 + pixels[i + 2] as f32 * 0.114;
+        let luma =
+            pixels[i] as f32 * 0.299 + pixels[i + 1] as f32 * 0.587 + pixels[i + 2] as f32 * 0.114;
         let t = ((luma - threshold * 255.0) / soft_width + 0.5).clamp(0.0, 1.0);
         // Smoothstep the transition for a filmic rolloff
         let w = t * t * (3.0 - 2.0 * t);
@@ -205,8 +262,26 @@ pub fn apply_glow(pixels: &mut [u8], width: u32, height: u32, threshold: f32, ra
 }
 
 // 7. Drop Shadow
-pub fn apply_drop_shadow(pixels: &mut [u8], width: u32, height: u32, distance: f32, angle_deg: f32, softness: u32, shadow_color: [u8; 4]) {
-    if width == 0 || height == 0 { return; }
+pub fn apply_drop_shadow(
+    pixels: &mut [u8],
+    width: u32,
+    height: u32,
+    distance: f32,
+    angle_deg: f32,
+    softness: u32,
+    shadow_color: [u8; 4],
+) {
+    let Some(pixel_count) = (width as usize).checked_mul(height as usize) else {
+        return;
+    };
+    let Some(pixel_bytes) = pixel_count.checked_mul(4) else {
+        return;
+    };
+    if width == 0 || height == 0 || pixels.len() != pixel_bytes {
+        return;
+    }
+    let angle_deg = if angle_deg.is_finite() { angle_deg } else { 0.0 };
+    let distance = if distance.is_finite() { distance.clamp(-4096.0, 4096.0) } else { 0.0 };
     let rad = angle_deg.to_radians();
     let dx = (rad.sin() * distance).round() as i32;
     let dy = (-rad.cos() * distance).round() as i32;
@@ -224,7 +299,8 @@ pub fn apply_drop_shadow(pixels: &mut [u8], width: u32, height: u32, distance: f
                 shadow_buf[s_idx] = shadow_color[0];
                 shadow_buf[s_idx + 1] = shadow_color[1];
                 shadow_buf[s_idx + 2] = shadow_color[2];
-                shadow_buf[s_idx + 3] = ((alpha as f32 * (shadow_color[3] as f32 / 255.0)).round()) as u8;
+                shadow_buf[s_idx + 3] =
+                    ((alpha as f32 * (shadow_color[3] as f32 / 255.0)).round()) as u8;
             }
         }
     }
@@ -270,7 +346,9 @@ pub fn apply_matte_choker(pixels: &mut [u8], choke_amount: f32, gray_level: f32)
     apply_simple_choker(pixels, choke_amount);
     let thresh = (gray_level * 255.0) as u8;
     for i in (3..pixels.len()).step_by(4) {
-        if pixels[i] < thresh { pixels[i] = 0; }
+        if pixels[i] < thresh {
+            pixels[i] = 0;
+        }
     }
 }
 
@@ -278,7 +356,10 @@ pub fn apply_matte_choker(pixels: &mut [u8], choke_amount: f32, gray_level: f32)
 pub fn apply_tint(pixels: &mut [u8], black_to: [u8; 3], white_to: [u8; 3], amount: f32) {
     let k = amount.clamp(0.0, 1.0);
     for i in (0..pixels.len()).step_by(4) {
-        let luma = (pixels[i] as f32 * 0.299 + pixels[i + 1] as f32 * 0.587 + pixels[i + 2] as f32 * 0.114) / 255.0;
+        let luma = (pixels[i] as f32 * 0.299
+            + pixels[i + 1] as f32 * 0.587
+            + pixels[i + 2] as f32 * 0.114)
+            / 255.0;
         for c in 0..3 {
             let tinted = black_to[c] as f32 + (white_to[c] as f32 - black_to[c] as f32) * luma;
             let orig = pixels[i + c] as f32;
@@ -290,7 +371,10 @@ pub fn apply_tint(pixels: &mut [u8], black_to: [u8; 3], white_to: [u8; 3], amoun
 // 12. Tritone
 pub fn apply_tritone(pixels: &mut [u8], shadow_c: [u8; 3], mid_c: [u8; 3], high_c: [u8; 3]) {
     for i in (0..pixels.len()).step_by(4) {
-        let luma = (pixels[i] as f32 * 0.299 + pixels[i + 1] as f32 * 0.587 + pixels[i + 2] as f32 * 0.114) / 255.0;
+        let luma = (pixels[i] as f32 * 0.299
+            + pixels[i + 1] as f32 * 0.587
+            + pixels[i + 2] as f32 * 0.114)
+            / 255.0;
         for c in 0..3 {
             let val = if luma < 0.5 {
                 shadow_c[c] as f32 + (mid_c[c] as f32 - shadow_c[c] as f32) * (luma * 2.0)
@@ -319,16 +403,22 @@ pub fn apply_invert(pixels: &mut [u8], invert_alpha: bool) {
         pixels[i] = 255 - pixels[i];
         pixels[i + 1] = 255 - pixels[i + 1];
         pixels[i + 2] = 255 - pixels[i + 2];
-        if invert_alpha { pixels[i + 3] = 255 - pixels[i + 3]; }
+        if invert_alpha {
+            pixels[i + 3] = 255 - pixels[i + 3];
+        }
     }
 }
 
 // 15. Threshold
 pub fn apply_threshold(pixels: &mut [u8], threshold: u8) {
     for i in (0..pixels.len()).step_by(4) {
-        let luma = (pixels[i] as u32 * 299 + pixels[i + 1] as u32 * 587 + pixels[i + 2] as u32 * 114) / 1000;
+        let luma =
+            (pixels[i] as u32 * 299 + pixels[i + 1] as u32 * 587 + pixels[i + 2] as u32 * 114)
+                / 1000;
         let val = if luma as u8 >= threshold { 255 } else { 0 };
-        pixels[i] = val; pixels[i + 1] = val; pixels[i + 2] = val;
+        pixels[i] = val;
+        pixels[i + 1] = val;
+        pixels[i + 2] = val;
     }
 }
 
@@ -342,7 +432,8 @@ pub fn apply_twirl(pixels: &mut [u8], width: u32, height: u32, angle_deg: f32, r
     let temp = pixels.to_vec();
 
     // Per-pixel independent — parallelize with rayon
-    pixels.par_chunks_exact_mut(4)
+    pixels
+        .par_chunks_exact_mut(4)
         .enumerate()
         .for_each(|(i, out)| {
             let x = i % width as usize;
@@ -374,7 +465,8 @@ pub fn apply_bulge(pixels: &mut [u8], width: u32, height: u32, amount: f32, radi
     let cy = height as f32 * 0.5;
     let temp = pixels.to_vec();
 
-    pixels.par_chunks_exact_mut(4)
+    pixels
+        .par_chunks_exact_mut(4)
         .enumerate()
         .for_each(|(i, out)| {
             let x = i % width as usize;
@@ -416,8 +508,16 @@ pub fn apply_offset(pixels: &mut [u8], width: u32, height: u32, shift_x: i32, sh
 }
 
 // 19. Venetian Blinds
-pub fn apply_venetian_blinds(pixels: &mut [u8], width: u32, height: u32, completion: f32, width_px: u32) {
-    if completion <= 0.0 || width_px == 0 || width == 0 || height == 0 { return; }
+pub fn apply_venetian_blinds(
+    pixels: &mut [u8],
+    width: u32,
+    height: u32,
+    completion: f32,
+    width_px: u32,
+) {
+    if completion <= 0.0 || width_px == 0 || width == 0 || height == 0 {
+        return;
+    }
     let blind_w = width_px as usize;
     let cut_w = (blind_w as f32 * (completion * 0.01)) as usize;
 
@@ -432,10 +532,20 @@ pub fn apply_venetian_blinds(pixels: &mut [u8], width: u32, height: u32, complet
 }
 
 // 20. Linear Wipe
-pub fn apply_linear_wipe(pixels: &mut [u8], width: u32, height: u32, completion: f32, angle_deg: f32) {
-    if completion <= 0.0 { return; }
+pub fn apply_linear_wipe(
+    pixels: &mut [u8],
+    width: u32,
+    height: u32,
+    completion: f32,
+    angle_deg: f32,
+) {
+    if completion <= 0.0 {
+        return;
+    }
     if completion >= 100.0 {
-        for i in (3..pixels.len()).step_by(4) { pixels[i] = 0; }
+        for i in (3..pixels.len()).step_by(4) {
+            pixels[i] = 0;
+        }
         return;
     }
 
@@ -511,7 +621,14 @@ pub fn apply_gaussian_blur(pixels: &mut [u8], width: u32, height: u32, radius: u
 }
 
 /// One separable box blur: horizontal src -> scratch, vertical scratch -> dst.
-fn box_blur_separable(src: &[u8], dst: &mut [u8], scratch: &mut [u8], width: u32, height: u32, radius: u32) {
+fn box_blur_separable(
+    src: &[u8],
+    dst: &mut [u8],
+    scratch: &mut [u8],
+    width: u32,
+    height: u32,
+    radius: u32,
+) {
     let r = radius as i32;
 
     // Horizontal: src -> scratch
@@ -600,7 +717,10 @@ mod gaussian_tests {
         assert!(px[neighbor] > 0, "energy must spread to neighbors");
         // Symmetry check: left and right neighbors receive equal energy
         let left = ((32 * w + 31) * 4) as usize;
-        assert!((px[left] as i32 - px[neighbor] as i32).abs() <= 2, "blur must be symmetric");
+        assert!(
+            (px[left] as i32 - px[neighbor] as i32).abs() <= 2,
+            "blur must be symmetric"
+        );
     }
 
     #[test]
@@ -624,13 +744,24 @@ mod gaussian_tests {
         // 1. Gaussian concentrates energy at the center (higher peak than box)
         let center_g = g[((cy + 63) * 4) as usize];
         let center_b = b[((cy + 63) * 4) as usize];
-        assert!(center_g > center_b, "gaussian peak ({}) must exceed box ({})", center_g, center_b);
+        assert!(
+            center_g > center_b,
+            "gaussian peak ({}) must exceed box ({})",
+            center_g,
+            center_b
+        );
 
         // 2. Smooth monotone falloff (no abrupt steps like a box kernel)
         let mut prev = u32::MAX;
         for x in 64..80 {
             let v = g[((cy + x) * 4) as usize] as u32;
-            assert!(v <= prev.saturating_add(1), "falloff must be monotone at x={}: {} -> {}", x, prev, v);
+            assert!(
+                v <= prev.saturating_add(1),
+                "falloff must be monotone at x={}: {} -> {}",
+                x,
+                prev,
+                v
+            );
             prev = v;
         }
 
@@ -638,7 +769,13 @@ mod gaussian_tests {
         for d in 1..8u32 {
             let l = g[((cy + (64 - d)) * 4) as usize] as i32;
             let r = g[((cy + (63 + d)) * 4) as usize] as i32;
-            assert!((l - r).abs() <= 1, "blur must be symmetric at d={}: {} vs {}", d, l, r);
+            assert!(
+                (l - r).abs() <= 1,
+                "blur must be symmetric at d={}: {} vs {}",
+                d,
+                l,
+                r
+            );
         }
     }
 }
@@ -674,7 +811,11 @@ mod glow_tests {
         );
         // Dark corners far away stay dark
         let corner = ((2 * w + 2) * 4) as usize;
-        assert!(px[corner] < 20, "far dark areas must stay dark, got {}", px[corner]);
+        assert!(
+            px[corner] < 20,
+            "far dark areas must stay dark, got {}",
+            px[corner]
+        );
     }
 
     #[test]
@@ -709,7 +850,9 @@ mod glow_tests {
         let row = 4 * w;
         let mut max_delta = 0i32;
         for x in 1..w {
-            let d = (out[((row + x) * 4) as usize] as i32 - out[((row + x - 1) * 4) as usize] as i32).abs();
+            let d = (out[((row + x) * 4) as usize] as i32
+                - out[((row + x - 1) * 4) as usize] as i32)
+                .abs();
             max_delta = max_delta.max(d);
         }
         // With blur radius 6 the steepest step should be gentle (< 60/px)
@@ -748,7 +891,10 @@ mod shadow_tests {
         let mut px = solid_square(w, h, 8, 24, 24, 40);
         apply_drop_shadow(&mut px, w, h, 16.0, 90.0, 4, [0, 0, 0, 255]);
         let right = ((32 * w + 30) * 4) as usize;
-        assert!(px[right + 3] > 0, "shadow alpha must extend past shape edge");
+        assert!(
+            px[right + 3] > 0,
+            "shadow alpha must extend past shape edge"
+        );
         assert_eq!(px[right], 0, "shadow must be black");
     }
 
@@ -767,13 +913,18 @@ mod shadow_tests {
             .map(|x| px[(row * w as usize + x) * 4 + 3] as i32)
             .collect();
         let peak = vals.iter().enumerate().max_by_key(|(_, v)| **v).unwrap().0;
-        assert!(peak > 0 && peak < vals.len() - 1, "shadow must have an interior peak");
+        assert!(
+            peak > 0 && peak < vals.len() - 1,
+            "shadow must have an interior peak"
+        );
         let mut prev = i32::MAX;
         for (i, &v) in vals.iter().enumerate().skip(peak) {
             assert!(
                 v <= prev.saturating_add(1),
                 "shadow falloff must be monotone at x={}: {} -> {}",
-                peak + i, prev, v
+                peak + i,
+                prev,
+                v
             );
             prev = v;
         }
@@ -815,7 +966,11 @@ mod directional_radial_tests {
         let right = ((32 * w + 38) * 4) as usize;
         let below = ((36 * w + 32) * 4) as usize;
         assert!(px[right] > 0, "energy must spread horizontally");
-        assert!(px[below] < 10, "perpendicular axis must stay dark, got {}", px[below]);
+        assert!(
+            px[below] < 10,
+            "perpendicular axis must stay dark, got {}",
+            px[below]
+        );
     }
 
     #[test]
@@ -840,7 +995,11 @@ mod directional_radial_tests {
         apply_radial_blur(&mut px, w, h, 100.0);
         // Energy must spread to multiple pixels around the original radius
         let nonzero = px.chunks_exact(4).filter(|p| p[0] > 0).count();
-        assert!(nonzero > 1, "radial blur must spread angularly, got {} lit pixels", nonzero);
+        assert!(
+            nonzero > 1,
+            "radial blur must spread angularly, got {} lit pixels",
+            nonzero
+        );
         let peak = px.chunks_exact(4).map(|p| p[0]).max().unwrap();
         assert!(peak < 255, "peak must drop as energy spreads, got {}", peak);
     }
@@ -851,7 +1010,9 @@ mod directional_radial_tests {
         let w = 33u32;
         let h = 33u32;
         let mut px = vec![200u8; (w * h * 4) as usize];
-        for i in (3..px.len()).step_by(4) { px[i] = 255; }
+        for i in (3..px.len()).step_by(4) {
+            px[i] = 255;
+        }
         let orig = px.clone();
         apply_radial_blur(&mut px, w, h, 50.0);
         assert_eq!(px, orig);
@@ -880,7 +1041,7 @@ pub fn apply_inner_shadow(
 
     // Mask M = A(x,y) × (1 − A(x−dx, y−dy)): the band of opaque pixels whose
     // back-shifted sample falls outside the shape.
-    let mut mask = vec![0u8; (width * height) as usize];
+    let mut mask = vec![0u8; pixel_count];
     for y in 0..height {
         for x in 0..width {
             let idx = ((y * width + x) * 4) as usize;
@@ -896,7 +1057,7 @@ pub fn apply_inner_shadow(
     }
 
     // Soften the band into an RGBA buffer so gaussian blur can run on alpha.
-    let mut soft = vec![shadow_color[0]; (width * height * 4) as usize];
+    let mut soft = vec![shadow_color[0]; pixel_bytes];
     for i in (0..soft.len()).step_by(4) {
         soft[i] = shadow_color[0];
         soft[i + 1] = shadow_color[1];
@@ -936,14 +1097,20 @@ pub fn apply_inner_glow(
     glow_color: [u8; 4],
     opacity: f32,
 ) {
-    if width == 0 || height == 0 || opacity <= 0.0 {
+    let Some(pixel_count) = (width as usize).checked_mul(height as usize) else {
+        return;
+    };
+    let Some(pixel_bytes) = pixel_count.checked_mul(4) else {
+        return;
+    };
+    if width == 0 || height == 0 || pixels.len() != pixel_bytes || !opacity.is_finite() || opacity <= 0.0 {
         return;
     }
     let strength = (opacity / 100.0).clamp(0.0, 1.0);
 
     // Invert alpha, blur it, then re-mask by original alpha: brightest just
     // inside the edge, fading toward the interior.
-    let mut inv = vec![0u8; (width * height * 4) as usize];
+    let mut inv = vec![0u8; pixel_bytes];
     for i in (0..inv.len()).step_by(4) {
         inv[i + 3] = 255 - pixels[i + 3];
     }
@@ -988,7 +1155,15 @@ pub struct BevelEmbossParams {
 /// edges facing the light get the highlight tint, edges facing away get the
 /// shadow tint. Gaussian-softened bands, alpha-weighted compositing.
 pub fn apply_bevel_emboss(pixels: &mut [u8], width: u32, height: u32, p: &BevelEmbossParams) {
-    let BevelEmbossParams { angle_deg, depth_px, size_px, color_light, color_dark, highlight_strength, shadow_strength } = p;
+    let BevelEmbossParams {
+        angle_deg,
+        depth_px,
+        size_px,
+        color_light,
+        color_dark,
+        highlight_strength,
+        shadow_strength,
+    } = p;
     let depth_px = *depth_px;
     let size_px = *size_px;
     let highlight_strength = *highlight_strength;
@@ -1024,8 +1199,8 @@ pub fn apply_bevel_emboss(pixels: &mut [u8], width: u32, height: u32, p: &BevelE
                 continue;
             }
             let idx = (y as u32 * width + x as u32) as usize;
-            let a_light = sample_a(x + dx, y + dy);   // toward the light
-            let a_away = sample_a(x - dx, y - dy);    // away from the light
+            let a_light = sample_a(x + dx, y + dy); // toward the light
+            let a_away = sample_a(x - dx, y - dy); // away from the light
             mask_lit[idx] = (a * (1.0 - a_light) * 255.0).round() as u8;
             mask_shade[idx] = (a * (1.0 - a_away) * 255.0).round() as u8;
         }
@@ -1178,7 +1353,12 @@ pub struct GradientOverlayParams {
 /// Linear Gradient Overlay: interpolates start→end along `angle_deg`
 /// (0 = left→right, 90 = bottom→top), spanning `scale_pct` of the layer
 /// extent, blended at `opacity` over existing alpha.
-pub fn apply_gradient_overlay(pixels: &mut [u8], width: u32, height: u32, p: &GradientOverlayParams) {
+pub fn apply_gradient_overlay(
+    pixels: &mut [u8],
+    width: u32,
+    height: u32,
+    p: &GradientOverlayParams,
+) {
     if width == 0 || height == 0 || p.opacity <= 0.0 {
         return;
     }
@@ -1306,7 +1486,8 @@ pub fn apply_lens_flare(pixels: &mut [u8], width: u32, height: u32, p: &LensFlar
 // ── Camera Shake ──
 /// Applies procedural camera shake to a position value.
 /// Returns offset [dx, dy] for the given time.
-pub fn camera_shake(time_sec: f32, intensity: f32, speed_hz: f32, seed: u64) -> [f32; 2] {    let t = time_sec * speed_hz;
+pub fn camera_shake(time_sec: f32, intensity: f32, speed_hz: f32, seed: u64) -> [f32; 2] {
+    let t = time_sec * speed_hz;
     let s = seed as f32;
     let dx = (t * 1.7 + s).sin() * 0.6 + (t * 3.3 + s * 1.7).sin() * 0.4;
     let dy = (t * 2.1 + s * 2.3).sin() * 0.5 + (t * 4.7 + s * 0.9).sin() * 0.5;
@@ -1346,13 +1527,27 @@ mod camera_shake_tests {
             &mut px,
             w,
             h,
-            &super::LensFlareParams { pos_x: 0.5, pos_y: 0.5, intensity: 1.0, threshold: 1.0, color: [255, 255, 255] },
+            &super::LensFlareParams {
+                pos_x: 0.5,
+                pos_y: 0.5,
+                intensity: 1.0,
+                threshold: 1.0,
+                color: [255, 255, 255],
+            },
         );
         let center = ((32 * w + 32) * 4) as usize;
-        assert!(px[center] > 200, "flare core must brighten center, got {}", px[center]);
+        assert!(
+            px[center] > 200,
+            "flare core must brighten center, got {}",
+            px[center]
+        );
         // Far corner should stay near original
         let corner = ((2 * w + 2) * 4) as usize;
-        assert!(px[corner] < 60, "corner must be barely affected, got {}", px[corner]);
+        assert!(
+            px[corner] < 60,
+            "corner must be barely affected, got {}",
+            px[corner]
+        );
     }
 
     #[test]
@@ -1363,7 +1558,13 @@ mod camera_shake_tests {
             &mut px,
             16,
             16,
-            &super::LensFlareParams { pos_x: 0.5, pos_y: 0.5, intensity: 0.0, threshold: 1.0, color: [255, 255, 255] },
+            &super::LensFlareParams {
+                pos_x: 0.5,
+                pos_y: 0.5,
+                intensity: 0.0,
+                threshold: 1.0,
+                color: [255, 255, 255],
+            },
         );
         assert_eq!(px, before);
     }
@@ -1377,7 +1578,13 @@ mod camera_shake_tests {
             &mut px,
             w,
             h,
-            &super::LensFlareParams { pos_x: 0.5, pos_y: 0.5, intensity: 5.0, threshold: 2.0, color: [255, 255, 255] },
+            &super::LensFlareParams {
+                pos_x: 0.5,
+                pos_y: 0.5,
+                intensity: 5.0,
+                threshold: 2.0,
+                color: [255, 255, 255],
+            },
         );
         // Center region must clamp to pure white
         for y in 12..20u32 {
@@ -1396,7 +1603,13 @@ mod camera_shake_tests {
                 &mut px,
                 32,
                 32,
-                &super::LensFlareParams { pos_x: 0.3, pos_y: 0.7, intensity: 1.0, threshold: 1.0, color: [200, 150, 100] },
+                &super::LensFlareParams {
+                    pos_x: 0.3,
+                    pos_y: 0.7,
+                    intensity: 1.0,
+                    threshold: 1.0,
+                    color: [200, 150, 100],
+                },
             );
             px
         };
@@ -1407,12 +1620,22 @@ mod camera_shake_tests {
     fn test_color_overlay_blends_opaque_pixels() {
         let mut px = vec![0u8; 16];
         // One opaque red pixel
-        px[0] = 255; px[1] = 0; px[2] = 0; px[3] = 255;
+        px[0] = 255;
+        px[1] = 0;
+        px[2] = 0;
+        px[3] = 255;
         // One transparent pixel (must stay untouched)
-        px[4] = 200; px[5] = 100; px[6] = 50; px[7] = 0;
+        px[4] = 200;
+        px[5] = 100;
+        px[6] = 50;
+        px[7] = 0;
         let before = px.clone();
         super::apply_color_overlay(&mut px, 2, 2, [0, 0, 255, 255], 50.0);
-        assert!(px[0] >= 127 && px[0] <= 128, "red blended halfway toward blue, got {}", px[0]);
+        assert!(
+            px[0] >= 127 && px[0] <= 128,
+            "red blended halfway toward blue, got {}",
+            px[0]
+        );
         assert!(px[2] >= 127 && px[2] <= 128);
         assert_eq!(&px[4..8], &before[4..8], "transparent pixel untouched");
     }
@@ -1480,7 +1703,10 @@ mod camera_shake_tests {
         super::apply_inner_shadow(&mut px, w, h, 6.0, 90.0, 1, [0, 0, 0, 255]);
         let left = px[(2 * w as usize + 7) * 4];
         let right = px[(2 * w as usize + 22) * 4];
-        assert!(left < right, "left band must darken: left={left} right={right}");
+        assert!(
+            left < right,
+            "left band must darken: left={left} right={right}"
+        );
         assert!(right >= 195, "far side stays bright: {right}");
     }
 
@@ -1528,7 +1754,13 @@ mod camera_shake_tests {
             &mut px,
             w,
             h,
-            &super::SatinParams { distance: 10.0, angle_deg: 90.0, size: 4, color: [30, 30, 60, 255], opacity: 100.0 },
+            &super::SatinParams {
+                distance: 10.0,
+                angle_deg: 90.0,
+                size: 4,
+                color: [30, 30, 60, 255],
+                opacity: 100.0,
+            },
         );
         let band = px[(7 * w as usize + 9) * 4];
         let far = px[(7 * w as usize + 38) * 4];
@@ -1545,7 +1777,13 @@ mod camera_shake_tests {
             &mut px,
             w,
             h,
-            &super::SatinParams { distance: 5.0, angle_deg: 45.0, size: 4, color: [200, 0, 0, 255], opacity: 0.0 },
+            &super::SatinParams {
+                distance: 5.0,
+                angle_deg: 45.0,
+                size: 4,
+                color: [200, 0, 0, 255],
+                opacity: 0.0,
+            },
         );
         assert_eq!(px, before);
     }
@@ -1571,7 +1809,10 @@ mod camera_shake_tests {
         );
         let left_edge = px[(7 * w as usize + 8) * 4];
         let right_edge = px[(7 * w as usize + 40) * 4];
-        assert!(left_edge > right_edge, "light side brighter: {left_edge} vs {right_edge}");
+        assert!(
+            left_edge > right_edge,
+            "light side brighter: {left_edge} vs {right_edge}"
+        );
     }
 
     #[test]
