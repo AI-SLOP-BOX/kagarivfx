@@ -152,19 +152,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
         Commands::Script { project, file } => {
             let json = std::fs::read_to_string(&project)?;
-            let proj_parse = serde_json::from_str::<aftereffects_oss::Project>(&json);
-            let mut proj = match proj_parse {
-                Ok(p) => p,
-                Err(_) => {
-                    let pf: aftereffects_oss::core::project::ProjectFile =
-                        serde_json::from_str(&json).map_err(|e| e.to_string())?;
-                    aftereffects_oss::Project {
-                        compositions: vec![pf.composition],
-                        active_composition_idx: 0,
-                        assets: Vec::new(),
-                        use_gpu_compute: false,
-                    }
-                }
+            let mut production =
+                aftereffects_oss::core::production_document::ProductionDocument::from_json(&json)
+                    .ok();
+            let mut proj = if let Some(document) = production.as_mut() {
+                document.project().clone()
+            } else {
+                load_project(&project)?
             };
             // Tolerate wrapped ProjectFile format too
             let source = std::fs::read_to_string(&file)?;
@@ -172,8 +166,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             for l in logs {
                 println!("{l}");
             }
-            let out = serde_json::to_string_pretty(&proj)?;
-            std::fs::write(&project, out)?;
+            if let Some(document) = production.as_mut() {
+                *document.project_mut() = proj;
+                document
+                    .save_atomic(&project)
+                    .map_err(std::io::Error::other)?;
+            } else {
+                let out = serde_json::to_string_pretty(&proj)?;
+                std::fs::write(&project, out)?;
+            }
             println!("project saved → {}", project);
         }
         Commands::Frame { project, frame, output, width, height } => {
@@ -190,9 +191,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 fn load_project(path: &str) -> Result<Project, Box<dyn std::error::Error>> {
     let json = std::fs::read_to_string(path)
         .map_err(|e| format!("Failed to read project file '{}': {}", path, e))?;
-    // Schema-migrated load: handles versioned wrappers and legacy files,
-    // and sanitizes broken parent-child links on the way in.
-    let project = aftereffects_oss::core::project_migration::load_project_migrated(&json)
+    let project = aftereffects_oss::core::production_document::ProductionDocument::from_json(&json)
+        .map(|document| document.project().clone())
+        .or_else(|_| aftereffects_oss::core::project_migration::load_project_migrated(&json))
         .map_err(|e| format!("Failed to parse project JSON: {}", e))?;
     Ok(project)
 }
