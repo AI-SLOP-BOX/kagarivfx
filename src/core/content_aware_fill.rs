@@ -42,13 +42,23 @@ pub fn generate_content_aware_fill(
     height: u32,
     options: &ContentAwareFillOptions,
 ) {
-    if pixels.len() != (width * height * 4) as usize || hole_mask.len() != (width * height) as usize {
+    let Some(pixel_count) = (width as usize).checked_mul(height as usize) else {
+        return;
+    };
+    let Some(pixel_bytes) = pixel_count.checked_mul(4) else {
+        return;
+    };
+    if width == 0
+        || height == 0
+        || pixels.len() != pixel_bytes
+        || hole_mask.len() != pixel_count
+    {
         return;
     }
 
     let w = width as usize;
     let h = height as usize;
-    let patch_r = options.patch_radius.max(1) as i32;
+    let patch_r = options.patch_radius.clamp(1, 64) as i32;
 
     // Collect hole pixel coordinates
     let mut hole_coords = Vec::new();
@@ -90,7 +100,9 @@ pub fn generate_content_aware_fill(
 
             for dy in -patch_r..=patch_r {
                 for dx in -patch_r..=patch_r {
-                    if dx == 0 && dy == 0 { continue; }
+                    if dx == 0 && dy == 0 {
+                        continue;
+                    }
                     let nx = x + dx;
                     let ny = y + dy;
 
@@ -146,7 +158,10 @@ mod tests {
         let mut pixels = vec![0u8; (width * height * 4) as usize];
         // Background: filled with Red (255, 0, 0, 255)
         for i in (0..pixels.len()).step_by(4) {
-            pixels[i] = 255; pixels[i + 1] = 0; pixels[i + 2] = 0; pixels[i + 3] = 255;
+            pixels[i] = 255;
+            pixels[i + 1] = 0;
+            pixels[i + 2] = 0;
+            pixels[i + 3] = 255;
         }
 
         // Hole mask: 4x4 black box in the middle
@@ -155,7 +170,10 @@ mod tests {
             for x in 6..10 {
                 let idx = y * 16 + x;
                 mask[idx] = 255; // hole
-                pixels[idx * 4] = 0; pixels[idx * 4 + 1] = 0; pixels[idx * 4 + 2] = 0; pixels[idx * 4 + 3] = 0;
+                pixels[idx * 4] = 0;
+                pixels[idx * 4 + 1] = 0;
+                pixels[idx * 4 + 2] = 0;
+                pixels[idx * 4 + 3] = 0;
             }
         }
 
@@ -166,5 +184,22 @@ mod tests {
         let center_idx = (8 * 16 + 8) * 4;
         assert_eq!(pixels[center_idx], 255, "Red channel must be reconstructed");
         assert_eq!(pixels[center_idx + 3], 255, "Alpha must be 255");
+    }
+
+    #[test]
+    fn test_content_aware_fill_rejects_dimension_overflow_and_bounds_patch() {
+        let mut pixels = vec![9u8; 4];
+        let mask = vec![255u8];
+        generate_content_aware_fill(
+            &mut pixels,
+            &mask,
+            u32::MAX,
+            u32::MAX,
+            &ContentAwareFillOptions {
+                patch_radius: u32::MAX,
+                ..Default::default()
+            },
+        );
+        assert_eq!(pixels, vec![9u8; 4]);
     }
 }
