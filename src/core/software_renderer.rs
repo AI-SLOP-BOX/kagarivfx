@@ -16,7 +16,10 @@ struct CpuMaskEntry {
 
 /// Offset a polygon's vertices along their outward normals by `expansion` pixels.
 fn offset_polygon_vertices(vertices: &[[f32; 2]], expansion: f32) -> Vec<[f32; 2]> {
-    if vertices.len() < 3 || expansion.abs() < 0.01 {
+    if vertices.len() < 3 || !expansion.is_finite() || expansion.abs() < 0.01 {
+        return vertices.to_vec();
+    }
+    if vertices.iter().any(|point| !point.iter().all(|value| value.is_finite())) {
         return vertices.to_vec();
     }
     let n = vertices.len();
