@@ -191,7 +191,7 @@ impl AutosaveManager {
             if let Ok(json) = std::fs::read_to_string(path) {
                 if let Ok(snapshot) = serde_json::from_str::<AutosaveSnapshot>(&json) {
                     if let Some(document) = snapshot.production_document {
-                        if document.validate().is_ok() {
+                        if document.validate().is_ok() && is_recoverable_project(&document.project) {
                             return Some(document);
                         }
                         log::warn!("[Autosave] Skipping invalid production document {:?}", path);
@@ -380,6 +380,31 @@ mod tests {
         .unwrap();
 
         assert!(AutosaveManager::new(&dir).load_latest_recovery().is_none());
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn production_recovery_skips_document_with_invalid_project() {
+        let dir = std::env::temp_dir().join(format!(
+            "aevfx_autosave_invalid_production_project_{}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let mut project = sample_project();
+        project.active_composition_idx = project.compositions.len();
+        let document = ProductionDocument::new(project.clone());
+        let snapshot = AutosaveSnapshot {
+            project,
+            production_document: Some(document),
+        };
+        std::fs::write(
+            dir.join("recovery_0.json"),
+            serde_json::to_string(&snapshot).unwrap(),
+        )
+        .unwrap();
+
+        assert!(AutosaveManager::new(&dir).load_latest_production().is_none());
         let _ = std::fs::remove_dir_all(dir);
     }
 
