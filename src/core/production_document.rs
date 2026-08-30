@@ -739,6 +739,8 @@ fn particle_emitter_is_valid(emitter: &crate::core::particle_system::ParticleEmi
         && emitter.speed_variance >= 0.0
         && (0.0..=360.0).contains(&emitter.spread_degrees)
         && emitter.emitter_size.iter().all(|value| *value >= 0.0)
+        && (0.0..=1.0).contains(&emitter.color_start[3])
+        && (0.0..=1.0).contains(&emitter.color_end[3])
         && emitter.size_start >= 0.0
         && emitter.size_end >= 0.0
         && emitter.opacity_start >= 0.0
@@ -1326,6 +1328,9 @@ mod tests {
         emitter.gravity_curve.0[0] = 1.0;
         emitter.collision_enabled = true;
         emitter.collision_bounds = [10.0, 10.0, 0.0, 0.0];
+        assert!(!particle_emitter_is_valid(&emitter));
+        emitter.collision_bounds = [0.0, 0.0, 10.0, 10.0];
+        emitter.color_start[3] = 1.1;
         assert!(!particle_emitter_is_valid(&emitter));
     }
 
