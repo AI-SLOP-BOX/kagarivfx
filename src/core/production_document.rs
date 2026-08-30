@@ -379,7 +379,7 @@ fn validate_composition(
             stroke_width,
             extrusion_depth,
             bevel_depth,
-            ..
+            fill_type,
         } = &layer.layer_type
         {
             if color.iter().any(|value| !value.is_finite())
@@ -468,6 +468,35 @@ fn validate_composition(
                     return Err("polygon point counts must be at least three".into());
                 }
                 _ => {}
+            }
+            let fill_is_valid = match fill_type {
+                crate::core::timeline::ShapeFillType::Solid => true,
+                crate::core::timeline::ShapeFillType::LinearGradient {
+                    start,
+                    end,
+                    colors,
+                    stops,
+                } => {
+                    start
+                        .iter()
+                        .chain(end.iter())
+                        .all(|value| value.is_finite())
+                        && valid_gradient_stops(colors.as_slice(), stops.as_slice())
+                }
+                crate::core::timeline::ShapeFillType::RadialGradient {
+                    center,
+                    radius,
+                    colors,
+                    stops,
+                } => {
+                    center.iter().all(|value| value.is_finite())
+                        && radius.is_finite()
+                        && *radius > 0.0
+                        && valid_gradient_stops(colors.as_slice(), stops.as_slice())
+                }
+            };
+            if !fill_is_valid {
+                return Err("shape gradient settings are invalid".into());
             }
         }
         let mut effect_ids = HashSet::new();
@@ -611,6 +640,26 @@ fn scalar_animation_is_at_least(
             .iter()
             .all(|keyframe| keyframe.value.is_finite() && keyframe.value >= minimum),
     }
+}
+
+fn valid_gradient_stops(colors: &[[f32; 4]], stops: &[f32]) -> bool {
+    colors.len() >= 2
+        && colors.len() == stops.len()
+        && colors
+            .iter()
+            .all(|color| color.iter().all(|value| value.is_finite()))
+        && stops.windows(2).all(|pair| {
+            pair[0].is_finite()
+                && pair[1].is_finite()
+                && (0.0..=1.0).contains(&pair[0])
+                && pair[0] <= pair[1]
+        })
+        && stops
+            .first()
+            .is_some_and(|stop| stop.is_finite() && (0.0..=1.0).contains(stop))
+        && stops
+            .last()
+            .is_some_and(|stop| stop.is_finite() && (0.0..=1.0).contains(stop))
 }
 
 fn vector_animation_is_finite(value: &crate::core::property::Animatable<[f32; 2]>) -> bool {
