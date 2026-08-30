@@ -195,6 +195,9 @@ pub fn apply_eq(buf: &mut [f32], bands: &[EqBand], sample_rate: u32) {
     let filters: Vec<Biquad> = bands
         .iter()
         .filter(|b| {
+            if !b.freq.is_finite() || !b.gain_db.is_finite() || !b.q.is_finite() || b.q <= 0.0 {
+                return false;
+            }
             // Skip pass filters at extreme frequencies (bypass mode)
             match b.band_type {
                 EqBandType::HighPass => b.freq > 1.0 && (b.freq as f64) < nyquist,
@@ -597,6 +600,27 @@ mod tests {
         let mut buf = vec![0.25f32, -0.5, 0.75, -1.0];
         let original = buf.clone();
         apply_eq(&mut buf, &[EqBand::default()], 0);
+        assert_eq!(buf, original);
+    }
+
+    #[test]
+    fn test_eq_skips_invalid_band_parameters() {
+        let mut buf = vec![0.25f32, -0.5, 0.75, -1.0];
+        let original = buf.clone();
+        apply_eq(
+            &mut buf,
+            &[
+                EqBand {
+                    q: 0.0,
+                    ..EqBand::default()
+                },
+                EqBand {
+                    freq: f32::NAN,
+                    ..EqBand::default()
+                },
+            ],
+            48_000,
+        );
         assert_eq!(buf, original);
     }
 
