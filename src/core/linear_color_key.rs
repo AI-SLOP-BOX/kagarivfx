@@ -15,10 +15,10 @@ pub enum ColorMatchMode {
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct LinearColorKeyParams {
-    pub key_color: [f32; 3],       // RGB in 0.0..1.0
+    pub key_color: [f32; 3], // RGB in 0.0..1.0
     pub match_mode: ColorMatchMode,
-    pub tolerance: f32,            // 0.0..100.0%
-    pub softness: f32,             // 0.0..100.0%
+    pub tolerance: f32, // 0.0..100.0%
+    pub softness: f32,  // 0.0..100.0%
 }
 
 impl Default for LinearColorKeyParams {
@@ -39,16 +39,37 @@ pub fn apply_linear_color_key(
     height: u32,
     params: &LinearColorKeyParams,
 ) {
-    if pixels.len() != (width * height * 4) as usize {
+    let Some(pixel_count) = (width as usize)
+        .checked_mul(height as usize)
+        .filter(|&count| count <= usize::MAX / 4)
+    else {
+        return;
+    };
+    if width == 0 || height == 0 || pixels.len() != pixel_count * 4 {
         return;
     }
 
-    let kr = params.key_color[0];
-    let kg = params.key_color[1];
-    let kb = params.key_color[2];
+    let safe_color = |value: f32| {
+        if value.is_finite() {
+            value.clamp(0.0, 1.0)
+        } else {
+            0.0
+        }
+    };
+    let kr = safe_color(params.key_color[0]);
+    let kg = safe_color(params.key_color[1]);
+    let kb = safe_color(params.key_color[2]);
 
-    let tol = (params.tolerance / 100.0).clamp(0.0, 1.0);
-    let soft = (params.softness / 100.0).clamp(0.001, 1.0);
+    let tol = if params.tolerance.is_finite() {
+        (params.tolerance / 100.0).clamp(0.0, 1.0)
+    } else {
+        0.0
+    };
+    let soft = if params.softness.is_finite() {
+        (params.softness / 100.0).clamp(0.001, 1.0)
+    } else {
+        0.001
+    };
 
     let rgb_to_hsl = |r: f32, g: f32, b: f32| -> (f32, f32, f32) {
         let max = r.max(g).max(b);
@@ -56,7 +77,11 @@ pub fn apply_linear_color_key(
         let delta = max - min;
 
         let l = (max + min) * 0.5;
-        let s = if delta == 0.0 { 0.0 } else { delta / (1.0 - (2.0 * l - 1.0).abs()) };
+        let s = if delta == 0.0 {
+            0.0
+        } else {
+            delta / (1.0 - (2.0 * l - 1.0).abs())
+        };
 
         let h = if delta == 0.0 {
             0.0
@@ -125,8 +150,8 @@ mod tests {
     #[test]
     fn test_linear_color_key_green_screen() {
         let mut pixels = vec![
-            0, 255, 0, 255,   // Pure green -> should become transparent
-            255, 0, 0, 255,   // Pure red -> should stay opaque
+            0, 255, 0, 255, // Pure green -> should become transparent
+            255, 0, 0, 255, // Pure red -> should stay opaque
         ];
 
         let params = LinearColorKeyParams {
@@ -137,7 +162,25 @@ mod tests {
         };
 
         apply_linear_color_key(&mut pixels, 2, 1, &params);
-        assert_eq!(pixels[3], 0);    // Green keyed out
-        assert_eq!(pixels[7], 255);  // Red kept
+        assert_eq!(pixels[3], 0); // Green keyed out
+        assert_eq!(pixels[7], 255); // Red kept
+    }
+
+    #[test]
+    fn test_linear_color_key_rejects_invalid_buffer_and_parameters() {
+        let original = vec![0, 255, 0, 255];
+        let mut pixels = original.clone();
+        apply_linear_color_key(
+            &mut pixels,
+            u32::MAX,
+            u32::MAX,
+            &LinearColorKeyParams {
+                key_color: [f32::NAN, f32::INFINITY, -f32::INFINITY],
+                tolerance: f32::NAN,
+                softness: f32::INFINITY,
+                ..Default::default()
+            },
+        );
+        assert_eq!(pixels, original);
     }
 }
