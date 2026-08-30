@@ -247,6 +247,9 @@ fn validate_composition(
     if composition.id.trim().is_empty() {
         return Err("composition id must not be empty".into());
     }
+    if composition.name.trim().is_empty() {
+        return Err("composition name must not be empty".into());
+    }
     if !composition_ids.insert(composition.id.clone()) {
         return Err(format!("duplicate composition id: {}", composition.id));
     }
@@ -342,6 +345,10 @@ mod tests {
 
         let mut invalid_project = Project::default();
         invalid_project.compositions[0].id.clear();
+        assert!(ProductionDocument::new(invalid_project).validate().is_err());
+
+        let mut invalid_project = Project::default();
+        invalid_project.compositions[0].name = "  ".into();
         assert!(ProductionDocument::new(invalid_project).validate().is_err());
 
         let mut invalid_project = Project::default();
