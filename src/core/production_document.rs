@@ -435,6 +435,40 @@ fn validate_composition(
             {
                 return Err("shape animation values must be finite".into());
             }
+            let shape_nonnegative_values = match shape_type {
+                crate::core::timeline::ShapeType::FreeformBezier { .. } => Vec::new(),
+                crate::core::timeline::ShapeType::Rectangle {
+                    width,
+                    height,
+                    corner_radius,
+                } => vec![width, height, corner_radius],
+                crate::core::timeline::ShapeType::Ellipse { width, height } => {
+                    vec![width, height]
+                }
+                crate::core::timeline::ShapeType::Star {
+                    points,
+                    inner_radius,
+                    outer_radius,
+                } => vec![points, inner_radius, outer_radius],
+                crate::core::timeline::ShapeType::Polygon { sides, radius } => {
+                    vec![sides, radius]
+                }
+            };
+            if shape_nonnegative_values
+                .iter()
+                .any(|value| !scalar_animation_is_nonnegative(value))
+            {
+                return Err("shape dimensions must be non-negative".into());
+            }
+            match shape_type {
+                crate::core::timeline::ShapeType::Star { points, .. }
+                | crate::core::timeline::ShapeType::Polygon { sides: points, .. }
+                    if !scalar_animation_is_at_least(points, 3.0) =>
+                {
+                    return Err("polygon point counts must be at least three".into());
+                }
+                _ => {}
+            }
         }
         let mut effect_ids = HashSet::new();
         for effect in &layer.effects {
@@ -553,6 +587,29 @@ fn scalar_animation_is_finite(value: &crate::core::property::Animatable<f32>) ->
         crate::core::property::Animatable::Animated(keyframes) => {
             keyframes.iter().all(|keyframe| keyframe.value.is_finite())
         }
+    }
+}
+
+fn scalar_animation_is_nonnegative(value: &crate::core::property::Animatable<f32>) -> bool {
+    match value {
+        crate::core::property::Animatable::Constant(value) => value.is_finite() && *value >= 0.0,
+        crate::core::property::Animatable::Animated(keyframes) => keyframes
+            .iter()
+            .all(|keyframe| keyframe.value.is_finite() && keyframe.value >= 0.0),
+    }
+}
+
+fn scalar_animation_is_at_least(
+    value: &crate::core::property::Animatable<f32>,
+    minimum: f32,
+) -> bool {
+    match value {
+        crate::core::property::Animatable::Constant(value) => {
+            value.is_finite() && *value >= minimum
+        }
+        crate::core::property::Animatable::Animated(keyframes) => keyframes
+            .iter()
+            .all(|keyframe| keyframe.value.is_finite() && keyframe.value >= minimum),
     }
 }
 
@@ -703,6 +760,28 @@ mod tests {
                 "bad-comp",
                 "Bad Comp",
                 ProjectItemType::Composition { comp_idx: 99 },
+            ));
+        assert!(ProductionDocument::new(invalid_project).validate().is_err());
+
+        let mut invalid_project = Project::default();
+        invalid_project.compositions[0]
+            .layers
+            .push(crate::core::timeline::Layer::new(
+                "invalid-shape-dimensions".into(),
+                "Invalid Shape Dimensions".into(),
+                LayerType::Shape {
+                    shape_type: crate::core::timeline::ShapeType::Polygon {
+                        sides: crate::core::property::Animatable::new_constant(2.0),
+                        radius: crate::core::property::Animatable::new_constant(-1.0),
+                    },
+                    color: [1.0, 1.0, 1.0, 1.0],
+                    stroke_color: [0.0, 0.0, 0.0, 1.0],
+                    stroke_width: 0.0,
+                    fill_type: Default::default(),
+                    extrusion_depth: 0.0,
+                    bevel_depth: 0.0,
+                },
+                300,
             ));
         assert!(ProductionDocument::new(invalid_project).validate().is_err());
 
