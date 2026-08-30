@@ -388,20 +388,23 @@ pub fn markerless_pose_to_bvh(pose: &NamedMarkerlessPoseTrack, frame_time: f32) 
     }
     let root = parent.iter().position(Option::is_none).unwrap_or(0);
     let mut output = String::from("HIERARCHY\n");
-    fn write_joint(out: &mut String, index: usize, indent: usize, names: &[String], children: &[Vec<usize>], frame: &MarkerlessPoseFrame, is_root: bool) {
+    fn write_joint(out: &mut String, index: usize, parent: Option<usize>, indent: usize, names: &[String], children: &[Vec<usize>], frame: &MarkerlessPoseFrame, is_root: bool, visited: &mut Vec<bool>) {
+        if index >= names.len() || visited[index] { return; }
+        visited[index] = true;
         let pad = "  ".repeat(indent);
         out.push_str(&format!("{}{} {}\n{}{{\n", pad, if is_root { "ROOT" } else { "JOINT" }, names[index], pad));
-        let (ox, oy) = frame.joints.get(index).zip(frame.joints.get(index).and_then(|_| Some(index))).map(|(p, _)| (p[0], p[1])).unwrap_or((0.0, 0.0));
-        let parent_pos = if is_root { [0.0, 0.0] } else { [0.0, 0.0] };
-        let _ = parent_pos;
+        let point = frame.joints.get(index).copied().unwrap_or([0.0, 0.0]);
+        let parent_point = parent.and_then(|p| frame.joints.get(p).copied()).unwrap_or([0.0, 0.0]);
+        let (ox, oy) = if is_root { (0.0, 0.0) } else { (point[0] - parent_point[0], point[1] - parent_point[1]) };
         out.push_str(&format!("{}  OFFSET {:.6} {:.6} 0.000000\n", pad, ox, oy));
         if is_root { out.push_str(&format!("{}  CHANNELS 6 Xposition Yposition Zposition Zrotation Xrotation Yrotation\n", pad)); }
         else { out.push_str(&format!("{}  CHANNELS 3 Zrotation Xrotation Yrotation\n", pad)); }
-        for &child in &children[index] { write_joint(out, child, indent + 1, names, children, frame, false); }
+        for &child in &children[index] { write_joint(out, child, Some(index), indent + 1, names, children, frame, false, visited); }
         if children[index].is_empty() { out.push_str(&format!("{}  End Site\n{}  {{\n{}    OFFSET 0.000000 0.000000 0.000000\n{}  }}\n", pad, pad, pad, pad)); }
         out.push_str(&format!("{}}}\n", pad));
     }
-    write_joint(&mut output, root, 0, &pose.joint_names, &children, first, true);
+    let mut visited = vec![false; pose.joint_names.len()];
+    write_joint(&mut output, root, None, 0, &pose.joint_names, &children, first, true, &mut visited);
     output.push_str(&format!("MOTION\nFrames: {}\nFrame Time: {:.9}\n", pose.frames.len(), frame_time));
     let initial = &first.joints;
     for (frame_index, frame) in pose.frames.iter().enumerate() {
