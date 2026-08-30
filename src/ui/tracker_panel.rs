@@ -131,8 +131,14 @@ pub fn draw_tracker_panel(app: &mut AfterEffectsApp, ui: &mut egui::Ui, current_
                         let total = pose.frames.len().saturating_mul(pose.frames.first().map(|frame| frame.joints.len()).unwrap_or(0));
                         let confidence = if pose.frames.is_empty() { 0.0 } else { pose.frames.iter().map(|frame| frame.confidence).sum::<f32>() / pose.frames.len() as f32 };
                         let summary = format!("Pose: {} frames • {}/{} joints valid • confidence {:.0}%", pose.frames.len(), valid, total, confidence * 100.0);
+                        let mut added = 0;
+                        app.modify_project(|p| {
+                            added = crate::core::tracker_engine::TrackerEngine::apply_pose_as_tracker_points(
+                                &mut p.active_composition_mut().layers[idx], &pose, mocap_confidence,
+                            );
+                        });
                         ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("mocap_pose_summary"), summary));
-                        app.toasts.info("Markerless pose estimation completed");
+                        app.toasts.info(format!("Markerless pose completed: {} tracker points added", added));
                     } else {
                         app.toasts.error("Pose estimation failed: no valid media frames");
                     }

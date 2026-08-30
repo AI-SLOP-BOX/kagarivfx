@@ -8,6 +8,35 @@ use crate::core::timeline::{Composition, Layer};
 pub struct TrackerEngine;
 
 impl TrackerEngine {
+    pub fn apply_pose_as_tracker_points(
+        layer: &mut Layer,
+        pose: &crate::core::optical_flow_timewarp::MarkerlessPoseTrack,
+        minimum_confidence: f32,
+    ) -> usize {
+        let threshold = if minimum_confidence.is_finite() { minimum_confidence.clamp(0.0, 1.0) } else { 0.0 };
+        let names = crate::core::optical_flow_timewarp::standard_humanoid_joint_names(
+            pose.frames.first().map(|frame| frame.joints.len()).unwrap_or(0),
+        );
+        let mut created = 0;
+        for (joint, name) in names.into_iter().enumerate() {
+            let keyframes = pose.frames.iter().filter_map(|frame| {
+                let point = *frame.joints.get(joint)?;
+                (frame.confidence >= threshold && point.iter().all(|value| value.is_finite())).then(|| {
+                    Keyframe::new(frame.frame, point, InterpolationType::Linear)
+                })
+            }).collect::<Vec<_>>();
+            if keyframes.is_empty() { continue; }
+            let initial = keyframes[0].value;
+            let mut tracker = crate::core::timeline::TrackerPoint::new(
+                format!("pose_{}", name), format!("Pose {}", name.replace('_', " ")), initial,
+            );
+            tracker.position = if keyframes.len() == 1 { Animatable::Constant(initial) } else { Animatable::Animated(keyframes) };
+            layer.trackers.push(tracker);
+            created += 1;
+        }
+        created
+    }
+
     pub fn estimate_markerless_pose(
         layer: &Layer,
         start_frame: u32,
