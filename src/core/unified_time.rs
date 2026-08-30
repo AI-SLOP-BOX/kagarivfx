@@ -102,6 +102,8 @@ impl Default for TempoMap {
 }
 
 impl TempoMap {
+    pub const MAX_CHANGES: usize = 8192;
+
     pub fn new(bpm: f64) -> Self {
         Self {
             changes: vec![TempoChange {
@@ -114,6 +116,9 @@ impl TempoMap {
     pub fn validate(&self) -> Result<(), &'static str> {
         if self.changes.is_empty() {
             return Err("tempo map must contain an initial tempo");
+        }
+        if self.changes.len() > Self::MAX_CHANGES {
+            return Err("tempo map contains too many changes");
         }
         if self.changes[0].at != Time::ZERO {
             return Err("tempo map must start at time zero");
@@ -289,6 +294,17 @@ mod tests {
 
         let mut map = TempoMap::new(120.0);
         map.changes[0].at = Time::new(1, 1);
+        assert!(map.validate().is_err());
+    }
+
+    #[test]
+    fn tempo_map_rejects_excessive_change_count() {
+        let mut map = TempoMap::new(120.0);
+        map.changes
+            .resize(TempoMap::MAX_CHANGES + 1, TempoChange {
+                at: Time::ZERO,
+                bpm: 120.0,
+            });
         assert!(map.validate().is_err());
     }
 
