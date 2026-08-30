@@ -43,6 +43,7 @@ impl ProductionDocument {
     pub const CURRENT_SCHEMA_VERSION: u32 = 1;
     pub const MAX_AUDIO_CHANNELS: usize = 4096;
     pub const MAX_BINDINGS: usize = 8192;
+    pub const MAX_ASSETS: usize = 100_000;
     pub const MAX_COMPOSITION_FRAMES: u32 = 10_000_000;
     pub const MAX_ASSET_DURATION_SEC: f32 = 10_000_000.0;
 
@@ -95,6 +96,9 @@ impl ProductionDocument {
             )?;
         }
         let mut asset_ids = HashSet::new();
+        if self.project.assets.len() > Self::MAX_ASSETS {
+            return Err("production document contains too many assets".into());
+        }
         let folder_ids = self
             .project
             .assets
@@ -1645,6 +1649,17 @@ mod tests {
                 output_min: 0.0,
                 output_max: 1.0,
             },
+        );
+        assert!(document.validate().is_err());
+
+        let mut document = ProductionDocument::new(Project::default());
+        document.project.assets.resize(
+            ProductionDocument::MAX_ASSETS + 1,
+            crate::core::timeline::ProjectItem::new(
+                "asset",
+                "Asset",
+                ProjectItemType::Folder { name: "x".into() },
+            ),
         );
         assert!(document.validate().is_err());
     }
