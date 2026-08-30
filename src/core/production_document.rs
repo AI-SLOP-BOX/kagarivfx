@@ -311,6 +311,7 @@ fn validate_composition(
             if mask.id.trim().is_empty() || !mask_ids.insert(mask.id.clone()) {
                 return Err("mask ids must be non-empty and unique within a layer".into());
             }
+            validate_mask(mask)?;
         }
     }
     for layer_id in layer_parents.keys() {
@@ -342,6 +343,37 @@ fn validate_precomp_references(
     }
     for nested in &composition.sub_compositions {
         validate_precomp_references(nested, composition_ids)?;
+    }
+    Ok(())
+}
+
+fn validate_mask(mask: &crate::core::mask::Mask) -> Result<(), String> {
+    let validate_vertices = |vertices: &[[f32; 2]]| {
+        vertices
+            .iter()
+            .flatten()
+            .all(|value| value.is_finite())
+    };
+    match &mask.path.vertices {
+        crate::core::property::Animatable::Constant(vertices) => {
+            if !validate_vertices(vertices) {
+                return Err("mask vertex coordinates must be finite".into());
+            }
+        }
+        crate::core::property::Animatable::Animated(keyframes) => {
+            if keyframes.iter().any(|keyframe| !validate_vertices(&keyframe.value)) {
+                return Err("mask vertex coordinates must be finite".into());
+            }
+        }
+    }
+    if let Some(tangents) = &mask.path.tangents {
+        if tangents
+            .iter()
+            .flat_map(|(incoming, outgoing)| incoming.iter().chain(outgoing.iter()))
+            .any(|value| !value.is_finite())
+        {
+            return Err("mask tangent coordinates must be finite".into());
+        }
     }
     Ok(())
 }
@@ -601,6 +633,22 @@ mod tests {
         invalid_project.compositions[0].layers[0]
             .masks
             .extend([mask.clone(), mask]);
+        assert!(ProductionDocument::new(invalid_project).validate().is_err());
+
+        let mut invalid_project = Project::default();
+        let mut invalid_mask = crate::core::mask::Mask::new_rect(
+            "invalid-mask".into(),
+            "Mask".into(),
+            0.0,
+            0.0,
+            100.0,
+            100.0,
+        );
+        if let crate::core::property::Animatable::Constant(vertices) = &mut invalid_mask.path.vertices
+        {
+            vertices[0][0] = f32::NAN;
+        }
+        invalid_project.compositions[0].layers[0].masks.push(invalid_mask);
         assert!(ProductionDocument::new(invalid_project).validate().is_err());
     }
 
