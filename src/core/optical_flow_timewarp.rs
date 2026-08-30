@@ -758,6 +758,15 @@ pub fn filter_pose3d_frames_by_quality(
     before - pose.frames.len()
 }
 
+pub fn normalize_pose3d_bones(pose: &mut MarkerlessPose3DTrack) -> usize {
+    let joint_count = pose.frames.iter().map(|frame| frame.joints.len()).max().unwrap_or(0);
+    let before = pose.bones.len();
+    pose.bones.retain(|bone| bone[0] < joint_count && bone[1] < joint_count && bone[0] != bone[1]);
+    pose.bones.sort_unstable();
+    pose.bones.dedup();
+    before - pose.bones.len()
+}
+
 pub trait Pose3DInferenceBackend {
     fn infer_joints_3d(&mut self, rgb: &[f32], width: u32, height: u32) -> Vec<([f32; 3], f32)>;
 }
@@ -1667,6 +1676,16 @@ mod tests {
         };
         assert_eq!(filter_pose3d_frames_by_quality(&mut pose, 1, 0.5), 2);
         assert_eq!(pose.frames.iter().map(|frame| frame.frame).collect::<Vec<_>>(), vec![0]);
+    }
+
+    #[test]
+    fn pose_3d_bone_normalization_removes_invalid_and_duplicate_edges() {
+        let mut pose = MarkerlessPose3DTrack {
+            frames: vec![MarkerlessPose3DFrame { frame: 0, joints: vec![[0.0, 0.0, 1.0]; 2], confidence: 1.0 }],
+            bones: vec![[0, 1], [1, 0], [0, 1], [1, 1], [1, 4]],
+        };
+        assert_eq!(normalize_pose3d_bones(&mut pose), 3);
+        assert_eq!(pose.bones, vec![[0, 1], [1, 0]]);
     }
 
     #[test]
