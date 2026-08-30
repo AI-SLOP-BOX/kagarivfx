@@ -797,6 +797,7 @@ fn particle_emitter_is_valid(emitter: &crate::core::particle_system::ParticleEmi
     finite.iter().all(|value| value.is_finite())
         && emitter.rate >= 0.0
         && emitter.max_particles > 0
+        && emitter.max_particles <= 10_000_000
         && emitter.lifetime > 0.0
         && emitter.lifetime_variance >= 0.0
         && emitter.speed >= 0.0
@@ -1526,6 +1527,9 @@ mod tests {
         emitter.spread_degrees = 361.0;
         assert!(!particle_emitter_is_valid(&emitter));
         emitter.spread_degrees = 0.0;
+        emitter.max_particles = 10_000_001;
+        assert!(!particle_emitter_is_valid(&emitter));
+        emitter.max_particles = 10_000;
         emitter.gravity_curve.0[0] = f32::NAN;
         assert!(!particle_emitter_is_valid(&emitter));
         emitter.gravity_curve.0[0] = 1.0;
