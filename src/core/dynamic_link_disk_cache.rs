@@ -234,7 +234,10 @@ impl PersistentDiskCache {
         if let Some(ref dir) = self.cache_dir {
             if let Ok(entries) = fs::read_dir(dir) {
                 for entry in entries.flatten() {
-                    if entry.path().extension().and_then(|s| s.to_str()) == Some("cache") {
+                    if matches!(
+                        entry.path().extension().and_then(|s| s.to_str()),
+                        Some("cache") | Some("meta")
+                    ) {
                         let _ = fs::remove_file(entry.path());
                     }
                 }
@@ -360,6 +363,8 @@ mod tests {
         assert_eq!(meta.height, 1080);
 
         cache.clear();
+        assert!(!tmp_dir.join(format!("{k0:016x}.cache")).exists());
+        assert!(!tmp_dir.join(format!("{k0:016x}.meta")).exists());
         let _ = fs::remove_dir_all(&tmp_dir);
     }
 
