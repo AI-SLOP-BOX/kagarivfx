@@ -376,8 +376,8 @@ fn validate_composition(
             frame_count, speed, ..
         } = &layer.layer_type
         {
-            if *frame_count == 0 || !speed.is_finite() || *speed <= 0.0 {
-                return Err("video layer frame count or speed is invalid".into());
+            if *frame_count == 0 || !speed.is_finite() || *speed <= 0.0 || *speed > 1_000.0 {
+                return Err("video layer frame count or speed is out of range".into());
             }
         }
         if let LayerType::Audio { path, volume } = &layer.layer_type {
@@ -983,6 +983,23 @@ mod tests {
                     path: "video.mp4".into(),
                     duration_sec: ProductionDocument::MAX_ASSET_DURATION_SEC + 1.0,
                 },
+            ));
+        assert!(ProductionDocument::new(invalid_project).validate().is_err());
+
+        let mut invalid_project = Project::default();
+        invalid_project.compositions[0]
+            .layers
+            .push(crate::core::timeline::Layer::new(
+                "invalid-video-speed".into(),
+                "Invalid Video Speed".into(),
+                LayerType::Video {
+                    source: "video.mp4".into(),
+                    frames_dir: "frames".into(),
+                    frame_count: 1,
+                    audio_wav: None,
+                    speed: 1_001.0,
+                },
+                300,
             ));
         assert!(ProductionDocument::new(invalid_project).validate().is_err());
 
