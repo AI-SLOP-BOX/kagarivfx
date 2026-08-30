@@ -45,7 +45,13 @@ impl ImageCache {
 
     /// Load an image from a file path. Returns cached result on subsequent calls.
     pub fn load_image(&mut self, path: &str) -> Option<&CachedImage> {
-        let revision = Self::file_revision(path)?;
+        let revision = match Self::file_revision(path) {
+            Some(revision) => revision,
+            None => {
+                self.cache.remove(path);
+                return None;
+            }
+        };
         if self
             .cache
             .get(path)
@@ -54,7 +60,13 @@ impl ImageCache {
             return self.cache.get(path).map(|cached| &cached.image);
         }
 
-        let img = Self::decode_image_file(path)?;
+        let img = match Self::decode_image_file(path) {
+            Some(image) => image,
+            None => {
+                self.cache.remove(path);
+                return None;
+            }
+        };
         self.cache.insert(
             path.to_string(),
             CachedFile {
@@ -78,7 +90,10 @@ impl ImageCache {
         if total == 0 || total > Self::MAX_IMAGE_PIXELS {
             log::warn!(
                 "[ImageCache] Rejecting image {} with dimensions {}x{} ({} px > limit)",
-                path, declared_w, declared_h, total
+                path,
+                declared_w,
+                declared_h,
+                total
             );
             return None;
         }
@@ -103,7 +118,11 @@ impl ImageCache {
 
     /// Get a cached image without loading.
     pub fn get(&self, path: &str) -> Option<&CachedImage> {
-        self.cache.get(path).map(|cached| &cached.image)
+        let revision = Self::file_revision(path)?;
+        self.cache
+            .get(path)
+            .filter(|cached| cached.revision == revision)
+            .map(|cached| &cached.image)
     }
 }
 
@@ -115,9 +134,7 @@ pub fn with_image_cache<F, R>(f: F) -> R
 where
     F: FnOnce(&mut ImageCache) -> R,
 {
-    let cache = GLOBAL_IMAGE_CACHE.get_or_init(|| {
-        std::sync::Mutex::new(ImageCache::new())
-    });
+    let cache = GLOBAL_IMAGE_CACHE.get_or_init(|| std::sync::Mutex::new(ImageCache::new()));
     let mut lock = cache.lock().unwrap_or_else(|e| e.into_inner());
     f(&mut lock)
 }
@@ -167,6 +184,26 @@ mod tests {
 
         let _ = std::fs::remove_dir_all(&dir);
     }
+
+    #[test]
+    fn failed_reload_and_deleted_source_do_not_expose_stale_pixels() {
+        let dir = std::env::temp_dir().join(format!("aevfx_image_cache_stale_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("stale.png");
+        image::RgbaImage::from_pixel(1, 1, image::Rgba([1, 2, 3, 255]))
+            .save(&path)
+            .unwrap();
+        let key = path.to_str().unwrap();
+        let mut cache = ImageCache::new();
+        assert!(cache.load_image(key).is_some());
+        std::fs::write(&path, b"corrupt").unwrap();
+        assert!(cache.load_image(key).is_none());
+        assert!(cache.get(key).is_none());
+        let _ = std::fs::remove_file(&path);
+        assert!(cache.get(key).is_none());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 }
 
 #[cfg(test)]
@@ -186,5 +223,4 @@ mod robustness_tests {
         assert!(cache.load_image(bad.to_str().unwrap()).is_none());
         let _ = std::fs::remove_file(&bad);
     }
-
 }
