@@ -6,15 +6,14 @@
 /// - Boundary collisions with restitution & friction
 /// - Per-particle size, color, and opacity over lifetime
 /// - Point and box emitter shapes
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
 use crate::core::particle_forces::{
     apply_drag, resolve_bounds_collision, resolve_pairwise_collisions, wind_with_gust, LifeCurve,
 };
 
 /// Emitter shape type.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[derive(Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub enum EmitterShape {
     #[default]
     Point = 0,
@@ -25,10 +24,8 @@ pub enum EmitterShape {
     Ring = 4,
 }
 
-
 /// Opacity fade curve over particle lifetime.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[derive(Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub enum FadeCurve {
     #[default]
     Linear = 0,
@@ -167,8 +164,12 @@ pub struct ParticleEmitter {
     pub death_spawn_life_scale: f32,
 }
 
-fn default_death_speed_scale() -> f32 { 0.5 }
-fn default_death_life_scale() -> f32 { 0.5 }
+fn default_death_speed_scale() -> f32 {
+    0.5
+}
+fn default_death_life_scale() -> f32 {
+    0.5
+}
 
 impl Default for ParticleEmitter {
     fn default() -> Self {
@@ -287,8 +288,10 @@ impl ParticleSystem {
             return;
         }
 
-        let lifetime = self.emitter.lifetime * (1.0 - self.emitter.lifetime_variance * (self.next_random() * 2.0 - 1.0));
-        let speed = self.emitter.speed * (1.0 + self.emitter.speed_variance * (self.next_random() * 2.0 - 1.0));
+        let lifetime = self.emitter.lifetime
+            * (1.0 - self.emitter.lifetime_variance * (self.next_random() * 2.0 - 1.0));
+        let speed = self.emitter.speed
+            * (1.0 + self.emitter.speed_variance * (self.next_random() * 2.0 - 1.0));
         let rotation_speed = if self.emitter.rotation_speed_variance > 0.0 {
             self.emitter.rotation_speed
                 * (1.0 + self.emitter.rotation_speed_variance * (self.next_random() * 2.0 - 1.0))
@@ -517,13 +520,7 @@ impl ParticleSystem {
     }
 
     /// Render all particles into an RGBA pixel buffer (flat, no camera).
-    pub fn render(
-        &self,
-        buffer: &mut [u8],
-        buf_width: u32,
-        buf_height: u32,
-        _time: f32,
-    ) {
+    pub fn render(&self, buffer: &mut [u8], buf_width: u32, buf_height: u32, _time: f32) {
         self.render_projected(buffer, buf_width, buf_height, _time, None);
     }
 
@@ -540,16 +537,23 @@ impl ParticleSystem {
     ) {
         let e = &self.emitter;
         for p in &self.particles {
-            if p.life <= 0.0 { continue; }
+            if p.life <= 0.0 {
+                continue;
+            }
 
             let t = 1.0 - (p.life / p.max_life);
             let r = e.color_start[0] + (e.color_end[0] - e.color_start[0]) * t;
             let g = e.color_start[1] + (e.color_end[1] - e.color_start[1]) * t;
             let b = e.color_start[2] + (e.color_end[2] - e.color_start[2]) * t;
-            let a = (e.color_start[3] + (e.color_end[3] - e.color_start[3]) * t) * e.fade_curve.apply(t);
+            let a = (e.color_start[3] + (e.color_end[3] - e.color_start[3]) * t)
+                * e.fade_curve.apply(t);
 
             // Project main position (flat fallback keeps legacy behavior)
-            let Some((sx, sy, sscale)) = proj.map_or(Some((p.x, p.y, 1.0)), |cp| cp.project(p.x, p.y, p.z)) else { continue };
+            let Some((sx, sy, sscale)) =
+                proj.map_or(Some((p.x, p.y, 1.0)), |cp| cp.project(p.x, p.y, p.z))
+            else {
+                continue;
+            };
 
             // Trail dots: projected per-point so streaks follow depth too
             if p.trail_len > 0 && e.trail_taper > 0.01 {
@@ -559,15 +563,38 @@ impl ParticleSystem {
                     let (tx, ty) = p.trail[i];
                     let fade = e.trail_taper.powi(i as i32 + 1);
                     let ta = a * fade;
-                    if ta < 0.01 { continue; }
-                    let Some((txs, tys, ts_scale)) = proj.map_or(Some((tx, ty, 1.0)), |cp| cp.project(tx, ty, p.z)) else { continue };
-                    let half_t = trail_size * ts_scale * 0.5 * (1.0 - (i as f32 / max_trail as f32) * 0.5);
-                    draw_dot(buffer, (buf_width, buf_height), (txs, tys), half_t, [r, g, b], ta, e.blend_mode);
+                    if ta < 0.01 {
+                        continue;
+                    }
+                    let Some((txs, tys, ts_scale)) =
+                        proj.map_or(Some((tx, ty, 1.0)), |cp| cp.project(tx, ty, p.z))
+                    else {
+                        continue;
+                    };
+                    let half_t =
+                        trail_size * ts_scale * 0.5 * (1.0 - (i as f32 / max_trail as f32) * 0.5);
+                    draw_dot(
+                        buffer,
+                        (buf_width, buf_height),
+                        (txs, tys),
+                        half_t,
+                        [r, g, b],
+                        ta,
+                        e.blend_mode,
+                    );
                 }
             }
 
             let half = p.size * sscale * 0.5;
-            draw_dot(buffer, (buf_width, buf_height), (sx, sy), half, [r, g, b], a, e.blend_mode);
+            draw_dot(
+                buffer,
+                (buf_width, buf_height),
+                (sx, sy),
+                half,
+                [r, g, b],
+                a,
+                e.blend_mode,
+            );
         }
     }
 }
@@ -603,13 +630,30 @@ impl CameraProjection {
 }
 
 /// Rasterize one soft-circle dot with the emitter's blend mode.
-fn draw_dot(buffer: &mut [u8], dims: (u32, u32), center: (f32, f32), half: f32, color: [f32; 3], a: f32, blend_mode: u32) {
+fn draw_dot(
+    buffer: &mut [u8],
+    dims: (u32, u32),
+    center: (f32, f32),
+    half: f32,
+    color: [f32; 3],
+    a: f32,
+    blend_mode: u32,
+) {
     let [r, g, b] = color;
     let buf_width = dims.0;
     let buf_height = dims.1;
     let cx = center.0;
     let cy = center.1;
-    if half < 0.35 || a <= 0.001 {
+    if buf_width == 0
+        || buf_height == 0
+        || half < 0.35
+        || !half.is_finite()
+        || !cx.is_finite()
+        || !cy.is_finite()
+        || !a.is_finite()
+        || !color.iter().all(|value| value.is_finite())
+        || a <= 0.001
+    {
         return;
     }
     let x0 = ((cx - half).max(0.0)) as u32;
@@ -624,10 +668,14 @@ fn draw_dot(buffer: &mut [u8], dims: (u32, u32), center: (f32, f32), half: f32, 
             let dist = ((dx * dx + dy * dy).sqrt() / half).min(1.0);
             let falloff = (1.0 - dist * dist).max(0.0);
             let pixel_a = a * falloff;
-            if pixel_a <= 0.001 { continue; }
+            if pixel_a <= 0.001 {
+                continue;
+            }
 
             let idx = ((py * buf_width + px) * 4) as usize;
-            if idx + 3 >= buffer.len() { continue; }
+            if idx + 3 >= buffer.len() {
+                continue;
+            }
 
             let src_r = r * pixel_a;
             let src_g = g * pixel_a;
@@ -635,47 +683,58 @@ fn draw_dot(buffer: &mut [u8], dims: (u32, u32), center: (f32, f32), half: f32, 
 
             match blend_mode {
                 1 => {
-                    let dst_a = buffer[idx+3] as f32 / 255.0;
+                    let dst_a = buffer[idx + 3] as f32 / 255.0;
                     let dr = buffer[idx] as f32 / 255.0 + src_r;
-                    let dg = buffer[idx+1] as f32 / 255.0 + src_g;
-                    let db = buffer[idx+2] as f32 / 255.0 + src_b;
+                    let dg = buffer[idx + 1] as f32 / 255.0 + src_g;
+                    let db = buffer[idx + 2] as f32 / 255.0 + src_b;
                     let da = (dst_a + pixel_a).min(1.0);
                     buffer[idx] = (dr.min(1.0) * 255.0) as u8;
-                    buffer[idx+1] = (dg.min(1.0) * 255.0) as u8;
-                    buffer[idx+2] = (db.min(1.0) * 255.0) as u8;
-                    buffer[idx+3] = (da * 255.0) as u8;
+                    buffer[idx + 1] = (dg.min(1.0) * 255.0) as u8;
+                    buffer[idx + 2] = (db.min(1.0) * 255.0) as u8;
+                    buffer[idx + 3] = (da * 255.0) as u8;
                 }
                 2 => {
                     let dst_r = buffer[idx] as f32 / 255.0;
-                    let dst_g = buffer[idx+1] as f32 / 255.0;
-                    let dst_b = buffer[idx+2] as f32 / 255.0;
-                    let dst_a = buffer[idx+3] as f32 / 255.0;
+                    let dst_g = buffer[idx + 1] as f32 / 255.0;
+                    let dst_b = buffer[idx + 2] as f32 / 255.0;
+                    let dst_a = buffer[idx + 3] as f32 / 255.0;
                     let sa = pixel_a;
                     let sr = if sa > 0.001 { r } else { 0.0 };
                     let sg = if sa > 0.001 { g } else { 0.0 };
                     let sb = if sa > 0.001 { b } else { 0.0 };
                     let out_a = sa + dst_a * (1.0 - sa);
                     if out_a > 0.001 {
-                        let out_r = (sr * sa + (1.0 - sa) * dst_r * dst_a + sa * (1.0 - dst_a) * sr) / out_a;
-                        let out_g = (sg * sa + (1.0 - sa) * dst_g * dst_a + sa * (1.0 - dst_a) * sg) / out_a;
-                        let out_b = (sb * sa + (1.0 - sa) * dst_b * dst_a + sa * (1.0 - dst_a) * sb) / out_a;
+                        let out_r =
+                            (sr * sa + (1.0 - sa) * dst_r * dst_a + sa * (1.0 - dst_a) * sr)
+                                / out_a;
+                        let out_g =
+                            (sg * sa + (1.0 - sa) * dst_g * dst_a + sa * (1.0 - dst_a) * sg)
+                                / out_a;
+                        let out_b =
+                            (sb * sa + (1.0 - sa) * dst_b * dst_a + sa * (1.0 - dst_a) * sb)
+                                / out_a;
                         buffer[idx] = (out_r.clamp(0.0, 1.0) * 255.0) as u8;
-                        buffer[idx+1] = (out_g.clamp(0.0, 1.0) * 255.0) as u8;
-                        buffer[idx+2] = (out_b.clamp(0.0, 1.0) * 255.0) as u8;
-                        buffer[idx+3] = (out_a.clamp(0.0, 1.0) * 255.0) as u8;
+                        buffer[idx + 1] = (out_g.clamp(0.0, 1.0) * 255.0) as u8;
+                        buffer[idx + 2] = (out_b.clamp(0.0, 1.0) * 255.0) as u8;
+                        buffer[idx + 3] = (out_a.clamp(0.0, 1.0) * 255.0) as u8;
                     }
                 }
                 _ => {
-                    let dst_a = buffer[idx+3] as f32 / 255.0;
+                    let dst_a = buffer[idx + 3] as f32 / 255.0;
                     let out_a = pixel_a + dst_a * (1.0 - pixel_a);
                     if out_a > 0.001 {
-                        let out_r = (src_r + buffer[idx] as f32 / 255.0 * dst_a * (1.0 - pixel_a)) / out_a;
-                        let out_g = (src_g + buffer[idx+1] as f32 / 255.0 * dst_a * (1.0 - pixel_a)) / out_a;
-                        let out_b = (src_b + buffer[idx+2] as f32 / 255.0 * dst_a * (1.0 - pixel_a)) / out_a;
+                        let out_r =
+                            (src_r + buffer[idx] as f32 / 255.0 * dst_a * (1.0 - pixel_a)) / out_a;
+                        let out_g = (src_g
+                            + buffer[idx + 1] as f32 / 255.0 * dst_a * (1.0 - pixel_a))
+                            / out_a;
+                        let out_b = (src_b
+                            + buffer[idx + 2] as f32 / 255.0 * dst_a * (1.0 - pixel_a))
+                            / out_a;
                         buffer[idx] = (out_r.clamp(0.0, 1.0) * 255.0) as u8;
-                        buffer[idx+1] = (out_g.clamp(0.0, 1.0) * 255.0) as u8;
-                        buffer[idx+2] = (out_b.clamp(0.0, 1.0) * 255.0) as u8;
-                        buffer[idx+3] = (out_a.clamp(0.0, 1.0) * 255.0) as u8;
+                        buffer[idx + 1] = (out_g.clamp(0.0, 1.0) * 255.0) as u8;
+                        buffer[idx + 2] = (out_b.clamp(0.0, 1.0) * 255.0) as u8;
+                        buffer[idx + 3] = (out_a.clamp(0.0, 1.0) * 255.0) as u8;
                     }
                 }
             }
@@ -686,6 +745,22 @@ fn draw_dot(buffer: &mut [u8], dims: (u32, u32), center: (f32, f32), half: f32, 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_draw_dot_ignores_invalid_raster_inputs() {
+        let original = vec![17u8; 16];
+        for (center, half, alpha, color) in [
+            ([f32::NAN, 1.0], 2.0, 1.0, [1.0, 1.0, 1.0]),
+            ([1.0, f32::INFINITY], 2.0, 1.0, [1.0, 1.0, 1.0]),
+            ([1.0, 1.0], f32::NAN, 1.0, [1.0, 1.0, 1.0]),
+            ([1.0, 1.0], 2.0, f32::NAN, [1.0, 1.0, 1.0]),
+            ([1.0, 1.0], 2.0, 1.0, [f32::INFINITY, 1.0, 1.0]),
+        ] {
+            let mut pixels = original.clone();
+            draw_dot(&mut pixels, (2, 2), (center[0], center[1]), half, color, alpha, 1);
+            assert_eq!(pixels, original);
+        }
+    }
 
     #[test]
     fn test_particle_emitter_defaults() {
@@ -711,8 +786,15 @@ mod tests {
         };
         let mut sys = ParticleSystem::new(emitter);
         sys.particles.push(Particle {
-            x: 200.0, y: 100.0, vx: 0.0, vy: 0.0,
-            life: 5.0, max_life: 5.0, size: 4.0, rotation: 0.0, angular_velocity: 0.0,
+            x: 200.0,
+            y: 100.0,
+            vx: 0.0,
+            vy: 0.0,
+            life: 5.0,
+            max_life: 5.0,
+            size: 4.0,
+            rotation: 0.0,
+            angular_velocity: 0.0,
             trail: [(200.0, 100.0); 8],
             trail_len: 0,
             z: 0.0,
@@ -720,8 +802,16 @@ mod tests {
         sys.update(0.1, 0.0, 0.0);
         let p = &sys.particles[0];
         // Particle right of center: CW tangent is downward (+vy)
-        assert!(p.vy > 10.0, "vortex must induce tangential +vy, got {}", p.vy);
-        assert!(p.vx.abs() < 1.0, "no radial velocity expected, got {}", p.vx);
+        assert!(
+            p.vy > 10.0,
+            "vortex must induce tangential +vy, got {}",
+            p.vy
+        );
+        assert!(
+            p.vx.abs() < 1.0,
+            "no radial velocity expected, got {}",
+            p.vx
+        );
     }
 
     #[test]
@@ -737,8 +827,15 @@ mod tests {
         };
         let mut sys = ParticleSystem::new(emitter);
         sys.particles.push(Particle {
-            x: 100.0, y: 300.0, vx: 0.0, vy: 0.0,
-            life: 5.0, max_life: 5.0, size: 4.0, rotation: 0.0, angular_velocity: 0.0,
+            x: 100.0,
+            y: 300.0,
+            vx: 0.0,
+            vy: 0.0,
+            life: 5.0,
+            max_life: 5.0,
+            size: 4.0,
+            rotation: 0.0,
+            angular_velocity: 0.0,
             trail: [(100.0, 300.0); 8],
             trail_len: 0,
             z: 0.0,
@@ -746,7 +843,11 @@ mod tests {
         sys.update(0.1, 0.0, 0.0);
         let p = &sys.particles[0];
         // Pulled toward +x (attractor at x=300)
-        assert!(p.vx > 20.0, "attraction must accelerate toward point, got {}", p.vx);
+        assert!(
+            p.vx > 20.0,
+            "attraction must accelerate toward point, got {}",
+            p.vx
+        );
     }
 
     #[test]
@@ -762,8 +863,15 @@ mod tests {
         };
         let mut sys = ParticleSystem::new(emitter);
         sys.particles.push(Particle {
-            x: 110.0, y: 300.0, vx: 0.0, vy: 0.0,
-            life: 5.0, max_life: 5.0, size: 4.0, rotation: 0.0, angular_velocity: 0.0,
+            x: 110.0,
+            y: 300.0,
+            vx: 0.0,
+            vy: 0.0,
+            life: 5.0,
+            max_life: 5.0,
+            size: 4.0,
+            rotation: 0.0,
+            angular_velocity: 0.0,
             trail: [(110.0, 300.0); 8],
             trail_len: 0,
             z: 0.0,
@@ -771,7 +879,11 @@ mod tests {
         sys.update(0.1, 0.0, 0.0);
         let p = &sys.particles[0];
         // Negative strength pushes away from attractor (+x direction here)
-        assert!(p.vx > 20.0, "repulsion must push away from point, got {}", p.vx);
+        assert!(
+            p.vx > 20.0,
+            "repulsion must push away from point, got {}",
+            p.vx
+        );
     }
 
     #[test]
@@ -789,8 +901,15 @@ mod tests {
         let mut sys = ParticleSystem::new(emitter);
         // One particle at end of life
         sys.particles.push(Particle {
-            x: 50.0, y: 60.0, vx: 0.0, vy: 0.0,
-            life: 0.001, max_life: 1.0, size: 8.0, rotation: 0.0, angular_velocity: 0.0,
+            x: 50.0,
+            y: 60.0,
+            vx: 0.0,
+            vy: 0.0,
+            life: 0.001,
+            max_life: 1.0,
+            size: 8.0,
+            rotation: 0.0,
+            angular_velocity: 0.0,
             trail: [(50.0, 60.0); 8],
             trail_len: 0,
             z: 0.0,
@@ -818,31 +937,61 @@ mod tests {
         let mut sys = ParticleSystem::new(emitter);
         for i in 0..5u32 {
             sys.particles.push(Particle {
-                x: i as f32 * 10.0, y: 0.0, vx: 0.0, vy: 0.0,
-                life: 0.001, max_life: 1.0, size: 4.0, rotation: 0.0, angular_velocity: 0.0,
+                x: i as f32 * 10.0,
+                y: 0.0,
+                vx: 0.0,
+                vy: 0.0,
+                life: 0.001,
+                max_life: 1.0,
+                size: 4.0,
+                rotation: 0.0,
+                angular_velocity: 0.0,
                 trail: [(i as f32 * 10.0, 0.0); 8],
                 trail_len: 0,
                 z: 0.0,
             });
         }
         sys.update(0.016, 0.0, 0.0);
-        assert!(sys.particles.len() <= 3, "must cap at max_particles, got {}", sys.particles.len());
+        assert!(
+            sys.particles.len() <= 3,
+            "must cap at max_particles, got {}",
+            sys.particles.len()
+        );
     }
 
     #[test]
     fn test_camera_projection_near_particle_larger() {
         // Camera at z=-1000 looking toward +z; focal 100
-        let proj = CameraProjection { cam_x: 500.0, cam_y: 400.0, cam_z: -1000.0, focal: 100.0, cos_rz: 1.0, sin_rz: 0.0 };
-        let near = proj.project(500.0, 400.0, -900.0).expect("in front");   // dz=100
-        let far = proj.project(500.0, 400.0, -500.0).expect("in front");    // dz=500
-        assert!(near.2 > far.2 * 2.5, "nearer particle scales bigger: {} vs {}", near.2, far.2);
+        let proj = CameraProjection {
+            cam_x: 500.0,
+            cam_y: 400.0,
+            cam_z: -1000.0,
+            focal: 100.0,
+            cos_rz: 1.0,
+            sin_rz: 0.0,
+        };
+        let near = proj.project(500.0, 400.0, -900.0).expect("in front"); // dz=100
+        let far = proj.project(500.0, 400.0, -500.0).expect("in front"); // dz=500
+        assert!(
+            near.2 > far.2 * 2.5,
+            "nearer particle scales bigger: {} vs {}",
+            near.2,
+            far.2
+        );
         // Centered on camera axis → stays centered
         assert!((near.0 - 500.0).abs() < 1.0);
     }
 
     #[test]
     fn test_camera_projection_behind_returns_none() {
-        let proj = CameraProjection { cam_x: 0.0, cam_y: 0.0, cam_z: -100.0, focal: 100.0, cos_rz: 1.0, sin_rz: 0.0 };
+        let proj = CameraProjection {
+            cam_x: 0.0,
+            cam_y: 0.0,
+            cam_z: -100.0,
+            focal: 100.0,
+            cos_rz: 1.0,
+            sin_rz: 0.0,
+        };
         assert!(proj.project(10.0, 10.0, -200.0).is_none(), "behind camera");
     }
 
@@ -863,7 +1012,11 @@ mod tests {
         }
         assert!(!sys.particles.is_empty());
         for p in &sys.particles {
-            assert!((-200.0..=300.0).contains(&p.z), "spawned z out of range: {}", p.z);
+            assert!(
+                (-200.0..=300.0).contains(&p.z),
+                "spawned z out of range: {}",
+                p.z
+            );
         }
     }
 
@@ -879,12 +1032,28 @@ mod tests {
         // World (15,-15) with cam focal 100 / dz 50 -> screen ~(30,30) in a
         // 64px buffer; scale factor 20x makes the dot cover most of the frame.
         sys.particles.push(Particle {
-            x: 15.0, y: -15.0, vx: 0.0, vy: 0.0,
-            life: 1.0, max_life: 1.0, size: 8.0, rotation: 0.0, angular_velocity: 0.0,
-            trail: [(15.0, -15.0); 8], trail_len: 0, z: -950.0,
+            x: 15.0,
+            y: -15.0,
+            vx: 0.0,
+            vy: 0.0,
+            life: 1.0,
+            max_life: 1.0,
+            size: 8.0,
+            rotation: 0.0,
+            angular_velocity: 0.0,
+            trail: [(15.0, -15.0); 8],
+            trail_len: 0,
+            z: -950.0,
         });
         let mut buf = vec![0u8; 64 * 64 * 4];
-        let proj = CameraProjection { cam_x: 0.0, cam_y: 0.0, cam_z: -1000.0, focal: 100.0, cos_rz: 1.0, sin_rz: 0.0 };
+        let proj = CameraProjection {
+            cam_x: 0.0,
+            cam_y: 0.0,
+            cam_z: -1000.0,
+            focal: 100.0,
+            cos_rz: 1.0,
+            sin_rz: 0.0,
+        };
         sys.render_projected(&mut buf, 64, 64, 0.0, Some(&proj));
         let lit = buf.chunks_exact(4).filter(|c| c[3] > 0).count();
         assert!(lit > 400, "depth-scaled dot must be large, got {lit} px");
@@ -944,7 +1113,10 @@ mod tests {
         let mut buf_linear = vec![0u8; 100 * 100 * 4];
         let mut buf_ease = vec![0u8; 100 * 100 * 4];
 
-        for (buf, curve) in [(&mut buf_linear, FadeCurve::Linear), (&mut buf_ease, FadeCurve::EaseIn)] {
+        for (buf, curve) in [
+            (&mut buf_linear, FadeCurve::Linear),
+            (&mut buf_ease, FadeCurve::EaseIn),
+        ] {
             let emitter = ParticleEmitter {
                 rate: 100.0,
                 lifetime: 10.0,
@@ -978,20 +1150,25 @@ mod tests {
         }
 
         // Variance gives per-particle angular velocities but stays deterministic
-        let make = || ParticleSystem::new(ParticleEmitter {
-            rate: 1000.0,
-            rotation_start: 0.0,
-            rotation_speed: 90.0,
-            rotation_speed_variance: 0.5,
-            ..Default::default()
-        });
+        let make = || {
+            ParticleSystem::new(ParticleEmitter {
+                rate: 1000.0,
+                rotation_start: 0.0,
+                rotation_speed: 90.0,
+                rotation_speed_variance: 0.5,
+                ..Default::default()
+            })
+        };
         let mut a = make();
         let mut b = make();
         a.update(0.05, 0.0, 0.0);
         b.update(0.05, 0.0, 0.0);
         let rots: Vec<f32> = a.particles.iter().map(|p| p.rotation).collect();
         assert!(!rots.is_empty());
-        assert!(rots.windows(2).any(|w| (w[0] - w[1]).abs() > f32::EPSILON), "variance should differ per particle");
+        assert!(
+            rots.windows(2).any(|w| (w[0] - w[1]).abs() > f32::EPSILON),
+            "variance should differ per particle"
+        );
         for (pa, pb) in a.particles.iter().zip(b.particles.iter()) {
             assert_eq!(pa.rotation, pb.rotation);
         }
@@ -999,7 +1176,12 @@ mod tests {
 
     #[test]
     fn test_emitter_shapes() {
-        for shape in [EmitterShape::Point, EmitterShape::Box, EmitterShape::Circle, EmitterShape::Line] {
+        for shape in [
+            EmitterShape::Point,
+            EmitterShape::Box,
+            EmitterShape::Circle,
+            EmitterShape::Line,
+        ] {
             let emitter = ParticleEmitter {
                 shape,
                 rate: 10.0,
@@ -1007,31 +1189,42 @@ mod tests {
             };
             let mut ps = ParticleSystem::new(emitter);
             ps.update(1.0, 50.0, 50.0);
-            assert!(!ps.particles.is_empty(), "Shape {:?} should emit particles", shape);
+            assert!(
+                !ps.particles.is_empty(),
+                "Shape {:?} should emit particles",
+                shape
+            );
         }
     }
 
     #[test]
     fn test_gravity_curve_accelerates_fall() {
-        let make = |curve: LifeCurve| ParticleSystem::new(ParticleEmitter {
-            rate: 1000.0,
-            lifetime: 10.0,
-            lifetime_variance: 0.0,
-            speed: 0.0,
-            speed_variance: 0.0,
-            spread_degrees: 0.0,
-            gravity: [0.0, 100.0],
-            gravity_curve: curve,
-            ..Default::default()
-        });
+        let make = |curve: LifeCurve| {
+            ParticleSystem::new(ParticleEmitter {
+                rate: 1000.0,
+                lifetime: 10.0,
+                lifetime_variance: 0.0,
+                speed: 0.0,
+                speed_variance: 0.0,
+                spread_degrees: 0.0,
+                gravity: [0.0, 100.0],
+                gravity_curve: curve,
+                ..Default::default()
+            })
+        };
         // Constant gravity x2 vs constant x1.
         let mut weak = make(LifeCurve::constant(1.0));
         let mut strong = make(LifeCurve::constant(2.0));
         weak.update(0.5, 0.0, 0.0);
         strong.update(0.5, 0.0, 0.0);
-        let y_weak: f32 = weak.particles.iter().map(|p| p.y).sum::<f32>() / weak.particles.len().max(1) as f32;
-        let y_strong: f32 = strong.particles.iter().map(|p| p.y).sum::<f32>() / strong.particles.len().max(1) as f32;
-        assert!(y_strong > y_weak * 1.5, "curve-multiplied gravity should fall faster");
+        let y_weak: f32 =
+            weak.particles.iter().map(|p| p.y).sum::<f32>() / weak.particles.len().max(1) as f32;
+        let y_strong: f32 = strong.particles.iter().map(|p| p.y).sum::<f32>()
+            / strong.particles.len().max(1) as f32;
+        assert!(
+            y_strong > y_weak * 1.5,
+            "curve-multiplied gravity should fall faster"
+        );
 
         // Determinism: identical configs produce identical results.
         let mut a = make(LifeCurve(vec![0.0, 3.0]));
@@ -1077,10 +1270,15 @@ mod tests {
         });
         ps2.emit_accumulator = 5.0;
         // Fast-forward to half a gust period later.
-        for _ in 0..50 { ps2.update(0.01, 0.0, 0.0); }
-        let vx_late = ps2.particles.iter().map(|p| p.vx).sum::<f32>()
-            / ps2.particles.len().max(1) as f32;
-        assert!((vx_early - vx_late).abs() > 1.0, "gust should modulate wind over time");
+        for _ in 0..50 {
+            ps2.update(0.01, 0.0, 0.0);
+        }
+        let vx_late =
+            ps2.particles.iter().map(|p| p.vx).sum::<f32>() / ps2.particles.len().max(1) as f32;
+        assert!(
+            (vx_early - vx_late).abs() > 1.0,
+            "gust should modulate wind over time"
+        );
     }
 
     #[test]
@@ -1101,28 +1299,35 @@ mod tests {
         };
         let mut ps = ParticleSystem::new(emitter);
         ps.emit_accumulator = 5.0;
-        for _ in 0..120 { ps.update(0.05, 0.0, 0.0); }
+        for _ in 0..120 {
+            ps.update(0.05, 0.0, 0.0);
+        }
         assert!(!ps.particles.is_empty());
         for p in &ps.particles {
             assert!(p.y <= 200.0 + 1e-3, "particle fell through floor: {}", p.y);
         }
         // At least one particle must have bounced (upward velocity after contact).
-        assert!(ps.particles.iter().any(|p| p.vy < -1.0), "no bounce detected");
+        assert!(
+            ps.particles.iter().any(|p| p.vy < -1.0),
+            "no bounce detected"
+        );
     }
 
     #[test]
     fn test_drag_slows_particles() {
-        let make = |drag: f32| ParticleSystem::new(ParticleEmitter {
-            rate: 1000.0,
-            lifetime: 10.0,
-            lifetime_variance: 0.0,
-            speed: 300.0,
-            speed_variance: 0.0,
-            spread_degrees: 0.0,
-            gravity: [0.0, 0.0],
-            drag,
-            ..Default::default()
-        });
+        let make = |drag: f32| {
+            ParticleSystem::new(ParticleEmitter {
+                rate: 1000.0,
+                lifetime: 10.0,
+                lifetime_variance: 0.0,
+                speed: 300.0,
+                speed_variance: 0.0,
+                spread_degrees: 0.0,
+                gravity: [0.0, 0.0],
+                drag,
+                ..Default::default()
+            })
+        };
         let mut free = make(0.0);
         let mut damped = make(4.0);
         free.update(1.0, 0.0, 0.0);
@@ -1156,25 +1361,31 @@ mod tests {
 
     #[test]
     fn test_simulation_is_deterministic_with_all_forces() {
-        let make = || ParticleSystem::new(ParticleEmitter {
-            rate: 500.0,
-            lifetime: 3.0,
-            gravity_curve: LifeCurve(vec![0.2, 1.5, 0.8]),
-            wind: [60.0, -20.0],
-            wind_gust_strength: 40.0,
-            wind_gust_frequency: 2.0,
-            drag: 0.8,
-            turbulence: 15.0,
-            collision_enabled: true,
-            collision_bounds: [0.0, 0.0, 800.0, 600.0],
-            restitution: 0.55,
-            surface_friction: 0.85,
-            ..Default::default()
-        });
+        let make = || {
+            ParticleSystem::new(ParticleEmitter {
+                rate: 500.0,
+                lifetime: 3.0,
+                gravity_curve: LifeCurve(vec![0.2, 1.5, 0.8]),
+                wind: [60.0, -20.0],
+                wind_gust_strength: 40.0,
+                wind_gust_frequency: 2.0,
+                drag: 0.8,
+                turbulence: 15.0,
+                collision_enabled: true,
+                collision_bounds: [0.0, 0.0, 800.0, 600.0],
+                restitution: 0.55,
+                surface_friction: 0.85,
+                ..Default::default()
+            })
+        };
         let mut a = make();
         let mut b = make();
-        for _ in 0..60 { a.update(1.0 / 30.0, 400.0, 100.0); }
-        for _ in 0..60 { b.update(1.0 / 30.0, 400.0, 100.0); }
+        for _ in 0..60 {
+            a.update(1.0 / 30.0, 400.0, 100.0);
+        }
+        for _ in 0..60 {
+            b.update(1.0 / 30.0, 400.0, 100.0);
+        }
         assert_eq!(a.particles.len(), b.particles.len());
         for (pa, pb) in a.particles.iter().zip(b.particles.iter()) {
             assert_eq!(pa.x, pb.x);
@@ -1206,15 +1417,29 @@ mod particle_collision_tests {
         emitter.gravity_curve = LC::constant(1.0);
         let mut sys = ParticleSystem::new(emitter);
         sys.particles.push(Particle {
-            x: 46.0, y: 50.0, vx: 30.0, vy: 0.0,
-            life: 5.0, max_life: 5.0, size: 4.0, rotation: 0.0, angular_velocity: 0.0,
+            x: 46.0,
+            y: 50.0,
+            vx: 30.0,
+            vy: 0.0,
+            life: 5.0,
+            max_life: 5.0,
+            size: 4.0,
+            rotation: 0.0,
+            angular_velocity: 0.0,
             trail: [(46.0, 50.0); 8],
             trail_len: 0,
             z: 0.0,
         });
         sys.particles.push(Particle {
-            x: 54.0, y: 50.0, vx: -30.0, vy: 0.0,
-            life: 5.0, max_life: 5.0, size: 4.0, rotation: 0.0, angular_velocity: 0.0,
+            x: 54.0,
+            y: 50.0,
+            vx: -30.0,
+            vy: 0.0,
+            life: 5.0,
+            max_life: 5.0,
+            size: 4.0,
+            rotation: 0.0,
+            angular_velocity: 0.0,
             trail: [(54.0, 50.0); 8],
             trail_len: 0,
             z: 0.0,
