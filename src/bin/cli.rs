@@ -70,6 +70,13 @@ enum Commands {
         project: String,
     },
 
+    /// Show unified audio, tempo, and cross-domain binding information
+    ProductionInfo {
+        /// Path to a unified production JSON file
+        #[arg(short, long)]
+        project: String,
+    },
+
     /// Validate a project file
     Validate {
         /// Path to project JSON file
@@ -146,6 +153,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
         Commands::Info { project } => {
             cmd_info(&project)?;
+        }
+        Commands::ProductionInfo { project } => {
+            cmd_production_info(&project)?;
         }
         Commands::Validate { project } => {
             cmd_validate(&project)?;
@@ -494,6 +504,27 @@ fn cmd_info(project_path: &str) -> Result<(), Box<dyn std::error::Error>> {
         println!();
     }
 
+    Ok(())
+}
+
+fn cmd_production_info(project_path: &str) -> Result<(), Box<dyn std::error::Error>> {
+    let json = std::fs::read_to_string(project_path)?;
+    let document = aftereffects_oss::core::production_document::ProductionDocument::from_json(&json)
+        .map_err(|error| format!("Not a valid production document: {error}"))?;
+    let clock = document.clock();
+    println!("Production document schema: {}", document.schema_version);
+    println!("Audio sample rate: {} Hz", document.audio.sample_rate);
+    println!("Audio channels: {}", document.audio.channels.len());
+    println!("Tempo changes: {}", document.tempo.changes.len());
+    println!("Initial BPM: {:.3}", document.tempo.changes[0].bpm);
+    println!("Automation bindings: {}", document.bindings.len());
+    println!(
+        "Beat at 1 second: {:.3}",
+        clock.beat(aftereffects_oss::core::unified_time::Time::new(1, 1))
+    );
+    for binding in &document.bindings {
+        println!("  {} -> {} ({} points)", binding.source, binding.target, binding.curve.points.len());
+    }
     Ok(())
 }
 
