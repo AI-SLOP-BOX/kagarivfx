@@ -112,6 +112,34 @@ pub fn draw_tracker_panel(app: &mut AfterEffectsApp, ui: &mut egui::Ui, current_
                     }
                 }
             });
+            if let Some(summary) = ui.ctx().data(|d| d.get_temp::<String>(egui::Id::new("mocap_pose_summary"))) {
+                ui.label(egui::RichText::new(summary).small().color(colors::ACCENT_GREEN));
+            }
+            if custom_widgets::ae_button(ui, "🧍 Estimate Markerless Pose").on_hover_text("Estimate and stabilize a 2D humanoid pose from the work area").clicked() {
+                let wa_out = app.work_area_out.unwrap_or_else(|| {
+                    app.history.current().active_composition().duration_frames.saturating_sub(1)
+                });
+                if wa_out >= current_frame {
+                    let pose = {
+                        let comp = app.history.current().active_composition();
+                        crate::core::tracker_engine::TrackerEngine::estimate_markerless_pose(
+                            &comp.layers[idx], current_frame, wa_out, mocap_max as usize, mocap_spacing, 2, mocap_search as i32,
+                        )
+                    };
+                    if let Some(pose) = pose {
+                        let valid = pose.frames.iter().flat_map(|frame| frame.joints.iter()).filter(|point| point.iter().all(|value| value.is_finite())).count();
+                        let total = pose.frames.len().saturating_mul(pose.frames.first().map(|frame| frame.joints.len()).unwrap_or(0));
+                        let confidence = if pose.frames.is_empty() { 0.0 } else { pose.frames.iter().map(|frame| frame.confidence).sum::<f32>() / pose.frames.len() as f32 };
+                        let summary = format!("Pose: {} frames • {}/{} joints valid • confidence {:.0}%", pose.frames.len(), valid, total, confidence * 100.0);
+                        ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("mocap_pose_summary"), summary));
+                        app.toasts.info("Markerless pose estimation completed");
+                    } else {
+                        app.toasts.error("Pose estimation failed: no valid media frames");
+                    }
+                } else {
+                    app.toasts.error("Nothing to estimate: extend the work area past the playhead");
+                }
+            }
 
             // ── 3D Camera Tracker (Scene Reconstruction) ──
             ui.add_space(8.0);

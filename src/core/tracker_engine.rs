@@ -8,6 +8,32 @@ use crate::core::timeline::{Composition, Layer};
 pub struct TrackerEngine;
 
 impl TrackerEngine {
+    pub fn estimate_markerless_pose(
+        layer: &Layer,
+        start_frame: u32,
+        end_frame: u32,
+        max_features: usize,
+        feature_spacing: u32,
+        block_radius: i32,
+        search_radius: i32,
+    ) -> Option<crate::core::optical_flow_timewarp::MarkerlessPoseTrack> {
+        if end_frame < start_frame { return None; }
+        let mut frames = Vec::new();
+        let mut width = 0u32;
+        let mut height = 0u32;
+        for frame in start_frame..=end_frame {
+            let (current, next, w, h) = Self::load_tracker_frames(layer, frame)?;
+            width = w as u32;
+            height = h as u32;
+            frames.push(current);
+            if frame == end_frame { frames.push(next); }
+        }
+        let refs = frames.iter().map(Vec::as_slice).collect::<Vec<_>>();
+        Some(crate::core::optical_flow_timewarp::estimate_markerless_pose(
+            &refs, width, height, max_features, feature_spacing, block_radius, search_radius,
+        ))
+    }
+
     pub fn analyze_markerless_tracks(
         layer: &mut Layer,
         start_frame: u32,
