@@ -85,6 +85,12 @@ pub struct TempoMap {
     pub changes: Vec<TempoChange>,
 }
 
+impl Default for TempoMap {
+    fn default() -> Self {
+        Self::new(120.0)
+    }
+}
+
 impl TempoMap {
     pub fn new(bpm: f64) -> Self {
         Self {

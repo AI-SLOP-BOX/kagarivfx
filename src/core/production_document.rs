@@ -27,8 +27,11 @@ impl Default for AudioDocumentSettings {
 pub struct ProductionDocument {
     pub schema_version: u32,
     pub project: Project,
+    #[serde(default)]
     pub audio: AudioDocumentSettings,
+    #[serde(default)]
     pub tempo: TempoMap,
+    #[serde(default)]
     pub bindings: Vec<AutomationBinding>,
 }
 
@@ -198,6 +201,23 @@ mod tests {
 
         assert_eq!(document.project().compositions.len(), 1);
         assert_eq!(document.audio.sample_rate, 48_000);
+        assert!(document.bindings.is_empty());
+    }
+
+    #[test]
+    fn partial_production_documents_receive_domain_defaults() {
+        let mut value: serde_json::Value = serde_json::from_str(
+            &serde_json::to_string(&ProductionDocument::new(Project::default())).unwrap(),
+        )
+        .unwrap();
+        let object = value.as_object_mut().unwrap();
+        object.remove("audio");
+        object.remove("tempo");
+        object.remove("bindings");
+        let document =
+            ProductionDocument::from_json(&serde_json::to_string(&value).unwrap()).unwrap();
+        assert_eq!(document.audio.sample_rate, 48_000);
+        assert_eq!(document.tempo.beat_at(crate::core::unified_time::Time::new(1, 1)), 2.0);
         assert!(document.bindings.is_empty());
     }
 }
