@@ -444,10 +444,12 @@ fn validate_composition(
                 return Err("shape layer settings are invalid".into());
             }
             if let crate::core::timeline::ShapeType::FreeformBezier {
-                points, tangents, ..
+                points,
+                tangents,
+                closed,
             } = shape_type
             {
-                if points.len() != tangents.len() {
+                if points.len() != tangents.len() || points.len() < if *closed { 3 } else { 2 } {
                     return Err("shape points and tangents must have matching lengths".into());
                 }
                 if points
