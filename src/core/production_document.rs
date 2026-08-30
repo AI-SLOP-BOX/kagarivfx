@@ -330,7 +330,10 @@ fn validate_composition(
     for marker in &composition.markers {
         if marker.frame >= composition.duration_frames
             || marker.label.trim().is_empty()
-            || marker.color.iter().any(|value| !value.is_finite())
+            || marker
+                .color
+                .iter()
+                .any(|value| !value.is_finite() || !(0.0..=1.0).contains(value))
         {
             return Err("timeline marker settings are invalid".into());
         }
@@ -1385,8 +1388,8 @@ mod tests {
             .markers
             .push(crate::core::timeline::TimelineMarker {
                 frame: duration_frames,
-                label: "  ".into(),
-                color: [0.0, 0.0, 0.0],
+                label: "Marker".into(),
+                color: [1.1, 0.0, 0.0],
             });
         assert!(ProductionDocument::new(invalid_project).validate().is_err());
 
