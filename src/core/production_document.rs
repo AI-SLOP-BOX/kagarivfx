@@ -46,6 +46,7 @@ impl ProductionDocument {
     pub const MAX_ASSETS: usize = 100_000;
     pub const MAX_COMPOSITIONS: usize = 10_000;
     pub const MAX_LAYERS_PER_COMPOSITION: usize = 100_000;
+    pub const MAX_SUB_COMPOSITIONS_PER_COMPOSITION: usize = 10_000;
     pub const MAX_COMPOSITION_FRAMES: u32 = 10_000_000;
     pub const MAX_ASSET_DURATION_SEC: f32 = 10_000_000.0;
 
@@ -277,6 +278,10 @@ fn validate_composition(
     }
     if composition.layers.len() > ProductionDocument::MAX_LAYERS_PER_COMPOSITION {
         return Err("composition contains too many layers".into());
+    }
+    if composition.sub_compositions.len() > ProductionDocument::MAX_SUB_COMPOSITIONS_PER_COMPOSITION
+    {
+        return Err("composition contains too many nested compositions".into());
     }
     if composition.id.trim().is_empty() {
         return Err("composition id must not be empty".into());
@@ -1675,6 +1680,13 @@ mod tests {
         document.project.compositions[0].layers.resize(
             ProductionDocument::MAX_LAYERS_PER_COMPOSITION + 1,
             crate::core::timeline::Layer::new("layer".into(), "Layer".into(), LayerType::Null, 1),
+        );
+        assert!(document.validate().is_err());
+
+        let mut document = ProductionDocument::new(Project::default());
+        document.project.compositions[0].sub_compositions.resize(
+            ProductionDocument::MAX_SUB_COMPOSITIONS_PER_COMPOSITION + 1,
+            crate::core::timeline::Composition::new("nested".into(), "Nested".into(), 1, 1, 1, 1),
         );
         assert!(document.validate().is_err());
     }
