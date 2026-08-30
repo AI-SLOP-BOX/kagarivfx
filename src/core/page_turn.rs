@@ -8,12 +8,12 @@
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct PageTurnParams {
-    pub fold_position: [f32; 2],     // Peel handle point
-    pub fold_radius: f32,           // Cylinder radius (px)
-    pub fold_direction_deg: f32,    // Angle of fold line (0 = horizontal, 90 = vertical)
-    pub light_direction_deg: f32,   // Direction of cylindrical specular highlight
-    pub back_opacity: f32,          // 0.0..100.0%
-    pub back_color: [f32; 4],       // Default paper backside color
+    pub fold_position: [f32; 2],  // Peel handle point
+    pub fold_radius: f32,         // Cylinder radius (px)
+    pub fold_direction_deg: f32,  // Angle of fold line (0 = horizontal, 90 = vertical)
+    pub light_direction_deg: f32, // Direction of cylindrical specular highlight
+    pub back_opacity: f32,        // 0.0..100.0%
+    pub back_color: [f32; 4],     // Default paper backside color
 }
 
 impl Default for PageTurnParams {
@@ -30,19 +30,25 @@ impl Default for PageTurnParams {
 }
 
 /// Renders CC Page Turn cylindrical fold deformation onto an RGBA pixel buffer.
-pub fn apply_page_turn(
-    src: &[u8],
-    width: u32,
-    height: u32,
-    params: &PageTurnParams,
-) -> Vec<u8> {
-    if src.len() != (width * height * 4) as usize || width == 0 || height == 0 {
+pub fn apply_page_turn(src: &[u8], width: u32, height: u32, params: &PageTurnParams) -> Vec<u8> {
+    let Some(pixel_count) = (width as usize)
+        .checked_mul(height as usize)
+        .filter(|&count| count <= usize::MAX / 4)
+    else {
+        return src.to_vec();
+    };
+    if src.len() != pixel_count * 4 || width == 0 || height == 0 {
         return src.to_vec();
     }
 
     let mut dst = vec![0u8; src.len()];
 
-    let rad_angle = params.fold_direction_deg.to_radians();
+    let fold_direction = if params.fold_direction_deg.is_finite() {
+        params.fold_direction_deg
+    } else {
+        0.0
+    };
+    let rad_angle = fold_direction.to_radians();
     let cos_a = rad_angle.cos();
     let sin_a = rad_angle.sin();
 
@@ -50,10 +56,22 @@ pub fn apply_page_turn(
     let nx = -sin_a;
     let ny = cos_a;
 
-    let fx = params.fold_position[0];
-    let fy = params.fold_position[1];
+    let fx = if params.fold_position[0].is_finite() { params.fold_position[0] } else { 0.0 };
+    let fy = if params.fold_position[1].is_finite() { params.fold_position[1] } else { 0.0 };
 
-    let r = params.fold_radius.max(5.0);
+    let r = if params.fold_radius.is_finite() {
+        params.fold_radius.clamp(5.0, 4096.0)
+    } else {
+        5.0
+    };
+    let back_opacity = if params.back_opacity.is_finite() {
+        (params.back_opacity / 100.0).clamp(0.0, 1.0)
+    } else {
+        0.0
+    };
+    let back_color = params.back_color.map(|value| {
+        if value.is_finite() { value.clamp(0.0, 1.0) } else { 0.0 }
+    });
     let pi_r = std::f32::consts::PI * r;
 
     let sample_bilinear = |x: f32, y: f32| -> [u8; 4] {
@@ -131,10 +149,11 @@ pub fn apply_page_turn(
                 let mut pixel = sample_bilinear(sx, sy);
 
                 // Backside color tint & opacity
-                let b_op = (params.back_opacity / 100.0).clamp(0.0, 1.0);
+                let b_op = back_opacity;
                 for c in 0..3 {
-                    let back_val = params.back_color[c] * 255.0;
-                    pixel[c] = (pixel[c] as f32 * (1.0 - b_op) + back_val * b_op * 0.85).clamp(0.0, 255.0) as u8;
+                    let back_val = back_color[c] * 255.0;
+                    pixel[c] = (pixel[c] as f32 * (1.0 - b_op) + back_val * b_op * 0.85)
+                        .clamp(0.0, 255.0) as u8;
                 }
 
                 dst[d_idx..d_idx + 4].copy_from_slice(&pixel);
@@ -152,6 +171,22 @@ pub fn apply_page_turn(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_page_turn_sanitizes_extreme_parameters() {
+        let src = vec![100u8; 16];
+        let params = PageTurnParams {
+            fold_position: [f32::NAN, f32::INFINITY],
+            fold_radius: f32::NAN,
+            fold_direction_deg: f32::INFINITY,
+            back_opacity: f32::NAN,
+            back_color: [f32::NAN, f32::INFINITY, -f32::INFINITY, 1.0],
+            ..Default::default()
+        };
+        let result = apply_page_turn(&src, 2, 2, &params);
+        assert_eq!(result.len(), src.len());
+        assert_eq!(apply_page_turn(&src, u32::MAX, u32::MAX, &params), src);
+    }
 
     #[test]
     fn test_page_turn_unfolded_region_preserves_pixels() {
