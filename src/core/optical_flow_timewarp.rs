@@ -370,6 +370,57 @@ pub fn markerless_pose_to_csv(pose: &NamedMarkerlessPoseTrack) -> String {
     output
 }
 
+pub fn markerless_pose_to_bvh(pose: &NamedMarkerlessPoseTrack, frame_time: f32) -> String {
+    if pose.joint_names.is_empty() || pose.frames.is_empty() {
+        return String::new();
+    }
+    let frame_time = if frame_time.is_finite() && frame_time > 0.0 { frame_time } else { 1.0 / 30.0 };
+    let mut children = vec![Vec::<usize>::new(); pose.joint_names.len()];
+    for bone in &pose.bones {
+        if bone[0] < children.len() && bone[1] < children.len() && bone[0] != bone[1] {
+            children[bone[0]].push(bone[1]);
+        }
+    }
+    let first = &pose.frames[0];
+    let mut parent = vec![None; pose.joint_names.len()];
+    for bone in &pose.bones {
+        if bone[1] < parent.len() && parent[bone[1]].is_none() { parent[bone[1]] = Some(bone[0]); }
+    }
+    let root = parent.iter().position(Option::is_none).unwrap_or(0);
+    let mut output = String::from("HIERARCHY\n");
+    fn write_joint(out: &mut String, index: usize, indent: usize, names: &[String], children: &[Vec<usize>], frame: &MarkerlessPoseFrame, is_root: bool) {
+        let pad = "  ".repeat(indent);
+        out.push_str(&format!("{}{} {}\n{}{{\n", pad, if is_root { "ROOT" } else { "JOINT" }, names[index], pad));
+        let (ox, oy) = frame.joints.get(index).zip(frame.joints.get(index).and_then(|_| Some(index))).map(|(p, _)| (p[0], p[1])).unwrap_or((0.0, 0.0));
+        let parent_pos = if is_root { [0.0, 0.0] } else { [0.0, 0.0] };
+        let _ = parent_pos;
+        out.push_str(&format!("{}  OFFSET {:.6} {:.6} 0.000000\n", pad, ox, oy));
+        if is_root { out.push_str(&format!("{}  CHANNELS 6 Xposition Yposition Zposition Zrotation Xrotation Yrotation\n", pad)); }
+        else { out.push_str(&format!("{}  CHANNELS 3 Zrotation Xrotation Yrotation\n", pad)); }
+        for &child in &children[index] { write_joint(out, child, indent + 1, names, children, frame, false); }
+        if children[index].is_empty() { out.push_str(&format!("{}  End Site\n{}  {{\n{}    OFFSET 0.000000 0.000000 0.000000\n{}  }}\n", pad, pad, pad, pad)); }
+        out.push_str(&format!("{}}}\n", pad));
+    }
+    write_joint(&mut output, root, 0, &pose.joint_names, &children, first, true);
+    output.push_str(&format!("MOTION\nFrames: {}\nFrame Time: {:.9}\n", pose.frames.len(), frame_time));
+    let initial = &first.joints;
+    for (frame_index, frame) in pose.frames.iter().enumerate() {
+        let root_point = frame.joints.get(root).copied().unwrap_or([0.0, 0.0]);
+        output.push_str(&format!("{:.6} {:.6} 0.000000", root_point[0], root_point[1]));
+        for index in 0..pose.joint_names.len() {
+            if index == root { continue; }
+            let angle = parent[index].and_then(|p| {
+                let a = initial.get(index)?; let b = initial.get(p)?;
+                let ia = frame.joints.get(index)?; let ib = frame.joints.get(p)?;
+                Some(((ia[1] - ib[1]).atan2(ia[0] - ib[0]) - (a[1] - b[1]).atan2(a[0] - b[0])).to_degrees())
+            }).unwrap_or(0.0);
+            output.push_str(&format!(" {:.6} 0.000000 0.000000", angle));
+        }
+        if frame_index + 1 < pose.frames.len() { output.push('\n'); }
+    }
+    output
+}
+
 pub fn build_markerless_pose_track(
     joint_tracks: &[MarkerlessMotionTrack],
     bones: &[(usize, usize)],
@@ -641,5 +692,9 @@ mod tests {
         let csv = markerless_pose_to_csv(&named);
         assert!(csv.lines().next().unwrap().contains("hip_x"));
         assert_eq!(csv.lines().count(), 3);
+        let bvh = markerless_pose_to_bvh(&named, 0.0);
+        assert!(bvh.contains("HIERARCHY"));
+        assert!(bvh.contains("Frames: 2"));
+        assert!(bvh.contains("Frame Time:"));
     }
 }
