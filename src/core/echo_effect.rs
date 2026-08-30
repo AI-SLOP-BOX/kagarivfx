@@ -22,7 +22,7 @@ pub enum EchoOperator {
 pub struct EchoParams {
     pub echo_time_seconds: f32, // Offset between echoes (e.g. -0.033 = 1 frame back at 30fps)
     pub num_echoes: u32,        // 1..30
-    pub starting_intensity: f32,// 0.0..2.0
+    pub starting_intensity: f32, // 0.0..2.0
     pub decay: f32,             // 0.0..1.0 multiplier per echo
     pub operator: EchoOperator,
 }
@@ -48,11 +48,21 @@ pub fn blend_echo_frame(
     weight: f32,
     op: EchoOperator,
 ) {
-    if acc.len() != (width * height * 4) as usize || echo.len() != acc.len() {
+    let Some(pixel_count) = (width as usize)
+        .checked_mul(height as usize)
+        .filter(|&count| count <= usize::MAX / 4)
+    else {
+        return;
+    };
+    if width == 0 || height == 0 || acc.len() != pixel_count * 4 || echo.len() != acc.len() {
         return;
     }
 
-    let w = weight.clamp(0.0, 2.0);
+    let w = if weight.is_finite() {
+        weight.clamp(0.0, 2.0)
+    } else {
+        0.0
+    };
 
     for idx in (0..acc.len()).step_by(4) {
         let ar = acc[idx] as f32 / 255.0;
@@ -78,18 +88,8 @@ pub fn blend_echo_frame(
                 1.0 - (1.0 - ab) * (1.0 - eb.min(1.0)),
                 1.0 - (1.0 - aa) * (1.0 - ea.min(1.0)),
             ),
-            EchoOperator::Maximum => (
-                ar.max(er),
-                ag.max(eg),
-                ab.max(eb),
-                aa.max(ea),
-            ),
-            EchoOperator::Minimum => (
-                ar.min(er),
-                ag.min(eg),
-                ab.min(eb),
-                aa.min(ea),
-            ),
+            EchoOperator::Maximum => (ar.max(er), ag.max(eg), ab.max(eb), aa.max(ea)),
+            EchoOperator::Minimum => (ar.min(er), ag.min(eg), ab.min(eb), aa.min(ea)),
             EchoOperator::CompositeInBack => {
                 let out_a = ea + aa * (1.0 - ea);
                 if out_a <= 0.0 {
@@ -139,6 +139,16 @@ mod tests {
         blend_echo_frame(&mut acc, &echo, 1, 1, 1.0, EchoOperator::Add);
         assert_eq!(acc[0], 200);
         assert_eq!(acc[3], 255);
+    }
+
+    #[test]
+    fn test_echo_rejects_overflow_and_nonfinite_weight() {
+        let original = vec![50u8; 4];
+        let mut acc = original.clone();
+        blend_echo_frame(&mut acc, &original, u32::MAX, u32::MAX, f32::NAN, EchoOperator::Add);
+        assert_eq!(acc, original);
+        blend_echo_frame(&mut acc, &original, 1, 1, f32::INFINITY, EchoOperator::Add);
+        assert!(acc.iter().all(|value| *value <= 255));
     }
 
     #[test]
