@@ -702,13 +702,24 @@ pub fn compute_homography(from: [[f32; 2]; 4], to: [[f32; 2]; 4]) -> Option<[[f6
 /// (infinity) return f32::MAX components.
 pub fn apply_homography(h: &[[f64; 3]; 3], p: [f32; 2]) -> [f32; 2] {
     let [x, y] = [p[0] as f64, p[1] as f64];
+    if !x.is_finite()
+        || !y.is_finite()
+        || h.iter().flatten().any(|value| !value.is_finite())
+    {
+        return [f32::MAX, f32::MAX];
+    }
     let w = h[2][0] * x + h[2][1] * y + h[2][2];
-    if w.abs() < 1e-12 {
+    if !w.is_finite() || w.abs() < 1e-12 {
+        return [f32::MAX, f32::MAX];
+    }
+    let mapped_x = (h[0][0] * x + h[0][1] * y + h[0][2]) / w;
+    let mapped_y = (h[1][0] * x + h[1][1] * y + h[1][2]) / w;
+    if !mapped_x.is_finite() || !mapped_y.is_finite() {
         return [f32::MAX, f32::MAX];
     }
     [
-        ((h[0][0] * x + h[0][1] * y + h[0][2]) / w) as f32,
-        ((h[1][0] * x + h[1][1] * y + h[1][2]) / w) as f32,
+        mapped_x.clamp(f64::from(f32::MIN), f64::from(f32::MAX)) as f32,
+        mapped_y.clamp(f64::from(f32::MIN), f64::from(f32::MAX)) as f32,
     ]
 }
 
@@ -811,8 +822,16 @@ pub fn smooth_tracker_keyframes(
             weight_sum += weight;
         }
 
-        let avg_x = if weight_sum > 0.0 { sum_x / weight_sum } else { kfs[i].value[0] };
-        let avg_y = if weight_sum > 0.0 { sum_y / weight_sum } else { kfs[i].value[1] };
+        let avg_x = if weight_sum > 0.0 {
+            sum_x / weight_sum
+        } else {
+            kfs[i].value[0]
+        };
+        let avg_y = if weight_sum > 0.0 {
+            sum_y / weight_sum
+        } else {
+            kfs[i].value[1]
+        };
 
         smoothed.push(crate::core::keyframe::Keyframe::new(
             kfs[i].frame,
@@ -1044,6 +1063,20 @@ mod quad_track_tests {
             (m[0] - 85.0).abs() < 1e-3 && (m[1] - 45.0).abs() < 1e-3,
             "{m:?}"
         );
+    }
+
+    #[test]
+    fn test_homography_rejects_nonfinite_inputs_without_propagation() {
+        let identity = [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]];
+        assert_eq!(apply_homography(&identity, [f32::NAN, 1.0]), [f32::MAX; 2]);
+        assert_eq!(apply_homography(&identity, [1.0, f32::INFINITY]), [f32::MAX; 2]);
+
+        let invalid = [[f64::NAN, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]];
+        assert_eq!(apply_homography(&invalid, [1.0, 1.0]), [f32::MAX; 2]);
+
+        let overflow = [[f64::MAX, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]];
+        let mapped = apply_homography(&overflow, [2.0, 1.0]);
+        assert!(mapped.iter().all(|value| value.is_finite()));
     }
 
     #[test]
