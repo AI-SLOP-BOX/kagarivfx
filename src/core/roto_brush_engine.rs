@@ -58,7 +58,7 @@ pub fn generate_rotobrush_matte(
     let Some(expected_len) = size.checked_mul(4) else {
         return vec![0u8; size];
     };
-    if src_pixels.len() != expected_len || strokes.is_empty() {
+    if width == 0 || height == 0 || src_pixels.len() != expected_len || strokes.is_empty() {
         return vec![0u8; size];
     }
 
@@ -69,8 +69,15 @@ pub fn generate_rotobrush_matte(
 
     // Collect color samples and point coordinates from brush strokes
     for stroke in strokes {
-        let r_sq = stroke.radius * stroke.radius;
+        if !stroke.radius.is_finite() || stroke.radius < 0.0 {
+            continue;
+        }
+        let radius = stroke.radius.min(width.max(height) as f32);
+        let r_sq = radius * radius;
         for &pt in &stroke.points {
+            if !pt[0].is_finite() || !pt[1].is_finite() {
+                continue;
+            }
             if stroke.stroke_type == RotoStrokeType::Foreground {
                 fg_points.push(pt);
             } else {
@@ -79,7 +86,7 @@ pub fn generate_rotobrush_matte(
 
             let px = pt[0] as i32;
             let py = pt[1] as i32;
-            let rad = stroke.radius.ceil() as i32;
+            let rad = radius.ceil() as i32;
 
             for dy in -rad..=rad {
                 let y = py + dy;
@@ -129,17 +136,23 @@ pub fn generate_rotobrush_matte(
 
             // Spatial distance to nearest FG/BG strokes
             let p_curr = [x as f32, y as f32];
-            let min_d_fg_pos = fg_points.iter().map(|&p| {
-                let dx = p[0] - p_curr[0];
-                let dy = p[1] - p_curr[1];
-                dx * dx + dy * dy
-            }).fold(f32::INFINITY, f32::min);
+            let min_d_fg_pos = fg_points
+                .iter()
+                .map(|&p| {
+                    let dx = p[0] - p_curr[0];
+                    let dy = p[1] - p_curr[1];
+                    dx * dx + dy * dy
+                })
+                .fold(f32::INFINITY, f32::min);
 
-            let min_d_bg_pos = bg_points.iter().map(|&p| {
-                let dx = p[0] - p_curr[0];
-                let dy = p[1] - p_curr[1];
-                dx * dx + dy * dy
-            }).fold(f32::INFINITY, f32::min);
+            let min_d_bg_pos = bg_points
+                .iter()
+                .map(|&p| {
+                    let dx = p[0] - p_curr[0];
+                    let dy = p[1] - p_curr[1];
+                    dx * dx + dy * dy
+                })
+                .fold(f32::INFINITY, f32::min);
 
             let spatial_fg_weight = if !fg_points.is_empty() {
                 (-min_d_fg_pos / (2.0 * spatial_sigma_sq)).exp()
@@ -177,7 +190,8 @@ pub fn generate_rotobrush_matte(
     }
 
     // Apply edge refinement & feather adjusted by sensitivity
-    let effective_feather = settings.feather_radius * (1.2 - settings.edge_detection_sensitivity.clamp(0.0, 1.0) * 0.4);
+    let effective_feather =
+        settings.feather_radius * (1.2 - settings.edge_detection_sensitivity.clamp(0.0, 1.0) * 0.4);
     if effective_feather > 0.5 {
         refine_edge_matte(&mut alpha_matte, width, height, effective_feather);
     }
@@ -329,6 +343,10 @@ mod tests {
         };
         let matte = generate_rotobrush_matte(&pixels, 3, 3, &[stroke], &settings);
         assert!(matte[4] > 200);
-        assert!(matte.iter().enumerate().filter(|(i, _)| *i != 4).all(|(_, a)| *a < 200));
+        assert!(matte
+            .iter()
+            .enumerate()
+            .filter(|(i, _)| *i != 4)
+            .all(|(_, a)| *a < 200));
     }
 }
