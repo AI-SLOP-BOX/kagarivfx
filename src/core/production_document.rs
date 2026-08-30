@@ -74,6 +74,9 @@ impl ProductionDocument {
         if self.project.active_composition_idx >= self.project.compositions.len() {
             return Err("production document active composition index is out of range".into());
         }
+        for composition in &self.project.compositions {
+            validate_composition(composition, 0)?;
+        }
         if !(1..=384_000).contains(&self.audio.sample_rate) {
             return Err("audio sample rate is outside the supported range".into());
         }
@@ -160,6 +163,32 @@ impl ProductionDocument {
     }
 }
 
+fn validate_composition(
+    composition: &crate::core::timeline::Composition,
+    depth: usize,
+) -> Result<(), String> {
+    if depth > 1024 {
+        return Err("production document composition nesting is too deep".into());
+    }
+    if !(1..=65_535).contains(&composition.width)
+        || !(1..=65_535).contains(&composition.height)
+    {
+        return Err("composition dimensions are outside the supported range".into());
+    }
+    if !(1..=240).contains(&composition.fps) || composition.duration_frames == 0 {
+        return Err("composition frame rate or duration is invalid".into());
+    }
+    if !composition.motion_blur_shutter_angle.is_finite()
+        || !composition.motion_blur_shutter_phase.is_finite()
+    {
+        return Err("composition motion blur settings must be finite".into());
+    }
+    for nested in &composition.sub_compositions {
+        validate_composition(nested, depth + 1)?;
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -206,6 +235,14 @@ mod tests {
 
         let mut invalid_project = Project::default();
         invalid_project.active_composition_idx = invalid_project.compositions.len();
+        assert!(ProductionDocument::new(invalid_project).validate().is_err());
+
+        let mut invalid_project = Project::default();
+        invalid_project.compositions[0].width = 0;
+        assert!(ProductionDocument::new(invalid_project).validate().is_err());
+
+        let mut invalid_project = Project::default();
+        invalid_project.compositions[0].duration_frames = 0;
         assert!(ProductionDocument::new(invalid_project).validate().is_err());
     }
 
