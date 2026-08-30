@@ -42,6 +42,7 @@ impl ProductionDocument {
     pub const CURRENT_SCHEMA_VERSION: u32 = 1;
     pub const MAX_AUDIO_CHANNELS: usize = 4096;
     pub const MAX_BINDINGS: usize = 8192;
+    pub const MAX_COMPOSITION_FRAMES: u32 = 10_000_000;
 
     pub fn new(project: Project) -> Self {
         Self {
@@ -175,7 +176,10 @@ fn validate_composition(
     {
         return Err("composition dimensions are outside the supported range".into());
     }
-    if !(1..=240).contains(&composition.fps) || composition.duration_frames == 0 {
+    if !(1..=240).contains(&composition.fps)
+        || !(1..=ProductionDocument::MAX_COMPOSITION_FRAMES)
+            .contains(&composition.duration_frames)
+    {
         return Err("composition frame rate or duration is invalid".into());
     }
     if !composition.motion_blur_shutter_angle.is_finite()
@@ -250,6 +254,11 @@ mod tests {
 
         let mut invalid_project = Project::default();
         invalid_project.compositions[0].background_color[0] = f32::NAN;
+        assert!(ProductionDocument::new(invalid_project).validate().is_err());
+
+        let mut invalid_project = Project::default();
+        invalid_project.compositions[0].duration_frames =
+            ProductionDocument::MAX_COMPOSITION_FRAMES + 1;
         assert!(ProductionDocument::new(invalid_project).validate().is_err());
     }
 
