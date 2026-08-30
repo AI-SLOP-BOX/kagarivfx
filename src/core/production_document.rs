@@ -115,6 +115,11 @@ impl ProductionDocument {
                 {
                     return Err("media asset path must not be empty".into());
                 }
+                ProjectItemType::Solid { color }
+                    if color.iter().any(|channel| !channel.is_finite()) =>
+                {
+                    return Err("solid asset color must be finite".into());
+                }
                 ProjectItemType::Video { duration_sec, .. }
                 | ProjectItemType::Audio { duration_sec, .. }
                     if !duration_sec.is_finite() || *duration_sec < 0.0 =>
@@ -371,6 +376,16 @@ mod tests {
             ProjectItemType::Audio {
                 path: "  ".into(),
                 duration_sec: 1.0,
+            },
+        ));
+        assert!(ProductionDocument::new(invalid_project).validate().is_err());
+
+        let mut invalid_project = Project::default();
+        invalid_project.assets.push(crate::core::timeline::ProjectItem::new(
+            "bad-solid",
+            "Bad Solid",
+            ProjectItemType::Solid {
+                color: [f32::INFINITY, 0.0, 0.0, 1.0],
             },
         ));
         assert!(ProductionDocument::new(invalid_project).validate().is_err());
