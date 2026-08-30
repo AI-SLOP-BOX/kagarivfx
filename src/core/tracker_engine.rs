@@ -27,11 +27,17 @@ impl TrackerEngine {
             }).collect::<Vec<_>>();
             if keyframes.is_empty() { continue; }
             let initial = keyframes[0].value;
-            let mut tracker = crate::core::timeline::TrackerPoint::new(
-                format!("pose_{}", name), format!("Pose {}", name.replace('_', " ")), initial,
-            );
-            tracker.position = if keyframes.len() == 1 { Animatable::Constant(initial) } else { Animatable::Animated(keyframes) };
-            layer.trackers.push(tracker);
+            let id = format!("pose_{}", name);
+            let position = if keyframes.len() == 1 { Animatable::Constant(initial) } else { Animatable::Animated(keyframes) };
+            if let Some(tracker) = layer.trackers.iter_mut().find(|tracker| tracker.id == id) {
+                tracker.position = position;
+            } else {
+                let mut tracker = crate::core::timeline::TrackerPoint::new(
+                    id, format!("Pose {}", name.replace('_', " ")), initial,
+                );
+                tracker.position = position;
+                layer.trackers.push(tracker);
+            }
             created += 1;
         }
         created
@@ -1518,5 +1524,22 @@ mod quad_track_tests {
         assert_eq!(smoothed.len(), 3);
         // Spike at frame 1 should be damped significantly by its neighbours
         assert!(smoothed[1].value[0] < 100.0);
+    }
+
+    #[test]
+    fn pose_application_is_idempotent_for_repeated_analysis() {
+        let mut layer = Layer::new(
+            "l".into(), "Pose Layer".into(), crate::core::timeline::LayerType::Null, 10,
+        );
+        let pose = crate::core::optical_flow_timewarp::MarkerlessPoseTrack {
+            frames: vec![
+                crate::core::optical_flow_timewarp::MarkerlessPoseFrame { frame: 0, joints: vec![[1.0, 2.0]], root: [1.0, 2.0], confidence: 1.0 },
+                crate::core::optical_flow_timewarp::MarkerlessPoseFrame { frame: 1, joints: vec![[2.0, 2.0]], root: [2.0, 2.0], confidence: 1.0 },
+            ], bones: vec![], bone_lengths: vec![],
+        };
+        assert_eq!(TrackerEngine::apply_pose_as_tracker_points(&mut layer, &pose, 0.5), 1);
+        assert_eq!(TrackerEngine::apply_pose_as_tracker_points(&mut layer, &pose, 0.5), 1);
+        assert_eq!(layer.trackers.len(), 1);
+        assert_eq!(layer.trackers[0].position.evaluate(1), [2.0, 2.0]);
     }
 }
