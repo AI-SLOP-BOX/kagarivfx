@@ -44,6 +44,7 @@ impl ProductionDocument {
     pub const MAX_AUDIO_CHANNELS: usize = 4096;
     pub const MAX_BINDINGS: usize = 8192;
     pub const MAX_COMPOSITION_FRAMES: u32 = 10_000_000;
+    pub const MAX_ASSET_DURATION_SEC: f32 = 10_000_000.0;
 
     pub fn new(project: Project) -> Self {
         Self {
@@ -140,9 +141,11 @@ impl ProductionDocument {
                 }
                 ProjectItemType::Video { duration_sec, .. }
                 | ProjectItemType::Audio { duration_sec, .. }
-                    if !duration_sec.is_finite() || *duration_sec < 0.0 =>
+                    if !duration_sec.is_finite()
+                        || *duration_sec < 0.0
+                        || *duration_sec > Self::MAX_ASSET_DURATION_SEC =>
                 {
-                    return Err("asset duration must be finite and non-negative".into());
+                    return Err("asset duration is out of range".into());
                 }
                 _ => {}
             }
@@ -909,6 +912,19 @@ mod tests {
         let mut invalid_project = Project::default();
         let duplicate = invalid_project.compositions[0].clone();
         invalid_project.compositions.push(duplicate);
+        assert!(ProductionDocument::new(invalid_project).validate().is_err());
+
+        let mut invalid_project = Project::default();
+        invalid_project
+            .assets
+            .push(crate::core::timeline::ProjectItem::new(
+                "huge-duration",
+                "Huge Duration",
+                ProjectItemType::Video {
+                    path: "video.mp4".into(),
+                    duration_sec: ProductionDocument::MAX_ASSET_DURATION_SEC + 1.0,
+                },
+            ));
         assert!(ProductionDocument::new(invalid_project).validate().is_err());
 
         let mut invalid_project = Project::default();
