@@ -108,10 +108,15 @@ impl TempoMap {
     pub const MAX_CHANGES: usize = 8192;
 
     pub fn new(bpm: f64) -> Self {
+        let bpm = if bpm.is_finite() && bpm > 0.0 {
+            bpm
+        } else {
+            120.0
+        };
         Self {
             changes: vec![TempoChange {
                 at: Time::ZERO,
-                bpm: bpm.max(f64::EPSILON),
+                bpm,
             }],
         }
     }
@@ -311,13 +316,22 @@ mod tests {
     }
 
     #[test]
+    fn tempo_map_constructor_sanitizes_invalid_bpm() {
+        assert!(TempoMap::new(f64::NAN).validate().is_ok());
+        assert_eq!(TempoMap::new(f64::NAN).changes[0].bpm, 120.0);
+        assert_eq!(TempoMap::new(-1.0).changes[0].bpm, 120.0);
+    }
+
+    #[test]
     fn tempo_map_rejects_excessive_change_count() {
         let mut map = TempoMap::new(120.0);
-        map.changes
-            .resize(TempoMap::MAX_CHANGES + 1, TempoChange {
+        map.changes.resize(
+            TempoMap::MAX_CHANGES + 1,
+            TempoChange {
                 at: Time::ZERO,
                 bpm: 120.0,
-            });
+            },
+        );
         assert!(map.validate().is_err());
     }
 
