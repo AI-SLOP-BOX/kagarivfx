@@ -1057,6 +1057,7 @@ mod tests {
         assert_eq!(reject_markerless_motion_outliers(&mut track, 5.0), 1);
         assert_eq!(track.samples[1].position, [5.0, 0.0]);
         assert!(track.samples[1].confidence < 0.5);
+        assert!(redetect_markerless_feature(&vec![0u8; 4 * 4 * 4], 4, 4, [1.0, 1.0], 2).is_none());
     }
 
     #[test]
