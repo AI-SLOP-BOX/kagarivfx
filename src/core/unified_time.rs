@@ -54,6 +54,9 @@ impl Time {
     }
 
     pub fn to_sample_floor(self, sample_rate: u32) -> i64 {
+        if !self.is_valid() || sample_rate == 0 {
+            return 0;
+        }
         div_floor(
             i128::from(self.numerator) * i128::from(sample_rate),
             i128::from(self.denominator),
@@ -266,6 +269,16 @@ mod tests {
         assert!(!malformed.is_valid());
         assert_eq!(Time::from_frame(100, malformed), Time::ZERO);
         assert_eq!(Time::new(1, 1).to_frame_floor(malformed), 0);
+    }
+
+    #[test]
+    fn malformed_time_sample_conversion_fails_closed() {
+        let malformed = Time {
+            numerator: 1,
+            denominator: 0,
+        };
+        assert_eq!(malformed.to_sample_floor(48_000), 0);
+        assert_eq!(Time::new(1, 1).to_sample_floor(0), 0);
     }
 
     #[test]
