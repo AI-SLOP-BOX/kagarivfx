@@ -416,16 +416,23 @@ mod disk_cache {
         }
         let width = u32::from_le_bytes([data[0], data[1], data[2], data[3]]);
         let height = u32::from_le_bytes([data[4], data[5], data[6], data[7]]);
+        if width == 0 || height == 0 {
+            let _ = std::fs::remove_file(&path);
+            return None;
+        }
         let Some(pixel_bytes) = (width as usize)
             .checked_mul(height as usize)
             .and_then(|pixels| pixels.checked_mul(4))
         else {
+            let _ = std::fs::remove_file(&path);
             return None;
         };
         let Some(expected) = pixel_bytes.checked_add(8) else {
+            let _ = std::fs::remove_file(&path);
             return None;
         };
         if data.len() != expected {
+            let _ = std::fs::remove_file(&path);
             return None;
         }
         Some((data[8..expected].to_vec(), width, height))
@@ -664,5 +671,16 @@ mod disk_cache_tests {
         std::fs::write(&path, data).unwrap();
         assert!(disk_cache::read_frame(&key).is_none());
         let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn zero_dimension_disk_frame_is_rejected_and_removed() {
+        let key = (u32::MAX - 2, u64::MAX - 2);
+        let dir = std::env::temp_dir().join("aevfx_frame_cache");
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join(format!("frame_{}_{}.rgba", key.0, key.1));
+        std::fs::write(&path, [0, 0, 0, 0, 0, 0, 0, 0]).unwrap();
+        assert!(disk_cache::read_frame(&key).is_none());
+        assert!(!path.exists());
     }
 }
