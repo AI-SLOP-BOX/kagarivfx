@@ -120,6 +120,112 @@ pub fn compute_dense_optical_flow(
     flow
 }
 
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct MarkerlessMotionSample {
+    pub frame: u32,
+    pub position: [f32; 2],
+    pub confidence: f32,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct MarkerlessMotionTrack {
+    pub samples: Vec<MarkerlessMotionSample>,
+}
+
+pub fn track_markerless_motion(
+    frames: &[&[u8]],
+    width: u32,
+    height: u32,
+    seed_points: &[[f32; 2]],
+    block_radius: i32,
+    search_radius: i32,
+) -> Vec<MarkerlessMotionTrack> {
+    let Some(byte_len) = (width as usize)
+        .checked_mul(height as usize)
+        .and_then(|v| v.checked_mul(4))
+    else {
+        return Vec::new();
+    };
+    if width == 0 || height == 0 || frames.is_empty() || frames.iter().any(|f| f.len() != byte_len)
+    {
+        return Vec::new();
+    }
+
+    let mut positions = Vec::with_capacity(seed_points.len());
+    let mut tracks = Vec::with_capacity(seed_points.len());
+    for &point in seed_points {
+        if !point[0].is_finite() || !point[1].is_finite() {
+            continue;
+        }
+        let position = [
+            point[0].clamp(0.0, width.saturating_sub(1) as f32),
+            point[1].clamp(0.0, height.saturating_sub(1) as f32),
+        ];
+        positions.push(position);
+        tracks.push(MarkerlessMotionTrack {
+            samples: vec![MarkerlessMotionSample {
+                frame: 0,
+                position,
+                confidence: 1.0,
+            }],
+        });
+    }
+    if frames.len() == 1 || tracks.is_empty() {
+        return tracks;
+    }
+
+    for frame in 1..frames.len() {
+        let flow = compute_dense_optical_flow(
+            frames[frame - 1],
+            frames[frame],
+            width,
+            height,
+            block_radius,
+            search_radius,
+        );
+        for (index, position) in positions.iter_mut().enumerate() {
+            let x = position[0]
+                .round()
+                .clamp(0.0, width.saturating_sub(1) as f32) as u32;
+            let y = position[1]
+                .round()
+                .clamp(0.0, height.saturating_sub(1) as f32) as u32;
+            let vector = flow.get(x, y);
+            let magnitude = vector[0].hypot(vector[1]);
+            let confidence = if magnitude.is_finite() {
+                (1.0 - magnitude / (search_radius.max(1) as f32 + 1.0)).clamp(0.0, 1.0)
+            } else {
+                0.0
+            };
+            position[0] = (position[0] + vector[0]).clamp(0.0, width.saturating_sub(1) as f32);
+            position[1] = (position[1] + vector[1]).clamp(0.0, height.saturating_sub(1) as f32);
+            tracks[index].samples.push(MarkerlessMotionSample {
+                frame: frame as u32,
+                position: *position,
+                confidence,
+            });
+        }
+    }
+    tracks
+}
+
+pub fn markerless_track_keyframes(
+    track: &MarkerlessMotionTrack,
+) -> crate::core::property::Animatable<[f32; 2]> {
+    use crate::core::keyframe::{InterpolationType, Keyframe};
+    let keyframes = track
+        .samples
+        .iter()
+        .filter(|sample| sample.position.iter().all(|value| value.is_finite()))
+        .map(|sample| Keyframe::new(sample.frame, sample.position, InterpolationType::Linear))
+        .collect::<Vec<_>>();
+    match keyframes.as_slice() {
+        [] => crate::core::property::Animatable::Constant([0.0, 0.0]),
+        [keyframe] => crate::core::property::Animatable::Constant(keyframe.value),
+        _ => crate::core::property::Animatable::Animated(keyframes),
+    }
+}
+
 /// Interpolates an intermediate frame at fractional position `t` (0.0 .. 1.0)
 /// using bidirectional forward and backward flow fields.
 pub fn interpolate_timewarp_frame(
@@ -259,5 +365,56 @@ mod tests {
         let center_vec = flow.get(5, 5);
         assert_eq!(center_vec[0], 2.0);
         assert_eq!(center_vec[1], 0.0);
+    }
+
+    #[test]
+    fn markerless_tracking_follows_translation_and_bakes_keyframes() {
+        let (w, h) = (16u32, 16u32);
+        let make_frame = |offset: u32| {
+            let mut frame = vec![0u8; (w * h * 4) as usize];
+            for y in 4..8 {
+                for x in (4 + offset)..(8 + offset) {
+                    let i = (y * w + x) as usize * 4;
+                    frame[i..i + 4].copy_from_slice(&[255, 255, 255, 255]);
+                }
+            }
+            frame
+        };
+        let frames = [make_frame(0), make_frame(2), make_frame(4)];
+        let refs = frames.iter().map(Vec::as_slice).collect::<Vec<_>>();
+        let tracks = track_markerless_motion(&refs, w, h, &[[5.0, 5.0]], 1, 3);
+        assert_eq!(tracks.len(), 1);
+        assert_eq!(tracks[0].samples.len(), 3);
+        assert!(tracks[0].samples[1].position[0] >= 6.0);
+        assert!(tracks[0]
+            .samples
+            .iter()
+            .all(|s| (0.0..=1.0).contains(&s.confidence)));
+        let keyframes = markerless_track_keyframes(&tracks[0]);
+        assert_eq!(keyframes.keyframes().map(|k| k.len()), Some(3));
+    }
+
+    #[test]
+    fn markerless_tracking_rejects_bad_frames_and_nonfinite_seeds() {
+        let valid = vec![0u8; 4 * 4 * 4];
+        let invalid = vec![0u8; 3];
+        assert!(track_markerless_motion(
+            &[valid.as_slice(), invalid.as_slice()],
+            4,
+            4,
+            &[[1.0, 1.0]],
+            1,
+            1
+        )
+        .is_empty());
+        assert!(track_markerless_motion(
+            &[valid.as_slice()],
+            4,
+            4,
+            &[[f32::NAN, 1.0], [f32::INFINITY, 2.0]],
+            1,
+            1
+        )
+        .is_empty());
     }
 }
