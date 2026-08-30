@@ -174,6 +174,14 @@ pub fn assign_features_to_humanoid(
     height: u32,
 ) -> Vec<Option<usize>> {
     if features.is_empty() || width == 0 || height == 0 { return vec![None; 17]; }
+    let valid = features.iter().filter(|point| point.iter().all(|value| value.is_finite())).collect::<Vec<_>>();
+    if valid.is_empty() { return vec![None; 17]; }
+    let min_x = valid.iter().map(|point| point[0]).fold(f32::INFINITY, f32::min);
+    let max_x = valid.iter().map(|point| point[0]).fold(f32::NEG_INFINITY, f32::max);
+    let min_y = valid.iter().map(|point| point[1]).fold(f32::INFINITY, f32::min);
+    let max_y = valid.iter().map(|point| point[1]).fold(f32::NEG_INFINITY, f32::max);
+    let span_x = (max_x - min_x).max(1.0);
+    let span_y = (max_y - min_y).max(1.0);
     let canonical = [
         (0.50, 0.62), (0.50, 0.48), (0.50, 0.38), (0.50, 0.28), (0.50, 0.16),
         (0.38, 0.40), (0.30, 0.52), (0.24, 0.65), (0.62, 0.40), (0.70, 0.52),
@@ -185,8 +193,8 @@ pub fn assign_features_to_humanoid(
         features.iter().enumerate().filter(|(index, point)| {
             !used[*index] && point[0].is_finite() && point[1].is_finite()
         }).min_by(|(_, a), (_, b)| {
-            let da = (a[0] / width as f32 - x).hypot(a[1] / height as f32 - y);
-            let db = (b[0] / width as f32 - x).hypot(b[1] / height as f32 - y);
+            let da = ((a[0] - min_x) / span_x - x).hypot((a[1] - min_y) / span_y - y);
+            let db = ((b[0] - min_x) / span_x - x).hypot((b[1] - min_y) / span_y - y);
             da.total_cmp(&db)
         }).map(|(index, _)| { used[index] = true; index })
     }).collect()
