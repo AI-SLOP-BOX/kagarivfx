@@ -185,7 +185,10 @@ impl AutosaveManager {
             if let Ok(json) = std::fs::read_to_string(path) {
                 if let Ok(snapshot) = serde_json::from_str::<AutosaveSnapshot>(&json) {
                     if let Some(document) = snapshot.production_document {
-                        return Some(document);
+                        if document.validate().is_ok() {
+                            return Some(document);
+                        }
+                        log::warn!("[Autosave] Skipping invalid production document {:?}", path);
                     }
                 }
             }
@@ -292,6 +295,31 @@ mod tests {
         assert_eq!(manager.load_latest_recovery().unwrap().active_composition().name, "AutoSaveComp");
         assert!(manager.load_latest_production().is_none());
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn invalid_production_snapshot_is_not_returned_as_recovery() {
+        let dir = std::env::temp_dir().join(format!(
+            "aevfx_autosave_invalid_production_{}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let mut document = ProductionDocument::new(sample_project());
+        document.audio.sample_rate = 0;
+        let snapshot = AutosaveSnapshot {
+            project: sample_project(),
+            production_document: Some(document),
+        };
+        std::fs::write(
+            dir.join("recovery_0.json"),
+            serde_json::to_string(&snapshot).unwrap(),
+        )
+        .unwrap();
+
+        let manager = AutosaveManager::new(&dir);
+        assert!(manager.load_latest_production().is_none());
+        let _ = std::fs::remove_dir_all(dir);
     }
 
     #[test]
