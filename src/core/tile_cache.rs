@@ -86,10 +86,13 @@ impl TileCache {
     pub fn get(&mut self, frame: u32, coord: TileCoord) -> Option<&[u8]> {
         let version = current_tile_version();
         let key = (frame, 0, coord);
-        let entry = self.tiles.get_mut(&key)?;
-        if entry.version != version {
+        if self.tiles.get(&key).is_some_and(|entry| entry.version != version) {
+            if let Some(entry) = self.tiles.remove(&key) {
+                self.current_memory = self.current_memory.saturating_sub(entry.pixels.len());
+            }
             return None;
         }
+        let entry = self.tiles.get_mut(&key)?;
         self.lru_clock += 1;
         entry.lru_stamp = self.lru_clock;
         Some(&entry.pixels)
@@ -235,6 +238,16 @@ mod tests {
         cache.insert(2, TileCoord { tx: 0, ty: 0 }, vec![2; 16]);
         assert!(cache.get(0, TileCoord { tx: 0, ty: 0 }).is_some());
         assert!(cache.get(1, TileCoord { tx: 0, ty: 0 }).is_none());
+    }
+
+    #[test]
+    fn stale_tile_is_removed_when_read_after_invalidation() {
+        let mut cache = TileCache::new(16, 32);
+        cache.insert(0, TileCoord { tx: 0, ty: 0 }, vec![0; 16]);
+        bump_tile_version();
+        assert!(cache.get(0, TileCoord { tx: 0, ty: 0 }).is_none());
+        assert_eq!(cache.tile_count(), 0);
+        assert_eq!(cache.memory_usage(), 0);
     }
 
     #[test]
