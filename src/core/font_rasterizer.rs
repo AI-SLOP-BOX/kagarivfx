@@ -337,6 +337,12 @@ impl FontRasterizer {
         color: [f32; 4],
         tracking: f32,
     ) -> Option<(u32, u32, Vec<u8>)> {
+        if !font_size.is_finite() || !(0.1..=8192.0).contains(&font_size)
+            || !tracking.is_finite()
+            || !color.iter().all(|value| value.is_finite())
+        {
+            return None;
+        }
         self.rasterize_text_formatted(
             family_name,
             text,
@@ -362,6 +368,18 @@ impl FontRasterizer {
         box_width: f32,
         alignment: crate::core::text_layout::TextAlign,
     ) -> Option<(u32, u32, Vec<u8>)> {
+        if !font_size.is_finite()
+            || !(0.1..=8192.0).contains(&font_size)
+            || !tracking.is_finite()
+            || !leading.is_finite()
+            || leading <= 0.0
+            || leading > 100.0
+            || !box_width.is_finite()
+            || box_width < 0.0
+            || !color.iter().all(|value| value.is_finite())
+        {
+            return None;
+        }
         let font_data = self.fonts.get(family_name)?;
         let font = parse_font(font_data)?;
         let scale = PxScale::from(font_size);
@@ -452,6 +470,19 @@ impl FontRasterizer {
         animator: &crate::core::text_animator::TextAnimatorSettings,
         time: f32,
     ) -> Option<(u32, u32, Vec<u8>)> {
+        if !font_size.is_finite()
+            || !(0.1..=8192.0).contains(&font_size)
+            || !tracking.is_finite()
+            || !leading.is_finite()
+            || leading <= 0.0
+            || leading > 100.0
+            || !box_width.is_finite()
+            || box_width < 0.0
+            || !time.is_finite()
+            || !color.iter().all(|value| value.is_finite())
+        {
+            return None;
+        }
         let font_data = self.fonts.get(family_name)?;
         let font = parse_font(font_data)?;
         let scaled_font = font.as_scaled(PxScale::from(font_size));
