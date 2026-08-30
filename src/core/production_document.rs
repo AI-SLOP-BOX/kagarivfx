@@ -418,6 +418,7 @@ fn validate_composition(
                 || !(-100_000.0..=100_000.0).contains(tracking)
                 || !leading.is_finite()
                 || *leading <= 0.0
+                || *leading > 1_000.0
                 || !stroke_width.is_finite()
                 || *stroke_width < 0.0
                 || *align > 2
@@ -1386,6 +1387,14 @@ mod tests {
             &mut invalid_project.compositions[0].layers[1].layer_type
         {
             *tracking = 100_001.0;
+        }
+        assert!(ProductionDocument::new(invalid_project).validate().is_err());
+
+        let mut invalid_project = Project::default();
+        if let LayerType::Text { leading, .. } =
+            &mut invalid_project.compositions[0].layers[1].layer_type
+        {
+            *leading = 1_000.1;
         }
         assert!(ProductionDocument::new(invalid_project).validate().is_err());
 
