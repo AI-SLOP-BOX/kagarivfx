@@ -132,6 +132,9 @@ impl ProductionDocument {
                 }
             }
             match &asset.item_type {
+                ProjectItemType::Folder { name } if name.trim().is_empty() => {
+                    return Err("asset folder name must not be empty".into());
+                }
                 ProjectItemType::Composition { comp_idx }
                     if *comp_idx >= self.project.compositions.len() =>
                 {
@@ -1255,6 +1258,16 @@ mod tests {
                 "item_comp1",
                 "Duplicate",
                 ProjectItemType::Folder { name: "x".into() },
+            ));
+        assert!(ProductionDocument::new(invalid_project).validate().is_err());
+
+        let mut invalid_project = Project::default();
+        invalid_project
+            .assets
+            .push(crate::core::timeline::ProjectItem::new(
+                "empty-folder",
+                "Folder",
+                ProjectItemType::Folder { name: "  ".into() },
             ));
         assert!(ProductionDocument::new(invalid_project).validate().is_err());
 
