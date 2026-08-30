@@ -338,6 +338,28 @@ fn validate_composition(
                 return Err("audio layer path or volume is invalid".into());
             }
         }
+        if let LayerType::Text {
+            font_size,
+            color,
+            tracking,
+            leading,
+            stroke_color,
+            stroke_width,
+            ..
+        } = &layer.layer_type
+        {
+            if *font_size == 0
+                || color.iter().any(|value| !value.is_finite())
+                || stroke_color.iter().any(|value| !value.is_finite())
+                || !tracking.is_finite()
+                || !leading.is_finite()
+                || *leading <= 0.0
+                || !stroke_width.is_finite()
+                || *stroke_width < 0.0
+            {
+                return Err("text layer settings are invalid".into());
+            }
+        }
         let mut effect_ids = HashSet::new();
         for effect in &layer.effects {
             if effect.id.trim().is_empty() || !effect_ids.insert(effect.id.clone()) {
