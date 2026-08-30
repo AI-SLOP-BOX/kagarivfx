@@ -85,12 +85,13 @@ impl TileCache {
 
     pub fn get(&mut self, frame: u32, coord: TileCoord) -> Option<&[u8]> {
         let version = current_tile_version();
-        let entry = self.tiles.get(&(frame, 0, coord))?;
+        let key = (frame, 0, coord);
+        let entry = self.tiles.get_mut(&key)?;
         if entry.version != version {
             return None;
         }
         self.lru_clock += 1;
-        // Can't mutate in get; LRU update happens on insert
+        entry.lru_stamp = self.lru_clock;
         Some(&entry.pixels)
     }
 
@@ -223,6 +224,17 @@ mod tests {
         // Should have evicted some tiles
         assert!(cache.tile_count() < 10);
         assert!(cache.memory_usage() <= 1024);
+    }
+
+    #[test]
+    fn get_refreshes_lru_before_eviction() {
+        let mut cache = TileCache::new(16, 32);
+        cache.insert(0, TileCoord { tx: 0, ty: 0 }, vec![0; 16]);
+        cache.insert(1, TileCoord { tx: 0, ty: 0 }, vec![1; 16]);
+        assert!(cache.get(0, TileCoord { tx: 0, ty: 0 }).is_some());
+        cache.insert(2, TileCoord { tx: 0, ty: 0 }, vec![2; 16]);
+        assert!(cache.get(0, TileCoord { tx: 0, ty: 0 }).is_some());
+        assert!(cache.get(1, TileCoord { tx: 0, ty: 0 }).is_none());
     }
 
     #[test]
