@@ -398,7 +398,14 @@ pub fn estimate_markerless_pose(
         let a = frame.joints.get(bone[0])?; let b = frame.joints.get(bone[1])?;
         if a.iter().all(|v| v.is_finite()) && b.iter().all(|v| v.is_finite()) { Some((a[0] - b[0]).hypot(a[1] - b[1])) } else { Some(0.0) }
     }).unwrap_or(0.0)).collect();
-    let _ = repair_markerless_pose_track(&mut pose, 2);
+    let _ = stabilize_markerless_pose_track(&mut pose, 2, 1);
+    for frame in &mut pose.frames {
+        let valid = frame.joints.iter().filter(|point| point.iter().all(|value| value.is_finite())).collect::<Vec<_>>();
+        frame.root = if valid.is_empty() { [0.0, 0.0] } else {
+            [valid.iter().map(|point| point[0]).sum::<f32>() / valid.len() as f32,
+             valid.iter().map(|point| point[1]).sum::<f32>() / valid.len() as f32]
+        };
+    }
     pose
 }
 
