@@ -146,6 +146,17 @@ pub fn draw_tracker_panel(app: &mut AfterEffectsApp, ui: &mut egui::Ui, current_
                     app.toasts.error("Nothing to estimate: extend the work area past the playhead");
                 }
             }
+            if custom_widgets::ae_button(ui, "✕ Clear Generated Pose").on_hover_text("Remove generated pose trackers while keeping manual tracker points").clicked() {
+                let mut removed = 0usize;
+                app.modify_project(|p| {
+                    let trackers = &mut p.active_composition_mut().layers[idx].trackers;
+                    let before = trackers.len();
+                    trackers.retain(|tracker| !tracker.id.starts_with("pose_"));
+                    removed = before - trackers.len();
+                });
+                ui.ctx().data_mut(|d| d.remove::<String>(egui::Id::new("mocap_pose_summary")));
+                app.toasts.info(format!("Removed {} generated pose tracker(s)", removed));
+            }
 
             // ── 3D Camera Tracker (Scene Reconstruction) ──
             ui.add_space(8.0);
