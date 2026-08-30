@@ -6,8 +6,8 @@
 #![allow(dead_code)]
 
 use std::collections::HashMap;
-use std::path::{Path, PathBuf};
 use std::fs;
+use std::path::{Path, PathBuf};
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct DiskCacheMetadata {
@@ -108,7 +108,9 @@ impl PersistentDiskCache {
                         .ok()
                         .and_then(|json| serde_json::from_str::<DiskCacheMetadata>(&json).ok());
 
-                    if let Some(mut meta) = meta_res {
+                    if let Some(mut meta) = meta_res.filter(|meta| {
+                        meta.cache_key == key && meta.size_bytes == size
+                    }) {
                         meta.last_access_epoch = current_epoch;
                         self.evict_for_bytes(size);
                         self.current_bytes += size;
@@ -181,22 +183,50 @@ impl PersistentDiskCache {
                 let _ = fs::remove_file(&tmp_file_path);
                 return Err(e);
             }
-            if let Ok(meta_json) = serde_json::to_string(&meta) {
-                if let Err(e) = fs::write(&tmp_meta_path, meta_json) {
-                    let _ = fs::remove_file(&tmp_file_path);
-                    let _ = fs::remove_file(&tmp_meta_path);
-                    return Err(e);
-                }
+            let meta_json = serde_json::to_string(&meta)
+                .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
+            if let Err(e) = fs::write(&tmp_meta_path, meta_json) {
+                let _ = fs::remove_file(&tmp_file_path);
+                let _ = fs::remove_file(&tmp_meta_path);
+                return Err(e);
             }
 
             // Atomic rename to final file destinations
-            let _ = fs::rename(&tmp_file_path, &file_path);
-            let _ = fs::rename(&tmp_meta_path, &meta_path);
+            if let Err(e) = fs::rename(&tmp_file_path, &file_path) {
+                let _ = fs::remove_file(&tmp_file_path);
+                let _ = fs::remove_file(&tmp_meta_path);
+                return Err(e);
+            }
+            if let Err(e) = fs::rename(&tmp_meta_path, &meta_path) {
+                let _ = fs::remove_file(&file_path);
+                let _ = fs::remove_file(&tmp_meta_path);
+                return Err(e);
+            }
         }
 
         self.current_bytes += size;
         self.entries.insert(key, (meta, data));
         Ok(())
+    }
+
+    /// Removes every cached frame belonging to one composition.
+    pub fn invalidate_comp(&mut self, comp_id: &str) -> usize {
+        let keys = self
+            .entries
+            .iter()
+            .filter_map(|(&key, (meta, _))| (meta.comp_id == comp_id).then_some(key))
+            .collect::<Vec<_>>();
+
+        for key in &keys {
+            if let Some((meta, _)) = self.entries.remove(key) {
+                self.current_bytes = self.current_bytes.saturating_sub(meta.size_bytes);
+            }
+            if let Some(dir) = &self.cache_dir {
+                let _ = fs::remove_file(dir.join(format!("{key:016x}.cache")));
+                let _ = fs::remove_file(dir.join(format!("{key:016x}.meta")));
+            }
+        }
+        keys.len()
     }
 
     /// Clears all memory and disk cache files.
@@ -220,10 +250,27 @@ impl PersistentDiskCache {
 pub enum DynamicLinkMessage {
     Ping,
     Pong,
-    SyncCompositionSettings { comp_id: String, width: u32, height: u32, fps: u32, duration_frames: u32 },
-    RequestRenderFrame { comp_id: String, frame: u32 },
-    FrameRenderResult { comp_id: String, frame: u32, width: u32, height: u32, rgba_png: Vec<u8> },
-    InvalidateCache { comp_id: String },
+    SyncCompositionSettings {
+        comp_id: String,
+        width: u32,
+        height: u32,
+        fps: u32,
+        duration_frames: u32,
+    },
+    RequestRenderFrame {
+        comp_id: String,
+        frame: u32,
+    },
+    FrameRenderResult {
+        comp_id: String,
+        frame: u32,
+        width: u32,
+        height: u32,
+        rgba_png: Vec<u8>,
+    },
+    InvalidateCache {
+        comp_id: String,
+    },
 }
 
 #[cfg(test)]
@@ -282,7 +329,13 @@ mod tests {
 
     #[test]
     fn test_disk_cache_filesystem_persistence_and_metadata_reload() {
-        let tmp_dir = std::env::temp_dir().join(format!("ae_test_cache_{}", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()));
+        let tmp_dir = std::env::temp_dir().join(format!(
+            "ae_test_cache_{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
         let _ = fs::create_dir_all(&tmp_dir);
 
         let mut cache = PersistentDiskCache::with_directory(500, tmp_dir.clone());
@@ -308,5 +361,114 @@ mod tests {
 
         cache.clear();
         let _ = fs::remove_dir_all(&tmp_dir);
+    }
+
+    #[test]
+    fn test_corrupt_metadata_is_not_accepted_as_valid_frame_metadata() {
+        let tmp_dir = std::env::temp_dir().join(format!(
+            "ae_test_cache_corrupt_{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let key = 0xabcdu64;
+        let _ = fs::create_dir_all(&tmp_dir);
+        fs::write(tmp_dir.join(format!("{key:016x}.cache")), [1u8, 2, 3]).unwrap();
+        fs::write(tmp_dir.join(format!("{key:016x}.meta")), b"not-json").unwrap();
+
+        let mut cache = PersistentDiskCache::with_directory(100, &tmp_dir);
+        assert!(
+            cache.get_frame(key, 1).is_none(),
+            "corrupt cache metadata must be ignored"
+        );
+        let _ = fs::remove_dir_all(tmp_dir);
+    }
+
+    #[test]
+    fn test_mismatched_metadata_size_is_discarded() {
+        let tmp_dir = std::env::temp_dir().join(format!(
+            "ae_test_cache_size_mismatch_{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let key = 0x1234u64;
+        fs::create_dir_all(&tmp_dir).unwrap();
+        fs::write(tmp_dir.join(format!("{key:016x}.cache")), [1u8, 2, 3, 4]).unwrap();
+        let metadata = DiskCacheMetadata {
+            cache_key: key,
+            comp_id: "comp".into(),
+            frame: 0,
+            width: 1,
+            height: 1,
+            size_bytes: 99,
+            last_access_epoch: 1,
+        };
+        fs::write(
+            tmp_dir.join(format!("{key:016x}.meta")),
+            serde_json::to_string(&metadata).unwrap(),
+        )
+        .unwrap();
+
+        let mut cache = PersistentDiskCache::with_directory(100, &tmp_dir);
+        assert!(cache.get_frame(key, 2).is_none());
+        assert!(!tmp_dir.join(format!("{key:016x}.cache")).exists());
+        assert!(!tmp_dir.join(format!("{key:016x}.meta")).exists());
+        let _ = fs::remove_dir_all(tmp_dir);
+    }
+
+    #[test]
+    fn test_mismatched_metadata_key_is_discarded() {
+        let tmp_dir = std::env::temp_dir().join(format!(
+            "ae_test_cache_key_mismatch_{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let key = 0x5678u64;
+        fs::create_dir_all(&tmp_dir).unwrap();
+        fs::write(tmp_dir.join(format!("{key:016x}.cache")), [5u8, 6, 7]).unwrap();
+        let metadata = DiskCacheMetadata {
+            cache_key: key + 1,
+            comp_id: "comp".into(),
+            frame: 0,
+            width: 1,
+            height: 1,
+            size_bytes: 3,
+            last_access_epoch: 1,
+        };
+        fs::write(
+            tmp_dir.join(format!("{key:016x}.meta")),
+            serde_json::to_string(&metadata).unwrap(),
+        )
+        .unwrap();
+
+        let mut cache = PersistentDiskCache::with_directory(100, &tmp_dir);
+        assert!(cache.get_frame(key, 2).is_none());
+        assert!(!tmp_dir.join(format!("{key:016x}.cache")).exists());
+        assert!(!tmp_dir.join(format!("{key:016x}.meta")).exists());
+        let _ = fs::remove_dir_all(tmp_dir);
+    }
+
+    #[test]
+    fn test_invalidate_comp_only_removes_matching_entries() {
+        let mut cache = PersistentDiskCache::new(1024);
+        cache
+            .put_frame(1, "a".into(), 0, 1, 1, vec![1; 10], 1)
+            .unwrap();
+        cache
+            .put_frame(2, "a".into(), 1, 1, 1, vec![2; 20], 2)
+            .unwrap();
+        cache
+            .put_frame(3, "b".into(), 0, 1, 1, vec![3; 30], 3)
+            .unwrap();
+
+        assert_eq!(cache.invalidate_comp("a"), 2);
+        assert_eq!(cache.current_bytes, 30);
+        assert_eq!(cache.entries.len(), 1);
+        assert!(cache.entries.contains_key(&3));
     }
 }
