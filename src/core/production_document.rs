@@ -330,6 +330,7 @@ fn validate_composition(
     for marker in &composition.markers {
         if marker.frame >= composition.duration_frames
             || marker.label.trim().is_empty()
+            || marker.label.chars().count() > 4_096
             || marker
                 .color
                 .iter()
@@ -1468,6 +1469,13 @@ mod tests {
                 frame: duration_frames,
                 label: "Marker".into(),
                 color: [1.1, 0.0, 0.0],
+            });
+        invalid_project.compositions[0]
+            .markers
+            .push(crate::core::timeline::TimelineMarker {
+                frame: 0,
+                label: "x".repeat(4_097),
+                color: [0.0, 0.0, 0.0],
             });
         assert!(ProductionDocument::new(invalid_project).validate().is_err());
 
