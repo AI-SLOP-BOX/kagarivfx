@@ -2,7 +2,7 @@
 
 use crate::core::audio_types::MixerChannel;
 use crate::core::automation_binding::{AutomationBinding, ProductionClock};
-use crate::core::timeline::{Project, ProjectItemType};
+use crate::core::timeline::{LayerType, Project, ProjectItemType};
 use crate::core::unified_time::TempoMap;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
@@ -79,6 +79,9 @@ impl ProductionDocument {
         let mut composition_ids = HashSet::new();
         for composition in &self.project.compositions {
             validate_composition(composition, 0, &mut composition_ids)?;
+        }
+        for composition in &self.project.compositions {
+            validate_precomp_references(composition, &composition_ids)?;
         }
         let mut asset_ids = HashSet::new();
         let folder_ids = self
@@ -278,6 +281,23 @@ fn validate_composition(
     Ok(())
 }
 
+fn validate_precomp_references(
+    composition: &crate::core::timeline::Composition,
+    composition_ids: &HashSet<String>,
+) -> Result<(), String> {
+    for layer in &composition.layers {
+        if let LayerType::PreComp { comp_id } = &layer.layer_type {
+            if !composition_ids.contains(comp_id) {
+                return Err(format!("precomp references missing composition: {comp_id}"));
+            }
+        }
+    }
+    for nested in &composition.sub_compositions {
+        validate_precomp_references(nested, composition_ids)?;
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -429,6 +449,17 @@ mod tests {
         );
         folder_b.parent_folder = Some("folder-a".into());
         invalid_project.assets.extend([folder_a, folder_b]);
+        assert!(ProductionDocument::new(invalid_project).validate().is_err());
+
+        let mut invalid_project = Project::default();
+        invalid_project.compositions[0].layers.push(crate::core::timeline::Layer::new(
+            "missing-precomp",
+            "Missing Precomp",
+            LayerType::PreComp {
+                comp_id: "does-not-exist".into(),
+            },
+            300,
+        ));
         assert!(ProductionDocument::new(invalid_project).validate().is_err());
     }
 
