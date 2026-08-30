@@ -17,6 +17,7 @@ impl TrackerEngine {
         let names = crate::core::optical_flow_timewarp::standard_humanoid_joint_names(
             pose.frames.first().map(|frame| frame.joints.len()).unwrap_or(0),
         );
+        let mut active_ids = std::collections::HashSet::new();
         let mut created = 0;
         for (joint, name) in names.into_iter().enumerate() {
             let keyframes = pose.frames.iter().filter_map(|frame| {
@@ -28,6 +29,7 @@ impl TrackerEngine {
             if keyframes.is_empty() { continue; }
             let initial = keyframes[0].value;
             let id = format!("pose_{}", name);
+            active_ids.insert(id.clone());
             let position = if keyframes.len() == 1 { Animatable::Constant(initial) } else { Animatable::Animated(keyframes) };
             if let Some(tracker) = layer.trackers.iter_mut().find(|tracker| tracker.id == id) {
                 tracker.position = position;
@@ -40,6 +42,7 @@ impl TrackerEngine {
             }
             created += 1;
         }
+        layer.trackers.retain(|tracker| !tracker.id.starts_with("pose_") || active_ids.contains(&tracker.id));
         created
     }
 
@@ -1541,5 +1544,22 @@ mod quad_track_tests {
         assert_eq!(TrackerEngine::apply_pose_as_tracker_points(&mut layer, &pose, 0.5), 1);
         assert_eq!(layer.trackers.len(), 1);
         assert_eq!(layer.trackers[0].position.evaluate(1), [2.0, 2.0]);
+    }
+
+    #[test]
+    fn pose_application_removes_stale_pose_points_but_keeps_manual_points() {
+        let mut layer = Layer::new(
+            "l".into(), "Pose Layer".into(), crate::core::timeline::LayerType::Null, 10,
+        );
+        layer.trackers.push(crate::core::timeline::TrackerPoint::new("manual".into(), "Manual".into(), [9.0, 9.0]));
+        layer.trackers.push(crate::core::timeline::TrackerPoint::new("pose_old_joint".into(), "Old".into(), [8.0, 8.0]));
+        let pose = crate::core::optical_flow_timewarp::MarkerlessPoseTrack {
+            frames: vec![crate::core::optical_flow_timewarp::MarkerlessPoseFrame {
+                frame: 0, joints: vec![[1.0, 2.0]], root: [1.0, 2.0], confidence: 1.0,
+            }], bones: vec![], bone_lengths: vec![],
+        };
+        TrackerEngine::apply_pose_as_tracker_points(&mut layer, &pose, 0.0);
+        assert!(layer.trackers.iter().any(|tracker| tracker.id == "manual"));
+        assert!(!layer.trackers.iter().any(|tracker| tracker.id == "pose_old_joint"));
     }
 }
