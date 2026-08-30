@@ -1043,6 +1043,34 @@ mod tests {
         invalid_project.compositions[0]
             .layers
             .push(crate::core::timeline::Layer::new(
+                "invalid-gradient-stops".into(),
+                "Invalid Gradient Stops".into(),
+                LayerType::Shape {
+                    shape_type: crate::core::timeline::ShapeType::Rectangle {
+                        width: crate::core::property::Animatable::new_constant(100.0),
+                        height: crate::core::property::Animatable::new_constant(100.0),
+                        corner_radius: crate::core::property::Animatable::new_constant(0.0),
+                    },
+                    color: [1.0, 1.0, 1.0, 1.0],
+                    stroke_color: [0.0, 0.0, 0.0, 1.0],
+                    stroke_width: 0.0,
+                    fill_type: crate::core::timeline::ShapeFillType::LinearGradient {
+                        start: [0.0, 0.0],
+                        end: [100.0, 100.0],
+                        colors: vec![[0.0, 0.0, 0.0, 1.0], [1.0, f32::NAN, 1.0, 1.0]],
+                        stops: vec![0.0],
+                    },
+                    extrusion_depth: 0.0,
+                    bevel_depth: 0.0,
+                },
+                300,
+            ));
+        assert!(ProductionDocument::new(invalid_project).validate().is_err());
+
+        let mut invalid_project = Project::default();
+        invalid_project.compositions[0]
+            .layers
+            .push(crate::core::timeline::Layer::new(
                 "invalid-shape-animation".into(),
                 "Invalid Shape Animation".into(),
                 LayerType::Shape {
