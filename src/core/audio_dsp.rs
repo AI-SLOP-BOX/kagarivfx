@@ -68,8 +68,16 @@ impl Biquad {
 
     fn process_stereo(&mut self, buf: &mut [f32]) {
         for sample in buf.chunks_exact_mut(2) {
-            let x_l = sample[0] as f64;
-            let x_r = sample[1] as f64;
+            let x_l = if sample[0].is_finite() {
+                f64::from(sample[0])
+            } else {
+                0.0
+            };
+            let x_r = if sample[1].is_finite() {
+                f64::from(sample[1])
+            } else {
+                0.0
+            };
 
             let y_l = self.b0 * x_l + self.b1 * self.x1_l + self.b2 * self.x2_l
                 - self.a1 * self.y1_l
@@ -676,6 +684,21 @@ mod tests {
             48_000,
         );
         assert_eq!(buf, original);
+    }
+
+    #[test]
+    fn test_eq_sanitizes_nonfinite_input_samples() {
+        let mut buf = vec![f32::NAN, f32::INFINITY, 0.25, -0.25];
+        apply_eq(
+            &mut buf,
+            &[EqBand {
+                band_type: EqBandType::LowPass,
+                freq: 1_000.0,
+                ..EqBand::default()
+            }],
+            48_000,
+        );
+        assert!(buf.iter().all(|sample| sample.is_finite()));
     }
 
     #[test]
