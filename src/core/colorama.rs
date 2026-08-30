@@ -16,12 +16,21 @@ pub fn apply_colorama(
     preset: ColoramaPreset,
     cycle_phase_deg: f32,
 ) {
-    let num_pixels = (width * height) as usize;
-    if pixels.len() != num_pixels * 4 {
+    let Some(num_pixels) = (width as usize)
+        .checked_mul(height as usize)
+        .filter(|&count| count <= usize::MAX / 4)
+    else {
+        return;
+    };
+    if width == 0 || height == 0 || pixels.len() != num_pixels * 4 {
         return;
     }
 
-    let phase_norm = (cycle_phase_deg / 360.0).fract();
+    let phase_norm = if cycle_phase_deg.is_finite() {
+        (cycle_phase_deg / 360.0).fract()
+    } else {
+        0.0
+    };
 
     for i in 0..num_pixels {
         let idx = i * 4;
@@ -46,9 +55,7 @@ pub fn apply_colorama(
                     [1.0, 1.0, (lum - 0.66) * 3.0]
                 }
             }
-            ColoramaPreset::Sepia => {
-                [lum * 0.9, lum * 0.7, lum * 0.4]
-            }
+            ColoramaPreset::Sepia => [lum * 0.9, lum * 0.7, lum * 0.4],
             ColoramaPreset::Solarize => {
                 let s = (lum * std::f32::consts::PI * 2.0).sin().abs();
                 [s, s * 0.8, s * 0.5]
@@ -89,5 +96,16 @@ mod tests {
         let mut pixels = vec![128u8; 16]; // 2x2 buffer
         apply_colorama(&mut pixels, 2, 2, ColoramaPreset::Rainbow, 0.0);
         assert_eq!(pixels.len(), 16);
+    }
+
+    #[test]
+    fn test_colorama_rejects_overflow_and_nonfinite_phase() {
+        let original = vec![128u8; 16];
+        let mut pixels = original.clone();
+        apply_colorama(&mut pixels, u32::MAX, u32::MAX, ColoramaPreset::Rainbow, f32::NAN);
+        assert_eq!(pixels, original);
+
+        apply_colorama(&mut pixels, 2, 2, ColoramaPreset::Rainbow, f32::INFINITY);
+        assert!(pixels.iter().all(|value| *value <= 255));
     }
 }
