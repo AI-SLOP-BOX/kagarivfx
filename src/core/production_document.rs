@@ -375,11 +375,13 @@ fn validate_composition(
         {
             return Err("layer 3D transform animation values must be finite".into());
         }
-        if layer
-            .time_remap
-            .as_ref()
-            .is_some_and(|value| !scalar_animation_is_nonnegative(value))
-        {
+        if layer.time_remap.as_ref().is_some_and(|value| {
+            !scalar_animation_is_nonnegative(value)
+                || !scalar_animation_is_at_most(
+                    value,
+                    ProductionDocument::MAX_COMPOSITION_FRAMES as f32,
+                )
+        }) {
             return Err("layer time remap values must be finite and non-negative".into());
         }
         if let LayerType::Video {
@@ -717,6 +719,20 @@ fn scalar_animation_is_at_least(
         crate::core::property::Animatable::Animated(keyframes) => keyframes
             .iter()
             .all(|keyframe| keyframe.value.is_finite() && keyframe.value >= minimum),
+    }
+}
+
+fn scalar_animation_is_at_most(
+    value: &crate::core::property::Animatable<f32>,
+    maximum: f32,
+) -> bool {
+    match value {
+        crate::core::property::Animatable::Constant(value) => {
+            value.is_finite() && *value <= maximum
+        }
+        crate::core::property::Animatable::Animated(keyframes) => keyframes
+            .iter()
+            .all(|keyframe| keyframe.value.is_finite() && keyframe.value <= maximum),
     }
 }
 
@@ -1307,6 +1323,13 @@ mod tests {
         let mut invalid_project = Project::default();
         invalid_project.compositions[0].layers[0].time_remap =
             Some(crate::core::property::Animatable::new_constant(-1.0));
+        assert!(ProductionDocument::new(invalid_project).validate().is_err());
+
+        let mut invalid_project = Project::default();
+        invalid_project.compositions[0].layers[0].time_remap =
+            Some(crate::core::property::Animatable::new_constant(
+                ProductionDocument::MAX_COMPOSITION_FRAMES as f32 + 1.0,
+            ));
         assert!(ProductionDocument::new(invalid_project).validate().is_err());
 
         let mut invalid_project = Project::default();
