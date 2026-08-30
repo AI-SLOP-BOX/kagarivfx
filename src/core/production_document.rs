@@ -355,8 +355,8 @@ fn validate_composition(
             }
             layer_parents.insert(layer.id.as_str(), parent_id.as_str());
         }
-        if layer.in_frame >= layer.out_frame {
-            return Err("layer frame range must have a positive duration".into());
+        if layer.in_frame >= layer.out_frame || layer.out_frame > composition.duration_frames {
+            return Err("layer frame range must fit within the composition".into());
         }
         if !vector_animation_is_finite(&layer.transform.anchor_point)
             || !vector_animation_is_finite(&layer.transform.position)
@@ -1161,6 +1161,11 @@ mod tests {
         let mut invalid_project = Project::default();
         invalid_project.compositions[0].layers[0].out_frame =
             invalid_project.compositions[0].layers[0].in_frame;
+        assert!(ProductionDocument::new(invalid_project).validate().is_err());
+
+        let mut invalid_project = Project::default();
+        invalid_project.compositions[0].layers[0].out_frame =
+            invalid_project.compositions[0].duration_frames + 1;
         assert!(ProductionDocument::new(invalid_project).validate().is_err());
 
         let mut invalid_project = Project::default();
