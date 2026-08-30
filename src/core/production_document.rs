@@ -123,8 +123,8 @@ impl ProductionDocument {
         for asset in &self.project.assets {
             if asset.id.trim().is_empty()
                 || asset.name.trim().is_empty()
-                || !asset_text_is_safe(&asset.id)
-                || !asset_text_is_safe(&asset.name)
+                || !metadata_text_is_safe(&asset.id)
+                || !metadata_text_is_safe(&asset.name)
                 || !asset_ids.insert(asset.id.clone())
             {
                 return Err("asset ids and names must be non-empty; ids must be unique".into());
@@ -141,7 +141,7 @@ impl ProductionDocument {
             }
             match &asset.item_type {
                 ProjectItemType::Folder { name }
-                    if name.trim().is_empty() || !asset_text_is_safe(name) =>
+                    if name.trim().is_empty() || !metadata_text_is_safe(name) =>
                 {
                     return Err("asset folder name must not be empty".into());
                 }
@@ -161,7 +161,7 @@ impl ProductionDocument {
                 ProjectItemType::Image { path, .. }
                 | ProjectItemType::Video { path, .. }
                 | ProjectItemType::Audio { path, .. }
-                    if path.trim().is_empty() || !asset_text_is_safe(path) =>
+                    if path.trim().is_empty() || !metadata_text_is_safe(path) =>
                 {
                     return Err("media asset path must not be empty".into());
                 }
@@ -320,10 +320,14 @@ fn validate_composition(
     if composition.markers.len() > ProductionDocument::MAX_MARKERS_PER_COMPOSITION {
         return Err("composition contains too many markers".into());
     }
-    if composition.id.trim().is_empty() {
+    if !metadata_text_is_safe(&composition.id)
+        || composition.id.len() > ProductionDocument::MAX_ASSET_STRING_LENGTH
+    {
         return Err("composition id must not be empty".into());
     }
-    if composition.name.trim().is_empty() {
+    if !metadata_text_is_safe(&composition.name)
+        || composition.name.len() > ProductionDocument::MAX_ASSET_STRING_LENGTH
+    {
         return Err("composition name must not be empty".into());
     }
     if !composition_ids.insert(composition.id.clone()) {
@@ -363,8 +367,10 @@ fn validate_composition(
     let mut light_ids = HashSet::new();
     let mut light_names = HashSet::new();
     for light in &composition.lights {
-        if light.id.trim().is_empty()
-            || light.name.trim().is_empty()
+        if !metadata_text_is_safe(&light.id)
+            || !metadata_text_is_safe(&light.name)
+            || light.id.len() > ProductionDocument::MAX_ASSET_STRING_LENGTH
+            || light.name.len() > ProductionDocument::MAX_ASSET_STRING_LENGTH
             || !light_ids.insert(light.id.clone())
             || !light_names.insert(light.name.clone())
             || light.color.iter().any(|value| !value.is_finite())
@@ -397,8 +403,10 @@ fn validate_composition(
     let mut layer_ids = HashSet::new();
     let mut layer_parents = HashMap::new();
     for layer in &composition.layers {
-        if layer.id.trim().is_empty()
-            || layer.name.trim().is_empty()
+        if !metadata_text_is_safe(&layer.id)
+            || !metadata_text_is_safe(&layer.name)
+            || layer.id.len() > ProductionDocument::MAX_ASSET_STRING_LENGTH
+            || layer.name.len() > ProductionDocument::MAX_ASSET_STRING_LENGTH
             || !layer_ids.insert(layer.id.clone())
         {
             return Err("layer ids must be non-empty and unique within a composition".into());
@@ -682,7 +690,7 @@ fn validate_composition(
     Ok(())
 }
 
-fn asset_text_is_safe(value: &str) -> bool {
+fn metadata_text_is_safe(value: &str) -> bool {
     !value.is_empty() && value == value.trim() && !value.chars().any(char::is_control)
 }
 
@@ -704,7 +712,8 @@ fn validate_precomp_references(
 }
 
 fn validate_camera(camera: &crate::core::timeline::Camera3D) -> Result<(), String> {
-    if camera.name.trim().is_empty()
+    if !metadata_text_is_safe(&camera.name)
+        || camera.name.len() > ProductionDocument::MAX_ASSET_STRING_LENGTH
         || !camera.fov_degrees.is_finite()
         || !(0.0..180.0).contains(&camera.fov_degrees)
         || !camera.focus_distance.is_finite()
