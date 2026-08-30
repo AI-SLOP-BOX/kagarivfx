@@ -815,9 +815,8 @@ mod tests {
         assert!(ProductionDocument::new(invalid_project).validate().is_err());
 
         let mut invalid_project = Project::default();
-        invalid_project.compositions[0].cameras.push(
-            invalid_project.compositions[0].active_camera.clone(),
-        );
+        let duplicate_camera = invalid_project.compositions[0].active_camera.clone();
+        invalid_project.compositions[0].cameras.push(duplicate_camera);
         assert!(ProductionDocument::new(invalid_project).validate().is_err());
 
         let mut invalid_project = Project::default();
