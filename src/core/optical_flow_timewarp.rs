@@ -683,6 +683,61 @@ pub fn markerless_pose3d_to_csv(pose: &MarkerlessPose3DTrack) -> String {
     output
 }
 
+pub fn stabilize_markerless_pose3d_track(pose: &mut MarkerlessPose3DTrack, max_gap: usize, radius: usize) -> usize {
+    if pose.frames.is_empty() || max_gap == 0 { return 0; }
+    let count = pose.frames.iter().map(|frame| frame.joints.len()).min().unwrap_or(0);
+    let mut changed = 0;
+    for joint in 0..count {
+        let mut index = 0;
+        while index < pose.frames.len() {
+            if pose.frames[index].joints[joint].iter().all(|value| value.is_finite()) { index += 1; continue; }
+            let start = index;
+            while index < pose.frames.len() && !pose.frames[index].joints[joint].iter().all(|value| value.is_finite()) { index += 1; }
+            let end = index;
+            if start == 0 || end >= pose.frames.len() { continue; }
+            let gap = pose.frames[end].frame.saturating_sub(pose.frames[start - 1].frame).saturating_sub(1) as usize;
+            if gap > max_gap || pose.frames[end].frame <= pose.frames[start - 1].frame { continue; }
+            let before = pose.frames[start - 1].joints[joint];
+            let after = pose.frames[end].joints[joint];
+            let before_frame = pose.frames[start - 1].frame;
+            let span = (pose.frames[end].frame - before_frame) as f32;
+            for item in &mut pose.frames[start..end] {
+                let t = (item.frame - before_frame) as f32 / span;
+                item.joints[joint] = [
+                    before[0] + (after[0] - before[0]) * t,
+                    before[1] + (after[1] - before[1]) * t,
+                    before[2] + (after[2] - before[2]) * t,
+                ];
+                item.confidence = (item.confidence * 0.5).clamp(0.0, 1.0);
+                changed += 1;
+            }
+        }
+    }
+    if radius == 0 { return changed; }
+    let original = pose.frames.iter().map(|frame| frame.joints.clone()).collect::<Vec<_>>();
+    for frame_index in 0..pose.frames.len() {
+        let start = frame_index.saturating_sub(radius);
+        let end = (frame_index + radius + 1).min(pose.frames.len());
+        for joint in 0..count {
+            let values = (start..end).filter_map(|index| {
+                let point = *original[index].get(joint)?;
+                point.iter().all(|value| value.is_finite()).then_some(point)
+            }).collect::<Vec<_>>();
+            if values.is_empty() { continue; }
+            let smoothed = [
+                values.iter().map(|point| point[0]).sum::<f32>() / values.len() as f32,
+                values.iter().map(|point| point[1]).sum::<f32>() / values.len() as f32,
+                values.iter().map(|point| point[2]).sum::<f32>() / values.len() as f32,
+            ];
+            if pose.frames[frame_index].joints[joint] != smoothed {
+                pose.frames[frame_index].joints[joint] = smoothed;
+                changed += 1;
+            }
+        }
+    }
+    changed
+}
+
 pub trait Pose3DInferenceBackend {
     fn infer_joints_3d(&mut self, rgb: &[f32], width: u32, height: u32) -> Vec<([f32; 3], f32)>;
 }
@@ -710,7 +765,9 @@ pub fn estimate_pose_3d_with_backend<B: Pose3DInferenceBackend>(
     for frame in &mut outputs {
         frame.joints.resize(count, [f32::NAN; 3]);
     }
-    MarkerlessPose3DTrack { frames: outputs, bones: standard_humanoid_bones(count) }
+    let mut pose = MarkerlessPose3DTrack { frames: outputs, bones: standard_humanoid_bones(count) };
+    let _ = stabilize_markerless_pose3d_track(&mut pose, 2, 1);
+    pose
 }
 
 pub fn estimate_pose_with_normalized_backend<B: NormalizedPoseInferenceBackend>(
