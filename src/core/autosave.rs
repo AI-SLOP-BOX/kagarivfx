@@ -214,7 +214,12 @@ impl AutosaveManager {
 pub fn is_valid_project_file(path: &Path) -> bool {
     std::fs::read_to_string(path)
         .ok()
-        .and_then(|s| serde_json::from_str::<Project>(&s).ok())
+        .and_then(|s| {
+            ProductionDocument::from_json(&s)
+                .map(|_| ())
+                .or_else(|_| serde_json::from_str::<Project>(&s).map(|_| ()))
+                .ok()
+        })
         .is_some()
 }
 
@@ -319,6 +324,31 @@ mod tests {
 
         let manager = AutosaveManager::new(&dir);
         assert!(manager.load_latest_production().is_none());
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn project_file_validation_accepts_legacy_and_production_documents() {
+        let dir = std::env::temp_dir().join(format!(
+            "aevfx_project_file_validation_{}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let legacy_path = dir.join("legacy.json");
+        let production_path = dir.join("production.aura");
+        let invalid_path = dir.join("invalid.json");
+        std::fs::write(&legacy_path, serde_json::to_string(&sample_project()).unwrap()).unwrap();
+        std::fs::write(
+            &production_path,
+            ProductionDocument::new(sample_project()).to_json().unwrap(),
+        )
+        .unwrap();
+        std::fs::write(&invalid_path, "{\"project\": null}").unwrap();
+
+        assert!(is_valid_project_file(&legacy_path));
+        assert!(is_valid_project_file(&production_path));
+        assert!(!is_valid_project_file(&invalid_path));
         let _ = std::fs::remove_dir_all(dir);
     }
 
