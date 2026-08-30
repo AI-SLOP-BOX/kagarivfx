@@ -79,6 +79,14 @@ impl AutomationBinding {
         {
             return Err("automation source and target are too long");
         }
+        if self
+            .source
+            .chars()
+            .chain(self.target.chars())
+            .any(char::is_control)
+        {
+            return Err("automation source and target must not contain control characters");
+        }
         if [
             self.input_min,
             self.input_max,
@@ -212,6 +220,25 @@ mod tests {
     fn rejects_oversized_binding_endpoints() {
         let binding = AutomationBinding {
             source: "s".repeat(AutomationBinding::MAX_ENDPOINT_LENGTH + 1),
+            target: "vfx.opacity".into(),
+            curve: AutomationCurve {
+                points: vec![AutomationPoint {
+                    time: Time::ZERO,
+                    value: 0.0,
+                }],
+            },
+            input_min: 0.0,
+            input_max: 1.0,
+            output_min: 0.0,
+            output_max: 1.0,
+        };
+        assert!(binding.validate().is_err());
+    }
+
+    #[test]
+    fn rejects_control_characters_in_binding_endpoints() {
+        let binding = AutomationBinding {
+            source: "audio\0bass".into(),
             target: "vfx.opacity".into(),
             curve: AutomationCurve {
                 points: vec![AutomationPoint {
