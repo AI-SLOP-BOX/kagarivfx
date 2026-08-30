@@ -168,6 +168,30 @@ pub fn detect_markerless_features(
     selected
 }
 
+pub fn assign_features_to_humanoid(
+    features: &[[f32; 2]],
+    width: u32,
+    height: u32,
+) -> Vec<Option<usize>> {
+    if features.is_empty() || width == 0 || height == 0 { return vec![None; 17]; }
+    let canonical = [
+        (0.50, 0.62), (0.50, 0.48), (0.50, 0.38), (0.50, 0.28), (0.50, 0.16),
+        (0.38, 0.40), (0.30, 0.52), (0.24, 0.65), (0.62, 0.40), (0.70, 0.52),
+        (0.76, 0.65), (0.44, 0.64), (0.42, 0.82), (0.40, 0.98), (0.56, 0.64),
+        (0.58, 0.82), (0.60, 0.98),
+    ];
+    let mut used = vec![false; features.len()];
+    canonical.iter().map(|&(x, y)| {
+        features.iter().enumerate().filter(|(index, point)| {
+            !used[*index] && point[0].is_finite() && point[1].is_finite()
+        }).min_by(|(_, a), (_, b)| {
+            let da = (a[0] / width as f32 - x).hypot(a[1] / height as f32 - y);
+            let db = (b[0] / width as f32 - x).hypot(b[1] / height as f32 - y);
+            da.total_cmp(&db)
+        }).map(|(index, _)| { used[index] = true; index })
+    }).collect()
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct MarkerlessMotionSample {
     pub frame: u32,
@@ -977,6 +1001,10 @@ mod tests {
         assert!(first.iter().all(|p| p[0] >= 1.0 && p[0] < 11.0 && p[1] >= 1.0 && p[1] < 11.0));
         let refs = [&frame[..]];
         assert_eq!(track_markerless_auto(&refs, w, h, 2, 2, 1, 1).len(), first.len().min(2));
+        let assignments = assign_features_to_humanoid(&first, w, h);
+        assert_eq!(assignments.len(), 17);
+        let assigned = assignments.iter().flatten().copied().collect::<std::collections::HashSet<_>>();
+        assert_eq!(assigned.len(), assignments.iter().filter(|value| value.is_some()).count());
     }
 
     #[test]
