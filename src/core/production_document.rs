@@ -414,6 +414,7 @@ fn validate_composition(
             }
         }
         if let LayerType::Text {
+            text,
             font_size,
             color,
             tracking,
@@ -425,7 +426,8 @@ fn validate_composition(
             ..
         } = &layer.layer_type
         {
-            if *font_size == 0
+            if text.chars().count() > 1_000_000
+                || *font_size == 0
                 || *font_size > 16_384
                 || color.iter().any(|value| !value.is_finite())
                 || stroke_color.iter().any(|value| !value.is_finite())
@@ -1431,6 +1433,14 @@ mod tests {
             &mut invalid_project.compositions[0].layers[1].layer_type
         {
             *leading = 1_000.1;
+        }
+        assert!(ProductionDocument::new(invalid_project).validate().is_err());
+
+        let mut invalid_project = Project::default();
+        if let LayerType::Text { text, .. } =
+            &mut invalid_project.compositions[0].layers[1].layer_type
+        {
+            *text = "x".repeat(1_000_001);
         }
         assert!(ProductionDocument::new(invalid_project).validate().is_err());
 
