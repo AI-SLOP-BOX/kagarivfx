@@ -516,18 +516,7 @@ fn cmd_production_info(
         .map_err(|error| format!("Not a valid production document: {error}"))?;
     let clock = document.clock();
     if json_output {
-        let output = serde_json::json!({
-            "schema_version": document.schema_version,
-            "sample_rate": document.audio.sample_rate,
-            "audio_channels": document.audio.channels.len(),
-            "tempo_changes": document.tempo.changes.len(),
-            "initial_bpm": document.tempo.changes[0].bpm,
-            "automation_bindings": document.bindings.iter().map(|binding| serde_json::json!({
-                "source": binding.source,
-                "target": binding.target,
-                "points": binding.curve.points.len(),
-            })).collect::<Vec<_>>(),
-        });
+        let output = production_info_value(&document);
         println!("{}", serde_json::to_string_pretty(&output)?);
         return Ok(());
     }
@@ -545,6 +534,23 @@ fn cmd_production_info(
         println!("  {} -> {} ({} points)", binding.source, binding.target, binding.curve.points.len());
     }
     Ok(())
+}
+
+fn production_info_value(
+    document: &aftereffects_oss::core::production_document::ProductionDocument,
+) -> serde_json::Value {
+    serde_json::json!({
+        "schema_version": document.schema_version,
+        "sample_rate": document.audio.sample_rate,
+        "audio_channels": document.audio.channels.len(),
+        "tempo_changes": document.tempo.changes.len(),
+        "initial_bpm": document.tempo.changes[0].bpm,
+        "automation_bindings": document.bindings.iter().map(|binding| serde_json::json!({
+            "source": binding.source,
+            "target": binding.target,
+            "points": binding.curve.points.len(),
+        })).collect::<Vec<_>>(),
+    })
 }
 
 fn cmd_validate(project_path: &str) -> Result<(), Box<dyn std::error::Error>> {
