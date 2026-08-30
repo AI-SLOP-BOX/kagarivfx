@@ -54,13 +54,14 @@ pub fn extract_depth_to_rgba(
     options: &DepthExtractorOptions,
     out_rgba: &mut [u8],
 ) {
-    let len = (width * height) as usize;
-    if depth_f32.len() < len || out_rgba.len() < len * 4 {
+    let Some(len) = (width as usize).checked_mul(height as usize) else { return; };
+    let Some(out_len) = len.checked_mul(4) else { return; };
+    if width == 0 || height == 0 || depth_f32.len() < len || out_rgba.len() < out_len {
         return;
     }
 
-    let z_min = options.black_point_depth;
-    let z_max = options.white_point_depth;
+    let z_min = if options.black_point_depth.is_finite() { options.black_point_depth } else { 0.0 };
+    let z_max = if options.white_point_depth.is_finite() { options.white_point_depth } else { z_min + 1.0 };
     let range = (z_max - z_min).max(1e-5);
 
     for i in 0..len {
@@ -86,16 +87,18 @@ pub fn extract_normals_to_rgba(
     height: u32,
     out_rgba: &mut [u8],
 ) {
-    let len = (width * height) as usize;
-    if normals_f32.len() < len * 3 || out_rgba.len() < len * 4 {
+    let Some(len) = (width as usize).checked_mul(height as usize) else { return; };
+    let Some(normals_len) = len.checked_mul(3) else { return; };
+    let Some(out_len) = len.checked_mul(4) else { return; };
+    if width == 0 || height == 0 || normals_f32.len() < normals_len || out_rgba.len() < out_len {
         return;
     }
 
     for i in 0..len {
         let in_idx = i * 3;
-        let nx = (normals_f32[in_idx] * 0.5 + 0.5).clamp(0.0, 1.0);
-        let ny = (normals_f32[in_idx + 1] * 0.5 + 0.5).clamp(0.0, 1.0);
-        let nz = (normals_f32[in_idx + 2] * 0.5 + 0.5).clamp(0.0, 1.0);
+        let nx = (normals_f32[in_idx].is_finite().then_some(normals_f32[in_idx]).unwrap_or(0.0) * 0.5 + 0.5).clamp(0.0, 1.0);
+        let ny = (normals_f32[in_idx + 1].is_finite().then_some(normals_f32[in_idx + 1]).unwrap_or(0.0) * 0.5 + 0.5).clamp(0.0, 1.0);
+        let nz = (normals_f32[in_idx + 2].is_finite().then_some(normals_f32[in_idx + 2]).unwrap_or(0.0) * 0.5 + 0.5).clamp(0.0, 1.0);
 
         let out_idx = i * 4;
         out_rgba[out_idx] = (nx * 255.0).round() as u8;
@@ -113,14 +116,18 @@ pub fn extract_cryptomatte_id(
     target_id_hash: f32,
     out_mask: &mut [u8],
 ) {
-    let len = (width * height) as usize;
+    let Some(len) = (width as usize).checked_mul(height as usize) else { return; };
     if crypto_f32.len() < len || out_mask.len() < len {
+        return;
+    }
+    if !target_id_hash.is_finite() {
+        out_mask[..len].fill(0);
         return;
     }
 
     for i in 0..len {
         let hash = crypto_f32[i];
-        if (hash - target_id_hash).abs() < 1e-4 {
+        if hash.is_finite() && (hash - target_id_hash).abs() < 1e-4 {
             out_mask[i] = 255;
         } else {
             out_mask[i] = 0;
