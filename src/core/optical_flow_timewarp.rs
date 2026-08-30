@@ -631,6 +631,9 @@ pub fn estimate_pose_3d_with_backend<B: Pose3DInferenceBackend>(
         outputs.push(MarkerlessPose3DFrame { frame: frame_index as u32, joints: joints.into_iter().map(|(point, _)| point).collect(), confidence });
     }
     let count = outputs.iter().map(|frame| frame.joints.len()).max().unwrap_or(0);
+    for frame in &mut outputs {
+        frame.joints.resize(count, [f32::NAN; 3]);
+    }
     MarkerlessPose3DTrack { frames: outputs, bones: standard_humanoid_bones(count) }
 }
 
