@@ -59,6 +59,22 @@ pub fn draw_tracker_panel(app: &mut AfterEffectsApp, ui: &mut egui::Ui, current_
                 );
             }
 
+            let mut mocap_max = ui.ctx().data(|d| d.get_temp::<u32>(egui::Id::new("mocap_max_features")).unwrap_or(64));
+            let mut mocap_spacing = ui.ctx().data(|d| d.get_temp::<u32>(egui::Id::new("mocap_feature_spacing")).unwrap_or(12));
+            let mut mocap_search = ui.ctx().data(|d| d.get_temp::<u32>(egui::Id::new("mocap_search_radius")).unwrap_or(16));
+            let mut mocap_confidence = ui.ctx().data(|d| d.get_temp::<f32>(egui::Id::new("mocap_min_confidence")).unwrap_or(0.05));
+            ui.collapsing("⚙ Markerless Capture Settings", |ui| {
+                ui.add(egui::Slider::new(&mut mocap_max, 1..=512).text("Features"));
+                ui.add(egui::Slider::new(&mut mocap_spacing, 1..=128).text("Spacing px"));
+                ui.add(egui::Slider::new(&mut mocap_search, 1..=128).text("Search px"));
+                ui.add(egui::Slider::new(&mut mocap_confidence, 0.0..=1.0).text("Min confidence"));
+                ui.ctx().data_mut(|d| {
+                    d.insert_temp(egui::Id::new("mocap_max_features"), mocap_max);
+                    d.insert_temp(egui::Id::new("mocap_feature_spacing"), mocap_spacing);
+                    d.insert_temp(egui::Id::new("mocap_search_radius"), mocap_search);
+                    d.insert_temp(egui::Id::new("mocap_min_confidence"), mocap_confidence);
+                });
+            });
             ui.horizontal(|ui| {
                 if custom_widgets::ae_button(ui, "Analyze Forward (Work Area)").on_hover_text("Track the feature through the work area using real SAD matching + subpixel refinement").clicked() {
                     let wa_out = app.work_area_out.unwrap_or_else(|| {
@@ -86,7 +102,7 @@ pub fn draw_tracker_panel(app: &mut AfterEffectsApp, ui: &mut egui::Ui, current_
                         app.modify_project(|p| {
                             let comp = p.active_composition_mut();
                             crate::core::tracker_engine::TrackerEngine::analyze_markerless_tracks(
-                                &mut comp.layers[idx], start, wa_out, 2, 16, 0.05,
+                                &mut comp.layers[idx], start, wa_out, 2, mocap_search as i32, mocap_confidence,
                             );
                         });
                         app.toasts.info("Optical-flow mocap generated keyframes for all tracker points");
