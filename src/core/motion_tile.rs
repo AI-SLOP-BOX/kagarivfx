@@ -15,12 +15,12 @@ pub enum TilingMode {
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct MotionTileParams {
     pub tile_center: [f32; 2],
-    pub tile_width: f32,   // % (100.0 = original width)
-    pub tile_height: f32,  // % (100.0 = original height)
-    pub output_width: f32, // % (100.0..1000.0)
-    pub output_height: f32,// % (100.0..1000.0)
+    pub tile_width: f32,    // % (100.0 = original width)
+    pub tile_height: f32,   // % (100.0 = original height)
+    pub output_width: f32,  // % (100.0..1000.0)
+    pub output_height: f32, // % (100.0..1000.0)
     pub mirror_edges: bool,
-    pub phase: f32,        // degrees (-360.0..360.0)
+    pub phase: f32, // degrees (-360.0..360.0)
 }
 
 impl Default for MotionTileParams {
@@ -44,19 +44,27 @@ pub fn apply_motion_tile(
     height: u32,
     params: &MotionTileParams,
 ) -> Vec<u8> {
-    if src.len() != (width * height * 4) as usize || width == 0 || height == 0 {
+    let Some(pixel_count) = (width as usize)
+        .checked_mul(height as usize)
+        .filter(|&count| count <= usize::MAX / 4)
+    else {
+        return src.to_vec();
+    };
+    if src.len() != pixel_count * 4 || width == 0 || height == 0 {
         return src.to_vec();
     }
 
     let mut dst = vec![0u8; src.len()];
 
-    let tw = (width as f32 * (params.tile_width.max(1.0) / 100.0)).max(1.0);
-    let th = (height as f32 * (params.tile_height.max(1.0) / 100.0)).max(1.0);
+    let tile_width = if params.tile_width.is_finite() { params.tile_width.clamp(1.0, 10000.0) } else { 100.0 };
+    let tile_height = if params.tile_height.is_finite() { params.tile_height.clamp(1.0, 10000.0) } else { 100.0 };
+    let tw = (width as f32 * (tile_width / 100.0)).max(1.0);
+    let th = (height as f32 * (tile_height / 100.0)).max(1.0);
 
-    let cx = params.tile_center[0];
-    let cy = params.tile_center[1];
+    let cx = if params.tile_center[0].is_finite() { params.tile_center[0] } else { width as f32 * 0.5 };
+    let cy = if params.tile_center[1].is_finite() { params.tile_center[1] } else { height as f32 * 0.5 };
 
-    let phase_norm = (params.phase / 360.0).fract();
+    let phase_norm = if params.phase.is_finite() { (params.phase / 360.0).fract() } else { 0.0 };
 
     for y in 0..height {
         let dy = (y as f32 - cy) / th;
@@ -68,7 +76,11 @@ pub fn apply_motion_tile(
         }
 
         // Horizontal phase shift per row
-        let row_phase = if (row_idx % 2).abs() == 1 { phase_norm } else { 0.0 };
+        let row_phase = if (row_idx % 2).abs() == 1 {
+            phase_norm
+        } else {
+            0.0
+        };
 
         for x in 0..width {
             let dx = (x as f32 - cx) / tw + row_phase;
@@ -96,6 +108,21 @@ pub fn apply_motion_tile(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_motion_tile_rejects_overflow_and_nonfinite_parameters() {
+        let src = vec![3u8; 16];
+        let params = MotionTileParams {
+            tile_center: [f32::NAN, f32::INFINITY],
+            tile_width: f32::NAN,
+            tile_height: f32::INFINITY,
+            phase: f32::NAN,
+            ..Default::default()
+        };
+        let result = apply_motion_tile(&src, 2, 2, &params);
+        assert_eq!(result.len(), src.len());
+        assert_eq!(apply_motion_tile(&src, u32::MAX, u32::MAX, &params), src);
+    }
 
     #[test]
     fn test_motion_tile_identity_at_defaults() {
