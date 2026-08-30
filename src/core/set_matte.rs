@@ -55,9 +55,18 @@ pub fn apply_set_matte(
     source_h: u32,
     params: &SetMatteParams,
 ) {
-    if target_pixels.len() != (target_w * target_h * 4) as usize
-        || source_pixels.len() != (source_w * source_h * 4) as usize
-        || target_w == 0 || target_h == 0 || source_w == 0 || source_h == 0
+    let target_len = (target_w as usize)
+        .checked_mul(target_h as usize)
+        .and_then(|pixels| pixels.checked_mul(4));
+    let source_len = (source_w as usize)
+        .checked_mul(source_h as usize)
+        .and_then(|pixels| pixels.checked_mul(4));
+    if target_len != Some(target_pixels.len())
+        || source_len != Some(source_pixels.len())
+        || target_w == 0
+        || target_h == 0
+        || source_w == 0
+        || source_h == 0
     {
         return;
     }
@@ -117,10 +126,7 @@ mod tests {
     fn test_set_matte_alpha_replace() {
         let mut tgt = vec![255u8; 16]; // 2x2 opaque
         let src = vec![
-            255, 0, 0, 128,
-            255, 0, 0, 128,
-            255, 0, 0, 128,
-            255, 0, 0, 128,
+            255, 0, 0, 128, 255, 0, 0, 128, 255, 0, 0, 128, 255, 0, 0, 128,
         ]; // 2x2 with alpha 128
 
         let params = SetMatteParams {
@@ -135,13 +141,27 @@ mod tests {
     }
 
     #[test]
+    fn test_set_matte_rejects_dimension_overflow() {
+        let mut target = vec![255u8; 4];
+        let source = vec![255u8; 4];
+        let params = SetMatteParams::default();
+        apply_set_matte(
+            &mut target,
+            u32::MAX,
+            u32::MAX,
+            &source,
+            1,
+            1,
+            &params,
+        );
+        assert_eq!(target, vec![255u8; 4]);
+    }
+
+    #[test]
     fn test_set_matte_luminance_invert() {
         let mut tgt = vec![255u8; 16];
         let src = vec![
-            255, 255, 255, 255,
-            255, 255, 255, 255,
-            255, 255, 255, 255,
-            255, 255, 255, 255,
+            255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
         ]; // pure white
 
         let params = SetMatteParams {
