@@ -2,7 +2,7 @@
 
 use crate::core::audio_types::MixerChannel;
 use crate::core::automation_binding::{AutomationBinding, ProductionClock};
-use crate::core::timeline::Project;
+use crate::core::timeline::{Project, ProjectItemType};
 use crate::core::unified_time::TempoMap;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
@@ -79,6 +79,25 @@ impl ProductionDocument {
         let mut composition_ids = HashSet::new();
         for composition in &self.project.compositions {
             validate_composition(composition, 0, &mut composition_ids)?;
+        }
+        for asset in &self.project.assets {
+            match &asset.item_type {
+                ProjectItemType::Composition { comp_idx }
+                    if *comp_idx >= self.project.compositions.len() =>
+                {
+                    return Err("asset composition index is out of range".into());
+                }
+                ProjectItemType::Image { width, height } if *width == 0 || *height == 0 => {
+                    return Err("asset image dimensions must be non-zero".into());
+                }
+                ProjectItemType::Video { duration_sec, .. }
+                | ProjectItemType::Audio { duration_sec, .. }
+                    if !duration_sec.is_finite() || *duration_sec < 0.0 =>
+                {
+                    return Err("asset duration must be finite and non-negative".into());
+                }
+                _ => {}
+            }
         }
         if !(1..=384_000).contains(&self.audio.sample_rate) {
             return Err("audio sample rate is outside the supported range".into());
@@ -277,6 +296,26 @@ mod tests {
         let mut invalid_project = Project::default();
         let duplicate = invalid_project.compositions[0].clone();
         invalid_project.compositions.push(duplicate);
+        assert!(ProductionDocument::new(invalid_project).validate().is_err());
+
+        let mut invalid_project = Project::default();
+        invalid_project.assets.push(crate::core::timeline::ProjectItem::new(
+            "bad-comp",
+            "Bad Comp",
+            ProjectItemType::Composition { comp_idx: 99 },
+        ));
+        assert!(ProductionDocument::new(invalid_project).validate().is_err());
+
+        let mut invalid_project = Project::default();
+        invalid_project.assets.push(crate::core::timeline::ProjectItem::new(
+            "bad-image",
+            "Bad Image",
+            ProjectItemType::Image {
+                path: "image.png".into(),
+                width: 0,
+                height: 1080,
+            },
+        ));
         assert!(ProductionDocument::new(invalid_project).validate().is_err());
     }
 
