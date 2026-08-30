@@ -187,7 +187,7 @@ fn design_biquad(band: &EqBand, sample_rate: f64) -> Biquad {
 
 /// Apply parametric EQ with multiple bands to a stereo interleaved buffer.
 pub fn apply_eq(buf: &mut [f32], bands: &[EqBand], sample_rate: u32) {
-    if bands.is_empty() || buf.is_empty() {
+    if bands.is_empty() || buf.is_empty() || sample_rate == 0 {
         return;
     }
     let fs = sample_rate as f64;
@@ -590,6 +590,14 @@ mod tests {
         for s in &buf {
             assert!(s.abs() < 10.0, "Low-pass filter went unstable: {}", s);
         }
+    }
+
+    #[test]
+    fn test_eq_with_invalid_sample_rate_is_a_safe_bypass() {
+        let mut buf = vec![0.25f32, -0.5, 0.75, -1.0];
+        let original = buf.clone();
+        apply_eq(&mut buf, &[EqBand::default()], 0);
+        assert_eq!(buf, original);
     }
 
     #[test]
