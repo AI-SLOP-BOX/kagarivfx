@@ -1719,6 +1719,13 @@ mod tests {
             },
         );
         assert!(document.validate().is_err());
+
+        let mut document = ProductionDocument::new(Project::default());
+        document.project.compositions[0].lights.resize(
+            ProductionDocument::MAX_LIGHTS_PER_COMPOSITION + 1,
+            Default::default(),
+        );
+        assert!(document.validate().is_err());
     }
 
     #[test]
