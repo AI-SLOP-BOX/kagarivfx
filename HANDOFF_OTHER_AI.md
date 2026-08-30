@@ -335,3 +335,65 @@
 ### shader.wgsl (fixing committed breakage from `ce6f272` GPU Lens Flare)
 - The new lens-flare block lives inside helper `sample_layer_color(local_pos_in, tc_in, blur_extend)` but referenced `in.tex_coords`, which doesn't exist in that scope → WGSL parse failure broke the validation gate for every subsequent commit. Replaced both occurrences with `tc_in`. flare_* fields were already wired Rust-side.
 - Please run `cargo test --test shader_validation` before committing shader changes — it exists precisely to catch this class of breakage pre-push.
+
+## Codex Handoff (2026-08-30) — Architecture Stabilization
+
+The project is no longer just an AE-like feature collection. The intended direction is:
+
+> Open-source programmable VFX and motion-graphics engine with a shared video/audio timeline.
+
+Do not interpret the large feature count as production completeness. The most important unfinished work is integration: Project → Command → Evaluation → Render → Cache → Save/Load → Undo → CLI/Headless.
+
+### Changes completed in this session
+
+Commits:
+
+- `45fed4e` — stale-cache and project-save hardening
+- `aced6b5` — RAII safety for automation's thread-local Project scope
+- `98be6de` — `src/core/unified_time.rs`
+
+Details:
+
+- Precomp cache keys now include a content revision derived from serialized composition content.
+- Image cache detects file length/mtime changes and reloads replaced footage.
+- Project saves sync the temporary file and parent directory before returning success.
+- Future project schema versions are rejected instead of silently losing unknown data.
+- Rhai automation uses `ProjectScope`, which clears the raw pointer even during unwinding and rejects nested execution.
+- `unified_time` provides exact rational `Time`, rational `FrameRate`, frame/sample conversion, and tempo-map beat conversion.
+
+### Verification
+
+- Full suite currently passes: 834 library tests plus integration/adversarial suites.
+- `cargo clippy --all-features -- -D warnings` passes.
+- There is an existing non-fatal future-incompatibility warning for dependency `block v0.1.6`.
+
+### Important current risks
+
+1. `Project` is not yet the sole source of truth. Mixer, work-area, color-display, and other output-affecting state still lives in AppState.
+2. GUI, CLI, and Script directly mutate Projects through different paths. There is no shared serializable Domain Command layer yet.
+3. `vfx_graph_compiler` is not the actual CPU/GPU evaluation path.
+4. Main frame cache, precomp cache, tile cache, LUT state, and GPU state use separate/global invalidation domains.
+5. Most rendering still uses RGBA8 buffers; this is not yet a genuine HDR/float pipeline.
+6. Time is still mostly `fps: u32` and `frame: u32` outside the new module. Do not claim the whole application is rational-time aware until callers migrate.
+7. `src/core/audio_engine.rs` still references `app_state::MixerChannel`; move this type into Core before making a public headless API.
+8. OFX/AE SDK loading remains in-process unsafe code. It is not crash-isolated plugin hosting.
+
+### Recommended next order
+
+1. Add a minimal shared Command layer: AddLayer, SetProperty, AddKeyframe, AddEffect, RemoveLayer.
+2. Make GUI/CLI/Script use those commands and route invalidation + undo through one place.
+3. Move persistent audio/color/work-area/render settings into Project.
+4. Add AssetRevision/content hashes and use them in every render cache key.
+5. Introduce an explicit RenderContext carrying Time, color config, backend, resolution, quality, and asset revisions.
+6. Migrate audio frame slicing and expression evaluation to `unified_time`.
+7. Build one 30-second reference project that goes from GUI edit to save/reload, CLI render, and export.
+
+### Do not do yet
+
+- Do not add another large pack of independent effects.
+- Do not build Git-like branches before stable IDs, canonical serialization, Commands, and AssetRevision exist.
+- Do not replace the whole renderer in one sweep.
+- Do not use `git add -A` or `git add .`; the worktree may contain another agent's unfinished changes.
+- Before editing a file, re-read it. Stage only files/hunks actually owned by the current change.
+
+The project is worth continuing, but the next breakthrough is boring infrastructure, not another demo effect. Make ten features fully vertical before making the feature list larger.
