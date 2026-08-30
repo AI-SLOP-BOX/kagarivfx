@@ -82,6 +82,29 @@ impl ProductionDocument {
         document.validate()?;
         Ok(document)
     }
+
+    pub fn save_atomic(&self, path: impl AsRef<std::path::Path>) -> Result<(), String> {
+        let target = path.as_ref();
+        let temporary = target.with_extension("production.tmp");
+        let json = self.to_json()?;
+        let mut file = std::fs::File::create(&temporary)
+            .map_err(|error| format!("failed to create production document: {error}"))?;
+        use std::io::Write;
+        file.write_all(json.as_bytes())
+            .map_err(|error| format!("failed to write production document: {error}"))?;
+        file.sync_all()
+            .map_err(|error| format!("failed to sync production document: {error}"))?;
+        drop(file);
+        std::fs::rename(&temporary, target)
+            .map_err(|error| format!("failed to replace production document: {error}"))?;
+        Ok(())
+    }
+
+    pub fn load(path: impl AsRef<std::path::Path>) -> Result<Self, String> {
+        let json = std::fs::read_to_string(path.as_ref())
+            .map_err(|error| format!("failed to read production document: {error}"))?;
+        Self::from_json(&json)
+    }
 }
 
 #[cfg(test)]
@@ -127,5 +150,23 @@ mod tests {
         document.schema_version = ProductionDocument::CURRENT_SCHEMA_VERSION;
         document.audio.sample_rate = 0;
         assert!(document.validate().is_err());
+    }
+
+    #[test]
+    fn atomic_save_and_load_preserve_contract() {
+        let directory =
+            std::env::temp_dir().join(format!("aevfx_production_document_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&directory);
+        std::fs::create_dir_all(&directory).unwrap();
+        let path = directory.join("session.aura");
+        let document = ProductionDocument::new(Project::default());
+
+        document.save_atomic(&path).unwrap();
+        let loaded = ProductionDocument::load(&path).unwrap();
+        assert_eq!(loaded.schema_version, document.schema_version);
+        assert!(path.exists());
+        assert!(!directory.join("session.production.tmp").exists());
+
+        let _ = std::fs::remove_dir_all(directory);
     }
 }
