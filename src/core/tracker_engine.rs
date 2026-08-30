@@ -8,6 +8,30 @@ use crate::core::timeline::{Composition, Layer};
 pub struct TrackerEngine;
 
 impl TrackerEngine {
+    pub fn analyze_markerless_tracks(
+        layer: &mut Layer,
+        start_frame: u32,
+        end_frame: u32,
+        block_radius: i32,
+        search_radius: i32,
+        minimum_confidence: f32,
+    ) -> usize {
+        let tracker_count = layer.trackers.len();
+        let mut total = 0;
+        for tracker_idx in 0..tracker_count {
+            total += Self::analyze_markerless_track(
+                layer,
+                tracker_idx,
+                start_frame,
+                end_frame,
+                block_radius,
+                search_radius,
+                minimum_confidence,
+            );
+        }
+        total
+    }
+
     pub fn analyze_markerless_track(
         layer: &mut Layer,
         tracker_idx: usize,

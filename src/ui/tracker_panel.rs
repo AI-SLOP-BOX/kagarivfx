@@ -85,11 +85,11 @@ pub fn draw_tracker_panel(app: &mut AfterEffectsApp, ui: &mut egui::Ui, current_
                     if wa_out > start {
                         app.modify_project(|p| {
                             let comp = p.active_composition_mut();
-                            crate::core::tracker_engine::TrackerEngine::analyze_markerless_track(
-                                &mut comp.layers[idx], 0, start, wa_out, 2, 16, 0.05,
+                            crate::core::tracker_engine::TrackerEngine::analyze_markerless_tracks(
+                                &mut comp.layers[idx], start, wa_out, 2, 16, 0.05,
                             );
                         });
-                        app.toasts.info("Optical-flow mocap generated keyframes for tracker 1");
+                        app.toasts.info("Optical-flow mocap generated keyframes for all tracker points");
                     } else {
                         app.toasts.error("Nothing to track: extend the work area past the playhead");
                     }
