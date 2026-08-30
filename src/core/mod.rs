@@ -67,6 +67,7 @@ pub mod planar_tracker;
 pub mod posterize_time;
 pub mod precomp_cache;
 pub mod presets;
+pub mod production_document;
 pub mod project;
 pub mod project_migration;
 pub mod property;
