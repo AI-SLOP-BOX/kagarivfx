@@ -275,6 +275,11 @@ fn validate_composition(
     if composition.background_color.iter().any(|channel| !channel.is_finite()) {
         return Err("composition background color must be finite".into());
     }
+    for layer in &composition.layers {
+        if layer.in_frame >= layer.out_frame {
+            return Err("layer frame range must have a positive duration".into());
+        }
+    }
     for nested in &composition.sub_compositions {
         validate_composition(nested, depth + 1, composition_ids)?;
     }
@@ -460,6 +465,11 @@ mod tests {
             },
             300,
         ));
+        assert!(ProductionDocument::new(invalid_project).validate().is_err());
+
+        let mut invalid_project = Project::default();
+        invalid_project.compositions[0].layers[0].out_frame =
+            invalid_project.compositions[0].layers[0].in_frame;
         assert!(ProductionDocument::new(invalid_project).validate().is_err());
     }
 
