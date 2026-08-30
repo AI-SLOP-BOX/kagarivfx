@@ -335,13 +335,29 @@ pub struct NamedMarkerlessPoseTrack {
     pub bone_lengths: Vec<f32>,
 }
 
+pub fn standard_humanoid_joint_names(count: usize) -> Vec<String> {
+    const NAMES: &[&str] = &[
+        "hip", "spine", "chest", "neck", "head", "left_shoulder", "left_elbow",
+        "left_wrist", "right_shoulder", "right_elbow", "right_wrist", "left_hip",
+        "left_knee", "left_ankle", "right_hip", "right_knee", "right_ankle",
+    ];
+    (0..count).map(|index| {
+        NAMES.get(index).map(|name| (*name).to_string())
+            .unwrap_or_else(|| format!("joint_{index:02}"))
+    }).collect()
+}
+
+pub fn normalize_joint_name(name: &str) -> String {
+    name.trim().to_ascii_lowercase().replace([' ', '-'], "_")
+}
+
 pub fn name_markerless_pose_track(
     pose: &MarkerlessPoseTrack,
     joint_names: &[String],
 ) -> NamedMarkerlessPoseTrack {
     let names = joint_names.iter().take(
         pose.frames.first().map(|frame| frame.joints.len()).unwrap_or(0),
-    ).cloned().collect::<Vec<_>>();
+    ).map(|name| normalize_joint_name(name)).collect::<Vec<_>>();
     let joint_count = names.len();
     let bones = pose.bones.iter().copied()
         .filter(|bone| bone[0] < joint_count && bone[1] < joint_count)
@@ -695,6 +711,8 @@ mod tests {
         let csv = markerless_pose_to_csv(&named);
         assert!(csv.lines().next().unwrap().contains("hip_x"));
         assert_eq!(csv.lines().count(), 3);
+        assert_eq!(normalize_joint_name(" Left Shoulder-01 "), "left_shoulder_01");
+        assert_eq!(standard_humanoid_joint_names(2), vec!["hip", "spine"]);
         let bvh = markerless_pose_to_bvh(&named, 0.0);
         assert!(bvh.contains("HIERARCHY"));
         assert!(bvh.contains("Frames: 2"));
