@@ -356,6 +356,7 @@ fn validate_composition(
             tracking,
             leading,
             align,
+            font_family,
             stroke_color,
             stroke_width,
             ..
@@ -371,6 +372,7 @@ fn validate_composition(
                 || !stroke_width.is_finite()
                 || *stroke_width < 0.0
                 || *align > 2
+                || font_family.trim().is_empty()
             {
                 return Err("text layer settings are invalid".into());
             }
@@ -1026,6 +1028,14 @@ mod tests {
             &mut invalid_project.compositions[0].layers[1].layer_type
         {
             *font_size = 16_385;
+        }
+        assert!(ProductionDocument::new(invalid_project).validate().is_err());
+
+        let mut invalid_project = Project::default();
+        if let LayerType::Text { font_family, .. } =
+            &mut invalid_project.compositions[0].layers[1].layer_type
+        {
+            *font_family = "   ".into();
         }
         assert!(ProductionDocument::new(invalid_project).validate().is_err());
 
