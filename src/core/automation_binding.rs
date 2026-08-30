@@ -68,9 +68,16 @@ pub struct AutomationBinding {
 }
 
 impl AutomationBinding {
+    pub const MAX_ENDPOINT_LENGTH: usize = 4096;
+
     pub fn validate(&self) -> Result<(), &'static str> {
         if self.source.trim().is_empty() || self.target.trim().is_empty() {
             return Err("automation source and target are required");
+        }
+        if self.source.len() > Self::MAX_ENDPOINT_LENGTH
+            || self.target.len() > Self::MAX_ENDPOINT_LENGTH
+        {
+            return Err("automation source and target are too long");
         }
         if [
             self.input_min,
@@ -186,6 +193,25 @@ mod tests {
         assert!(curve.validate().is_err());
         let binding = AutomationBinding {
             source: String::new(),
+            target: "vfx.opacity".into(),
+            curve: AutomationCurve {
+                points: vec![AutomationPoint {
+                    time: Time::ZERO,
+                    value: 0.0,
+                }],
+            },
+            input_min: 0.0,
+            input_max: 1.0,
+            output_min: 0.0,
+            output_max: 1.0,
+        };
+        assert!(binding.validate().is_err());
+    }
+
+    #[test]
+    fn rejects_oversized_binding_endpoints() {
+        let binding = AutomationBinding {
+            source: "s".repeat(AutomationBinding::MAX_ENDPOINT_LENGTH + 1),
             target: "vfx.opacity".into(),
             curve: AutomationCurve {
                 points: vec![AutomationPoint {
