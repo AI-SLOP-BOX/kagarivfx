@@ -183,11 +183,14 @@ pub fn bind_audio_amplitude_to_layer_transform(
         return;
     }
 
+    let base_value = if base_value.is_finite() { base_value } else { 0.0 };
+    let multiplier = if multiplier.is_finite() { multiplier } else { 0.0 };
+
     match target {
         AudioTargetProperty::Scale => {
             let mut scale_kfs = Vec::with_capacity(keyframes.len());
             for kf in keyframes {
-                let s = base_value + kf.value * multiplier;
+                let s = modulated_value(base_value, kf.value, multiplier);
                 scale_kfs.push(Keyframe::new(kf.frame, [s, s], InterpolationType::Linear));
             }
             layer.transform.scale = Animatable::Animated(scale_kfs);
@@ -195,7 +198,7 @@ pub fn bind_audio_amplitude_to_layer_transform(
         AudioTargetProperty::Opacity => {
             let mut opac_kfs = Vec::with_capacity(keyframes.len());
             for kf in keyframes {
-                let op = (base_value + kf.value * multiplier).clamp(0.0, 100.0);
+                let op = modulated_value(base_value, kf.value, multiplier).clamp(0.0, 100.0);
                 opac_kfs.push(Keyframe::new(kf.frame, op, InterpolationType::Linear));
             }
             layer.transform.opacity = Animatable::Animated(opac_kfs);
@@ -203,16 +206,18 @@ pub fn bind_audio_amplitude_to_layer_transform(
         AudioTargetProperty::Rotation => {
             let mut rot_kfs = Vec::with_capacity(keyframes.len());
             for kf in keyframes {
-                let r = base_value + kf.value * multiplier;
+                let r = modulated_value(base_value, kf.value, multiplier);
                 rot_kfs.push(Keyframe::new(kf.frame, r, InterpolationType::Linear));
             }
             layer.transform.rotation = Animatable::Animated(rot_kfs);
         }
         AudioTargetProperty::PositionY => {
             let mut pos_kfs = Vec::with_capacity(keyframes.len());
-            let current_pos = layer.transform.position.evaluate(0);
+            let current_pos = layer.transform.position.evaluate(0).map(|value| {
+                if value.is_finite() { value } else { 0.0 }
+            });
             for kf in keyframes {
-                let y = current_pos[1] + (kf.value * multiplier);
+                let y = current_pos[1] + modulated_value(0.0, kf.value, multiplier);
                 pos_kfs.push(Keyframe::new(
                     kf.frame,
                     [current_pos[0], y],
@@ -221,6 +226,18 @@ pub fn bind_audio_amplitude_to_layer_transform(
             }
             layer.transform.position = Animatable::Animated(pos_kfs);
         }
+    }
+}
+
+fn modulated_value(base: f32, value: f32, multiplier: f32) -> f32 {
+    if !value.is_finite() {
+        return base;
+    }
+    let result = f64::from(base) + f64::from(value) * f64::from(multiplier);
+    if result.is_finite() {
+        result.clamp(f64::from(f32::MIN), f64::from(f32::MAX)) as f32
+    } else {
+        base
     }
 }
 
@@ -304,5 +321,24 @@ mod tests {
         generate_beat_markers_from_audio(&mut comp, &kfs, 10.0);
         assert_eq!(comp.markers.len(), 1);
         assert_eq!(comp.markers[0].frame, 1);
+    }
+
+    #[test]
+    fn test_audio_binding_sanitizes_nonfinite_values() {
+        let mut layer = Layer::new_null("null".into(), "Null".into(), 10);
+        let keyframes = vec![
+            Keyframe::new(0, f32::NAN, InterpolationType::Linear),
+            Keyframe::new(1, f32::INFINITY, InterpolationType::Linear),
+        ];
+        bind_audio_amplitude_to_layer_transform(
+            &mut layer,
+            &keyframes,
+            AudioTargetProperty::Opacity,
+            f32::NAN,
+            f32::INFINITY,
+        );
+        for frame in 0..=1 {
+            assert!(layer.transform.opacity.evaluate(frame).is_finite());
+        }
     }
 }
