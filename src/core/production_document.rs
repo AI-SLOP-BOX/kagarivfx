@@ -332,7 +332,7 @@ fn validate_composition(
             || !vector_animation_is_finite(&layer.transform.position)
             || !vector_animation_is_finite(&layer.transform.scale)
             || !scalar_animation_is_finite(&layer.transform.rotation)
-            || !scalar_animation_is_finite(&layer.transform.opacity)
+            || !scalar_animation_is_unit_interval(&layer.transform.opacity)
         {
             return Err("layer transform animation values must be finite".into());
         }
@@ -621,10 +621,13 @@ fn validate_mask(mask: &crate::core::mask::Mask) -> Result<(), String> {
             return Err("mask tangent coordinates must be finite".into());
         }
     }
-    for value in [&mask.feather, &mask.opacity, &mask.expansion] {
+    for value in [&mask.feather, &mask.expansion] {
         if !scalar_animation_is_finite(value) {
             return Err("mask animation values must be finite".into());
         }
+    }
+    if !scalar_animation_is_unit_interval(&mask.opacity) {
+        return Err("mask opacity must be within 0..1".into());
     }
     Ok(())
 }
@@ -644,6 +647,17 @@ fn scalar_animation_is_nonnegative(value: &crate::core::property::Animatable<f32
         crate::core::property::Animatable::Animated(keyframes) => keyframes
             .iter()
             .all(|keyframe| keyframe.value.is_finite() && keyframe.value >= 0.0),
+    }
+}
+
+fn scalar_animation_is_unit_interval(value: &crate::core::property::Animatable<f32>) -> bool {
+    match value {
+        crate::core::property::Animatable::Constant(value) => {
+            value.is_finite() && (0.0..=1.0).contains(value)
+        }
+        crate::core::property::Animatable::Animated(keyframes) => keyframes
+            .iter()
+            .all(|keyframe| keyframe.value.is_finite() && (0.0..=1.0).contains(&keyframe.value)),
     }
 }
 
@@ -1149,6 +1163,11 @@ mod tests {
         assert!(ProductionDocument::new(invalid_project).validate().is_err());
 
         let mut invalid_project = Project::default();
+        invalid_project.compositions[0].layers[0].transform.opacity =
+            crate::core::property::Animatable::new_constant(1.1);
+        assert!(ProductionDocument::new(invalid_project).validate().is_err());
+
+        let mut invalid_project = Project::default();
         invalid_project.compositions[0].layers[0]
             .transform_3d
             .position = crate::core::property::Animatable::new_constant([0.0, f32::INFINITY, 0.0]);
@@ -1294,6 +1313,21 @@ mod tests {
             100.0,
         );
         invalid_mask.opacity = crate::core::property::Animatable::new_constant(f32::NAN);
+        invalid_project.compositions[0].layers[0]
+            .masks
+            .push(invalid_mask);
+        assert!(ProductionDocument::new(invalid_project).validate().is_err());
+
+        let mut invalid_project = Project::default();
+        let mut invalid_mask = crate::core::mask::Mask::new_rect(
+            "invalid-mask-opacity".into(),
+            "Mask".into(),
+            0.0,
+            0.0,
+            100.0,
+            100.0,
+        );
+        invalid_mask.opacity = crate::core::property::Animatable::new_constant(-0.1);
         invalid_project.compositions[0].layers[0]
             .masks
             .push(invalid_mask);
