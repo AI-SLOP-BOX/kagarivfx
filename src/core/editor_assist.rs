@@ -787,17 +787,23 @@ pub fn normalization_gain_db(samples: &[f32], target_rms_db: f32, peak_ceiling_d
     if finite.is_empty() {
         return 0.0;
     }
-    let rms =
-        (finite.iter().map(|sample| sample * sample).sum::<f32>() / finite.len() as f32).sqrt();
-    let peak = finite.iter().map(|sample| sample.abs()).fold(0.0, f32::max);
-    if rms <= f32::EPSILON || peak <= f32::EPSILON {
+    let sum_squares = finite
+        .iter()
+        .map(|sample| f64::from(*sample) * f64::from(*sample))
+        .sum::<f64>();
+    let rms = (sum_squares / finite.len() as f64).sqrt();
+    let peak = finite
+        .iter()
+        .map(|sample| f64::from(sample.abs()))
+        .fold(0.0, f64::max);
+    if !rms.is_finite() || !peak.is_finite() || rms <= f64::EPSILON || peak <= f64::EPSILON {
         return 0.0;
     }
     let rms_db = 20.0 * rms.log10();
     let peak_db = 20.0 * peak.log10();
-    (target_rms_db - rms_db)
-        .min(peak_ceiling_db - peak_db)
-        .clamp(-60.0, 60.0)
+    ((f64::from(target_rms_db) - rms_db)
+        .min(f64::from(peak_ceiling_db) - peak_db)
+        .clamp(-60.0, 60.0)) as f32
 }
 
 /// Returns ranges where audio remains at or above a clipping threshold.
