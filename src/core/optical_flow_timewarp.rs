@@ -327,6 +327,49 @@ pub struct MarkerlessPoseTrack {
     pub bone_lengths: Vec<f32>,
 }
 
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct NamedMarkerlessPoseTrack {
+    pub joint_names: Vec<String>,
+    pub bones: Vec<[usize; 2]>,
+    pub frames: Vec<MarkerlessPoseFrame>,
+    pub bone_lengths: Vec<f32>,
+}
+
+pub fn name_markerless_pose_track(
+    pose: &MarkerlessPoseTrack,
+    joint_names: &[String],
+) -> NamedMarkerlessPoseTrack {
+    let names = joint_names.iter().take(
+        pose.frames.first().map(|frame| frame.joints.len()).unwrap_or(0),
+    ).cloned().collect::<Vec<_>>();
+    let joint_count = names.len();
+    let bones = pose.bones.iter().copied()
+        .filter(|bone| bone[0] < joint_count && bone[1] < joint_count)
+        .collect();
+    NamedMarkerlessPoseTrack {
+        joint_names: names,
+        bones,
+        frames: pose.frames.clone(),
+        bone_lengths: pose.bone_lengths.iter().copied().take(pose.bones.len()).collect(),
+    }
+}
+
+pub fn markerless_pose_to_csv(pose: &NamedMarkerlessPoseTrack) -> String {
+    let mut output = String::from("frame,root_x,root_y,confidence");
+    for name in &pose.joint_names {
+        output.push_str(&format!(",{}_x,{}_y", name, name));
+    }
+    output.push('\n');
+    for frame in &pose.frames {
+        output.push_str(&format!("{},{},{},{}", frame.frame, frame.root[0], frame.root[1], frame.confidence));
+        for joint in &frame.joints {
+            output.push_str(&format!(",{},{}", joint[0], joint[1]));
+        }
+        output.push('\n');
+    }
+    output
+}
+
 pub fn build_markerless_pose_track(
     joint_tracks: &[MarkerlessMotionTrack],
     bones: &[(usize, usize)],
@@ -594,5 +637,9 @@ mod tests {
         assert!(json.contains("bone_lengths"));
         let restored: MarkerlessPoseTrack = serde_json::from_str(&json).unwrap();
         assert_eq!(restored, pose);
+        let named = name_markerless_pose_track(&pose, &["hip".into(), "hand".into()]);
+        let csv = markerless_pose_to_csv(&named);
+        assert!(csv.lines().next().unwrap().contains("hip_x"));
+        assert_eq!(csv.lines().count(), 3);
     }
 }
