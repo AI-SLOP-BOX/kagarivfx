@@ -2,7 +2,7 @@
 /// Chroma Key options matching After Effects Keylight effect.
 #[derive(Debug, Clone)]
 pub struct ChromaKeyOptions {
-    pub screen_color: [f32; 3],  // Primary Key Color [R, G, B] in range 0.0 .. 1.0 (Default Green: [0.0, 1.0, 0.0])
+    pub screen_color: [f32; 3], // Primary Key Color [R, G, B] in range 0.0 .. 1.0 (Default Green: [0.0, 1.0, 0.0])
     pub screen_gain: f32,       // Key Sensitivity Gain (1.0 .. 2.0)
     pub screen_balance: f32,    // Relative balance between R, G, B channels
     pub despill_strength: f32,  // Green/Blue spill suppression factor (0.0 .. 1.0)
@@ -45,20 +45,36 @@ fn chroma_distance(cb: f32, cr: f32, k_cb: f32, k_cr: f32, balance: f32) -> f32 
 /// separates luminance from hue and produces soft, feathered edges. Spill
 /// suppression works for both green and blue screens by clamping the dominant
 /// channel against the other two channels.
-pub fn apply_chroma_key(
-    pixels: &mut [u8],
-    width: u32,
-    height: u32,
-    options: &ChromaKeyOptions,
-) {
-    let num_pixels = (width * height) as usize;
-    if pixels.len() != num_pixels * 4 {
+pub fn apply_chroma_key(pixels: &mut [u8], width: u32, height: u32, options: &ChromaKeyOptions) {
+    let Some(num_pixels) = (width as usize)
+        .checked_mul(height as usize)
+        .filter(|&count| count <= usize::MAX / 4)
+    else {
+        return;
+    };
+    if width == 0 || height == 0 || pixels.len() != num_pixels * 4 {
         return;
     }
 
-    let k_r = options.screen_color[0].clamp(0.0, 1.0);
-    let k_g = options.screen_color[1].clamp(0.0, 1.0);
-    let k_b = options.screen_color[2].clamp(0.0, 1.0);
+    let finite_clamped = |value: f32, default: f32| {
+        if value.is_finite() {
+            value.clamp(0.0, 1.0)
+        } else {
+            default
+        }
+    };
+    let k_r = finite_clamped(options.screen_color[0], 0.0);
+    let k_g = finite_clamped(options.screen_color[1], 1.0);
+    let k_b = finite_clamped(options.screen_color[2], 0.0);
+    let gain = if options.screen_gain.is_finite() {
+        options.screen_gain.max(0.0)
+    } else {
+        1.0
+    };
+    let balance = finite_clamped(options.screen_balance, 0.5);
+    let clip_black = finite_clamped(options.clip_black, 0.0);
+    let clip_white = finite_clamped(options.clip_white, 1.0);
+    let despill_strength = finite_clamped(options.despill_strength, 0.0);
 
     let (k_cb, k_cr) = rgb_to_chroma(k_r, k_g, k_b);
 
@@ -76,15 +92,15 @@ pub fn apply_chroma_key(
         let (cb, cr) = rgb_to_chroma(r, g, b);
         const CORE_TOLERANCE: f32 = 0.15;
         const MATTE_RAMP: f32 = 3.0;
-        let raw_matte = ((chroma_distance(cb, cr, k_cb, k_cr, options.screen_balance)
+        let raw_matte = ((chroma_distance(cb, cr, k_cb, k_cr, balance)
             - CORE_TOLERANCE)
             * MATTE_RAMP
-            * options.screen_gain)
+            * gain)
             .clamp(0.0, 1.0);
 
         // Apply Clip Black / Clip White thresholds
-        let matte = if options.clip_white > options.clip_black + 0.001 {
-            ((raw_matte - options.clip_black) / (options.clip_white - options.clip_black))
+        let matte = if clip_white > clip_black + 0.001 {
+            ((raw_matte - clip_black) / (clip_white - clip_black))
                 .clamp(0.0, 1.0)
         } else {
             raw_matte.clamp(0.0, 1.0)
@@ -96,7 +112,7 @@ pub fn apply_chroma_key(
 
         // Apply Spill Suppression (Despill): clamp the dominant screen channel
         // (G for green screens, B for blue screens) against the other channels.
-        let strength = options.despill_strength.clamp(0.0, 1.0);
+        let strength = despill_strength;
         if strength > 0.001 {
             let ch_idx = if is_green_screen { idx + 1 } else { idx + 2 };
             let primary_ch = pixels[ch_idx] as f32 / 255.0;
@@ -125,14 +141,14 @@ mod tests {
     #[test]
     fn test_chroma_key_green_screen_removal() {
         let mut pixels = vec![
-            0, 255, 0, 255,   // Pure Green Pixel -> Should become transparent
-            255, 0, 0, 255,   // Pure Red Pixel -> Should stay opaque
+            0, 255, 0, 255, // Pure Green Pixel -> Should become transparent
+            255, 0, 0, 255, // Pure Red Pixel -> Should stay opaque
         ];
 
         let options = ChromaKeyOptions::default();
         apply_chroma_key(&mut pixels, 2, 1, &options);
 
-        assert_eq!(pixels[3], 0);   // Green pixel alpha removed
+        assert_eq!(pixels[3], 0); // Green pixel alpha removed
         assert_eq!(pixels[7], 255); // Red pixel alpha preserved
     }
 
@@ -159,7 +175,10 @@ mod tests {
             if (1..=2).contains(&x) && (1..=2).contains(&y) {
                 assert!(a >= 240, "foreground pixel {i} should be opaque, got {a}");
             } else {
-                assert!(a <= 10, "background pixel {i} should be transparent, got {a}");
+                assert!(
+                    a <= 10,
+                    "background pixel {i} should be transparent, got {a}"
+                );
             }
         }
     }
@@ -176,7 +195,10 @@ mod tests {
         apply_chroma_key(&mut pixels, 1, 1, &options);
 
         let [r, g, b, _a] = px(&pixels, 0);
-        assert!(g <= 84, "spill should be suppressed toward max(R,B), got G={g} R={r} B={b}");
+        assert!(
+            g <= 84,
+            "spill should be suppressed toward max(R,B), got G={g} R={r} B={b}"
+        );
         assert_eq!(g, 80);
     }
 
@@ -199,8 +221,8 @@ mod tests {
     #[test]
     fn test_blue_screen_keying() {
         let mut pixels = vec![
-            0, 0, 255, 255,      // Blue background -> transparent
-            255, 165, 0, 255,    // Orange foreground -> opaque
+            0, 0, 255, 255, // Blue background -> transparent
+            255, 165, 0, 255, // Orange foreground -> opaque
         ];
         let options = ChromaKeyOptions {
             screen_color: [0.0, 0.0, 1.0],
@@ -222,8 +244,10 @@ mod tests {
         apply_chroma_key(&mut blended, 1, 1, &options);
 
         let a_blend = blended[3] as i32;
-        assert!(a_blend > 10 && a_blend < 250,
-            "edge pixel should be partially transparent: {a_blend}");
+        assert!(
+            a_blend > 10 && a_blend < 250,
+            "edge pixel should be partially transparent: {a_blend}"
+        );
     }
 
     #[test]
@@ -235,7 +259,10 @@ mod tests {
             ..Default::default()
         };
         apply_chroma_key(&mut pixels, 1, 1, &options);
-        assert_eq!(pixels[3], 255, "matte above clip range should be forced opaque");
+        assert_eq!(
+            pixels[3], 255,
+            "matte above clip range should be forced opaque"
+        );
     }
 
     #[test]
