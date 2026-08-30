@@ -47,7 +47,7 @@ impl Default for TileCache {
 impl TileCache {
     pub fn new(tile_size: u32, max_memory_bytes: usize) -> Self {
         Self {
-            tile_size,
+            tile_size: tile_size.max(1),
             max_memory: max_memory_bytes,
             ..Default::default()
         }
@@ -91,11 +91,21 @@ impl TileCache {
     pub fn insert(&mut self, frame: u32, coord: TileCoord, pixels: Vec<u8>) {
         let version = current_tile_version();
         let tile_bytes = pixels.len();
+        if tile_bytes > self.max_memory {
+            return;
+        }
         self.lru_clock += 1;
+
+        let key = (frame, 0, coord);
+        if let Some(previous) = self.tiles.remove(&key) {
+            self.current_memory = self.current_memory.saturating_sub(previous.pixels.len());
+        }
 
         // Evict if over budget
         while self.current_memory + tile_bytes > self.max_memory && !self.tiles.is_empty() {
-            if let Some((worst_key, worst_entry)) = self.tiles.iter()
+            if let Some((worst_key, worst_entry)) = self
+                .tiles
+                .iter()
                 .min_by_key(|(_, e)| e.lru_stamp)
                 .map(|(k, e)| (*k, e.clone()))
             {
@@ -107,11 +117,14 @@ impl TileCache {
         }
 
         self.current_memory += tile_bytes;
-        self.tiles.insert((frame, 0, coord), TileEntry {
-            pixels,
-            version,
-            lru_stamp: self.lru_clock,
-        });
+        self.tiles.insert(
+            key,
+            TileEntry {
+                pixels,
+                version,
+                lru_stamp: self.lru_clock,
+            },
+        );
     }
 
     pub fn invalidate_all(&mut self) {
@@ -122,7 +135,9 @@ impl TileCache {
 
     pub fn invalidate_frame(&mut self, frame: u32) {
         let version = current_tile_version();
-        let keys: Vec<_> = self.tiles.keys()
+        let keys: Vec<_> = self
+            .tiles
+            .keys()
             .filter(|(f, _, _)| *f == frame)
             .copied()
             .collect();
@@ -194,5 +209,30 @@ mod tests {
         // Should have evicted some tiles
         assert!(cache.tile_count() < 10);
         assert!(cache.memory_usage() <= 1024);
+    }
+
+    #[test]
+    fn reinserting_a_tile_replaces_its_memory_accounting() {
+        let mut cache = TileCache::new(16, 32);
+        cache.insert(0, TileCoord { tx: 0, ty: 0 }, vec![1; 16]);
+        cache.insert(0, TileCoord { tx: 0, ty: 0 }, vec![2; 8]);
+        assert_eq!(cache.tile_count(), 1);
+        assert_eq!(cache.memory_usage(), 8);
+        assert_eq!(cache.get(0, TileCoord { tx: 0, ty: 0 }), Some(&[2; 8][..]));
+    }
+
+    #[test]
+    fn oversized_tiles_are_rejected_without_exceeding_budget() {
+        let mut cache = TileCache::new(16, 8);
+        cache.insert(0, TileCoord { tx: 0, ty: 0 }, vec![0; 9]);
+        assert_eq!(cache.tile_count(), 0);
+        assert_eq!(cache.memory_usage(), 0);
+    }
+
+    #[test]
+    fn zero_tile_size_is_clamped_to_a_safe_value() {
+        let cache = TileCache::new(0, 64);
+        assert_eq!(cache.tile_size(), 1);
+        assert_eq!(cache.tiles_for_frame(0, 2, 1).len(), 2);
     }
 }
