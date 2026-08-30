@@ -241,6 +241,34 @@ pub fn markerless_track_keyframes(
     }
 }
 
+pub fn apply_markerless_track_to_tracker_point(
+    tracker: &mut crate::core::timeline::TrackerPoint,
+    track: &MarkerlessMotionTrack,
+    minimum_confidence: f32,
+) -> usize {
+    use crate::core::keyframe::{InterpolationType, Keyframe};
+    let threshold = if minimum_confidence.is_finite() {
+        minimum_confidence.clamp(0.0, 1.0)
+    } else {
+        0.0
+    };
+    let keyframes = track
+        .samples
+        .iter()
+        .filter(|sample| {
+            sample.confidence >= threshold
+                && sample.confidence.is_finite()
+                && sample.position.iter().all(|value| value.is_finite())
+        })
+        .map(|sample| Keyframe::new(sample.frame, sample.position, InterpolationType::Linear))
+        .collect::<Vec<_>>();
+    let count = keyframes.len();
+    if count > 0 {
+        tracker.position = crate::core::property::Animatable::Animated(keyframes);
+    }
+    count
+}
+
 /// Interpolates an intermediate frame at fractional position `t` (0.0 .. 1.0)
 /// using bidirectional forward and backward flow fields.
 pub fn interpolate_timewarp_frame(
