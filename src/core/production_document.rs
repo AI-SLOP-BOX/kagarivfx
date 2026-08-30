@@ -118,11 +118,11 @@ impl ProductionDocument {
                 {
                     return Err("asset composition index is out of range".into());
                 }
-                ProjectItemType::Image { width, height } if *width == 0 || *height == 0 => {
+                ProjectItemType::Image { width, height, .. } if *width == 0 || *height == 0 => {
                     return Err("asset image dimensions must be non-zero".into());
                 }
                 ProjectItemType::Image { path, .. }
-                | ProjectItemType::Video { source: path, .. }
+                | ProjectItemType::Video { path, .. }
                 | ProjectItemType::Audio { path, .. }
                     if path.trim().is_empty() =>
                 {
@@ -652,8 +652,8 @@ mod tests {
 
         let mut invalid_project = Project::default();
         invalid_project.compositions[0].layers.push(crate::core::timeline::Layer::new(
-            "missing-precomp",
-            "Missing Precomp",
+            "missing-precomp".into(),
+            "Missing Precomp".into(),
             LayerType::PreComp {
                 comp_id: "does-not-exist".into(),
             },
@@ -674,8 +674,8 @@ mod tests {
         let mut invalid_project = Project::default();
         let comp_id = invalid_project.compositions[0].id.clone();
         invalid_project.compositions[0].layers.push(crate::core::timeline::Layer::new(
-            "self-precomp",
-            "Self Precomp",
+            "self-precomp".into(),
+            "Self Precomp".into(),
             LayerType::PreComp { comp_id },
             300,
         ));
