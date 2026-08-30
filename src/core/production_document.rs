@@ -683,7 +683,7 @@ fn validate_composition(
 }
 
 fn asset_text_is_safe(value: &str) -> bool {
-    !value.chars().any(char::is_control)
+    !value.is_empty() && value == value.trim() && !value.chars().any(char::is_control)
 }
 
 fn validate_precomp_references(
@@ -1821,6 +1821,22 @@ mod tests {
             .push(crate::core::timeline::ProjectItem::new(
                 "asset\0id",
                 "Asset",
+                ProjectItemType::Folder {
+                    name: "Folder".into(),
+                },
+            ));
+        assert!(document.validate().is_err());
+    }
+
+    #[test]
+    fn rejects_untrimmed_asset_metadata() {
+        let mut document = ProductionDocument::new(Project::default());
+        document
+            .project
+            .assets
+            .push(crate::core::timeline::ProjectItem::new(
+                "asset-id",
+                " Asset ",
                 ProjectItemType::Folder {
                     name: "Folder".into(),
                 },
