@@ -738,6 +738,12 @@ pub fn stabilize_markerless_pose3d_track(pose: &mut MarkerlessPose3DTrack, max_g
     changed
 }
 
+pub fn pose3d_quality(pose: &MarkerlessPose3DTrack, frame_index: usize) -> (usize, f32) {
+    let Some(frame) = pose.frames.get(frame_index) else { return (0, 0.0); };
+    let valid = frame.joints.iter().filter(|point| point.iter().all(|value| value.is_finite())).count();
+    (valid, if frame.confidence.is_finite() { frame.confidence.clamp(0.0, 1.0) } else { 0.0 })
+}
+
 pub trait Pose3DInferenceBackend {
     fn infer_joints_3d(&mut self, rgb: &[f32], width: u32, height: u32) -> Vec<([f32; 3], f32)>;
 }
@@ -1624,6 +1630,16 @@ mod tests {
         let csv = markerless_pose3d_to_csv(&pose);
         assert!(csv.lines().next().unwrap().contains("hip_z"));
         assert!(csv.lines().nth(1).unwrap().contains("4,0.75,1,2,3"));
+    }
+
+    #[test]
+    fn pose_3d_quality_counts_only_finite_joints() {
+        let pose = MarkerlessPose3DTrack {
+            frames: vec![MarkerlessPose3DFrame { frame: 0, joints: vec![[1.0, 2.0, 3.0], [f32::NAN; 3]], confidence: 1.5 }],
+            bones: vec![],
+        };
+        assert_eq!(pose3d_quality(&pose, 0), (1, 1.0));
+        assert_eq!(pose3d_quality(&pose, 9), (0, 0.0));
     }
 
     #[test]
