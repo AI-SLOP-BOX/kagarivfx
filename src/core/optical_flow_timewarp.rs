@@ -410,6 +410,45 @@ pub fn pose_root_acceleration(
     } else { [0.0, 0.0] }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub enum MarkerlessMotionEventKind { Peak, Stop, DirectionChange }
+
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct MarkerlessMotionEvent { pub frame: u32, pub joint: usize, pub kind: MarkerlessMotionEventKind, pub magnitude: f32 }
+
+pub fn detect_markerless_motion_events(
+    pose: &MarkerlessPoseTrack,
+    speed_threshold: f32,
+    acceleration_threshold: f32,
+) -> Vec<MarkerlessMotionEvent> {
+    let speed_threshold = if speed_threshold.is_finite() && speed_threshold >= 0.0 { speed_threshold } else { 0.0 };
+    let acceleration_threshold = if acceleration_threshold.is_finite() && acceleration_threshold >= 0.0 { acceleration_threshold } else { 0.0 };
+    let mut events = Vec::new();
+    for frame_index in 1..pose.frames.len() {
+        let velocities = pose_joint_velocities(pose, frame_index);
+        for (joint, velocity) in velocities.iter().enumerate() {
+            let speed = velocity[0].hypot(velocity[1]);
+            if speed >= speed_threshold && speed.is_finite() {
+                events.push(MarkerlessMotionEvent { frame: pose.frames[frame_index].frame, joint, kind: MarkerlessMotionEventKind::Peak, magnitude: speed });
+            }
+            if frame_index > 1 {
+                let previous = pose_joint_velocities(pose, frame_index - 1).get(joint).copied().unwrap_or([0.0, 0.0]);
+                let acceleration = [velocity[0] - previous[0], velocity[1] - previous[1]];
+                let magnitude = acceleration[0].hypot(acceleration[1]);
+                if magnitude >= acceleration_threshold && magnitude.is_finite() {
+                    let dot = velocity[0] * previous[0] + velocity[1] * previous[1];
+                    let kind = if dot < 0.0 { MarkerlessMotionEventKind::DirectionChange } else { MarkerlessMotionEventKind::Peak };
+                    events.push(MarkerlessMotionEvent { frame: pose.frames[frame_index].frame, joint, kind, magnitude });
+                }
+            }
+            if speed <= speed_threshold && frame_index > 1 {
+                events.push(MarkerlessMotionEvent { frame: pose.frames[frame_index].frame, joint, kind: MarkerlessMotionEventKind::Stop, magnitude: speed });
+            }
+        }
+    }
+    events
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct MarkerlessPoseTrack {
     pub frames: Vec<MarkerlessPoseFrame>,
@@ -963,5 +1002,7 @@ mod tests {
         assert_eq!(pose_joint_velocities(&pose, 2), vec![[3.0, 0.0]]);
         assert_eq!(pose_root_acceleration(&pose, 2), [1.0, 0.0]);
         assert_eq!(pose_root_acceleration(&pose, 0), [0.0, 0.0]);
+        let events = detect_markerless_motion_events(&pose, 2.5, 0.5);
+        assert!(events.iter().any(|event| event.kind == MarkerlessMotionEventKind::Peak));
     }
 }
