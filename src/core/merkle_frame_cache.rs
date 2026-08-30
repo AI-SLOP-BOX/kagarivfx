@@ -24,14 +24,29 @@ impl MerkleFrameCache {
     }
 
     /// Computes Merkle Hash for a layer node given its ID, parameters, frame, and parent Merkle Hash.
-    pub fn compute_node_hash(layer_id: &str, params_signature: &str, frame: u32, parent_hash: Option<&MerkleHash>) -> MerkleHash {
-        let parent_str = parent_hash.map(|h| h.0.as_str()).unwrap_or("ROOT");
-        let raw_key = format!("{}:{}:{}:{}", layer_id, params_signature, frame, parent_str);
-        
+    pub fn compute_node_hash(
+        layer_id: &str,
+        params_signature: &str,
+        frame: u32,
+        parent_hash: Option<&MerkleHash>,
+    ) -> MerkleHash {
         // Simple deterministic FNV 64-bit hash for Merkle key generation
         let mut hasher: u64 = 0xcbf29ce484222325;
-        for byte in raw_key.bytes() {
-            hasher ^= byte as u64;
+        let mut feed = |bytes: &[u8]| {
+            hasher ^= bytes.len() as u64;
+            hasher = hasher.wrapping_mul(0x100000001b3);
+            for byte in bytes {
+                hasher ^= *byte as u64;
+                hasher = hasher.wrapping_mul(0x100000001b3);
+            }
+        };
+        feed(layer_id.as_bytes());
+        feed(params_signature.as_bytes());
+        feed(&frame.to_le_bytes());
+        feed(parent_hash.map(|h| h.0.as_bytes()).unwrap_or(b"ROOT"));
+
+        for byte in b"aura-merkle-v1" {
+            hasher ^= *byte as u64;
             hasher = hasher.wrapping_mul(0x100000001b3);
         }
 
@@ -64,5 +79,12 @@ mod tests {
         let cached = cache.get(&hash);
         assert!(cached.is_some());
         assert_eq!(cached.unwrap().len(), 16);
+    }
+
+    #[test]
+    fn test_merkle_hash_preserves_field_boundaries() {
+        let first = MerkleFrameCache::compute_node_hash("a:b", "c", 1, None);
+        let second = MerkleFrameCache::compute_node_hash("a", "b:c", 1, None);
+        assert_ne!(first, second);
     }
 }
