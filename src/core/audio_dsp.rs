@@ -427,20 +427,47 @@ pub fn extract_multiband_audio_keyframes(
     let mut env_mid = 0.0f32;
     let mut env_treble = 0.0f32;
 
+    let attack_ms = if options.attack_ms.is_finite() {
+        options.attack_ms.max(1.0)
+    } else {
+        10.0
+    };
+    let release_ms = if options.release_ms.is_finite() {
+        options.release_ms.max(1.0)
+    } else {
+        100.0
+    };
+    let min_db = if options.min_db.is_finite() {
+        options.min_db
+    } else {
+        -48.0
+    };
+    let max_db = if options.max_db.is_finite() && options.max_db > min_db {
+        options.max_db
+    } else {
+        0.0
+    };
+    let multiplier = if options.multiplier.is_finite() {
+        options.multiplier.max(0.0)
+    } else {
+        100.0
+    };
     let dt = 1.0f32 / fps.max(1) as f32;
-    let att_coef = (-dt / (options.attack_ms.max(1.0) * 0.001)).exp();
-    let rel_coef = (-dt / (options.release_ms.max(1.0) * 0.001)).exp();
+    let att_coef = (-dt / (attack_ms * 0.001)).exp();
+    let rel_coef = (-dt / (release_ms * 0.001)).exp();
 
     let mut res = MultiBandAudioKeyframes::default();
     let db_to_value = |amplitude: f32| {
         let db = 20.0 * amplitude.max(1.0e-8).log10();
-        let span = (options.max_db - options.min_db).max(f32::EPSILON);
-        ((db - options.min_db) / span).clamp(0.0, 1.0) * options.multiplier.max(0.0)
+        let span = (max_db - min_db).max(f32::EPSILON);
+        ((db - min_db) / span).clamp(0.0, 1.0) * multiplier
     };
 
     for f in 0..total_frames {
-        let start_sample_idx = ((f as f64 * sample_rate as f64) / fps.max(1) as f64).floor() as usize;
-        let mut end_sample_idx = (((f as u64 + 1) as f64 * sample_rate as f64) / fps.max(1) as f64).ceil() as usize;
+        let start_sample_idx =
+            ((f as f64 * sample_rate as f64) / fps.max(1) as f64).floor() as usize;
+        let mut end_sample_idx =
+            (((f as u64 + 1) as f64 * sample_rate as f64) / fps.max(1) as f64).ceil() as usize;
         if end_sample_idx == start_sample_idx {
             end_sample_idx = start_sample_idx.saturating_add(1);
         }
@@ -448,7 +475,10 @@ pub fn extract_multiband_audio_keyframes(
         let end_sample = (end_sample_idx.saturating_mul(2)).min(pcm_stereo.len());
 
         let frame_buf = if start_sample < pcm_stereo.len() && start_sample < end_sample {
-            pcm_stereo[start_sample..end_sample].to_vec()
+            pcm_stereo[start_sample..end_sample]
+                .iter()
+                .map(|sample| if sample.is_finite() { *sample } else { 0.0 })
+                .collect()
         } else {
             // Beyond audio stream end -> silence (zero-filled, never loops)
             Vec::new()
@@ -511,16 +541,16 @@ pub fn extract_multiband_audio_keyframes(
             } else {
                 *env = target + rel_coef * (*env - target);
             }
-            (*env * options.multiplier).clamp(0.0, options.multiplier)
+            (*env * multiplier).clamp(0.0, multiplier)
         };
 
         let v_master =
-            db_to_value(update_env(&mut env_master, peak_master) / options.multiplier.max(1.0));
+            db_to_value(update_env(&mut env_master, peak_master) / multiplier.max(1.0));
         let v_bass =
-            db_to_value(update_env(&mut env_bass, peak_bass) / options.multiplier.max(1.0));
-        let v_mid = db_to_value(update_env(&mut env_mid, peak_mid) / options.multiplier.max(1.0));
+            db_to_value(update_env(&mut env_bass, peak_bass) / multiplier.max(1.0));
+        let v_mid = db_to_value(update_env(&mut env_mid, peak_mid) / multiplier.max(1.0));
         let v_treble =
-            db_to_value(update_env(&mut env_treble, peak_treble) / options.multiplier.max(1.0));
+            db_to_value(update_env(&mut env_treble, peak_treble) / multiplier.max(1.0));
 
         let kf = |val: f32| {
             crate::core::keyframe::Keyframe::new(
@@ -689,5 +719,43 @@ mod tests {
         assert_eq!(kfs.master.len(), total_frames as usize);
         // Master values must not be zero/empty
         assert!(kfs.master.iter().any(|kf| kf.value > 0.0));
+    }
+
+    #[test]
+    fn test_extract_multiband_sanitizes_nonfinite_options_and_pcm() {
+        let options = AudioKeyframeOptions {
+            attack_ms: f32::NAN,
+            release_ms: f32::INFINITY,
+            min_db: f32::NAN,
+            max_db: f32::NEG_INFINITY,
+            multiplier: f32::NAN,
+            ..AudioKeyframeOptions::default()
+        };
+        let pcm = vec![f32::NAN, f32::INFINITY, 0.5, -0.5];
+        let result = extract_multiband_audio_keyframes(&pcm, 48_000, 30, 4, &options);
+        assert_eq!(result.master.len(), 4);
+        assert!(result
+            .master
+            .iter()
+            .chain(&result.bass)
+            .chain(&result.mid)
+            .chain(&result.treble)
+            .all(|kf| kf.value.is_finite()));
+    }
+
+    #[test]
+    fn test_extract_multiband_audio_is_silent_after_eof() {
+        let options = AudioKeyframeOptions {
+            min_db: -60.0,
+            max_db: 0.0,
+            multiplier: 100.0,
+            ..Default::default()
+        };
+        let pcm = vec![1.0f32, 1.0f32];
+        let kfs = extract_multiband_audio_keyframes(&pcm, 48_000, 24, 3, &options);
+
+        assert!(kfs.master[0].value > 0.0);
+        assert_eq!(kfs.master[1].value, 0.0);
+        assert_eq!(kfs.master[2].value, 0.0);
     }
 }
