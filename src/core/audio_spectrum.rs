@@ -46,12 +46,24 @@ pub struct AudioSpectrumOptions {
     pub peak_decay: f32,
 }
 
-fn default_fft_size() -> usize { 2048 }
-fn default_start_freq() -> f32 { 20.0 }
-fn default_end_freq() -> f32 { 20000.0 }
-fn default_db_floor() -> f32 { -60.0 }
-fn default_release() -> f32 { 0.25 }
-fn default_peak_decay() -> f32 { 0.02 }
+fn default_fft_size() -> usize {
+    2048
+}
+fn default_start_freq() -> f32 {
+    20.0
+}
+fn default_end_freq() -> f32 {
+    20000.0
+}
+fn default_db_floor() -> f32 {
+    -60.0
+}
+fn default_release() -> f32 {
+    0.25
+}
+fn default_peak_decay() -> f32 {
+    0.02
+}
 
 impl Default for AudioSpectrumOptions {
     fn default() -> Self {
@@ -98,7 +110,9 @@ pub fn generate_audio_spectrum_bands(
             let end = (start + chunk_size).min(samples.len());
             let mut sum_sq = 0.0f32;
             for &s in &samples[start..end] {
-                sum_sq += s * s;
+                if s.is_finite() {
+                    sum_sq = (sum_sq + s * s).min(f32::MAX);
+                }
             }
             let rms = (sum_sq / (end - start).max(1) as f32).sqrt();
             magnitudes[b] = (rms * 2.5).clamp(0.0, 1.0);
@@ -140,7 +154,9 @@ impl SpectrumAnalyzer {
         for (i, &v) in current.iter().enumerate() {
             self.prev_bands[i] = self.prev_bands[i] * smooth + v * (1.0 - smooth);
             self.peaks[i] = self.peaks[i].max(self.prev_bands[i]) - options.peak_decay;
-            if self.peaks[i] < 0.0 { self.peaks[i] = 0.0; }
+            if self.peaks[i] < 0.0 {
+                self.peaks[i] = 0.0;
+            }
         }
         self.prev_bands.clone()
     }
@@ -166,7 +182,9 @@ pub fn extract_waveform(samples: &[f32], target_len: usize) -> Vec<f32> {
         }
         let mut max_val = 0.0f32;
         for &s in &samples[start..end] {
-            max_val = max_val.max(s.abs());
+            if s.is_finite() {
+                max_val = max_val.max(s.abs());
+            }
         }
         out.push(max_val);
     }
@@ -191,7 +209,8 @@ pub fn render_spectrum(
 
     for (b_idx, &mag) in bands.iter().enumerate() {
         let bx = b_idx as f32 * band_w;
-        let bh = (mag * (height as f32 * 0.45)).max(1.0);
+        let safe_mag = if mag.is_finite() { mag.max(0.0) } else { 0.0 };
+        let bh = (safe_mag * (height as f32 * 0.45)).min(height as f32).max(1.0);
         let top = (cy - bh).clamp(0.0, height as f32 - 1.0) as u32;
         let bot = (cy + bh).clamp(0.0, height as f32 - 1.0) as u32;
 
@@ -202,7 +221,13 @@ pub fn render_spectrum(
 
         for y in top..=bot {
             for x in (bx as u32)..((bx + band_w * 0.8) as u32).min(width) {
-                let idx = ((y * width + x) * 4) as usize;
+                let Some(idx) = (y as usize)
+                    .checked_mul(width as usize)
+                    .and_then(|offset| offset.checked_add(x as usize))
+                    .and_then(|offset| offset.checked_mul(4))
+                else {
+                    continue;
+                };
                 if idx + 3 < buffer.len() {
                     buffer[idx] = r;
                     buffer[idx + 1] = g;
@@ -277,6 +302,30 @@ mod tests {
     use super::*;
 
     #[test]
+    fn test_audio_analysis_ignores_nonfinite_samples_and_magnitudes() {
+        let samples = [f32::NAN, f32::INFINITY, 0.5, -0.5];
+        let options = AudioSpectrumOptions {
+            frequency_bands: 2,
+            ..Default::default()
+        };
+        let bands = generate_audio_spectrum_bands(&samples, 48_000, &options);
+        assert_eq!(bands.len(), 2);
+        assert!(bands.iter().all(|value| value.is_finite()));
+
+        let mut buffer = vec![11u8; 16];
+        render_spectrum(
+            &mut buffer,
+            2,
+            2,
+            &[f32::NAN, f32::INFINITY],
+            &options,
+            [255, 0, 0],
+            [0, 0, 255],
+        );
+        assert!(buffer.iter().all(|value| *value <= 255));
+    }
+
+    #[test]
     fn test_audio_spectrum_generation_linear() {
         let samples = vec![0.5f32; 1024];
         let opts = AudioSpectrumOptions {
@@ -289,7 +338,9 @@ mod tests {
         let bars = generate_audio_spectrum(&samples, &opts);
         assert_eq!(bars.len(), 16);
         assert!(bars[0].magnitude > 0.0);
-        let h = ((bars[0].end[0] - bars[0].start[0]).powi(2) + (bars[0].end[1] - bars[0].start[1]).powi(2)).sqrt();
+        let h = ((bars[0].end[0] - bars[0].start[0]).powi(2)
+            + (bars[0].end[1] - bars[0].start[1]).powi(2))
+        .sqrt();
         assert!(h > 0.0);
     }
 
@@ -357,14 +408,15 @@ impl Default for AudioWaveformOptions {
 }
 
 /// Generates evaluated 2D point sequence for an oscilloscope / audio waveform.
-pub fn generate_waveform_points(
-    samples: &[f32],
-    options: &AudioWaveformOptions,
-) -> Vec<[f32; 2]> {
+pub fn generate_waveform_points(samples: &[f32], options: &AudioWaveformOptions) -> Vec<[f32; 2]> {
     let count = options.sample_count.clamp(16, 2048);
     let mut points = Vec::with_capacity(count);
 
-    let step = if samples.is_empty() { 0 } else { samples.len() / count };
+    let step = if samples.is_empty() {
+        0
+    } else {
+        samples.len() / count
+    };
 
     if options.is_polar {
         let center = options.start_point;
@@ -372,7 +424,11 @@ pub fn generate_waveform_points(
 
         for i in 0..count {
             let s_idx = (i * step).min(samples.len().saturating_sub(1));
-            let val = if samples.is_empty() { 0.0 } else { samples[s_idx] };
+            let val = if samples.is_empty() {
+                0.0
+            } else {
+                samples[s_idx]
+            };
 
             let theta = (i as f32 / count as f32) * std::f32::consts::TAU;
             let (sin_t, cos_t) = theta.sin_cos();
@@ -391,7 +447,11 @@ pub fn generate_waveform_points(
         for i in 0..count {
             let t = i as f32 / (count.saturating_sub(1)).max(1) as f32;
             let s_idx = (i * step).min(samples.len().saturating_sub(1));
-            let val = if samples.is_empty() { 0.0 } else { samples[s_idx] };
+            let val = if samples.is_empty() {
+                0.0
+            } else {
+                samples[s_idx]
+            };
 
             let base_x = p0[0] + dx * t;
             let base_y = p0[1] + dy * t;
@@ -431,7 +491,8 @@ pub fn render_audio_waveform(
 
         let min_x = ((p0[0].min(p1[0]) - stroke_r - 1.0).floor() as i32).clamp(0, width as i32 - 1);
         let max_x = ((p0[0].max(p1[0]) + stroke_r + 1.0).ceil() as i32).clamp(0, width as i32 - 1);
-        let min_y = ((p0[1].min(p1[1]) - stroke_r - 1.0).floor() as i32).clamp(0, height as i32 - 1);
+        let min_y =
+            ((p0[1].min(p1[1]) - stroke_r - 1.0).floor() as i32).clamp(0, height as i32 - 1);
         let max_y = ((p0[1].max(p1[1]) + stroke_r + 1.0).ceil() as i32).clamp(0, height as i32 - 1);
 
         let seg_dx = p1[0] - p0[0];
@@ -444,7 +505,8 @@ pub fn render_audio_waveform(
                 let py = y as f32;
 
                 // Project point onto line segment
-                let u = (((px - p0[0]) * seg_dx + (py - p0[1]) * seg_dy) / seg_len_sq).clamp(0.0, 1.0);
+                let u =
+                    (((px - p0[0]) * seg_dx + (py - p0[1]) * seg_dy) / seg_len_sq).clamp(0.0, 1.0);
                 let proj_x = p0[0] + u * seg_dx;
                 let proj_y = p0[1] + u * seg_dy;
 
