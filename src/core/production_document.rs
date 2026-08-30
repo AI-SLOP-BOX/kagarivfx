@@ -5,7 +5,7 @@ use crate::core::automation_binding::{AutomationBinding, ProductionClock};
 use crate::core::timeline::{Project, ProjectItemType};
 use crate::core::unified_time::TempoMap;
 use serde::{Deserialize, Serialize};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::sync::atomic::{AtomicU64, Ordering};
 
 static SAVE_SEQUENCE: AtomicU64 = AtomicU64::new(0);
@@ -115,6 +115,27 @@ impl ProductionDocument {
                     return Err("asset duration must be finite and non-negative".into());
                 }
                 _ => {}
+            }
+        }
+        let folder_parents = self
+            .project
+            .assets
+            .iter()
+            .filter_map(|asset| match &asset.item_type {
+                ProjectItemType::Folder { .. } => {
+                    Some((asset.id.as_str(), asset.parent_folder.as_deref()))
+                }
+                _ => None,
+            })
+            .collect::<HashMap<_, _>>();
+        for folder_id in folder_parents.keys() {
+            let mut current = Some(*folder_id);
+            let mut visited = HashSet::new();
+            while let Some(id) = current {
+                if !visited.insert(id) {
+                    return Err("asset folder hierarchy contains a cycle".into());
+                }
+                current = folder_parents.get(id).copied().flatten();
             }
         }
         if !(1..=384_000).contains(&self.audio.sample_rate) {
@@ -352,6 +373,22 @@ mod tests {
         );
         asset.parent_folder = Some("missing".into());
         invalid_project.assets.push(asset);
+        assert!(ProductionDocument::new(invalid_project).validate().is_err());
+
+        let mut invalid_project = Project::default();
+        let mut folder_a = crate::core::timeline::ProjectItem::new(
+            "folder-a",
+            "A",
+            ProjectItemType::Folder { name: "A".into() },
+        );
+        folder_a.parent_folder = Some("folder-b".into());
+        let mut folder_b = crate::core::timeline::ProjectItem::new(
+            "folder-b",
+            "B",
+            ProjectItemType::Folder { name: "B".into() },
+        );
+        folder_b.parent_folder = Some("folder-a".into());
+        invalid_project.assets.extend([folder_a, folder_b]);
         assert!(ProductionDocument::new(invalid_project).validate().is_err());
     }
 
