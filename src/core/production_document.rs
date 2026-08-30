@@ -44,6 +44,8 @@ impl ProductionDocument {
     pub const MAX_AUDIO_CHANNELS: usize = 4096;
     pub const MAX_BINDINGS: usize = 8192;
     pub const MAX_ASSETS: usize = 100_000;
+    pub const MAX_COMPOSITIONS: usize = 10_000;
+    pub const MAX_LAYERS_PER_COMPOSITION: usize = 100_000;
     pub const MAX_COMPOSITION_FRAMES: u32 = 10_000_000;
     pub const MAX_ASSET_DURATION_SEC: f32 = 10_000_000.0;
 
@@ -74,6 +76,9 @@ impl ProductionDocument {
         }
         if self.project.compositions.is_empty() {
             return Err("production document must contain at least one composition".into());
+        }
+        if self.project.compositions.len() > Self::MAX_COMPOSITIONS {
+            return Err("production document contains too many compositions".into());
         }
         if self.project.active_composition_idx >= self.project.compositions.len() {
             return Err("production document active composition index is out of range".into());
@@ -269,6 +274,9 @@ fn validate_composition(
 ) -> Result<(), String> {
     if depth > 1024 {
         return Err("production document composition nesting is too deep".into());
+    }
+    if composition.layers.len() > ProductionDocument::MAX_LAYERS_PER_COMPOSITION {
+        return Err("composition contains too many layers".into());
     }
     if composition.id.trim().is_empty() {
         return Err("composition id must not be empty".into());
@@ -1660,6 +1668,13 @@ mod tests {
                 "Asset",
                 ProjectItemType::Folder { name: "x".into() },
             ),
+        );
+        assert!(document.validate().is_err());
+
+        let mut document = ProductionDocument::new(Project::default());
+        document.project.compositions[0].layers.resize(
+            ProductionDocument::MAX_LAYERS_PER_COMPOSITION + 1,
+            crate::core::timeline::Layer::new("layer".into(), "Layer".into(), LayerType::Null, 1),
         );
         assert!(document.validate().is_err());
     }
