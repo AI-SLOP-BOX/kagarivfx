@@ -121,6 +121,10 @@ impl PersistentDiskCache {
                         let _ = fs::remove_file(&file_path);
                         let _ = fs::remove_file(&meta_path);
                     }
+                } else {
+                    // A file larger than the current budget can never become a valid entry.
+                    let _ = fs::remove_file(&file_path);
+                    let _ = fs::remove_file(&meta_path);
                 }
             }
         }
@@ -453,6 +457,31 @@ mod tests {
 
         let mut cache = PersistentDiskCache::with_directory(100, &tmp_dir);
         assert!(cache.get_frame(key, 2).is_none());
+        assert!(!tmp_dir.join(format!("{key:016x}.cache")).exists());
+        assert!(!tmp_dir.join(format!("{key:016x}.meta")).exists());
+        let _ = fs::remove_dir_all(tmp_dir);
+    }
+
+    #[test]
+    fn test_oversized_disk_entry_is_discarded() {
+        let tmp_dir = std::env::temp_dir().join(format!(
+            "ae_test_cache_oversized_{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let key = 0x9abcu64;
+        fs::create_dir_all(&tmp_dir).unwrap();
+        fs::write(
+            tmp_dir.join(format!("{key:016x}.cache")),
+            [0u8; 101],
+        )
+        .unwrap();
+        fs::write(tmp_dir.join(format!("{key:016x}.meta")), b"stale").unwrap();
+
+        let mut cache = PersistentDiskCache::with_directory(100, &tmp_dir);
+        assert!(cache.get_frame(key, 1).is_none());
         assert!(!tmp_dir.join(format!("{key:016x}.cache")).exists());
         assert!(!tmp_dir.join(format!("{key:016x}.meta")).exists());
         let _ = fs::remove_dir_all(tmp_dir);
