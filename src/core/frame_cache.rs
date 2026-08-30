@@ -167,14 +167,14 @@ impl FrameCache {
 
     /// Try to retrieve a cached frame for the current global version (updates LRU timestamp).
     /// Checks RAM first, then falls back to disk cache on miss.
-    /// Supports partial invalidation: reuses cached frames if their layers haven't changed.
+    /// Entries are only valid for the exact current project version.
     pub fn get(&mut self, frame: u32) -> Option<&CacheEntry> {
         self.get_with_layers(frame, &[])
     }
 
-    /// Try to retrieve a cached frame with layer-aware partial invalidation.
-    /// If `frame_layers` is provided and the frame is not dirty, reuses the previous
-    /// version's cached frame (avoiding re-rendering for unchanged layers).
+    /// Try to retrieve a cached frame for the current project version.
+    /// `frame_layers` is retained as provenance for future content-addressed
+    /// invalidation, but never authorizes cross-version reuse by itself.
     pub fn get_with_layers(&mut self, frame: u32, frame_layers: &[usize]) -> Option<&CacheEntry> {
         let ver = current_version();
         let key = (frame, ver);
@@ -185,36 +185,17 @@ impl FrameCache {
             return self.entries.get(&key);
         }
 
-        // Check if frame is dirty - if not dirty and we have a cached entry from previous version
-        // that used the same layers, we can reuse it
-        if !self.is_frame_dirty(frame, frame_layers) {
-            let found = self.entries.iter().find_map(|(&(old_frame, old_ver), entry)| {
-                if old_frame == frame && old_ver < ver {
-                    if let Some(_cached_layers) = self.frame_layers.get(&(old_frame, old_ver)) {
-                        return Some((entry.pixels.clone(), entry.width, entry.height));
-                    }
-                }
-                None
-            });
-
-            if let Some((pixels, width, height)) = found {
-                self.entries.insert(
-                    key,
-                    CacheEntry {
-                        version: ver,
-                        width,
-                        height,
-                        pixels,
-                        lru_stamp: lru_tick(),
-                    },
-                );
-                self.frame_layers.insert(key, frame_layers.iter().cloned().collect());
-                return self.entries.get(&key);
-            }
-        }
-
         // Check disk cache on miss
         if let Some((pixels, w, h)) = disk_cache::read_frame(&key) {
+            if pixels.len() > self.max_memory_bytes {
+                return None;
+            }
+            if self.current_memory_bytes.saturating_add(pixels.len()) > self.max_memory_bytes {
+                self.collect_garbage();
+                if self.current_memory_bytes.saturating_add(pixels.len()) > self.max_memory_bytes {
+                    return None;
+                }
+            }
             self.current_memory_bytes += pixels.len();
             self.entries.insert(
                 key,
@@ -226,7 +207,8 @@ impl FrameCache {
                     lru_stamp: lru_tick(),
                 },
             );
-            self.frame_layers.insert(key, frame_layers.iter().cloned().collect());
+            self.frame_layers
+                .insert(key, frame_layers.iter().cloned().collect());
             // Evict from disk once loaded into RAM
             disk_cache::remove_frame(&key);
             return self.entries.get(&key);
@@ -251,8 +233,8 @@ impl FrameCache {
     }
 
     /// Store a rendered frame and record which layers contributed to it.
-    /// Layer tracking enables partial invalidation: future `get_with_layers`
-    /// calls can reuse this entry when only unrelated layers have changed.
+    /// Layer provenance is metadata only until a complete content-addressed
+    /// render key can prove that all other render inputs are unchanged.
     pub fn insert_with_layers(
         &mut self,
         frame: u32,
@@ -290,7 +272,9 @@ impl FrameCache {
         }
 
         // Trigger LRU garbage collection if budget exceeded
-        if self.entries.len() > self.max_entries || self.current_memory_bytes > self.max_memory_bytes {
+        if self.entries.len() > self.max_entries
+            || self.current_memory_bytes > self.max_memory_bytes
+        {
             self.collect_garbage();
         }
     }
@@ -329,8 +313,15 @@ impl FrameCache {
                 }
                 if let Some(removed) = self.entries.remove(&key) {
                     // Spill to disk before evicting from RAM
-                    let _ = disk_cache::write_frame(&key, &removed.pixels, removed.width, removed.height);
-                    self.current_memory_bytes = self.current_memory_bytes.saturating_sub(removed.pixels.len());
+                    let _ = disk_cache::write_frame(
+                        &key,
+                        &removed.pixels,
+                        removed.width,
+                        removed.height,
+                    );
+                    self.current_memory_bytes = self
+                        .current_memory_bytes
+                        .saturating_sub(removed.pixels.len());
                 }
             }
         }
@@ -344,7 +335,12 @@ impl FrameCache {
             let keep = *ver >= target_version;
             if !keep {
                 freed_bytes += entry.pixels.len();
-                evicted.push(((*frame, *ver), entry.pixels.as_ref().clone(), entry.width, entry.height));
+                evicted.push((
+                    (*frame, *ver),
+                    entry.pixels.as_ref().clone(),
+                    entry.width,
+                    entry.height,
+                ));
             }
             keep
         });
@@ -391,7 +387,8 @@ mod disk_cache {
             let dir = std::env::temp_dir().join("aevfx_frame_cache");
             let _ = std::fs::create_dir_all(&dir);
             dir
-        }).clone()
+        })
+        .clone()
     }
 
     fn frame_path(key: &(u32, u64)) -> PathBuf {
@@ -401,7 +398,9 @@ mod disk_cache {
     /// Write frame pixels to disk. Returns true on success.
     pub fn write_frame(key: &(u32, u64), pixels: &[u8], width: u32, height: u32) -> bool {
         let path = frame_path(key);
-        let header = width.to_le_bytes().into_iter()
+        let header = width
+            .to_le_bytes()
+            .into_iter()
             .chain(height.to_le_bytes())
             .chain(pixels.iter().copied())
             .collect::<Vec<u8>>();
@@ -467,6 +466,28 @@ mod tests {
     }
 
     #[test]
+    fn test_layer_metadata_never_reuses_cross_version_pixels() {
+        let mut cache = FrameCache::new(16);
+        const FRAME: u32 = 2_000_002;
+        cache.insert_with_layers(FRAME, 1, 1, vec![17, 34, 51, 255], &[0, 1]);
+        let inserted_version = cache
+            .entries
+            .keys()
+            .find(|(frame, _)| *frame == FRAME)
+            .map(|(_, version)| *version)
+            .expect("inserted frame must exist");
+
+        while current_version() == inserted_version {
+            bump_version();
+        }
+
+        assert!(
+            cache.get_with_layers(FRAME, &[0, 1]).is_none(),
+            "layer indices alone cannot prove that resolution, color, effects, sources, and backend match"
+        );
+    }
+
+    #[test]
     fn test_gc_removes_old_versions() {
         let mut cache = FrameCache::new(1024);
         let pixels = Arc::new(vec![0u8; 4]);
@@ -475,27 +496,42 @@ mod tests {
         let old_ver = 1;
         let cur_ver = 2;
 
-        cache.entries.insert((FRAME, old_ver), CacheEntry {
-            version: old_ver,
-            width: 1,
-            height: 1,
-            pixels: pixels.clone(),
-            lru_stamp: lru_tick(),
-        });
-        cache.entries.insert((FRAME, cur_ver), CacheEntry {
-            version: cur_ver,
-            width: 1,
-            height: 1,
-            pixels: pixels.clone(),
-            lru_stamp: lru_tick(),
-        });
+        cache.entries.insert(
+            (FRAME, old_ver),
+            CacheEntry {
+                version: old_ver,
+                width: 1,
+                height: 1,
+                pixels: pixels.clone(),
+                lru_stamp: lru_tick(),
+            },
+        );
+        cache.entries.insert(
+            (FRAME, cur_ver),
+            CacheEntry {
+                version: cur_ver,
+                width: 1,
+                height: 1,
+                pixels: pixels.clone(),
+                lru_stamp: lru_tick(),
+            },
+        );
 
         assert_eq!(cache.len(), 2, "should have 2 versioned entries before GC");
         cache.collect_garbage_below(cur_ver);
 
-        assert!(cache.entries.values().all(|e| e.version >= cur_ver), "all remaining entries must be >= cur_ver");
-        assert!(cache.entries.contains_key(&(FRAME, cur_ver)), "current version entry must survive GC");
-        assert!(!cache.entries.contains_key(&(FRAME, old_ver)), "old version entry must be removed by GC");
+        assert!(
+            cache.entries.values().all(|e| e.version >= cur_ver),
+            "all remaining entries must be >= cur_ver"
+        );
+        assert!(
+            cache.entries.contains_key(&(FRAME, cur_ver)),
+            "current version entry must survive GC"
+        );
+        assert!(
+            !cache.entries.contains_key(&(FRAME, old_ver)),
+            "old version entry must be removed by GC"
+        );
     }
 
     #[test]
@@ -508,7 +544,10 @@ mod tests {
         cache.insert(2, 1, 1, pixels.clone());
         cache.insert(3, 1, 1, pixels.clone()); // Total 120 bytes > 100 max
 
-        assert!(cache.current_memory_bytes <= 100, "LRU memory limit should automatically purge old entries");
+        assert!(
+            cache.current_memory_bytes <= 100,
+            "LRU memory limit should automatically purge old entries"
+        );
     }
 
     #[test]
@@ -518,7 +557,10 @@ mod tests {
         assert!(buf.capacity() >= 1024);
         pool.recycle(buf);
         let recycled = pool.acquire(512);
-        assert!(recycled.capacity() >= 1024, "Recycled buffer should retain its allocated capacity");
+        assert!(
+            recycled.capacity() >= 1024,
+            "Recycled buffer should retain its allocated capacity"
+        );
     }
 }
 
