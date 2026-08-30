@@ -354,6 +354,54 @@ pub fn track_markerless_auto(
     track_markerless_motion(frames, width, height, &seeds, block_radius, search_radius)
 }
 
+pub fn estimate_markerless_pose(
+    frames: &[&[u8]],
+    width: u32,
+    height: u32,
+    max_features: usize,
+    feature_spacing: u32,
+    block_radius: i32,
+    search_radius: i32,
+) -> MarkerlessPoseTrack {
+    let first = frames.first().copied().unwrap_or(&[]);
+    let seeds = detect_markerless_features(first, width, height, max_features, feature_spacing);
+    let tracks = track_markerless_motion(frames, width, height, &seeds, block_radius, search_radius);
+    let assignments = assign_features_to_humanoid(&seeds, width, height);
+    let frame_count = tracks.iter().map(|track| track.samples.len()).min().unwrap_or(0);
+    let mut pose_frames = Vec::with_capacity(frame_count);
+    for frame_index in 0..frame_count {
+        let mut joints = vec![[f32::NAN, f32::NAN]; 17];
+        let mut confidence_sum = 0.0;
+        let mut confidence_count = 0;
+        for (joint, assignment) in assignments.iter().enumerate() {
+            if let Some(track_index) = assignment {
+                if let Some(sample) = tracks.get(*track_index).and_then(|track| track.samples.get(frame_index)) {
+                    joints[joint] = sample.position;
+                    confidence_sum += sample.confidence;
+                    confidence_count += 1;
+                }
+            }
+        }
+        let valid = joints.iter().filter(|point| point.iter().all(|value| value.is_finite())).collect::<Vec<_>>();
+        let root = if valid.is_empty() { [0.0, 0.0] } else {
+            [valid.iter().map(|point| point[0]).sum::<f32>() / valid.len() as f32,
+             valid.iter().map(|point| point[1]).sum::<f32>() / valid.len() as f32]
+        };
+        pose_frames.push(MarkerlessPoseFrame {
+            frame: tracks.first().and_then(|track| track.samples.get(frame_index)).map(|sample| sample.frame).unwrap_or(frame_index as u32),
+            joints, root,
+            confidence: if confidence_count == 0 { 0.0 } else { (confidence_sum / confidence_count as f32).clamp(0.0, 1.0) },
+        });
+    }
+    let mut pose = MarkerlessPoseTrack { frames: pose_frames, bones: standard_humanoid_bones(17), bone_lengths: Vec::new() };
+    pose.bone_lengths = pose.bones.iter().map(|bone| pose.frames.first().and_then(|frame| {
+        let a = frame.joints.get(bone[0])?; let b = frame.joints.get(bone[1])?;
+        if a.iter().all(|v| v.is_finite()) && b.iter().all(|v| v.is_finite()) { Some((a[0] - b[0]).hypot(a[1] - b[1])) } else { Some(0.0) }
+    }).unwrap_or(0.0)).collect();
+    let _ = repair_markerless_pose_track(&mut pose, 2);
+    pose
+}
+
 pub fn markerless_track_keyframes(
     track: &MarkerlessMotionTrack,
 ) -> crate::core::property::Animatable<[f32; 2]> {
@@ -1042,6 +1090,9 @@ mod tests {
         assert!(first.iter().all(|p| p[0] >= 1.0 && p[0] < 11.0 && p[1] >= 1.0 && p[1] < 11.0));
         let refs = [&frame[..]];
         assert_eq!(track_markerless_auto(&refs, w, h, 2, 2, 1, 1).len(), first.len().min(2));
+        let pose = estimate_markerless_pose(&refs, w, h, 4, 2, 1, 1);
+        assert_eq!(pose.frames.len(), 1);
+        assert_eq!(pose.bones.len(), 16);
         let assignments = assign_features_to_humanoid(&first, w, h);
         assert_eq!(assignments.len(), 17);
         let assigned = assignments.iter().flatten().copied().collect::<std::collections::HashSet<_>>();
