@@ -21,7 +21,14 @@ pub fn auto_trace(
     threshold: f32,
     tolerance: f32,
 ) -> Vec<ShapeType> {
-    auto_trace_with_channel(pixels, width, height, threshold, tolerance, AutoTraceChannel::Alpha)
+    auto_trace_with_channel(
+        pixels,
+        width,
+        height,
+        threshold,
+        tolerance,
+        AutoTraceChannel::Alpha,
+    )
 }
 
 /// Trace boundaries in an RGBA buffer based on chosen channel and produce shape paths.
@@ -33,9 +40,26 @@ pub fn auto_trace_with_channel(
     tolerance: f32,
     channel: AutoTraceChannel,
 ) -> Vec<ShapeType> {
-    if width == 0 || height == 0 || pixels.len() < (width * height * 4) as usize {
+    let Some(pixel_count) = (width as usize)
+        .checked_mul(height as usize)
+        .filter(|&count| count <= usize::MAX / 4)
+    else {
+        return Vec::new();
+    };
+    if width == 0 || height == 0 || pixels.len() < pixel_count * 4 {
         return Vec::new();
     }
+
+    let threshold = if threshold.is_finite() {
+        threshold.clamp(0.0, 1.0)
+    } else {
+        0.5
+    };
+    let tolerance = if tolerance.is_finite() {
+        tolerance.max(0.0)
+    } else {
+        0.0
+    };
 
     let w = width as usize;
     let h = height as usize;
@@ -45,7 +69,10 @@ pub fn auto_trace_with_channel(
         let val = match channel {
             AutoTraceChannel::Alpha => pixels[idx + 3] as f32 / 255.0,
             AutoTraceChannel::Luminance => {
-                (0.2126 * pixels[idx] as f32 + 0.7152 * pixels[idx + 1] as f32 + 0.0722 * pixels[idx + 2] as f32) / 255.0
+                (0.2126 * pixels[idx] as f32
+                    + 0.7152 * pixels[idx + 1] as f32
+                    + 0.0722 * pixels[idx + 2] as f32)
+                    / 255.0
             }
             AutoTraceChannel::Red => pixels[idx] as f32 / 255.0,
             AutoTraceChannel::Green => pixels[idx + 1] as f32 / 255.0,
@@ -315,8 +342,23 @@ mod tests {
                 pixels[idx + 3] = 255;
             }
         }
-        let shapes = auto_trace_with_channel(&pixels, 20, 20, 0.5, 1.0, AutoTraceChannel::Luminance);
+        let shapes =
+            auto_trace_with_channel(&pixels, 20, 20, 0.5, 1.0, AutoTraceChannel::Luminance);
         assert!(!shapes.is_empty());
+    }
+
+    #[test]
+    fn test_auto_trace_rejects_overflow_and_nonfinite_options() {
+        let pixels = vec![255u8; 4];
+        assert!(auto_trace_with_channel(
+            &pixels,
+            u32::MAX,
+            u32::MAX,
+            f32::NAN,
+            f32::INFINITY,
+            AutoTraceChannel::Alpha
+        )
+        .is_empty());
     }
 
     #[test]
@@ -329,7 +371,15 @@ mod tests {
                 pixels[idx] = 255;
             }
         }
-        let ok = auto_trace_to_layer_mask(&mut layer, &pixels, 20, 20, 0.5, 1.0, AutoTraceChannel::Alpha);
+        let ok = auto_trace_to_layer_mask(
+            &mut layer,
+            &pixels,
+            20,
+            20,
+            0.5,
+            1.0,
+            AutoTraceChannel::Alpha,
+        );
         assert!(ok);
         assert_eq!(layer.masks.len(), 1);
         assert_eq!(layer.masks[0].name, "Auto-trace 1");
