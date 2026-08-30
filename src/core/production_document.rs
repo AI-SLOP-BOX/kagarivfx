@@ -123,6 +123,8 @@ impl ProductionDocument {
         for asset in &self.project.assets {
             if asset.id.trim().is_empty()
                 || asset.name.trim().is_empty()
+                || !asset_text_is_safe(&asset.id)
+                || !asset_text_is_safe(&asset.name)
                 || !asset_ids.insert(asset.id.clone())
             {
                 return Err("asset ids and names must be non-empty; ids must be unique".into());
@@ -138,7 +140,9 @@ impl ProductionDocument {
                 }
             }
             match &asset.item_type {
-                ProjectItemType::Folder { name } if name.trim().is_empty() => {
+                ProjectItemType::Folder { name }
+                    if name.trim().is_empty() || !asset_text_is_safe(name) =>
+                {
                     return Err("asset folder name must not be empty".into());
                 }
                 ProjectItemType::Folder { name } if name.len() > Self::MAX_ASSET_STRING_LENGTH => {
@@ -157,7 +161,7 @@ impl ProductionDocument {
                 ProjectItemType::Image { path, .. }
                 | ProjectItemType::Video { path, .. }
                 | ProjectItemType::Audio { path, .. }
-                    if path.trim().is_empty() =>
+                    if path.trim().is_empty() || !asset_text_is_safe(path) =>
                 {
                     return Err("media asset path must not be empty".into());
                 }
@@ -676,6 +680,10 @@ fn validate_composition(
         validate_composition(nested, depth + 1, composition_ids)?;
     }
     Ok(())
+}
+
+fn asset_text_is_safe(value: &str) -> bool {
+    !value.chars().any(char::is_control)
 }
 
 fn validate_precomp_references(
@@ -1799,6 +1807,22 @@ mod tests {
                     path: "x".repeat(ProductionDocument::MAX_ASSET_STRING_LENGTH + 1),
                     width: 1,
                     height: 1,
+                },
+            ));
+        assert!(document.validate().is_err());
+    }
+
+    #[test]
+    fn rejects_control_characters_in_asset_metadata() {
+        let mut document = ProductionDocument::new(Project::default());
+        document
+            .project
+            .assets
+            .push(crate::core::timeline::ProjectItem::new(
+                "asset\0id",
+                "Asset",
+                ProjectItemType::Folder {
+                    name: "Folder".into(),
                 },
             ));
         assert!(document.validate().is_err());
