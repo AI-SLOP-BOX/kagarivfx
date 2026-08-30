@@ -761,6 +761,39 @@ pub fn repair_markerless_pose_track(
     repaired
 }
 
+pub fn stabilize_markerless_pose_track(
+    pose: &mut MarkerlessPoseTrack,
+    max_gap: usize,
+    radius: usize,
+) -> usize {
+    let repaired = repair_markerless_pose_track(pose, max_gap);
+    if pose.frames.is_empty() || radius == 0 { return repaired; }
+    let joint_count = pose.frames.iter().map(|frame| frame.joints.len()).min().unwrap_or(0);
+    let original = pose.frames.iter().map(|frame| frame.joints.clone()).collect::<Vec<_>>();
+    let mut changed = repaired;
+    for frame_index in 0..pose.frames.len() {
+        let start = frame_index.saturating_sub(radius);
+        let end = (frame_index + radius + 1).min(pose.frames.len());
+        for joint in 0..joint_count {
+            let values = (start..end).filter_map(|index| {
+                let point = *original[index].get(joint)?;
+                point.iter().all(|value| value.is_finite()).then_some(point)
+            }).collect::<Vec<_>>();
+            if values.is_empty() { continue; }
+            let smoothed = [
+                values.iter().map(|point| point[0]).sum::<f32>() / values.len() as f32,
+                values.iter().map(|point| point[1]).sum::<f32>() / values.len() as f32,
+            ];
+            if pose.frames[frame_index].joints[joint] != smoothed {
+                pose.frames[frame_index].joints[joint] = smoothed;
+                pose.frames[frame_index].confidence = (pose.frames[frame_index].confidence * 0.98).clamp(0.0, 1.0);
+                changed += 1;
+            }
+        }
+    }
+    changed
+}
+
 pub fn reject_markerless_motion_outliers(
     track: &mut MarkerlessMotionTrack,
     max_step: f32,
@@ -1236,5 +1269,22 @@ mod tests {
         let pose = estimate_pose_with_backend(&mut backend, &[&frame], 2, 2);
         assert!(pose.frames.is_empty());
         assert!(pose.bones.is_empty());
+    }
+
+    #[test]
+    fn pose_stabilization_repairs_short_gaps_and_smooths_jitter() {
+        let mut pose = MarkerlessPoseTrack {
+            frames: vec![
+                MarkerlessPoseFrame { frame: 0, joints: vec![[0.0, 0.0]], root: [0.0, 0.0], confidence: 1.0 },
+                MarkerlessPoseFrame { frame: 1, joints: vec![[f32::NAN, f32::NAN]], root: [0.0, 0.0], confidence: 1.0 },
+                MarkerlessPoseFrame { frame: 2, joints: vec![[4.0, 0.0]], root: [4.0, 0.0], confidence: 1.0 },
+                MarkerlessPoseFrame { frame: 3, joints: vec![[3.0, 0.0]], root: [3.0, 0.0], confidence: 1.0 },
+            ], bones: vec![], bone_lengths: vec![],
+        };
+        let changed = stabilize_markerless_pose_track(&mut pose, 1, 1);
+        assert!(changed >= 2);
+        assert_eq!(pose.frames[1].joints[0], [2.0, 0.0]);
+        assert!(pose.frames[1].confidence < 1.0);
+        assert!(pose.frames[2].joints[0][0] < 4.0);
     }
 }
