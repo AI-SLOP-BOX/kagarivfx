@@ -9,6 +9,14 @@ use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
 use crate::core::timeline::Project;
+use crate::core::production_document::ProductionDocument;
+
+#[derive(serde::Serialize, serde::Deserialize)]
+struct AutosaveSnapshot {
+    project: Project,
+    #[serde(default)]
+    production_document: Option<ProductionDocument>,
+}
 
 /// Number of rotating recovery files kept on disk.
 pub const MAX_AUTOSAVE_SLOTS: usize = 5;
@@ -63,7 +71,8 @@ impl AutosaveManager {
 
     /// Returns the path of the recovery file for a slot.
     fn slot_path(&self, slot: usize) -> PathBuf {
-        self.recovery_dir.join(format!("{}_{}.json", self.stem, slot))
+        self.recovery_dir
+            .join(format!("{}_{}.json", self.stem, slot))
     }
 
     /// Writes a recovery snapshot if the dirty flag is set and the interval elapsed.
@@ -72,7 +81,7 @@ impl AutosaveManager {
         if !self.dirty || self.last_save.elapsed() < self.interval {
             return None;
         }
-        let path = self.write_snapshot(project);
+        let path = self.write_snapshot(project, None);
         self.dirty = false;
         self.last_save = Instant::now();
         path.ok()
@@ -80,21 +89,38 @@ impl AutosaveManager {
 
     /// Forces an immediate snapshot (e.g. on app exit or before risky operations).
     pub fn save_now(&mut self, project: &Project) -> std::io::Result<PathBuf> {
-        let path = self.write_snapshot(project)?;
+        let path = self.write_snapshot(project, None)?;
         self.dirty = false;
         self.last_save = Instant::now();
         Ok(path)
     }
 
+    pub fn tick_production(&mut self, document: &ProductionDocument) -> Option<PathBuf> {
+        if !self.dirty || self.last_save.elapsed() < self.interval {
+            return None;
+        }
+        let path = self.write_snapshot(&document.project, Some(document));
+        self.dirty = false;
+        self.last_save = Instant::now();
+        path.ok()
+    }
+
     /// Writes to the next rotating slot, tolerating individual write failures.
-    fn write_snapshot(&mut self, project: &Project) -> std::io::Result<PathBuf> {
+    fn write_snapshot(
+        &mut self,
+        project: &Project,
+        production_document: Option<&ProductionDocument>,
+    ) -> std::io::Result<PathBuf> {
         std::fs::create_dir_all(&self.recovery_dir)?;
         let path = self.slot_path(self.next_slot % MAX_AUTOSAVE_SLOTS);
         self.next_slot = (self.next_slot + 1) % MAX_AUTOSAVE_SLOTS;
 
         // Atomic write: temp file + rename so a crash mid-write cannot truncate the slot.
         let tmp = path.with_extension("json.tmp");
-        let json = serde_json::to_string(project)
+        let json = serde_json::to_string(&AutosaveSnapshot {
+            project: project.clone(),
+            production_document: production_document.cloned(),
+        })
             .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
         std::fs::write(&tmp, json)?;
         std::fs::rename(&tmp, &path)?;
@@ -116,10 +142,31 @@ impl AutosaveManager {
 
         for (_, path) in slots {
             if let Ok(json) = std::fs::read_to_string(&path) {
+                if let Ok(snapshot) = serde_json::from_str::<AutosaveSnapshot>(&json) {
+                    return Some(snapshot.project);
+                }
                 if let Ok(project) = serde_json::from_str::<Project>(&json) {
                     return Some(project);
                 }
                 log::warn!("[Autosave] Skipping corrupt recovery file {:?}", path);
+            }
+        }
+        None
+    }
+
+    pub fn load_latest_production(&self) -> Option<ProductionDocument> {
+        let mut slots: Vec<(std::time::SystemTime, PathBuf)> = (0..MAX_AUTOSAVE_SLOTS)
+            .map(|i| self.slot_path(i))
+            .filter_map(|p| Some((std::fs::metadata(&p).ok()?.modified().ok()?, p)))
+            .collect();
+        slots.sort_by(|a, b| b.0.cmp(&a.0));
+        for (_, path) in slots {
+            if let Ok(json) = std::fs::read_to_string(path) {
+                if let Ok(snapshot) = serde_json::from_str::<AutosaveSnapshot>(&json) {
+                    if let Some(document) = snapshot.production_document {
+                        return Some(document);
+                    }
+                }
             }
         }
         None
@@ -154,7 +201,12 @@ mod tests {
 
     fn sample_project() -> Project {
         let mut comp = Composition::new("c1".into(), "AutoSaveComp".into(), 64, 64, 30, 30);
-        let layer = Layer::new("l1".into(), "Solid".into(), LayerType::Solid { color: [1.0; 4] }, 30);
+        let layer = Layer::new(
+            "l1".into(),
+            "Solid".into(),
+            LayerType::Solid { color: [1.0; 4] },
+            30,
+        );
         comp.layers.push(layer);
         Project {
             compositions: vec![comp],
@@ -174,7 +226,9 @@ mod tests {
         assert!(mgr.tick(&sample_project()).is_none());
         // Dirty → writes
         mgr.mark_dirty();
-        let path = mgr.tick(&sample_project()).expect("should write when dirty");
+        let path = mgr
+            .tick(&sample_project())
+            .expect("should write when dirty");
         assert!(path.exists());
 
         // Recovery loads back the same project
@@ -202,27 +256,31 @@ mod tests {
 
         // Count recovery files on disk
         let count = std::fs::read_dir(&dir).unwrap().count();
-        assert!(count <= MAX_AUTOSAVE_SLOTS, "must not exceed slot limit, got {}", count);
+        assert!(
+            count <= MAX_AUTOSAVE_SLOTS,
+            "must not exceed slot limit, got {}",
+            count
+        );
         let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
     fn test_corrupt_recovery_files_are_skipped() {
-        let dir = std::env::temp_dir().join(format!("aevfx_autosave_corrupt_{}", std::process::id()));
+        let dir =
+            std::env::temp_dir().join(format!("aevfx_autosave_corrupt_{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
 
         // Slot 0: truncated garbage; slot 1: valid project
         std::fs::write(dir.join("recovery_0.json"), "{\"compositions\": [").unwrap();
         let good = dir.join("recovery_1.json");
-        serde_json::to_writer_pretty(
-            std::fs::File::create(&good).unwrap(),
-            &sample_project(),
-        )
-        .unwrap();
+        serde_json::to_writer_pretty(std::fs::File::create(&good).unwrap(), &sample_project())
+            .unwrap();
 
         let mgr = AutosaveManager::new(&dir);
-        let recovered = mgr.load_latest_recovery().expect("valid slot must be found");
+        let recovered = mgr
+            .load_latest_recovery()
+            .expect("valid slot must be found");
         assert_eq!(recovered.compositions[0].name, "AutoSaveComp");
         let _ = std::fs::remove_dir_all(&dir);
     }
@@ -237,9 +295,18 @@ mod tests {
 
         let tmp_count = std::fs::read_dir(&dir)
             .unwrap()
-            .filter(|e| e.as_ref().unwrap().path().extension().is_some_and(|x| x == "tmp"))
+            .filter(|e| {
+                e.as_ref()
+                    .unwrap()
+                    .path()
+                    .extension()
+                    .is_some_and(|x| x == "tmp")
+            })
             .count();
-        assert_eq!(tmp_count, 0, "no .tmp files may remain after successful save");
+        assert_eq!(
+            tmp_count, 0,
+            "no .tmp files may remain after successful save"
+        );
         let _ = std::fs::remove_dir_all(&dir);
     }
 }

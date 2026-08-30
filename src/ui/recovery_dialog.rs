@@ -1,7 +1,7 @@
-use eframe::egui;
-use crate::AfterEffectsApp;
-use crate::ui::theme::colors;
 use crate::ui::custom_widgets;
+use crate::ui::theme::colors;
+use crate::AfterEffectsApp;
+use eframe::egui;
 
 /// Startup crash-recovery prompt: offers to restore the latest autosave snapshot.
 pub fn draw_recovery_dialog(app: &mut AfterEffectsApp, ctx: &egui::Context) {
@@ -17,9 +17,16 @@ pub fn draw_recovery_dialog(app: &mut AfterEffectsApp, ctx: &egui::Context) {
         .default_width(380.0)
         .show(ctx, |ui| {
             ui.horizontal(|ui| {
-                ui.label(egui::RichText::new("⚠").size(28.0).color(colors::ACCENT_ORANGE));
+                ui.label(
+                    egui::RichText::new("⚠")
+                        .size(28.0)
+                        .color(colors::ACCENT_ORANGE),
+                );
                 ui.vertical(|ui| {
-                    ui.label(egui::RichText::new("前回のセッションが異常終了した可能性があります").strong());
+                    ui.label(
+                        egui::RichText::new("前回のセッションが異常終了した可能性があります")
+                            .strong(),
+                    );
                     ui.label("リカバリースナップショットが見つかりました。");
                 });
             });
@@ -34,6 +41,7 @@ pub fn draw_recovery_dialog(app: &mut AfterEffectsApp, ctx: &egui::Context) {
                 if custom_widgets::ae_button_accent(ui, "✅ 復元する").clicked() {
                     if let Some(project) = app.autosave.load_latest_recovery() {
                         app.history = crate::core::history::ProjectHistory::new(project);
+                        app.production_document = app.autosave.load_latest_production();
                         crate::core::frame_cache::bump_version();
                         app.frame_cache.collect_garbage();
                     }
