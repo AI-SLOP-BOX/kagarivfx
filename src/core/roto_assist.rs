@@ -54,9 +54,12 @@ pub fn segment_roto_brush(
     height: u32,
     strokes: &[RotoStroke],
 ) -> Vec<u8> {
-    let len = (width * height) as usize;
+    let Some(len) = (width as usize).checked_mul(height as usize) else {
+        return Vec::new();
+    };
     let mut mask = vec![0u8; len];
-    if strokes.is_empty() || image.len() != len * 4 {
+    let Some(image_len) = len.checked_mul(4) else { return mask; };
+    if width == 0 || height == 0 || strokes.is_empty() || image.len() != image_len {
         return mask;
     }
 
@@ -68,7 +71,9 @@ pub fn segment_roto_brush(
     let h_i = height as i32;
 
     for stroke in strokes {
-        let r = stroke.radius.max(1.0) as i32;
+        let r = if stroke.radius.is_finite() {
+            stroke.radius.clamp(1.0, 512.0) as i32
+        } else { 1 };
         for &pt in &stroke.points {
             let cx = pt[0].round() as i32;
             let cy = pt[1].round() as i32;
@@ -109,16 +114,26 @@ pub fn segment_roto_brush(
                 image[px_idx + 2] as f32,
             ];
 
-            let min_fg_dist = fg_colors.iter().map(|&c| {
-                (c[0] - p_col[0]).powi(2) + (c[1] - p_col[1]).powi(2) + (c[2] - p_col[2]).powi(2)
-            }).fold(f32::INFINITY, f32::min);
+            let min_fg_dist = fg_colors
+                .iter()
+                .map(|&c| {
+                    (c[0] - p_col[0]).powi(2)
+                        + (c[1] - p_col[1]).powi(2)
+                        + (c[2] - p_col[2]).powi(2)
+                })
+                .fold(f32::INFINITY, f32::min);
 
             let min_bg_dist = if bg_colors.is_empty() {
                 2500.0 // Default threshold
             } else {
-                bg_colors.iter().map(|&c| {
-                    (c[0] - p_col[0]).powi(2) + (c[1] - p_col[1]).powi(2) + (c[2] - p_col[2]).powi(2)
-                }).fold(f32::INFINITY, f32::min)
+                bg_colors
+                    .iter()
+                    .map(|&c| {
+                        (c[0] - p_col[0]).powi(2)
+                            + (c[1] - p_col[1]).powi(2)
+                            + (c[2] - p_col[2]).powi(2)
+                    })
+                    .fold(f32::INFINITY, f32::min)
             };
 
             let out_idx = (y * width + x) as usize;
@@ -135,7 +150,12 @@ pub fn segment_roto_brush(
 
 /// Trace the boundary of a binary mask (0/255) and return simplified polygon vertices.
 /// Uses Moore-neighborhood contour tracing with Douglas-Peucker simplification.
-pub fn trace_contour_to_polygon(mask: &[u8], width: u32, height: u32, simplify_tolerance: f32) -> Vec<[f32; 2]> {
+pub fn trace_contour_to_polygon(
+    mask: &[u8],
+    width: u32,
+    height: u32,
+    simplify_tolerance: f32,
+) -> Vec<[f32; 2]> {
     let w = width as i32;
     let h = height as i32;
     if mask.is_empty() || w == 0 || h == 0 {
@@ -163,7 +183,16 @@ pub fn trace_contour_to_polygon(mask: &[u8], width: u32, height: u32, simplify_t
         None => return Vec::new(),
     };
     // Moore neighborhood directions: E, NE, N, NW, W, SW, S, SE
-    let dirs: [(i32, i32); 8] = [(1, 0), (1, -1), (0, -1), (-1, -1), (-1, 0), (-1, 1), (0, 1), (1, 1)];
+    let dirs: [(i32, i32); 8] = [
+        (1, 0),
+        (1, -1),
+        (0, -1),
+        (-1, -1),
+        (-1, 0),
+        (-1, 1),
+        (0, 1),
+        (1, 1),
+    ];
     let mut contour: Vec<[f32; 2]> = Vec::new();
     let mut bx = sx;
     let mut by = sy;
@@ -243,13 +272,16 @@ pub fn refine_edge_guided_filter(
     radius: i32,
     eps: f32,
 ) -> Vec<u8> {
-    let len = (width * height) as usize;
+    let Some(len) = (width as usize).checked_mul(height as usize) else {
+        return Vec::new();
+    };
     let mut refined = vec![0u8; len];
-    if guide_image.len() != len * 4 || rough_mask.len() != len {
+    let Some(image_len) = len.checked_mul(4) else { return refined; };
+    if width == 0 || height == 0 || guide_image.len() != image_len || rough_mask.len() != len {
         return refined;
     }
 
-    let r = radius.max(1);
+    let r = radius.clamp(1, 64);
     let w_i = width as i32;
     let h_i = height as i32;
 
@@ -259,7 +291,10 @@ pub fn refine_edge_guided_filter(
 
     for i in 0..len {
         let px = i * 4;
-        i_gray[i] = (guide_image[px] as f32 * 0.299 + guide_image[px + 1] as f32 * 0.587 + guide_image[px + 2] as f32 * 0.114) / 255.0;
+        i_gray[i] = (guide_image[px] as f32 * 0.299
+            + guide_image[px + 1] as f32 * 0.587
+            + guide_image[px + 2] as f32 * 0.114)
+            / 255.0;
         p_val[i] = rough_mask[i] as f32 / 255.0;
     }
 
@@ -391,9 +426,15 @@ mod tests {
             for x in 0..width {
                 let idx = ((y * width + x) * 4) as usize;
                 if x < 8 {
-                    img[idx] = 250; img[idx + 1] = 20; img[idx + 2] = 20; img[idx + 3] = 255;
+                    img[idx] = 250;
+                    img[idx + 1] = 20;
+                    img[idx + 2] = 20;
+                    img[idx + 3] = 255;
                 } else {
-                    img[idx] = 20; img[idx + 1] = 20; img[idx + 2] = 250; img[idx + 3] = 255;
+                    img[idx] = 20;
+                    img[idx + 1] = 20;
+                    img[idx + 2] = 250;
+                    img[idx + 3] = 255;
                 }
             }
         }
@@ -412,8 +453,16 @@ mod tests {
         ];
 
         let rough_mask = segment_roto_brush(&img, width, height, &strokes);
-        assert_eq!(rough_mask[8 * 16 + 2], 255, "Left half must be segmented as foreground");
-        assert_eq!(rough_mask[8 * 16 + 14], 0, "Right half must be segmented as background");
+        assert_eq!(
+            rough_mask[8 * 16 + 2],
+            255,
+            "Left half must be segmented as foreground"
+        );
+        assert_eq!(
+            rough_mask[8 * 16 + 14],
+            0,
+            "Right half must be segmented as background"
+        );
 
         let refined = refine_edge_guided_filter(&img, &rough_mask, width, height, 2, 0.01);
         assert_eq!(refined.len(), (width * height) as usize);
