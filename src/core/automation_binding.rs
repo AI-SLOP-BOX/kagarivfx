@@ -19,6 +19,9 @@ impl AutomationCurve {
         if self.points.is_empty() || self.points.len() > 8192 {
             return Err("automation curve must contain 1..=8192 points");
         }
+        if self.points.iter().any(|point| !point.time.is_valid()) {
+            return Err("automation times must have a non-zero denominator");
+        }
         if self.points.iter().any(|point| !point.value.is_finite()) {
             return Err("automation values must be finite");
         }
@@ -79,6 +82,9 @@ impl AutomationBinding {
         .any(|value| !value.is_finite())
         {
             return Err("automation ranges must be finite");
+        }
+        if self.input_max <= self.input_min {
+            return Err("automation input range must be increasing");
         }
         self.curve.validate()
     }

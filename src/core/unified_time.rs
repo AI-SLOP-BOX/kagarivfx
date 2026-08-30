@@ -25,6 +25,10 @@ impl Time {
         }
     }
 
+    pub fn is_valid(self) -> bool {
+        self.denominator != 0
+    }
+
     pub fn from_frame(frame: i64, rate: FrameRate) -> Self {
         Self::new(
             frame.saturating_mul(i64::from(rate.denominator)),
@@ -97,6 +101,9 @@ impl TempoMap {
         }
         if self.changes[0].at != Time::ZERO {
             return Err("tempo map must start at time zero");
+        }
+        if self.changes.iter().any(|change| !change.at.is_valid()) {
+            return Err("tempo change times must have a non-zero denominator");
         }
         if self
             .changes
@@ -221,6 +228,12 @@ mod tests {
     fn rejects_invalid_frame_rates() {
         assert!(FrameRate::new(0, 1).is_none());
         assert!(FrameRate::new(24, 0).is_none());
+    }
+
+    #[test]
+    fn deserialized_zero_denominator_time_is_invalid() {
+        let time: Time = serde_json::from_str(r#"{"numerator":1,"denominator":0}"#).unwrap();
+        assert!(!time.is_valid());
     }
 
     #[test]
