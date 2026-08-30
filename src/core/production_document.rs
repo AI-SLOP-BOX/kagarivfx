@@ -183,6 +183,9 @@ fn validate_composition(
     {
         return Err("composition motion blur settings must be finite".into());
     }
+    if composition.background_color.iter().any(|channel| !channel.is_finite()) {
+        return Err("composition background color must be finite".into());
+    }
     for nested in &composition.sub_compositions {
         validate_composition(nested, depth + 1)?;
     }
@@ -243,6 +246,10 @@ mod tests {
 
         let mut invalid_project = Project::default();
         invalid_project.compositions[0].duration_frames = 0;
+        assert!(ProductionDocument::new(invalid_project).validate().is_err());
+
+        let mut invalid_project = Project::default();
+        invalid_project.compositions[0].background_color[0] = f32::NAN;
         assert!(ProductionDocument::new(invalid_project).validate().is_err());
     }
 
