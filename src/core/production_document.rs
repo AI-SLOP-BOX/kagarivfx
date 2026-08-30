@@ -68,6 +68,12 @@ impl ProductionDocument {
                 Self::CURRENT_SCHEMA_VERSION
             ));
         }
+        if self.project.compositions.is_empty() {
+            return Err("production document must contain at least one composition".into());
+        }
+        if self.project.active_composition_idx >= self.project.compositions.len() {
+            return Err("production document active composition index is out of range".into());
+        }
         if !(1..=384_000).contains(&self.audio.sample_rate) {
             return Err("audio sample rate is outside the supported range".into());
         }
@@ -195,6 +201,10 @@ mod tests {
         document.schema_version = ProductionDocument::CURRENT_SCHEMA_VERSION;
         document.audio.sample_rate = 0;
         assert!(document.validate().is_err());
+
+        let mut invalid_project = Project::default();
+        invalid_project.active_composition_idx = invalid_project.compositions.len();
+        assert!(ProductionDocument::new(invalid_project).validate().is_err());
     }
 
     #[test]
