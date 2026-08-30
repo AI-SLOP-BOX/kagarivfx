@@ -416,11 +416,13 @@ fn validate_composition(
             return Err("layer ids must be non-empty and unique within a composition".into());
         }
         if let Some(parent_id) = &layer.parent_id {
-            if !layer_ids.contains(parent_id)
-                && !composition
-                    .layers
-                    .iter()
-                    .any(|candidate| candidate.id == *parent_id)
+            if !metadata_text_is_safe(parent_id)
+                || parent_id.len() > ProductionDocument::MAX_ASSET_STRING_LENGTH
+                || (!layer_ids.contains(parent_id)
+                    && !composition
+                        .layers
+                        .iter()
+                        .any(|candidate| candidate.id == *parent_id))
             {
                 return Err("layer parent reference is invalid".into());
             }
@@ -461,11 +463,14 @@ fn validate_composition(
             ..
         } = &layer.layer_type
         {
-            if source.trim().is_empty()
-                || frames_dir.trim().is_empty()
-                || audio_wav
-                    .as_ref()
-                    .is_some_and(|path| path.trim().is_empty())
+            if !metadata_text_is_safe(source)
+                || !metadata_text_is_safe(frames_dir)
+                || source.len() > ProductionDocument::MAX_ASSET_STRING_LENGTH
+                || frames_dir.len() > ProductionDocument::MAX_ASSET_STRING_LENGTH
+                || audio_wav.as_ref().is_some_and(|path| {
+                    !metadata_text_is_safe(path)
+                        || path.len() > ProductionDocument::MAX_ASSET_STRING_LENGTH
+                })
                 || *frame_count == 0
                 || !speed.is_finite()
                 || *speed <= 0.0
@@ -475,7 +480,10 @@ fn validate_composition(
             }
         }
         if let LayerType::Audio { path, volume } = &layer.layer_type {
-            if path.trim().is_empty() || !scalar_animation_is_finite(volume) {
+            if !metadata_text_is_safe(path)
+                || path.len() > ProductionDocument::MAX_ASSET_STRING_LENGTH
+                || !scalar_animation_is_finite(volume)
+            {
                 return Err("audio layer path or volume is invalid".into());
             }
         }
@@ -704,7 +712,10 @@ fn validate_precomp_references(
 ) -> Result<(), String> {
     for layer in &composition.layers {
         if let LayerType::PreComp { comp_id } = &layer.layer_type {
-            if !composition_ids.contains(comp_id) {
+            if !metadata_text_is_safe(comp_id)
+                || comp_id.len() > ProductionDocument::MAX_ASSET_STRING_LENGTH
+                || !composition_ids.contains(comp_id)
+            {
                 return Err(format!("precomp references missing composition: {comp_id}"));
             }
         }
