@@ -322,8 +322,17 @@ fn validate_composition(
             || light.falloff < 0.0
             || !light.max_radius.is_finite()
             || light.max_radius < 0.0
+            || !light_type_is_valid(&light.light_type)
         {
             return Err("light settings are invalid".into());
+        }
+    }
+    for marker in &composition.markers {
+        if marker.frame >= composition.duration_frames
+            || marker.label.trim().is_empty()
+            || marker.color.iter().any(|value| !value.is_finite())
+        {
+            return Err("timeline marker settings are invalid".into());
         }
     }
     let mut layer_ids = HashSet::new();
@@ -807,6 +816,21 @@ fn particle_emitter_is_valid(emitter: &crate::core::particle_system::ParticleEmi
                 .all(|value| value.is_finite())
                 && emitter.collision_bounds[0] <= emitter.collision_bounds[2]
                 && emitter.collision_bounds[1] <= emitter.collision_bounds[3]))
+}
+
+fn light_type_is_valid(light_type: &crate::core::timeline::LightType) -> bool {
+    match light_type {
+        crate::core::timeline::LightType::Spot {
+            cone_angle_deg,
+            cone_feather_pct,
+        } => {
+            cone_angle_deg.is_finite()
+                && (0.0..=180.0).contains(cone_angle_deg)
+                && cone_feather_pct.is_finite()
+                && (0.0..=100.0).contains(cone_feather_pct)
+        }
+        _ => true,
+    }
 }
 
 fn vector_animation_is_finite(value: &crate::core::property::Animatable<[f32; 2]>) -> bool {
@@ -1430,6 +1454,28 @@ mod tests {
         emitter.collision_bounds = [0.0, 0.0, 10.0, 10.0];
         emitter.color_start[3] = 1.1;
         assert!(!particle_emitter_is_valid(&emitter));
+    }
+
+    #[test]
+    fn spot_light_validation_bounds_cone_settings() {
+        assert!(light_type_is_valid(
+            &crate::core::timeline::LightType::Spot {
+                cone_angle_deg: 45.0,
+                cone_feather_pct: 50.0,
+            }
+        ));
+        assert!(!light_type_is_valid(
+            &crate::core::timeline::LightType::Spot {
+                cone_angle_deg: 181.0,
+                cone_feather_pct: 50.0,
+            }
+        ));
+        assert!(!light_type_is_valid(
+            &crate::core::timeline::LightType::Spot {
+                cone_angle_deg: 45.0,
+                cone_feather_pct: -1.0,
+            }
+        ));
     }
 
     #[test]
