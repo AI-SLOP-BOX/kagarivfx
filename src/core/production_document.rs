@@ -83,6 +83,16 @@ impl ProductionDocument {
         for composition in &self.project.compositions {
             validate_precomp_references(composition, &composition_ids)?;
         }
+        let mut visiting = HashSet::new();
+        let mut visited = HashSet::new();
+        for composition in &self.project.compositions {
+            validate_precomp_cycles(
+                composition,
+                &self.project.compositions,
+                &mut visiting,
+                &mut visited,
+            )?;
+        }
         let mut asset_ids = HashSet::new();
         let folder_ids = self
             .project
@@ -307,6 +317,46 @@ fn validate_precomp_references(
     Ok(())
 }
 
+fn validate_precomp_cycles(
+    composition: &crate::core::timeline::Composition,
+    roots: &[crate::core::timeline::Composition],
+    visiting: &mut HashSet<String>,
+    visited: &mut HashSet<String>,
+) -> Result<(), String> {
+    if visited.contains(&composition.id) {
+        return Ok(());
+    }
+    if !visiting.insert(composition.id.clone()) {
+        return Err("composition precomp graph contains a cycle".into());
+    }
+    for layer in &composition.layers {
+        if let LayerType::PreComp { comp_id } = &layer.layer_type {
+            let target = roots
+                .iter()
+                .find_map(|root| find_nested_composition(root, comp_id));
+            if let Some(target) = target {
+                validate_precomp_cycles(target, roots, visiting, visited)?;
+            }
+        }
+    }
+    visiting.remove(&composition.id);
+    visited.insert(composition.id.clone());
+    Ok(())
+}
+
+fn find_nested_composition<'a>(
+    composition: &'a crate::core::timeline::Composition,
+    id: &str,
+) -> Option<&'a crate::core::timeline::Composition> {
+    if composition.id == id {
+        return Some(composition);
+    }
+    composition
+        .sub_compositions
+        .iter()
+        .find_map(|nested| find_nested_composition(nested, id))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -479,6 +529,16 @@ mod tests {
         let mut invalid_project = Project::default();
         let duplicate = invalid_project.compositions[0].layers[0].clone();
         invalid_project.compositions[0].layers.push(duplicate);
+        assert!(ProductionDocument::new(invalid_project).validate().is_err());
+
+        let mut invalid_project = Project::default();
+        let comp_id = invalid_project.compositions[0].id.clone();
+        invalid_project.compositions[0].layers.push(crate::core::timeline::Layer::new(
+            "self-precomp",
+            "Self Precomp",
+            LayerType::PreComp { comp_id },
+            300,
+        ));
         assert!(ProductionDocument::new(invalid_project).validate().is_err());
     }
 
