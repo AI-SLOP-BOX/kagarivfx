@@ -114,20 +114,23 @@ fn build_engine(log_sink: Arc<Mutex<Vec<String>>>) -> rhai::Engine {
             g.push(msg.to_string());
         }
     });
-    engine.register_fn("new_comp", |name: &str, w: i64, ht: i64, fps: i64, dur: i64| {
-        with_project(|p| {
-            let comp = Composition::new(
-                format!("comp_{}", p.compositions.len()),
-                name.to_string(),
-                w.max(1) as u32,
-                ht.max(1) as u32,
-                fps.max(1) as u32,
-                dur.max(1) as u32,
-            );
-            p.compositions.push(comp);
-            p.active_composition_idx = p.compositions.len() - 1;
-        });
-    });
+    engine.register_fn(
+        "new_comp",
+        |name: &str, w: i64, ht: i64, fps: i64, dur: i64| {
+            with_project(|p| {
+                let comp = Composition::new(
+                    format!("comp_{}", p.compositions.len()),
+                    name.to_string(),
+                    w.max(1) as u32,
+                    ht.max(1) as u32,
+                    fps.max(1) as u32,
+                    dur.max(1) as u32,
+                );
+                p.compositions.push(comp);
+                p.active_composition_idx = p.compositions.len() - 1;
+            });
+        },
+    );
     engine.register_fn("select_comp", |idx: i64| {
         with_project(|p| {
             if idx >= 0 && (idx as usize) < p.compositions.len() {
@@ -139,18 +142,21 @@ fn build_engine(log_sink: Arc<Mutex<Vec<String>>>) -> rhai::Engine {
     // ── Layer creation ──
     engine.register_fn("add_solid", |name: &str, color_hex: &str| -> String {
         with_project(|p| {
+            let Some(idx) = p.compositions.get(p.active_composition_idx).map(|_| p.active_composition_idx) else {
+                return String::new();
+            };
             let c = parse_hex(color_hex);
             let comp_len = {
-                let idx = p.active_composition_idx;
                 p.compositions[idx].duration_frames
             };
             let mut layer = Layer::new(
                 gen_id(),
                 name.to_string(),
-                LayerType::Solid { color: [c[0], c[1], c[2], 1.0] },
+                LayerType::Solid {
+                    color: [c[0], c[1], c[2], 1.0],
+                },
                 comp_len,
             );
-            let idx = p.active_composition_idx;
             let comp = &mut p.compositions[idx];
             let cw = comp.width as f32;
             let ch = comp.height as f32;
@@ -164,8 +170,10 @@ fn build_engine(log_sink: Arc<Mutex<Vec<String>>>) -> rhai::Engine {
     });
     engine.register_fn("add_text", |name: &str, text: &str, size: i64| -> String {
         with_project(|p| {
+            let Some(idx) = p.compositions.get(p.active_composition_idx).map(|_| p.active_composition_idx) else {
+                return String::new();
+            };
             let comp_len = {
-                let idx = p.active_composition_idx;
                 p.compositions[idx].duration_frames
             };
             let mut layer = Layer::new(
@@ -185,7 +193,6 @@ fn build_engine(log_sink: Arc<Mutex<Vec<String>>>) -> rhai::Engine {
                 },
                 comp_len,
             );
-            let idx = p.active_composition_idx;
             let comp = &mut p.compositions[idx];
             let cw = comp.width as f32;
             let ch = comp.height as f32;
@@ -201,8 +208,14 @@ fn build_engine(log_sink: Arc<Mutex<Vec<String>>>) -> rhai::Engine {
     // ── Property animation ──
     engine.register_fn("set_position", |layer: &str, x: f64, y: f64| {
         with_project(|p| {
-            let idx = p.active_composition_idx;
-            if let Some(i) = p.compositions[idx].layers.iter().position(|l| l.name == layer) {
+            let Some(idx) = p.compositions.get(p.active_composition_idx).map(|_| p.active_composition_idx) else {
+                return;
+            };
+            if let Some(i) = p.compositions[idx]
+                .layers
+                .iter()
+                .position(|l| l.name == layer)
+            {
                 p.compositions[idx].layers[i].transform.position =
                     Animatable::new_constant([x as f32, y as f32]);
             }
@@ -210,8 +223,14 @@ fn build_engine(log_sink: Arc<Mutex<Vec<String>>>) -> rhai::Engine {
     });
     engine.register_fn("set_opacity", |layer: &str, pct: f64| {
         with_project(|p| {
-            let idx = p.active_composition_idx;
-            if let Some(i) = p.compositions[idx].layers.iter().position(|l| l.name == layer) {
+            let Some(idx) = p.compositions.get(p.active_composition_idx).map(|_| p.active_composition_idx) else {
+                return;
+            };
+            if let Some(i) = p.compositions[idx]
+                .layers
+                .iter()
+                .position(|l| l.name == layer)
+            {
                 p.compositions[idx].layers[i].transform.opacity =
                     Animatable::new_constant(pct.clamp(0.0, 100.0) as f32);
             }
@@ -219,8 +238,14 @@ fn build_engine(log_sink: Arc<Mutex<Vec<String>>>) -> rhai::Engine {
     });
     engine.register_fn("set_opacity", |layer: &str, pct: i64| {
         with_project(|p| {
-            let idx = p.active_composition_idx;
-            if let Some(i) = p.compositions[idx].layers.iter().position(|l| l.name == layer) {
+            let Some(idx) = p.compositions.get(p.active_composition_idx).map(|_| p.active_composition_idx) else {
+                return;
+            };
+            if let Some(i) = p.compositions[idx]
+                .layers
+                .iter()
+                .position(|l| l.name == layer)
+            {
                 p.compositions[idx].layers[i].transform.opacity =
                     Animatable::new_constant((pct as f64).clamp(0.0, 100.0) as f32);
             }
@@ -228,11 +253,21 @@ fn build_engine(log_sink: Arc<Mutex<Vec<String>>>) -> rhai::Engine {
     });
     engine.register_fn("key_position", |layer: &str, frame: i64, x: f64, y: f64| {
         with_project(|p| {
-            let idx = p.active_composition_idx;
-            let Some(i) = p.compositions[idx].layers.iter().position(|l| l.name == layer) else {
+            let Some(idx) = p.compositions.get(p.active_composition_idx).map(|_| p.active_composition_idx) else {
                 return;
             };
-            let kf = Keyframe::new(frame.max(0) as u32, [x as f32, y as f32], InterpolationType::Linear);
+            let Some(i) = p.compositions[idx]
+                .layers
+                .iter()
+                .position(|l| l.name == layer)
+            else {
+                return;
+            };
+            let kf = Keyframe::new(
+                frame.max(0) as u32,
+                [x as f32, y as f32],
+                InterpolationType::Linear,
+            );
             match &mut p.compositions[idx].layers[i].transform.position {
                 Animatable::Animated(kfs) => {
                     kfs.push(kf);
@@ -240,11 +275,10 @@ fn build_engine(log_sink: Arc<Mutex<Vec<String>>>) -> rhai::Engine {
                 }
                 Animatable::Constant(v0) => {
                     let v = *v0;
-                    p.compositions[idx].layers[i].transform.position =
-                        Animatable::Animated(vec![
-                            Keyframe::new(0, v, InterpolationType::Linear),
-                            kf,
-                        ]);
+                    p.compositions[idx].layers[i].transform.position = Animatable::Animated(vec![
+                        Keyframe::new(0, v, InterpolationType::Linear),
+                        kf,
+                    ]);
                 }
             }
         });
@@ -341,5 +375,19 @@ mod tests {
 
         let error = ProjectScope::enter(&mut second).unwrap_err();
         assert!(error.contains("nested automation"));
+    }
+
+    #[test]
+    fn test_mutations_fail_closed_when_active_composition_is_missing() {
+        let mut project = Project::default();
+        project.compositions.clear();
+        let script = r#"
+            add_solid("BG", "ffffff");
+            add_text("T", "safe", 32);
+            set_opacity("BG", 50);
+            key_position("T", 10, 1.0, 2.0);
+        "#;
+        assert!(run_script(&mut project, script).is_ok());
+        assert!(project.compositions.is_empty());
     }
 }
