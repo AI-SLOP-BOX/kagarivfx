@@ -1,9 +1,9 @@
+use ab_glyph::{Font, FontRef, PxScale, ScaleFont};
 /// Font rasterizer using ab_glyph for text layer rendering.
 ///
 /// Loads system fonts (or bundled fonts) and rasterizes individual glyphs
 /// into RGBA pixel buffers that can be composited by the software renderer.
 use std::collections::HashMap;
-use ab_glyph::{Font, FontRef, PxScale, ScaleFont};
 
 /// Parses raw font bytes, supporting TrueType Collections (.ttc) via index fallback.
 fn parse_font(data: &[u8]) -> Option<FontRef<'_>> {
@@ -166,7 +166,8 @@ impl FontRasterizer {
                             if let Ok(sub_entries) = std::fs::read_dir(&path) {
                                 for sub_entry in sub_entries.flatten() {
                                     let sub_path = sub_entry.path();
-                                    let ext = sub_path.extension().and_then(|e| e.to_str()).unwrap_or("");
+                                    let ext =
+                                        sub_path.extension().and_then(|e| e.to_str()).unwrap_or("");
                                     if matches!(ext, "ttf" | "otf") {
                                         let name = sub_path
                                             .file_stem()
@@ -220,11 +221,29 @@ impl FontRasterizer {
         }
 
         const CANDIDATES: &[&str] = &[
-            "Helvetica", "Helvetica Neue", "Arial", "Inter", "Roboto",
-            "DejaVu Sans", "Liberation Sans", "Times New Roman", "Georgia",
-            "Courier New", "Menlo", "Monaco", "Verdana", "Tahoma",
-            "Trebuchet MS", "Futura", "Gill Sans", "Avenir", "Optima",
-            "Hiragino Sans", "Yu Gothic", "Noto Sans CJK JP", "Osaka",
+            "Helvetica",
+            "Helvetica Neue",
+            "Arial",
+            "Inter",
+            "Roboto",
+            "DejaVu Sans",
+            "Liberation Sans",
+            "Times New Roman",
+            "Georgia",
+            "Courier New",
+            "Menlo",
+            "Monaco",
+            "Verdana",
+            "Tahoma",
+            "Trebuchet MS",
+            "Futura",
+            "Gill Sans",
+            "Avenir",
+            "Optima",
+            "Hiragino Sans",
+            "Yu Gothic",
+            "Noto Sans CJK JP",
+            "Osaka",
         ];
         for name in CANDIDATES {
             if !self.fonts.contains_key(*name) {
@@ -236,7 +255,13 @@ impl FontRasterizer {
     /// Get the default font (first available system font, or embed a fallback).
     pub fn get_default_font_data(&self) -> &[u8] {
         // Try to find a system font
-        for name in &["Helvetica", "Arial", "DejaVu Sans", "Liberation Sans", "sans-serif"] {
+        for name in &[
+            "Helvetica",
+            "Arial",
+            "DejaVu Sans",
+            "Liberation Sans",
+            "sans-serif",
+        ] {
             if let Some(data) = self.fonts.get(*name) {
                 return data;
             }
@@ -252,13 +277,17 @@ impl FontRasterizer {
         ch: char,
         font_size: f32,
     ) -> Option<RasterizedGlyph> {
+        if !font_size.is_finite() || !(0.1..=8192.0).contains(&font_size) {
+            return None;
+        }
         let font_data = self.fonts.get(family_name)?;
         let font = parse_font(font_data)?;
         let scale = PxScale::from(font_size);
         let _scaled_font = font.as_scaled(scale);
 
         let glyph_id = font.glyph_id(ch);
-        let glyph = glyph_id.with_scale_and_position(PxScale::from(font_size), ab_glyph::point(0.0, 0.0));
+        let glyph =
+            glyph_id.with_scale_and_position(PxScale::from(font_size), ab_glyph::point(0.0, 0.0));
         let outlined = font.outline_glyph(glyph)?;
 
         let bounds = outlined.px_bounds();
@@ -275,15 +304,18 @@ impl FontRasterizer {
             });
         }
 
-        let mut pixels = vec![0u8; (width * height * 4) as usize];
+        let pixel_len = (width as usize)
+            .checked_mul(height as usize)
+            .and_then(|count| count.checked_mul(4))?;
+        let mut pixels = vec![0u8; pixel_len];
         outlined.draw(|x, y, coverage| {
             let idx = ((y * width + x) * 4) as usize;
             if idx + 3 < pixels.len() {
                 let a = (coverage * 255.0) as u8;
-                pixels[idx] = 255;     // R
+                pixels[idx] = 255; // R
                 pixels[idx + 1] = 255; // G
                 pixels[idx + 2] = 255; // B
-                pixels[idx + 3] = a;   // A
+                pixels[idx + 3] = a; // A
             }
         });
 
@@ -305,7 +337,16 @@ impl FontRasterizer {
         color: [f32; 4],
         tracking: f32,
     ) -> Option<(u32, u32, Vec<u8>)> {
-        self.rasterize_text_formatted(family_name, text, font_size, color, tracking, 1.2, 0.0, crate::core::text_layout::TextAlign::Left)
+        self.rasterize_text_formatted(
+            family_name,
+            text,
+            font_size,
+            color,
+            tracking,
+            1.2,
+            0.0,
+            crate::core::text_layout::TextAlign::Left,
+        )
     }
 
     /// Rasterize text with full paragraph formatting (leading, box_width, alignment).
@@ -326,14 +367,18 @@ impl FontRasterizer {
         let scale = PxScale::from(font_size);
         let scaled_font = font.as_scaled(scale);
 
-        let layout = crate::core::text_layout::layout_text(text, font_size, tracking, leading, box_width, alignment);
+        let layout = crate::core::text_layout::layout_text(
+            text, font_size, tracking, leading, box_width, alignment,
+        );
         if layout.lines.is_empty() {
             return None;
         }
 
         let buf_w = (layout.total_width.ceil() as u32).max(1);
         let line_height = font_size * leading;
-        let buf_h = (layout.total_height.ceil() as u32).max(line_height.ceil() as u32).max(1);
+        let buf_h = (layout.total_height.ceil() as u32)
+            .max(line_height.ceil() as u32)
+            .max(1);
 
         let mut pixels = vec![0u8; (buf_w * buf_h * 4) as usize];
         let r = (color[0].clamp(0.0, 1.0) * 255.0) as u8;
@@ -343,7 +388,8 @@ impl FontRasterizer {
         let max_top = font_size * 0.8; // baseline offset estimate
 
         for line in &layout.lines {
-            let align_x = crate::core::text_layout::get_alignment_offset(line.width, box_width, alignment);
+            let align_x =
+                crate::core::text_layout::get_alignment_offset(line.width, box_width, alignment);
             let mut cursor_x = align_x;
             let cursor_y = line.y_offset;
 
@@ -352,7 +398,10 @@ impl FontRasterizer {
                 let h_advance = scaled_font.h_advance(glyph_id);
 
                 if ch != ' ' {
-                    let glyph = glyph_id.with_scale_and_position(PxScale::from(font_size), ab_glyph::point(0.0, 0.0));
+                    let glyph = glyph_id.with_scale_and_position(
+                        PxScale::from(font_size),
+                        ab_glyph::point(0.0, 0.0),
+                    );
                     if let Some(outlined) = font.outline_glyph(glyph) {
                         let bounds = outlined.px_bounds();
                         let glyph_left = bounds.min.x as i32;
@@ -361,7 +410,11 @@ impl FontRasterizer {
                         outlined.draw(|x, y, coverage| {
                             let dest_x = cursor_x as i32 + glyph_left + x as i32;
                             let dest_y = cursor_y as i32 + max_top as i32 + glyph_top + y as i32;
-                            if dest_x >= 0 && dest_y >= 0 && (dest_x as u32) < buf_w && (dest_y as u32) < buf_h {
+                            if dest_x >= 0
+                                && dest_y >= 0
+                                && (dest_x as u32) < buf_w
+                                && (dest_y as u32) < buf_h
+                            {
                                 let idx = ((dest_y as u32 * buf_w + dest_x as u32) * 4) as usize;
                                 if idx + 3 < pixels.len() {
                                     let a = (coverage * 255.0) as u8;
@@ -408,20 +461,23 @@ impl FontRasterizer {
         if flat_text.is_empty() {
             return None;
         }
-        let xforms = crate::core::text_animator::TextAnimatorEngine::eval_character_transforms_extended(
-            &flat_text,
-            &animator.selector,
-            animator.position_offset,
-            animator.scale,
-            animator.opacity,
-            animator.tracking,
-            animator.rotation,
-            animator.blur_amount,
-            false,
-            time,
-        );
+        let xforms =
+            crate::core::text_animator::TextAnimatorEngine::eval_character_transforms_extended(
+                &flat_text,
+                &animator.selector,
+                animator.position_offset,
+                animator.scale,
+                animator.opacity,
+                animator.tracking,
+                animator.rotation,
+                animator.blur_amount,
+                false,
+                time,
+            );
 
-        let layout = crate::core::text_layout::layout_text(text, font_size, tracking, leading, box_width, alignment);
+        let layout = crate::core::text_layout::layout_text(
+            text, font_size, tracking, leading, box_width, alignment,
+        );
         if layout.lines.is_empty() {
             return None;
         }
@@ -440,18 +496,24 @@ impl FontRasterizer {
 
         let mut char_idx: usize = 0;
         for line in &layout.lines {
-            let align_x = crate::core::text_layout::get_alignment_offset(line.width, box_width, alignment);
+            let align_x =
+                crate::core::text_layout::get_alignment_offset(line.width, box_width, alignment);
             let mut cursor_x = align_x;
             let cursor_y = line.y_offset;
 
             for ch in line.text.chars() {
-                let c = xforms.get(char_idx).cloned()
+                let c = xforms
+                    .get(char_idx)
+                    .cloned()
                     .unwrap_or_else(crate::core::text_animator::CharacterTransform::default);
                 let glyph_id = font.glyph_id(ch);
                 let h_advance = scaled_font.h_advance(glyph_id);
 
                 if ch != ' ' && (c.opacity_multiplier > 0.01) {
-                    let glyph = glyph_id.with_scale_and_position(PxScale::from(font_size), ab_glyph::point(0.0, 0.0));
+                    let glyph = glyph_id.with_scale_and_position(
+                        PxScale::from(font_size),
+                        ab_glyph::point(0.0, 0.0),
+                    );
                     if let Some(outlined) = font.outline_glyph(glyph) {
                         let bounds = outlined.px_bounds();
                         let bw = bounds.width().ceil() as usize;
@@ -481,15 +543,24 @@ impl FontRasterizer {
                             let blur_px = c.blur.round().max(0.0) as u32;
                             if blur_px >= 1 {
                                 crate::core::ae_effects_pack::apply_gaussian_blur(
-                                    &mut src_rgba, bw as u32, bh as u32, blur_px.min(16),
+                                    &mut src_rgba,
+                                    bw as u32,
+                                    bh as u32,
+                                    blur_px.min(16),
                                 );
                             }
 
                             // Destination placement: layout position + animator offset
-                            let dest_x = pad as f32 + cursor_x + c.position_offset[0]
-                                + c.tracking_offset + bounds.min.x;
-                            let dest_y = pad as f32 + cursor_y + max_top
-                                + bounds.min.y + c.position_offset[1];
+                            let dest_x = pad as f32
+                                + cursor_x
+                                + c.position_offset[0]
+                                + c.tracking_offset
+                                + bounds.min.x;
+                            let dest_y = pad as f32
+                                + cursor_y
+                                + max_top
+                                + bounds.min.y
+                                + c.position_offset[1];
 
                             // Transform-blit with scale + rotation about glyph center
                             let sx = c.scale_multiplier[0].max(0.01);
@@ -507,22 +578,34 @@ impl FontRasterizer {
                                     let ry = dy as f32 - dst_h as f32 * 0.5;
                                     // inverse rotate + inverse scale → source coords
                                     let ux = (rx * cos_r + ry * sin_r) / sx + bounds.width() * 0.5;
-                                    let uy = (-rx * sin_r + ry * cos_r) / sy + bounds.height() * 0.5;
+                                    let uy =
+                                        (-rx * sin_r + ry * cos_r) / sy + bounds.height() * 0.5;
                                     let sxi = ux.floor() as isize;
                                     let syi = uy.floor() as isize;
-                                    if sxi < 0 || syi < 0 || sxi >= bw as isize || syi >= bh as isize {
+                                    if sxi < 0
+                                        || syi < 0
+                                        || sxi >= bw as isize
+                                        || syi >= bh as isize
+                                    {
                                         continue;
                                     }
-                                    let a = src_rgba[((syi as usize) * bw + (sxi as usize)) * 4 + 3];
+                                    let a =
+                                        src_rgba[((syi as usize) * bw + (sxi as usize)) * 4 + 3];
                                     if a == 0 {
                                         continue;
                                     }
                                     let pxi = (cx_dst + rx).round() as isize;
                                     let pyi = (cy_dst + ry).round() as isize;
-                                    if pxi < 0 || pyi < 0 || pxi >= buf_w as isize || pyi >= buf_h as isize {
+                                    if pxi < 0
+                                        || pyi < 0
+                                        || pxi >= buf_w as isize
+                                        || pyi >= buf_h as isize
+                                    {
                                         continue;
                                     }
-                                    let out_a = (a as f32 * c.opacity_multiplier).round().clamp(0.0, 255.0) as u8;
+                                    let out_a =
+                                        (a as f32 * c.opacity_multiplier).round().clamp(0.0, 255.0)
+                                            as u8;
                                     if out_a == 0 {
                                         continue;
                                     }
@@ -571,11 +654,12 @@ impl FontRasterizer {
         }
 
         let advanced = stack.compose(&flat_text);
-        let xforms: Vec<crate::core::text_animator::CharacterTransform> = advanced.iter().map(|a| {
-            a.base
-        }).collect();
+        let xforms: Vec<crate::core::text_animator::CharacterTransform> =
+            advanced.iter().map(|a| a.base).collect();
 
-        let layout = crate::core::text_layout::layout_text(text, font_size, tracking, leading, box_width, alignment);
+        let layout = crate::core::text_layout::layout_text(
+            text, font_size, tracking, leading, box_width, alignment,
+        );
         if layout.lines.is_empty() {
             return None;
         }
@@ -593,18 +677,24 @@ impl FontRasterizer {
 
         let mut char_idx: usize = 0;
         for line in &layout.lines {
-            let align_x = crate::core::text_layout::get_alignment_offset(line.width, box_width, alignment);
+            let align_x =
+                crate::core::text_layout::get_alignment_offset(line.width, box_width, alignment);
             let mut cursor_x = align_x;
             let cursor_y = line.y_offset;
 
             for ch in line.text.chars() {
-                let c = xforms.get(char_idx).cloned()
+                let c = xforms
+                    .get(char_idx)
+                    .cloned()
                     .unwrap_or_else(crate::core::text_animator::CharacterTransform::default);
                 let glyph_id = font.glyph_id(ch);
                 let h_advance = scaled_font.h_advance(glyph_id);
 
                 if ch != ' ' && (c.opacity_multiplier > 0.01) {
-                    let glyph = glyph_id.with_scale_and_position(PxScale::from(font_size), ab_glyph::point(0.0, 0.0));
+                    let glyph = glyph_id.with_scale_and_position(
+                        PxScale::from(font_size),
+                        ab_glyph::point(0.0, 0.0),
+                    );
                     if let Some(outlined) = font.outline_glyph(glyph) {
                         let bounds = outlined.px_bounds();
                         let bw = bounds.width().ceil() as usize;
@@ -628,14 +718,23 @@ impl FontRasterizer {
                             let blur_px = c.blur.round().max(0.0) as u32;
                             if blur_px >= 1 {
                                 crate::core::ae_effects_pack::apply_gaussian_blur(
-                                    &mut src_rgba, bw as u32, bh as u32, blur_px.min(16),
+                                    &mut src_rgba,
+                                    bw as u32,
+                                    bh as u32,
+                                    blur_px.min(16),
                                 );
                             }
 
-                            let dest_x = pad as f32 + cursor_x + c.position_offset[0]
-                                + c.tracking_offset + bounds.min.x;
-                            let dest_y = pad as f32 + cursor_y + max_top
-                                + bounds.min.y + c.position_offset[1];
+                            let dest_x = pad as f32
+                                + cursor_x
+                                + c.position_offset[0]
+                                + c.tracking_offset
+                                + bounds.min.x;
+                            let dest_y = pad as f32
+                                + cursor_y
+                                + max_top
+                                + bounds.min.y
+                                + c.position_offset[1];
 
                             let sx = c.scale_multiplier[0].max(0.01);
                             let sy = c.scale_multiplier[1].max(0.01);
@@ -650,10 +749,15 @@ impl FontRasterizer {
                                     let rx = dx as f32 - dst_w as f32 * 0.5;
                                     let ry = dy as f32 - dst_h as f32 * 0.5;
                                     let ux = (rx * cos_r + ry * sin_r) / sx + bounds.width() * 0.5;
-                                    let uy = (-rx * sin_r + ry * cos_r) / sy + bounds.height() * 0.5;
+                                    let uy =
+                                        (-rx * sin_r + ry * cos_r) / sy + bounds.height() * 0.5;
                                     let sxi = ux.floor() as isize;
                                     let syi = uy.floor() as isize;
-                                    if sxi < 0 || syi < 0 || sxi >= bw as isize || syi >= bh as isize {
+                                    if sxi < 0
+                                        || syi < 0
+                                        || sxi >= bw as isize
+                                        || syi >= bh as isize
+                                    {
                                         continue;
                                     }
                                     let sa = cov[(syi as usize) * bw + (sxi as usize)];
@@ -662,10 +766,17 @@ impl FontRasterizer {
                                     }
                                     let pxi = (cx_dst + rx).round() as isize;
                                     let pyi = (cy_dst + ry).round() as isize;
-                                    if pxi < 0 || pyi < 0 || pxi >= buf_w as isize || pyi >= buf_h as isize {
+                                    if pxi < 0
+                                        || pyi < 0
+                                        || pxi >= buf_w as isize
+                                        || pyi >= buf_h as isize
+                                    {
                                         continue;
                                     }
-                                    let out_a = (sa * 255.0 * c.opacity_multiplier).round().clamp(0.0, 255.0) as u8;
+                                    let out_a = (sa * 255.0 * c.opacity_multiplier)
+                                        .round()
+                                        .clamp(0.0, 255.0)
+                                        as u8;
                                     if out_a == 0 {
                                         continue;
                                     }
@@ -727,14 +838,19 @@ impl FontRasterizer {
             )));
             // Also check ~/Library/Fonts
             if let Some(home) = std::env::var_os("HOME") {
-                paths.push(std::path::PathBuf::from(home).join(format!("Library/Fonts/{}.ttf", family_name)));
+                paths.push(
+                    std::path::PathBuf::from(home)
+                        .join(format!("Library/Fonts/{}.ttf", family_name)),
+                );
             }
         }
 
         #[cfg(target_os = "windows")]
         {
             if let Some(font_dir) = std::env::var_os("WINDIR") {
-                paths.push(std::path::PathBuf::from(font_dir).join(format!("Fonts/{}.ttf", family_name)));
+                paths.push(
+                    std::path::PathBuf::from(font_dir).join(format!("Fonts/{}.ttf", family_name)),
+                );
             }
         }
 
@@ -800,7 +916,14 @@ where
 {
     let rasterizer = GLOBAL_FONT_RASTERIZER.get_or_init(|| {
         let mut r = FontRasterizer::new();
-        for name in &["Helvetica", "Arial", "DejaVu Sans", "Liberation Sans", "Inter", "Roboto"] {
+        for name in &[
+            "Helvetica",
+            "Arial",
+            "DejaVu Sans",
+            "Liberation Sans",
+            "Inter",
+            "Roboto",
+        ] {
             r.load_system_font(name);
         }
         std::sync::Mutex::new(r)
