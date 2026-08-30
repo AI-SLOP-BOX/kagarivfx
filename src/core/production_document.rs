@@ -300,6 +300,14 @@ fn validate_composition(
         if layer.in_frame >= layer.out_frame {
             return Err("layer frame range must have a positive duration".into());
         }
+        if !vector_animation_is_finite(&layer.transform.anchor_point)
+            || !vector_animation_is_finite(&layer.transform.position)
+            || !vector_animation_is_finite(&layer.transform.scale)
+            || !scalar_animation_is_finite(&layer.transform.rotation)
+            || !scalar_animation_is_finite(&layer.transform.opacity)
+        {
+            return Err("layer transform animation values must be finite".into());
+        }
         let mut effect_ids = HashSet::new();
         for effect in &layer.effects {
             if effect.id.trim().is_empty() || !effect_ids.insert(effect.id.clone()) {
@@ -389,6 +397,18 @@ fn scalar_animation_is_finite(value: &crate::core::property::Animatable<f32>) ->
         crate::core::property::Animatable::Animated(keyframes) => {
             keyframes.iter().all(|keyframe| keyframe.value.is_finite())
         }
+    }
+}
+
+fn vector_animation_is_finite(
+    value: &crate::core::property::Animatable<[f32; 2]>,
+) -> bool {
+    match value {
+        crate::core::property::Animatable::Constant(value) =>
+            value.iter().all(|component| component.is_finite()),
+        crate::core::property::Animatable::Animated(keyframes) => keyframes
+            .iter()
+            .all(|keyframe| keyframe.value.iter().all(|component| component.is_finite())),
     }
 }
 
@@ -647,6 +667,11 @@ mod tests {
         invalid_project.compositions[0].layers[0]
             .masks
             .extend([mask.clone(), mask]);
+        assert!(ProductionDocument::new(invalid_project).validate().is_err());
+
+        let mut invalid_project = Project::default();
+        invalid_project.compositions[0].layers[0].transform.position =
+            crate::core::property::Animatable::new_constant([f32::NAN, 0.0]);
         assert!(ProductionDocument::new(invalid_project).validate().is_err());
 
         let mut invalid_project = Project::default();
