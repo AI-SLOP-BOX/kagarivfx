@@ -518,10 +518,7 @@ fn validate_composition(
                 return Err("effect ids must be non-empty and unique within a layer".into());
             }
             let effect_debug = format!("{:?}", effect.effect_type);
-            if effect_debug.contains("NaN")
-                || effect_debug.contains("inf")
-                || effect_debug.contains("-inf")
-            {
+            if !effect_debug_is_finite(&effect_debug) {
                 return Err("effect parameters must be finite and serializable".into());
             }
         }
@@ -677,6 +674,12 @@ fn valid_gradient_stops(colors: &[[f32; 4]], stops: &[f32]) -> bool {
         && stops
             .last()
             .is_some_and(|stop| stop.is_finite() && (0.0..=1.0).contains(stop))
+}
+
+fn effect_debug_is_finite(debug: &str) -> bool {
+    !debug
+        .split(|character: char| !character.is_ascii_alphanumeric() && character != '-')
+        .any(|token| matches!(token, "NaN" | "inf" | "-inf"))
 }
 
 fn particle_emitter_is_valid(emitter: &crate::core::particle_system::ParticleEmitter) -> bool {
@@ -1302,6 +1305,13 @@ mod tests {
         assert!(!valid_gradient_stops(&colors, &[0.0, 1.1]));
         assert!(!valid_gradient_stops(&colors, &[0.0]));
         assert!(!valid_gradient_stops(&[[0.0, 0.0, 0.0, 1.0]], &[0.0]));
+    }
+
+    #[test]
+    fn effect_finite_check_does_not_match_field_names() {
+        assert!(effect_debug_is_finite("Bezier { influence: 0.333 }"));
+        assert!(!effect_debug_is_finite("GaussianBlur { radius: NaN }"));
+        assert!(!effect_debug_is_finite("GaussianBlur { radius: -inf }"));
     }
 
     #[test]
