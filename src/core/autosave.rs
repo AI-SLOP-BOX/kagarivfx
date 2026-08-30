@@ -164,10 +164,16 @@ impl AutosaveManager {
         for (_, path) in slots {
             if let Ok(json) = std::fs::read_to_string(&path) {
                 if let Ok(snapshot) = serde_json::from_str::<AutosaveSnapshot>(&json) {
-                    return Some(snapshot.project);
+                    if is_recoverable_project(&snapshot.project) {
+                        return Some(snapshot.project);
+                    }
+                    log::warn!("[Autosave] Skipping invalid project recovery file {:?}", path);
                 }
                 if let Ok(project) = serde_json::from_str::<Project>(&json) {
-                    return Some(project);
+                    if is_recoverable_project(&project) {
+                        return Some(project);
+                    }
+                    log::warn!("[Autosave] Skipping invalid project recovery file {:?}", path);
                 }
                 log::warn!("[Autosave] Skipping corrupt recovery file {:?}", path);
             }
@@ -207,6 +213,11 @@ impl AutosaveManager {
             let _ = std::fs::remove_file(self.slot_path(i));
         }
     }
+}
+
+fn is_recoverable_project(project: &Project) -> bool {
+    !project.compositions.is_empty()
+        && project.active_composition_idx < project.compositions.len()
 }
 
 /// Returns true if the path looks like a valid project JSON (cheap sanity check
@@ -349,6 +360,26 @@ mod tests {
         assert!(is_valid_project_file(&legacy_path));
         assert!(is_valid_project_file(&production_path));
         assert!(!is_valid_project_file(&invalid_path));
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn recovery_skips_project_with_invalid_active_composition() {
+        let dir = std::env::temp_dir().join(format!(
+            "aevfx_autosave_invalid_project_{}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let mut project = sample_project();
+        project.active_composition_idx = project.compositions.len();
+        std::fs::write(
+            dir.join("recovery_0.json"),
+            serde_json::to_string(&project).unwrap(),
+        )
+        .unwrap();
+
+        assert!(AutosaveManager::new(&dir).load_latest_recovery().is_none());
         let _ = std::fs::remove_dir_all(dir);
     }
 
