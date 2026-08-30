@@ -82,8 +82,10 @@ impl AutosaveManager {
             return None;
         }
         let path = self.write_snapshot(project, None);
-        self.dirty = false;
-        self.last_save = Instant::now();
+        if path.is_ok() {
+            self.dirty = false;
+            self.last_save = Instant::now();
+        }
         path.ok()
     }
 
@@ -106,8 +108,10 @@ impl AutosaveManager {
         let mut current_document = document.clone();
         current_document.project = project.clone();
         let path = self.write_snapshot(project, Some(&current_document));
-        self.dirty = false;
-        self.last_save = Instant::now();
+        if path.is_ok() {
+            self.dirty = false;
+            self.last_save = Instant::now();
+        }
         path.ok()
     }
 
@@ -277,6 +281,19 @@ mod tests {
         assert_eq!(manager.load_latest_recovery().unwrap().active_composition().name, "AutoSaveComp");
         assert!(manager.load_latest_production().is_none());
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn failed_tick_keeps_dirty_state_for_retry() {
+        let path = std::env::temp_dir().join(format!("aevfx_autosave_blocked_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&path);
+        std::fs::write(&path, "not a directory").unwrap();
+        let mut manager = AutosaveManager::new(&path).with_interval(Duration::from_secs(0));
+        manager.mark_dirty();
+        assert!(manager.tick(&sample_project()).is_none());
+        std::fs::remove_file(&path).unwrap();
+        assert!(manager.tick(&sample_project()).is_some());
+        let _ = std::fs::remove_dir_all(&path);
     }
 
     #[test]
