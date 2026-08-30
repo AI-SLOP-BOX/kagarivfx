@@ -103,6 +103,10 @@ fn finite_f32(value: f64) -> f32 {
     }
 }
 
+fn bounded_u32(value: i64, minimum: u32) -> u32 {
+    value.clamp(i64::from(minimum), i64::from(u32::MAX)) as u32
+}
+
 fn build_engine(log_sink: Arc<Mutex<Vec<String>>>) -> rhai::Engine {
     let mut engine = rhai::Engine::new();
     engine.set_max_operations(2_000_000);
@@ -129,10 +133,10 @@ fn build_engine(log_sink: Arc<Mutex<Vec<String>>>) -> rhai::Engine {
                 let comp = Composition::new(
                     format!("comp_{}", p.compositions.len()),
                     name.to_string(),
-                    w.max(1) as u32,
-                    ht.max(1) as u32,
-                    fps.max(1) as u32,
-                    dur.max(1) as u32,
+                    bounded_u32(w, 1),
+                    bounded_u32(ht, 1),
+                    bounded_u32(fps, 1),
+                    bounded_u32(dur, 1),
                 );
                 p.compositions.push(comp);
                 p.active_composition_idx = p.compositions.len() - 1;
@@ -189,7 +193,7 @@ fn build_engine(log_sink: Arc<Mutex<Vec<String>>>) -> rhai::Engine {
                 name.to_string(),
                 LayerType::Text {
                     text: text.to_string(),
-                    font_size: size.max(4) as u32,
+                    font_size: bounded_u32(size, 4),
                     color: [1.0, 1.0, 1.0, 1.0],
                     font_family: "Inter".to_string(),
                     tracking: 0.0,
@@ -272,7 +276,7 @@ fn build_engine(log_sink: Arc<Mutex<Vec<String>>>) -> rhai::Engine {
                 return;
             };
             let kf = Keyframe::new(
-                frame.max(0) as u32,
+                bounded_u32(frame, 0),
                 [finite_f32(x), finite_f32(y)],
                 InterpolationType::Linear,
             );
@@ -415,5 +419,29 @@ mod tests {
         let layer = project.active_composition().layers.last().unwrap();
         assert!(layer.transform.position.evaluate(1).iter().all(|v| v.is_finite()));
         assert!(layer.transform.opacity.evaluate(1).is_finite());
+    }
+
+    #[test]
+    fn test_script_bounds_extreme_integer_inputs() {
+        let mut project = Project::default();
+        run_script(
+            &mut project,
+            r#"
+                new_comp("bounded", 9223372036854775807, -5, 0, 9223372036854775807);
+                add_text("T", "safe", 9223372036854775807);
+                key_position("T", 9223372036854775807, 1.0, 2.0);
+            "#,
+        )
+        .unwrap();
+        let comp = project.active_composition();
+        assert_eq!(comp.width, u32::MAX);
+        assert_eq!(comp.height, 1);
+        assert_eq!(comp.fps, 1);
+        assert_eq!(comp.duration_frames, u32::MAX);
+        match &comp.layers[0].layer_type {
+            LayerType::Text { font_size, .. } => assert_eq!(*font_size, u32::MAX),
+            other => panic!("expected text layer, got {other:?}"),
+        }
+        assert_eq!(comp.layers[0].transform.position.evaluate(u32::MAX), [1.0, 2.0]);
     }
 }
