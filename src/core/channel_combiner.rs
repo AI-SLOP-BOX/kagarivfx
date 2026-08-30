@@ -57,7 +57,13 @@ pub fn apply_channel_combiner(
     height: u32,
     params: &ChannelCombinerParams,
 ) {
-    if pixels.len() != (width * height * 4) as usize {
+    let Some(pixel_count) = (width as usize)
+        .checked_mul(height as usize)
+        .filter(|&count| count <= usize::MAX / 4)
+    else {
+        return;
+    };
+    if width == 0 || height == 0 || pixels.len() != pixel_count * 4 {
         return;
     }
 
@@ -67,7 +73,11 @@ pub fn apply_channel_combiner(
         let delta = max - min;
 
         let l = (max + min) * 0.5;
-        let s = if delta == 0.0 { 0.0 } else { delta / (1.0 - (2.0 * l - 1.0).abs()) };
+        let s = if delta == 0.0 {
+            0.0
+        } else {
+            delta / (1.0 - (2.0 * l - 1.0).abs())
+        };
 
         let h = if delta == 0.0 {
             0.0
@@ -155,6 +165,19 @@ pub fn apply_channel_combiner(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_channel_combiner_rejects_dimension_overflow() {
+        let original = vec![42u8; 4];
+        let mut pixels = original.clone();
+        apply_channel_combiner(
+            &mut pixels,
+            u32::MAX,
+            u32::MAX,
+            &ChannelCombinerParams::default(),
+        );
+        assert_eq!(pixels, original);
+    }
 
     #[test]
     fn test_channel_combiner_luma_to_alpha() {
