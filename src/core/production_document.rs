@@ -285,6 +285,10 @@ fn validate_composition(
     if composition.background_color.iter().any(|channel| !channel.is_finite()) {
         return Err("composition background color must be finite".into());
     }
+    validate_camera(&composition.active_camera)?;
+    for camera in &composition.cameras {
+        validate_camera(camera)?;
+    }
     let mut layer_ids = HashSet::new();
     let mut layer_parents = HashMap::new();
     for layer in &composition.layers {
@@ -357,6 +361,29 @@ fn validate_precomp_references(
     }
     for nested in &composition.sub_compositions {
         validate_precomp_references(nested, composition_ids)?;
+    }
+    Ok(())
+}
+
+fn validate_camera(camera: &crate::core::timeline::Camera3D) -> Result<(), String> {
+    if camera.name.trim().is_empty()
+        || !camera.fov_degrees.is_finite()
+        || !(0.0..180.0).contains(&camera.fov_degrees)
+        || !camera.focus_distance.is_finite()
+        || camera.focus_distance <= 0.0
+        || !camera.aperture.is_finite()
+        || camera.aperture < 0.0
+        || !camera.dof_max_blur.is_finite()
+        || camera.dof_max_blur < 0.0
+        || (camera.dof_iris_sides != 0 && !(3..=32).contains(&camera.dof_iris_sides))
+    {
+        return Err("camera settings are invalid".into());
+    }
+    if !vector3_animation_is_finite(&camera.transform.position)
+        || !vector3_animation_is_finite(&camera.transform.rotation)
+        || !vector3_animation_is_finite(&camera.transform.scale)
+    {
+        return Err("camera transform animation values must be finite".into());
     }
     Ok(())
 }
@@ -695,6 +722,10 @@ mod tests {
         let mut invalid_project = Project::default();
         invalid_project.compositions[0].layers[0].transform_3d.position =
             crate::core::property::Animatable::new_constant([0.0, f32::INFINITY, 0.0]);
+        assert!(ProductionDocument::new(invalid_project).validate().is_err());
+
+        let mut invalid_project = Project::default();
+        invalid_project.compositions[0].active_camera.fov_degrees = f32::NAN;
         assert!(ProductionDocument::new(invalid_project).validate().is_err());
 
         let mut invalid_project = Project::default();
