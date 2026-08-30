@@ -96,6 +96,7 @@ pub mod tracker_engine;
 pub mod transform_effect;
 pub mod turbulent_displace;
 pub mod undo_manager;
+pub mod unified_time;
 pub mod vfx_graph_compiler;
 pub mod video_import;
 pub mod wiggle_paths;
