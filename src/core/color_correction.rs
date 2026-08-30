@@ -674,9 +674,12 @@ fn hsl_to_rgb(h: f32, s: f32, l: f32, out: &mut [f32; 3]) {
 }
 
 pub fn apply_hsl_adjust(pixels: &mut [u8], adj: &HslAdjust) {
-    let sat_mul = 1.0 + (adj.saturation / 100.0).clamp(-1.0, 1.0);
-    let l_shift = (adj.lightness / 100.0).clamp(-1.0, 1.0) * 0.5;
-    if adj.hue_deg.abs() < 1e-3 && (sat_mul - 1.0).abs() < 1e-6 && l_shift.abs() < 1e-6 {
+    let hue = if adj.hue_deg.is_finite() { adj.hue_deg } else { 0.0 };
+    let saturation = if adj.saturation.is_finite() { adj.saturation } else { 0.0 };
+    let lightness = if adj.lightness.is_finite() { adj.lightness } else { 0.0 };
+    let sat_mul = 1.0 + (saturation / 100.0).clamp(-1.0, 1.0);
+    let l_shift = (lightness / 100.0).clamp(-1.0, 1.0) * 0.5;
+    if hue.abs() < 1e-3 && (sat_mul - 1.0).abs() < 1e-6 && l_shift.abs() < 1e-6 {
         return;
     }
     for px in pixels.chunks_exact_mut(4) {
@@ -684,7 +687,7 @@ pub fn apply_hsl_adjust(pixels: &mut [u8], adj: &HslAdjust) {
         let g = px[1] as f32 / 255.0;
         let b = px[2] as f32 / 255.0;
         let (mut h, mut s, mut l) = rgb_to_hsl(r, g, b);
-        h = (h + adj.hue_deg).rem_euclid(360.0);
+        h = (h + hue).rem_euclid(360.0);
         s = (s * sat_mul).clamp(0.0, 1.0);
         l = (l + l_shift).clamp(0.0, 1.0);
         let mut rgb = [0.0f32; 3];
