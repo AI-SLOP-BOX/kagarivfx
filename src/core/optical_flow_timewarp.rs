@@ -666,6 +666,23 @@ pub fn project_pose3d_track_to_motion_tracks(
     }).collect()
 }
 
+pub fn markerless_pose3d_to_csv(pose: &MarkerlessPose3DTrack) -> String {
+    let count = pose.frames.iter().map(|frame| frame.joints.len()).max().unwrap_or(0);
+    let names = standard_humanoid_joint_names(count);
+    let mut output = String::from("frame,confidence");
+    for name in &names { output.push_str(&format!(",{}_x,{}_y,{}_z", name, name, name)); }
+    output.push('\n');
+    for frame in &pose.frames {
+        output.push_str(&format!("{},{}", frame.frame, frame.confidence));
+        for joint in 0..count {
+            let point = frame.joints.get(joint).copied().unwrap_or([f32::NAN; 3]);
+            output.push_str(&format!(",{},{},{}", point[0], point[1], point[2]));
+        }
+        output.push('\n');
+    }
+    output
+}
+
 pub trait Pose3DInferenceBackend {
     fn infer_joints_3d(&mut self, rgb: &[f32], width: u32, height: u32) -> Vec<([f32; 3], f32)>;
 }
@@ -1539,6 +1556,17 @@ mod tests {
         assert_eq!(tracks.len(), 1);
         assert_eq!(tracks[0].samples[0].frame, 10);
         assert_eq!(tracks[0].samples[1].position, [60.0, 40.0]);
+    }
+
+    #[test]
+    fn pose_3d_csv_preserves_joint_names_and_depth() {
+        let pose = MarkerlessPose3DTrack {
+            frames: vec![MarkerlessPose3DFrame { frame: 4, joints: vec![[1.0, 2.0, 3.0]], confidence: 0.75 }],
+            bones: vec![],
+        };
+        let csv = markerless_pose3d_to_csv(&pose);
+        assert!(csv.lines().next().unwrap().contains("hip_z"));
+        assert!(csv.lines().nth(1).unwrap().contains("4,0.75,1,2,3"));
     }
 
     #[test]
