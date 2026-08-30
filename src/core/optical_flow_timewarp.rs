@@ -580,6 +580,16 @@ pub trait PoseInferenceBackend {
     fn infer_joints(&mut self, frame_rgba: &[u8], width: u32, height: u32) -> Vec<([f32; 2], f32)>;
 }
 
+pub fn rgba_to_normalized_rgb(frame_rgba: &[u8], width: u32, height: u32) -> Option<Vec<f32>> {
+    let byte_len = (width as usize).checked_mul(height as usize)?.checked_mul(4)?;
+    if width == 0 || height == 0 || frame_rgba.len() != byte_len { return None; }
+    let mut rgb = Vec::with_capacity((width as usize) * (height as usize) * 3);
+    for pixel in frame_rgba.chunks_exact(4) {
+        rgb.extend([pixel[0] as f32 / 255.0, pixel[1] as f32 / 255.0, pixel[2] as f32 / 255.0]);
+    }
+    Some(rgb)
+}
+
 pub fn estimate_pose_with_backend<B: PoseInferenceBackend>(
     backend: &mut B,
     frames: &[&[u8]],
@@ -1284,6 +1294,19 @@ mod tests {
         let pose = estimate_pose_with_backend(&mut backend, &[&frame], 2, 2);
         assert!(pose.frames.is_empty());
         assert!(pose.bones.is_empty());
+    }
+
+    #[test]
+    fn pose_input_conversion_drops_alpha_and_normalizes_channels() {
+        let input = [0, 128, 255, 7, 255, 64, 32, 200];
+        let rgb = rgba_to_normalized_rgb(&input, 2, 1).unwrap();
+        assert_eq!(rgb.len(), 6);
+        assert_eq!(rgb[0], 0.0);
+        assert!((rgb[1] - 128.0 / 255.0).abs() < f32::EPSILON);
+        assert_eq!(rgb[2], 1.0);
+        assert!((rgb[3] - 1.0).abs() < f32::EPSILON);
+        assert!(rgba_to_normalized_rgb(&input, 0, 1).is_none());
+        assert!(rgba_to_normalized_rgb(&input[..7], 2, 1).is_none());
     }
 
     #[test]
