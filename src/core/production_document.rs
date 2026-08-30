@@ -389,12 +389,16 @@ fn validate_composition(
             source,
             frames_dir,
             frame_count,
+            audio_wav,
             speed,
             ..
         } = &layer.layer_type
         {
             if source.trim().is_empty()
                 || frames_dir.trim().is_empty()
+                || audio_wav
+                    .as_ref()
+                    .is_some_and(|path| path.trim().is_empty())
                 || *frame_count == 0
                 || !speed.is_finite()
                 || *speed <= 0.0
@@ -1487,6 +1491,23 @@ mod tests {
                     frames_dir: "frames".into(),
                     frame_count: 0,
                     audio_wav: None,
+                    speed: 1.0,
+                },
+                300,
+            ));
+        assert!(ProductionDocument::new(invalid_project).validate().is_err());
+
+        let mut invalid_project = Project::default();
+        invalid_project.compositions[0]
+            .layers
+            .push(crate::core::timeline::Layer::new(
+                "empty-video-audio".into(),
+                "Empty Video Audio".into(),
+                LayerType::Video {
+                    source: "video.mp4".into(),
+                    frames_dir: "frames".into(),
+                    frame_count: 1,
+                    audio_wav: Some("  ".into()),
                     speed: 1.0,
                 },
                 300,
