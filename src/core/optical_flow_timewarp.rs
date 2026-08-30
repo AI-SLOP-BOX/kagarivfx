@@ -404,6 +404,45 @@ pub fn name_and_connect_markerless_pose_track(
     named
 }
 
+pub fn repair_markerless_pose_track(
+    pose: &mut MarkerlessPoseTrack,
+    max_gap: usize,
+) -> usize {
+    if pose.frames.is_empty() || max_gap == 0 { return 0; }
+    let joint_count = pose.frames.iter().map(|frame| frame.joints.len()).min().unwrap_or(0);
+    let mut repaired = 0;
+    for joint in 0..joint_count {
+        let mut index = 0;
+        while index < pose.frames.len() {
+            if pose.frames[index].joints[joint].iter().all(|value| value.is_finite()) {
+                index += 1;
+                continue;
+            }
+            let start = index;
+            while index < pose.frames.len() && !pose.frames[index].joints[joint].iter().all(|value| value.is_finite()) {
+                index += 1;
+            }
+            let end = index;
+            if start == 0 || end >= pose.frames.len() || end - start > max_gap {
+                continue;
+            }
+            let before = pose.frames[start - 1].joints[joint];
+            let after = pose.frames[end].joints[joint];
+            let span = (end - start + 1) as f32;
+            for offset in 0..(end - start) {
+                let t = (offset + 1) as f32 / span;
+                pose.frames[start + offset].joints[joint] = [
+                    before[0] + (after[0] - before[0]) * t,
+                    before[1] + (after[1] - before[1]) * t,
+                ];
+                pose.frames[start + offset].confidence = (pose.frames[start + offset].confidence * 0.5).clamp(0.0, 1.0);
+                repaired += 1;
+            }
+        }
+    }
+    repaired
+}
+
 pub fn markerless_pose_to_csv(pose: &NamedMarkerlessPoseTrack) -> String {
     let mut output = String::from("frame,root_x,root_y,confidence");
     for name in &pose.joint_names {
@@ -754,5 +793,21 @@ mod tests {
         assert!(bvh.contains("HIERARCHY"));
         assert!(bvh.contains("Frames: 2"));
         assert!(bvh.contains("Frame Time:"));
+    }
+
+    #[test]
+    fn pose_repair_interpolates_short_occlusion_and_lowers_confidence() {
+        let mut pose = MarkerlessPoseTrack {
+            frames: vec![
+                MarkerlessPoseFrame { frame: 0, joints: vec![[0.0, 0.0]], root: [0.0, 0.0], confidence: 1.0 },
+                MarkerlessPoseFrame { frame: 1, joints: vec![[f32::NAN, f32::NAN]], root: [0.0, 0.0], confidence: 1.0 },
+                MarkerlessPoseFrame { frame: 2, joints: vec![[2.0, 0.0]], root: [2.0, 0.0], confidence: 1.0 },
+            ],
+            bones: Vec::new(),
+            bone_lengths: Vec::new(),
+        };
+        assert_eq!(repair_markerless_pose_track(&mut pose, 1), 1);
+        assert_eq!(pose.frames[1].joints[0], [1.0, 0.0]);
+        assert!(pose.frames[1].confidence < 1.0);
     }
 }
