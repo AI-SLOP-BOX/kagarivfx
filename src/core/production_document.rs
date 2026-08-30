@@ -5,6 +5,9 @@ use crate::core::automation_binding::{AutomationBinding, ProductionClock};
 use crate::core::timeline::Project;
 use crate::core::unified_time::TempoMap;
 use serde::{Deserialize, Serialize};
+use std::sync::atomic::{AtomicU64, Ordering};
+
+static SAVE_SEQUENCE: AtomicU64 = AtomicU64::new(0);
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AudioDocumentSettings {
@@ -100,7 +103,12 @@ impl ProductionDocument {
 
     pub fn save_atomic(&self, path: impl AsRef<std::path::Path>) -> Result<(), String> {
         let target = path.as_ref();
-        let temporary = target.with_extension("production.tmp");
+        let sequence = SAVE_SEQUENCE.fetch_add(1, Ordering::Relaxed);
+        let temporary = target.with_extension(format!(
+            "production.{}.{}.tmp",
+            std::process::id(),
+            sequence
+        ));
         let json = self.to_json()?;
         let mut file = std::fs::File::create(&temporary)
             .map_err(|error| format!("failed to create production document: {error}"))?;
