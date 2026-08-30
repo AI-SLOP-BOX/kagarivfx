@@ -367,6 +367,7 @@ fn validate_composition(
             }
         }
         if let LayerType::Shape {
+            shape_type,
             color,
             stroke_color,
             stroke_width,
@@ -385,6 +386,21 @@ fn validate_composition(
                 || *bevel_depth < 0.0
             {
                 return Err("shape layer settings are invalid".into());
+            }
+            if let crate::core::timeline::ShapeType::FreeformBezier {
+                points, tangents, ..
+            } = shape_type
+            {
+                if points
+                    .iter()
+                    .flatten()
+                    .chain(tangents.iter().flat_map(|(incoming, outgoing)| {
+                        incoming.iter().chain(outgoing.iter())
+                    }))
+                    .any(|value| !value.is_finite())
+                {
+                    return Err("shape geometry coordinates must be finite".into());
+                }
             }
         }
         let mut effect_ids = HashSet::new();
