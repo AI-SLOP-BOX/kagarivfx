@@ -188,7 +188,7 @@ impl AutosaveManager {
             .collect();
         slots.sort_by(|a, b| b.0.cmp(&a.0));
         for (_, path) in slots {
-            if let Ok(json) = std::fs::read_to_string(path) {
+            if let Ok(json) = std::fs::read_to_string(&path) {
                 if let Ok(snapshot) = serde_json::from_str::<AutosaveSnapshot>(&json) {
                     if let Some(document) = snapshot.production_document {
                         if document.validate().is_ok() && is_recoverable_project(&document.project) {
