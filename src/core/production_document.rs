@@ -504,6 +504,11 @@ fn validate_composition(
                 return Err("shape gradient settings are invalid".into());
             }
         }
+        if let LayerType::Particle { emitter } = &layer.layer_type {
+            if !particle_emitter_is_valid(emitter) {
+                return Err("particle emitter settings are invalid".into());
+            }
+        }
         let mut effect_ids = HashSet::new();
         for effect in &layer.effects {
             if effect.id.trim().is_empty()
@@ -665,6 +670,76 @@ fn valid_gradient_stops(colors: &[[f32; 4]], stops: &[f32]) -> bool {
         && stops
             .last()
             .is_some_and(|stop| stop.is_finite() && (0.0..=1.0).contains(stop))
+}
+
+fn particle_emitter_is_valid(emitter: &crate::core::particle_system::ParticleEmitter) -> bool {
+    let finite = [
+        emitter.rate,
+        emitter.lifetime,
+        emitter.lifetime_variance,
+        emitter.speed,
+        emitter.speed_variance,
+        emitter.spread_degrees,
+        emitter.emitter_size[0],
+        emitter.emitter_size[1],
+        emitter.gravity[0],
+        emitter.gravity[1],
+        emitter.wind[0],
+        emitter.wind[1],
+        emitter.turbulence,
+        emitter.color_start[0],
+        emitter.color_start[1],
+        emitter.color_start[2],
+        emitter.color_start[3],
+        emitter.color_end[0],
+        emitter.color_end[1],
+        emitter.color_end[2],
+        emitter.color_end[3],
+        emitter.size_start,
+        emitter.size_end,
+        emitter.opacity_start,
+        emitter.opacity_end,
+        emitter.rotation_speed,
+        emitter.rotation_start,
+        emitter.rotation_speed_variance,
+        emitter.wind_gust_strength,
+        emitter.wind_gust_frequency,
+        emitter.drag,
+        emitter.restitution,
+        emitter.surface_friction,
+        emitter.particle_diameter,
+        emitter.trail_taper,
+        emitter.vortex_strength,
+        emitter.vortex_center[0],
+        emitter.vortex_center[1],
+        emitter.attract_strength,
+        emitter.attract_center[0],
+        emitter.attract_center[1],
+        emitter.depth_range[0],
+        emitter.depth_range[1],
+        emitter.death_spawn_speed_scale,
+        emitter.death_spawn_life_scale,
+    ];
+    finite.iter().all(|value| value.is_finite())
+        && emitter.rate >= 0.0
+        && emitter.lifetime > 0.0
+        && emitter.lifetime_variance >= 0.0
+        && emitter.speed >= 0.0
+        && emitter.speed_variance >= 0.0
+        && emitter.emitter_size.iter().all(|value| *value >= 0.0)
+        && emitter.size_start >= 0.0
+        && emitter.size_end >= 0.0
+        && emitter.opacity_start >= 0.0
+        && emitter.opacity_start <= 1.0
+        && emitter.opacity_end >= 0.0
+        && emitter.opacity_end <= 1.0
+        && emitter.drag >= 0.0
+        && emitter.restitution >= 0.0
+        && emitter.surface_friction >= 0.0
+        && emitter.particle_diameter > 0.0
+        && emitter.depth_range[0] <= emitter.depth_range[1]
+        && emitter.death_spawn_speed_scale >= 0.0
+        && emitter.death_spawn_life_scale >= 0.0
 }
 
 fn vector_animation_is_finite(value: &crate::core::property::Animatable<[f32; 2]>) -> bool {
