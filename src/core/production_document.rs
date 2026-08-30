@@ -54,6 +54,7 @@ impl ProductionDocument {
     pub const MAX_MASKS_PER_LAYER: usize = 10_000;
     pub const MAX_COMPOSITION_FRAMES: u32 = 10_000_000;
     pub const MAX_ASSET_DURATION_SEC: f32 = 10_000_000.0;
+    pub const MAX_ASSET_STRING_LENGTH: usize = 4_096;
 
     pub fn new(project: Project) -> Self {
         Self {
@@ -126,6 +127,11 @@ impl ProductionDocument {
             {
                 return Err("asset ids and names must be non-empty; ids must be unique".into());
             }
+            if asset.id.len() > Self::MAX_ASSET_STRING_LENGTH
+                || asset.name.len() > Self::MAX_ASSET_STRING_LENGTH
+            {
+                return Err("asset ids and names are too long".into());
+            }
             if let Some(parent_folder) = &asset.parent_folder {
                 if !folder_ids.contains(parent_folder.as_str()) {
                     return Err("asset parent folder reference is invalid".into());
@@ -134,6 +140,9 @@ impl ProductionDocument {
             match &asset.item_type {
                 ProjectItemType::Folder { name } if name.trim().is_empty() => {
                     return Err("asset folder name must not be empty".into());
+                }
+                ProjectItemType::Folder { name } if name.len() > Self::MAX_ASSET_STRING_LENGTH => {
+                    return Err("asset folder name is too long".into());
                 }
                 ProjectItemType::Composition { comp_idx }
                     if *comp_idx >= self.project.compositions.len() =>
@@ -151,6 +160,13 @@ impl ProductionDocument {
                     if path.trim().is_empty() =>
                 {
                     return Err("media asset path must not be empty".into());
+                }
+                ProjectItemType::Image { path, .. }
+                | ProjectItemType::Video { path, .. }
+                | ProjectItemType::Audio { path, .. }
+                    if path.len() > Self::MAX_ASSET_STRING_LENGTH =>
+                {
+                    return Err("media asset path is too long".into());
                 }
                 ProjectItemType::Solid { color }
                     if color.iter().any(|channel| !channel.is_finite()) =>
@@ -1767,6 +1783,24 @@ mod tests {
             ProductionDocument::MAX_MASKS_PER_LAYER + 1,
             crate::core::mask::Mask::new_rect("mask".into(), "Mask".into(), 0.0, 0.0, 1.0, 1.0),
         );
+        assert!(document.validate().is_err());
+    }
+
+    #[test]
+    fn rejects_oversized_asset_metadata() {
+        let mut document = ProductionDocument::new(Project::default());
+        document
+            .project
+            .assets
+            .push(crate::core::timeline::ProjectItem::new(
+                "asset-id",
+                "Asset",
+                ProjectItemType::Image {
+                    path: "x".repeat(ProductionDocument::MAX_ASSET_STRING_LENGTH + 1),
+                    width: 1,
+                    height: 1,
+                },
+            ));
         assert!(document.validate().is_err());
     }
 
