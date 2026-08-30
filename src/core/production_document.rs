@@ -105,6 +105,22 @@ impl ProductionDocument {
             .map_err(|error| format!("failed to read production document: {error}"))?;
         Self::from_json(&json)
     }
+
+    /// Upgrade a legacy Project JSON into the unified production document.
+    /// Audio, tempo, and binding data receive safe defaults until the caller
+    /// supplies domain-specific values.
+    pub fn from_legacy_project_json(json: &str) -> Result<Self, String> {
+        let project = crate::core::project_migration::load_project_migrated(json)?;
+        Ok(Self::new(project))
+    }
+
+    pub fn project(&self) -> &Project {
+        &self.project
+    }
+
+    pub fn project_mut(&mut self) -> &mut Project {
+        &mut self.project
+    }
 }
 
 #[cfg(test)]
@@ -168,5 +184,16 @@ mod tests {
         assert!(!directory.join("session.production.tmp").exists());
 
         let _ = std::fs::remove_dir_all(directory);
+    }
+
+    #[test]
+    fn upgrades_legacy_project_json_with_safe_defaults() {
+        let legacy =
+            crate::core::project_migration::save_project_versioned(&Project::default()).unwrap();
+        let document = ProductionDocument::from_legacy_project_json(&legacy).unwrap();
+
+        assert_eq!(document.project().compositions.len(), 1);
+        assert_eq!(document.audio.sample_rate, 48_000);
+        assert!(document.bindings.is_empty());
     }
 }
