@@ -5,6 +5,7 @@ use crate::core::automation_binding::{AutomationBinding, ProductionClock};
 use crate::core::timeline::Project;
 use crate::core::unified_time::TempoMap;
 use serde::{Deserialize, Serialize};
+use std::collections::HashSet;
 use std::sync::atomic::{AtomicU64, Ordering};
 
 static SAVE_SEQUENCE: AtomicU64 = AtomicU64::new(0);
@@ -75,8 +76,9 @@ impl ProductionDocument {
         if self.project.active_composition_idx >= self.project.compositions.len() {
             return Err("production document active composition index is out of range".into());
         }
+        let mut composition_ids = HashSet::new();
         for composition in &self.project.compositions {
-            validate_composition(composition, 0)?;
+            validate_composition(composition, 0, &mut composition_ids)?;
         }
         if !(1..=384_000).contains(&self.audio.sample_rate) {
             return Err("audio sample rate is outside the supported range".into());
@@ -167,12 +169,16 @@ impl ProductionDocument {
 fn validate_composition(
     composition: &crate::core::timeline::Composition,
     depth: usize,
+    composition_ids: &mut HashSet<String>,
 ) -> Result<(), String> {
     if depth > 1024 {
         return Err("production document composition nesting is too deep".into());
     }
     if composition.id.trim().is_empty() {
         return Err("composition id must not be empty".into());
+    }
+    if !composition_ids.insert(composition.id.clone()) {
+        return Err(format!("duplicate composition id: {}", composition.id));
     }
     if !(1..=65_535).contains(&composition.width)
         || !(1..=65_535).contains(&composition.height)
@@ -194,7 +200,7 @@ fn validate_composition(
         return Err("composition background color must be finite".into());
     }
     for nested in &composition.sub_compositions {
-        validate_composition(nested, depth + 1)?;
+        validate_composition(nested, depth + 1, composition_ids)?;
     }
     Ok(())
 }
@@ -266,6 +272,11 @@ mod tests {
 
         let mut invalid_project = Project::default();
         invalid_project.compositions[0].id.clear();
+        assert!(ProductionDocument::new(invalid_project).validate().is_err());
+
+        let mut invalid_project = Project::default();
+        let duplicate = invalid_project.compositions[0].clone();
+        invalid_project.compositions.push(duplicate);
         assert!(ProductionDocument::new(invalid_project).validate().is_err());
     }
 
