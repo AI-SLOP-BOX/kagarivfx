@@ -30,6 +30,9 @@ impl Time {
     }
 
     pub fn from_frame(frame: i64, rate: FrameRate) -> Self {
+        if !rate.is_valid() {
+            return Self::ZERO;
+        }
         Self::new(
             frame.saturating_mul(i64::from(rate.denominator)),
             rate.numerator,
@@ -41,6 +44,9 @@ impl Time {
     }
 
     pub fn to_frame_floor(self, rate: FrameRate) -> i64 {
+        if !self.is_valid() || !rate.is_valid() {
+            return 0;
+        }
         div_floor(
             i128::from(self.numerator) * i128::from(rate.numerator),
             i128::from(self.denominator) * i128::from(rate.denominator),
@@ -71,6 +77,10 @@ impl FrameRate {
             numerator: numerator / divisor,
             denominator: denominator / divisor,
         })
+    }
+
+    pub fn is_valid(self) -> bool {
+        self.numerator != 0 && self.denominator != 0
     }
 }
 
@@ -240,6 +250,17 @@ mod tests {
     fn deserialized_zero_denominator_time_is_invalid() {
         let time: Time = serde_json::from_str(r#"{"numerator":1,"denominator":0}"#).unwrap();
         assert!(!time.is_valid());
+    }
+
+    #[test]
+    fn malformed_frame_rate_conversions_fail_closed() {
+        let malformed = FrameRate {
+            numerator: 24,
+            denominator: 0,
+        };
+        assert!(!malformed.is_valid());
+        assert_eq!(Time::from_frame(100, malformed), Time::ZERO);
+        assert_eq!(Time::new(1, 1).to_frame_floor(malformed), 0);
     }
 
     #[test]
