@@ -617,21 +617,35 @@ pub fn find_loop_candidates(
                 })
                 .sum::<f32>()
                 / pixels;
-            candidates.push(LoopCandidate {
+            let candidate = LoopCandidate {
                 start_frame: start,
                 end_frame: end,
                 error,
-            });
+            };
+            if candidates.len() < maximum_results {
+                candidates.push(candidate);
+            } else {
+                let worst = candidates
+                    .iter()
+                    .enumerate()
+                    .max_by(|(_, left), (_, right)| compare_loop_candidates(left, right));
+                if let Some((worst_index, worst)) = worst {
+                    if compare_loop_candidates(&candidate, worst).is_lt() {
+                        candidates[worst_index] = candidate;
+                    }
+                }
+            }
         }
     }
-    candidates.sort_by(|a, b| {
-        a.error
-            .total_cmp(&b.error)
-            .then_with(|| b.end_frame.cmp(&a.end_frame))
-            .then_with(|| a.start_frame.cmp(&b.start_frame))
-    });
-    candidates.truncate(maximum_results);
+    candidates.sort_by(compare_loop_candidates);
     candidates
+}
+
+fn compare_loop_candidates(a: &LoopCandidate, b: &LoopCandidate) -> std::cmp::Ordering {
+    a.error
+        .total_cmp(&b.error)
+        .then_with(|| b.end_frame.cmp(&a.end_frame))
+        .then_with(|| a.start_frame.cmp(&b.start_frame))
 }
 
 /// Returns silent regions using windowed RMS, merging adjacent silent windows.
