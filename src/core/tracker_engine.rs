@@ -16,9 +16,23 @@ impl TrackerEngine {
         search_radius: i32,
         minimum_confidence: f32,
     ) -> usize {
-        if layer.trackers.is_empty() || end_frame < start_frame {
+        if end_frame < start_frame {
             return 0;
         }
+        if layer.trackers.is_empty() {
+            let Some((first, _, width, height)) = Self::load_tracker_frames(layer, start_frame) else {
+                return 0;
+            };
+            let seeds = crate::core::optical_flow_timewarp::detect_markerless_features(
+                &first, width as u32, height as u32, 64, 12,
+            );
+            for (index, position) in seeds.into_iter().enumerate() {
+                layer.trackers.push(crate::core::timeline::TrackerPoint::new(
+                    format!("mocap_{index}"), format!("Mocap Feature {}", index + 1), position,
+                ));
+            }
+        }
+        if layer.trackers.is_empty() { return 0; }
         let mut frames = Vec::new();
         let mut width = 0u32;
         let mut height = 0u32;
