@@ -43,22 +43,30 @@ pub fn evaluate_shape_repeater(options: &ShapeRepeaterOptions) -> Vec<RepeaterCo
         return Vec::new();
     }
 
-    let mut instances = Vec::with_capacity(options.copies as usize);
-    let total = options.copies as f32;
+    let copies = options.copies.min(4096);
+    let mut instances = Vec::with_capacity(copies as usize);
+    let total = copies as f32;
+    let finite = |value: f32, fallback: f32| if value.is_finite() { value } else { fallback };
+    let offset = finite(options.offset, 0.0);
+    let position_offset = options.position_offset.map(|value| finite(value, 0.0));
+    let scale_offset = options.scale_offset.map(|value| finite(value, 1.0));
+    let rotation_offset = finite(options.rotation_offset_deg, 0.0);
+    let start_opacity = finite(options.start_opacity, 1.0);
+    let end_opacity = finite(options.end_opacity, 1.0);
 
-    for i in 0..options.copies {
-        let copy_idx = i as f32 + options.offset;
+    for i in 0..copies {
+        let copy_idx = i as f32 + offset;
 
         // Position offset per copy
-        let px = options.position_offset[0] * copy_idx;
-        let py = options.position_offset[1] * copy_idx;
+        let px = position_offset[0] * copy_idx;
+        let py = position_offset[1] * copy_idx;
 
         // Scale compound per copy
-        let sx = options.scale_offset[0].powf(copy_idx);
-        let sy = options.scale_offset[1].powf(copy_idx);
+        let sx = finite(scale_offset[0].powf(copy_idx), 0.0).clamp(-1.0e6, 1.0e6);
+        let sy = finite(scale_offset[1].powf(copy_idx), 0.0).clamp(-1.0e6, 1.0e6);
 
         // Rotation offset per copy
-        let rot_deg = options.rotation_offset_deg * copy_idx;
+        let rot_deg = rotation_offset * copy_idx;
         let rad = rot_deg.to_radians();
         let cos = rad.cos();
         let sin = rad.sin();
@@ -70,17 +78,17 @@ pub fn evaluate_shape_repeater(options: &ShapeRepeaterOptions) -> Vec<RepeaterCo
             [0.0, 0.0, 1.0],
         ];
 
-        let t_pos = [
-            [1.0, 0.0, px],
-            [0.0, 1.0, py],
-            [0.0, 0.0, 1.0],
-        ];
+        let t_pos = [[1.0, 0.0, px], [0.0, 1.0, py], [0.0, 0.0, 1.0]];
 
         let matrix = multiply_matrix_3x3(&t_pos, &s_rot);
 
         // Opacity interpolation across copies
-        let opacity_t = if options.copies > 1 { i as f32 / (total - 1.0) } else { 0.0 };
-        let opacity = options.start_opacity + (options.end_opacity - options.start_opacity) * opacity_t;
+        let opacity_t = if options.copies > 1 {
+            i as f32 / (total - 1.0)
+        } else {
+            0.0
+        };
+        let opacity = start_opacity + (end_opacity - start_opacity) * opacity_t;
 
         instances.push(RepeaterCopyInstance {
             copy_index: i,
