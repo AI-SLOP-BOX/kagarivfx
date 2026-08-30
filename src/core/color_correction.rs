@@ -24,7 +24,9 @@ impl Default for ToneCurve {
 impl ToneCurve {
     /// Identity curve.
     pub fn linear() -> Self {
-        Self { points: vec![[0.0, 0.0], [1.0, 1.0]] }
+        Self {
+            points: vec![[0.0, 0.0], [1.0, 1.0]],
+        }
     }
 
     /// Build from unsorted points; sorts by x and clamps to [0,1].
@@ -340,7 +342,13 @@ mod tests {
 
     #[test]
     fn test_s_curve_increases_contrast() {
-        let s = ToneCurve::new(vec![[0.0, 0.0], [0.25, 0.15], [0.5, 0.5], [0.75, 0.85], [1.0, 1.0]]);
+        let s = ToneCurve::new(vec![
+            [0.0, 0.0],
+            [0.25, 0.15],
+            [0.5, 0.5],
+            [0.75, 0.85],
+            [1.0, 1.0],
+        ]);
         assert!(s.eval(0.25) < 0.25, "shadow must darken");
         assert!(s.eval(0.75) > 0.75, "highlight must brighten");
         assert!((s.eval(0.5) - 0.5).abs() < 1e-4, "mid anchor preserved");
@@ -394,7 +402,11 @@ mod tests {
         let mut px = vec![128u8, 128, 128, 255];
         apply_color_balance(
             &mut px,
-            &ColorBalance { midtones: [50.0, 0.0, -50.0], preserve_luminosity: false, ..Default::default() },
+            &ColorBalance {
+                midtones: [50.0, 0.0, -50.0],
+                preserve_luminosity: false,
+                ..Default::default()
+            },
         );
         assert!(px[0] > 150, "red pushed up: {}", px[0]);
         assert!(px[2] < 110, "blue pulled down: {}", px[2]);
@@ -522,7 +534,9 @@ mod tests {
 /// and partially protects warm skin-tone hues. `amount` spans −100..100
 /// (negative desaturates).
 pub fn apply_vibrance(pixels: &mut [u8], amount: f32) {
-    let amt = (amount / 100.0).clamp(-1.0, 1.0);
+    let amt = if amount.is_finite() {
+        (amount / 100.0).clamp(-1.0, 1.0)
+    } else { 0.0 };
     if amt == 0.0 || pixels.is_empty() {
         return;
     }
@@ -565,13 +579,18 @@ pub struct WhiteBalance {
 
 impl Default for WhiteBalance {
     fn default() -> Self {
-        Self { temperature: 0.0, tint: 0.0 }
+        Self {
+            temperature: 0.0,
+            tint: 0.0,
+        }
     }
 }
 
 pub fn apply_white_balance(pixels: &mut [u8], wb: &WhiteBalance) {
-    let t = (wb.temperature / 100.0).clamp(-1.0, 1.0) * 0.25;
-    let gshift = -(wb.tint / 100.0).clamp(-1.0, 1.0) * 0.20;
+    let temperature = if wb.temperature.is_finite() { wb.temperature } else { 0.0 };
+    let tint = if wb.tint.is_finite() { wb.tint } else { 0.0 };
+    let t = (temperature / 100.0).clamp(-1.0, 1.0) * 0.25;
+    let gshift = -(tint / 100.0).clamp(-1.0, 1.0) * 0.20;
     if (t == 0.0 && gshift == 0.0) || pixels.is_empty() {
         return;
     }
@@ -600,7 +619,11 @@ pub struct HslAdjust {
 
 impl Default for HslAdjust {
     fn default() -> Self {
-        Self { hue_deg: 0.0, saturation: 0.0, lightness: 0.0 }
+        Self {
+            hue_deg: 0.0,
+            saturation: 0.0,
+            lightness: 0.0,
+        }
     }
 }
 
@@ -613,7 +636,11 @@ fn rgb_to_hsl(r: f32, g: f32, b: f32) -> (f32, f32, f32) {
     if d < 1e-6 {
         return (0.0, 0.0, l);
     }
-    let s = if l > 0.5 { d / (2.0 - max - min) } else { d / (max + min) };
+    let s = if l > 0.5 {
+        d / (2.0 - max - min)
+    } else {
+        d / (max + min)
+    };
     let h = if (max - r).abs() < 1e-6 {
         ((g - b) / d).rem_euclid(6.0)
     } else if (max - g).abs() < 1e-6 {
@@ -735,17 +762,35 @@ mod vibrance_wb_tests {
         let base = solid(4, 4, [128, 128, 128, 255]);
 
         let mut warm = base.clone();
-        apply_white_balance(&mut warm, &WhiteBalance { temperature: 80.0, tint: 0.0 });
+        apply_white_balance(
+            &mut warm,
+            &WhiteBalance {
+                temperature: 80.0,
+                tint: 0.0,
+            },
+        );
         assert!(warm[0] > 128, "warm raises R: {}", warm[0]);
         assert!(warm[2] < 128, "warm lowers B: {}", warm[2]);
         assert_eq!(warm[1], 128, "tint 0 keeps G");
 
         let mut cool = base.clone();
-        apply_white_balance(&mut cool, &WhiteBalance { temperature: -80.0, tint: 0.0 });
+        apply_white_balance(
+            &mut cool,
+            &WhiteBalance {
+                temperature: -80.0,
+                tint: 0.0,
+            },
+        );
         assert!(cool[0] < 128 && cool[2] > 128);
 
         let mut mag = base.clone();
-        apply_white_balance(&mut mag, &WhiteBalance { temperature: 0.0, tint: 60.0 });
+        apply_white_balance(
+            &mut mag,
+            &WhiteBalance {
+                temperature: 0.0,
+                tint: 60.0,
+            },
+        );
         assert!(mag[1] < 128, "positive tint reduces G (magenta)");
 
         let mut neutral = base.clone();
@@ -764,7 +809,13 @@ mod vibrance_wb_tests {
     #[test]
     fn test_hsl_full_desaturation_grays_out() {
         let mut img = solid(4, 4, [200, 40, 40, 255]);
-        apply_hsl_adjust(&mut img, &HslAdjust { saturation: -100.0, ..Default::default() });
+        apply_hsl_adjust(
+            &mut img,
+            &HslAdjust {
+                saturation: -100.0,
+                ..Default::default()
+            },
+        );
         assert_eq!(img[0], img[1], "R==G");
         assert_eq!(img[1], img[2], "G==B");
     }
@@ -773,28 +824,61 @@ mod vibrance_wb_tests {
     fn test_hsl_hue_rotation_moves_red_to_cyan_family() {
         // Pure red rotated +180° lands in the cyan family (low R, high G+B).
         let mut img = solid(2, 2, [255, 0, 0, 255]);
-        apply_hsl_adjust(&mut img, &HslAdjust { hue_deg: 180.0, ..Default::default() });
+        apply_hsl_adjust(
+            &mut img,
+            &HslAdjust {
+                hue_deg: 180.0,
+                ..Default::default()
+            },
+        );
         assert!(img[0] < 60, "R dropped: {}", img[0]);
         assert!(img[1] > 180 && img[2] > 180, "G/B high: {:?}", &img[..3]);
         // Rotation wraps: +360° returns to the original hue.
         let mut wrapped = solid(2, 2, [255, 0, 0, 255]);
-        apply_hsl_adjust(&mut wrapped, &HslAdjust { hue_deg: 360.0, ..Default::default() });
-        assert!(wrapped[0] > 230 && wrapped[1] < 25, "wrap keeps red: {:?}", &wrapped[..3]);
+        apply_hsl_adjust(
+            &mut wrapped,
+            &HslAdjust {
+                hue_deg: 360.0,
+                ..Default::default()
+            },
+        );
+        assert!(
+            wrapped[0] > 230 && wrapped[1] < 25,
+            "wrap keeps red: {:?}",
+            &wrapped[..3]
+        );
     }
 
     #[test]
     fn test_hsl_lightness_extremes_and_determinism() {
         let run = |light: f32| {
             let mut img = solid(4, 4, [120, 120, 120, 255]);
-            apply_hsl_adjust(&mut img, &HslAdjust { lightness: light, ..Default::default() });
+            apply_hsl_adjust(
+                &mut img,
+                &HslAdjust {
+                    lightness: light,
+                    ..Default::default()
+                },
+            );
             img
         };
         let bright = run(100.0);
-        assert!(bright[0] > 240, "+100 lightness → near white: {}", bright[0]);
+        assert!(
+            bright[0] > 240,
+            "+100 lightness → near white: {}",
+            bright[0]
+        );
         let dark = run(-100.0);
         assert!(dark[0] < 15, "-100 lightness → near black: {}", dark[0]);
         assert_eq!(run(20.0), run(20.0), "deterministic");
         // Empty buffer safe.
-        apply_hsl_adjust(&mut [], &HslAdjust { hue_deg: 90.0, saturation: 50.0, lightness: 10.0 });
+        apply_hsl_adjust(
+            &mut [],
+            &HslAdjust {
+                hue_deg: 90.0,
+                saturation: 50.0,
+                lightness: 10.0,
+            },
+        );
     }
 }
