@@ -95,6 +95,14 @@ pub fn parse_hex(hex: &str) -> [f32; 3] {
     [1.0, 1.0, 1.0]
 }
 
+fn finite_f32(value: f64) -> f32 {
+    if value.is_finite() {
+        value.clamp(f64::from(f32::MIN), f64::from(f32::MAX)) as f32
+    } else {
+        0.0
+    }
+}
+
 fn build_engine(log_sink: Arc<Mutex<Vec<String>>>) -> rhai::Engine {
     let mut engine = rhai::Engine::new();
     engine.set_max_operations(2_000_000);
@@ -217,7 +225,7 @@ fn build_engine(log_sink: Arc<Mutex<Vec<String>>>) -> rhai::Engine {
                 .position(|l| l.name == layer)
             {
                 p.compositions[idx].layers[i].transform.position =
-                    Animatable::new_constant([x as f32, y as f32]);
+                    Animatable::new_constant([finite_f32(x), finite_f32(y)]);
             }
         });
     });
@@ -232,7 +240,7 @@ fn build_engine(log_sink: Arc<Mutex<Vec<String>>>) -> rhai::Engine {
                 .position(|l| l.name == layer)
             {
                 p.compositions[idx].layers[i].transform.opacity =
-                    Animatable::new_constant(pct.clamp(0.0, 100.0) as f32);
+                    Animatable::new_constant(finite_f32(pct).clamp(0.0, 100.0));
             }
         });
     });
@@ -247,7 +255,7 @@ fn build_engine(log_sink: Arc<Mutex<Vec<String>>>) -> rhai::Engine {
                 .position(|l| l.name == layer)
             {
                 p.compositions[idx].layers[i].transform.opacity =
-                    Animatable::new_constant((pct as f64).clamp(0.0, 100.0) as f32);
+                    Animatable::new_constant(finite_f32(pct as f64).clamp(0.0, 100.0));
             }
         });
     });
@@ -265,7 +273,7 @@ fn build_engine(log_sink: Arc<Mutex<Vec<String>>>) -> rhai::Engine {
             };
             let kf = Keyframe::new(
                 frame.max(0) as u32,
-                [x as f32, y as f32],
+                [finite_f32(x), finite_f32(y)],
                 InterpolationType::Linear,
             );
             match &mut p.compositions[idx].layers[i].transform.position {
@@ -389,5 +397,23 @@ mod tests {
         "#;
         assert!(run_script(&mut project, script).is_ok());
         assert!(project.compositions.is_empty());
+    }
+
+    #[test]
+    fn test_transform_mutations_sanitize_nonfinite_numbers() {
+        let mut project = Project::default();
+        run_script(
+            &mut project,
+            r#"
+                add_text("T", "safe", 32);
+                set_position("T", parse_float("NaN"), parse_float("Inf"));
+                set_opacity("T", parse_float("NaN"));
+                key_position("T", 1, parse_float("NaN"), parse_float("Inf"));
+            "#,
+        )
+        .unwrap();
+        let layer = project.active_composition().layers.last().unwrap();
+        assert!(layer.transform.position.evaluate(1).iter().all(|v| v.is_finite()));
+        assert!(layer.transform.opacity.evaluate(1).is_finite());
     }
 }
