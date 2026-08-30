@@ -101,12 +101,24 @@ pub fn apply_lut_batch_f32(
 ) {
     let size = lut.size;
     for pixel in pixels.iter_mut() {
-        let (lr, lg, lb) = cache.get_or_insert(pixel[0], pixel[1], pixel[2], size, |r, g, b| {
+        let input = [pixel[0], pixel[1], pixel[2]].map(|value| {
+            if value.is_finite() { value } else { 0.0 }
+        });
+        let (lr, lg, lb) = cache.get_or_insert(input[0], input[1], input[2], size, |r, g, b| {
             lut.apply(r, g, b)
         });
-        pixel[0] = lr.clamp(0.0, 1.0);
-        pixel[1] = lg.clamp(0.0, 1.0);
-        pixel[2] = lb.clamp(0.0, 1.0);
+        pixel[0] = finite_clamped(lr);
+        pixel[1] = finite_clamped(lg);
+        pixel[2] = finite_clamped(lb);
+    }
+}
+
+#[inline]
+fn finite_clamped(value: f32) -> f32 {
+    if value.is_finite() {
+        value.clamp(0.0, 1.0)
+    } else {
+        0.0
     }
 }
 
@@ -209,5 +221,18 @@ mod tests {
         let original = pixels.clone();
         apply_lut_batch_cached(&lut, &mut pixels, &mut cache);
         assert_ne!(pixels[..3], original[..3]);
+    }
+
+    #[test]
+    fn test_batch_apply_f32_sanitizes_nonfinite_values() {
+        let lut = crate::core::ocio_color::Lut3D {
+            size: 2,
+            data: vec![0.5; 24],
+        };
+        let mut cache = LutCache::new(64);
+        let mut pixels = [[f32::NAN, f32::INFINITY, 0.5]];
+        apply_lut_batch_f32(&lut, &mut pixels, &mut cache);
+        assert!(pixels[0].iter().all(|value| value.is_finite()));
+        assert!(pixels[0].iter().all(|value| (0.0..=1.0).contains(value)));
     }
 }
