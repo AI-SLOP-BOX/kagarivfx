@@ -569,6 +569,27 @@ pub struct MarkerlessPoseTrack {
     pub bone_lengths: Vec<f32>,
 }
 
+pub fn pose_quality(pose: &MarkerlessPoseTrack, frame_index: usize) -> (usize, f32) {
+    let Some(frame) = pose.frames.get(frame_index) else { return (0, 0.0); };
+    let valid = frame.joints.iter().filter(|point| point.iter().all(|value| value.is_finite())).count();
+    let confidence = if frame.joints.is_empty() { 0.0 } else { frame.confidence.clamp(0.0, 1.0) };
+    (valid, confidence)
+}
+
+pub fn filter_pose_frames_by_quality(
+    pose: &mut MarkerlessPoseTrack,
+    minimum_joints: usize,
+    minimum_confidence: f32,
+) -> usize {
+    let threshold = if minimum_confidence.is_finite() { minimum_confidence.clamp(0.0, 1.0) } else { 0.0 };
+    let before = pose.frames.len();
+    pose.frames.retain(|frame| {
+        frame.joints.iter().filter(|point| point.iter().all(|value| value.is_finite())).count() >= minimum_joints
+            && frame.confidence.is_finite() && frame.confidence >= threshold
+    });
+    before - pose.frames.len()
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct NamedMarkerlessPoseTrack {
     pub joint_names: Vec<String>,
@@ -1125,5 +1146,8 @@ mod tests {
         assert_eq!(pose_root_acceleration(&pose, 0), [0.0, 0.0]);
         let events = detect_markerless_motion_events(&pose, 2.5, 0.5);
         assert!(events.iter().any(|event| event.kind == MarkerlessMotionEventKind::Peak));
+        assert_eq!(pose_quality(&pose, 1), (1, 1.0));
+        let mut filtered = pose.clone();
+        assert_eq!(filter_pose_frames_by_quality(&mut filtered, 1, 0.9), 0);
     }
 }
