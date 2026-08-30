@@ -183,6 +183,14 @@ pub fn track_markerless_motion(
             block_radius,
             search_radius,
         );
+        let reverse_flow = compute_dense_optical_flow(
+            frames[frame],
+            frames[frame - 1],
+            width,
+            height,
+            block_radius,
+            search_radius,
+        );
         for (index, position) in positions.iter_mut().enumerate() {
             let x = position[0]
                 .round()
@@ -192,13 +200,20 @@ pub fn track_markerless_motion(
                 .clamp(0.0, height.saturating_sub(1) as f32) as u32;
             let vector = flow.get(x, y);
             let magnitude = vector[0].hypot(vector[1]);
-            let confidence = if magnitude.is_finite() {
-                (1.0 - magnitude / (search_radius.max(1) as f32 + 1.0)).clamp(0.0, 1.0)
+            let predicted = [
+                (position[0] + vector[0]).clamp(0.0, width.saturating_sub(1) as f32),
+                (position[1] + vector[1]).clamp(0.0, height.saturating_sub(1) as f32),
+            ];
+            let reverse = reverse_flow.get(predicted[0].round() as u32, predicted[1].round() as u32);
+            let consistency = (vector[0] + reverse[0]).hypot(vector[1] + reverse[1]);
+            let confidence = if magnitude.is_finite() && consistency.is_finite() {
+                let motion_score = 1.0 - magnitude / (search_radius.max(1) as f32 + 1.0);
+                let consistency_score = 1.0 - consistency / (search_radius.max(1) as f32 + 1.0);
+                motion_score.min(consistency_score).clamp(0.0, 1.0)
             } else {
                 0.0
             };
-            position[0] = (position[0] + vector[0]).clamp(0.0, width.saturating_sub(1) as f32);
-            position[1] = (position[1] + vector[1]).clamp(0.0, height.saturating_sub(1) as f32);
+            *position = predicted;
             tracks[index].samples.push(MarkerlessMotionSample {
                 frame: frame as u32,
                 position: *position,
