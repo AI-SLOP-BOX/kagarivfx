@@ -306,6 +306,12 @@ fn validate_composition(
                 return Err("effect ids must be non-empty and unique within a layer".into());
             }
         }
+        let mut mask_ids = HashSet::new();
+        for mask in &layer.masks {
+            if mask.id.trim().is_empty() || !mask_ids.insert(mask.id.clone()) {
+                return Err("mask ids must be non-empty and unique within a layer".into());
+            }
+        }
     }
     for layer_id in layer_parents.keys() {
         let mut current = Some(*layer_id);
@@ -581,6 +587,20 @@ mod tests {
         invalid_project.compositions[0].layers[0]
             .effects
             .extend([effect.clone(), effect]);
+        assert!(ProductionDocument::new(invalid_project).validate().is_err());
+
+        let mut invalid_project = Project::default();
+        let mask = crate::core::mask::Mask::new_rect(
+            "duplicate-mask".into(),
+            "Mask".into(),
+            0.0,
+            0.0,
+            100.0,
+            100.0,
+        );
+        invalid_project.compositions[0].layers[0]
+            .masks
+            .extend([mask.clone(), mask]);
         assert!(ProductionDocument::new(invalid_project).validate().is_err());
     }
 
