@@ -269,6 +269,47 @@ pub fn apply_markerless_track_to_tracker_point(
     count
 }
 
+pub fn smooth_markerless_track(
+    track: &MarkerlessMotionTrack,
+    radius: usize,
+) -> MarkerlessMotionTrack {
+    if track.samples.len() < 2 || radius == 0 {
+        return track.clone();
+    }
+    let mut samples = Vec::with_capacity(track.samples.len());
+    for (index, sample) in track.samples.iter().enumerate() {
+        let start = index.saturating_sub(radius);
+        let end = (index + radius + 1).min(track.samples.len());
+        let mut weighted_position = [0.0f32; 2];
+        let mut weight_sum = 0.0f32;
+        let mut confidence_sum = 0.0f32;
+        for neighbor in &track.samples[start..end] {
+            let weight = neighbor.confidence.clamp(0.0, 1.0).max(0.01);
+            if neighbor.position.iter().all(|value| value.is_finite()) {
+                weighted_position[0] += neighbor.position[0] * weight;
+                weighted_position[1] += neighbor.position[1] * weight;
+                confidence_sum += neighbor.confidence.clamp(0.0, 1.0) * weight;
+                weight_sum += weight;
+            }
+        }
+        let position = if weight_sum > 0.0 {
+            [weighted_position[0] / weight_sum, weighted_position[1] / weight_sum]
+        } else {
+            sample.position
+        };
+        samples.push(MarkerlessMotionSample {
+            frame: sample.frame,
+            position,
+            confidence: if weight_sum > 0.0 {
+                (confidence_sum / weight_sum).clamp(0.0, 1.0)
+            } else {
+                0.0
+            },
+        });
+    }
+    MarkerlessMotionTrack { samples }
+}
+
 /// Interpolates an intermediate frame at fractional position `t` (0.0 .. 1.0)
 /// using bidirectional forward and backward flow fields.
 pub fn interpolate_timewarp_frame(
@@ -459,5 +500,20 @@ mod tests {
             1
         )
         .is_empty());
+    }
+
+    #[test]
+    fn markerless_smoothing_reduces_low_confidence_spike() {
+        let track = MarkerlessMotionTrack {
+            samples: vec![
+                MarkerlessMotionSample { frame: 0, position: [0.0, 0.0], confidence: 1.0 },
+                MarkerlessMotionSample { frame: 1, position: [10.0, 0.0], confidence: 0.1 },
+                MarkerlessMotionSample { frame: 2, position: [2.0, 0.0], confidence: 1.0 },
+            ],
+        };
+        let smoothed = smooth_markerless_track(&track, 1);
+        assert!(smoothed.samples[1].position[0] < 6.0);
+        assert_eq!(smoothed.samples[0].frame, 0);
+        assert_eq!(smoothed.samples[2].frame, 2);
     }
 }
