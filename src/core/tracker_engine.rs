@@ -16,17 +16,36 @@ impl TrackerEngine {
         search_radius: i32,
         minimum_confidence: f32,
     ) -> usize {
-        let tracker_count = layer.trackers.len();
+        if layer.trackers.is_empty() || end_frame < start_frame {
+            return 0;
+        }
+        let mut frames = Vec::new();
+        let mut width = 0u32;
+        let mut height = 0u32;
+        for frame in start_frame..=end_frame {
+            let Some((current, next, w, h)) = Self::load_tracker_frames(layer, frame) else {
+                return 0;
+            };
+            width = w as u32;
+            height = h as u32;
+            frames.push(current);
+            if frame == end_frame {
+                frames.push(next);
+            }
+        }
+        let seeds = layer
+            .trackers
+            .iter()
+            .map(|tracker| tracker.position.evaluate(start_frame))
+            .collect::<Vec<_>>();
+        let refs = frames.iter().map(Vec::as_slice).collect::<Vec<_>>();
+        let tracks = crate::core::optical_flow_timewarp::track_markerless_motion(
+            &refs, width, height, &seeds, block_radius, search_radius,
+        );
         let mut total = 0;
-        for tracker_idx in 0..tracker_count {
-            total += Self::analyze_markerless_track(
-                layer,
-                tracker_idx,
-                start_frame,
-                end_frame,
-                block_radius,
-                search_radius,
-                minimum_confidence,
+        for (tracker, track) in layer.trackers.iter_mut().zip(tracks.iter()) {
+            total += crate::core::optical_flow_timewarp::apply_markerless_track_to_tracker_point(
+                tracker, track, minimum_confidence,
             );
         }
         total
