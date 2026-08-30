@@ -246,6 +246,31 @@ mod tests {
     }
 
     #[test]
+    fn failed_atomic_replace_removes_temporary_document() {
+        let directory = std::env::temp_dir().join(format!(
+            "aevfx_production_document_failure_{}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&directory);
+        std::fs::create_dir_all(&directory).unwrap();
+        let target = directory.join("session.aura");
+        std::fs::create_dir(&target).unwrap();
+
+        let document = ProductionDocument::new(Project::default());
+        assert!(document.save_atomic(&target).is_err());
+
+        let temporary_files = std::fs::read_dir(&directory)
+            .unwrap()
+            .filter_map(Result::ok)
+            .map(|entry| entry.file_name())
+            .filter(|name| name.to_string_lossy().starts_with("session.production."))
+            .collect::<Vec<_>>();
+        assert!(temporary_files.is_empty(), "temporary files: {temporary_files:?}");
+
+        let _ = std::fs::remove_dir_all(directory);
+    }
+
+    #[test]
     fn upgrades_legacy_project_json_with_safe_defaults() {
         let legacy =
             crate::core::project_migration::save_project_versioned(&Project::default()).unwrap();
