@@ -651,6 +651,21 @@ pub fn project_pose3d_point_with_rotation(
     projected.iter().all(|value| value.is_finite()).then_some(projected)
 }
 
+pub fn project_pose3d_track_to_motion_tracks(
+    pose: &MarkerlessPose3DTrack,
+    camera: PoseCameraModel,
+    rotation_degrees: [f32; 3],
+) -> Vec<MarkerlessMotionTrack> {
+    let joint_count = pose.frames.iter().map(|frame| frame.joints.len()).max().unwrap_or(0);
+    (0..joint_count).map(|joint| MarkerlessMotionTrack {
+        samples: pose.frames.iter().filter_map(|frame| {
+            let point = *frame.joints.get(joint)?;
+            let position = project_pose3d_point_with_rotation(point, camera, rotation_degrees)?;
+            Some(MarkerlessMotionSample { frame: frame.frame, position, confidence: frame.confidence })
+        }).collect(),
+    }).collect()
+}
+
 pub trait Pose3DInferenceBackend {
     fn infer_joints_3d(&mut self, rgb: &[f32], width: u32, height: u32) -> Vec<([f32; 3], f32)>;
 }
@@ -1510,6 +1525,20 @@ mod tests {
         assert_eq!(project_pose3d_point([f32::NAN, 2.0, 10.0], camera), None);
         let rotated = project_pose3d_point_with_rotation([1.0, 0.0, 10.0], camera, [0.0, 90.0, 0.0]);
         assert!(rotated.is_none());
+    }
+
+    #[test]
+    fn pose_3d_track_projection_returns_editable_motion_tracks() {
+        let pose = MarkerlessPose3DTrack {
+            frames: vec![
+                MarkerlessPose3DFrame { frame: 10, joints: vec![[0.0, 0.0, 10.0]], confidence: 0.8 },
+                MarkerlessPose3DFrame { frame: 12, joints: vec![[1.0, 0.0, 10.0]], confidence: 0.9 },
+            ], bones: vec![],
+        };
+        let tracks = project_pose3d_track_to_motion_tracks(&pose, PoseCameraModel { focal_length: 100.0, principal_point: [50.0, 40.0], position: [0.0, 0.0, 0.0] }, [0.0; 3]);
+        assert_eq!(tracks.len(), 1);
+        assert_eq!(tracks[0].samples[0].frame, 10);
+        assert_eq!(tracks[0].samples[1].position, [60.0, 40.0]);
     }
 
     #[test]
