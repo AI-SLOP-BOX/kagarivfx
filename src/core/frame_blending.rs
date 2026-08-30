@@ -13,8 +13,8 @@
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FrameBlendMode {
     Off,
-    FrameMix,     // Simple linear alpha cross-fade
-    PixelMotion,  // Motion-vector interpolation
+    FrameMix,    // Simple linear alpha cross-fade
+    PixelMotion, // Motion-vector interpolation
 }
 
 /// Evaluates fractional frame indices and weights for time-stretched playback.
@@ -23,9 +23,11 @@ pub fn evaluate_frame_blend_weights(
     fps: u32,
     blend_mode: FrameBlendMode,
 ) -> ((u32, f32), (u32, f32)) {
-    let exact_frame = (time_sec * fps as f32).max(0.0);
+    let exact_frame = if time_sec.is_finite() && fps > 0 {
+        (time_sec.max(0.0) * fps as f32).min(u32::MAX as f32)
+    } else { 0.0 };
     let f0 = exact_frame.floor() as u32;
-    let f1 = f0 + 1;
+    let f1 = f0.saturating_add(1);
     let frac = exact_frame - f0 as f32;
 
     match blend_mode {
@@ -45,7 +47,9 @@ pub fn evaluate_time_remap_seconds(
     source_total_frames: u32,
     blend_mode: FrameBlendMode,
 ) -> ((u32, f32), (u32, f32)) {
-    let exact_frame = (remap_sec * source_fps as f32).max(0.0);
+    let exact_frame = if remap_sec.is_finite() && source_fps > 0 {
+        (remap_sec.max(0.0) * source_fps as f32).min(u32::MAX as f32)
+    } else { 0.0 };
     let max_frame = source_total_frames.saturating_sub(1);
 
     let f0 = (exact_frame.floor() as u32).min(max_frame);
@@ -54,9 +58,7 @@ pub fn evaluate_time_remap_seconds(
 
     match blend_mode {
         FrameBlendMode::Off => ((f0, 1.0), (f0, 0.0)),
-        FrameBlendMode::FrameMix | FrameBlendMode::PixelMotion => {
-            ((f0, 1.0 - frac), (f1, frac))
-        }
+        FrameBlendMode::FrameMix | FrameBlendMode::PixelMotion => ((f0, 1.0 - frac), (f1, frac)),
     }
 }
 
@@ -64,6 +66,8 @@ pub fn evaluate_time_remap_seconds(
 /// semi-transparent edges never produce dark halos (the naive per-channel lerp
 /// does).
 pub fn blend_pixel_buffers(buf0: &[u8], w0: f32, buf1: &[u8], w1: f32, out: &mut [u8]) {
+    let w0 = if w0.is_finite() { w0.max(0.0) } else { 0.0 };
+    let w1 = if w1.is_finite() { w1.max(0.0) } else { 0.0 };
     let len = buf0.len().min(buf1.len()).min(out.len());
     let n_px = len / 4;
     for i in 0..n_px {
@@ -78,8 +82,7 @@ pub fn blend_pixel_buffers(buf0: &[u8], w0: f32, buf1: &[u8], w1: f32, out: &mut
             continue;
         }
         for c in 0..3 {
-            let v = (buf0[idx + c] as f32 / 255.0 * a0 + buf1[idx + c] as f32 / 255.0 * a1)
-                / out_a;
+            let v = (buf0[idx + c] as f32 / 255.0 * a0 + buf1[idx + c] as f32 / 255.0 * a1) / out_a;
             out[idx + c] = (v.clamp(0.0, 1.0) * 255.0).round() as u8;
         }
         out[idx + 3] = (out_a.clamp(0.0, 1.0) * 255.0).round() as u8;
@@ -100,7 +103,11 @@ pub struct PixelMotionOptions {
 
 impl Default for PixelMotionOptions {
     fn default() -> Self {
-        Self { block_size: 16, search_radius: 6, occlusion_threshold: 40.0 }
+        Self {
+            block_size: 16,
+            search_radius: 6,
+            occlusion_threshold: 40.0,
+        }
     }
 }
 
@@ -119,11 +126,14 @@ pub fn blend_pixel_motion(
     height: u32,
     options: &PixelMotionOptions,
 ) -> Vec<u8> {
-    let n_bytes = (width as usize) * (height as usize) * 4;
-    if buf0.len() != n_bytes || buf1.len() != n_bytes || n_bytes == 0 {
+    let Some(n_bytes) = (width as usize)
+        .checked_mul(height as usize)
+        .and_then(|count| count.checked_mul(4))
+    else { return buf0.to_vec(); };
+    if width == 0 || height == 0 || buf0.len() != n_bytes || buf1.len() != n_bytes || n_bytes == 0 {
         return buf0.to_vec();
     }
-    let t = t.clamp(0.0, 1.0);
+    let t = if t.is_finite() { t.clamp(0.0, 1.0) } else { 0.0 };
 
     let bs = options.block_size.clamp(4, 128).max(1) as usize;
     let rad = options.search_radius.min(32) as i32;
@@ -174,7 +184,11 @@ pub fn blend_pixel_motion(
                 for dx in -rad..=rad {
                     let sx = bx as i32 + dx;
                     let sy = by as i32 + dy;
-                    if sx < 0 || sy < 0 || sx + bs as i32 > width as i32 || sy + bs as i32 > height as i32 {
+                    if sx < 0
+                        || sy < 0
+                        || sx + bs as i32 > width as i32
+                        || sy + bs as i32 > height as i32
+                    {
                         continue;
                     }
                     let mut sad = 0.0f64;
@@ -193,7 +207,11 @@ pub fn blend_pixel_motion(
                             count += 1;
                         }
                     }
-                    let mean = if count > 0 { (sad / (count as f64 * 3.0)) as f32 } else { f32::MAX };
+                    let mean = if count > 0 {
+                        (sad / (count as f64 * 3.0)) as f32
+                    } else {
+                        f32::MAX
+                    };
                     if mean < best_sad {
                         best_sad = mean;
                         best_dx = dx;
@@ -206,10 +224,14 @@ pub fn blend_pixel_motion(
 
             for yy in 0..bs {
                 let py = by + yy;
-                if py >= height as usize { break; }
+                if py >= height as usize {
+                    break;
+                }
                 for xx in 0..bs {
                     let px = bx + xx;
-                    if px >= width as usize { break; }
+                    if px >= width as usize {
+                        break;
+                    }
                     let qx = px as f32;
                     let qy = py as f32;
                     let rgba = if occluded {
@@ -219,7 +241,11 @@ pub fn blend_pixel_motion(
                         // A f0 block matching f1 at offset d means its content
                         // sits at q - d*t (from f0) / q + d*(1-t) (from f1).
                         let s0 = sample(buf0, qx - best_dx as f32 * t, qy - best_dy as f32 * t);
-                        let s1 = sample(buf1, qx + best_dx as f32 * (1.0 - t), qy + best_dy as f32 * (1.0 - t));
+                        let s1 = sample(
+                            buf1,
+                            qx + best_dx as f32 * (1.0 - t),
+                            qy + best_dy as f32 * (1.0 - t),
+                        );
                         mix_px(s0, s1)
                     };
                     let idx = (py * width as usize + px) * 4;
@@ -304,7 +330,11 @@ mod tests {
             0.5,
             32,
             32,
-            &PixelMotionOptions { block_size: 8, search_radius: 10, ..Default::default() },
+            &PixelMotionOptions {
+                block_size: 8,
+                search_radius: 10,
+                ..Default::default()
+            },
         );
 
         // Motion compensation keeps the interpolated square much brighter than
@@ -324,7 +354,11 @@ mod tests {
     fn test_pixel_motion_endpoints_recover_inputs() {
         let f0 = moving_square(6);
         let f1 = moving_square(14);
-        let opts = PixelMotionOptions { block_size: 8, search_radius: 10, ..Default::default() };
+        let opts = PixelMotionOptions {
+            block_size: 8,
+            search_radius: 10,
+            ..Default::default()
+        };
         let at0 = blend_pixel_motion(&f0, &f1, 0.0, 32, 32, &opts);
         let at1 = blend_pixel_motion(&f0, &f1, 1.0, 32, 32, &opts);
         let diff0: u64 = at0
@@ -332,13 +366,21 @@ mod tests {
             .zip(f0.chunks(4))
             .map(|(a, b)| (a[0] as i64 - b[0] as i64).unsigned_abs())
             .sum();
-        assert!(diff0 < 500, "t=0 should reconstruct frame 0, diff={}", diff0);
+        assert!(
+            diff0 < 500,
+            "t=0 should reconstruct frame 0, diff={}",
+            diff0
+        );
         let diff1: u64 = at1
             .chunks(4)
             .zip(f1.chunks(4))
             .map(|(a, b)| (a[0] as i64 - b[0] as i64).unsigned_abs())
             .sum();
-        assert!(diff1 < 500, "t=1 should reconstruct frame 1, diff={}", diff1);
+        assert!(
+            diff1 < 500,
+            "t=1 should reconstruct frame 1, diff={}",
+            diff1
+        );
     }
 
     #[test]
@@ -374,14 +416,16 @@ mod tests {
     fn test_time_remap_seconds_evaluation() {
         // 30fps source, 100 frames total.
         // Remap to 1.5 seconds -> exact frame 45.0
-        let ((f0, w0), (f1, w1)) = evaluate_time_remap_seconds(1.5, 30, 100, FrameBlendMode::FrameMix);
+        let ((f0, w0), (f1, w1)) =
+            evaluate_time_remap_seconds(1.5, 30, 100, FrameBlendMode::FrameMix);
         assert_eq!(f0, 45);
         assert_eq!(f1, 46);
         assert_eq!(w0, 1.0);
         assert_eq!(w1, 0.0);
 
         // Remap to 1.55 seconds -> frame 46.5
-        let ((f0, w0), (f1, w1)) = evaluate_time_remap_seconds(1.55, 30, 100, FrameBlendMode::FrameMix);
+        let ((f0, w0), (f1, w1)) =
+            evaluate_time_remap_seconds(1.55, 30, 100, FrameBlendMode::FrameMix);
         assert_eq!(f0, 46);
         assert_eq!(f1, 47);
         assert!((w0 - 0.5).abs() < 1e-4);
