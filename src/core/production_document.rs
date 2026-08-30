@@ -308,6 +308,12 @@ fn validate_composition(
         {
             return Err("layer transform animation values must be finite".into());
         }
+        if !vector3_animation_is_finite(&layer.transform_3d.position)
+            || !vector3_animation_is_finite(&layer.transform_3d.rotation)
+            || !vector3_animation_is_finite(&layer.transform_3d.scale)
+        {
+            return Err("layer 3D transform animation values must be finite".into());
+        }
         let mut effect_ids = HashSet::new();
         for effect in &layer.effects {
             if effect.id.trim().is_empty() || !effect_ids.insert(effect.id.clone()) {
@@ -402,6 +408,18 @@ fn scalar_animation_is_finite(value: &crate::core::property::Animatable<f32>) ->
 
 fn vector_animation_is_finite(
     value: &crate::core::property::Animatable<[f32; 2]>,
+) -> bool {
+    match value {
+        crate::core::property::Animatable::Constant(value) =>
+            value.iter().all(|component| component.is_finite()),
+        crate::core::property::Animatable::Animated(keyframes) => keyframes
+            .iter()
+            .all(|keyframe| keyframe.value.iter().all(|component| component.is_finite())),
+    }
+}
+
+fn vector3_animation_is_finite(
+    value: &crate::core::property::Animatable<[f32; 3]>,
 ) -> bool {
     match value {
         crate::core::property::Animatable::Constant(value) =>
@@ -672,6 +690,11 @@ mod tests {
         let mut invalid_project = Project::default();
         invalid_project.compositions[0].layers[0].transform.position =
             crate::core::property::Animatable::new_constant([f32::NAN, 0.0]);
+        assert!(ProductionDocument::new(invalid_project).validate().is_err());
+
+        let mut invalid_project = Project::default();
+        invalid_project.compositions[0].layers[0].transform_3d.position =
+            crate::core::property::Animatable::new_constant([0.0, f32::INFINITY, 0.0]);
         assert!(ProductionDocument::new(invalid_project).validate().is_err());
 
         let mut invalid_project = Project::default();
