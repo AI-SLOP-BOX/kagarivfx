@@ -130,18 +130,30 @@ pub fn detect_markerless_features(
     min_spacing: u32,
 ) -> Vec<[f32; 2]> {
     let Some(size) = (width as usize).checked_mul(height as usize).and_then(|v| v.checked_mul(4)) else { return Vec::new(); };
-    if width < 3 || height < 3 || frame_rgba.len() != size || max_features == 0 { return Vec::new(); }
+    if width < 5 || height < 5 || frame_rgba.len() != size || max_features == 0 { return Vec::new(); }
     let luma = |x: u32, y: u32| -> f32 {
         let i = (y as usize * width as usize + x as usize) * 4;
         0.299 * frame_rgba[i] as f32 + 0.587 * frame_rgba[i + 1] as f32 + 0.114 * frame_rgba[i + 2] as f32
     };
     let mut candidates = Vec::new();
-    for y in 1..height - 1 {
-        for x in 1..width - 1 {
+    for y in 2..height - 2 {
+        for x in 2..width - 2 {
             let gx = luma(x + 1, y) - luma(x - 1, y);
             let gy = luma(x, y + 1) - luma(x, y - 1);
             let score = gx * gx + gy * gy;
-            if score.is_finite() && score > 1.0 { candidates.push((score, [x as f32, y as f32])); }
+            let is_local_max = (-1..=1).all(|dy| {
+                (-1..=1).all(|dx| {
+                    if dx == 0 && dy == 0 { return true; }
+                    let nx = (x as i32 + dx) as u32;
+                    let ny = (y as i32 + dy) as u32;
+                    let ngx = luma(nx + 1, ny) - luma(nx - 1, ny);
+                    let ngy = luma(nx, ny + 1) - luma(nx, ny - 1);
+                    score >= ngx * ngx + ngy * ngy
+                })
+            });
+            if score.is_finite() && score > 1.0 && is_local_max {
+                candidates.push((score, [x as f32, y as f32]));
+            }
         }
     }
     candidates.sort_by(|a, b| b.0.total_cmp(&a.0));
