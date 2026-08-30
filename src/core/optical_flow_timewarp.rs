@@ -269,6 +269,9 @@ pub fn track_markerless_motion(
             });
         }
     }
+    for track in &mut tracks {
+        let _ = reject_markerless_motion_outliers(track, search_radius.max(1) as f32);
+    }
     tracks
 }
 
@@ -501,6 +504,28 @@ pub fn repair_markerless_pose_track(
         }
     }
     repaired
+}
+
+pub fn reject_markerless_motion_outliers(
+    track: &mut MarkerlessMotionTrack,
+    max_step: f32,
+) -> usize {
+    if track.samples.len() < 2 || !max_step.is_finite() || max_step <= 0.0 { return 0; }
+    let mut changed = 0;
+    for index in 1..track.samples.len() {
+        let previous = track.samples[index - 1].position;
+        let current = track.samples[index].position;
+        let distance = (current[0] - previous[0]).hypot(current[1] - previous[1]);
+        if !distance.is_finite() || distance > max_step {
+            track.samples[index].position = if distance.is_finite() {
+                let scale = max_step / distance;
+                [previous[0] + (current[0] - previous[0]) * scale, previous[1] + (current[1] - previous[1]) * scale]
+            } else { previous };
+            track.samples[index].confidence = (track.samples[index].confidence * 0.25).clamp(0.0, 1.0);
+            changed += 1;
+        }
+    }
+    changed
 }
 
 pub fn markerless_pose_to_csv(pose: &NamedMarkerlessPoseTrack) -> String {
@@ -886,5 +911,16 @@ mod tests {
         assert!(first.iter().all(|p| p[0] >= 1.0 && p[0] < 11.0 && p[1] >= 1.0 && p[1] < 11.0));
         let refs = [&frame[..]];
         assert_eq!(track_markerless_auto(&refs, w, h, 2, 2, 1, 1).len(), first.len().min(2));
+    }
+
+    #[test]
+    fn motion_outlier_is_clamped_and_marked_low_confidence() {
+        let mut track = MarkerlessMotionTrack { samples: vec![
+            MarkerlessMotionSample { frame: 0, position: [0.0, 0.0], confidence: 1.0 },
+            MarkerlessMotionSample { frame: 1, position: [100.0, 0.0], confidence: 1.0 },
+        ]};
+        assert_eq!(reject_markerless_motion_outliers(&mut track, 5.0), 1);
+        assert_eq!(track.samples[1].position, [5.0, 0.0]);
+        assert!(track.samples[1].confidence < 0.5);
     }
 }
