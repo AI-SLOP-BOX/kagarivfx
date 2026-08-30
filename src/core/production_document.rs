@@ -1701,6 +1701,24 @@ mod tests {
             crate::core::timeline::Composition::new("nested".into(), "Nested".into(), 1, 1, 1, 1),
         );
         assert!(document.validate().is_err());
+
+        let mut document = ProductionDocument::new(Project::default());
+        document.project.compositions[0].cameras.resize(
+            ProductionDocument::MAX_CAMERAS_PER_COMPOSITION + 1,
+            Default::default(),
+        );
+        assert!(document.validate().is_err());
+
+        let mut document = ProductionDocument::new(Project::default());
+        document.project.compositions[0].markers.resize(
+            ProductionDocument::MAX_MARKERS_PER_COMPOSITION + 1,
+            crate::core::timeline::TimelineMarker {
+                frame: 0,
+                label: "Marker".into(),
+                color: [0.0, 0.0, 0.0],
+            },
+        );
+        assert!(document.validate().is_err());
     }
 
     #[test]
