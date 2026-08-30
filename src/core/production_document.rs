@@ -517,6 +517,13 @@ fn validate_composition(
             {
                 return Err("effect ids must be non-empty and unique within a layer".into());
             }
+            let effect_debug = format!("{:?}", effect.effect_type);
+            if effect_debug.contains("NaN")
+                || effect_debug.contains("inf")
+                || effect_debug.contains("-inf")
+            {
+                return Err("effect parameters must be finite and serializable".into());
+            }
         }
         let mut mask_ids = HashSet::new();
         for mask in &layer.masks {
@@ -1070,6 +1077,19 @@ mod tests {
         invalid_project.compositions[0].layers[0]
             .effects
             .extend([effect.clone(), effect]);
+        assert!(ProductionDocument::new(invalid_project).validate().is_err());
+
+        let mut invalid_project = Project::default();
+        invalid_project.compositions[0].layers[0]
+            .effects
+            .push(crate::core::timeline::Effect {
+                id: "nonfinite-effect".into(),
+                name: "Blur".into(),
+                effect_type: EffectType::GaussianBlur {
+                    blur_radius: crate::core::property::Animatable::new_constant(f32::NAN),
+                },
+                enabled: true,
+            });
         assert!(ProductionDocument::new(invalid_project).validate().is_err());
 
         let mut invalid_project = Project::default();
