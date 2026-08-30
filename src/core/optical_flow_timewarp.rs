@@ -122,6 +122,40 @@ pub fn compute_dense_optical_flow(
     flow
 }
 
+pub fn detect_markerless_features(
+    frame_rgba: &[u8],
+    width: u32,
+    height: u32,
+    max_features: usize,
+    min_spacing: u32,
+) -> Vec<[f32; 2]> {
+    let Some(size) = (width as usize).checked_mul(height as usize).and_then(|v| v.checked_mul(4)) else { return Vec::new(); };
+    if width < 3 || height < 3 || frame_rgba.len() != size || max_features == 0 { return Vec::new(); }
+    let luma = |x: u32, y: u32| -> f32 {
+        let i = (y as usize * width as usize + x as usize) * 4;
+        0.299 * frame_rgba[i] as f32 + 0.587 * frame_rgba[i + 1] as f32 + 0.114 * frame_rgba[i + 2] as f32
+    };
+    let mut candidates = Vec::new();
+    for y in 1..height - 1 {
+        for x in 1..width - 1 {
+            let gx = luma(x + 1, y) - luma(x - 1, y);
+            let gy = luma(x, y + 1) - luma(x, y - 1);
+            let score = gx * gx + gy * gy;
+            if score.is_finite() && score > 1.0 { candidates.push((score, [x as f32, y as f32])); }
+        }
+    }
+    candidates.sort_by(|a, b| b.0.total_cmp(&a.0));
+    let spacing = min_spacing.max(1) as f32;
+    let mut selected = Vec::with_capacity(max_features.min(candidates.len()));
+    for (_, point) in candidates {
+        if selected.iter().all(|other: & [f32; 2]| (point[0] - other[0]).hypot(point[1] - other[1]) >= spacing) {
+            selected.push(point);
+            if selected.len() == max_features { break; }
+        }
+    }
+    selected
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct MarkerlessMotionSample {
     pub frame: u32,
@@ -809,5 +843,20 @@ mod tests {
         assert_eq!(repair_markerless_pose_track(&mut pose, 1), 1);
         assert_eq!(pose.frames[1].joints[0], [1.0, 0.0]);
         assert!(pose.frames[1].confidence < 1.0);
+    }
+
+    #[test]
+    fn feature_detection_is_bounded_spaced_and_deterministic() {
+        let (w, h) = (12u32, 12u32);
+        let mut frame = vec![0u8; (w * h * 4) as usize];
+        for &(x, y) in &[(2, 2), (8, 3), (4, 9)] {
+            let i = (y * w + x) as usize * 4;
+            frame[i..i + 4].copy_from_slice(&[255, 255, 255, 255]);
+        }
+        let first = detect_markerless_features(&frame, w, h, 4, 2);
+        let second = detect_markerless_features(&frame, w, h, 4, 2);
+        assert_eq!(first, second);
+        assert!(first.len() <= 4);
+        assert!(first.iter().all(|p| p[0] >= 1.0 && p[0] < 11.0 && p[1] >= 1.0 && p[1] < 11.0));
     }
 }
