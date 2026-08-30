@@ -594,6 +594,46 @@ pub trait NormalizedPoseInferenceBackend {
     fn infer_normalized_rgb(&mut self, rgb: &[f32], width: u32, height: u32) -> Vec<([f32; 2], f32)>;
 }
 
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct MarkerlessPose3DFrame {
+    pub frame: u32,
+    pub joints: Vec<[f32; 3]>,
+    pub confidence: f32,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct MarkerlessPose3DTrack {
+    pub frames: Vec<MarkerlessPose3DFrame>,
+    pub bones: Vec<[usize; 2]>,
+}
+
+pub trait Pose3DInferenceBackend {
+    fn infer_joints_3d(&mut self, rgb: &[f32], width: u32, height: u32) -> Vec<([f32; 3], f32)>;
+}
+
+pub fn estimate_pose_3d_with_backend<B: Pose3DInferenceBackend>(
+    backend: &mut B,
+    frames: &[&[u8]],
+    width: u32,
+    height: u32,
+) -> MarkerlessPose3DTrack {
+    let normalized = frames.iter().map(|frame| rgba_to_normalized_rgb(frame, width, height)).collect::<Option<Vec<_>>>();
+    let Some(normalized) = normalized else { return MarkerlessPose3DTrack { frames: Vec::new(), bones: Vec::new() }; };
+    let mut outputs = Vec::with_capacity(normalized.len());
+    for (frame_index, rgb) in normalized.iter().enumerate() {
+        let joints = backend.infer_joints_3d(rgb, width, height).into_iter().take(17)
+            .map(|(point, confidence)| {
+                if point.iter().all(|value| value.is_finite()) && confidence.is_finite() {
+                    (point, confidence.clamp(0.0, 1.0))
+                } else { ([f32::NAN; 3], 0.0) }
+            }).collect::<Vec<_>>();
+        let confidence = if joints.is_empty() { 0.0 } else { joints.iter().map(|(_, value)| *value).sum::<f32>() / joints.len() as f32 };
+        outputs.push(MarkerlessPose3DFrame { frame: frame_index as u32, joints: joints.into_iter().map(|(point, _)| point).collect(), confidence });
+    }
+    let count = outputs.iter().map(|frame| frame.joints.len()).max().unwrap_or(0);
+    MarkerlessPose3DTrack { frames: outputs, bones: standard_humanoid_bones(count) }
+}
+
 pub fn estimate_pose_with_normalized_backend<B: NormalizedPoseInferenceBackend>(
     backend: &mut B,
     frames: &[&[u8]],
@@ -1349,6 +1389,14 @@ mod tests {
         }
     }
 
+    struct TestPose3DBackend;
+
+    impl Pose3DInferenceBackend for TestPose3DBackend {
+        fn infer_joints_3d(&mut self, rgb: &[f32], _width: u32, _height: u32) -> Vec<([f32; 3], f32)> {
+            if rgb.iter().all(|value| (0.0..=1.0).contains(value)) { vec![([1.0, 2.0, 3.0], 1.2)] } else { Vec::new() }
+        }
+    }
+
     #[test]
     fn pose_backend_adapter_filters_invalid_joints_and_clamps_confidence() {
         let frame = vec![0u8; 2 * 2 * 4];
@@ -1394,6 +1442,17 @@ mod tests {
         assert_eq!(pose.frames.len(), 2);
         assert_eq!(pose.frames[0].joints, vec![[1.0, 1.0]]);
         assert_eq!(pose.frames[1].frame, 1);
+    }
+
+    #[test]
+    fn pose_3d_backend_preserves_depth_and_builds_bones() {
+        let frame = vec![255u8, 0, 128, 9];
+        let mut backend = TestPose3DBackend;
+        let pose = estimate_pose_3d_with_backend(&mut backend, &[&frame, &frame], 1, 1);
+        assert_eq!(pose.frames.len(), 2);
+        assert_eq!(pose.frames[0].joints, vec![[1.0, 2.0, 3.0]]);
+        assert_eq!(pose.frames[0].confidence, 1.0);
+        assert!(pose.bones.is_empty());
     }
 
     #[test]
