@@ -683,6 +683,10 @@ pub fn markerless_pose3d_to_csv(pose: &MarkerlessPose3DTrack) -> String {
     output
 }
 
+pub fn markerless_pose3d_to_json(pose: &MarkerlessPose3DTrack) -> Result<String, serde_json::Error> {
+    serde_json::to_string_pretty(pose)
+}
+
 pub fn stabilize_markerless_pose3d_track(pose: &mut MarkerlessPose3DTrack, max_gap: usize, radius: usize) -> usize {
     if pose.frames.is_empty() || max_gap == 0 { return 0; }
     let count = pose.frames.iter().map(|frame| frame.joints.len()).min().unwrap_or(0);
@@ -1653,6 +1657,9 @@ mod tests {
         let csv = markerless_pose3d_to_csv(&pose);
         assert!(csv.lines().next().unwrap().contains("hip_z"));
         assert!(csv.lines().nth(1).unwrap().contains("4,0.75,1,2,3"));
+        let json = markerless_pose3d_to_json(&pose).unwrap();
+        let restored: MarkerlessPose3DTrack = serde_json::from_str(&json).unwrap();
+        assert_eq!(restored, pose);
     }
 
     #[test]
