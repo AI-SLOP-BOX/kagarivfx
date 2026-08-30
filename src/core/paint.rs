@@ -33,7 +33,12 @@ pub struct DirtyRect {
 
 impl DirtyRect {
     pub fn new() -> Self {
-        Self { min_x: f32::MAX, min_y: f32::MAX, max_x: f32::MIN, max_y: f32::MIN }
+        Self {
+            min_x: f32::MAX,
+            min_y: f32::MAX,
+            max_x: f32::MIN,
+            max_y: f32::MIN,
+        }
     }
 
     pub fn is_empty(&self) -> bool {
@@ -75,7 +80,10 @@ pub struct PaintLayer {
 
 impl PaintLayer {
     pub fn new() -> Self {
-        Self { strokes: Vec::new(), dirty_rect: DirtyRect::new() }
+        Self {
+            strokes: Vec::new(),
+            dirty_rect: DirtyRect::new(),
+        }
     }
 
     pub fn add_stroke(&mut self, stroke: PaintStroke) {
@@ -90,7 +98,8 @@ impl PaintLayer {
 
     fn dirty_rect_for_stroke(&mut self, stroke: &PaintStroke) {
         for point in &stroke.points {
-            self.dirty_rect.expand_point(point.x, point.y, stroke.size * 0.5);
+            self.dirty_rect
+                .expand_point(point.x, point.y, stroke.size * 0.5);
         }
     }
 
@@ -127,14 +136,28 @@ pub fn draw_stroke(
     color: [f32; 4],
     size: f32,
 ) {
-    if points.is_empty() || size <= 0.0 || w == 0 || h == 0 {
+    let Some(expected_len) = (w as usize)
+        .checked_mul(h as usize)
+        .and_then(|count| count.checked_mul(4))
+    else { return; };
+    if points.is_empty()
+        || !size.is_finite()
+        || size <= 0.0
+        || w == 0
+        || h == 0
+        || buf.len() < expected_len
+        || !color.iter().all(|value| value.is_finite())
+    {
         return;
     }
-    let radius = (size * 0.5).max(0.5);
+    let radius = (size.clamp(0.0, 8192.0) * 0.5).max(0.5);
     let r2 = radius * radius;
     let src_a = color[3].clamp(0.0, 1.0);
 
     let mut stamp = |cx: f32, cy: f32| {
+        if !cx.is_finite() || !cy.is_finite() {
+            return;
+        }
         let lo_x = ((cx - radius).floor().max(0.0)) as u32;
         let hi_x = ((cx + radius).ceil().min(w as f32 - 1.0)) as u32;
         let lo_y = ((cy - radius).floor().max(0.0)) as u32;
@@ -149,7 +172,9 @@ pub fn draw_stroke(
                 }
                 // Hard core with a 1px anti-aliased rim.
                 let dist = d2.sqrt();
-                if dist > radius { continue; }
+                if dist > radius {
+                    continue;
+                }
                 let cov = (radius - dist).clamp(0.0, 1.0);
                 let idx = ((py * w + px) * 4) as usize;
                 if idx + 3 >= buf.len() {
@@ -222,15 +247,21 @@ impl Default for CloneStampConfig {
 /// Transform source coordinates with rotation, flip, and offset.
 #[inline]
 fn clone_transform(
-    dx: f32, dy: f32,
+    dx: f32,
+    dy: f32,
     offset: [f32; 2],
     rot_rad: f32,
-    flip_h: bool, flip_v: bool,
+    flip_h: bool,
+    flip_v: bool,
 ) -> (f32, f32) {
     let mut x = dx;
     let mut y = dy;
-    if flip_h { x = -x; }
-    if flip_v { y = -y; }
+    if flip_h {
+        x = -x;
+    }
+    if flip_v {
+        y = -y;
+    }
     let cos = rot_rad.cos();
     let sin = rot_rad.sin();
     let rx = x * cos - y * sin;
@@ -270,17 +301,32 @@ pub fn draw_clone_stamp(
                 }
                 let dist = d2.sqrt();
                 let alpha = if soft <= 0.001 {
-                    if dist <= radius { 1.0 } else { 0.0 }
+                    if dist <= radius {
+                        1.0
+                    } else {
+                        0.0
+                    }
                 } else {
                     let t = dist / radius;
-                    if t < 1.0 - soft { 1.0 } else if t < 1.0 { 1.0 - (t - (1.0 - soft)) / soft } else { 0.0 }
+                    if t < 1.0 - soft {
+                        1.0
+                    } else if t < 1.0 {
+                        1.0 - (t - (1.0 - soft)) / soft
+                    } else {
+                        0.0
+                    }
                 };
                 let a = alpha * config.opacity;
                 if a <= 0.001 {
                     continue;
                 }
                 let (sx_f, sy_f) = clone_transform(
-                    dx, dy, config.src_offset, rot_rad, config.flip_h, config.flip_v,
+                    dx,
+                    dy,
+                    config.src_offset,
+                    rot_rad,
+                    config.flip_h,
+                    config.flip_v,
                 );
                 let sx = sx_f as i32;
                 let sy = sy_f as i32;
@@ -298,7 +344,12 @@ pub fn draw_clone_stamp(
                     for ch in 0..3 {
                         let s_val = src[s_idx + ch] as f32 / 255.0;
                         let d_val = dst[d_idx + ch] as f32 / 255.0;
-                        dst[d_idx + ch] = ((s_val * a + d_val * dst[d_idx + 3] as f32 / 255.0 * (1.0 - a)) * inv_a * 255.0).round().min(255.0) as u8;
+                        dst[d_idx + ch] = ((s_val * a
+                            + d_val * dst[d_idx + 3] as f32 / 255.0 * (1.0 - a))
+                            * inv_a
+                            * 255.0)
+                            .round()
+                            .min(255.0) as u8;
                     }
                     dst[d_idx + 3] = (out_a * 255.0).round().min(255.0) as u8;
                 }
@@ -327,6 +378,23 @@ pub fn draw_clone_stamp(
 mod tests {
     use super::*;
 
+    #[test]
+    fn test_draw_stroke_ignores_invalid_geometry_and_color() {
+        let original = vec![12u8; 16];
+        let mut buf = original.clone();
+        draw_stroke(
+            &mut buf,
+            2,
+            2,
+            &[[f32::NAN, 1.0], [1.0, f32::INFINITY]],
+            [f32::NAN, 0.0, 0.0, 1.0],
+            f32::INFINITY,
+        );
+        assert_eq!(buf, original);
+        draw_stroke(&mut buf, 2, 2, &[[1.0, 1.0]], [1.0; 4], 2.0);
+        assert_ne!(buf, original);
+    }
+
     fn blank(w: u32, h: u32) -> Vec<u8> {
         vec![0u8; (w * h * 4) as usize]
     }
@@ -346,7 +414,14 @@ mod tests {
     fn test_line_is_contiguous() {
         let w = 40u32;
         let mut buf = blank(w, 7);
-        draw_stroke(&mut buf, w, 7, &[[2.0, 3.5], [37.0, 3.5]], [0.0, 1.0, 0.0, 1.0], 3.0);
+        draw_stroke(
+            &mut buf,
+            w,
+            7,
+            &[[2.0, 3.5], [37.0, 3.5]],
+            [0.0, 1.0, 0.0, 1.0],
+            3.0,
+        );
         // Sample midpoints along the line — all should be green-ish opaque.
         for x in [5u32, 15, 25, 34] {
             let i = ((3 * w + x) * 4) as usize;
@@ -360,12 +435,17 @@ mod tests {
         let w = 5u32;
         let mut buf = blank(w, 1);
         // Pre-fill with opaque blue.
-        for px in buf.chunks_exact_mut(4) { px.copy_from_slice(&[0, 0, 255, 255]); }
+        for px in buf.chunks_exact_mut(4) {
+            px.copy_from_slice(&[0, 0, 255, 255]);
+        }
         // Half-alpha red dot on top → purple-ish, still opaque.
         draw_stroke(&mut buf, w, 1, &[[2.5, 0.5]], [1.0, 0.0, 0.0, 0.5], 5.0);
         let i = (2 * 4) as usize;
         assert_eq!(buf[i + 3], 255, "stays opaque");
-        assert!(buf[i] > 100 && buf[i + 2] > 100, "blend produces mixed color");
+        assert!(
+            buf[i] > 100 && buf[i + 2] > 100,
+            "blend produces mixed color"
+        );
     }
 
     #[test]
@@ -379,8 +459,16 @@ mod tests {
     fn test_paint_layer_add_and_clear() {
         let mut layer = PaintLayer::new();
         layer.add_stroke(PaintStroke {
-            id: 1, color: [1.0; 4], size: 5.0, hardness: 0.5, opacity: 1.0,
-            points: vec![StrokePoint { x: 0.0, y: 0.0, pressure: 1.0 }],
+            id: 1,
+            color: [1.0; 4],
+            size: 5.0,
+            hardness: 0.5,
+            opacity: 1.0,
+            points: vec![StrokePoint {
+                x: 0.0,
+                y: 0.0,
+                pressure: 1.0,
+            }],
         });
         assert_eq!(layer.strokes.len(), 1);
         layer.clear();
@@ -391,10 +479,22 @@ mod tests {
     fn test_paint_layer_render() {
         let mut layer = PaintLayer::new();
         layer.add_stroke(PaintStroke {
-            id: 1, color: [1.0, 0.0, 0.0, 1.0], size: 10.0, hardness: 0.5, opacity: 1.0,
+            id: 1,
+            color: [1.0, 0.0, 0.0, 1.0],
+            size: 10.0,
+            hardness: 0.5,
+            opacity: 1.0,
             points: vec![
-                StrokePoint { x: 50.0, y: 50.0, pressure: 1.0 },
-                StrokePoint { x: 60.0, y: 50.0, pressure: 1.0 },
+                StrokePoint {
+                    x: 50.0,
+                    y: 50.0,
+                    pressure: 1.0,
+                },
+                StrokePoint {
+                    x: 60.0,
+                    y: 50.0,
+                    pressure: 1.0,
+                },
             ],
         });
         let mut buf = blank(100, 100);
@@ -407,7 +507,11 @@ mod tests {
     fn test_empty_stroke_noop() {
         let mut layer = PaintLayer::new();
         layer.add_stroke(PaintStroke {
-            id: 1, color: [1.0; 4], size: 5.0, hardness: 0.5, opacity: 1.0,
+            id: 1,
+            color: [1.0; 4],
+            size: 5.0,
+            hardness: 0.5,
+            opacity: 1.0,
             points: vec![],
         });
         let mut buf = blank(10, 10);
@@ -435,8 +539,13 @@ mod tests {
         }
         // Clone stamp at (10,10) with offset (0,0) — no transform
         let config = CloneStampConfig {
-            src_offset: [0.0, 0.0], size: 4.0, opacity: 1.0, hardness: 1.0,
-            rotation_deg: 0.0, flip_h: false, flip_v: false,
+            src_offset: [0.0, 0.0],
+            size: 4.0,
+            opacity: 1.0,
+            hardness: 1.0,
+            rotation_deg: 0.0,
+            flip_h: false,
+            flip_v: false,
         };
         draw_clone_stamp(&mut dst, &src, w, h, &[[10.0, 10.0]], &config);
         let idx = ((10 * w + 10) * 4) as usize;
@@ -448,8 +557,13 @@ mod tests {
         let mut dst = blank(10, 10);
         let src = vec![128u8; 400];
         let config = CloneStampConfig {
-            src_offset: [0.0; 2], size: 5.0, opacity: 1.0, hardness: 1.0,
-            rotation_deg: 0.0, flip_h: false, flip_v: false,
+            src_offset: [0.0; 2],
+            size: 5.0,
+            opacity: 1.0,
+            hardness: 1.0,
+            rotation_deg: 0.0,
+            flip_h: false,
+            flip_v: false,
         };
         draw_clone_stamp(&mut dst, &src, 10, 10, &[], &config);
         assert!(dst.iter().all(|&b| b == 0));
