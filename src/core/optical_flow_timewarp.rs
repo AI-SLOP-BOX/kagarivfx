@@ -811,9 +811,11 @@ pub fn repair_markerless_pose_track(
             let after = pose.frames[end].joints[joint];
             let before_frame = pose.frames[start - 1].frame;
             let after_frame = pose.frames[end].frame;
+            if after_frame <= before_frame { continue; }
             let span = (after_frame.saturating_sub(before_frame)) as f32;
             for offset in 0..(end - start) {
                 let current_frame = pose.frames[start + offset].frame;
+                if current_frame <= before_frame || current_frame >= after_frame { continue; }
                 let t = if span > 0.0 { current_frame.saturating_sub(before_frame) as f32 / span } else { 0.0 };
                 pose.frames[start + offset].joints[joint] = [
                     before[0] + (after[0] - before[0]) * t,
@@ -1261,6 +1263,19 @@ mod tests {
         };
         assert_eq!(repair_markerless_pose_track(&mut pose, 3), 1);
         assert_eq!(pose.frames[1].joints[0], [4.0, 0.0]);
+    }
+
+    #[test]
+    fn pose_repair_rejects_non_monotonic_frame_numbers() {
+        let mut pose = MarkerlessPoseTrack {
+            frames: vec![
+                MarkerlessPoseFrame { frame: 10, joints: vec![[0.0, 0.0]], root: [0.0, 0.0], confidence: 1.0 },
+                MarkerlessPoseFrame { frame: 9, joints: vec![[f32::NAN, f32::NAN]], root: [0.0, 0.0], confidence: 1.0 },
+                MarkerlessPoseFrame { frame: 8, joints: vec![[8.0, 0.0]], root: [8.0, 0.0], confidence: 1.0 },
+            ], bones: vec![], bone_lengths: vec![],
+        };
+        assert_eq!(repair_markerless_pose_track(&mut pose, 10), 0);
+        assert!(pose.frames[1].joints[0][0].is_nan());
     }
 
     #[test]
