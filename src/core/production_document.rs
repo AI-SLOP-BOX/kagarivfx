@@ -110,17 +110,23 @@ impl ProductionDocument {
             sequence
         ));
         let json = self.to_json()?;
-        let mut file = std::fs::File::create(&temporary)
-            .map_err(|error| format!("failed to create production document: {error}"))?;
-        use std::io::Write;
-        file.write_all(json.as_bytes())
-            .map_err(|error| format!("failed to write production document: {error}"))?;
-        file.sync_all()
-            .map_err(|error| format!("failed to sync production document: {error}"))?;
-        drop(file);
-        std::fs::rename(&temporary, target)
-            .map_err(|error| format!("failed to replace production document: {error}"))?;
-        Ok(())
+        let result = (|| {
+            let mut file = std::fs::File::create(&temporary)
+                .map_err(|error| format!("failed to create production document: {error}"))?;
+            use std::io::Write;
+            file.write_all(json.as_bytes())
+                .map_err(|error| format!("failed to write production document: {error}"))?;
+            file.sync_all()
+                .map_err(|error| format!("failed to sync production document: {error}"))?;
+            drop(file);
+            std::fs::rename(&temporary, target)
+                .map_err(|error| format!("failed to replace production document: {error}"))?;
+            Ok(())
+        })();
+        if result.is_err() {
+            let _ = std::fs::remove_file(&temporary);
+        }
+        result
     }
 
     pub fn load(path: impl AsRef<std::path::Path>) -> Result<Self, String> {
