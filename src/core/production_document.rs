@@ -333,6 +333,11 @@ fn validate_composition(
                 return Err("video layer frame count or speed is invalid".into());
             }
         }
+        if let LayerType::Audio { path, volume } = &layer.layer_type {
+            if path.trim().is_empty() || !scalar_animation_is_finite(volume) {
+                return Err("audio layer path or volume is invalid".into());
+            }
+        }
         let mut effect_ids = HashSet::new();
         for effect in &layer.effects {
             if effect.id.trim().is_empty() || !effect_ids.insert(effect.id.clone()) {
@@ -671,6 +676,18 @@ mod tests {
             "Missing Precomp".into(),
             LayerType::PreComp {
                 comp_id: "does-not-exist".into(),
+            },
+            300,
+        ));
+        assert!(ProductionDocument::new(invalid_project).validate().is_err());
+
+        let mut invalid_project = Project::default();
+        invalid_project.compositions[0].layers.push(crate::core::timeline::Layer::new(
+            "invalid-audio".into(),
+            "Invalid Audio".into(),
+            LayerType::Audio {
+                path: "".into(),
+                volume: crate::core::property::Animatable::new_constant(f32::NAN),
             },
             300,
         ));
