@@ -101,6 +101,16 @@ impl ImageCache {
         let img = image::open(path).ok()?;
         let rgba = img.to_rgba8();
         let (width, height) = rgba.dimensions();
+        let expected_bytes = (width as usize)
+            .checked_mul(height as usize)
+            .and_then(|pixels| pixels.checked_mul(4))?;
+        if width == 0
+            || height == 0
+            || (width as u64).saturating_mul(height as u64) > Self::MAX_IMAGE_PIXELS
+            || rgba.as_raw().len() != expected_bytes
+        {
+            return None;
+        }
         Some(CachedImage {
             width,
             height,
