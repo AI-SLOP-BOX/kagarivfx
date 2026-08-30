@@ -13,6 +13,7 @@ impl TrackerEngine {
         pose: &crate::core::optical_flow_timewarp::MarkerlessPoseTrack,
         minimum_confidence: f32,
     ) -> usize {
+        if pose.frames.is_empty() { return 0; }
         let threshold = if minimum_confidence.is_finite() { minimum_confidence.clamp(0.0, 1.0) } else { 0.0 };
         let names = crate::core::optical_flow_timewarp::standard_humanoid_joint_names(
             pose.frames.first().map(|frame| frame.joints.len()).unwrap_or(0),
@@ -1560,5 +1561,17 @@ mod quad_track_tests {
         TrackerEngine::apply_pose_as_tracker_points(&mut layer, &pose, 0.0);
         assert!(layer.trackers.iter().any(|tracker| tracker.id == "manual"));
         assert!(!layer.trackers.iter().any(|tracker| tracker.id == "pose_old_joint"));
+    }
+
+    #[test]
+    fn failed_pose_estimation_does_not_delete_existing_pose_points() {
+        let mut layer = Layer::new(
+            "l".into(), "Pose Layer".into(), crate::core::timeline::LayerType::Null, 10,
+        );
+        layer.trackers.push(crate::core::timeline::TrackerPoint::new("pose_head".into(), "Pose head".into(), [1.0, 2.0]));
+        let empty = crate::core::optical_flow_timewarp::MarkerlessPoseTrack { frames: vec![], bones: vec![], bone_lengths: vec![] };
+        assert_eq!(TrackerEngine::apply_pose_as_tracker_points(&mut layer, &empty, 0.5), 0);
+        assert_eq!(layer.trackers.len(), 1);
+        assert_eq!(layer.trackers[0].id, "pose_head");
     }
 }
