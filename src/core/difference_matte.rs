@@ -39,6 +39,8 @@ pub fn apply_difference_matte(
 
     let tolerance = if options.tolerance.is_finite() {
         options.tolerance.clamp(0.0, 1.0)
+    } else if options.tolerance.is_sign_positive() {
+        1.0
     } else {
         0.0
     };
