@@ -275,7 +275,11 @@ fn validate_composition(
     if composition.background_color.iter().any(|channel| !channel.is_finite()) {
         return Err("composition background color must be finite".into());
     }
+    let mut layer_ids = HashSet::new();
     for layer in &composition.layers {
+        if layer.id.trim().is_empty() || !layer_ids.insert(layer.id.clone()) {
+            return Err("layer ids must be non-empty and unique within a composition".into());
+        }
         if layer.in_frame >= layer.out_frame {
             return Err("layer frame range must have a positive duration".into());
         }
@@ -470,6 +474,11 @@ mod tests {
         let mut invalid_project = Project::default();
         invalid_project.compositions[0].layers[0].out_frame =
             invalid_project.compositions[0].layers[0].in_frame;
+        assert!(ProductionDocument::new(invalid_project).validate().is_err());
+
+        let mut invalid_project = Project::default();
+        let duplicate = invalid_project.compositions[0].layers[0].clone();
+        invalid_project.compositions[0].layers.push(duplicate);
         assert!(ProductionDocument::new(invalid_project).validate().is_err());
     }
 
