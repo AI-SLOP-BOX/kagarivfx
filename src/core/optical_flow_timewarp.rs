@@ -5,6 +5,8 @@
 
 #![allow(dead_code)]
 
+use serde::{Deserialize, Serialize};
+
 #[derive(Debug, Clone)]
 pub struct DenseFlowField {
     pub width: u32,
@@ -120,14 +122,14 @@ pub fn compute_dense_optical_flow(
     flow
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct MarkerlessMotionSample {
     pub frame: u32,
     pub position: [f32; 2],
     pub confidence: f32,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct MarkerlessMotionTrack {
     pub samples: Vec<MarkerlessMotionSample>,
 }
@@ -310,7 +312,7 @@ pub fn smooth_markerless_track(
     MarkerlessMotionTrack { samples }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct MarkerlessPoseFrame {
     pub frame: u32,
     pub joints: Vec<[f32; 2]>,
@@ -318,9 +320,10 @@ pub struct MarkerlessPoseFrame {
     pub confidence: f32,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct MarkerlessPoseTrack {
     pub frames: Vec<MarkerlessPoseFrame>,
+    pub bones: Vec<[usize; 2]>,
     pub bone_lengths: Vec<f32>,
 }
 
@@ -329,7 +332,7 @@ pub fn build_markerless_pose_track(
     bones: &[(usize, usize)],
 ) -> MarkerlessPoseTrack {
     if joint_tracks.is_empty() {
-        return MarkerlessPoseTrack { frames: Vec::new(), bone_lengths: Vec::new() };
+        return MarkerlessPoseTrack { frames: Vec::new(), bones: Vec::new(), bone_lengths: Vec::new() };
     }
     let frame_count = joint_tracks.iter().map(|track| track.samples.len()).min().unwrap_or(0);
     let mut frames = Vec::with_capacity(frame_count);
@@ -354,7 +357,17 @@ pub fn build_markerless_pose_track(
             _ => 0.0,
         }
     }).collect();
-    MarkerlessPoseTrack { frames, bone_lengths }
+    MarkerlessPoseTrack {
+        frames,
+        bones: bones.iter().map(|&(a, b)| [a, b]).collect(),
+        bone_lengths,
+    }
+}
+
+pub fn markerless_pose_to_json(
+    pose: &MarkerlessPoseTrack,
+) -> Result<String, serde_json::Error> {
+    serde_json::to_string_pretty(pose)
 }
 
 /// Interpolates an intermediate frame at fractional position `t` (0.0 .. 1.0)
@@ -577,5 +590,9 @@ mod tests {
         assert_eq!(pose.frames[0].root, [1.5, 0.0]);
         assert!((pose.bone_lengths[0] - 3.0).abs() < 0.001);
         assert!((pose.frames[1].confidence - 0.8).abs() < 0.001);
+        let json = markerless_pose_to_json(&pose).unwrap();
+        assert!(json.contains("bone_lengths"));
+        let restored: MarkerlessPoseTrack = serde_json::from_str(&json).unwrap();
+        assert_eq!(restored, pose);
     }
 }
