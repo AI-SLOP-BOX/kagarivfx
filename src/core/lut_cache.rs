@@ -82,16 +82,14 @@ pub fn apply_lut_batch_cached(
     cache: &mut LutCache,
 ) {
     let size = lut.size;
-    for chunk in pixels.chunks_exact_mut(16) {
-        for pixel in chunk.chunks_exact_mut(4) {
-            let r = pixel[0] as f32 / 255.0;
-            let g = pixel[1] as f32 / 255.0;
-            let b = pixel[2] as f32 / 255.0;
-            let (lr, lg, lb) = cache.get_or_insert(r, g, b, size, |r, g, b| lut.apply(r, g, b));
-            pixel[0] = (lr.clamp(0.0, 1.0) * 255.0).round() as u8;
-            pixel[1] = (lg.clamp(0.0, 1.0) * 255.0).round() as u8;
-            pixel[2] = (lb.clamp(0.0, 1.0) * 255.0).round() as u8;
-        }
+    for pixel in pixels.chunks_exact_mut(4) {
+        let r = pixel[0] as f32 / 255.0;
+        let g = pixel[1] as f32 / 255.0;
+        let b = pixel[2] as f32 / 255.0;
+        let (lr, lg, lb) = cache.get_or_insert(r, g, b, size, |r, g, b| lut.apply(r, g, b));
+        pixel[0] = (lr.clamp(0.0, 1.0) * 255.0).round() as u8;
+        pixel[1] = (lg.clamp(0.0, 1.0) * 255.0).round() as u8;
+        pixel[2] = (lb.clamp(0.0, 1.0) * 255.0).round() as u8;
     }
 }
 
@@ -198,5 +196,18 @@ mod tests {
         let mut pixels = [[0.5f32; 3]; 8];
         apply_lut_batch_f32(&lut, &mut pixels, &mut cache);
         assert_eq!(pixels.len(), 8);
+    }
+
+    #[test]
+    fn test_batch_apply_u8_processes_short_tail() {
+        let lut = crate::core::ocio_color::Lut3D {
+            size: 2,
+            data: (0..24).map(|value| value as f32 / 24.0).collect(),
+        };
+        let mut cache = LutCache::new(64);
+        let mut pixels = vec![128u8, 64, 32, 255];
+        let original = pixels.clone();
+        apply_lut_batch_cached(&lut, &mut pixels, &mut cache);
+        assert_ne!(pixels[..3], original[..3]);
     }
 }
