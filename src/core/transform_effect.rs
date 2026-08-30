@@ -10,13 +10,13 @@
 pub struct TransformEffectParams {
     pub anchor_point: [f32; 2],
     pub position: [f32; 2],
-    pub scale_width: f32,    // % (100.0 = 1.0)
-    pub scale_height: f32,   // % (100.0 = 1.0)
+    pub scale_width: f32,  // % (100.0 = 1.0)
+    pub scale_height: f32, // % (100.0 = 1.0)
     pub uniform_scale: bool,
-    pub skew_deg: f32,       // -85.0..85.0
-    pub skew_axis_deg: f32,  // 0.0..360.0
+    pub skew_deg: f32,      // -85.0..85.0
+    pub skew_axis_deg: f32, // 0.0..360.0
     pub rotation_deg: f32,
-    pub opacity: f32,        // 0.0..100.0%
+    pub opacity: f32, // 0.0..100.0%
 }
 
 impl Default for TransformEffectParams {
@@ -42,32 +42,51 @@ pub fn apply_transform_effect(
     height: u32,
     params: &TransformEffectParams,
 ) -> Vec<u8> {
-    if src.len() != (width * height * 4) as usize || width == 0 || height == 0 {
+    let Some(pixel_count) = (width as usize)
+        .checked_mul(height as usize)
+        .filter(|&count| count <= usize::MAX / 4)
+    else {
+        return src.to_vec();
+    };
+    if src.len() != pixel_count * 4 || width == 0 || height == 0 {
         return src.to_vec();
     }
 
-    let mut dst = vec![0u8; src.len()];
+    let mut dst = vec![0u8; pixel_count * 4];
+    let finite = |value: f32, fallback: f32| {
+        if value.is_finite() { value } else { fallback }
+    };
 
-    let sx = (if params.uniform_scale { params.scale_width } else { params.scale_width } / 100.0).max(0.001);
-    let sy = (if params.uniform_scale { params.scale_width } else { params.scale_height } / 100.0).max(0.001);
+    let sx = (if params.uniform_scale {
+        finite(params.scale_width, 100.0)
+    } else {
+        finite(params.scale_width, 100.0)
+    } / 100.0)
+        .max(0.001);
+    let sy = (if params.uniform_scale {
+        finite(params.scale_width, 100.0)
+    } else {
+        finite(params.scale_height, 100.0)
+    } / 100.0)
+        .max(0.001);
 
-    let rot_rad = params.rotation_deg.to_radians();
+    let rot_rad = finite(params.rotation_deg, 0.0).to_radians();
     let cos_r = rot_rad.cos();
     let sin_r = rot_rad.sin();
 
-    let skew_rad = params.skew_deg.to_radians().clamp(-1.48, 1.48);
+    let skew_rad = finite(params.skew_deg, 0.0).to_radians().clamp(-1.48, 1.48);
     let tan_skew = skew_rad.tan();
 
-    let skew_axis_rad = params.skew_axis_deg.to_radians();
+    let skew_axis_rad = finite(params.skew_axis_deg, 0.0).to_radians();
     let cos_sa = skew_axis_rad.cos();
     let sin_sa = skew_axis_rad.sin();
 
-    let ax = params.anchor_point[0];
-    let ay = params.anchor_point[1];
-    let px = params.position[0];
-    let py = params.position[1];
+    let ax = finite(params.anchor_point[0], 0.0);
+    let ay = finite(params.anchor_point[1], 0.0);
+    let px = finite(params.position[0], 0.0);
+    let py = finite(params.position[1], 0.0);
 
-    let opacity_mult = (params.opacity / 100.0).clamp(0.0, 1.0);
+    let opacity_mult = (finite(params.opacity, 100.0) / 100.0).clamp(0.0, 1.0);
 
     let sample_bilinear = |x: f32, y: f32| -> [u8; 4] {
         if x < 0.0 || x > (width - 1) as f32 || y < 0.0 || y > (height - 1) as f32 {
@@ -139,6 +158,23 @@ pub fn apply_transform_effect(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_transform_rejects_overflow_and_sanitizes_parameters() {
+        let original = vec![120u8; 16];
+        let mut params = TransformEffectParams::default();
+        params.anchor_point = [f32::NAN, f32::INFINITY];
+        params.position = [f32::NAN, f32::NEG_INFINITY];
+        params.scale_width = f32::NAN;
+        params.rotation_deg = f32::INFINITY;
+        params.opacity = f32::NAN;
+        let rendered = apply_transform_effect(&original, 2, 2, &params);
+        assert!(rendered.iter().all(|value| *value <= 255));
+        assert_eq!(
+            apply_transform_effect(&original, u32::MAX, u32::MAX, &params),
+            original
+        );
+    }
 
     #[test]
     fn test_transform_effect_identity() {
