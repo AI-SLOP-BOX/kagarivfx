@@ -6,14 +6,16 @@ pub mod core;
 #[cfg(feature = "gui")]
 pub mod ui;
 
+#[cfg(feature = "gui")]
 pub mod app_state;
 
 #[cfg(feature = "gui")]
 pub use app_state::AfterEffectsApp;
+#[cfg(feature = "gui")]
 pub use app_state::DragTransaction;
 
-pub use core::ffmpeg_export::ExportEvent;
 pub use core::automation;
+pub use core::ffmpeg_export::ExportEvent;
 pub use core::timeline::Project;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
