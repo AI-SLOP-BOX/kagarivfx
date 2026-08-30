@@ -203,7 +203,12 @@ pub fn apply_eq(buf: &mut [f32], bands: &[EqBand], sample_rate: u32) {
     let filters: Vec<Biquad> = bands
         .iter()
         .filter(|b| {
-            if !b.freq.is_finite() || !b.gain_db.is_finite() || !b.q.is_finite() || b.q <= 0.0 {
+            if !b.freq.is_finite()
+                || !b.gain_db.is_finite()
+                || !b.q.is_finite()
+                || b.q < 1.0e-6
+                || b.gain_db.abs() > 120.0
+            {
                 return false;
             }
             // Skip pass filters at extreme frequencies (bypass mode)
@@ -703,6 +708,21 @@ mod tests {
             48_000,
         );
         assert!(buf.iter().all(|sample| sample.is_finite()));
+    }
+
+    #[test]
+    fn test_eq_skips_extreme_finite_band_parameters() {
+        let mut buf = vec![0.25f32, -0.5, 0.75, -1.0];
+        let original = buf.clone();
+        apply_eq(
+            &mut buf,
+            &[EqBand {
+                gain_db: f32::MAX,
+                ..EqBand::default()
+            }],
+            48_000,
+        );
+        assert_eq!(buf, original);
     }
 
     #[test]
