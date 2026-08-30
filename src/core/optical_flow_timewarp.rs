@@ -260,6 +260,20 @@ pub fn track_markerless_motion(
     tracks
 }
 
+pub fn track_markerless_auto(
+    frames: &[&[u8]],
+    width: u32,
+    height: u32,
+    max_features: usize,
+    feature_spacing: u32,
+    block_radius: i32,
+    search_radius: i32,
+) -> Vec<MarkerlessMotionTrack> {
+    let Some(first) = frames.first() else { return Vec::new(); };
+    let seeds = detect_markerless_features(first, width, height, max_features, feature_spacing);
+    track_markerless_motion(frames, width, height, &seeds, block_radius, search_radius)
+}
+
 pub fn markerless_track_keyframes(
     track: &MarkerlessMotionTrack,
 ) -> crate::core::property::Animatable<[f32; 2]> {
@@ -858,5 +872,7 @@ mod tests {
         assert_eq!(first, second);
         assert!(first.len() <= 4);
         assert!(first.iter().all(|p| p[0] >= 1.0 && p[0] < 11.0 && p[1] >= 1.0 && p[1] < 11.0));
+        let refs = [&frame[..]];
+        assert_eq!(track_markerless_auto(&refs, w, h, 2, 2, 1, 1).len(), first.len().min(2));
     }
 }
