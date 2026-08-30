@@ -17,10 +17,22 @@ pub fn apply_vr_horizon(
     yaw_deg: f32,
     roll_deg: f32,
 ) {
-    if pixels.len() != (width * height * 4) as usize || (pitch_deg.abs() < 1e-4 && yaw_deg.abs() < 1e-4 && roll_deg.abs() < 1e-4) {
+    let Some(pixel_count) = (width as usize)
+        .checked_mul(height as usize)
+        .filter(|&count| count <= usize::MAX / 4)
+    else {
+        return;
+    };
+    if width == 0
+        || height == 0
+        || pixels.len() != pixel_count * 4
+        || !pitch_deg.is_finite()
+        || !yaw_deg.is_finite()
+        || !roll_deg.is_finite()
+        || (pitch_deg.abs() < 1e-4 && yaw_deg.abs() < 1e-4 && roll_deg.abs() < 1e-4)
+    {
         return;
     }
-
     let src = pixels.to_vec();
     let p_rad = pitch_deg.to_radians();
     let y_rad = yaw_deg.to_radians();
@@ -66,11 +78,14 @@ pub fn apply_vr_horizon(
             let src_lat = ry.clamp(-1.0, 1.0).asin();
             let src_lon = rx.atan2(rz);
 
-            let src_u = ((src_lon / (2.0 * std::f32::consts::PI) + 0.5).rem_euclid(1.0) * w_f) as usize;
+            let src_u =
+                ((src_lon / (2.0 * std::f32::consts::PI) + 0.5).rem_euclid(1.0) * w_f) as usize;
             let src_v = (((src_lat / std::f32::consts::PI + 0.5).clamp(0.0, 1.0)) * h_f) as usize;
 
             let dst_idx = ((y * width + x) * 4) as usize;
-            let src_idx = ((src_v.min(height as usize - 1) * width as usize + src_u.min(width as usize - 1)) * 4) as usize;
+            let src_idx = ((src_v.min(height as usize - 1) * width as usize
+                + src_u.min(width as usize - 1))
+                * 4) as usize;
 
             pixels[dst_idx..dst_idx + 4].copy_from_slice(&src[src_idx..src_idx + 4]);
         }
@@ -78,15 +93,22 @@ pub fn apply_vr_horizon(
 }
 
 /// Geodesic latitude-compensated Gaussian blur for 360 panoramic equirectangular images.
-pub fn apply_vr_blur(
-    pixels: &mut [u8],
-    width: u32,
-    height: u32,
-    radius: f32,
-) {
-    if radius <= 0.001 || pixels.len() != (width * height * 4) as usize {
+pub fn apply_vr_blur(pixels: &mut [u8], width: u32, height: u32, radius: f32) {
+    let Some(pixel_count) = (width as usize)
+        .checked_mul(height as usize)
+        .filter(|&count| count <= usize::MAX / 4)
+    else {
+        return;
+    };
+    if width == 0
+        || height == 0
+        || radius <= 0.001
+        || !radius.is_finite()
+        || pixels.len() != pixel_count * 4
+    {
         return;
     }
+    let radius = radius.min(4096.0);
 
     let src = pixels.to_vec();
     let w_f = width as f32;
@@ -154,12 +176,19 @@ mod tests {
         let mut pixels = vec![0u8; 32 * 16 * 4];
         // Center white spot at boundary seam (x=0, y=8)
         let idx = (8 * 32 + 0) * 4;
-        pixels[idx] = 255; pixels[idx + 1] = 255; pixels[idx + 2] = 255; pixels[idx + 3] = 255;
+        pixels[idx] = 255;
+        pixels[idx + 1] = 255;
+        pixels[idx + 2] = 255;
+        pixels[idx + 3] = 255;
 
         apply_vr_blur(&mut pixels, 32, 16, 2.0);
 
         // Rightmost pixel (x=31, y=8) should receive wrapped blur energy
         let wrap_idx = (8 * 32 + 31) * 4;
-        assert!(pixels[wrap_idx] >= 5, "Seam wrapping blur must propagate to x=31: got {}", pixels[wrap_idx]);
+        assert!(
+            pixels[wrap_idx] >= 5,
+            "Seam wrapping blur must propagate to x=31: got {}",
+            pixels[wrap_idx]
+        );
     }
 }
