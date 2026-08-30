@@ -310,6 +310,53 @@ pub fn smooth_markerless_track(
     MarkerlessMotionTrack { samples }
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub struct MarkerlessPoseFrame {
+    pub frame: u32,
+    pub joints: Vec<[f32; 2]>,
+    pub root: [f32; 2],
+    pub confidence: f32,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct MarkerlessPoseTrack {
+    pub frames: Vec<MarkerlessPoseFrame>,
+    pub bone_lengths: Vec<f32>,
+}
+
+pub fn build_markerless_pose_track(
+    joint_tracks: &[MarkerlessMotionTrack],
+    bones: &[(usize, usize)],
+) -> MarkerlessPoseTrack {
+    if joint_tracks.is_empty() {
+        return MarkerlessPoseTrack { frames: Vec::new(), bone_lengths: Vec::new() };
+    }
+    let frame_count = joint_tracks.iter().map(|track| track.samples.len()).min().unwrap_or(0);
+    let mut frames = Vec::with_capacity(frame_count);
+    for frame_index in 0..frame_count {
+        let joints = joint_tracks.iter().map(|track| track.samples[frame_index].position).collect::<Vec<_>>();
+        let root = joints.iter().fold([0.0, 0.0], |sum, point| [sum[0] + point[0], sum[1] + point[1]]);
+        let root = [root[0] / joints.len() as f32, root[1] / joints.len() as f32];
+        let confidence = joint_tracks.iter().map(|track| track.samples[frame_index].confidence).sum::<f32>()
+            / joint_tracks.len() as f32;
+        frames.push(MarkerlessPoseFrame {
+            frame: joint_tracks[0].samples[frame_index].frame,
+            joints,
+            root,
+            confidence: confidence.clamp(0.0, 1.0),
+        });
+    }
+    let bone_lengths = bones.iter().map(|&(a, b)| {
+        let Some(first) = frames.first() else { return 0.0; };
+        match (first.joints.get(a), first.joints.get(b)) {
+            (Some(a), Some(b)) if a.iter().all(|v| v.is_finite()) && b.iter().all(|v| v.is_finite()) =>
+                (a[0] - b[0]).hypot(a[1] - b[1]),
+            _ => 0.0,
+        }
+    }).collect();
+    MarkerlessPoseTrack { frames, bone_lengths }
+}
+
 /// Interpolates an intermediate frame at fractional position `t` (0.0 .. 1.0)
 /// using bidirectional forward and backward flow fields.
 pub fn interpolate_timewarp_frame(
@@ -515,5 +562,20 @@ mod tests {
         assert!(smoothed.samples[1].position[0] < 6.0);
         assert_eq!(smoothed.samples[0].frame, 0);
         assert_eq!(smoothed.samples[2].frame, 2);
+    }
+
+    #[test]
+    fn pose_track_uses_common_frames_and_computes_bones() {
+        let make = |offset: f32| MarkerlessMotionTrack {
+            samples: vec![
+                MarkerlessMotionSample { frame: 0, position: [offset, 0.0], confidence: 1.0 },
+                MarkerlessMotionSample { frame: 1, position: [offset + 1.0, 0.0], confidence: 0.8 },
+            ],
+        };
+        let pose = build_markerless_pose_track(&[make(0.0), make(3.0)], &[(0, 1)]);
+        assert_eq!(pose.frames.len(), 2);
+        assert_eq!(pose.frames[0].root, [1.5, 0.0]);
+        assert!((pose.bone_lengths[0] - 3.0).abs() < 0.001);
+        assert!((pose.frames[1].confidence - 0.8).abs() < 0.001);
     }
 }
