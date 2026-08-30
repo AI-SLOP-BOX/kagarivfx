@@ -626,7 +626,8 @@ impl eframe::App for AfterEffectsApp {
 
         // Crash-recovery autosave: write a rotating snapshot when dirty and due
         let autosave_path = if let Some(document) = self.production_document.as_ref() {
-            self.autosave.tick_production(document)
+            self.autosave
+                .tick_production(self.history.current(), document)
         } else {
             self.autosave.tick(self.history.current())
         };

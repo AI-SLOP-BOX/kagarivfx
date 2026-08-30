@@ -95,11 +95,17 @@ impl AutosaveManager {
         Ok(path)
     }
 
-    pub fn tick_production(&mut self, document: &ProductionDocument) -> Option<PathBuf> {
+    pub fn tick_production(
+        &mut self,
+        project: &Project,
+        document: &ProductionDocument,
+    ) -> Option<PathBuf> {
         if !self.dirty || self.last_save.elapsed() < self.interval {
             return None;
         }
-        let path = self.write_snapshot(&document.project, Some(document));
+        let mut current_document = document.clone();
+        current_document.project = project.clone();
+        let path = self.write_snapshot(project, Some(&current_document));
         self.dirty = false;
         self.last_save = Instant::now();
         path.ok()
@@ -239,6 +245,24 @@ mod tests {
         // Clear removes everything
         mgr.clear_recovery();
         assert!(!mgr.has_recovery());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn production_autosave_uses_latest_project_with_metadata() {
+        let dir = std::env::temp_dir().join(format!("aevfx_autosave_production_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let mut manager = AutosaveManager::new(&dir).with_interval(Duration::from_secs(0));
+        let mut document = ProductionDocument::new(sample_project());
+        document.audio.sample_rate = 44_100;
+        let mut latest = sample_project();
+        latest.active_composition_mut().name = "Latest".into();
+        manager.mark_dirty();
+        manager.tick_production(&latest, &document).expect("writes production snapshot");
+
+        let recovered = manager.load_latest_recovery().expect("recovers project");
+        assert_eq!(recovered.active_composition().name, "Latest");
+        assert_eq!(manager.load_latest_production().unwrap().audio.sample_rate, 44_100);
         let _ = std::fs::remove_dir_all(&dir);
     }
 
