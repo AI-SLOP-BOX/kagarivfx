@@ -60,7 +60,13 @@ impl TileCache {
     pub fn tiles_for_frame(&self, _frame: u32, comp_w: u32, comp_h: u32) -> Vec<TileCoord> {
         let cols = comp_w.div_ceil(self.tile_size);
         let rows = comp_h.div_ceil(self.tile_size);
-        let mut coords = Vec::with_capacity((cols * rows) as usize);
+        let Some(count) = (cols as usize).checked_mul(rows as usize) else {
+            return Vec::new();
+        };
+        if count > isize::MAX as usize {
+            return Vec::new();
+        }
+        let mut coords = Vec::with_capacity(count);
         for ty in 0..rows {
             for tx in 0..cols {
                 coords.push(TileCoord { tx, ty });
@@ -70,8 +76,8 @@ impl TileCache {
     }
 
     pub fn tile_rect(&self, coord: TileCoord, comp_w: u32, comp_h: u32) -> (u32, u32, u32, u32) {
-        let x = coord.tx * self.tile_size;
-        let y = coord.ty * self.tile_size;
+        let x = coord.tx.saturating_mul(self.tile_size);
+        let y = coord.ty.saturating_mul(self.tile_size);
         let w = self.tile_size.min(comp_w.saturating_sub(x));
         let h = self.tile_size.min(comp_h.saturating_sub(y));
         (x, y, w, h)
@@ -102,7 +108,12 @@ impl TileCache {
         }
 
         // Evict if over budget
-        while self.current_memory + tile_bytes > self.max_memory && !self.tiles.is_empty() {
+        while self
+            .current_memory
+            .checked_add(tile_bytes)
+            .is_none_or(|total| total > self.max_memory)
+            && !self.tiles.is_empty()
+        {
             if let Some((worst_key, worst_entry)) = self
                 .tiles
                 .iter()
@@ -116,7 +127,10 @@ impl TileCache {
             }
         }
 
-        self.current_memory += tile_bytes;
+        let Some(new_memory) = self.current_memory.checked_add(tile_bytes) else {
+            return;
+        };
+        self.current_memory = new_memory;
         self.tiles.insert(
             key,
             TileEntry {
@@ -234,5 +248,20 @@ mod tests {
         let cache = TileCache::new(0, 64);
         assert_eq!(cache.tile_size(), 1);
         assert_eq!(cache.tiles_for_frame(0, 2, 1).len(), 2);
+    }
+
+    #[test]
+    fn huge_tile_grid_is_rejected_without_capacity_overflow() {
+        let cache = TileCache::new(1, 64);
+        assert!(cache.tiles_for_frame(0, u32::MAX, u32::MAX).is_empty());
+    }
+
+    #[test]
+    fn overflowing_tile_coordinates_saturate_outside_frame() {
+        let cache = TileCache::new(u32::MAX, 64);
+        assert_eq!(
+            cache.tile_rect(TileCoord { tx: 2, ty: 2 }, 100, 100),
+            (u32::MAX, u32::MAX, 0, 0)
+        );
     }
 }
