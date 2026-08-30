@@ -744,6 +744,20 @@ pub fn pose3d_quality(pose: &MarkerlessPose3DTrack, frame_index: usize) -> (usiz
     (valid, if frame.confidence.is_finite() { frame.confidence.clamp(0.0, 1.0) } else { 0.0 })
 }
 
+pub fn filter_pose3d_frames_by_quality(
+    pose: &mut MarkerlessPose3DTrack,
+    minimum_joints: usize,
+    minimum_confidence: f32,
+) -> usize {
+    let threshold = if minimum_confidence.is_finite() { minimum_confidence.clamp(0.0, 1.0) } else { 0.0 };
+    let before = pose.frames.len();
+    pose.frames.retain(|frame| {
+        frame.joints.iter().filter(|point| point.iter().all(|value| value.is_finite())).count() >= minimum_joints
+            && frame.confidence.is_finite() && frame.confidence >= threshold
+    });
+    before - pose.frames.len()
+}
+
 pub trait Pose3DInferenceBackend {
     fn infer_joints_3d(&mut self, rgb: &[f32], width: u32, height: u32) -> Vec<([f32; 3], f32)>;
 }
@@ -1640,6 +1654,19 @@ mod tests {
         };
         assert_eq!(pose3d_quality(&pose, 0), (1, 1.0));
         assert_eq!(pose3d_quality(&pose, 9), (0, 0.0));
+    }
+
+    #[test]
+    fn pose_3d_quality_filter_removes_bad_frames_only() {
+        let mut pose = MarkerlessPose3DTrack {
+            frames: vec![
+                MarkerlessPose3DFrame { frame: 0, joints: vec![[1.0, 2.0, 3.0]], confidence: 0.9 },
+                MarkerlessPose3DFrame { frame: 1, joints: vec![[f32::NAN; 3]], confidence: 0.9 },
+                MarkerlessPose3DFrame { frame: 2, joints: vec![[1.0, 2.0, 3.0]], confidence: 0.2 },
+            ], bones: vec![],
+        };
+        assert_eq!(filter_pose3d_frames_by_quality(&mut pose, 1, 0.5), 2);
+        assert_eq!(pose.frames.iter().map(|frame| frame.frame).collect::<Vec<_>>(), vec![0]);
     }
 
     #[test]
