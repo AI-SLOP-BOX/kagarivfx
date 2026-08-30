@@ -173,7 +173,18 @@ pub fn assign_features_to_humanoid(
     width: u32,
     height: u32,
 ) -> Vec<Option<usize>> {
+    assign_features_to_humanoid_with_confidence(features, width, height, 1.0)
+        .into_iter().map(|value| value.map(|(index, _)| index)).collect()
+}
+
+pub fn assign_features_to_humanoid_with_confidence(
+    features: &[[f32; 2]],
+    width: u32,
+    height: u32,
+    minimum_confidence: f32,
+) -> Vec<Option<(usize, f32)>> {
     if features.is_empty() || width == 0 || height == 0 { return vec![None; 17]; }
+    let minimum_confidence = if minimum_confidence.is_finite() { minimum_confidence.clamp(0.0, 1.0) } else { 0.0 };
     let valid = features.iter().filter(|point| point.iter().all(|value| value.is_finite())).collect::<Vec<_>>();
     if valid.is_empty() { return vec![None; 17]; }
     let min_x = valid.iter().map(|point| point[0]).fold(f32::INFINITY, f32::min);
@@ -192,11 +203,13 @@ pub fn assign_features_to_humanoid(
     canonical.iter().map(|&(x, y)| {
         features.iter().enumerate().filter(|(index, point)| {
             !used[*index] && point[0].is_finite() && point[1].is_finite()
-        }).min_by(|(_, a), (_, b)| {
-            let da = ((a[0] - min_x) / span_x - x).hypot((a[1] - min_y) / span_y - y);
-            let db = ((b[0] - min_x) / span_x - x).hypot((b[1] - min_y) / span_y - y);
-            da.total_cmp(&db)
-        }).map(|(index, _)| { used[index] = true; index })
+        }).map(|(index, point)| {
+            let da = ((point[0] - min_x) / span_x - x).hypot((point[1] - min_y) / span_y - y);
+            (index, point, da)
+        }).min_by(|(_, _, da), (_, _, db)| da.total_cmp(db)).and_then(|(index, _, distance)| {
+            let confidence = (1.0 - distance * 2.0).clamp(0.0, 1.0);
+            if confidence < minimum_confidence { None } else { used[index] = true; Some((index, confidence)) }
+        })
     }).collect()
 }
 
