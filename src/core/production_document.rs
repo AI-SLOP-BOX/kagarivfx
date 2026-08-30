@@ -146,7 +146,9 @@ impl ProductionDocument {
     /// supplies domain-specific values.
     pub fn from_legacy_project_json(json: &str) -> Result<Self, String> {
         let project = crate::core::project_migration::load_project_migrated(json)?;
-        Ok(Self::new(project))
+        let document = Self::new(project);
+        document.validate()?;
+        Ok(document)
     }
 
     pub fn project(&self) -> &Project {
@@ -289,6 +291,14 @@ mod tests {
         assert_eq!(document.project().compositions.len(), 1);
         assert_eq!(document.audio.sample_rate, 48_000);
         assert!(document.bindings.is_empty());
+    }
+
+    #[test]
+    fn legacy_migration_rejects_unusable_project() {
+        let mut project = Project::default();
+        project.active_composition_idx = project.compositions.len();
+        let legacy = crate::core::project_migration::save_project_versioned(&project).unwrap();
+        assert!(ProductionDocument::from_legacy_project_json(&legacy).is_err());
     }
 
     #[test]
