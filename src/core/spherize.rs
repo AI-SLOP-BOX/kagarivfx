@@ -2,8 +2,8 @@
 /// Spherize / CC Sphere options matching After Effects Spherize effect.
 #[derive(Debug, Clone)]
 pub struct SpherizeOptions {
-    pub radius: f32,       // Sphere radius in pixels
-    pub center: [f32; 2],  // Center coordinates of sphere
+    pub radius: f32,           // Sphere radius in pixels
+    pub center: [f32; 2],      // Center coordinates of sphere
     pub refractive_index: f32, // Spherical refraction strength
 }
 
@@ -24,8 +24,20 @@ pub fn apply_spherize(
     height: u32,
     options: &SpherizeOptions,
 ) -> Vec<u8> {
-    let num_pixels = (width * height) as usize;
-    if pixels.len() != num_pixels * 4 || options.radius <= 0.001 {
+    let Some(num_pixels) = (width as usize)
+        .checked_mul(height as usize)
+        .filter(|&count| count <= usize::MAX / 4)
+    else {
+        return pixels.to_vec();
+    };
+    if pixels.len() != num_pixels * 4
+        || width == 0
+        || height == 0
+        || !options.radius.is_finite()
+        || !options.center.iter().all(|value| value.is_finite())
+        || !options.refractive_index.is_finite()
+        || options.radius <= 0.001
+    {
         return pixels.to_vec();
     }
 
@@ -52,7 +64,8 @@ pub fn apply_spherize(
 
                 // Refraction distortion factor
                 let factor = if dist > 0.001 {
-                    (1.0 - z * (1.0 - 1.0 / options.refractive_index.max(0.1))) * (norm_d.asin() / (std::f32::consts::PI * 0.5))
+                    (1.0 - z * (1.0 - 1.0 / options.refractive_index.max(0.1)))
+                        * (norm_d.asin() / (std::f32::consts::PI * 0.5))
                 } else {
                     1.0
                 };
@@ -106,7 +119,8 @@ mod tests {
         let max_r = ((cx * cx + cy * cy).sqrt()).max(1.0);
         for y in 0..h {
             for x in 0..w {
-                let d = (((x as f32 - cx).powi(2) + (y as f32 - cy).powi(2)).sqrt() / max_r * 255.0) as u8;
+                let d = (((x as f32 - cx).powi(2) + (y as f32 - cy).powi(2)).sqrt() / max_r * 255.0)
+                    as u8;
                 v.extend_from_slice(&[d, d, d, 255]);
             }
         }
@@ -119,6 +133,20 @@ mod tests {
         let options = SpherizeOptions::default_for_size(4.0, 4.0);
         let out = apply_spherize(&pixels, 4, 4, &options);
         assert_eq!(out.len(), 64);
+    }
+
+    #[test]
+    fn test_spherize_rejects_invalid_dimensions_and_options() {
+        let pixels = vec![7u8; 4];
+        let invalid_options = [
+            SpherizeOptions { radius: f32::NAN, ..SpherizeOptions::default_for_size(1.0, 1.0) },
+            SpherizeOptions { center: [f32::INFINITY, 0.0], ..SpherizeOptions::default_for_size(1.0, 1.0) },
+            SpherizeOptions { refractive_index: f32::NAN, ..SpherizeOptions::default_for_size(1.0, 1.0) },
+        ];
+        for options in invalid_options {
+            assert_eq!(apply_spherize(&pixels, 1, 1, &options), pixels);
+        }
+        assert_eq!(apply_spherize(&pixels, u32::MAX, u32::MAX, &SpherizeOptions::default_for_size(1.0, 1.0)), pixels);
     }
 
     #[test]
@@ -156,7 +184,11 @@ mod tests {
     fn test_higher_refractive_index_changes_interior() {
         let img = radial_gradient(32, 32);
         let mk = |n: f32| {
-            let options = SpherizeOptions { radius: 12.0, center: [16.0, 16.0], refractive_index: n };
+            let options = SpherizeOptions {
+                radius: 12.0,
+                center: [16.0, 16.0],
+                refractive_index: n,
+            };
             apply_spherize(&img, 32, 32, &options)
         };
         let n1 = mk(1.0);
@@ -170,7 +202,10 @@ mod tests {
     #[test]
     fn test_zero_radius_is_identity() {
         let img = radial_gradient(16, 16);
-        let options = SpherizeOptions { radius: 0.0, ..SpherizeOptions::default_for_size(16.0, 16.0) };
+        let options = SpherizeOptions {
+            radius: 0.0,
+            ..SpherizeOptions::default_for_size(16.0, 16.0)
+        };
         let out = apply_spherize(&img, 16, 16, &options);
         assert_eq!(out, img);
     }
