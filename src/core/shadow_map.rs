@@ -19,10 +19,15 @@ pub struct ShadowMap {
 
 impl ShadowMap {
     pub fn new(width: u32, height: u32) -> Self {
+        const MAX_SHADOW_PIXELS: usize = 16_777_216;
+        let size = (width as usize)
+            .checked_mul(height as usize)
+            .filter(|&count| count <= MAX_SHADOW_PIXELS)
+            .unwrap_or(0);
         Self {
             width,
             height,
-            depth_buffer: vec![f32::INFINITY; (width * height) as usize],
+            depth_buffer: vec![f32::INFINITY; size],
             light_view_proj: [
                 [1.0, 0.0, 0.0, 0.0],
                 [0.0, 1.0, 0.0, 0.0],
@@ -40,9 +45,11 @@ impl ShadowMap {
     /// Records depth for a sample point in shadow map space.
     pub fn set_depth(&mut self, x: u32, y: u32, depth: f32) {
         if x < self.width && y < self.height {
-            let idx = (y * self.width + x) as usize;
-            if depth < self.depth_buffer[idx] {
-                self.depth_buffer[idx] = depth;
+            let idx = y as usize * self.width as usize + x as usize;
+            if let Some(slot) = self.depth_buffer.get_mut(idx) {
+                if depth.is_finite() && depth < *slot {
+                    *slot = depth;
+                }
             }
         }
     }
@@ -50,6 +57,16 @@ impl ShadowMap {
     /// Evaluates shadow visibility (0.0 = fully in shadow, 1.0 = fully lit)
     /// using 3x3 Percentage-Closer Filtering (PCF) for smooth soft shadow edges.
     pub fn sample_shadow_pcf(&self, sm_x: f32, sm_y: f32, current_depth: f32, bias: f32) -> f32 {
+        if self.width == 0
+            || self.height == 0
+            || self.depth_buffer.len() != self.width as usize * self.height as usize
+            || !sm_x.is_finite()
+            || !sm_y.is_finite()
+            || !current_depth.is_finite()
+            || !bias.is_finite()
+        {
+            return 1.0;
+        }
         let ix = sm_x.round() as i32;
         let iy = sm_y.round() as i32;
 
@@ -107,8 +124,10 @@ pub fn calculate_surface_shading(
                 continue;
             }
             LightType::Parallel => {
-                let lx = -1.0f32; let ly = -1.0f32; let lz = 1.0f32;
-                let len = (lx*lx + ly*ly + lz*lz).sqrt();
+                let lx = -1.0f32;
+                let ly = -1.0f32;
+                let lz = 1.0f32;
+                let len = (lx * lx + ly * ly + lz * lz).sqrt();
                 ([lx / len, ly / len, lz / len], light.intensity * 0.01)
             }
             LightType::Point => {
@@ -136,7 +155,8 @@ pub fn calculate_surface_shading(
 
                 let cone_angle = (cone_angle_deg * 0.5).to_radians().cos();
                 let spot_dir = [0.0f32, 0.0f32, -1.0f32];
-                let dot_spot = -(l_dir[0] * spot_dir[0] + l_dir[1] * spot_dir[1] + l_dir[2] * spot_dir[2]);
+                let dot_spot =
+                    -(l_dir[0] * spot_dir[0] + l_dir[1] * spot_dir[1] + l_dir[2] * spot_dir[2]);
                 if dot_spot < cone_angle {
                     atten = 0.0;
                 }
@@ -177,16 +197,20 @@ pub fn calculate_surface_shading(
 
         let n_dot_h = (n[0] * half_vec[0] + n[1] * half_vec[1] + n[2] * half_vec[2]).max(0.0);
         let spec_power = material.specular_exponent.max(1.0);
-        let spec_factor = n_dot_h.powf(spec_power) * (material.specular * 0.01) * attenuation * shadow;
+        let spec_factor =
+            n_dot_h.powf(spec_power) * (material.specular * 0.01) * attenuation * shadow;
 
         specular_acc[0] += l_col[0] * spec_factor;
         specular_acc[1] += l_col[1] * spec_factor;
         specular_acc[2] += l_col[2] * spec_factor;
     }
 
-    let final_r = (base_color[0] * (ambient_acc[0] + diffuse_acc[0]) + specular_acc[0]).clamp(0.0, 1.0);
-    let final_g = (base_color[1] * (ambient_acc[1] + diffuse_acc[1]) + specular_acc[1]).clamp(0.0, 1.0);
-    let final_b = (base_color[2] * (ambient_acc[2] + diffuse_acc[2]) + specular_acc[2]).clamp(0.0, 1.0);
+    let final_r =
+        (base_color[0] * (ambient_acc[0] + diffuse_acc[0]) + specular_acc[0]).clamp(0.0, 1.0);
+    let final_g =
+        (base_color[1] * (ambient_acc[1] + diffuse_acc[1]) + specular_acc[1]).clamp(0.0, 1.0);
+    let final_b =
+        (base_color[2] * (ambient_acc[2] + diffuse_acc[2]) + specular_acc[2]).clamp(0.0, 1.0);
 
     [final_r, final_g, final_b, base_color[3]]
 }
@@ -194,6 +218,17 @@ pub fn calculate_surface_shading(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_shadow_map_bounds_allocation_and_invalid_samples() {
+        let map = ShadowMap::new(u32::MAX, u32::MAX);
+        assert!(map.depth_buffer.is_empty());
+        assert_eq!(map.sample_shadow_pcf(0.0, 0.0, 0.0, 0.0), 1.0);
+
+        let map = ShadowMap::new(2, 2);
+        assert_eq!(map.sample_shadow_pcf(f32::NAN, 0.0, 0.0, 0.0), 1.0);
+        assert_eq!(map.sample_shadow_pcf(0.0, 0.0, f32::INFINITY, 0.0), 1.0);
+    }
     use crate::core::timeline::LightType;
 
     #[test]
@@ -204,7 +239,10 @@ mod tests {
 
         // Point at depth 12.0 behind occluder should be partially in shadow
         let shadow_val = sm.sample_shadow_pcf(5.0, 5.0, 12.0, 0.01);
-        assert!(shadow_val < 1.0, "Point behind occluder must receive shadow");
+        assert!(
+            shadow_val < 1.0,
+            "Point behind occluder must receive shadow"
+        );
 
         // Point in front of occluder (depth 8.0) must be fully lit
         let lit_val = sm.sample_shadow_pcf(5.0, 5.0, 8.0, 0.01);
@@ -234,7 +272,7 @@ mod tests {
 
         let shaded = calculate_surface_shading(
             [0.0, 0.0, 0.0],
-            [0.0, 0.0, 1.0], // Facing camera
+            [0.0, 0.0, 1.0],   // Facing camera
             [0.0, 0.0, 100.0], // Camera in front
             [1.0, 0.5, 0.2, 1.0],
             &mat,
