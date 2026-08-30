@@ -168,6 +168,23 @@ pub fn detect_markerless_features(
     selected
 }
 
+pub fn redetect_markerless_feature(
+    frame_rgba: &[u8],
+    width: u32,
+    height: u32,
+    predicted: [f32; 2],
+    search_radius: u32,
+) -> Option<[f32; 2]> {
+    let candidates = detect_markerless_features(frame_rgba, width, height, 128, 2);
+    let radius = search_radius.max(1) as f32;
+    candidates.into_iter()
+        .filter(|point| (point[0] - predicted[0]).hypot(point[1] - predicted[1]) <= radius)
+        .min_by(|a, b| {
+            (a[0] - predicted[0]).hypot(a[1] - predicted[1])
+                .total_cmp(&(b[0] - predicted[0]).hypot(b[1] - predicted[1]))
+        })
+}
+
 pub fn assign_features_to_humanoid(
     features: &[[f32; 2]],
     width: u32,
@@ -306,7 +323,10 @@ pub fn track_markerless_motion(
             } else {
                 0.0
             };
-            *position = predicted;
+            *position = if confidence < 0.15 {
+                redetect_markerless_feature(frames[frame], width, height, predicted, search_radius.max(1) as u32)
+                    .unwrap_or(predicted)
+            } else { predicted };
             tracks[index].samples.push(MarkerlessMotionSample {
                 frame: frame as u32,
                 position: *position,
