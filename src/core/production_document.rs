@@ -108,6 +108,13 @@ impl ProductionDocument {
                 ProjectItemType::Image { width, height } if *width == 0 || *height == 0 => {
                     return Err("asset image dimensions must be non-zero".into());
                 }
+                ProjectItemType::Image { path, .. }
+                | ProjectItemType::Video { source: path, .. }
+                | ProjectItemType::Audio { path, .. }
+                    if path.trim().is_empty() =>
+                {
+                    return Err("media asset path must not be empty".into());
+                }
                 ProjectItemType::Video { duration_sec, .. }
                 | ProjectItemType::Audio { duration_sec, .. }
                     if !duration_sec.is_finite() || *duration_sec < 0.0 =>
@@ -353,6 +360,17 @@ mod tests {
                 path: "image.png".into(),
                 width: 0,
                 height: 1080,
+            },
+        ));
+        assert!(ProductionDocument::new(invalid_project).validate().is_err());
+
+        let mut invalid_project = Project::default();
+        invalid_project.assets.push(crate::core::timeline::ProjectItem::new(
+            "empty-media",
+            "Empty Media",
+            ProjectItemType::Audio {
+                path: "  ".into(),
+                duration_sec: 1.0,
             },
         ));
         assert!(ProductionDocument::new(invalid_project).validate().is_err());
