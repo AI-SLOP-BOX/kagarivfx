@@ -415,6 +415,7 @@ fn validate_composition(
                 || color.iter().any(|value| !value.is_finite())
                 || stroke_color.iter().any(|value| !value.is_finite())
                 || !tracking.is_finite()
+                || !(-100_000.0..=100_000.0).contains(tracking)
                 || !leading.is_finite()
                 || *leading <= 0.0
                 || !stroke_width.is_finite()
@@ -1377,6 +1378,14 @@ mod tests {
             &mut invalid_project.compositions[0].layers[1].layer_type
         {
             *font_family = "   ".into();
+        }
+        assert!(ProductionDocument::new(invalid_project).validate().is_err());
+
+        let mut invalid_project = Project::default();
+        if let LayerType::Text { tracking, .. } =
+            &mut invalid_project.compositions[0].layers[1].layer_type
+        {
+            *tracking = 100_001.0;
         }
         assert!(ProductionDocument::new(invalid_project).validate().is_err());
 
