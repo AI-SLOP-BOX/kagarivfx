@@ -102,7 +102,8 @@ pub fn draw_tracker_panel(app: &mut AfterEffectsApp, ui: &mut egui::Ui, current_
                         app.modify_project(|p| {
                             let comp = p.active_composition_mut();
                             crate::core::tracker_engine::TrackerEngine::analyze_markerless_tracks(
-                                &mut comp.layers[idx], start, wa_out, 2, mocap_search as i32, mocap_confidence,
+                                &mut comp.layers[idx], start, wa_out, mocap_max as usize, mocap_spacing,
+                                2, mocap_search as i32, mocap_confidence,
                             );
                         });
                         app.toasts.info("Optical-flow mocap generated keyframes for all tracker points");

@@ -12,6 +12,8 @@ impl TrackerEngine {
         layer: &mut Layer,
         start_frame: u32,
         end_frame: u32,
+        max_features: usize,
+        feature_spacing: u32,
         block_radius: i32,
         search_radius: i32,
         minimum_confidence: f32,
@@ -24,7 +26,7 @@ impl TrackerEngine {
                 return 0;
             };
             let seeds = crate::core::optical_flow_timewarp::detect_markerless_features(
-                &first, width as u32, height as u32, 64, 12,
+                &first, width as u32, height as u32, max_features, feature_spacing,
             );
             for (index, position) in seeds.into_iter().enumerate() {
                 layer.trackers.push(crate::core::timeline::TrackerPoint::new(
