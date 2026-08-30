@@ -37,6 +37,8 @@ pub struct ProductionDocument {
 
 impl ProductionDocument {
     pub const CURRENT_SCHEMA_VERSION: u32 = 1;
+    pub const MAX_AUDIO_CHANNELS: usize = 4096;
+    pub const MAX_BINDINGS: usize = 8192;
 
     pub fn new(project: Project) -> Self {
         Self {
@@ -69,10 +71,16 @@ impl ProductionDocument {
         if !self.audio.master_gain.is_finite() || self.audio.master_gain < 0.0 {
             return Err("audio master gain must be finite and non-negative".into());
         }
+        if self.audio.channels.len() > Self::MAX_AUDIO_CHANNELS {
+            return Err("production document contains too many audio channels".into());
+        }
         for channel in &self.audio.channels {
             channel.validate().map_err(str::to_owned)?;
         }
         self.tempo.validate().map_err(str::to_owned)?;
+        if self.bindings.len() > Self::MAX_BINDINGS {
+            return Err("production document contains too many automation bindings".into());
+        }
         for binding in &self.bindings {
             binding.validate().map_err(str::to_owned)?;
         }
@@ -172,6 +180,36 @@ mod tests {
 
         document.schema_version = ProductionDocument::CURRENT_SCHEMA_VERSION;
         document.audio.sample_rate = 0;
+        assert!(document.validate().is_err());
+    }
+
+    #[test]
+    fn rejects_unbounded_audio_and_binding_collections() {
+        let mut document = ProductionDocument::new(Project::default());
+        document
+            .audio
+            .channels
+            .resize(ProductionDocument::MAX_AUDIO_CHANNELS + 1, MixerChannel::default());
+        assert!(document.validate().is_err());
+
+        let mut document = ProductionDocument::new(Project::default());
+        document.bindings.resize(
+            ProductionDocument::MAX_BINDINGS + 1,
+            AutomationBinding {
+                source: "audio.x".into(),
+                target: "vfx.y".into(),
+                curve: crate::core::automation_binding::AutomationCurve {
+                    points: vec![crate::core::automation_binding::AutomationPoint {
+                        time: crate::core::unified_time::Time::ZERO,
+                        value: 0.0,
+                    }],
+                },
+                input_min: 0.0,
+                input_max: 1.0,
+                output_min: 0.0,
+                output_max: 1.0,
+            },
+        );
         assert!(document.validate().is_err());
     }
 
