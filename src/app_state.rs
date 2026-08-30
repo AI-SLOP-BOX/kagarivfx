@@ -4,24 +4,7 @@ use std::sync::mpsc::Receiver;
 use crate::{ExportEvent, TrackerEvent, ViewportMode};
 use crate::core::timeline::Project;
 
-/// Mixer channel state for the audio mixer panel.
-#[derive(Debug, Clone, Copy)]
-pub struct MixerChannel {
-    /// Gain in dB (-60..+12)
-    pub gain_db: f32,
-    /// Pan position (-100 left .. 0 center .. +100 right)
-    pub pan: f32,
-    /// Mute toggle — when true, this channel is silenced in the mix
-    pub mute: bool,
-    /// Solo toggle — when any channel is soloed, only soloed channels are heard
-    pub solo: bool,
-}
-
-impl Default for MixerChannel {
-    fn default() -> Self {
-        Self { gain_db: 0.0, pan: 0.0, mute: false, solo: false }
-    }
-}
+pub use crate::core::audio_types::MixerChannel;
 
 /// Playback domain state: transport, current frame, work area bounds, volume.
 #[derive(Debug, Clone)]

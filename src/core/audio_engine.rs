@@ -25,13 +25,20 @@ impl AudioBuffer {
             samples.push(s);
             samples.push(s);
         }
-        Self { samples, sample_rate, channels: 2 }
+        Self {
+            samples,
+            sample_rate,
+            channels: 2,
+        }
     }
 
     /// Resample PCM audio samples to match destination sample rate (e.g. 44.1kHz -> 48kHz).
     #[allow(dead_code)]
     pub fn resample(&self, target_sample_rate: u32) -> Self {
-        if self.sample_rate == target_sample_rate || self.sample_rate == 0 || self.samples.is_empty() {
+        if self.sample_rate == target_sample_rate
+            || self.sample_rate == 0
+            || self.samples.is_empty()
+        {
             return self.clone();
         }
 
@@ -139,7 +146,13 @@ pub fn convert_audio_to_keyframes(comp: &Composition) -> Vec<AudioAmplitudeKeyfr
     let buffer_size = (sample_rate / comp.fps.max(1)) as usize;
 
     for frame in 0..comp.duration_frames {
-        let (_pcm, meter) = mix_audio_for_frame(comp, frame, sample_rate, buffer_size, &MasterDspParams::default());
+        let (_pcm, meter) = mix_audio_for_frame(
+            comp,
+            frame,
+            sample_rate,
+            buffer_size,
+            &MasterDspParams::default(),
+        );
 
         // Convert dB (-90dB .. +6dB) to normalized 0.0 .. 100.0 AE amplitude scale
         let db_to_ae_scale = |db: f32| -> f32 {
@@ -162,7 +175,6 @@ pub fn convert_audio_to_keyframes(comp: &Composition) -> Vec<AudioAmplitudeKeyfr
     keyframes
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -172,7 +184,10 @@ mod tests {
         let comp = Composition::new("c1".into(), "Comp 1".into(), 1920, 1080, 30, 300);
         let (buf, meter) = mix_audio_for_frame(&comp, 0, 44100, 512, &MasterDspParams::default());
         assert_eq!(buf.len(), 1024);
-        assert!(meter.peak_db_left < -100.0, "silent comp should have very low peak");
+        assert!(
+            meter.peak_db_left < -100.0,
+            "silent comp should have very low peak"
+        );
     }
 }
 
@@ -182,8 +197,7 @@ impl AudioBuffer {
     /// Parses a RIFF/WAVE file (PCM 8/16/24-bit, mono or stereo).
     /// Returns an error with a human-readable reason for unsupported formats.
     pub fn load_wav(path: &std::path::Path) -> Result<Self, String> {
-        let data = std::fs::read(path)
-            .map_err(|e| format!("cannot read WAV: {}", e))?;
+        let data = std::fs::read(path).map_err(|e| format!("cannot read WAV: {}", e))?;
         if data.len() < 44 || &data[0..4] != b"RIFF" || &data[8..12] != b"WAVE" {
             return Err("not a RIFF/WAVE file".into());
         }
@@ -227,7 +241,10 @@ impl AudioBuffer {
             return Err("WAV has invalid fmt chunk".into());
         }
         if format_tag != 1 {
-            return Err(format!("unsupported WAV format tag {} (need PCM)", format_tag));
+            return Err(format!(
+                "unsupported WAV format tag {} (need PCM)",
+                format_tag
+            ));
         }
         let raw = audio_data.unwrap();
         let bytes_per_sample = (bits / 8) as usize;
@@ -254,12 +271,17 @@ impl AudioBuffer {
             i += frame_bytes;
         }
 
-        Ok(Self { samples, sample_rate, channels })
+        Ok(Self {
+            samples,
+            sample_rate,
+            channels,
+        })
     }
 
     /// Peak amplitude in [0, 1] at a given time offset (± window/2 seconds).
     pub fn peak_at(&self, time_sec: f32, window_sec: f32) -> f32 {
-        let start_sample = ((time_sec - window_sec * 0.5).max(0.0) * self.sample_rate as f32) as usize
+        let start_sample = ((time_sec - window_sec * 0.5).max(0.0) * self.sample_rate as f32)
+            as usize
             * self.channels as usize;
         let end_sample = (((time_sec + window_sec * 0.5) * self.sample_rate as f32) as usize)
             .saturating_mul(self.channels as usize)
@@ -280,7 +302,9 @@ impl AudioBuffer {
         for b in 0..bins {
             let range = b * per_bin..((b + 1) * per_bin).min(total);
             peaks.push(range.clone().next().map_or(0.0, |_| {
-                self.samples[range].iter().fold(0.0f32, |m, s| m.max(s.abs()))
+                self.samples[range]
+                    .iter()
+                    .fold(0.0f32, |m, s| m.max(s.abs()))
             }));
         }
         peaks
@@ -375,7 +399,12 @@ pub fn apply_layer_audio_effects(samples: &mut [f32], layer: &Layer, sample_rate
         if !effect.enabled {
             continue;
         }
-        if let EffectType::BassTreble { bass_gain, treble_gain, crossover_freq } = &effect.effect_type {
+        if let EffectType::BassTreble {
+            bass_gain,
+            treble_gain,
+            crossover_freq,
+        } = &effect.effect_type
+        {
             let bass_db = bass_gain.evaluate(frame);
             let treble_db = treble_gain.evaluate(frame);
             let crossover = crossover_freq.evaluate(frame).clamp(80.0, 12000.0);
@@ -426,9 +455,14 @@ fn mix_precomp_audio(
             crate::core::timeline::LayerType::PreComp { comp_id, .. } => {
                 if let Some(sub) = sub_comp.find_sub_comp(comp_id) {
                     mix_precomp_audio(
-                        sub, sub_frame.saturating_sub(layer.in_frame),
-                        stereo_output, sample_rate, buffer_size,
-                        gain, pan, fps,
+                        sub,
+                        sub_frame.saturating_sub(layer.in_frame),
+                        stereo_output,
+                        sample_rate,
+                        buffer_size,
+                        gain,
+                        pan,
+                        fps,
                     );
                 }
             }
@@ -436,7 +470,9 @@ fn mix_precomp_audio(
                 let vol_db = volume.evaluate(sub_frame);
                 let _layer_gain = gain * 10.0f32.powf(vol_db / 20.0);
             }
-            crate::core::timeline::LayerType::Video { audio_wav: Some(w), .. } => {
+            crate::core::timeline::LayerType::Video {
+                audio_wav: Some(w), ..
+            } => {
                 let time_start = (sub_frame.saturating_sub(layer.in_frame)) as f32 / fps;
                 let source = {
                     let map = cache.lock().unwrap_or_else(|e| e.into_inner());
@@ -444,10 +480,14 @@ fn mix_precomp_audio(
                         Some(buf.clone())
                     } else {
                         drop(map);
-                        let loaded = AudioBuffer::load_wav(std::path::Path::new(w)).ok()
+                        let loaded = AudioBuffer::load_wav(std::path::Path::new(w))
+                            .ok()
                             .map(|b| std::sync::Arc::new(b.resample(sample_rate)));
                         if let Some(buf) = &loaded {
-                            cache.lock().unwrap_or_else(|e| e.into_inner()).insert(w.clone(), buf.clone());
+                            cache
+                                .lock()
+                                .unwrap_or_else(|e| e.into_inner())
+                                .insert(w.clone(), buf.clone());
                         }
                         loaded
                     }
@@ -455,7 +495,8 @@ fn mix_precomp_audio(
                 if let Some(buf) = source {
                     for i in 0..buffer_size {
                         let t = time_start + i as f32 / sample_rate as f32;
-                        let idx = (t.max(0.0) * buf.sample_rate as f32) as usize * buf.channels as usize;
+                        let idx =
+                            (t.max(0.0) * buf.sample_rate as f32) as usize * buf.channels as usize;
                         let l = buf.samples.get(idx).copied().unwrap_or(0.0);
                         let r = if buf.channels > 1 {
                             buf.samples.get(idx + 1).copied().unwrap_or(l)
@@ -491,7 +532,7 @@ pub fn mix_audio_sources_for_frame(
     sample_rate: u32,
     buffer_size: usize,
     // Optional per-layer mixer overrides indexed by layer order
-    mixer: Option<&[crate::app_state::MixerChannel]>,
+    mixer: Option<&[crate::core::audio_types::MixerChannel]>,
     dsp: &MasterDspParams,
 ) -> (Vec<f32>, AudioFrameMeter) {
     use std::collections::HashMap;
@@ -523,21 +564,32 @@ pub fn mix_audio_sources_for_frame(
                     if let Some(ch) = mix.get(layer_idx) {
                         sub_gain *= 10.0f32.powf(ch.gain_db / 20.0);
                         sub_pan = (ch.pan / 100.0).clamp(-1.0, 1.0);
-                        if ch.mute { sub_gain = 0.0; }
+                        if ch.mute {
+                            sub_gain = 0.0;
+                        }
                     }
                 }
                 if sub_gain > 0.0 {
-                    mix_precomp_audio(sub, sub_frame, &mut stereo_output, sample_rate, buffer_size, sub_gain, sub_pan, fps);
+                    mix_precomp_audio(
+                        sub,
+                        sub_frame,
+                        &mut stereo_output,
+                        sample_rate,
+                        buffer_size,
+                        sub_gain,
+                        sub_pan,
+                        fps,
+                    );
                 }
             }
             continue;
         }
         // Resolve the WAV path + gain for this layer
         let (wav_path, gain_db) = match &layer.layer_type {
-            LayerType::Audio { volume, .. } => {
-                (None, volume.evaluate(frame))
-            }
-            LayerType::Video { audio_wav: Some(w), .. } => (Some(w.clone()), 0.0f32),
+            LayerType::Audio { volume, .. } => (None, volume.evaluate(frame)),
+            LayerType::Video {
+                audio_wav: Some(w), ..
+            } => (Some(w.clone()), 0.0f32),
             _ => continue,
         };
         let mut gain = 10.0f32.powf(gain_db / 20.0);
@@ -573,10 +625,14 @@ pub fn mix_audio_sources_for_frame(
                     Some(buf.clone())
                 } else {
                     drop(map);
-                    let loaded = AudioBuffer::load_wav(std::path::Path::new(p)).ok()
+                    let loaded = AudioBuffer::load_wav(std::path::Path::new(p))
+                        .ok()
                         .map(|b| std::sync::Arc::new(b.resample(sample_rate)));
                     if let Some(buf) = &loaded {
-                        cache.lock().unwrap_or_else(|e| e.into_inner()).insert(p.clone(), buf.clone());
+                        cache
+                            .lock()
+                            .unwrap_or_else(|e| e.into_inner())
+                            .insert(p.clone(), buf.clone());
                     }
                     loaded
                 }
@@ -589,7 +645,8 @@ pub fn mix_audio_sources_for_frame(
             let t = time_start + i as f32 / sample_rate as f32;
             let (sample_l, sample_r) = match &source {
                 Some(buf) => {
-                    let idx = (t.max(0.0) * buf.sample_rate as f32) as usize * buf.channels as usize;
+                    let idx =
+                        (t.max(0.0) * buf.sample_rate as f32) as usize * buf.channels as usize;
                     let l = buf.samples.get(idx).copied().unwrap_or(0.0);
                     let r = if buf.channels > 1 {
                         buf.samples.get(idx + 1).copied().unwrap_or(l)
@@ -650,7 +707,12 @@ pub fn mix_audio_sources_for_frame(
             makeup_gain_db: dsp.comp_makeup,
         };
         let mut comp_state = audio_dsp::CompressorState::default();
-        audio_dsp::apply_compressor(&mut stereo_output, &comp_params, &mut comp_state, sample_rate);
+        audio_dsp::apply_compressor(
+            &mut stereo_output,
+            &comp_params,
+            &mut comp_state,
+            sample_rate,
+        );
     }
 
     // Meter the MIXED output, not per-layer contributions — otherwise the peak
@@ -684,7 +746,9 @@ pub fn mix_audio_sources_for_frame(
 /// Energy-based onset (beat) detection over a WAV file.
 /// Returns comp-frame indices where transients occur, sorted & deduped.
 pub fn detect_beat_frames(path: &std::path::Path, total_frames: u32, fps: f32) -> Vec<u32> {
-    let Ok(buf) = AudioBuffer::load_wav(path) else { return Vec::new() };
+    let Ok(buf) = AudioBuffer::load_wav(path) else {
+        return Vec::new();
+    };
     if buf.samples.is_empty() || total_frames == 0 || fps <= 0.0 {
         return Vec::new();
     }
@@ -696,8 +760,16 @@ pub fn detect_beat_frames(path: &std::path::Path, total_frames: u32, fps: f32) -
     while i < buf.samples.len() {
         let end = (i + hop * ch).min(buf.samples.len());
         let n = ((end - i) / ch).max(1);
-        let sum: f32 = buf.samples[i..end].iter().enumerate().map(|(k, s)| if k % ch == 0 { *s } else { 0.0 }).sum::<f32>()
-            + buf.samples[i..end].iter().enumerate().map(|(k, s)| if k % ch == 1 { *s } else { 0.0 }).sum::<f32>();
+        let sum: f32 = buf.samples[i..end]
+            .iter()
+            .enumerate()
+            .map(|(k, s)| if k % ch == 0 { *s } else { 0.0 })
+            .sum::<f32>()
+            + buf.samples[i..end]
+                .iter()
+                .enumerate()
+                .map(|(k, s)| if k % ch == 1 { *s } else { 0.0 })
+                .sum::<f32>();
         energies.push((sum / (2.0 * n as f32)).abs());
         i += hop * ch;
     }
@@ -729,9 +801,9 @@ pub fn detect_beat_frames(path: &std::path::Path, total_frames: u32, fps: f32) -
 #[cfg(test)]
 mod multitrack_tests {
     use super::*;
-    use crate::core::timeline::{Composition, Layer, LayerType};
-    use crate::core::property::Animatable;
     use crate::core::keyframe::Keyframe;
+    use crate::core::property::Animatable;
+    use crate::core::timeline::{Composition, Layer, LayerType};
 
     fn write_wav(path: &std::path::Path, samples: &[f32], rate: u32) {
         use std::io::Write;
@@ -751,7 +823,8 @@ mod multitrack_tests {
         f.write_all(b"data").unwrap();
         f.write_all(&data_len.to_le_bytes()).unwrap();
         for s in samples {
-            f.write_all(&((s.clamp(-1.0, 1.0) * 32767.0) as i16).to_le_bytes()).unwrap();
+            f.write_all(&((s.clamp(-1.0, 1.0) * 32767.0) as i16).to_le_bytes())
+                .unwrap();
         }
     }
 
@@ -769,16 +842,32 @@ mod multitrack_tests {
         write_wav(&wav_b, &samples_b, rate);
 
         let mut comp = Composition::new("c".into(), "Mix".into(), 64, 64, 30, 30);
-        let mut la = Layer::new("a".into(), "TrackA".into(), LayerType::Video {
-            source: "a".into(), frames_dir: "/tmp/na".into(), frame_count: 10,
-            audio_wav: Some(wav_a.to_string_lossy().to_string()), speed: 1.0,
-        }, 30);
+        let mut la = Layer::new(
+            "a".into(),
+            "TrackA".into(),
+            LayerType::Video {
+                source: "a".into(),
+                frames_dir: "/tmp/na".into(),
+                frame_count: 10,
+                audio_wav: Some(wav_a.to_string_lossy().to_string()),
+                speed: 1.0,
+            },
+            30,
+        );
         la.in_frame = 0;
         la.out_frame = 30;
-        let mut lb = Layer::new("b".into(), "TrackB".into(), LayerType::Video {
-            source: "b".into(), frames_dir: "/tmp/nb".into(), frame_count: 10,
-            audio_wav: Some(wav_b.to_string_lossy().to_string()), speed: 1.0,
-        }, 30);
+        let mut lb = Layer::new(
+            "b".into(),
+            "TrackB".into(),
+            LayerType::Video {
+                source: "b".into(),
+                frames_dir: "/tmp/nb".into(),
+                frame_count: 10,
+                audio_wav: Some(wav_b.to_string_lossy().to_string()),
+                speed: 1.0,
+            },
+            30,
+        );
         lb.in_frame = 0;
         lb.out_frame = 30;
         comp.layers.push(la);
@@ -838,7 +927,9 @@ mod beat_tests {
         bytes.extend_from_slice(&16u16.to_le_bytes()); // bits
         bytes.extend_from_slice(b"data");
         bytes.extend_from_slice(&data_len.to_le_bytes());
-        for s in samples { bytes.extend_from_slice(&s.to_le_bytes()); }
+        for s in samples {
+            bytes.extend_from_slice(&s.to_le_bytes());
+        }
         std::fs::write(path, bytes).unwrap();
     }
 
@@ -849,9 +940,21 @@ mod beat_tests {
         let path = dir.join("clicks.wav");
         write_test_wav(&path, 44100, &[0.2, 0.8, 1.4]);
         let beats = detect_beat_frames(&path, 60, 30.0);
-        assert!(beats.contains(&6), "expected onset near frame 6, got {:?}", beats);
-        assert!(beats.contains(&24), "expected onset near frame 24, got {:?}", beats);
-        assert!(beats.len() >= 3 && beats.len() <= 12, "sane beat count, got {:?}", beats);
+        assert!(
+            beats.contains(&6),
+            "expected onset near frame 6, got {:?}",
+            beats
+        );
+        assert!(
+            beats.contains(&24),
+            "expected onset near frame 24, got {:?}",
+            beats
+        );
+        assert!(
+            beats.len() >= 3 && beats.len() <= 12,
+            "sane beat count, got {:?}",
+            beats
+        );
         let _ = std::fs::remove_file(&path);
     }
 
@@ -862,7 +965,11 @@ mod beat_tests {
         let path = dir.join("silence.wav");
         write_test_wav(&path, 22050, &[]);
         let beats = detect_beat_frames(&path, 60, 30.0);
-        assert!(beats.is_empty(), "silence should have no beats, got {:?}", beats);
+        assert!(
+            beats.is_empty(),
+            "silence should have no beats, got {:?}",
+            beats
+        );
         let _ = std::fs::remove_file(&path);
     }
 }
