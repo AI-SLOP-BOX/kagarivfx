@@ -1,11 +1,11 @@
+use crate::core::mask::point_in_polygon;
+use rayon::prelude::*;
+use rayon::slice::ParallelSliceMut;
 /// Content-Aware Fill Inpainting Engine for object removal & texture synthesis.
 ///
 /// Uses an $O(N)$ BFS Distance Transform & Fast Marching Boundary Propagation
 /// to fill masked pixel areas smoothly without $O(R^2)$ performance stutter.
 use std::collections::VecDeque;
-use rayon::prelude::*;
-use rayon::slice::ParallelSliceMut;
-use crate::core::mask::point_in_polygon;
 
 #[allow(dead_code)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -32,7 +32,7 @@ pub fn generate_content_aware_fill_frame(
         vec![0u8; size]
     };
 
-    if mask_polygon.is_empty() {
+    if mask_polygon.is_empty() || width == 0 || height == 0 || width > i32::MAX as u32 || height > i32::MAX as u32 {
         return out_buffer;
     }
 
@@ -53,6 +53,11 @@ pub fn generate_content_aware_fill_frame(
     }
 
     // Step 2: Continuous Subpixel Euclidean Distance Transform Mask Expansion
+    let alpha_expansion = if alpha_expansion.is_finite() {
+        alpha_expansion.clamp(0.0, 256.0)
+    } else {
+        0.0
+    };
     if alpha_expansion > 0.5 {
         let radius_sq = alpha_expansion * alpha_expansion;
         let r_ceil = alpha_expansion.ceil() as i32;
@@ -60,31 +65,34 @@ pub fn generate_content_aware_fill_frame(
         let original_masked = is_masked.clone();
 
         // Parallelize mask expansion per row
-        is_masked.as_mut_slice().par_chunks_mut(w as usize).enumerate().for_each(|(y_idx, row)| {
-            let y = y_idx as i32;
-            for x in 0..w {
-                let idx = x as usize;
-                if !original_masked[y_idx * w as usize + idx] {
-                    'search: for dy in -r_ceil..=r_ceil {
-                        let ny = y + dy;
-                        if ny >= 0 && ny < h {
-                            let dy_sq = (dy * dy) as f32;
-                            for dx in -r_ceil..=r_ceil {
-                                let nx = x + dx;
-                                if nx >= 0 && nx < w
-                                    && (dx * dx) as f32 + dy_sq <= radius_sq {
+        is_masked
+            .as_mut_slice()
+            .par_chunks_mut(w as usize)
+            .enumerate()
+            .for_each(|(y_idx, row)| {
+                let y = y_idx as i32;
+                for x in 0..w {
+                    let idx = x as usize;
+                    if !original_masked[y_idx * w as usize + idx] {
+                        'search: for dy in -r_ceil..=r_ceil {
+                            let ny = y + dy;
+                            if ny >= 0 && ny < h {
+                                let dy_sq = (dy * dy) as f32;
+                                for dx in -r_ceil..=r_ceil {
+                                    let nx = x + dx;
+                                    if nx >= 0 && nx < w && (dx * dx) as f32 + dy_sq <= radius_sq {
                                         let nidx = (ny * w + nx) as usize;
                                         if original_masked[nidx] {
                                             row[idx] = true;
                                             break 'search;
                                         }
                                     }
+                                }
                             }
                         }
                     }
                 }
-            }
-        });
+            });
     }
 
     // Step 3: Fast Marching BFS Wavefront Inpainting (O(N) Complexity)
@@ -102,7 +110,9 @@ pub fn generate_content_aware_fill_frame(
                 let mut touches_masked = false;
                 for dy in -1..=1 {
                     for dx in -1..=1 {
-                        if dx == 0 && dy == 0 { continue; }
+                        if dx == 0 && dy == 0 {
+                            continue;
+                        }
                         let nx = x + dx;
                         let ny = y + dy;
                         if nx >= 0 && nx < w && ny >= 0 && ny < h {
@@ -113,7 +123,9 @@ pub fn generate_content_aware_fill_frame(
                             }
                         }
                     }
-                    if touches_masked { break; }
+                    if touches_masked {
+                        break;
+                    }
                 }
 
                 if touches_masked {
@@ -125,8 +137,14 @@ pub fn generate_content_aware_fill_frame(
 
     // Process BFS Queue: Propagate boundary colors inward into masked region
     let neighbor_offsets = [
-        (-1, 0), (1, 0), (0, -1), (0, 1),
-        (-1, -1), (1, -1), (-1, 1), (1, 1),
+        (-1, 0),
+        (1, 0),
+        (0, -1),
+        (0, 1),
+        (-1, -1),
+        (1, -1),
+        (-1, 1),
+        (1, 1),
     ];
 
     while let Some((cx, cy)) = queue.pop_front() {
@@ -165,12 +183,32 @@ mod tests {
     use super::*;
 
     #[test]
+    fn test_content_aware_fill_frame_rejects_extreme_dimensions_and_expansion() {
+        let pixels = vec![4u8; 4];
+        let polygon = [[0.0, 0.0], [1.0, 0.0], [1.0, 1.0]];
+        assert!(generate_content_aware_fill_frame(
+            &pixels, u32::MAX, u32::MAX, &polygon, f32::INFINITY, FillMethod::Object
+        ).is_empty());
+        let filled = generate_content_aware_fill_frame(
+            &pixels, 1, 1, &polygon, f32::NAN, FillMethod::Object
+        );
+        assert_eq!(filled.len(), pixels.len());
+    }
+
+    #[test]
     fn test_generate_content_aware_fill_frame() {
         let width = 10;
         let height = 10;
         let pixels = vec![255u8; (width * height * 4) as usize];
         let square_mask = vec![[3.0, 3.0], [7.0, 3.0], [7.0, 7.0], [3.0, 7.0]];
-        let filled = generate_content_aware_fill_frame(&pixels, width, height, &square_mask, 0.0, FillMethod::Object);
+        let filled = generate_content_aware_fill_frame(
+            &pixels,
+            width,
+            height,
+            &square_mask,
+            0.0,
+            FillMethod::Object,
+        );
         assert_eq!(filled.len(), pixels.len());
     }
 }
