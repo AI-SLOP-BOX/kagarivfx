@@ -8,6 +8,52 @@ use crate::core::timeline::{Composition, Layer};
 pub struct TrackerEngine;
 
 impl TrackerEngine {
+    pub fn analyze_markerless_track(
+        layer: &mut Layer,
+        tracker_idx: usize,
+        start_frame: u32,
+        end_frame: u32,
+        block_radius: i32,
+        search_radius: i32,
+        minimum_confidence: f32,
+    ) -> usize {
+        if tracker_idx >= layer.trackers.len() || end_frame < start_frame {
+            return 0;
+        }
+        let mut frames = Vec::new();
+        let mut width = 0u32;
+        let mut height = 0u32;
+        for frame in start_frame..=end_frame {
+            let Some((current, next, w, h)) = Self::load_tracker_frames(layer, frame) else {
+                return 0;
+            };
+            width = w as u32;
+            height = h as u32;
+            frames.push(current);
+            if frame == end_frame {
+                frames.push(next);
+            }
+        }
+        let seed = layer.trackers[tracker_idx].position.evaluate(start_frame);
+        let refs = frames.iter().map(Vec::as_slice).collect::<Vec<_>>();
+        let tracks = crate::core::optical_flow_timewarp::track_markerless_motion(
+            &refs,
+            width,
+            height,
+            &[seed],
+            block_radius,
+            search_radius,
+        );
+        let Some(track) = tracks.into_iter().next() else {
+            return 0;
+        };
+        crate::core::optical_flow_timewarp::apply_markerless_track_to_tracker_point(
+            &mut layer.trackers[tracker_idx],
+            &track,
+            minimum_confidence,
+        )
+    }
+
     /// Track a feature forward from `current_frame` to `current_frame + 1`.
     /// Generates keyframe data for the tracker point.
     pub fn track_next_frame(
@@ -702,10 +748,7 @@ pub fn compute_homography(from: [[f32; 2]; 4], to: [[f32; 2]; 4]) -> Option<[[f6
 /// (infinity) return f32::MAX components.
 pub fn apply_homography(h: &[[f64; 3]; 3], p: [f32; 2]) -> [f32; 2] {
     let [x, y] = [p[0] as f64, p[1] as f64];
-    if !x.is_finite()
-        || !y.is_finite()
-        || h.iter().flatten().any(|value| !value.is_finite())
-    {
+    if !x.is_finite() || !y.is_finite() || h.iter().flatten().any(|value| !value.is_finite()) {
         return [f32::MAX, f32::MAX];
     }
     let w = h[2][0] * x + h[2][1] * y + h[2][2];
@@ -1069,7 +1112,10 @@ mod quad_track_tests {
     fn test_homography_rejects_nonfinite_inputs_without_propagation() {
         let identity = [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]];
         assert_eq!(apply_homography(&identity, [f32::NAN, 1.0]), [f32::MAX; 2]);
-        assert_eq!(apply_homography(&identity, [1.0, f32::INFINITY]), [f32::MAX; 2]);
+        assert_eq!(
+            apply_homography(&identity, [1.0, f32::INFINITY]),
+            [f32::MAX; 2]
+        );
 
         let invalid = [[f64::NAN, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]];
         assert_eq!(apply_homography(&invalid, [1.0, 1.0]), [f32::MAX; 2]);

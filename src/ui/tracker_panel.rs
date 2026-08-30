@@ -77,6 +77,23 @@ pub fn draw_tracker_panel(app: &mut AfterEffectsApp, ui: &mut egui::Ui, current_
                         app.toasts.error("Nothing to analyze: extend the work area past the playhead");
                     }
                 }
+                if custom_widgets::ae_button_accent(ui, "🌊 Markerless Optical Flow").on_hover_text("Track the selected point with dense forward/backward optical flow and confidence filtering").clicked() {
+                    let wa_out = app.work_area_out.unwrap_or_else(|| {
+                        app.history.current().active_composition().duration_frames.saturating_sub(1)
+                    });
+                    let start = current_frame;
+                    if wa_out > start {
+                        app.modify_project(|p| {
+                            let comp = p.active_composition_mut();
+                            crate::core::tracker_engine::TrackerEngine::analyze_markerless_track(
+                                &mut comp.layers[idx], 0, start, wa_out, 2, 16, 0.05,
+                            );
+                        });
+                        app.toasts.info("Optical-flow mocap generated keyframes for tracker 1");
+                    } else {
+                        app.toasts.error("Nothing to track: extend the work area past the playhead");
+                    }
+                }
             });
 
             // ── 3D Camera Tracker (Scene Reconstruction) ──
@@ -454,7 +471,12 @@ pub fn draw_tracker_panel(app: &mut AfterEffectsApp, ui: &mut egui::Ui, current_
             }
 
             ui.horizontal(|ui| {
-                if custom_widgets::ae_button_accent(ui, "📦 Apply Motion → New Null").on_hover_text("Create a new Null layer and bind the tracked motion keyframes to it").clicked() {
+                if custom_widgets::ae_button_accent(ui, "📦 Apply Motion → New Null")
+                    .on_hover_text(
+                        "Create a new Null layer and bind the tracked motion keyframes to it",
+                    )
+                    .clicked()
+                {
                     app.modify_project(|p| {
                         let comp = p.active_composition_mut();
                         let null_idx = comp.layers.len();
@@ -466,20 +488,34 @@ pub fn draw_tracker_panel(app: &mut AfterEffectsApp, ui: &mut egui::Ui, current_
                             dur,
                         );
                         comp.add_layer(null_layer);
-                        crate::core::tracker_engine::TrackerEngine::apply_tracker_to_target(comp, idx, 0, null_idx, true, false);
+                        crate::core::tracker_engine::TrackerEngine::apply_tracker_to_target(
+                            comp, idx, 0, null_idx, true, false,
+                        );
                     });
                     crate::core::frame_cache::bump_version();
-                    app.toasts.info("Created new Null layer with tracked motion!");
+                    app.toasts
+                        .info("Created new Null layer with tracked motion!");
                 }
-                if custom_widgets::ae_button(ui, "🌊 Smooth Track").on_hover_text("Apply Gaussian temporal filter to reduce jitter in tracked keyframes").clicked() {
+                if custom_widgets::ae_button(ui, "🌊 Smooth Track")
+                    .on_hover_text(
+                        "Apply Gaussian temporal filter to reduce jitter in tracked keyframes",
+                    )
+                    .clicked()
+                {
                     let mut smoothed = false;
                     app.modify_project(|p| {
                         let comp = p.active_composition_mut();
                         if let Some(src_layer) = comp.layers.get_mut(idx) {
                             for tracker in &mut src_layer.trackers {
-                                if let crate::core::property::Animatable::Animated(ref kfs) = tracker.position {
-                                    let new_kfs = crate::core::tracker_engine::smooth_tracker_keyframes(kfs, 2);
-                                    tracker.position = crate::core::property::Animatable::Animated(new_kfs);
+                                if let crate::core::property::Animatable::Animated(ref kfs) =
+                                    tracker.position
+                                {
+                                    let new_kfs =
+                                        crate::core::tracker_engine::smooth_tracker_keyframes(
+                                            kfs, 2,
+                                        );
+                                    tracker.position =
+                                        crate::core::property::Animatable::Animated(new_kfs);
                                     smoothed = true;
                                 }
                             }
@@ -487,7 +523,8 @@ pub fn draw_tracker_panel(app: &mut AfterEffectsApp, ui: &mut egui::Ui, current_
                     });
                     if smoothed {
                         crate::core::frame_cache::bump_version();
-                        app.toasts.info("Tracked keyframes smoothed with Gaussian temporal filter");
+                        app.toasts
+                            .info("Tracked keyframes smoothed with Gaussian temporal filter");
                     } else {
                         app.toasts.error("No animated keyframes found on tracker");
                     }
