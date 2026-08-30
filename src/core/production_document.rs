@@ -305,6 +305,27 @@ fn validate_composition(
             return Err("camera names must be unique within a composition".into());
         }
     }
+    let mut light_ids = HashSet::new();
+    let mut light_names = HashSet::new();
+    for light in &composition.lights {
+        if light.id.trim().is_empty()
+            || light.name.trim().is_empty()
+            || !light_ids.insert(light.id.clone())
+            || !light_names.insert(light.name.clone())
+            || light.color.iter().any(|value| !value.is_finite())
+            || !light.intensity.is_finite()
+            || light.intensity < 0.0
+            || !vector3_animation_is_finite(&light.position)
+            || !light.shadow_darkness.is_finite()
+            || !(0.0..=100.0).contains(&light.shadow_darkness)
+            || !light.falloff.is_finite()
+            || light.falloff < 0.0
+            || !light.max_radius.is_finite()
+            || light.max_radius < 0.0
+        {
+            return Err("light settings are invalid".into());
+        }
+    }
     let mut layer_ids = HashSet::new();
     let mut layer_parents = HashMap::new();
     for layer in &composition.layers {
@@ -1282,6 +1303,17 @@ mod tests {
 
         let mut invalid_project = Project::default();
         invalid_project.compositions[0].active_camera.fov_degrees = f32::NAN;
+        assert!(ProductionDocument::new(invalid_project).validate().is_err());
+
+        let mut invalid_project = Project::default();
+        invalid_project.compositions[0]
+            .lights
+            .push(crate::core::timeline::Light3D {
+                id: "bad-light".into(),
+                name: "Bad Light".into(),
+                intensity: -1.0,
+                ..Default::default()
+            });
         assert!(ProductionDocument::new(invalid_project).validate().is_err());
 
         let mut invalid_project = Project::default();
