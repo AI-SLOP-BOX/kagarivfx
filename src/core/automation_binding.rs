@@ -71,7 +71,11 @@ impl AutomationBinding {
     pub const MAX_ENDPOINT_LENGTH: usize = 4096;
 
     pub fn validate(&self) -> Result<(), &'static str> {
-        if self.source.trim().is_empty() || self.target.trim().is_empty() {
+        if self.source.trim().is_empty()
+            || self.target.trim().is_empty()
+            || self.source != self.source.trim()
+            || self.target != self.target.trim()
+        {
             return Err("automation source and target are required");
         }
         if self.source.len() > Self::MAX_ENDPOINT_LENGTH
@@ -239,6 +243,25 @@ mod tests {
     fn rejects_control_characters_in_binding_endpoints() {
         let binding = AutomationBinding {
             source: "audio\0bass".into(),
+            target: "vfx.opacity".into(),
+            curve: AutomationCurve {
+                points: vec![AutomationPoint {
+                    time: Time::ZERO,
+                    value: 0.0,
+                }],
+            },
+            input_min: 0.0,
+            input_max: 1.0,
+            output_min: 0.0,
+            output_max: 1.0,
+        };
+        assert!(binding.validate().is_err());
+    }
+
+    #[test]
+    fn rejects_untrimmed_binding_endpoints() {
+        let binding = AutomationBinding {
+            source: " audio.level".into(),
             target: "vfx.opacity".into(),
             curve: AutomationCurve {
                 points: vec![AutomationPoint {
