@@ -386,7 +386,11 @@ pub fn apply_limiter(
 
     // Hard clip as safety net
     for sample in buf.iter_mut() {
-        *sample = sample.clamp(-1.0, 1.0);
+        *sample = if sample.is_finite() {
+            sample.clamp(-1.0, 1.0)
+        } else {
+            0.0
+        };
     }
 }
 
@@ -805,6 +809,15 @@ mod tests {
         apply_compressor(&mut buf, &params, &mut state, 48_000);
         assert!(state.envelope.is_finite());
         assert!(buf.iter().all(|sample| sample.is_finite()));
+    }
+
+    #[test]
+    fn test_limiter_cleans_nonfinite_odd_tail() {
+        let mut state = CompressorState::default();
+        let mut buf = vec![0.0, 0.0, f32::NAN];
+        apply_limiter(&mut buf, -1.0, 50.0, &mut state, 48_000);
+        assert!(buf.iter().all(|sample| sample.is_finite()));
+        assert_eq!(buf[2], 0.0);
     }
 
     #[test]
