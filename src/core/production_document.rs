@@ -722,10 +722,12 @@ fn particle_emitter_is_valid(emitter: &crate::core::particle_system::ParticleEmi
     ];
     finite.iter().all(|value| value.is_finite())
         && emitter.rate >= 0.0
+        && emitter.max_particles > 0
         && emitter.lifetime > 0.0
         && emitter.lifetime_variance >= 0.0
         && emitter.speed >= 0.0
         && emitter.speed_variance >= 0.0
+        && (0.0..=360.0).contains(&emitter.spread_degrees)
         && emitter.emitter_size.iter().all(|value| *value >= 0.0)
         && emitter.size_start >= 0.0
         && emitter.size_end >= 0.0
@@ -740,6 +742,19 @@ fn particle_emitter_is_valid(emitter: &crate::core::particle_system::ParticleEmi
         && emitter.depth_range[0] <= emitter.depth_range[1]
         && emitter.death_spawn_speed_scale >= 0.0
         && emitter.death_spawn_life_scale >= 0.0
+        && emitter.blend_mode <= 2
+        && emitter
+            .gravity_curve
+            .0
+            .iter()
+            .all(|value| value.is_finite())
+        && (!emitter.collision_enabled
+            || (emitter
+                .collision_bounds
+                .iter()
+                .all(|value| value.is_finite())
+                && emitter.collision_bounds[0] <= emitter.collision_bounds[2]
+                && emitter.collision_bounds[1] <= emitter.collision_bounds[3]))
 }
 
 fn vector_animation_is_finite(value: &crate::core::property::Animatable<[f32; 2]>) -> bool {
@@ -1267,6 +1282,21 @@ mod tests {
         assert!(!valid_gradient_stops(&colors, &[0.0, 1.1]));
         assert!(!valid_gradient_stops(&colors, &[0.0]));
         assert!(!valid_gradient_stops(&[[0.0, 0.0, 0.0, 1.0]], &[0.0]));
+    }
+
+    #[test]
+    fn particle_emitter_validation_rejects_invalid_ranges_and_curves() {
+        let mut emitter = crate::core::particle_system::ParticleEmitter::default();
+        assert!(particle_emitter_is_valid(&emitter));
+        emitter.spread_degrees = 361.0;
+        assert!(!particle_emitter_is_valid(&emitter));
+        emitter.spread_degrees = 0.0;
+        emitter.gravity_curve.0[0] = f32::NAN;
+        assert!(!particle_emitter_is_valid(&emitter));
+        emitter.gravity_curve.0[0] = 1.0;
+        emitter.collision_enabled = true;
+        emitter.collision_bounds = [10.0, 10.0, 0.0, 0.0];
+        assert!(!particle_emitter_is_valid(&emitter));
     }
 
     #[test]
