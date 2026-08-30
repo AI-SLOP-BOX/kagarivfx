@@ -391,6 +391,7 @@ fn validate_composition(
     for marker in &composition.markers {
         if marker.frame >= composition.duration_frames
             || marker.label.trim().is_empty()
+            || !metadata_text_is_safe(&marker.label)
             || marker.label.chars().count() > 4_096
             || marker
                 .color
@@ -1648,6 +1649,16 @@ mod tests {
             .push(crate::core::timeline::TimelineMarker {
                 frame: 0,
                 label: "x".repeat(4_097),
+                color: [0.0, 0.0, 0.0],
+            });
+        assert!(ProductionDocument::new(invalid_project).validate().is_err());
+
+        let mut invalid_project = Project::default();
+        invalid_project.compositions[0]
+            .markers
+            .push(crate::core::timeline::TimelineMarker {
+                frame: 0,
+                label: "cut\n01".into(),
                 color: [0.0, 0.0, 0.0],
             });
         assert!(ProductionDocument::new(invalid_project).validate().is_err());
