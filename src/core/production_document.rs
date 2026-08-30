@@ -812,6 +812,14 @@ mod tests {
         assert!(ProductionDocument::new(invalid_project).validate().is_err());
 
         let mut invalid_project = Project::default();
+        if let LayerType::Text { font_size, .. } =
+            &mut invalid_project.compositions[0].layers[1].layer_type
+        {
+            *font_size = 0;
+        }
+        assert!(ProductionDocument::new(invalid_project).validate().is_err());
+
+        let mut invalid_project = Project::default();
         invalid_project.compositions[0].layers.push(crate::core::timeline::Layer::new(
             "invalid-video".into(),
             "Invalid Video".into(),
