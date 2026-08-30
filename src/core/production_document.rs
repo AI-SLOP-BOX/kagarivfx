@@ -386,11 +386,21 @@ fn validate_composition(
             return Err("layer time remap values must be finite and non-negative".into());
         }
         if let LayerType::Video {
-            frame_count, speed, ..
+            source,
+            frames_dir,
+            frame_count,
+            speed,
+            ..
         } = &layer.layer_type
         {
-            if *frame_count == 0 || !speed.is_finite() || *speed <= 0.0 || *speed > 1_000.0 {
-                return Err("video layer frame count or speed is out of range".into());
+            if source.trim().is_empty()
+                || frames_dir.trim().is_empty()
+                || *frame_count == 0
+                || !speed.is_finite()
+                || *speed <= 0.0
+                || *speed > 1_000.0
+            {
+                return Err("video layer source, frame count, or speed is invalid".into());
             }
         }
         if let LayerType::Audio { path, volume } = &layer.layer_type {
@@ -1045,6 +1055,23 @@ mod tests {
                     path: "video.mp4".into(),
                     duration_sec: ProductionDocument::MAX_ASSET_DURATION_SEC + 1.0,
                 },
+            ));
+        assert!(ProductionDocument::new(invalid_project).validate().is_err());
+
+        let mut invalid_project = Project::default();
+        invalid_project.compositions[0]
+            .layers
+            .push(crate::core::timeline::Layer::new(
+                "missing-video-source".into(),
+                "Missing Video Source".into(),
+                LayerType::Video {
+                    source: "  ".into(),
+                    frames_dir: "frames".into(),
+                    frame_count: 1,
+                    audio_wav: None,
+                    speed: 1.0,
+                },
+                300,
             ));
         assert!(ProductionDocument::new(invalid_project).validate().is_err());
 
