@@ -80,7 +80,25 @@ impl ProductionDocument {
         for composition in &self.project.compositions {
             validate_composition(composition, 0, &mut composition_ids)?;
         }
+        let mut asset_ids = HashSet::new();
+        let folder_ids = self
+            .project
+            .assets
+            .iter()
+            .filter_map(|asset| match &asset.item_type {
+                ProjectItemType::Folder { .. } => Some(asset.id.as_str()),
+                _ => None,
+            })
+            .collect::<HashSet<_>>();
         for asset in &self.project.assets {
+            if asset.id.trim().is_empty() || !asset_ids.insert(asset.id.clone()) {
+                return Err("asset ids must be non-empty and unique".into());
+            }
+            if let Some(parent_folder) = &asset.parent_folder {
+                if !folder_ids.contains(parent_folder.as_str()) {
+                    return Err("asset parent folder reference is invalid".into());
+                }
+            }
             match &asset.item_type {
                 ProjectItemType::Composition { comp_idx }
                     if *comp_idx >= self.project.compositions.len() =>
@@ -316,6 +334,24 @@ mod tests {
                 height: 1080,
             },
         ));
+        assert!(ProductionDocument::new(invalid_project).validate().is_err());
+
+        let mut invalid_project = Project::default();
+        invalid_project.assets.push(crate::core::timeline::ProjectItem::new(
+            "item_comp1",
+            "Duplicate",
+            ProjectItemType::Folder { name: "x".into() },
+        ));
+        assert!(ProductionDocument::new(invalid_project).validate().is_err());
+
+        let mut invalid_project = Project::default();
+        let mut asset = crate::core::timeline::ProjectItem::new(
+            "asset",
+            "Asset",
+            ProjectItemType::Folder { name: "x".into() },
+        );
+        asset.parent_folder = Some("missing".into());
+        invalid_project.assets.push(asset);
         assert!(ProductionDocument::new(invalid_project).validate().is_err());
     }
 
