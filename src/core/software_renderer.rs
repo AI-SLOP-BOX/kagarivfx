@@ -1151,6 +1151,9 @@ fn render_precomp_layers_inner(
 
 /// Safe buffer size calculation: returns None on overflow or zero dimensions.
 pub fn rgba_buffer_size(width: u32, height: u32) -> Option<usize> {
+    if width == 0 || height == 0 {
+        return None;
+    }
     let w = width as usize;
     let h = height as usize;
     w.checked_mul(h)?.checked_mul(4)
@@ -4760,7 +4763,7 @@ mod render_size_guard_tests {
     #[test]
     fn test_rgba_buffer_size_overflow_safe() {
         assert!(rgba_buffer_size(u32::MAX, u32::MAX).is_none());
-        assert!(rgba_buffer_size(0, 0).is_some()); // 0 is valid size, caller checks
+        assert!(rgba_buffer_size(0, 0).is_none());
         assert_eq!(rgba_buffer_size(2, 2), Some(16));
     }
 }
