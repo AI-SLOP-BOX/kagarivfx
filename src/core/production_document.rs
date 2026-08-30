@@ -963,6 +963,24 @@ mod tests {
         document.audio.master_gain = -0.1;
         assert!(document.validate().is_err());
 
+        let mut document = ProductionDocument::new(Project::default());
+        document.audio.channels.push(MixerChannel {
+            gain_db: 25.0,
+            pan: 0.0,
+            mute: false,
+            solo: false,
+        });
+        assert!(document.validate().is_err());
+
+        let mut document = ProductionDocument::new(Project::default());
+        document.audio.channels.push(MixerChannel {
+            gain_db: 0.0,
+            pan: 1.1,
+            mute: false,
+            solo: false,
+        });
+        assert!(document.validate().is_err());
+
         let mut invalid_project = Project::default();
         invalid_project.active_composition_idx = invalid_project.compositions.len();
         assert!(ProductionDocument::new(invalid_project).validate().is_err());
