@@ -293,6 +293,9 @@ pub fn apply_compressor(
         0.0
     };
     let makeup = 10.0_f64.powf(makeup_db / 20.0);
+    if !state.envelope.is_finite() {
+        state.envelope = 0.0;
+    }
 
     for sample in buf.chunks_exact_mut(2) {
         let peak_l = if sample[0].is_finite() {
@@ -340,8 +343,18 @@ pub fn apply_compressor(
         state.envelope = coeff * state.envelope + (1.0 - coeff) * gr_db;
 
         let gain = 10.0_f64.powf(state.envelope / 20.0) * makeup;
-        sample[0] = (peak_l * gain) as f32;
-        sample[1] = (peak_r * gain) as f32;
+        sample[0] = finite_audio_sample(peak_l * gain);
+        sample[1] = finite_audio_sample(peak_r * gain);
+    }
+}
+
+fn finite_audio_sample(value: f64) -> f32 {
+    if value.is_finite() {
+        value.clamp(f64::from(f32::MIN), f64::from(f32::MAX)) as f32
+    } else if value.is_sign_negative() {
+        f32::MIN
+    } else {
+        f32::MAX
     }
 }
 
@@ -758,6 +771,16 @@ mod tests {
         let mut state = CompressorState::default();
         let mut buf = vec![f32::NAN, 0.5, f32::INFINITY, -0.5];
         apply_compressor(&mut buf, &params, &mut state, 48_000);
+        assert!(buf.iter().all(|sample| sample.is_finite()));
+    }
+
+    #[test]
+    fn test_compressor_recovers_invalid_state_and_extreme_output() {
+        let params = CompressorParams::default();
+        let mut state = CompressorState { envelope: f32::NAN.into() };
+        let mut buf = vec![f32::MAX, f32::MAX];
+        apply_compressor(&mut buf, &params, &mut state, 48_000);
+        assert!(state.envelope.is_finite());
         assert!(buf.iter().all(|sample| sample.is_finite()));
     }
 
