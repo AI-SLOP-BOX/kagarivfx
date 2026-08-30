@@ -416,8 +416,16 @@ mod disk_cache {
         }
         let width = u32::from_le_bytes([data[0], data[1], data[2], data[3]]);
         let height = u32::from_le_bytes([data[4], data[5], data[6], data[7]]);
-        let expected = (width as usize * height as usize * 4) + 8;
-        if data.len() < expected {
+        let Some(pixel_bytes) = (width as usize)
+            .checked_mul(height as usize)
+            .and_then(|pixels| pixels.checked_mul(4))
+        else {
+            return None;
+        };
+        let Some(expected) = pixel_bytes.checked_add(8) else {
+            return None;
+        };
+        if data.len() != expected {
             return None;
         }
         Some((data[8..expected].to_vec(), width, height))
@@ -622,5 +630,39 @@ mod memory_bound_tests {
             cache.collect_garbage();
             assert_eq!(cache.cached_count(), 0, "stale entries must be discarded");
         });
+    }
+}
+
+#[cfg(test)]
+mod disk_cache_tests {
+    use super::disk_cache;
+
+    #[test]
+    fn malformed_dimensions_do_not_overflow_or_panic() {
+        let key = (u32::MAX, u64::MAX);
+        let path = {
+            let dir = std::env::temp_dir().join("aevfx_frame_cache");
+            std::fs::create_dir_all(&dir).unwrap();
+            dir.join(format!("frame_{}_{}.rgba", key.0, key.1))
+        };
+        std::fs::write(&path, [0xff; 8]).unwrap();
+        assert!(disk_cache::read_frame(&key).is_none());
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn trailing_disk_data_is_rejected() {
+        let key = (u32::MAX - 1, u64::MAX - 1);
+        let path = {
+            let dir = std::env::temp_dir().join("aevfx_frame_cache");
+            std::fs::create_dir_all(&dir).unwrap();
+            dir.join(format!("frame_{}_{}.rgba", key.0, key.1))
+        };
+        let mut data = Vec::from(1u32.to_le_bytes());
+        data.extend_from_slice(&1u32.to_le_bytes());
+        data.extend_from_slice(&[0, 0, 0, 255, 42]);
+        std::fs::write(&path, data).unwrap();
+        assert!(disk_cache::read_frame(&key).is_none());
+        let _ = std::fs::remove_file(path);
     }
 }
