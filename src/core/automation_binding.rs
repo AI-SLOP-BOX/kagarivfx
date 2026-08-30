@@ -15,7 +15,25 @@ pub struct AutomationCurve {
 }
 
 impl AutomationCurve {
+    pub fn validate(&self) -> Result<(), &'static str> {
+        if self.points.is_empty() || self.points.len() > 8192 {
+            return Err("automation curve must contain 1..=8192 points");
+        }
+        if self.points.iter().any(|point| !point.value.is_finite()) {
+            return Err("automation values must be finite");
+        }
+        if self
+            .points
+            .windows(2)
+            .any(|pair| !time_before(pair[0].time, pair[1].time))
+        {
+            return Err("automation times must be strictly increasing");
+        }
+        Ok(())
+    }
+
     pub fn sample(&self, time: Time) -> Option<f64> {
+        self.validate().ok()?;
         let first = *self.points.first()?;
         if time_before(time, first.time) {
             return Some(first.value);
@@ -47,7 +65,26 @@ pub struct AutomationBinding {
 }
 
 impl AutomationBinding {
+    pub fn validate(&self) -> Result<(), &'static str> {
+        if self.source.trim().is_empty() || self.target.trim().is_empty() {
+            return Err("automation source and target are required");
+        }
+        if [
+            self.input_min,
+            self.input_max,
+            self.output_min,
+            self.output_max,
+        ]
+        .iter()
+        .any(|value| !value.is_finite())
+        {
+            return Err("automation ranges must be finite");
+        }
+        self.curve.validate()
+    }
+
     pub fn evaluate(&self, time: Time) -> Option<f64> {
+        self.validate().ok()?;
         let value = self.curve.sample(time)?;
         let span = self.input_max - self.input_min;
         let normalized = if span.abs() <= f64::EPSILON {
@@ -124,6 +161,38 @@ mod tests {
             output_max: 50.0,
         };
         assert_eq!(binding.evaluate(Time::ZERO), Some(30.0));
+    }
+
+    #[test]
+    fn rejects_invalid_binding_data() {
+        let curve = AutomationCurve {
+            points: vec![
+                AutomationPoint {
+                    time: Time::new(1, 1),
+                    value: 0.0,
+                },
+                AutomationPoint {
+                    time: Time::new(1, 1),
+                    value: 1.0,
+                },
+            ],
+        };
+        assert!(curve.validate().is_err());
+        let binding = AutomationBinding {
+            source: String::new(),
+            target: "vfx.opacity".into(),
+            curve: AutomationCurve {
+                points: vec![AutomationPoint {
+                    time: Time::ZERO,
+                    value: 0.0,
+                }],
+            },
+            input_min: 0.0,
+            input_max: 1.0,
+            output_min: 0.0,
+            output_max: 1.0,
+        };
+        assert!(binding.validate().is_err());
     }
 
     #[test]
