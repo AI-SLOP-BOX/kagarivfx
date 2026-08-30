@@ -256,20 +256,55 @@ pub fn apply_compressor(
     state: &mut CompressorState,
     sample_rate: u32,
 ) {
-    if buf.is_empty() {
+    if buf.is_empty() || sample_rate == 0 {
         return;
     }
     let fs = sample_rate as f64;
-    let attack_coeff = (-1.0 / (params.attack_ms as f64 * 0.001 * fs)).exp();
-    let release_coeff = (-1.0 / (params.release_ms as f64 * 0.001 * fs)).exp();
-    let threshold = params.threshold_db as f64;
-    let ratio = params.ratio as f64;
-    let knee = params.knee_db as f64;
-    let makeup = 10.0_f64.powf(params.makeup_gain_db as f64 / 20.0);
+    let attack_ms = if params.attack_ms.is_finite() {
+        params.attack_ms.max(0.001)
+    } else {
+        5.0
+    };
+    let release_ms = if params.release_ms.is_finite() {
+        params.release_ms.max(0.001)
+    } else {
+        50.0
+    };
+    let attack_coeff = (-1.0 / (f64::from(attack_ms) * 0.001 * fs)).exp();
+    let release_coeff = (-1.0 / (f64::from(release_ms) * 0.001 * fs)).exp();
+    let threshold = if params.threshold_db.is_finite() {
+        f64::from(params.threshold_db)
+    } else {
+        -20.0
+    };
+    let ratio = if params.ratio.is_finite() {
+        f64::from(params.ratio.max(1.0))
+    } else {
+        4.0
+    };
+    let knee = if params.knee_db.is_finite() {
+        f64::from(params.knee_db.max(0.0))
+    } else {
+        6.0
+    };
+    let makeup_db = if params.makeup_gain_db.is_finite() {
+        f64::from(params.makeup_gain_db.clamp(-120.0, 120.0))
+    } else {
+        0.0
+    };
+    let makeup = 10.0_f64.powf(makeup_db / 20.0);
 
     for sample in buf.chunks_exact_mut(2) {
-        let peak_l = sample[0] as f64;
-        let peak_r = sample[1] as f64;
+        let peak_l = if sample[0].is_finite() {
+            f64::from(sample[0])
+        } else {
+            0.0
+        };
+        let peak_r = if sample[1].is_finite() {
+            f64::from(sample[1])
+        } else {
+            0.0
+        };
         let peak = peak_l.abs().max(peak_r.abs());
 
         // dB level
@@ -280,7 +315,13 @@ pub fn apply_compressor(
         };
 
         // Gain reduction with soft knee
-        let gr_db = if level_db < threshold - knee / 2.0 {
+        let gr_db = if knee <= f64::EPSILON {
+            if level_db > threshold {
+                threshold + (level_db - threshold) / ratio - level_db
+            } else {
+                0.0
+            }
+        } else if level_db < threshold - knee / 2.0 {
             0.0
         } else if level_db > threshold + knee / 2.0 {
             threshold + (level_db - threshold) / ratio - level_db
@@ -702,6 +743,22 @@ mod tests {
         for s in &buf {
             assert!(s.abs() <= 1.001, "Limiter failed to clip: {}", s);
         }
+    }
+
+    #[test]
+    fn test_compressor_invalid_parameters_do_not_create_nonfinite_audio() {
+        let params = CompressorParams {
+            threshold_db: f32::NAN,
+            ratio: 0.0,
+            attack_ms: f32::INFINITY,
+            release_ms: 0.0,
+            knee_db: 0.0,
+            makeup_gain_db: f32::INFINITY,
+        };
+        let mut state = CompressorState::default();
+        let mut buf = vec![f32::NAN, 0.5, f32::INFINITY, -0.5];
+        apply_compressor(&mut buf, &params, &mut state, 48_000);
+        assert!(buf.iter().all(|sample| sample.is_finite()));
     }
 
     #[test]
