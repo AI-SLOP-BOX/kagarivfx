@@ -383,6 +383,33 @@ pub struct MarkerlessPoseFrame {
     pub confidence: f32,
 }
 
+pub fn pose_joint_velocities(
+    pose: &MarkerlessPoseTrack,
+    frame_index: usize,
+) -> Vec<[f32; 2]> {
+    let Some(current) = pose.frames.get(frame_index) else { return Vec::new(); };
+    let previous = frame_index.checked_sub(1).and_then(|i| pose.frames.get(i));
+    current.joints.iter().enumerate().map(|(index, point)| {
+        let Some(previous_point) = previous.and_then(|frame| frame.joints.get(index)) else { return [0.0, 0.0]; };
+        if point.iter().all(|value| value.is_finite()) && previous_point.iter().all(|value| value.is_finite()) {
+            [point[0] - previous_point[0], point[1] - previous_point[1]]
+        } else { [0.0, 0.0] }
+    }).collect()
+}
+
+pub fn pose_root_acceleration(
+    pose: &MarkerlessPoseTrack,
+    frame_index: usize,
+) -> [f32; 2] {
+    if frame_index < 2 || frame_index >= pose.frames.len() { return [0.0, 0.0]; }
+    let a = pose.frames[frame_index - 2].root;
+    let b = pose.frames[frame_index - 1].root;
+    let c = pose.frames[frame_index].root;
+    if [a, b, c].iter().flatten().all(|value| value.is_finite()) {
+        [c[0] - 2.0 * b[0] + a[0], c[1] - 2.0 * b[1] + a[1]]
+    } else { [0.0, 0.0] }
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct MarkerlessPoseTrack {
     pub frames: Vec<MarkerlessPoseFrame>,
@@ -922,5 +949,19 @@ mod tests {
         assert_eq!(reject_markerless_motion_outliers(&mut track, 5.0), 1);
         assert_eq!(track.samples[1].position, [5.0, 0.0]);
         assert!(track.samples[1].confidence < 0.5);
+    }
+
+    #[test]
+    fn pose_motion_metrics_are_finite_and_deterministic() {
+        let pose = MarkerlessPoseTrack {
+            frames: vec![
+                MarkerlessPoseFrame { frame: 0, joints: vec![[0.0, 0.0]], root: [0.0, 0.0], confidence: 1.0 },
+                MarkerlessPoseFrame { frame: 1, joints: vec![[2.0, 0.0]], root: [2.0, 0.0], confidence: 1.0 },
+                MarkerlessPoseFrame { frame: 2, joints: vec![[5.0, 0.0]], root: [5.0, 0.0], confidence: 1.0 },
+            ], bones: Vec::new(), bone_lengths: Vec::new(),
+        };
+        assert_eq!(pose_joint_velocities(&pose, 2), vec![[3.0, 0.0]]);
+        assert_eq!(pose_root_acceleration(&pose, 2), [1.0, 0.0]);
+        assert_eq!(pose_root_acceleration(&pose, 0), [0.0, 0.0]);
     }
 }
