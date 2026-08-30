@@ -347,6 +347,20 @@ pub fn standard_humanoid_joint_names(count: usize) -> Vec<String> {
     }).collect()
 }
 
+pub fn standard_humanoid_bones(joint_count: usize) -> Vec<[usize; 2]> {
+    const BONES: &[(usize, usize)] = &[
+        (0, 1), (1, 2), (2, 3), (3, 4),
+        (2, 5), (5, 6), (6, 7),
+        (2, 8), (8, 9), (9, 10),
+        (0, 11), (11, 12), (12, 13),
+        (0, 14), (14, 15), (15, 16),
+    ];
+    BONES.iter()
+        .filter(|&&(parent, child)| parent < joint_count && child < joint_count)
+        .map(|&(parent, child)| [parent, child])
+        .collect()
+}
+
 pub fn normalize_joint_name(name: &str) -> String {
     name.trim().to_ascii_lowercase().replace([' ', '-'], "_")
 }
@@ -368,6 +382,26 @@ pub fn name_markerless_pose_track(
         frames: pose.frames.clone(),
         bone_lengths: pose.bone_lengths.iter().copied().take(pose.bones.len()).collect(),
     }
+}
+
+pub fn name_and_connect_markerless_pose_track(
+    pose: &MarkerlessPoseTrack,
+) -> NamedMarkerlessPoseTrack {
+    let count = pose.frames.first().map(|frame| frame.joints.len()).unwrap_or(0);
+    let names = standard_humanoid_joint_names(count);
+    let mut named = name_markerless_pose_track(pose, &names);
+    named.bones = standard_humanoid_bones(named.joint_names.len());
+    named.bone_lengths = named.bones.iter().map(|bone| {
+        pose.bone_lengths.get(pose.bones.iter().position(|candidate| {
+            candidate[0] == bone[0] && candidate[1] == bone[1]
+        }).unwrap_or(usize::MAX)).copied().unwrap_or_else(|| {
+            pose.frames.first().and_then(|frame| {
+                Some((frame.joints[bone[0]][0] - frame.joints[bone[1]][0])
+                    .hypot(frame.joints[bone[0]][1] - frame.joints[bone[1]][1]))
+            }).unwrap_or(0.0)
+        })
+    }).collect();
+    named
 }
 
 pub fn markerless_pose_to_csv(pose: &NamedMarkerlessPoseTrack) -> String {
@@ -713,6 +747,9 @@ mod tests {
         assert_eq!(csv.lines().count(), 3);
         assert_eq!(normalize_joint_name(" Left Shoulder-01 "), "left_shoulder_01");
         assert_eq!(standard_humanoid_joint_names(2), vec!["hip", "spine"]);
+        assert_eq!(standard_humanoid_bones(3), vec![[0, 1], [1, 2]]);
+        let auto_named = name_and_connect_markerless_pose_track(&pose);
+        assert_eq!(auto_named.joint_names, vec!["hip", "spine"]);
         let bvh = markerless_pose_to_bvh(&named, 0.0);
         assert!(bvh.contains("HIERARCHY"));
         assert!(bvh.contains("Frames: 2"));
