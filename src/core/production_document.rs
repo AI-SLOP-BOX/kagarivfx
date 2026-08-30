@@ -121,8 +121,10 @@ impl ProductionDocument {
                 {
                     return Err("asset composition index is out of range".into());
                 }
-                ProjectItemType::Image { width, height, .. } if *width == 0 || *height == 0 => {
-                    return Err("asset image dimensions must be non-zero".into());
+                ProjectItemType::Image { width, height, .. }
+                    if *width == 0 || *height == 0 || *width > 65_535 || *height > 65_535 =>
+                {
+                    return Err("asset image dimensions are out of range".into());
                 }
                 ProjectItemType::Image { path, .. }
                 | ProjectItemType::Video { path, .. }
@@ -916,6 +918,20 @@ mod tests {
                 "bad-comp",
                 "Bad Comp",
                 ProjectItemType::Composition { comp_idx: 99 },
+            ));
+        assert!(ProductionDocument::new(invalid_project).validate().is_err());
+
+        let mut invalid_project = Project::default();
+        invalid_project
+            .assets
+            .push(crate::core::timeline::ProjectItem::new(
+                "huge-image",
+                "Huge Image",
+                ProjectItemType::Image {
+                    path: "image.png".into(),
+                    width: 65_536,
+                    height: 1080,
+                },
             ));
         assert!(ProductionDocument::new(invalid_project).validate().is_err());
 
