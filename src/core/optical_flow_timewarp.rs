@@ -591,22 +591,35 @@ pub fn estimate_pose_with_backend<B: PoseInferenceBackend>(
     let mut all_joints = Vec::with_capacity(frames.len());
     for frame in frames {
         let joints = backend.infer_joints(frame, width, height).into_iter()
-            .filter(|(point, confidence)| point.iter().all(|value| value.is_finite()) && confidence.is_finite())
-            .map(|(point, confidence)| (point, confidence.clamp(0.0, 1.0)))
-            .take(17).collect::<Vec<_>>();
+            .take(17)
+            .map(|(point, confidence)| {
+                if point.iter().all(|value| value.is_finite()) && confidence.is_finite() {
+                    (point, confidence.clamp(0.0, 1.0))
+                } else {
+                    ([f32::NAN, f32::NAN], 0.0)
+                }
+            })
+            .collect::<Vec<_>>();
         all_joints.push(joints);
     }
-    let count = all_joints.iter().map(Vec::len).min().unwrap_or(0);
+    let count = all_joints.iter().map(Vec::len).max().unwrap_or(0);
     let mut pose_frames = Vec::with_capacity(all_joints.len());
     for (frame_index, joints) in all_joints.iter().enumerate() {
-        let joints = joints.iter().take(count).map(|(point, _)| *point).collect::<Vec<_>>();
-        let root = if joints.is_empty() { [0.0, 0.0] } else { [joints.iter().map(|point| point[0]).sum::<f32>() / joints.len() as f32, joints.iter().map(|point| point[1]).sum::<f32>() / joints.len() as f32] };
-        let confidence = if count == 0 { 0.0 } else { joints.iter().enumerate().map(|(index, _)| all_joints[frame_index][index].1).sum::<f32>() / count as f32 };
+        let joints = (0..count).map(|index| joints.get(index).map(|(point, _)| *point).unwrap_or([f32::NAN, f32::NAN])).collect::<Vec<_>>();
+        let valid = joints.iter().filter(|point| point.iter().all(|value| value.is_finite())).collect::<Vec<_>>();
+        let root = if valid.is_empty() { [0.0, 0.0] } else { [valid.iter().map(|point| point[0]).sum::<f32>() / valid.len() as f32, valid.iter().map(|point| point[1]).sum::<f32>() / valid.len() as f32] };
+        let confidence = if count == 0 { 0.0 } else { (0..count).map(|index| all_joints[frame_index].get(index).map(|(_, confidence)| *confidence).unwrap_or(0.0)).sum::<f32>() / count as f32 };
         pose_frames.push(MarkerlessPoseFrame { frame: frame_index as u32, joints, root, confidence });
     }
     let mut pose = MarkerlessPoseTrack { frames: pose_frames, bones: standard_humanoid_bones(count), bone_lengths: Vec::new() };
     pose.bone_lengths = pose.bones.iter().map(|bone| {
-        pose.frames.first().and_then(|frame| Some((frame.joints[bone[0]][0] - frame.joints[bone[1]][0]).hypot(frame.joints[bone[0]][1] - frame.joints[bone[1]][1]))).unwrap_or(0.0)
+        pose.frames.first().and_then(|frame| {
+            let a = frame.joints.get(bone[0])?;
+            let b = frame.joints.get(bone[1])?;
+            if a.iter().all(|value| value.is_finite()) && b.iter().all(|value| value.is_finite()) {
+                Some((a[0] - b[0]).hypot(a[1] - b[1]))
+            } else { Some(0.0) }
+        }).unwrap_or(0.0)
     }).collect();
     pose
 }
@@ -1208,10 +1221,12 @@ mod tests {
         let mut backend = TestPoseBackend;
         let pose = estimate_pose_with_backend(&mut backend, &refs, 2, 2);
         assert_eq!(pose.frames.len(), 2);
-        assert_eq!(pose.frames[0].joints, vec![[2.0, 3.0], [4.0, 5.0]]);
-        assert_eq!(pose.frames[0].confidence, 0.5);
-        assert_eq!(pose.bones, vec![[0, 1]]);
-        assert!((pose.bone_lengths[0] - 2.828427).abs() < 0.0001);
+        assert_eq!(pose.frames[0].joints[0], [2.0, 3.0]);
+        assert!(pose.frames[0].joints[1].iter().all(|value| value.is_nan()));
+        assert_eq!(pose.frames[0].joints[2], [4.0, 5.0]);
+        assert!((pose.frames[0].confidence - (1.0 / 3.0)).abs() < 0.0001);
+        assert_eq!(pose.bones, vec![[0, 1], [1, 2]]);
+        assert_eq!(pose.bone_lengths, vec![0.0, 0.0]);
     }
 
     #[test]
