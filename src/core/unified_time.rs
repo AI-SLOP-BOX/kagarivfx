@@ -152,7 +152,7 @@ impl TempoMap {
     }
 
     pub fn beat_at(&self, time: Time) -> f64 {
-        if self.validate().is_err() {
+        if self.validate().is_err() || !time.is_valid() {
             return 0.0;
         }
         let mut beat = 0.0;
@@ -284,6 +284,12 @@ mod tests {
         };
         assert_eq!(malformed.to_sample_floor(48_000), 0);
         assert_eq!(Time::new(1, 1).to_sample_floor(0), 0);
+    }
+
+    #[test]
+    fn tempo_queries_fail_closed_for_invalid_time() {
+        let map = TempoMap::default();
+        assert_eq!(map.beat_at(Time { numerator: 1, denominator: 0 }), 0.0);
     }
 
     #[test]
