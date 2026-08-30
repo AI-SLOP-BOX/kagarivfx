@@ -91,7 +91,34 @@ impl TempoMap {
         }
     }
 
+    pub fn validate(&self) -> Result<(), &'static str> {
+        if self.changes.is_empty() {
+            return Err("tempo map must contain an initial tempo");
+        }
+        if self.changes[0].at != Time::ZERO {
+            return Err("tempo map must start at time zero");
+        }
+        if self
+            .changes
+            .iter()
+            .any(|change| !change.bpm.is_finite() || change.bpm <= 0.0)
+        {
+            return Err("tempo changes must use finite positive BPM values");
+        }
+        if self
+            .changes
+            .windows(2)
+            .any(|pair| !time_before(pair[0].at, pair[1].at))
+        {
+            return Err("tempo changes must be strictly increasing");
+        }
+        Ok(())
+    }
+
     pub fn beat_at(&self, time: Time) -> f64 {
+        if self.validate().is_err() {
+            return 0.0;
+        }
         let mut beat = 0.0;
         let mut previous = Time::ZERO;
         let mut bpm = self.changes.first().map_or(120.0, |change| change.bpm);
@@ -108,6 +135,9 @@ impl TempoMap {
     }
 
     pub fn time_at_beat(&self, target_beat: f64) -> Time {
+        if self.validate().is_err() || !target_beat.is_finite() {
+            return Time::ZERO;
+        }
         let mut beat = 0.0;
         let mut previous = Time::ZERO;
         let mut bpm = self.changes.first().map_or(120.0, |change| change.bpm);
@@ -162,6 +192,11 @@ fn time_le(left: Time, right: Time) -> bool {
         <= i128::from(right.numerator) * i128::from(left.denominator)
 }
 
+fn time_before(left: Time, right: Time) -> bool {
+    i128::from(left.numerator) * i128::from(right.denominator)
+        < i128::from(right.numerator) * i128::from(left.denominator)
+}
+
 fn from_seconds(seconds: f64) -> Time {
     const SCALE: f64 = 1_000_000_000.0;
     Time::new((seconds * SCALE).round() as i64, SCALE as u32)
@@ -197,5 +232,32 @@ mod tests {
         });
         assert!((map.beat_at(Time::new(3, 1)) - 5.0).abs() < 1e-9);
         assert_eq!(map.time_at_beat(5.0), Time::new(3, 1));
+    }
+
+    #[test]
+    fn tempo_map_rejects_invalid_changes() {
+        let mut map = TempoMap::new(120.0);
+        map.changes[0].bpm = f64::NAN;
+        assert!(map.validate().is_err());
+
+        let mut map = TempoMap::new(120.0);
+        map.changes.push(TempoChange {
+            at: Time::ZERO,
+            bpm: 90.0,
+        });
+        assert!(map.validate().is_err());
+
+        let mut map = TempoMap::new(120.0);
+        map.changes[0].at = Time::new(1, 1);
+        assert!(map.validate().is_err());
+    }
+
+    #[test]
+    fn invalid_tempo_map_fails_closed_for_queries() {
+        let mut map = TempoMap::new(120.0);
+        map.changes[0].bpm = f64::INFINITY;
+        assert_eq!(map.beat_at(Time::new(1, 1)), 0.0);
+        assert_eq!(map.time_at_beat(1.0), Time::ZERO);
+        assert_eq!(map.time_at_beat(f64::NAN), Time::ZERO);
     }
 }

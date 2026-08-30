@@ -66,6 +66,7 @@ impl ProductionDocument {
         if !self.audio.master_gain.is_finite() || self.audio.master_gain < 0.0 {
             return Err("audio master gain must be finite and non-negative".into());
         }
+        self.tempo.validate().map_err(str::to_owned)?;
         for binding in &self.bindings {
             binding.validate().map_err(str::to_owned)?;
         }
