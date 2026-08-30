@@ -267,6 +267,19 @@ mod tests {
     }
 
     #[test]
+    fn legacy_project_snapshot_remains_recoverable() {
+        let dir = std::env::temp_dir().join(format!("aevfx_autosave_legacy_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let json = serde_json::to_string(&sample_project()).unwrap();
+        std::fs::write(dir.join("recovery_0.json"), json).unwrap();
+        let manager = AutosaveManager::new(&dir);
+        assert_eq!(manager.load_latest_recovery().unwrap().active_composition().name, "AutoSaveComp");
+        assert!(manager.load_latest_production().is_none());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
     fn test_rotating_slots_never_exceed_limit() {
         let dir = std::env::temp_dir().join(format!("aevfx_autosave_rot_{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
