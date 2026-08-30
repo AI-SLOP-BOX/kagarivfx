@@ -286,12 +286,29 @@ fn validate_composition(
         return Err("composition background color must be finite".into());
     }
     let mut layer_ids = HashSet::new();
+    let mut layer_parents = HashMap::new();
     for layer in &composition.layers {
         if layer.id.trim().is_empty() || !layer_ids.insert(layer.id.clone()) {
             return Err("layer ids must be non-empty and unique within a composition".into());
         }
+        if let Some(parent_id) = &layer.parent_id {
+            if !layer_ids.contains(parent_id) && !composition.layers.iter().any(|candidate| candidate.id == *parent_id) {
+                return Err("layer parent reference is invalid".into());
+            }
+            layer_parents.insert(layer.id.as_str(), parent_id.as_str());
+        }
         if layer.in_frame >= layer.out_frame {
             return Err("layer frame range must have a positive duration".into());
+        }
+    }
+    for layer_id in layer_parents.keys() {
+        let mut current = Some(*layer_id);
+        let mut visited = HashSet::new();
+        while let Some(id) = current {
+            if !visited.insert(id) {
+                return Err("layer parent hierarchy contains a cycle".into());
+            }
+            current = layer_parents.get(id).copied();
         }
     }
     for nested in &composition.sub_compositions {
@@ -539,6 +556,11 @@ mod tests {
             LayerType::PreComp { comp_id },
             300,
         ));
+        assert!(ProductionDocument::new(invalid_project).validate().is_err());
+
+        let mut invalid_project = Project::default();
+        let layer_id = invalid_project.compositions[0].layers[0].id.clone();
+        invalid_project.compositions[0].layers[0].parent_id = Some(layer_id);
         assert!(ProductionDocument::new(invalid_project).validate().is_err());
     }
 
