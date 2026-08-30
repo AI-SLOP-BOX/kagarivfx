@@ -54,14 +54,29 @@ pub fn apply_displacement_map(
     height: u32,
     options: &DisplacementMapOptions,
 ) -> Vec<u8> {
-    let num_pixels = (width * height) as usize;
-    if target_pixels.len() != num_pixels * 4 || ref_map_pixels.len() != num_pixels * 4 {
+    let Some(num_pixels) = (width as usize)
+        .checked_mul(height as usize)
+        .filter(|&count| count <= usize::MAX / 4)
+    else {
+        return target_pixels.to_vec();
+    };
+    if width == 0
+        || height == 0
+        || target_pixels.len() != num_pixels * 4
+        || ref_map_pixels.len() != num_pixels * 4
+    {
         return target_pixels.to_vec();
     }
 
     let mut out_pixels = vec![0u8; num_pixels * 4];
     let w_f32 = width as f32;
     let h_f32 = height as f32;
+    let max_x = if options.max_horizontal_displacement.is_finite() {
+        options.max_horizontal_displacement.clamp(-4096.0, 4096.0)
+    } else { 0.0 };
+    let max_y = if options.max_vertical_displacement.is_finite() {
+        options.max_vertical_displacement.clamp(-4096.0, 4096.0)
+    } else { 0.0 };
 
     for y in 0..height {
         for x in 0..width {
@@ -73,8 +88,8 @@ pub fn apply_displacement_map(
                 ref_map_pixels[idx + 3],
             ];
 
-            let dx = sample_channel_value(ref_rgba, options.horizontal_channel) * options.max_horizontal_displacement;
-            let dy = sample_channel_value(ref_rgba, options.vertical_channel) * options.max_vertical_displacement;
+            let dx = sample_channel_value(ref_rgba, options.horizontal_channel) * max_x;
+            let dy = sample_channel_value(ref_rgba, options.vertical_channel) * max_y;
 
             let mut src_x = x as f32 + dx;
             let mut src_y = y as f32 + dy;
@@ -220,15 +235,47 @@ mod tests {
             ..Default::default()
         };
         let out2 = apply_displacement_map(&img, &lum_map, 8, 2, &opts_alpha);
-        assert!(out2.chunks(4).all(|px| px[0] == 90), "uniform source stays uniform");
+        assert!(
+            out2.chunks(4).all(|px| px[0] == 90),
+            "uniform source stays uniform"
+        );
     }
 
     #[test]
     fn test_mismatched_buffers_return_target_unchanged() {
         let target = vec![42u8; 32];
         let bad_ref = vec![7u8; 16];
-        let out = apply_displacement_map(&target, &bad_ref, 4, 2, &DisplacementMapOptions::default());
+        let out =
+            apply_displacement_map(&target, &bad_ref, 4, 2, &DisplacementMapOptions::default());
         assert_eq!(out, target);
+    }
+
+    #[test]
+    fn test_extreme_displacement_inputs_are_safe() {
+        let target = vec![42u8; 4];
+        let map = vec![255u8; 4];
+        let out = apply_displacement_map(
+            &target,
+            &map,
+            1,
+            1,
+            &DisplacementMapOptions {
+                max_horizontal_displacement: f32::INFINITY,
+                max_vertical_displacement: f32::NAN,
+                ..Default::default()
+            },
+        );
+        assert_eq!(out.len(), target.len());
+        assert_eq!(
+            apply_displacement_map(
+                &target,
+                &map,
+                u32::MAX,
+                u32::MAX,
+                &DisplacementMapOptions::default()
+            ),
+            target
+        );
     }
 
     #[test]
