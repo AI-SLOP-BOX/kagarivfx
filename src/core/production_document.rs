@@ -360,6 +360,27 @@ fn validate_composition(
                 return Err("text layer settings are invalid".into());
             }
         }
+        if let LayerType::Shape {
+            color,
+            stroke_color,
+            stroke_width,
+            extrusion_depth,
+            bevel_depth,
+            ..
+        } = &layer.layer_type
+        {
+            if color.iter().any(|value| !value.is_finite())
+                || stroke_color.iter().any(|value| !value.is_finite())
+                || !stroke_width.is_finite()
+                || *stroke_width < 0.0
+                || !extrusion_depth.is_finite()
+                || *extrusion_depth < 0.0
+                || !bevel_depth.is_finite()
+                || *bevel_depth < 0.0
+            {
+                return Err("shape layer settings are invalid".into());
+            }
+        }
         let mut effect_ids = HashSet::new();
         for effect in &layer.effects {
             if effect.id.trim().is_empty() || !effect_ids.insert(effect.id.clone()) {
