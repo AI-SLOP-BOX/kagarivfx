@@ -39,10 +39,8 @@ pub fn apply_difference_matte(
 
     let tolerance = if options.tolerance.is_finite() {
         options.tolerance.clamp(0.0, 1.0)
-    } else if options.tolerance.is_sign_positive() {
-        1.0
     } else {
-        0.0
+        1.0
     };
 
     for i in 0..num_pixels {
@@ -60,7 +58,9 @@ pub fn apply_difference_matte(
         let db = b1 - b2;
         let diff = (dr * dr + dg * dg + db * db).sqrt();
 
-        let matte = if diff > tolerance {
+        let matte = if tolerance >= 1.0 {
+            0.0
+        } else if diff > tolerance {
             ((diff - tolerance) / (1.0 - tolerance).max(0.001)).clamp(0.0, 1.0)
         } else {
             0.0
