@@ -1184,6 +1184,17 @@ mod tests {
     }
 
     #[test]
+    fn gradient_stops_require_matching_sorted_unit_interval_values() {
+        let colors = [[0.0, 0.0, 0.0, 1.0], [1.0, 1.0, 1.0, 1.0]];
+        assert!(valid_gradient_stops(&colors, &[0.0, 1.0]));
+        assert!(!valid_gradient_stops(&colors, &[0.8, 0.2]));
+        assert!(!valid_gradient_stops(&colors, &[-0.1, 1.0]));
+        assert!(!valid_gradient_stops(&colors, &[0.0, 1.1]));
+        assert!(!valid_gradient_stops(&colors, &[0.0]));
+        assert!(!valid_gradient_stops(&[[0.0, 0.0, 0.0, 1.0]], &[0.0]));
+    }
+
+    #[test]
     fn atomic_save_and_load_preserve_contract() {
         let directory =
             std::env::temp_dir().join(format!("aevfx_production_document_{}", std::process::id()));
