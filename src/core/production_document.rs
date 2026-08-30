@@ -135,7 +135,10 @@ impl ProductionDocument {
                 return Err("asset ids and names are too long".into());
             }
             if let Some(parent_folder) = &asset.parent_folder {
-                if !folder_ids.contains(parent_folder.as_str()) {
+                if !metadata_text_is_safe(parent_folder)
+                    || parent_folder.len() > Self::MAX_ASSET_STRING_LENGTH
+                    || !folder_ids.contains(parent_folder.as_str())
+                {
                     return Err("asset parent folder reference is invalid".into());
                 }
             }
