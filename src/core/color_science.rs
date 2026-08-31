@@ -33,7 +33,9 @@ pub fn rgb_to_hsl(r: f32, g: f32, b: f32) -> [f32; 3] {
         (r - g) / d + 4.0
     };
     h = (h * 60.0).rem_euclid(360.0);
-    if h.is_nan() { h = 0.0; }
+    if h.is_nan() {
+        h = 0.0;
+    }
 
     [h, s, l]
 }
@@ -51,15 +53,29 @@ pub fn hsl_to_rgb(h: f32, s: f32, l: f32) -> [f32; 3] {
     }
 
     let hue_to_rgb = |p: f32, q: f32, mut t: f32| -> f32 {
-        if t < 0.0 { t += 1.0; }
-        if t > 1.0 { t -= 1.0; }
-        if t < 1.0 / 6.0 { return p + (q - p) * 6.0 * t; }
-        if t < 1.0 / 2.0 { return q; }
-        if t < 2.0 / 3.0 { return p + (q - p) * (2.0 / 3.0 - t) * 6.0; }
+        if t < 0.0 {
+            t += 1.0;
+        }
+        if t > 1.0 {
+            t -= 1.0;
+        }
+        if t < 1.0 / 6.0 {
+            return p + (q - p) * 6.0 * t;
+        }
+        if t < 1.0 / 2.0 {
+            return q;
+        }
+        if t < 2.0 / 3.0 {
+            return p + (q - p) * (2.0 / 3.0 - t) * 6.0;
+        }
         p
     };
 
-    let q = if l < 0.5 { l * (1.0 + s) } else { l + s - l * s };
+    let q = if l < 0.5 {
+        l * (1.0 + s)
+    } else {
+        l + s - l * s
+    };
     let p = 2.0 * l - q;
 
     let h_normalized = h / 360.0;
@@ -77,10 +93,17 @@ pub fn hsl_to_rgb(h: f32, s: f32, l: f32) -> [f32; 3] {
 /// - `gamma` inside [0.1, 9.9]
 /// - `out_black`, `out_white` inside [0.0, 1.0]
 #[allow(dead_code)]
-pub fn apply_levels(val: f32, in_black: f32, in_white: f32, gamma: f32, out_black: f32, out_white: f32) -> f32 {
+pub fn apply_levels(
+    val: f32,
+    in_black: f32,
+    in_white: f32,
+    gamma: f32,
+    out_black: f32,
+    out_white: f32,
+) -> f32 {
     let range = (in_white - in_black).max(0.001);
     let normalized = ((val - in_black) / range).clamp(0.0, 1.0);
-    
+
     // Apply gamma curve (normalized value raised to 1/gamma power)
     let gamma_power = 1.0 / gamma.max(0.01);
     let gamma_adjusted = normalized.powf(gamma_power);
@@ -164,32 +187,63 @@ impl Lut3D {
         let c111 = get(ir + 1, ig + 1, ib + 1);
 
         if dr > dg {
-            if dg > db { // R > G > B
+            if dg > db {
+                // R > G > B
                 let c100 = get(ir + 1, ig, ib);
                 let c110 = get(ir + 1, ig + 1, ib);
                 (
-                    c000.0 + (c100.0 - c000.0) * dr + (c110.0 - c100.0) * dg + (c111.0 - c110.0) * db,
-                    c000.1 + (c100.1 - c000.1) * dr + (c110.1 - c100.1) * dg + (c111.1 - c110.1) * db,
-                    c000.2 + (c100.2 - c000.2) * dr + (c110.2 - c100.2) * dg + (c111.2 - c110.2) * db,
+                    c000.0
+                        + (c100.0 - c000.0) * dr
+                        + (c110.0 - c100.0) * dg
+                        + (c111.0 - c110.0) * db,
+                    c000.1
+                        + (c100.1 - c000.1) * dr
+                        + (c110.1 - c100.1) * dg
+                        + (c111.1 - c110.1) * db,
+                    c000.2
+                        + (c100.2 - c000.2) * dr
+                        + (c110.2 - c100.2) * dg
+                        + (c111.2 - c110.2) * db,
                 )
-            } else if dr > db { // R > B > G
+            } else if dr > db {
+                // R > B > G
                 let c100 = get(ir + 1, ig, ib);
                 let c101 = get(ir + 1, ig, ib + 1);
                 (
-                    c000.0 + (c100.0 - c000.0) * dr + (c101.0 - c100.0) * db + (c111.0 - c101.0) * dg,
-                    c000.1 + (c100.1 - c000.1) * dr + (c101.1 - c100.1) * db + (c111.1 - c101.1) * dg,
-                    c000.2 + (c100.2 - c000.2) * dr + (c101.2 - c100.2) * db + (c111.2 - c101.2) * dg,
+                    c000.0
+                        + (c100.0 - c000.0) * dr
+                        + (c101.0 - c100.0) * db
+                        + (c111.0 - c101.0) * dg,
+                    c000.1
+                        + (c100.1 - c000.1) * dr
+                        + (c101.1 - c100.1) * db
+                        + (c111.1 - c101.1) * dg,
+                    c000.2
+                        + (c100.2 - c000.2) * dr
+                        + (c101.2 - c100.2) * db
+                        + (c111.2 - c101.2) * dg,
                 )
-            } else { // B > R > G
+            } else {
+                // B > R > G
                 let c001 = get(ir, ig, ib + 1);
                 let c101 = get(ir + 1, ig, ib + 1);
                 (
-                    c000.0 + (c001.0 - c000.0) * db + (c101.0 - c001.0) * dr + (c111.0 - c101.0) * dg,
-                    c000.1 + (c001.1 - c000.1) * db + (c101.1 - c001.1) * dr + (c111.1 - c101.1) * dg,
-                    c000.2 + (c001.2 - c000.2) * db + (c101.2 - c001.2) * dr + (c111.2 - c101.2) * dg,
+                    c000.0
+                        + (c001.0 - c000.0) * db
+                        + (c101.0 - c001.0) * dr
+                        + (c111.0 - c101.0) * dg,
+                    c000.1
+                        + (c001.1 - c000.1) * db
+                        + (c101.1 - c001.1) * dr
+                        + (c111.1 - c101.1) * dg,
+                    c000.2
+                        + (c001.2 - c000.2) * db
+                        + (c101.2 - c001.2) * dr
+                        + (c111.2 - c101.2) * dg,
                 )
             }
-        } else if db > dg { // B > G > R
+        } else if db > dg {
+            // B > G > R
             let c001 = get(ir, ig, ib + 1);
             let c011 = get(ir, ig + 1, ib + 1);
             (
@@ -197,7 +251,8 @@ impl Lut3D {
                 c000.1 + (c001.1 - c000.1) * db + (c011.1 - c001.1) * dg + (c111.1 - c011.1) * dr,
                 c000.2 + (c001.2 - c000.2) * db + (c011.2 - c001.2) * dg + (c111.2 - c011.2) * dr,
             )
-        } else if db > dr { // G > B > R
+        } else if db > dr {
+            // G > B > R
             let c010 = get(ir, ig + 1, ib);
             let c011 = get(ir, ig + 1, ib + 1);
             (
@@ -205,7 +260,8 @@ impl Lut3D {
                 c000.1 + (c010.1 - c000.1) * dg + (c011.1 - c010.1) * db + (c111.1 - c011.1) * dr,
                 c000.2 + (c010.2 - c000.2) * dg + (c011.2 - c010.2) * db + (c111.2 - c011.2) * dr,
             )
-        } else { // G > R > B
+        } else {
+            // G > R > B
             let c010 = get(ir, ig + 1, ib);
             let c110 = get(ir + 1, ig + 1, ib);
             (
@@ -408,7 +464,7 @@ mod tests {
         let original = [0.2, 0.5, 0.8]; // Soft blue
         let hsl = rgb_to_hsl(original[0], original[1], original[2]);
         let roundtrip = hsl_to_rgb(hsl[0], hsl[1], hsl[2]);
-        
+
         assert!((original[0] - roundtrip[0]).abs() < 1e-4);
         assert!((original[1] - roundtrip[1]).abs() < 1e-4);
         assert!((original[2] - roundtrip[2]).abs() < 1e-4);
@@ -462,11 +518,275 @@ mod tests {
                 let log = linear_to_cinema_log(val, profile);
                 let roundtrip = cinema_log_to_linear(log, profile);
                 assert!(
-                    (val - roundtrip).abs() < 0.01 * val + 0.005,
-                    "profile {:?} failed for linear val {}: log={}, roundtrip={}",
-                    profile, val, log, roundtrip
+                    (roundtrip - val).abs() < 1e-3 * val.max(1.0),
+                    "profile {:?}: linear {} -> log {} -> linear {}",
+                    profile,
+                    val,
+                    log,
+                    roundtrip
                 );
             }
         }
+    }
+
+    #[test]
+    fn test_working_color_space_conversions() {
+        let white = [1.0f32, 1.0, 1.0];
+        let p3 = convert_color_space(
+            white,
+            WorkingColorSpace::Rec709,
+            WorkingColorSpace::DisplayP3,
+        );
+        assert!((p3[0] - 1.0).abs() < 0.05);
+        assert!((p3[1] - 1.0).abs() < 0.05);
+        assert!((p3[2] - 1.0).abs() < 0.05);
+
+        let black = [0.0f32, 0.0, 0.0];
+        let lin_black = convert_color_space(
+            black,
+            WorkingColorSpace::Rec709,
+            WorkingColorSpace::LinearSRGB,
+        );
+        assert_eq!(lin_black, [0.0, 0.0, 0.0]);
+    }
+}
+
+/// Standard professional working color spaces.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, serde::Serialize, serde::Deserialize)]
+pub enum WorkingColorSpace {
+    #[default]
+    Rec709,
+    DisplayP3,
+    Rec2020,
+    LinearSRGB,
+    AcesCG,
+}
+
+/// Converts sRGB Gamma (2.2 / standard transfer) to Linear RGB.
+pub fn srgb_to_linear(v: f32) -> f32 {
+    let v = v.clamp(0.0, 1.0);
+    if v <= 0.04045 {
+        v / 12.92
+    } else {
+        ((v + 0.055) / 1.055).powf(2.4)
+    }
+}
+
+/// Converts Linear RGB to sRGB Gamma.
+pub fn linear_to_srgb(v: f32) -> f32 {
+    let v = v.clamp(0.0, 1.0);
+    if v <= 0.0031308 {
+        v * 12.92
+    } else {
+        1.055 * v.powf(1.0 / 2.4) - 0.055
+    }
+}
+
+/// Color transformation matrix multiply for Rec.709 <-> Display P3 <-> Rec.2020 <-> ACEScg
+pub fn convert_color_space(
+    rgb: [f32; 3],
+    src: WorkingColorSpace,
+    dst: WorkingColorSpace,
+) -> [f32; 3] {
+    if src == dst {
+        return rgb;
+    }
+    // Convert source to Linear sRGB first
+    let lin_src = match src {
+        WorkingColorSpace::Rec709 => [
+            srgb_to_linear(rgb[0]),
+            srgb_to_linear(rgb[1]),
+            srgb_to_linear(rgb[2]),
+        ],
+        WorkingColorSpace::LinearSRGB => rgb,
+        WorkingColorSpace::DisplayP3 => {
+            let lin_p3 = [
+                srgb_to_linear(rgb[0]),
+                srgb_to_linear(rgb[1]),
+                srgb_to_linear(rgb[2]),
+            ];
+            [
+                lin_p3[0] * 1.2249 - lin_p3[1] * 0.2247 + lin_p3[2] * 0.0,
+                -lin_p3[0] * 0.0420 + lin_p3[1] * 1.0419 - lin_p3[2] * 0.0,
+                -lin_p3[0] * 0.0196 - lin_p3[1] * 0.0786 + lin_p3[2] * 1.0982,
+            ]
+        }
+        WorkingColorSpace::Rec2020 => {
+            let lin_2020 = [
+                srgb_to_linear(rgb[0]),
+                srgb_to_linear(rgb[1]),
+                srgb_to_linear(rgb[2]),
+            ];
+            [
+                lin_2020[0] * 1.6605 - lin_2020[1] * 0.5876 - lin_2020[2] * 0.0728,
+                -lin_2020[0] * 0.1246 + lin_2020[1] * 1.1329 - lin_2020[2] * 0.0083,
+                -lin_2020[0] * 0.0182 - lin_2020[1] * 0.1006 + lin_2020[2] * 1.1187,
+            ]
+        }
+        WorkingColorSpace::AcesCG => [
+            rgb[0] * 1.7050 - rgb[1] * 0.6242 - rgb[2] * 0.0808,
+            -rgb[0] * 0.1297 + rgb[1] * 1.1385 - rgb[2] * 0.0088,
+            -rgb[0] * 0.0241 - rgb[1] * 0.1246 + rgb[2] * 1.1488,
+        ],
+    };
+
+    // Convert Linear sRGB to destination
+    match dst {
+        WorkingColorSpace::Rec709 => [
+            linear_to_srgb(lin_src[0]),
+            linear_to_srgb(lin_src[1]),
+            linear_to_srgb(lin_src[2]),
+        ],
+        WorkingColorSpace::LinearSRGB => lin_src,
+        WorkingColorSpace::DisplayP3 => {
+            let p3_r = lin_src[0] * 0.8225 + lin_src[1] * 0.1775 + lin_src[2] * 0.0;
+            let p3_g = lin_src[0] * 0.0332 + lin_src[1] * 0.9668 + lin_src[2] * 0.0;
+            let p3_b = lin_src[0] * 0.0171 + lin_src[1] * 0.0724 + lin_src[2] * 0.9105;
+            [
+                linear_to_srgb(p3_r),
+                linear_to_srgb(p3_g),
+                linear_to_srgb(p3_b),
+            ]
+        }
+        WorkingColorSpace::Rec2020 => {
+            let r2020_r = lin_src[0] * 0.6274 + lin_src[1] * 0.3293 + lin_src[2] * 0.0433;
+            let r2020_g = lin_src[0] * 0.0691 + lin_src[1] * 0.9195 + lin_src[2] * 0.0114;
+            let r2020_b = lin_src[0] * 0.0164 + lin_src[1] * 0.0880 + lin_src[2] * 0.8956;
+            [
+                linear_to_srgb(r2020_r),
+                linear_to_srgb(r2020_g),
+                linear_to_srgb(r2020_b),
+            ]
+        }
+        WorkingColorSpace::AcesCG => [
+            lin_src[0] * 0.6131 + lin_src[1] * 0.3395 + lin_src[2] * 0.0474,
+            lin_src[0] * 0.0702 + lin_src[1] * 0.9164 + lin_src[2] * 0.0134,
+            lin_src[0] * 0.0206 + lin_src[1] * 0.1096 + lin_src[2] * 0.8698,
+        ],
+    }
+}
+
+/// Project / Composition color bit depth.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize, Default)]
+pub enum BitDepth {
+    #[default]
+    EightBit, // 8bpc (0..255)
+    SixteenBit, // 16bpc Half Float (unclamped HDR)
+    ThirtyTwoBitFloat, // 32bpc Full Float (infinite dynamic range)
+}
+
+/// High Dynamic Range (HDR) 32bpc / 16bpc scene-linear float pixel buffer.
+/// Stores RGBA components as 32-bit floats with unclamped range [0.0, +inf).
+#[derive(Debug, Clone)]
+pub struct HdrF32Buffer {
+    pub width: u32,
+    pub height: u32,
+    pub data: Vec<f32>, // 4 floats per pixel: [R, G, B, A]
+}
+
+impl HdrF32Buffer {
+    pub fn new(width: u32, height: u32) -> Self {
+        let len = (width as usize) * (height as usize) * 4;
+        Self {
+            width,
+            height,
+            data: vec![0.0; len],
+        }
+    }
+
+    /// Creates an HDR float buffer from an 8-bit sRGB RGBA slice.
+    pub fn from_rgba8(pixels: &[u8], width: u32, height: u32) -> Self {
+        let mut buffer = Self::new(width, height);
+        for (i, chunk) in pixels.chunks_exact(4).enumerate() {
+            let base = i * 4;
+            if base + 3 < buffer.data.len() {
+                buffer.data[base] = srgb_to_linear(chunk[0] as f32 / 255.0);
+                buffer.data[base + 1] = srgb_to_linear(chunk[1] as f32 / 255.0);
+                buffer.data[base + 2] = srgb_to_linear(chunk[2] as f32 / 255.0);
+                buffer.data[base + 3] = chunk[3] as f32 / 255.0;
+            }
+        }
+        buffer
+    }
+
+    /// Converts HDR float buffer back to 8bpc sRGB for display / 8-bit export.
+    pub fn to_rgba8(&self, tonemap: bool, exposure: f32) -> Vec<u8> {
+        let num_pixels = (self.width as usize) * (self.height as usize);
+        let mut out = vec![0u8; num_pixels * 4];
+        let exp_factor = 2.0f32.powf(exposure);
+
+        for (i, chunk) in self.data.chunks_exact(4).enumerate() {
+            let base = i * 4;
+            let mut r = chunk[0] * exp_factor;
+            let mut g = chunk[1] * exp_factor;
+            let mut b = chunk[2] * exp_factor;
+            let a = chunk[3].clamp(0.0, 1.0);
+
+            if tonemap {
+                // ACES / Reinhard filmic tonemapping for HDR highlights
+                r = r / (1.0 + r);
+                g = g / (1.0 + g);
+                b = b / (1.0 + b);
+            }
+
+            out[base] = (linear_to_srgb(r).clamp(0.0, 1.0) * 255.0).round() as u8;
+            out[base + 1] = (linear_to_srgb(g).clamp(0.0, 1.0) * 255.0).round() as u8;
+            out[base + 2] = (linear_to_srgb(b).clamp(0.0, 1.0) * 255.0).round() as u8;
+            out[base + 3] = (a * 255.0).round() as u8;
+        }
+        out
+    }
+
+    /// Alpha blend source layer over this buffer in scene-linear float space.
+    pub fn blend_over(&mut self, src: &HdrF32Buffer, opacity: f32) {
+        if self.width != src.width || self.height != src.height {
+            return;
+        }
+        let op = opacity.clamp(0.0, 1.0);
+        for i in 0..(self.data.len() / 4) {
+            let base = i * 4;
+            let src_a = src.data[base + 3] * op;
+            let dst_a = self.data[base + 3];
+            let out_a = src_a + dst_a * (1.0 - src_a);
+
+            if out_a > 1e-6 {
+                for c in 0..3 {
+                    let src_c = src.data[base + c];
+                    let dst_c = self.data[base + c];
+                    self.data[base + c] = (src_c * src_a + dst_c * dst_a * (1.0 - src_a)) / out_a;
+                }
+                self.data[base + 3] = out_a;
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod hdr_tests {
+    use super::*;
+
+    #[test]
+    fn test_hdr_f32_buffer_roundtrip() {
+        let rgba8 = vec![255, 128, 64, 255];
+        let hdr = HdrF32Buffer::from_rgba8(&rgba8, 1, 1);
+        assert!(hdr.data[0] > 0.9); // Linear white
+        let back = hdr.to_rgba8(false, 0.0);
+        assert_eq!(back[0], 255);
+        assert!((back[1] as i32 - 128).abs() <= 1);
+    }
+
+    #[test]
+    fn test_hdr_linear_alpha_blend() {
+        let mut bg = HdrF32Buffer::new(1, 1);
+        bg.data[0] = 1.0; // Red
+        bg.data[3] = 1.0;
+
+        let mut fg = HdrF32Buffer::new(1, 1);
+        fg.data[1] = 1.0; // Green
+        fg.data[3] = 0.5;
+
+        bg.blend_over(&fg, 1.0);
+        assert!(bg.data[0] > 0.0 && bg.data[1] > 0.0);
+        assert_eq!(bg.data[3], 1.0);
     }
 }

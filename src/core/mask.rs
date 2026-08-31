@@ -443,6 +443,78 @@ impl MaskPath {
         }
     }
 
+    /// Transforms a subset of vertices (scale, rotate, translate) around a bounding box pivot point.
+    /// Also rotates and scales tangent handles accordingly.
+    pub fn transform_selected_vertices(
+        &mut self,
+        frame: u32,
+        selected_indices: &[usize],
+        scale: [f32; 2],
+        rotation_deg: f32,
+        translation: [f32; 2],
+        custom_pivot: Option<[f32; 2]>,
+    ) {
+        if selected_indices.is_empty() {
+            return;
+        }
+
+        let mut verts = self.vertices_at_frame(frame);
+        if verts.is_empty() {
+            return;
+        }
+
+        // Calculate pivot as centroid of selected vertices if not provided
+        let pivot = custom_pivot.unwrap_or_else(|| {
+            let mut sum_x = 0.0f32;
+            let mut sum_y = 0.0f32;
+            let mut count = 0.0f32;
+            for &idx in selected_indices {
+                if let Some(p) = verts.get(idx) {
+                    sum_x += p[0];
+                    sum_y += p[1];
+                    count += 1.0;
+                }
+            }
+            if count > 0.0 {
+                [sum_x / count, sum_y / count]
+            } else {
+                [0.0, 0.0]
+            }
+        });
+
+        let rad = rotation_deg.to_radians();
+        let cos_r = rad.cos();
+        let sin_r = rad.sin();
+
+        let transform_point = |p: [f32; 2]| -> [f32; 2] {
+            let dx = (p[0] - pivot[0]) * scale[0];
+            let dy = (p[1] - pivot[1]) * scale[1];
+            let rx = dx * cos_r - dy * sin_r;
+            let ry = dx * sin_r + dy * cos_r;
+            [pivot[0] + rx + translation[0], pivot[1] + ry + translation[1]]
+        };
+
+        let transform_vector = |v: [f32; 2]| -> [f32; 2] {
+            let dx = v[0] * scale[0];
+            let dy = v[1] * scale[1];
+            [dx * cos_r - dy * sin_r, dx * sin_r + dy * cos_r]
+        };
+
+        for &idx in selected_indices {
+            if idx < verts.len() {
+                verts[idx] = transform_point(verts[idx]);
+                self.set_vertex_at_frame(frame, idx, verts[idx]);
+
+                if let Some(tangents) = &mut self.tangents {
+                    if idx < tangents.len() {
+                        let (t_in, t_out) = tangents[idx];
+                        tangents[idx] = (transform_vector(t_in), transform_vector(t_out));
+                    }
+                }
+            }
+        }
+    }
+
     /// Sample the path as a series of screen-space points for CPU rendering.
     /// Returns a flat list of [x, y] pairs. Uses cubic Bezier curves when tangents exist.
     pub fn to_polygon(&self, frame: u32, segments_per_edge: u32) -> Vec<[f32; 2]> {
@@ -659,5 +731,17 @@ mod tests {
         let (t_in, t_out) = tangents[0];
         assert_eq!(t_in, [-10.0, 0.0]);
         assert_eq!(t_out, [20.0, 0.0]); // Collinear opposite direction
+    }
+
+    #[test]
+    fn test_transform_selected_vertices_scale_and_translate() {
+        let mut path = MaskPath::new_rect(0.0, 0.0, 100.0, 100.0);
+        // Select all 4 vertices, scale by 2.0 around centroid [50, 50], and translate by [10, 20]
+        path.transform_selected_vertices(0, &[0, 1, 2, 3], [2.0, 2.0], 0.0, [10.0, 20.0], None);
+        let verts = path.vertices_at_frame(0);
+        // Top-left [0, 0] scaled around [50, 50] -> [-50, -50] + [10, 20] = [-40, -30]
+        assert_eq!(verts[0], [-40.0, -30.0]);
+        // Bottom-right [100, 100] -> [150, 150] + [10, 20] = [160, 170]
+        assert_eq!(verts[2], [160.0, 170.0]);
     }
 }

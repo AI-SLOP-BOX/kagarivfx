@@ -57,6 +57,7 @@ pub mod merkle_frame_cache;
 pub mod mlt_export;
 pub mod motion_tile;
 pub mod ocio_color;
+pub mod obj_parser;
 pub mod openfx_bridge;
 pub mod page_turn;
 pub mod paint;
