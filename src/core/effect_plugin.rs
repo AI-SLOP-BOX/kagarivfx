@@ -645,3 +645,127 @@ impl EffectPluginRegistry {
         }
     }
 }
+
+/// Extensibility interface for custom 3rd-party image processing plugins and shaders.
+pub trait CustomPixelEffectPlugin: Send + Sync {
+    /// Unique identifier of the plugin.
+    fn id(&self) -> &str;
+    /// User-visible name displayed in UI.
+    fn name(&self) -> &str;
+    /// Category / submenu in the effects palette.
+    fn category(&self) -> &str {
+        "Custom Plugins"
+    }
+    /// Process RGBA8 pixel buffer in-place on CPU.
+    fn process_pixels(
+        &self,
+        pixels: &mut [u8],
+        width: u32,
+        height: u32,
+        frame: u32,
+        time_sec: f32,
+    );
+}
+
+/// Global registry for dynamic third-party VFX plugins and custom filters.
+pub struct CustomPluginRegistry {
+    plugins: std::sync::RwLock<std::collections::HashMap<String, Box<dyn CustomPixelEffectPlugin>>>,
+}
+
+impl Default for CustomPluginRegistry {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl CustomPluginRegistry {
+    pub fn new() -> Self {
+        Self {
+            plugins: std::sync::RwLock::new(std::collections::HashMap::new()),
+        }
+    }
+
+    /// Register a custom 3rd-party plugin.
+    pub fn register(&self, plugin: Box<dyn CustomPixelEffectPlugin>) {
+        let key = plugin.id().to_string();
+        if let Ok(mut guard) = self.plugins.write() {
+            guard.insert(key, plugin);
+        }
+    }
+
+    /// Unregister a plugin by ID.
+    pub fn unregister(&self, plugin_id: &str) -> bool {
+        if let Ok(mut guard) = self.plugins.write() {
+            guard.remove(plugin_id).is_some()
+        } else {
+            false
+        }
+    }
+
+    /// Execute a custom plugin by ID on an RGBA pixel buffer.
+    pub fn process_layer(
+        &self,
+        plugin_id: &str,
+        pixels: &mut [u8],
+        width: u32,
+        height: u32,
+        frame: u32,
+        time_sec: f32,
+    ) -> bool {
+        if let Ok(guard) = self.plugins.read() {
+            if let Some(plugin) = guard.get(plugin_id) {
+                plugin.process_pixels(pixels, width, height, frame, time_sec);
+                return true;
+            }
+        }
+        false
+    }
+
+    /// List all registered plugin IDs and display names.
+    pub fn list_plugins(&self) -> Vec<(String, String, String)> {
+        if let Ok(guard) = self.plugins.read() {
+            guard
+                .values()
+                .map(|p| (p.id().to_string(), p.name().to_string(), p.category().to_string()))
+                .collect()
+        } else {
+            vec![]
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    struct InvertColorPlugin;
+    impl CustomPixelEffectPlugin for InvertColorPlugin {
+        fn id(&self) -> &str {
+            "vendor.invert"
+        }
+        fn name(&self) -> &str {
+            "Vendor Invert Colors"
+        }
+        fn process_pixels(&self, pixels: &mut [u8], width: u32, height: u32, _frame: u32, _time: f32) {
+            for chunk in pixels.chunks_exact_mut(4) {
+                chunk[0] = 255 - chunk[0];
+                chunk[1] = 255 - chunk[1];
+                chunk[2] = 255 - chunk[2];
+            }
+        }
+    }
+
+    #[test]
+    fn test_custom_plugin_registration_and_execution() {
+        let registry = CustomPluginRegistry::new();
+        registry.register(Box::new(InvertColorPlugin));
+
+        let list = registry.list_plugins();
+        assert_eq!(list.len(), 1);
+        assert_eq!(list[0].0, "vendor.invert");
+
+        let mut pixels = vec![100, 150, 200, 255];
+        assert!(registry.process_layer("vendor.invert", &mut pixels, 1, 1, 0, 0.0));
+        assert_eq!(pixels, vec![155, 105, 55, 255]);
+    }
+}
