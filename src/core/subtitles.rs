@@ -47,7 +47,11 @@ pub fn parse_srt(input: &str, fps: u32) -> Vec<SubtitleCue> {
                     let text: Vec<&str> = block[t_idx + 1..].iter().map(|s| s.as_str()).collect();
                     let text = text.join("\n").trim().to_string();
                     if !text.is_empty() && ef > sf {
-                        cues.push(SubtitleCue { start_frame: sf, end_frame: ef, text });
+                        cues.push(SubtitleCue {
+                            start_frame: sf,
+                            end_frame: ef,
+                            text,
+                        });
                     }
                 }
             }
@@ -75,26 +79,36 @@ pub fn cues_to_layers(
     comp_h: f32,
     font_size: u32,
 ) -> Vec<Layer> {
-    cues.iter().enumerate().map(|(i, cue)| {
-        let first_line = cue.text.lines().next().unwrap_or("").chars().take(24).collect::<String>();
-        let name = format!("Caption {:03} · {}", i + 1, first_line);
-        let mut layer = Layer::new(
-            format!("caption_{}", i + 1),
-            name,
-            LayerType::new_text(cue.text.clone(), font_size, [1.0, 1.0, 1.0, 1.0]),
-            1,
-        );
-        // Bottom-center placement + readable outline
-        layer.transform.position = Animatable::Constant([comp_w / 2.0, comp_h * 0.86]);
-        if let Some(tf) = &mut layer.text_formatting {
-            tf.alignment = 1; // center
-            tf.stroke_color = Some([0.0, 0.0, 0.0, 1.0]);
-            tf.stroke_width = font_size as f32 * 0.08;
-        }
-        layer.in_frame = cue.start_frame.min(cue.end_frame.saturating_sub(1));
-        layer.out_frame = cue.end_frame.max(layer.in_frame + 1);
-        layer
-    }).collect()
+    cues.iter()
+        .enumerate()
+        .map(|(i, cue)| {
+            let first_line = cue
+                .text
+                .lines()
+                .next()
+                .unwrap_or("")
+                .chars()
+                .take(24)
+                .collect::<String>();
+            let name = format!("Caption {:03} · {}", i + 1, first_line);
+            let mut layer = Layer::new(
+                format!("caption_{}", i + 1),
+                name,
+                LayerType::new_text(cue.text.clone(), font_size, [1.0, 1.0, 1.0, 1.0]),
+                1,
+            );
+            // Bottom-center placement + readable outline
+            layer.transform.position = Animatable::Constant([comp_w / 2.0, comp_h * 0.86]);
+            if let Some(tf) = &mut layer.text_formatting {
+                tf.alignment = 1; // center
+                tf.stroke_color = Some([0.0, 0.0, 0.0, 1.0]);
+                tf.stroke_width = font_size as f32 * 0.08;
+            }
+            layer.in_frame = cue.start_frame.min(cue.end_frame.saturating_sub(1));
+            layer.out_frame = cue.end_frame.max(layer.in_frame + 1);
+            layer
+        })
+        .collect()
 }
 
 /// Serialize caption-prefixed text layers back out as SRT.
@@ -111,7 +125,9 @@ pub fn layers_to_srt(layers: &[Layer], fps: u32) -> String {
 
     let mut cues: Vec<(u32, u32, &str)> = Vec::new();
     for l in layers {
-        if !l.name.starts_with("Caption") { continue; }
+        if !l.name.starts_with("Caption") {
+            continue;
+        }
         if let LayerType::Text { text, .. } = &l.layer_type {
             if l.out_frame > l.in_frame {
                 cues.push((l.in_frame, l.out_frame, text.as_str()));
@@ -122,11 +138,54 @@ pub fn layers_to_srt(layers: &[Layer], fps: u32) -> String {
 
     let mut out = String::new();
     for (i, (sf, ef, text)) in cues.iter().enumerate() {
-        out.push_str(&format!("{}\n{} --> {}\n{}\n\n", i + 1, fmt_tc(*sf, fps), fmt_tc(*ef, fps), text));
+        out.push_str(&format!(
+            "{}\n{} --> {}\n{}\n\n",
+            i + 1,
+            fmt_tc(*sf, fps),
+            fmt_tc(*ef, fps),
+            text
+        ));
     }
     out
 }
 
+/// Convert caption Text layers to standard WebVTT format string.
+pub fn layers_to_vtt(layers: &[Layer], fps: u32) -> String {
+    let mut out = String::from("WEBVTT\n\n");
+    let fps = fps.max(1) as f32;
+
+    fn fmt_vtt_tc(frame: u32, fps: f32) -> String {
+        let total_secs = frame as f64 / fps as f64;
+        let h = (total_secs / 3600.0).floor() as u32;
+        let m = ((total_secs / 60.0).floor() as u32) % 60;
+        let s = (total_secs.floor() as u32) % 60;
+        let ms = ((total_secs - total_secs.floor()) * 1000.0).round() as u32;
+        format!("{:02}:{:02}:{:02}.{:03}", h, m, s, ms)
+    }
+
+    let mut cues: Vec<(u32, u32, &str)> = Vec::new();
+    for l in layers {
+        if !l.name.starts_with("Caption") {
+            continue;
+        }
+        if let LayerType::Text { text, .. } = &l.layer_type {
+            if l.out_frame > l.in_frame {
+                cues.push((l.in_frame, l.out_frame, text.as_str()));
+            }
+        }
+    }
+    cues.sort_by_key(|c| c.0);
+
+    for (sf, ef, text) in cues {
+        out.push_str(&format!(
+            "{} --> {}\n{}\n\n",
+            fmt_vtt_tc(sf, fps),
+            fmt_vtt_tc(ef, fps),
+            text
+        ));
+    }
+    out
+}
 
 #[cfg(test)]
 mod tests {
@@ -178,5 +237,15 @@ mod tests {
         assert_eq!(reparsed.len(), 2);
         assert_eq!(reparsed[0].text, "Hello world");
         assert_eq!(reparsed[1].end_frame, 180);
+    }
+
+    #[test]
+    fn test_layers_to_vtt_formatting() {
+        let cues = parse_srt(SRT, 30);
+        let layers = cues_to_layers(&cues, 1920.0, 1080.0, 48);
+        let vtt = layers_to_vtt(&layers, 30);
+        assert!(vtt.starts_with("WEBVTT"));
+        assert!(vtt.contains("00:00:01.000 --> 00:00:03.500"));
+        assert!(vtt.contains("Hello world"));
     }
 }
