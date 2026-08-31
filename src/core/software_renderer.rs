@@ -19,7 +19,10 @@ fn offset_polygon_vertices(vertices: &[[f32; 2]], expansion: f32) -> Vec<[f32; 2
     if vertices.len() < 3 || !expansion.is_finite() || expansion.abs() < 0.01 {
         return vertices.to_vec();
     }
-    if vertices.iter().any(|point| !point.iter().all(|value| value.is_finite())) {
+    if vertices
+        .iter()
+        .any(|point| !point.iter().all(|value| value.is_finite()))
+    {
         return vertices.to_vec();
     }
     let n = vertices.len();
@@ -1472,13 +1475,60 @@ fn rasterize_shape_sdf(
     frame: u32,
     trim_paths: Option<&TrimPaths>,
 ) -> bool {
+    rasterize_shape_sdf_with_rotation(
+        layer_buf,
+        bw,
+        bh,
+        min_x,
+        min_y,
+        cx,
+        cy,
+        bounds_x,
+        bounds_y,
+        base_color,
+        fill_type,
+        stroke_color,
+        stroke_width,
+        l_opacity,
+        shape_type,
+        frame,
+        trim_paths,
+        0.0,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn rasterize_shape_sdf_with_rotation(
+    layer_buf: &mut [u8],
+    bw: u32,
+    bh: u32,
+    min_x: u32,
+    min_y: u32,
+    cx: f32,
+    cy: f32,
+    bounds_x: f32,
+    bounds_y: f32,
+    base_color: [f32; 4],
+    fill_type: &crate::core::timeline::ShapeFillType,
+    stroke_color: [f32; 4],
+    stroke_width: f32,
+    l_opacity: f32,
+    shape_type: &ShapeType,
+    frame: u32,
+    trim_paths: Option<&TrimPaths>,
+    rotation_deg: f32,
+) -> bool {
+    let rotation = (-rotation_deg).to_radians();
+    let (sin_rotation, cos_rotation) = rotation.sin_cos();
     let mut any_written = false;
     for py in 0..bh {
         for px in 0..bw {
             let world_x = min_x + px;
             let world_y = min_y + py;
-            let local_x = world_x as f32 - cx;
-            let local_y = world_y as f32 - cy;
+            let raw_x = world_x as f32 - cx;
+            let raw_y = world_y as f32 - cy;
+            let local_x = raw_x * cos_rotation - raw_y * sin_rotation;
+            let local_y = raw_x * sin_rotation + raw_y * cos_rotation;
             // Normalize to [-1, 1]
             let nx = local_x / bounds_x;
             let ny = local_y / bounds_y;
@@ -1558,7 +1608,11 @@ fn rasterize_shape_sdf(
                     let offset_pct = (tp.offset.evaluate(frame) / 360.0).fract();
                     let s = (start_pct + offset_pct).fract();
                     let e = (end_pct + offset_pct).fract();
-                    let in_trim = if s < e {
+                    // AE's zero-length trim is empty. Without this explicit branch,
+                    // the wrapped-range test below would incorrectly keep the whole path.
+                    let in_trim = if (s - e).abs() < f32::EPSILON {
+                        false
+                    } else if s < e {
                         angle_norm >= s && angle_norm <= e
                     } else {
                         angle_norm >= s || angle_norm <= e
@@ -1798,17 +1852,21 @@ pub fn render_frame_to_pixels(
                 }
 
                 // ── Depth of field: circle-of-confusion for 3D layers ──
-                let dof_blur = if layer.is_3d && comp.resolve_camera().dof_enabled {
+                let dof_blur = if layer.is_3d
+                    && comp.resolve_camera().dof_enabled_at(effective_frame)
+                {
                     let z = layer.transform_3d.position.evaluate(effective_frame)[2];
                     let dof = crate::core::camera_dof::CameraDofSettings {
-                        focus_distance: comp.resolve_camera().focus_distance,
-                        aperture: comp.resolve_camera().aperture,
-                        f_stop: comp.resolve_camera().aperture,
+                        focus_distance: comp.resolve_camera().focus_distance_at(effective_frame),
+                        aperture: comp.resolve_camera().aperture_at(effective_frame),
+                        f_stop: comp.resolve_camera().aperture_at(effective_frame),
                         blur_level: 100.0,
-                        iris_sides: comp.active_camera.dof_iris_sides,
+                        iris_sides: comp.resolve_camera().dof_iris_sides,
+                        anamorphic_ratio: 1.0,
+                        optical_vignetting: 0.0,
                     };
                     crate::core::camera_dof::calculate_circle_of_confusion(z, &dof)
-                        .clamp(0.0, comp.resolve_camera().dof_max_blur)
+                        .clamp(0.0, comp.resolve_camera().dof_max_blur_at(effective_frame))
                 } else {
                     0.0
                 };
@@ -1887,6 +1945,13 @@ pub fn render_frame_to_pixels(
         // Cooperative cancellation: checked once per layer
         if render_cancelled() {
             break;
+        }
+        if comp
+            .layers
+            .get(sorted_idx + 1)
+            .is_some_and(|consumer| consumer.track_matte != TrackMatteMode::None)
+        {
+            continue;
         }
         if !layer.is_active(frame) || (has_solo && !layer.solo) || !layer.visible {
             // layer handled via sorted_idx;
@@ -2181,7 +2246,7 @@ pub fn render_frame_to_pixels(
                 let cpos = cam.transform.position.evaluate(effective_frame);
                 let crot = cam.transform.rotation.evaluate(effective_frame);
                 let rad = crot[2].to_radians();
-                let fov = cam.fov_degrees.max(1.0).to_radians();
+                let fov = cam.fov_at(effective_frame).max(1.0).to_radians();
                 let focal = (height as f32 * 0.5) / (fov * 0.5).tan();
                 let proj = crate::core::particle_system::CameraProjection {
                     cam_x: cpos[0],
@@ -2255,7 +2320,7 @@ pub fn render_frame_to_pixels(
             let cam = comp.resolve_camera();
             let layer_rot_3d = layer.transform_3d.rotation.evaluate(effective_frame);
             if let Some(projected) = perspective_project_layer(
-                cam.fov_degrees,
+                cam.fov_at(effective_frame),
                 cam.transform.position.evaluate(effective_frame),
                 cam.transform.rotation.evaluate(effective_frame),
                 layer.transform_3d.position.evaluate(effective_frame),
@@ -2288,7 +2353,26 @@ pub fn render_frame_to_pixels(
             (w * 0.5, h * 0.5, None)
         };
         // abs(): negative scale flips w/h sign — must not invert the bounding box
-        let ext = bounds_x.max(bounds_y).abs() * 1.5;
+        let mut ext = bounds_x.max(bounds_y).abs() * 1.5;
+        if let Some(repeater) = &layer.shape_repeater {
+            // Reserve a conservative raster bounds for every repeated copy. The
+            // previous bounds only covered the source shape, so translated copies
+            // were silently clipped at the local-buffer edge.
+            let instances = crate::core::shape_repeater::evaluate_shape_repeater_at_frame(
+                repeater,
+                effective_frame,
+            );
+            for instance in instances {
+                let m = instance.transform_matrix;
+                let tx = m[0][2].abs();
+                let ty = m[1][2].abs();
+                let half_x = bounds_x.abs() * m[0][0].hypot(m[1][0]);
+                let half_y = bounds_y.abs() * m[0][1].hypot(m[1][1]);
+                if tx.is_finite() && ty.is_finite() && half_x.is_finite() && half_y.is_finite() {
+                    ext = ext.max(half_x.hypot(half_y) + tx.hypot(ty));
+                }
+            }
+        }
 
         // Render loop over the target bounding box (NaN-safe: `as u32` saturates NaN/inf)
         let min_x = ((cx - ext).max(0.0) as u32).min(width);
@@ -2383,16 +2467,20 @@ pub fn render_frame_to_pixels(
                 }
             } else if let Some(repeater) = &layer.shape_repeater {
                 // Repeater: render shape multiple times with transforms
-                use crate::core::shape_repeater::evaluate_shape_repeater;
-                let instances = evaluate_shape_repeater(repeater);
+                let instances = crate::core::shape_repeater::evaluate_shape_repeater_at_frame(
+                    repeater,
+                    effective_frame,
+                );
                 for instance in &instances {
                     // Apply repeater transform to center position
                     let m = &instance.transform_matrix;
                     let rx = cx * m[0][0] + cy * m[0][1] + m[0][2];
                     let ry = cx * m[1][0] + cy * m[1][1] + m[1][2];
+                    let copy_bounds_x = bounds_x * (m[0][0].hypot(m[1][0]).max(0.0001));
+                    let copy_bounds_y = bounds_y * (m[0][1].hypot(m[1][1]).max(0.0001));
                     let mut copy_color = base_color;
                     copy_color[3] *= instance.opacity;
-                    rasterize_shape_sdf(
+                    rasterize_shape_sdf_with_rotation(
                         &mut layer_buf,
                         bw,
                         bh,
@@ -2400,8 +2488,8 @@ pub fn render_frame_to_pixels(
                         min_y,
                         rx,
                         ry,
-                        bounds_x,
-                        bounds_y,
+                        copy_bounds_x,
+                        copy_bounds_y,
                         copy_color,
                         ft,
                         sc,
@@ -2410,6 +2498,7 @@ pub fn render_frame_to_pixels(
                         shape_type,
                         effective_frame,
                         layer.trim_paths.as_ref(),
+                        m[1][0].atan2(m[0][0]).to_degrees(),
                     );
                 }
             } else {
@@ -2874,11 +2963,12 @@ pub fn render_frame_to_pixels(
                     .iter()
                     .find(|l| l.name == light_name)
                     .and_then(|light| {
-                        crate::core::timeline::project_point_to_screen(
+                        crate::core::timeline::project_point_to_screen_at_frame(
                             comp.resolve_camera(),
                             light.position.evaluate(effective_frame),
                             bw as f32,
                             bh as f32,
+                            effective_frame,
                         )
                     })
             });
@@ -3162,7 +3252,7 @@ pub fn render_frame_to_pixels(
                     let matte_layer = &comp.layers[idx - 1];
                     if matte_layer.is_active(frame) && matte_layer.visible {
                         let m_frame = matte_layer.remap_frame(frame);
-                        let (m_pos, _m_scale, m_rot, m_opa) =
+                        let (m_pos, m_scale, m_rot, m_opa) =
                             comp.resolve_world_transform(matte_layer, m_frame);
                         let m_opacity = (m_opa / 100.0).clamp(0.0, 1.0);
                         let m_rad = m_rot.to_radians();
@@ -3243,6 +3333,126 @@ pub fn render_frame_to_pixels(
                                     }
                                 });
                             }
+                            LayerType::Shape {
+                                shape_type,
+                                color,
+                                stroke_color,
+                                stroke_width,
+                                fill_type,
+                                ..
+                            } => {
+                                let (shape_w, shape_h) = match shape_type {
+                                    ShapeType::Rectangle { width, height, .. }
+                                    | ShapeType::Ellipse { width, height } => {
+                                        (width.evaluate(m_frame), height.evaluate(m_frame))
+                                    }
+                                    ShapeType::Star { outer_radius, .. }
+                                    | ShapeType::Polygon {
+                                        radius: outer_radius,
+                                        ..
+                                    } => {
+                                        let diameter = outer_radius.evaluate(m_frame).abs() * 2.0;
+                                        (diameter, diameter)
+                                    }
+                                    ShapeType::FreeformBezier { points, .. } => {
+                                        let (mut max_x, mut max_y) = (0.0f32, 0.0f32);
+                                        for point in points {
+                                            max_x = max_x.max(point[0].abs());
+                                            max_y = max_y.max(point[1].abs());
+                                        }
+                                        (max_x * 2.0, max_y * 2.0)
+                                    }
+                                };
+                                let bounds_x =
+                                    (shape_w.abs() * (m_scale[0].abs() / 100.0) * 0.5).max(0.0);
+                                let bounds_y =
+                                    (shape_h.abs() * (m_scale[1].abs() / 100.0) * 0.5).max(0.0);
+                                rasterize_shape_sdf(
+                                    &mut m_buf,
+                                    m_bw,
+                                    m_bh,
+                                    0,
+                                    0,
+                                    m_cx,
+                                    m_cy,
+                                    bounds_x,
+                                    bounds_y,
+                                    *color,
+                                    fill_type,
+                                    *stroke_color,
+                                    *stroke_width,
+                                    m_opacity,
+                                    shape_type,
+                                    m_frame,
+                                    matte_layer.trim_paths.as_ref(),
+                                );
+                            }
+                            LayerType::Image { .. } | LayerType::Video { .. } => {
+                                use crate::core::image_cache::with_image_cache;
+                                let image_path = match &matte_layer.layer_type {
+                                    LayerType::Image { path } => path.clone(),
+                                    LayerType::Video {
+                                        frames_dir,
+                                        frame_count,
+                                        speed,
+                                        ..
+                                    } => {
+                                        let sequence_frame = ((m_frame as f32 * speed.max(0.0))
+                                            as u32)
+                                            .min(frame_count.saturating_sub(1));
+                                        std::path::Path::new(frames_dir)
+                                            .join(format!("frame_{:05}.png", sequence_frame))
+                                            .to_string_lossy()
+                                            .into_owned()
+                                    }
+                                    _ => unreachable!(),
+                                };
+                                with_image_cache(|cache| {
+                                    if let Some(image) = cache.load_image(&image_path) {
+                                        let iw = image.width as f32;
+                                        let ih = image.height as f32;
+                                        let cos_r = m_rot.to_radians().cos();
+                                        let sin_r = m_rot.to_radians().sin();
+                                        let half_w =
+                                            (comp.width as f32 * (m_scale[0].abs() / 100.0) * 0.5)
+                                                .max(0.001);
+                                        let half_h =
+                                            (comp.height as f32 * (m_scale[1].abs() / 100.0) * 0.5)
+                                                .max(0.001);
+                                        for py in 0..m_bh {
+                                            for px in 0..m_bw {
+                                                let dx = px as f32 + 0.5 - m_cx;
+                                                let dy = py as f32 + 0.5 - m_cy;
+                                                let lx = dx * cos_r + dy * sin_r;
+                                                let ly = -dx * sin_r + dy * cos_r;
+                                                let u = lx / (half_w * 2.0) + 0.5;
+                                                let v = ly / (half_h * 2.0) + 0.5;
+                                                if !(0.0..1.0).contains(&u)
+                                                    || !(0.0..1.0).contains(&v)
+                                                {
+                                                    continue;
+                                                }
+                                                let sx = ((u * iw) as u32).min(image.width - 1);
+                                                let sy = ((v * ih) as u32).min(image.height - 1);
+                                                let sidx = ((sy * image.width + sx) * 4) as usize;
+                                                let didx = ((py * m_bw + px) * 4) as usize;
+                                                if sidx + 3 < image.pixels.len()
+                                                    && didx + 3 < m_buf.len()
+                                                {
+                                                    m_buf[didx..didx + 4].copy_from_slice(
+                                                        &image.pixels[sidx..sidx + 4],
+                                                    );
+                                                    m_buf[didx + 3] = (m_buf[didx + 3] as f32
+                                                        * m_opacity)
+                                                        .round()
+                                                        .clamp(0.0, 255.0)
+                                                        as u8;
+                                                }
+                                            }
+                                        }
+                                    }
+                                });
+                            }
                             LayerType::PreComp { comp_id } => {
                                 // Render the nested composition as the matte source
                                 if let Some(sub_comp) =
@@ -3275,8 +3485,28 @@ pub fn render_frame_to_pixels(
                                     }
                                 }
                             }
+                            LayerType::Particle { .. } => {
+                                let mut matte_comp = comp.clone();
+                                let mut matte_source = matte_layer.clone();
+                                matte_source.track_matte = TrackMatteMode::None;
+                                matte_comp.layers = vec![matte_source];
+                                let particle_pixels = render_frame_to_pixels(
+                                    &matte_comp,
+                                    m_frame,
+                                    m_bw,
+                                    m_bh,
+                                    0.0,
+                                    0,
+                                );
+                                let copy_len = m_buf.len().min(particle_pixels.len());
+                                m_buf[..copy_len].copy_from_slice(&particle_pixels[..copy_len]);
+                                for alpha in m_buf[3..].iter_mut().step_by(4) {
+                                    *alpha =
+                                        (*alpha as f32 * m_opacity).round().clamp(0.0, 255.0) as u8;
+                                }
+                            }
                             _ => {
-                                // For other matte layer types (Image, Video, Shape, Particle), render as solid white (full matte)
+                                // Unsupported matte sources remain conservative full mattes.
                                 for py in 0..m_bh {
                                     for px in 0..m_bw {
                                         let idx = ((py * m_bw + px) * 4) as usize;

@@ -8,6 +8,10 @@ pub struct CameraDofSettings {
     pub blur_level: f32,     // Global DoF blur multiplier percentage (100.0 = standard)
     /// Iris shape: 0=circle, 3=triangle, 5=pentagon, 6=hexagon, 8=octagon
     pub iris_sides: u32,
+    /// Anamorphic ratio / squeeze factor (1.0 = spherical, 2.0 = standard 2x anamorphic lens)
+    pub anamorphic_ratio: f32,
+    /// Optical vignetting / Cat's Eye bokeh intensity towards frame corners (0.0..1.0)
+    pub optical_vignetting: f32,
 }
 
 impl Default for CameraDofSettings {
@@ -18,6 +22,8 @@ impl Default for CameraDofSettings {
             f_stop: 2.8,
             blur_level: 100.0,
             iris_sides: 0,
+            anamorphic_ratio: 1.0,
+            optical_vignetting: 0.0,
         }
     }
 }
@@ -36,28 +42,30 @@ pub fn calculate_circle_of_confusion(layer_z: f32, settings: &CameraDofSettings)
     (raw_cof * (settings.blur_level / 100.0)).clamp(0.0, 150.0)
 }
 
-/// Generate bokeh sample offsets for a given iris shape.
+/// Generate bokeh sample offsets for a given iris shape with optional anamorphic squeeze.
 /// Returns [(x, y, weight)] sample points within the CoF radius.
 pub fn generate_bokeh_samples(
     iris_sides: u32,
     cof_radius: f32,
     num_samples: u32,
+    anamorphic_ratio: f32,
 ) -> Vec<(f32, f32, f32)> {
     if cof_radius < 0.5 || num_samples == 0 {
         return vec![(0.0, 0.0, 1.0)];
     }
 
+    let squeeze = anamorphic_ratio.clamp(0.2, 5.0);
     let mut samples = Vec::with_capacity(num_samples as usize);
 
     if iris_sides == 0 || iris_sides == 1 {
-        // Circle: distribute samples in concentric rings
+        // Circle / Anamorphic Ellipse: distribute samples in concentric rings
         for i in 0..num_samples {
             let t = i as f32 / num_samples as f32;
             let angle = t * std::f32::consts::TAU;
-            let r = (t * 0.7 + 0.3) * cof_radius; // bias towards edge for nicer bokeh
-            let x = angle.cos() * r;
+            let r = (t * 0.7 + 0.3) * cof_radius;
+            let x = angle.cos() * r / squeeze; // Horizontal squeeze for vertical ellipse
             let y = angle.sin() * r;
-            let weight = 1.0 - (r / cof_radius) * 0.3; // slight center bias
+            let weight = 1.0 - (r / cof_radius) * 0.3;
             samples.push((x, y, weight));
         }
     } else {
@@ -72,9 +80,9 @@ pub fn generate_bokeh_samples(
             let a1 = (side as f32 / n) * std::f32::consts::TAU - std::f32::consts::FRAC_PI_2;
             let a2 = ((side + 1) as f32 / n) * std::f32::consts::TAU - std::f32::consts::FRAC_PI_2;
 
-            let x1 = a1.cos() * radial_scale;
+            let x1 = a1.cos() * radial_scale / squeeze;
             let y1 = a1.sin() * radial_scale;
-            let x2 = a2.cos() * radial_scale;
+            let x2 = a2.cos() * radial_scale / squeeze;
             let y2 = a2.sin() * radial_scale;
 
             let x = x1 + (x2 - x1) * edge_t;
@@ -101,7 +109,12 @@ pub fn apply_camera_dof_bokeh_blur(
     }
 
     let num_samples = (cof * 2.0).clamp(8.0, 32.0) as u32;
-    let samples = generate_bokeh_samples(settings.iris_sides, cof, num_samples);
+    let samples = generate_bokeh_samples(
+        settings.iris_sides,
+        cof,
+        num_samples,
+        settings.anamorphic_ratio,
+    );
     let src = pixels.to_vec();
     let w = width as i32;
     let h = height as i32;
@@ -157,6 +170,8 @@ mod tests {
             f_stop: 2.8,
             blur_level: 100.0,
             iris_sides: 0,
+            anamorphic_ratio: 1.0,
+            optical_vignetting: 0.0,
         };
         let blur = calculate_circle_of_confusion(500.0, &settings);
         assert_eq!(blur, 0.0);
@@ -170,6 +185,8 @@ mod tests {
             f_stop: 2.8,
             blur_level: 100.0,
             iris_sides: 0,
+            anamorphic_ratio: 1.0,
+            optical_vignetting: 0.0,
         };
         let blur = calculate_circle_of_confusion(1000.0, &settings);
         assert!(blur > 0.0);
@@ -177,7 +194,7 @@ mod tests {
 
     #[test]
     fn test_bokeh_circle_samples() {
-        let samples = generate_bokeh_samples(0, 10.0, 8);
+        let samples = generate_bokeh_samples(0, 10.0, 8, 1.0);
         assert_eq!(samples.len(), 8);
         for (x, y, w) in &samples {
             let r = (x * x + y * y).sqrt();
@@ -187,8 +204,18 @@ mod tests {
     }
 
     #[test]
+    fn test_bokeh_anamorphic_ellipse_samples() {
+        let samples = generate_bokeh_samples(0, 10.0, 8, 2.0); // 2x squeeze
+        assert_eq!(samples.len(), 8);
+        for (x, _y, _w) in &samples {
+            // Horizontal coordinate should be squeezed by half
+            assert!(x.abs() <= 5.05);
+        }
+    }
+
+    #[test]
     fn test_bokeh_hexagon_samples() {
-        let samples = generate_bokeh_samples(6, 10.0, 12);
+        let samples = generate_bokeh_samples(6, 10.0, 12, 1.0);
         assert_eq!(samples.len(), 12);
     }
 
@@ -200,19 +227,18 @@ mod tests {
             f_stop: 2.8,
             blur_level: 100.0,
             iris_sides: 0,
+            anamorphic_ratio: 1.0,
+            optical_vignetting: 0.0,
         };
         let mut pixels = vec![0u8; 20 * 20 * 4];
-        // Draw bright central point
         let center_idx = (10 * 20 + 10) * 4;
         pixels[center_idx] = 255;
         pixels[center_idx + 1] = 255;
         pixels[center_idx + 2] = 255;
         pixels[center_idx + 3] = 255;
 
-        // Apply DoF blur at out-of-focus plane Z = 200.0
         apply_camera_dof_bokeh_blur(&mut pixels, 20, 20, 200.0, &settings);
 
-        // Bokeh light distribution should be non-empty and spread across pixels
         let non_zero_count = pixels.iter().filter(|&&p| p > 0).count();
         assert!(non_zero_count > 0);
     }
