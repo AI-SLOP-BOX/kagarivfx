@@ -2932,7 +2932,9 @@ impl ProjectItem {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Project {
     pub compositions: Vec<Composition>,
+    #[serde(default)]
     pub active_composition_idx: usize,
+    #[serde(default)]
     pub assets: Vec<ProjectItem>,
     /// Render engine preference persisted with the project:
     /// GPU compute effects (blurs) run when true AND a compatible adapter exists.

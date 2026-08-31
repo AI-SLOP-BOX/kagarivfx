@@ -451,7 +451,7 @@ impl ParticleSystem {
             p.rotation += p.angular_velocity * dt;
 
             // Interpolate size and opacity over lifetime
-            let t = 1.0 - (p.life / p.max_life);
+            let t = (1.0 - (p.life / p.max_life)).clamp(0.0, 1.0);
             p.size = size_start + (size_end - size_start) * t;
         }
 
