@@ -3098,6 +3098,86 @@ impl Project {
         }
         deps.into_iter().collect()
     }
+
+    /// Automatically resolves missing external footage paths by scanning candidate directories
+    /// (e.g. `./`, `./Footage/`, `./Assets/`, `./Media/`) around the saved project file location.
+    pub fn resolve_relative_footage_paths(&mut self, project_file_dir: &std::path::Path) -> usize {
+        let mut relinked_count = 0usize;
+        let candidate_subdirs = ["", "Footage", "footage", "Assets", "assets", "Media", "media", "audio", "Audio"];
+
+        let find_file = |raw_path: &str| -> Option<String> {
+            let p = std::path::Path::new(raw_path);
+            if p.is_file() {
+                return None;
+            }
+            let filename = p.file_name()?;
+            for sub in &candidate_subdirs {
+                let candidate = if sub.is_empty() {
+                    project_file_dir.join(filename)
+                } else {
+                    project_file_dir.join(sub).join(filename)
+                };
+                if candidate.is_file() {
+                    return Some(candidate.to_string_lossy().to_string());
+                }
+            }
+            None
+        };
+
+        // Relink project assets
+        for asset in &mut self.assets {
+            match &mut asset.item_type {
+                ProjectItemType::Image { path, .. } => {
+                    if let Some(new_p) = find_file(path) {
+                        *path = new_p;
+                        relinked_count += 1;
+                    }
+                }
+                ProjectItemType::Video { path, .. } => {
+                    if let Some(new_p) = find_file(path) {
+                        *path = new_p;
+                        relinked_count += 1;
+                    }
+                }
+                ProjectItemType::Audio { path, .. } => {
+                    if let Some(new_p) = find_file(path) {
+                        *path = new_p;
+                        relinked_count += 1;
+                    }
+                }
+                _ => {}
+            }
+        }
+
+        // Relink layers across all compositions
+        for comp in &mut self.compositions {
+            for layer in &mut comp.layers {
+                match &mut layer.layer_type {
+                    LayerType::Image { path } => {
+                        if let Some(new_p) = find_file(path) {
+                            *path = new_p;
+                            relinked_count += 1;
+                        }
+                    }
+                    LayerType::Video { source, .. } => {
+                        if let Some(new_p) = find_file(source) {
+                            *source = new_p;
+                            relinked_count += 1;
+                        }
+                    }
+                    LayerType::Audio { path, .. } => {
+                        if let Some(new_p) = find_file(path) {
+                            *path = new_p;
+                            relinked_count += 1;
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        }
+
+        relinked_count
+    }
 }
 
 // ──────────────── Keyframe & Timeline Assistant Tools ────────────────
