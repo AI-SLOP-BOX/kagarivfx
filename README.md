@@ -159,3 +159,9 @@ See [AGENTS.md](./AGENTS.md) for full architecture notes, coding conventions, an
 ## 📜 License
 
 Distributed under the MIT License or Apache 2.0 License at your option.
+
+---
+
+## ⚖️ Trademark Disclaimer
+
+**AEVFX Studio (Aether VFX)** is an independent, community-driven open-source software project. It is **not** affiliated with, sponsored by, endorsed by, or in any way associated with Adobe Inc. or its subsidiaries. "Adobe", "After Effects", and other product names or logos are trademarks or registered trademarks of their respective owners.
