@@ -13,30 +13,50 @@ impl TrackerEngine {
         pose: &crate::core::optical_flow_timewarp::MarkerlessPoseTrack,
         minimum_confidence: f32,
     ) -> usize {
-        if pose.frames.is_empty() { return 0; }
-        let threshold = if minimum_confidence.is_finite() { minimum_confidence.clamp(0.0, 1.0) } else { 0.0 };
+        if pose.frames.is_empty() {
+            return 0;
+        }
+        let threshold = if minimum_confidence.is_finite() {
+            minimum_confidence.clamp(0.0, 1.0)
+        } else {
+            0.0
+        };
         let names = crate::core::optical_flow_timewarp::standard_humanoid_joint_names(
-            pose.frames.first().map(|frame| frame.joints.len()).unwrap_or(0),
+            pose.frames
+                .first()
+                .map(|frame| frame.joints.len())
+                .unwrap_or(0),
         );
         let mut active_ids = std::collections::HashSet::new();
         let mut created = 0;
         for (joint, name) in names.into_iter().enumerate() {
-            let keyframes = pose.frames.iter().filter_map(|frame| {
-                let point = *frame.joints.get(joint)?;
-                (frame.confidence >= threshold && point.iter().all(|value| value.is_finite())).then(|| {
-                    Keyframe::new(frame.frame, point, InterpolationType::Linear)
+            let keyframes = pose
+                .frames
+                .iter()
+                .filter_map(|frame| {
+                    let point = *frame.joints.get(joint)?;
+                    (frame.confidence >= threshold && point.iter().all(|value| value.is_finite()))
+                        .then(|| Keyframe::new(frame.frame, point, InterpolationType::Linear))
                 })
-            }).collect::<Vec<_>>();
-            if keyframes.is_empty() { continue; }
+                .collect::<Vec<_>>();
+            if keyframes.is_empty() {
+                continue;
+            }
             let initial = keyframes[0].value;
             let id = format!("pose_{}", name);
             active_ids.insert(id.clone());
-            let position = if keyframes.len() == 1 { Animatable::Constant(initial) } else { Animatable::Animated(keyframes) };
+            let position = if keyframes.len() == 1 {
+                Animatable::Constant(initial)
+            } else {
+                Animatable::Animated(keyframes)
+            };
             if let Some(tracker) = layer.trackers.iter_mut().find(|tracker| tracker.id == id) {
                 tracker.position = position;
             } else {
                 let mut tracker = crate::core::timeline::TrackerPoint::new(
-                    id, format!("Pose {}", name.replace('_', " ")), initial,
+                    id,
+                    format!("Pose {}", name.replace('_', " ")),
+                    initial,
                 );
                 tracker.position = position;
                 layer.trackers.push(tracker);
@@ -44,7 +64,9 @@ impl TrackerEngine {
             created += 1;
         }
         if created > 0 {
-            layer.trackers.retain(|tracker| !tracker.id.starts_with("pose_") || active_ids.contains(&tracker.id));
+            layer.trackers.retain(|tracker| {
+                !tracker.id.starts_with("pose_") || active_ids.contains(&tracker.id)
+            });
         }
         created
     }
@@ -56,35 +78,67 @@ impl TrackerEngine {
         rotation_degrees: [f32; 3],
         minimum_confidence: f32,
     ) -> usize {
-        if pose.frames.is_empty() { return 0; }
-        let threshold = if minimum_confidence.is_finite() { minimum_confidence.clamp(0.0, 1.0) } else { 0.0 };
+        if pose.frames.is_empty() {
+            return 0;
+        }
+        let threshold = if minimum_confidence.is_finite() {
+            minimum_confidence.clamp(0.0, 1.0)
+        } else {
+            0.0
+        };
         let names = crate::core::optical_flow_timewarp::standard_humanoid_joint_names(
-            pose.frames.iter().map(|frame| frame.joints.len()).max().unwrap_or(0),
+            pose.frames
+                .iter()
+                .map(|frame| frame.joints.len())
+                .max()
+                .unwrap_or(0),
         );
         let mut active_ids = std::collections::HashSet::new();
         let mut created = 0;
         for (joint, name) in names.into_iter().enumerate() {
-            let keyframes = pose.frames.iter().filter_map(|frame| {
-                let point = *frame.joints.get(joint)?;
-                let position = crate::core::optical_flow_timewarp::project_pose3d_point_with_rotation(point, camera, rotation_degrees)?;
-                (frame.confidence >= threshold).then(|| Keyframe::new(frame.frame, position, InterpolationType::Linear))
-            }).collect::<Vec<_>>();
-            if keyframes.is_empty() { continue; }
+            let keyframes = pose
+                .frames
+                .iter()
+                .filter_map(|frame| {
+                    let point = *frame.joints.get(joint)?;
+                    let position =
+                        crate::core::optical_flow_timewarp::project_pose3d_point_with_rotation(
+                            point,
+                            camera,
+                            rotation_degrees,
+                        )?;
+                    (frame.confidence >= threshold)
+                        .then(|| Keyframe::new(frame.frame, position, InterpolationType::Linear))
+                })
+                .collect::<Vec<_>>();
+            if keyframes.is_empty() {
+                continue;
+            }
             let id = format!("pose3d_{}", name);
             active_ids.insert(id.clone());
             let initial = keyframes[0].value;
-            let position = if keyframes.len() == 1 { Animatable::Constant(initial) } else { Animatable::Animated(keyframes) };
+            let position = if keyframes.len() == 1 {
+                Animatable::Constant(initial)
+            } else {
+                Animatable::Animated(keyframes)
+            };
             if let Some(tracker) = layer.trackers.iter_mut().find(|tracker| tracker.id == id) {
                 tracker.position = position;
             } else {
-                let mut tracker = crate::core::timeline::TrackerPoint::new(id, format!("Pose 3D {}", name.replace('_', " ")), initial);
+                let mut tracker = crate::core::timeline::TrackerPoint::new(
+                    id,
+                    format!("Pose 3D {}", name.replace('_', " ")),
+                    initial,
+                );
                 tracker.position = position;
                 layer.trackers.push(tracker);
             }
             created += 1;
         }
         if created > 0 {
-            layer.trackers.retain(|tracker| !tracker.id.starts_with("pose3d_") || active_ids.contains(&tracker.id));
+            layer.trackers.retain(|tracker| {
+                !tracker.id.starts_with("pose3d_") || active_ids.contains(&tracker.id)
+            });
         }
         created
     }
@@ -98,7 +152,9 @@ impl TrackerEngine {
         block_radius: i32,
         search_radius: i32,
     ) -> Option<crate::core::optical_flow_timewarp::MarkerlessPoseTrack> {
-        if end_frame < start_frame { return None; }
+        if end_frame < start_frame {
+            return None;
+        }
         let mut frames = Vec::new();
         let mut width = 0u32;
         let mut height = 0u32;
@@ -109,9 +165,17 @@ impl TrackerEngine {
             frames.push(current);
         }
         let refs = frames.iter().map(Vec::as_slice).collect::<Vec<_>>();
-        Some(crate::core::optical_flow_timewarp::estimate_markerless_pose(
-            &refs, width, height, max_features, feature_spacing, block_radius, search_radius,
-        ))
+        Some(
+            crate::core::optical_flow_timewarp::estimate_markerless_pose(
+                &refs,
+                width,
+                height,
+                max_features,
+                feature_spacing,
+                block_radius,
+                search_radius,
+            ),
+        )
     }
 
     pub fn analyze_markerless_tracks(
@@ -128,19 +192,30 @@ impl TrackerEngine {
             return 0;
         }
         if layer.trackers.is_empty() {
-            let Some((first, _, width, height)) = Self::load_tracker_frames(layer, start_frame) else {
+            let Some((first, _, width, height)) = Self::load_tracker_frames(layer, start_frame)
+            else {
                 return 0;
             };
             let seeds = crate::core::optical_flow_timewarp::detect_markerless_features(
-                &first, width as u32, height as u32, max_features, feature_spacing,
+                &first,
+                width as u32,
+                height as u32,
+                max_features,
+                feature_spacing,
             );
             for (index, position) in seeds.into_iter().enumerate() {
-                layer.trackers.push(crate::core::timeline::TrackerPoint::new(
-                    format!("mocap_{index}"), format!("Mocap Feature {}", index + 1), position,
-                ));
+                layer
+                    .trackers
+                    .push(crate::core::timeline::TrackerPoint::new(
+                        format!("mocap_{index}"),
+                        format!("Mocap Feature {}", index + 1),
+                        position,
+                    ));
             }
         }
-        if layer.trackers.is_empty() { return 0; }
+        if layer.trackers.is_empty() {
+            return 0;
+        }
         let mut frames = Vec::new();
         let mut width = 0u32;
         let mut height = 0u32;
@@ -162,12 +237,19 @@ impl TrackerEngine {
             .collect::<Vec<_>>();
         let refs = frames.iter().map(Vec::as_slice).collect::<Vec<_>>();
         let tracks = crate::core::optical_flow_timewarp::track_markerless_motion(
-            &refs, width, height, &seeds, block_radius, search_radius,
+            &refs,
+            width,
+            height,
+            &seeds,
+            block_radius,
+            search_radius,
         );
         let mut total = 0;
         for (tracker, track) in layer.trackers.iter_mut().zip(tracks.iter()) {
             total += crate::core::optical_flow_timewarp::apply_markerless_track_to_tracker_point(
-                tracker, track, minimum_confidence,
+                tracker,
+                track,
+                minimum_confidence,
             );
         }
         total
@@ -1000,6 +1082,76 @@ pub fn smooth_quad_track(track: &QuadTrackData, max_jump: f32) -> QuadTrackData 
     out
 }
 
+/// Bakes 4-point perspective quad tracking keyframes directly into a layer's CornerPin effect.
+pub fn apply_quad_track_to_corner_pin(
+    layer: &mut Layer,
+    track: &QuadTrackData,
+) -> bool {
+    if track.frames.is_empty() || track.corners.is_empty() {
+        return false;
+    }
+
+    let mut tl_kfs = Vec::with_capacity(track.frames.len());
+    let mut tr_kfs = Vec::with_capacity(track.frames.len());
+    let mut br_kfs = Vec::with_capacity(track.frames.len());
+    let mut bl_kfs = Vec::with_capacity(track.frames.len());
+
+    for (i, &f) in track.frames.iter().enumerate() {
+        if let Some(corners) = track.corners.get(i) {
+            tl_kfs.push(Keyframe::new(f, corners[0], InterpolationType::Linear));
+            tr_kfs.push(Keyframe::new(f, corners[1], InterpolationType::Linear));
+            br_kfs.push(Keyframe::new(f, corners[2], InterpolationType::Linear));
+            bl_kfs.push(Keyframe::new(f, corners[3], InterpolationType::Linear));
+        }
+    }
+
+    let top_left = if tl_kfs.len() == 1 {
+        Animatable::Constant(tl_kfs[0].value)
+    } else {
+        Animatable::Animated(tl_kfs)
+    };
+    let top_right = if tr_kfs.len() == 1 {
+        Animatable::Constant(tr_kfs[0].value)
+    } else {
+        Animatable::Animated(tr_kfs)
+    };
+    let bottom_right = if br_kfs.len() == 1 {
+        Animatable::Constant(br_kfs[0].value)
+    } else {
+        Animatable::Animated(br_kfs)
+    };
+    let bottom_left = if bl_kfs.len() == 1 {
+        Animatable::Constant(bl_kfs[0].value)
+    } else {
+        Animatable::Animated(bl_kfs)
+    };
+
+    let corner_pin_type = crate::core::timeline::EffectType::CornerPin {
+        top_left,
+        top_right,
+        bottom_right,
+        bottom_left,
+    };
+
+    // Update existing CornerPin effect or push a new one
+    if let Some(existing) = layer
+        .effects
+        .iter_mut()
+        .find(|e| matches!(e.effect_type, crate::core::timeline::EffectType::CornerPin { .. }))
+    {
+        existing.effect_type = corner_pin_type;
+    } else {
+        layer.effects.push(crate::core::timeline::Effect {
+            id: format!("effect_corner_pin_{}", layer.effects.len() + 1),
+            name: "Corner Pin (Perspective Track)".to_string(),
+            effect_type: corner_pin_type,
+            enabled: true,
+        });
+    }
+
+    true
+}
+
 /// Smooths 2D tracker keyframes using a Gaussian / weighted moving average window.
 pub fn smooth_tracker_keyframes(
     kfs: &[crate::core::keyframe::Keyframe<[f32; 2]>],
@@ -1574,16 +1726,37 @@ mod quad_track_tests {
     #[test]
     fn pose_application_is_idempotent_for_repeated_analysis() {
         let mut layer = Layer::new(
-            "l".into(), "Pose Layer".into(), crate::core::timeline::LayerType::Null, 10,
+            "l".into(),
+            "Pose Layer".into(),
+            crate::core::timeline::LayerType::Null,
+            10,
         );
         let pose = crate::core::optical_flow_timewarp::MarkerlessPoseTrack {
             frames: vec![
-                crate::core::optical_flow_timewarp::MarkerlessPoseFrame { frame: 0, joints: vec![[1.0, 2.0]], root: [1.0, 2.0], confidence: 1.0 },
-                crate::core::optical_flow_timewarp::MarkerlessPoseFrame { frame: 1, joints: vec![[2.0, 2.0]], root: [2.0, 2.0], confidence: 1.0 },
-            ], bones: vec![], bone_lengths: vec![],
+                crate::core::optical_flow_timewarp::MarkerlessPoseFrame {
+                    frame: 0,
+                    joints: vec![[1.0, 2.0]],
+                    root: [1.0, 2.0],
+                    confidence: 1.0,
+                },
+                crate::core::optical_flow_timewarp::MarkerlessPoseFrame {
+                    frame: 1,
+                    joints: vec![[2.0, 2.0]],
+                    root: [2.0, 2.0],
+                    confidence: 1.0,
+                },
+            ],
+            bones: vec![],
+            bone_lengths: vec![],
         };
-        assert_eq!(TrackerEngine::apply_pose_as_tracker_points(&mut layer, &pose, 0.5), 1);
-        assert_eq!(TrackerEngine::apply_pose_as_tracker_points(&mut layer, &pose, 0.5), 1);
+        assert_eq!(
+            TrackerEngine::apply_pose_as_tracker_points(&mut layer, &pose, 0.5),
+            1
+        );
+        assert_eq!(
+            TrackerEngine::apply_pose_as_tracker_points(&mut layer, &pose, 0.5),
+            1
+        );
         assert_eq!(layer.trackers.len(), 1);
         assert_eq!(layer.trackers[0].position.evaluate(1), [2.0, 2.0]);
     }
@@ -1591,28 +1764,67 @@ mod quad_track_tests {
     #[test]
     fn pose_application_removes_stale_pose_points_but_keeps_manual_points() {
         let mut layer = Layer::new(
-            "l".into(), "Pose Layer".into(), crate::core::timeline::LayerType::Null, 10,
+            "l".into(),
+            "Pose Layer".into(),
+            crate::core::timeline::LayerType::Null,
+            10,
         );
-        layer.trackers.push(crate::core::timeline::TrackerPoint::new("manual".into(), "Manual".into(), [9.0, 9.0]));
-        layer.trackers.push(crate::core::timeline::TrackerPoint::new("pose_old_joint".into(), "Old".into(), [8.0, 8.0]));
+        layer
+            .trackers
+            .push(crate::core::timeline::TrackerPoint::new(
+                "manual".into(),
+                "Manual".into(),
+                [9.0, 9.0],
+            ));
+        layer
+            .trackers
+            .push(crate::core::timeline::TrackerPoint::new(
+                "pose_old_joint".into(),
+                "Old".into(),
+                [8.0, 8.0],
+            ));
         let pose = crate::core::optical_flow_timewarp::MarkerlessPoseTrack {
             frames: vec![crate::core::optical_flow_timewarp::MarkerlessPoseFrame {
-                frame: 0, joints: vec![[1.0, 2.0]], root: [1.0, 2.0], confidence: 1.0,
-            }], bones: vec![], bone_lengths: vec![],
+                frame: 0,
+                joints: vec![[1.0, 2.0]],
+                root: [1.0, 2.0],
+                confidence: 1.0,
+            }],
+            bones: vec![],
+            bone_lengths: vec![],
         };
         TrackerEngine::apply_pose_as_tracker_points(&mut layer, &pose, 0.0);
         assert!(layer.trackers.iter().any(|tracker| tracker.id == "manual"));
-        assert!(!layer.trackers.iter().any(|tracker| tracker.id == "pose_old_joint"));
+        assert!(!layer
+            .trackers
+            .iter()
+            .any(|tracker| tracker.id == "pose_old_joint"));
     }
 
     #[test]
     fn failed_pose_estimation_does_not_delete_existing_pose_points() {
         let mut layer = Layer::new(
-            "l".into(), "Pose Layer".into(), crate::core::timeline::LayerType::Null, 10,
+            "l".into(),
+            "Pose Layer".into(),
+            crate::core::timeline::LayerType::Null,
+            10,
         );
-        layer.trackers.push(crate::core::timeline::TrackerPoint::new("pose_head".into(), "Pose head".into(), [1.0, 2.0]));
-        let empty = crate::core::optical_flow_timewarp::MarkerlessPoseTrack { frames: vec![], bones: vec![], bone_lengths: vec![] };
-        assert_eq!(TrackerEngine::apply_pose_as_tracker_points(&mut layer, &empty, 0.5), 0);
+        layer
+            .trackers
+            .push(crate::core::timeline::TrackerPoint::new(
+                "pose_head".into(),
+                "Pose head".into(),
+                [1.0, 2.0],
+            ));
+        let empty = crate::core::optical_flow_timewarp::MarkerlessPoseTrack {
+            frames: vec![],
+            bones: vec![],
+            bone_lengths: vec![],
+        };
+        assert_eq!(
+            TrackerEngine::apply_pose_as_tracker_points(&mut layer, &empty, 0.5),
+            0
+        );
         assert_eq!(layer.trackers.len(), 1);
         assert_eq!(layer.trackers[0].id, "pose_head");
     }
@@ -1620,31 +1832,67 @@ mod quad_track_tests {
     #[test]
     fn all_invalid_pose_frames_do_not_delete_existing_pose_points() {
         let mut layer = Layer::new(
-            "l".into(), "Pose Layer".into(), crate::core::timeline::LayerType::Null, 10,
+            "l".into(),
+            "Pose Layer".into(),
+            crate::core::timeline::LayerType::Null,
+            10,
         );
-        layer.trackers.push(crate::core::timeline::TrackerPoint::new("pose_head".into(), "Pose head".into(), [1.0, 2.0]));
+        layer
+            .trackers
+            .push(crate::core::timeline::TrackerPoint::new(
+                "pose_head".into(),
+                "Pose head".into(),
+                [1.0, 2.0],
+            ));
         let invalid = crate::core::optical_flow_timewarp::MarkerlessPoseTrack {
             frames: vec![crate::core::optical_flow_timewarp::MarkerlessPoseFrame {
-                frame: 0, joints: vec![[f32::NAN, f32::NAN]], root: [0.0, 0.0], confidence: 0.0,
-            }], bones: vec![], bone_lengths: vec![],
+                frame: 0,
+                joints: vec![[f32::NAN, f32::NAN]],
+                root: [0.0, 0.0],
+                confidence: 0.0,
+            }],
+            bones: vec![],
+            bone_lengths: vec![],
         };
-        assert_eq!(TrackerEngine::apply_pose_as_tracker_points(&mut layer, &invalid, 0.5), 0);
+        assert_eq!(
+            TrackerEngine::apply_pose_as_tracker_points(&mut layer, &invalid, 0.5),
+            0
+        );
         assert_eq!(layer.trackers.len(), 1);
     }
 
     #[test]
     fn projected_3d_pose_becomes_editable_tracker_keyframes() {
         let mut layer = Layer::new(
-            "l".into(), "3D Pose Layer".into(), crate::core::timeline::LayerType::Null, 10,
+            "l".into(),
+            "3D Pose Layer".into(),
+            crate::core::timeline::LayerType::Null,
+            10,
         );
         let pose = crate::core::optical_flow_timewarp::MarkerlessPose3DTrack {
             frames: vec![
-                crate::core::optical_flow_timewarp::MarkerlessPose3DFrame { frame: 2, joints: vec![[0.0, 0.0, 10.0]], confidence: 1.0 },
-                crate::core::optical_flow_timewarp::MarkerlessPose3DFrame { frame: 3, joints: vec![[1.0, 0.0, 10.0]], confidence: 1.0 },
-            ], bones: vec![],
+                crate::core::optical_flow_timewarp::MarkerlessPose3DFrame {
+                    frame: 2,
+                    joints: vec![[0.0, 0.0, 10.0]],
+                    confidence: 1.0,
+                },
+                crate::core::optical_flow_timewarp::MarkerlessPose3DFrame {
+                    frame: 3,
+                    joints: vec![[1.0, 0.0, 10.0]],
+                    confidence: 1.0,
+                },
+            ],
+            bones: vec![],
         };
-        let camera = crate::core::optical_flow_timewarp::PoseCameraModel { focal_length: 100.0, principal_point: [50.0, 40.0], position: [0.0, 0.0, 0.0] };
-        assert_eq!(TrackerEngine::apply_pose3d_as_tracker_points(&mut layer, &pose, camera, [0.0; 3], 0.5), 1);
+        let camera = crate::core::optical_flow_timewarp::PoseCameraModel {
+            focal_length: 100.0,
+            principal_point: [50.0, 40.0],
+            position: [0.0, 0.0, 0.0],
+        };
+        assert_eq!(
+            TrackerEngine::apply_pose3d_as_tracker_points(&mut layer, &pose, camera, [0.0; 3], 0.5),
+            1
+        );
         assert_eq!(layer.trackers[0].position.evaluate(3), [60.0, 40.0]);
     }
 }
