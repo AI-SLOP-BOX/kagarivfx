@@ -1243,8 +1243,11 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
                             if let Some(layer) = comp.layers.get_mut(idx) {
                                 if let crate::core::property::Animatable::Animated(ref mut kfs) = layer.transform.scale {
                                     if kfs.len() >= 2 {
-                                        let first = kfs.first().unwrap().clone();
-                                        let last = kfs.last().unwrap().clone();
+                                        let (Some(first), Some(last)) = (kfs.first(), kfs.last()) else {
+                                            return;
+                                        };
+                                        let first = first.clone();
+                                        let last = last.clone();
                                         let (f0, f1) = (first.frame as f32, last.frame as f32);
                                         let (s0, s1) = (first.value[0].max(0.01), last.value[0].max(0.01));
                                         let mut exp_kfs = Vec::new();
@@ -1349,6 +1352,14 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
                 ui.checkbox(&mut app.show_grid, "Show Grid");
                 ui.checkbox(&mut app.show_guides, "Show Safe Zones");
                 ui.checkbox(&mut app.show_handles, "Show Handles");
+                if ui.button("📊 Analyze / Quality Check…").clicked() {
+                    app.show_quality_check_panel = true;
+                    ui.close_menu();
+                }
+                if ui.button("🎚 Automation Bindings…").clicked() {
+                    app.show_automation_panel = true;
+                    ui.close_menu();
+                }
                 ui.separator();
                 // ── GPU Compute (experimental) ──
                 let mut gpu_fx = crate::core::compute_pipeline::gpu_effects_enabled();
@@ -1421,9 +1432,36 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
                     ctx.data_mut(|d| d.insert_temp(help_id, true));
                     ui.close_menu();
                 }
+                ui.separator();
+                if ui.button("ℹ️ About AEVFX Studio...").clicked() {
+                    let about_id = egui::Id::new("show_about_modal");
+                    ctx.data_mut(|d| d.insert_temp(about_id, true));
+                    ui.close_menu();
+                }
             });
         });
     });
+
+    let about_id = egui::Id::new("show_about_modal");
+    let mut show_about = ctx.data_mut(|d| *d.get_temp_mut_or_insert_with(about_id, || false));
+    if show_about {
+        egui::Window::new("About AEVFX Studio")
+            .open(&mut show_about)
+            .resizable(false)
+            .show(ctx, |ui| {
+                ui.heading("AEVFX Studio (Aether VFX)");
+                ui.label(format!("Version: {} (Experimental Prototype)", env!("CARGO_PKG_VERSION")));
+                ui.label("An open-source 2D/3D compositing & motion graphics research engine written in Rust.");
+                ui.add_space(8.0);
+                ui.separator();
+                ui.add_space(4.0);
+                ui.small("⚠️ Disclaimer & Trademark Notice:");
+                ui.small("Adobe and After Effects are registered trademarks of Adobe Inc.");
+                ui.small("AEVFX is an independent open-source research project and is not affiliated with, sponsored by, or endorsed by Adobe Inc.");
+                ui.add_space(8.0);
+            });
+        ctx.data_mut(|d| d.insert_temp(about_id, show_about));
+    }
 
     let help_id = egui::Id::new("show_shortcuts_modal");
     let mut show_help = ctx.data_mut(|d| *d.get_temp_mut_or_insert_with(help_id, || false));
@@ -1432,7 +1470,7 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
             .open(&mut show_help)
             .resizable(false)
             .show(ctx, |ui| {
-                ui.heading("After Effects OSS - Shortcuts");
+                ui.heading("AEVFX Studio — Shortcuts Reference");
                 ui.separator();
                 egui::Grid::new("shortcuts_grid")
                     .striped(true)
@@ -2042,8 +2080,12 @@ fn apply_effect_by_name(app: &mut crate::AfterEffectsApp, effect_name: &str) {
                         length: crate::core::property::Animatable::new_constant(40.0),
                         starting_thickness: crate::core::property::Animatable::new_constant(12.0),
                         ending_thickness: crate::core::property::Animatable::new_constant(4.0),
-                        core_color: crate::core::property::Animatable::new_constant([1.0, 1.0, 1.0, 1.0]),
-                        glow_color: crate::core::property::Animatable::new_constant([1.0, 0.2, 0.1, 0.8]),
+                        core_color: crate::core::property::Animatable::new_constant([
+                            1.0, 1.0, 1.0, 1.0,
+                        ]),
+                        glow_color: crate::core::property::Animatable::new_constant([
+                            1.0, 0.2, 0.1, 0.8,
+                        ]),
                     },
                     enabled: true,
                 },

@@ -6,19 +6,21 @@ fn main() -> eframe::Result<()> {
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
             .with_inner_size([1200.0, 800.0])
-            .with_title("After Effects OSS Alternative"),
+            .with_title("AEVFX Studio — Motion Graphics & Compositing (Experimental)"),
         ..Default::default()
     };
 
     eframe::run_native(
-        "After Effects OSS Alternative",
+        "AEVFX Studio",
         options,
         Box::new(|cc| {
             let mut app = aftereffects_oss::AfterEffectsApp::default();
 
             let (frame_tx, frame_rx) = std::sync::mpsc::channel();
             let (conn_tx, conn_rx) = std::sync::mpsc::channel();
-            if let Err(e) = aftereffects_oss::core::integration::start_sync_server(9000, frame_tx, conn_tx) {
+            if let Err(e) =
+                aftereffects_oss::core::integration::start_sync_server(9000, frame_tx, conn_tx)
+            {
                 log::warn!("Dynamic Link sync server unavailable on port 9000: {}", e);
             }
 
