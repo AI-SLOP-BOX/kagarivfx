@@ -46,12 +46,21 @@ impl LifeCurve {
 
 /// Wind including a sinusoidal gust component travelling along the base wind
 /// direction. When the base wind is zero the gust blows along +X.
-pub fn wind_with_gust(base: [f32; 2], gust_strength: f32, gust_frequency_hz: f32, time: f32) -> [f32; 2] {
+pub fn wind_with_gust(
+    base: [f32; 2],
+    gust_strength: f32,
+    gust_frequency_hz: f32,
+    time: f32,
+) -> [f32; 2] {
     if gust_strength == 0.0 {
         return base;
     }
     let mag = (base[0] * base[0] + base[1] * base[1]).sqrt();
-    let dir = if mag > 1e-6 { [base[0] / mag, base[1] / mag] } else { [1.0, 0.0] };
+    let dir = if mag > 1e-6 {
+        [base[0] / mag, base[1] / mag]
+    } else {
+        [1.0, 0.0]
+    };
     let gust = (std::f32::consts::TAU * gust_frequency_hz * time).sin() * gust_strength;
     [base[0] + dir[0] * gust, base[1] + dir[1] * gust]
 }
@@ -64,6 +73,55 @@ pub fn apply_drag(vx: &mut f32, vy: &mut f32, drag: f32, dt: f32) {
     let damp = 1.0 / (1.0 + drag * dt);
     *vx *= damp;
     *vy *= damp;
+}
+
+/// Vortex orbital force: pulls particles inward while accelerating them tangentially.
+pub fn vortex_force(
+    pos: [f32; 2],
+    center: [f32; 2],
+    inward_pull: f32,
+    tangential_speed: f32,
+) -> [f32; 2] {
+    let dx = pos[0] - center[0];
+    let dy = pos[1] - center[1];
+    let dist = (dx * dx + dy * dy).sqrt();
+    if dist < 1.0 {
+        return [0.0, 0.0];
+    }
+    let ndx = dx / dist;
+    let ndy = dy / dist;
+
+    // Radial inward acceleration: -dir * inward_pull
+    let fx_rad = -ndx * inward_pull;
+    let fy_rad = -ndy * inward_pull;
+
+    // Tangential perpendicular acceleration: [-ndy, ndx] * tangential_speed
+    let fx_tan = -ndy * tangential_speed;
+    let fy_tan = ndx * tangential_speed;
+
+    [fx_rad + fx_tan, fy_rad + fy_tan]
+}
+
+/// Divergence-free 2D Curl Noise turbulence force for natural fluid/smoke motion.
+pub fn curl_noise_turbulence(pos: [f32; 2], frequency: f32, amplitude: f32) -> [f32; 2] {
+    if amplitude <= 0.0 || frequency <= 0.0 {
+        return [0.0, 0.0];
+    }
+    let px = pos[0] * frequency;
+    let py = pos[1] * frequency;
+
+    // Numerical gradient of potential field: Psi = sin(px)*cos(py) + cos(px*1.3)*sin(py*1.3)*0.5
+    let eps = 0.01f32;
+    let psi_up = (px).sin() * (py + eps).cos() + (px * 1.3).cos() * ((py + eps) * 1.3).sin() * 0.5;
+    let psi_down = (px).sin() * (py - eps).cos() + (px * 1.3).cos() * ((py - eps) * 1.3).sin() * 0.5;
+    let psi_right = (px + eps).sin() * (py).cos() + ((px + eps) * 1.3).cos() * (py * 1.3).sin() * 0.5;
+    let psi_left = (px - eps).sin() * (py).cos() + ((px - eps) * 1.3).cos() * (py * 1.3).sin() * 0.5;
+
+    let d_psi_dy = (psi_up - psi_down) / (2.0 * eps);
+    let d_psi_dx = (psi_right - psi_left) / (2.0 * eps);
+
+    // Curl in 2D: [dPsi/dy, -dPsi/dx] (guaranteed div=0)
+    [d_psi_dy * amplitude, -d_psi_dx * amplitude]
 }
 
 /// Resolve a particle against an axis-aligned boundary box.
@@ -191,7 +249,14 @@ pub fn resolve_pairwise_collisions(
         let (p_head, p_tail) = positions.split_at_mut(i + 1);
         let (v_head, v_tail) = velocities.split_at_mut(i + 1);
         for (bp, bv) in p_tail.iter_mut().zip(v_tail.iter_mut()) {
-            if resolve_particle_collision(&mut p_head[i], &mut v_head[i], bp, bv, diameter, restitution) {
+            if resolve_particle_collision(
+                &mut p_head[i],
+                &mut v_head[i],
+                bp,
+                bv,
+                diameter,
+                restitution,
+            ) {
                 hits += 1;
             }
         }
@@ -267,13 +332,25 @@ mod tests {
     fn test_wall_and_ceiling_collision() {
         let mut pos = [-5.0, 50.0];
         let mut vel = [-30.0, 0.0];
-        assert!(resolve_bounds_collision(&mut pos, &mut vel, [0.0, 0.0, 100.0, 100.0], 1.0, 1.0));
+        assert!(resolve_bounds_collision(
+            &mut pos,
+            &mut vel,
+            [0.0, 0.0, 100.0, 100.0],
+            1.0,
+            1.0
+        ));
         assert_eq!(pos[0], 0.0);
         assert_eq!(vel[0], 30.0);
 
         let mut pos2 = [50.0, -1.0];
         let mut vel2 = [0.0, -10.0];
-        assert!(resolve_bounds_collision(&mut pos2, &mut vel2, [0.0, 0.0, 100.0, 100.0], 0.0, 1.0));
+        assert!(resolve_bounds_collision(
+            &mut pos2,
+            &mut vel2,
+            [0.0, 0.0, 100.0, 100.0],
+            0.0,
+            1.0
+        ));
         assert_eq!(pos2[1], 0.0);
         assert_eq!(vel2[1], 0.0); // restitution 0 kills the bounce
     }
@@ -282,13 +359,25 @@ mod tests {
     fn test_no_contact_returns_false() {
         let mut pos = [50.0, 50.0];
         let mut vel = [1.0, 1.0];
-        assert!(!resolve_bounds_collision(&mut pos, &mut vel, [0.0, 0.0, 100.0, 100.0], 0.5, 1.0));
+        assert!(!resolve_bounds_collision(
+            &mut pos,
+            &mut vel,
+            [0.0, 0.0, 100.0, 100.0],
+            0.5,
+            1.0
+        ));
         assert_eq!(pos, [50.0, 50.0]);
         assert_eq!(vel, [1.0, 1.0]);
         // Inverted bounds are ignored defensively.
         let mut p2 = [50.0, 50.0];
         let mut v2 = [1.0, 1.0];
-        assert!(!resolve_bounds_collision(&mut p2, &mut v2, [100.0, 100.0, 0.0, 0.0], 0.5, 1.0));
+        assert!(!resolve_bounds_collision(
+            &mut p2,
+            &mut v2,
+            [100.0, 100.0, 0.0, 0.0],
+            0.5,
+            1.0
+        ));
     }
 
     #[test]
@@ -306,9 +395,19 @@ mod tests {
         let mut va = [30.0, 0.0];
         let mut pb = [60.0, 50.0];
         let mut vb = [-30.0, 0.0];
-        assert!(resolve_particle_collision(&mut pa, &mut va, &mut pb, &mut vb, 24.0, 1.0));
-        assert!((va[0] + 30.0).abs() < 1e-4, "a takes b's velocity: {}", va[0]);
-        assert!((vb[0] - 30.0).abs() < 1e-4, "b takes a's velocity: {}", vb[0]);
+        assert!(resolve_particle_collision(
+            &mut pa, &mut va, &mut pb, &mut vb, 24.0, 1.0
+        ));
+        assert!(
+            (va[0] + 30.0).abs() < 1e-4,
+            "a takes b's velocity: {}",
+            va[0]
+        );
+        assert!(
+            (vb[0] - 30.0).abs() < 1e-4,
+            "b takes a's velocity: {}",
+            vb[0]
+        );
         // Particles separated to contact distance.
         let dist = (pb[0] - pa[0]).hypot(pb[1] - pa[1]);
         assert!((dist - 24.0).abs() < 1e-3, "post distance {dist}");
@@ -320,9 +419,14 @@ mod tests {
         let mut va = [20.0, 0.0];
         let mut pb = [26.0, 10.0];
         let mut vb = [0.0, 0.0];
-        assert!(resolve_particle_collision(&mut pa, &mut va, &mut pb, &mut vb, 20.0, 0.0));
+        assert!(resolve_particle_collision(
+            &mut pa, &mut va, &mut pb, &mut vb, 20.0, 0.0
+        ));
         let vn_after = (vb[0] - va[0]) * 1.0 + (vb[1] - va[1]) * 0.0;
-        assert!(vn_after.abs() < 1e-4, "normal relative velocity must vanish");
+        assert!(
+            vn_after.abs() < 1e-4,
+            "normal relative velocity must vanish"
+        );
         // Both move right together afterwards (momentum conserved).
         assert!(va[0] > 5.0 && vb[0] > 5.0);
     }
@@ -334,7 +438,9 @@ mod tests {
         let mut va = [-10.0, 0.0];
         let mut pb = [8.0, 0.0]; // overlapping
         let mut vb = [10.0, 0.0];
-        assert!(resolve_particle_collision(&mut pa, &mut va, &mut pb, &mut vb, 12.0, 1.0));
+        assert!(resolve_particle_collision(
+            &mut pa, &mut va, &mut pb, &mut vb, 12.0, 1.0
+        ));
         // Positions still separated, velocities unchanged.
         assert_eq!(va, [-10.0, 0.0]);
         assert_eq!(vb, [10.0, 0.0]);
@@ -346,16 +452,22 @@ mod tests {
         let mut va = [1.0, 1.0];
         let mut pb = [100.0, 100.0];
         let mut vb = [-1.0, -1.0];
-        assert!(!resolve_particle_collision(&mut pa, &mut va, &mut pb, &mut vb, 10.0, 0.8));
+        assert!(!resolve_particle_collision(
+            &mut pa, &mut va, &mut pb, &mut vb, 10.0, 0.8
+        ));
         assert_eq!(pa, [0.0, 0.0]);
         // Zero radius is always false.
-        assert!(!resolve_particle_collision(&mut pa, &mut va, &mut pb, &mut vb, 0.0, 1.0));
+        assert!(!resolve_particle_collision(
+            &mut pa, &mut va, &mut pb, &mut vb, 0.0, 1.0
+        ));
         // Coincident particles split cleanly without NaN.
         let mut qa = [50.0, 50.0];
         let mut qva = [0.0, 0.0];
         let mut qb = [50.0, 50.0];
         let mut qvb = [0.0, 0.0];
-        assert!(resolve_particle_collision(&mut qa, &mut qva, &mut qb, &mut qvb, 8.0, 1.0));
+        assert!(resolve_particle_collision(
+            &mut qa, &mut qva, &mut qb, &mut qvb, 8.0, 1.0
+        ));
         assert!(qa[0].is_finite() && qb[0].is_finite());
         assert!((qb[0] - qa[0]).abs() >= 7.9);
     }
@@ -377,5 +489,22 @@ mod tests {
         let mut ep: Vec<[f32; 2]> = vec![];
         let mut ev: Vec<[f32; 2]> = vec![];
         assert_eq!(resolve_pairwise_collisions(&mut ep, &mut ev, 4.0, 1.0), 0);
+    }
+
+    #[test]
+    fn test_vortex_force_pulls_inward_and_tangential() {
+        let f = vortex_force([100.0, 0.0], [0.0, 0.0], 10.0, 20.0);
+        // Point is on +X axis relative to center (0,0)
+        // Inward pull should be along -X (-10.0)
+        // Tangential speed should be along +Y (+20.0)
+        assert!((f[0] + 10.0).abs() < 1e-3);
+        assert!((f[1] - 20.0).abs() < 1e-3);
+    }
+
+    #[test]
+    fn test_curl_noise_turbulence_produces_finite_vectors() {
+        let f = curl_noise_turbulence([50.0, 50.0], 0.05, 10.0);
+        assert!(f[0].is_finite());
+        assert!(f[1].is_finite());
     }
 }
