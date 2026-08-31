@@ -841,6 +841,34 @@ pub fn build_engine() -> Engine {
         ]
     });
 
+    // --- AE spatial transformation expressions ---
+    engine.register_fn("toComp", |point: Array| -> Array {
+        let x = point.first().and_then(dynamic_to_f64).unwrap_or(0.0);
+        let y = point.get(1).and_then(dynamic_to_f64).unwrap_or(0.0);
+        // Default affine 2D transform to composition coordinates
+        vec![Dynamic::from_float(x), Dynamic::from_float(y)]
+    });
+
+    engine.register_fn("fromComp", |point: Array| -> Array {
+        let x = point.first().and_then(dynamic_to_f64).unwrap_or(0.0);
+        let y = point.get(1).and_then(dynamic_to_f64).unwrap_or(0.0);
+        vec![Dynamic::from_float(x), Dynamic::from_float(y)]
+    });
+
+    engine.register_fn("toWorld", |point: Array| -> Array {
+        let x = point.first().and_then(dynamic_to_f64).unwrap_or(0.0);
+        let y = point.get(1).and_then(dynamic_to_f64).unwrap_or(0.0);
+        let z = point.get(2).and_then(dynamic_to_f64).unwrap_or(0.0);
+        vec![Dynamic::from_float(x), Dynamic::from_float(y), Dynamic::from_float(z)]
+    });
+
+    engine.register_fn("fromWorld", |point: Array| -> Array {
+        let x = point.first().and_then(dynamic_to_f64).unwrap_or(0.0);
+        let y = point.get(1).and_then(dynamic_to_f64).unwrap_or(0.0);
+        let z = point.get(2).and_then(dynamic_to_f64).unwrap_or(0.0);
+        vec![Dynamic::from_float(x), Dynamic::from_float(y), Dynamic::from_float(z)]
+    });
+
     engine
 }
 
