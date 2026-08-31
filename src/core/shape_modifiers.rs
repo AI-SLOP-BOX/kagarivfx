@@ -458,10 +458,7 @@ pub fn evaluate_shape_tree(items: &[ShapeContentItem]) -> Vec<RenderableShapePat
                 current_paths.push((vec![top, right, bottom, left], true));
             }
             ShapeContentItem::TrimPaths {
-                start,
-                end,
-                offset,
-                ..
+                start, end, offset, ..
             } => {
                 let mut trimmed = Vec::new();
                 for (verts, closed) in current_paths {
@@ -478,9 +475,13 @@ pub fn evaluate_shape_tree(items: &[ShapeContentItem]) -> Vec<RenderableShapePat
                         .collect();
 
                     let boolean_op = match mode {
-                        MergePathsMode::Add | MergePathsMode::Merge => crate::core::shape_boolean::BooleanOp::Union,
+                        MergePathsMode::Add | MergePathsMode::Merge => {
+                            crate::core::shape_boolean::BooleanOp::Union
+                        }
                         MergePathsMode::Subtract => crate::core::shape_boolean::BooleanOp::Subtract,
-                        MergePathsMode::Intersect => crate::core::shape_boolean::BooleanOp::Intersect,
+                        MergePathsMode::Intersect => {
+                            crate::core::shape_boolean::BooleanOp::Intersect
+                        }
                         MergePathsMode::Exclude => crate::core::shape_boolean::BooleanOp::Exclude,
                     };
 
@@ -488,7 +489,9 @@ pub fn evaluate_shape_tree(items: &[ShapeContentItem]) -> Vec<RenderableShapePat
                     for next_poly in polys {
                         let mut next_acc = Vec::new();
                         for acc in &acc_polys {
-                            let res = crate::core::shape_boolean::apply_polygon_boolean(acc, &next_poly, boolean_op);
+                            let res = crate::core::shape_boolean::apply_polygon_boolean(
+                                acc, &next_poly, boolean_op,
+                            );
                             next_acc.extend(res);
                         }
                         if next_acc.is_empty() {
@@ -501,7 +504,10 @@ pub fn evaluate_shape_tree(items: &[ShapeContentItem]) -> Vec<RenderableShapePat
                     current_paths = acc_polys
                         .into_iter()
                         .map(|poly| {
-                            let verts = poly.into_iter().map(|p| MaskVertex::new(p[0], p[1])).collect();
+                            let verts = poly
+                                .into_iter()
+                                .map(|p| MaskVertex::new(p[0], p[1]))
+                                .collect();
                             (verts, true)
                         })
                         .collect();
@@ -540,16 +546,44 @@ pub fn evaluate_shape_tree(items: &[ShapeContentItem]) -> Vec<RenderableShapePat
                 ..
             } => {
                 let mut duplicated = Vec::new();
-                let count = (*copies).max(1);
+                if *copies == 0 {
+                    current_paths.clear();
+                    continue;
+                }
+                let count = (*copies).min(4096);
+                let offset = if offset.is_finite() { *offset } else { 0.0 };
+                let rotation = if transform.rotation.is_finite() {
+                    transform.rotation
+                } else {
+                    0.0
+                };
+                let scale_x = if transform.scale[0].is_finite() {
+                    transform.scale[0]
+                } else {
+                    100.0
+                };
+                let scale_y = if transform.scale[1].is_finite() {
+                    transform.scale[1]
+                } else {
+                    100.0
+                };
                 for i in 0..count {
-                    let progress = i as f32 + *offset;
-                    let rad = (transform.rotation * progress).to_radians();
+                    let progress = i as f32 + offset;
+                    let rad = (rotation * progress).to_radians();
                     let cos_r = rad.cos();
                     let sin_r = rad.sin();
-                    let sx = (100.0 + (transform.scale[0] - 100.0) * progress) * 0.01;
-                    let sy = (100.0 + (transform.scale[1] - 100.0) * progress) * 0.01;
-                    let tx = transform.position[0] * progress;
-                    let ty = transform.position[1] * progress;
+                    let sx = (100.0 + (scale_x - 100.0) * progress) * 0.01;
+                    let sy = (100.0 + (scale_y - 100.0) * progress) * 0.01;
+                    let tx = transform.position[0]
+                        .is_finite()
+                        .then_some(transform.position[0])
+                        .unwrap_or(0.0)
+                        * progress;
+                    let ty = transform.position[1]
+                        .is_finite()
+                        .then_some(transform.position[1])
+                        .unwrap_or(0.0)
+                        * progress;
 
                     for (verts, closed) in &current_paths {
                         let mut rep_verts = verts.clone();
@@ -657,6 +691,53 @@ mod tests {
     }
 
     #[test]
+    fn test_shape_tree_zero_copy_repeater_removes_paths() {
+        let tree = vec![
+            ShapeContentItem::Rectangle {
+                name: "Rect".into(),
+                size: [20.0, 20.0],
+                position: [0.0, 0.0],
+                roundness: 0.0,
+            },
+            ShapeContentItem::Repeater {
+                name: "Empty".into(),
+                copies: 0,
+                offset: 0.0,
+                transform: ShapeTransform::default(),
+            },
+        ];
+        assert!(evaluate_shape_tree(&tree).is_empty());
+    }
+
+    #[test]
+    fn test_shape_tree_repeater_sanitizes_nonfinite_transform() {
+        let tree = vec![
+            ShapeContentItem::Rectangle {
+                name: "Rect".into(),
+                size: [20.0, 20.0],
+                position: [0.0, 0.0],
+                roundness: 0.0,
+            },
+            ShapeContentItem::Repeater {
+                name: "Safe".into(),
+                copies: 2,
+                offset: f32::NAN,
+                transform: ShapeTransform {
+                    position: [f32::INFINITY, f32::NEG_INFINITY],
+                    rotation: f32::NAN,
+                    scale: [f32::INFINITY, f32::NAN],
+                    ..ShapeTransform::default()
+                },
+            },
+        ];
+        for path in evaluate_shape_tree(&tree) {
+            for vertex in path.vertices {
+                assert!(vertex.position.iter().all(|value| value.is_finite()));
+            }
+        }
+    }
+
+    #[test]
     fn test_evaluate_shape_tree_with_merge_paths() {
         let tree = vec![
             ShapeContentItem::Rectangle {
@@ -688,13 +769,102 @@ mod tests {
 
     #[test]
     fn test_trim_path_vertices_shortens_polyline() {
-        let raw = vec![
-            MaskVertex::new(0.0, 0.0),
-            MaskVertex::new(100.0, 0.0),
-        ];
+        let raw = vec![MaskVertex::new(0.0, 0.0), MaskVertex::new(100.0, 0.0)];
         let trimmed = trim_path_vertices(&raw, 25.0, 75.0, 0.0, false);
         assert!(trimmed.len() >= 2);
         assert!((trimmed[0].position[0] - 25.0).abs() < 1e-3);
         assert!((trimmed[1].position[0] - 75.0).abs() < 1e-3);
     }
+
+    #[test]
+    fn test_apply_offset_paths_expands_rect() {
+        let rect = vec![
+            MaskVertex::new(0.0, 0.0),
+            MaskVertex::new(100.0, 0.0),
+            MaskVertex::new(100.0, 100.0),
+            MaskVertex::new(0.0, 100.0),
+        ];
+        let offset = apply_offset_paths(&rect, 10.0, OffsetPathsJoin::Miter, 4.0);
+        assert_eq!(offset.len(), 4);
+        assert!(offset[0].position[0] < 0.0 && offset[0].position[1] < 0.0);
+    }
+}
+
+/// Line join style for Offset Paths modifier.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum OffsetPathsJoin {
+    #[default]
+    Miter,
+    Round,
+    Bevel,
+}
+
+/// Applies Offset Paths modifier to a polygon path.
+pub fn apply_offset_paths(
+    vertices: &[MaskVertex],
+    amount: f32,
+    join: OffsetPathsJoin,
+    miter_limit: f32,
+) -> Vec<MaskVertex> {
+    let n = vertices.len();
+    if n < 3 || amount.abs() < 1e-4 {
+        return vertices.to_vec();
+    }
+
+    // Compute signed polygon area to detect winding direction
+    let mut area = 0.0f32;
+    for i in 0..n {
+        let j = (i + 1) % n;
+        area += vertices[i].position[0] * vertices[j].position[1]
+            - vertices[j].position[0] * vertices[i].position[1];
+    }
+    let sign = if area > 0.0 { -1.0 } else { 1.0 };
+    let eff_amount = amount * sign;
+
+    let mut result = Vec::with_capacity(n * 2);
+
+    for i in 0..n {
+        let prev = &vertices[(i + n - 1) % n];
+        let curr = &vertices[i];
+        let next = &vertices[(i + 1) % n];
+
+        let d1 = [curr.position[0] - prev.position[0], curr.position[1] - prev.position[1]];
+        let d2 = [next.position[0] - curr.position[0], next.position[1] - curr.position[1]];
+
+        let len1 = (d1[0] * d1[0] + d1[1] * d1[1]).sqrt().max(1e-4);
+        let len2 = (d2[0] * d2[0] + d2[1] * d2[1]).sqrt().max(1e-4);
+
+        // Outward normals
+        let n1 = [-d1[1] / len1, d1[0] / len1];
+        let n2 = [-d2[1] / len2, d2[0] / len2];
+
+        let avg_n = [n1[0] + n2[0], n1[1] + n2[1]];
+        let avg_len = (avg_n[0] * avg_n[0] + avg_n[1] * avg_n[1]).sqrt().max(1e-4);
+        let bisector = [avg_n[0] / avg_len, avg_n[1] / avg_len];
+
+        let cos_half = n1[0] * bisector[0] + n1[1] * bisector[1];
+        let miter_len = if cos_half.abs() > 1e-3 {
+            (eff_amount / cos_half).clamp(-miter_limit * eff_amount.abs(), miter_limit * eff_amount.abs())
+        } else {
+            eff_amount
+        };
+
+        match join {
+            OffsetPathsJoin::Miter => {
+                let offset_pos = [
+                    curr.position[0] + bisector[0] * miter_len,
+                    curr.position[1] + bisector[1] * miter_len,
+                ];
+                result.push(MaskVertex::new(offset_pos[0], offset_pos[1]));
+            }
+            OffsetPathsJoin::Bevel | OffsetPathsJoin::Round => {
+                let p1 = [curr.position[0] + n1[0] * amount, curr.position[1] + n1[1] * amount];
+                let p2 = [curr.position[0] + n2[0] * amount, curr.position[1] + n2[1] * amount];
+                result.push(MaskVertex::new(p1[0], p1[1]));
+                result.push(MaskVertex::new(p2[0], p2[1]));
+            }
+        }
+    }
+
+    result
 }

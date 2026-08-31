@@ -1,4 +1,5 @@
 pub mod aces;
+pub mod aegp_sdk_bridge;
 pub mod aep_parser;
 pub mod audio_dsp;
 pub mod audio_engine;
