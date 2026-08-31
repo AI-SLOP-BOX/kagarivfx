@@ -311,6 +311,138 @@ impl MaskPath {
         }
     }
 
+    /// Subdivides segment `segment_idx` at parameter `t` in [0, 1] using de Casteljau split,
+    /// inserting a new anchor point and updating tangent handles smoothly.
+    pub fn insert_vertex_at_frame(&mut self, frame: u32, segment_idx: usize, t: f32) -> Option<usize> {
+        let t_clamped = t.clamp(0.01, 0.99);
+        let verts = self.vertices_at_frame(frame);
+        let n = verts.len();
+        if n < 2 || segment_idx >= n {
+            return None;
+        }
+
+        let next_idx = (segment_idx + 1) % n;
+        let p0 = verts[segment_idx];
+        let p3 = verts[next_idx];
+
+        let (c0, c1) = if let Some(tangents) = &self.tangents {
+            let out_h = tangents.get(segment_idx).map(|t| t.1).unwrap_or([0.0, 0.0]);
+            let in_h = tangents.get(next_idx).map(|t| t.0).unwrap_or([0.0, 0.0]);
+            ([p0[0] + out_h[0], p0[1] + out_h[1]], [p3[0] + in_h[0], p3[1] + in_h[1]])
+        } else {
+            (p0, p3)
+        };
+
+        // de Casteljau subdivision at parameter t
+        let q0 = [p0[0] + (c0[0] - p0[0]) * t_clamped, p0[1] + (c0[1] - p0[1]) * t_clamped];
+        let q1 = [c0[0] + (c1[0] - c0[0]) * t_clamped, c0[1] + (c1[1] - c0[1]) * t_clamped];
+        let q2 = [c1[0] + (p3[0] - c1[0]) * t_clamped, c1[1] + (p3[1] - c1[1]) * t_clamped];
+
+        let r0 = [q0[0] + (q1[0] - q0[0]) * t_clamped, q0[1] + (q1[1] - q0[1]) * t_clamped];
+        let r1 = [q1[0] + (q2[0] - q1[0]) * t_clamped, q1[1] + (q2[1] - q1[1]) * t_clamped];
+
+        let mid = [r0[0] + (r1[0] - r0[0]) * t_clamped, r0[1] + (r1[1] - r0[1]) * t_clamped];
+        let new_idx = segment_idx + 1;
+
+        match &mut self.vertices {
+            Animatable::Constant(verts) => {
+                verts.insert(new_idx, mid);
+            }
+            Animatable::Animated(kfs) => {
+                for kf in kfs.iter_mut() {
+                    if new_idx <= kf.value.len() {
+                        kf.value.insert(new_idx, mid);
+                    }
+                }
+            }
+        }
+
+        if let Some(tangents) = &mut self.tangents {
+            // Update segment_idx out tangent to (q0 - p0)
+            if segment_idx < tangents.len() {
+                tangents[segment_idx].1 = [q0[0] - p0[0], q0[1] - p0[1]];
+            }
+            // Insert new vertex tangents: in=(r0 - mid), out=(r1 - mid)
+            tangents.insert(new_idx, ([r0[0] - mid[0], r0[1] - mid[1]], [r1[0] - mid[0], r1[1] - mid[1]]));
+            // Update next vertex in tangent to (p3 - q2)
+            let updated_next = (new_idx + 1) % tangents.len();
+            if updated_next < tangents.len() {
+                tangents[updated_next].0 = [q2[0] - p3[0], q2[1] - p3[1]];
+            }
+        }
+
+        Some(new_idx)
+    }
+
+    /// Removes anchor vertex at `vertex_idx` maintaining polygon continuity.
+    pub fn remove_vertex_at_frame(&mut self, vertex_idx: usize) -> bool {
+        let mut removed = false;
+        match &mut self.vertices {
+            Animatable::Constant(verts) => {
+                if verts.len() > 3 && vertex_idx < verts.len() {
+                    verts.remove(vertex_idx);
+                    removed = true;
+                }
+            }
+            Animatable::Animated(kfs) => {
+                for kf in kfs.iter_mut() {
+                    if kf.value.len() > 3 && vertex_idx < kf.value.len() {
+                        kf.value.remove(vertex_idx);
+                        removed = true;
+                    }
+                }
+            }
+        }
+
+        if removed {
+            if let Some(tangents) = &mut self.tangents {
+                if vertex_idx < tangents.len() {
+                    tangents.remove(vertex_idx);
+                }
+            }
+        }
+
+        removed
+    }
+
+    /// Sets or updates incoming/outgoing tangent handles with optional smooth collinear link.
+    pub fn set_tangents_at_vertex(
+        &mut self,
+        vertex_idx: usize,
+        tangent_in: [f32; 2],
+        tangent_out: [f32; 2],
+        link_collinear: bool,
+    ) {
+        let count = match &self.vertices {
+            Animatable::Constant(v) => v.len(),
+            Animatable::Animated(kfs) => kfs.first().map(|k| k.value.len()).unwrap_or(0),
+        };
+        if vertex_idx >= count {
+            return;
+        }
+
+        let mut t_in = tangent_in;
+        let mut t_out = tangent_out;
+
+        if link_collinear {
+            // Mirror out handle based on in handle opposite vector
+            let len_out = (t_out[0].powi(2) + t_out[1].powi(2)).sqrt().max(1.0);
+            let len_in = (t_in[0].powi(2) + t_in[1].powi(2)).sqrt().max(1.0);
+            let ratio = len_out / len_in;
+            t_out = [-t_in[0] * ratio, -t_in[1] * ratio];
+        }
+
+        if self.tangents.is_none() {
+            self.tangents = Some(vec![([0.0, 0.0], [0.0, 0.0]); count]);
+        }
+
+        if let Some(tangents) = &mut self.tangents {
+            if vertex_idx < tangents.len() {
+                tangents[vertex_idx] = (t_in, t_out);
+            }
+        }
+    }
+
     /// Sample the path as a series of screen-space points for CPU rendering.
     /// Returns a flat list of [x, y] pairs. Uses cubic Bezier curves when tangents exist.
     pub fn to_polygon(&self, frame: u32, segments_per_edge: u32) -> Vec<[f32; 2]> {
@@ -500,5 +632,32 @@ mod tests {
             4 * 8 + 1,
             "sampled polygon should contain curve segments"
         );
+    }
+
+    #[test]
+    fn test_insert_and_remove_vertex_maintains_topology() {
+        let mut path = MaskPath::new_rect(0.0, 0.0, 100.0, 100.0);
+        assert_eq!(path.vertices_at_frame(0).len(), 4);
+
+        // Insert point in segment 0 (top edge) at t = 0.5
+        let new_idx = path.insert_vertex_at_frame(0, 0, 0.5).expect("insert succeeds");
+        assert_eq!(new_idx, 1);
+        let verts = path.vertices_at_frame(0);
+        assert_eq!(verts.len(), 5);
+        assert_eq!(verts[1], [50.0, 0.0]); // Midpoint of [0,0] -> [100,0]
+
+        // Remove inserted vertex
+        assert!(path.remove_vertex_at_frame(1));
+        assert_eq!(path.vertices_at_frame(0).len(), 4);
+    }
+
+    #[test]
+    fn test_set_tangents_collinear_link() {
+        let mut path = MaskPath::new_rect(0.0, 0.0, 100.0, 100.0);
+        path.set_tangents_at_vertex(0, [-10.0, 0.0], [20.0, 0.0], true);
+        let tangents = path.tangents.as_ref().unwrap();
+        let (t_in, t_out) = tangents[0];
+        assert_eq!(t_in, [-10.0, 0.0]);
+        assert_eq!(t_out, [20.0, 0.0]); // Collinear opposite direction
     }
 }
