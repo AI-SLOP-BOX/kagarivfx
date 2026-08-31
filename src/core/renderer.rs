@@ -69,6 +69,7 @@ struct GlobalsUniform {
 const LAYER_UNIFORM_SIZE: std::num::NonZeroU64 =
     std::num::NonZeroU64::new(std::mem::size_of::<LayerUniform>() as u64)
         .expect("LayerUniform holds f32 fields and can never be zero-sized");
+const LAYER_UNIFORM_STRIDE: usize = (std::mem::size_of::<LayerUniform>() + 255) & !255;
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
@@ -232,7 +233,42 @@ struct LayerUniform {
     extrusion_depth: f32,
     bevel_depth: f32,
 
-    _padding_align: [f32; 26], // Keep total size a multiple of 256 (768 bytes) for WGPU dynamic uniform offsets
+    // ── GPU Real-time VFX Shader Extensions ──
+    // Chromatic Aberration
+    chromatic_enabled: u32,
+    chromatic_amount: f32,
+    chromatic_angle: f32,
+    _pad_chromatic: f32,
+
+    // Vignette
+    vignette_enabled: u32,
+    vignette_amount: f32,
+    vignette_midpoint: f32,
+    vignette_feather: f32,
+
+    // Invert & Posterize
+    invert_enabled: u32,
+    posterize_enabled: u32,
+    posterize_levels: f32,
+    threshold_level: f32,
+
+    // Tint
+    tint_enabled: u32,
+    tint_amount: f32,
+    _pad_tint1: f32,
+    _pad_tint2: f32,
+    tint_black: [f32; 4],
+    tint_white: [f32; 4],
+
+    // CRT Scanlines
+    crt_enabled: u32,
+    crt_scanline_count: f32,
+    crt_scanline_intensity: f32,
+    crt_curvature: f32,
+
+    _padding_align: [f32; 4],
+    _ls_pad4: f32,
+    _ls_pad5: f32,
 }
 
 // ─── GPU Layer Mask Rasterization (CPU-baked coverage → group(3) texture) ──
@@ -592,11 +628,26 @@ mod gpu_mask_tests {
     #[test]
     fn add_mode_unions_adjacent_rects() {
         let shapes = [
-            MaskShape { poly: rect(0.0, 0.0, 4.0, 2.0), mode: crate::core::mask::MaskMode::Add, opacity: 1.0, inverted: false, feather: 0.0 },
-            MaskShape { poly: rect(4.0, 0.0, 4.0, 2.0), mode: crate::core::mask::MaskMode::Add, opacity: 1.0, inverted: false, feather: 0.0 },
+            MaskShape {
+                poly: rect(0.0, 0.0, 4.0, 2.0),
+                mode: crate::core::mask::MaskMode::Add,
+                opacity: 1.0,
+                inverted: false,
+                feather: 0.0,
+            },
+            MaskShape {
+                poly: rect(4.0, 0.0, 4.0, 2.0),
+                mode: crate::core::mask::MaskMode::Add,
+                opacity: 1.0,
+                inverted: false,
+                feather: 0.0,
+            },
         ];
         let cov = combine_mask_shapes(&shapes, 8, 2).expect("masks present");
-        assert!(cov.iter().all(|&c| c == 1.0), "union of both halves covers the row");
+        assert!(
+            cov.iter().all(|&c| c == 1.0),
+            "union of both halves covers the row"
+        );
     }
 
     #[test]
@@ -632,8 +683,20 @@ mod gpu_mask_tests {
     #[test]
     fn intersect_mode_takes_minimum() {
         let shapes = [
-            MaskShape { poly: rect(0.0, 0.0, 6.0, 2.0), mode: crate::core::mask::MaskMode::Add, opacity: 1.0, inverted: false, feather: 0.0 },
-            MaskShape { poly: rect(2.0, 0.0, 6.0, 2.0), mode: crate::core::mask::MaskMode::Intersect, opacity: 1.0, inverted: false, feather: 0.0 },
+            MaskShape {
+                poly: rect(0.0, 0.0, 6.0, 2.0),
+                mode: crate::core::mask::MaskMode::Add,
+                opacity: 1.0,
+                inverted: false,
+                feather: 0.0,
+            },
+            MaskShape {
+                poly: rect(2.0, 0.0, 6.0, 2.0),
+                mode: crate::core::mask::MaskMode::Intersect,
+                opacity: 1.0,
+                inverted: false,
+                feather: 0.0,
+            },
         ];
         let cov = combine_mask_shapes(&shapes, 8, 2).expect("masks present");
         assert_eq!(cov[1], 0.0, "only in first");
@@ -672,15 +735,14 @@ mod gpu_mask_tests {
             "feather participates in the key"
         );
         assert_ne!(
-            mask_input_key(
-                &[shape(0.0, crate::core::mask::MaskMode::Subtract)],
-                8,
-                8
-            ),
+            mask_input_key(&[shape(0.0, crate::core::mask::MaskMode::Subtract)], 8, 8),
             a,
             "mode participates in the key"
         );
-        assert_ne!(mask_input_key(&[shape(0.0, crate::core::mask::MaskMode::Add)], 16, 8), a);
+        assert_ne!(
+            mask_input_key(&[shape(0.0, crate::core::mask::MaskMode::Add)], 16, 8),
+            a
+        );
     }
 
     #[test]
@@ -705,9 +767,7 @@ mod gpu_mask_tests {
         // 4x4 grid with a single covered pixel at (1,1): Euclidean distance to
         // it must beat or equal any Manhattan path and match exact diagonals.
         let bin = vec![
-            false, false, false, false,
-            false, true,  false, false,
-            false, false, false, false,
+            false, false, false, false, false, true, false, false, false, false, false, false,
             false, false, false, false,
         ];
         let d = edt_2d(&bin, 4, 4, true);
@@ -751,7 +811,10 @@ mod gpu_mask_tests {
         // Right boundary sits between columns 17 and 18: both land mid-ramp.
         assert!(get(17, 8) > 0.0 && get(17, 8) < 1.0, "inner edge pixel");
         assert!(get(18, 8) > 0.0 && get(18, 8) < 1.0, "outer edge pixel");
-        assert!((get(17, 8) - get(18, 8)).abs() < 0.35, "ramp symmetric around edge");
+        assert!(
+            (get(17, 8) - get(18, 8)).abs() < 0.35,
+            "ramp symmetric around edge"
+        );
     }
 }
 
@@ -782,8 +845,7 @@ mod cpu_parity_tests {
             },
             30,
         );
-        layer.transform.position =
-            crate::core::property::Animatable::new_constant([32.0, 32.0]);
+        layer.transform.position = crate::core::property::Animatable::new_constant([32.0, 32.0]);
         let mut mask = Mask::new_rect("m".into(), "M".into(), 8.0, 8.0, 24.0, 40.0);
         mask.mode = mode;
         mask.inverted = inverted;
@@ -798,8 +860,7 @@ mod cpu_parity_tests {
     fn assert_cpu_and_gpu_agree(inverted: bool) {
         use crate::core::mask::MaskMode;
         let comp = solid_with_rect_mask(MaskMode::Add, inverted);
-        let cpu =
-            crate::core::software_renderer::render_frame_to_pixels(&comp, 0, W, H, 0.0, 0);
+        let cpu = crate::core::software_renderer::render_frame_to_pixels(&comp, 0, W, H, 0.0, 0);
 
         let (key, shapes) =
             collect_mask_shapes(&comp.layers[0], 0, W, H, W, H).expect("mask present");
@@ -807,9 +868,7 @@ mod cpu_parity_tests {
         assert_eq!(raster.key, key, "key must derive from the same inputs");
 
         // Rect spans x[8..32) y[8..48): interior (20,32), exterior (52,32).
-        for &(px, py, inside_polygon) in
-            &[(20usize, 32usize, true), (52usize, 32usize, false)]
-        {
+        for &(px, py, inside_polygon) in &[(20usize, 32usize, true), (52usize, 32usize, false)] {
             let i = (py * W as usize + px) * 4;
             let cpu_red = cpu[i];
             let my_alpha = raster.pixels[i + 3];
@@ -896,7 +955,8 @@ fn bake_text_stroke(
                                 let nidx = ((ny * w + nx) * 4) as usize;
                                 let n_alpha = pixels[nidx + 3] as f32 / 255.0;
                                 if n_alpha > 0.001 {
-                                    let edge = (stroke_width * 0.5 - dist) / (stroke_width * 0.25).max(0.5);
+                                    let edge = (stroke_width * 0.5 - dist)
+                                        / (stroke_width * 0.25).max(0.5);
                                     stroke_alpha = stroke_alpha.max(edge.clamp(0.0, 1.0));
                                 }
                             }
@@ -909,9 +969,18 @@ fn bake_text_stroke(
             let stroke_a_px = stroke_alpha * stroke_a;
             let out_a = fill_alpha + stroke_a_px * (1.0 - fill_alpha);
             if out_a > 0.001 {
-                let fr = pixels.get(((ty.max(0) * w + tx.max(0)) * 4) as usize).copied().unwrap_or(0);
-                let fg = pixels.get(((ty.max(0) * w + tx.max(0)) * 4 + 1) as usize).copied().unwrap_or(0);
-                let fb = pixels.get(((ty.max(0) * w + tx.max(0)) * 4 + 2) as usize).copied().unwrap_or(0);
+                let fr = pixels
+                    .get(((ty.max(0) * w + tx.max(0)) * 4) as usize)
+                    .copied()
+                    .unwrap_or(0);
+                let fg = pixels
+                    .get(((ty.max(0) * w + tx.max(0)) * 4 + 1) as usize)
+                    .copied()
+                    .unwrap_or(0);
+                let fb = pixels
+                    .get(((ty.max(0) * w + tx.max(0)) * 4 + 2) as usize)
+                    .copied()
+                    .unwrap_or(0);
                 // Stroke color behind fill color
                 let mix_r = (sr as f32 * (1.0 - fill_alpha) + fr as f32 * fill_alpha) as u8;
                 let mix_g = (sg as f32 * (1.0 - fill_alpha) + fg as f32 * fill_alpha) as u8;
@@ -938,11 +1007,29 @@ struct TextRasterParams {
     stroke_width: f32,
 }
 
-type RenderKey = (u64, u32, u32, u32, (u32, u32));
+fn composition_cache_key(comp: &Composition) -> u64 {
+    let serialized = serde_json::to_vec(comp).unwrap_or_else(|_| comp.id.as_bytes().to_vec());
+    serialized
+        .into_iter()
+        .fold(0xcbf29ce484222325u64, |hash, byte| {
+            (hash ^ u64::from(byte)).wrapping_mul(0x100000001b3)
+        })
+}
+
+type RenderKey = (u64, u64, u32, u32, u32, (u32, u32));
 type TextTextureKey = (String, String, u32, [u32; 4], u32);
-type TextTextureCache = std::collections::HashMap<TextTextureKey, (wgpu::Texture, std::sync::Arc<wgpu::BindGroup>, u32, u32)>;
+type TextTextureCache = std::collections::HashMap<
+    TextTextureKey,
+    (wgpu::Texture, std::sync::Arc<wgpu::BindGroup>, u32, u32),
+>;
 type VideoFrameKey = (String, String, u32);
-type VideoFrameCache = std::collections::HashMap<VideoFrameKey, (std::sync::Arc<wgpu::Texture>, std::sync::Arc<wgpu::BindGroup>)>;
+type VideoFrameCache = std::collections::HashMap<
+    VideoFrameKey,
+    (
+        std::sync::Arc<wgpu::Texture>,
+        std::sync::Arc<wgpu::BindGroup>,
+    ),
+>;
 
 /// Maximum cached video frame textures before oldest entries are evicted.
 /// 200 frames at 1080p RGBA is ~830 MB of VRAM; evicted frames re-upload
@@ -964,6 +1051,7 @@ pub struct WgpuRenderer {
     globals_bind_group: wgpu::BindGroup,
 
     layer_buffer: wgpu::Buffer,
+    layer_bind_group_layout: wgpu::BindGroupLayout,
     layer_bind_group: wgpu::BindGroup,
 
     texture_bind_group_layout: wgpu::BindGroupLayout,
@@ -1021,6 +1109,11 @@ pub struct WgpuRenderer {
     video_cache_version: std::cell::Cell<u64>,
 }
 
+/// The layer uniform buffer is allocated for this many entries.  Keeping the
+/// limit named prevents repeater expansion and draw submission from drifting
+/// apart when the buffer layout changes.
+const MAX_GPU_LAYERS: usize = 256;
+
 impl WgpuRenderer {
     pub fn new(device: Arc<wgpu::Device>, queue: Arc<wgpu::Queue>) -> Self {
         // Shaders compile
@@ -1052,7 +1145,7 @@ impl WgpuRenderer {
 
         let layer_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("Layer Buffer"),
-            size: (std::mem::size_of::<LayerUniform>() * 256) as u64, // Pre-allocate up to 256 layers
+            size: (LAYER_UNIFORM_STRIDE * MAX_GPU_LAYERS) as u64,
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
@@ -1186,7 +1279,8 @@ impl WgpuRenderer {
             },
             dummy_mask_size,
         );
-        let dummy_mask_view = dummy_mask_texture.create_view(&wgpu::TextureViewDescriptor::default());
+        let dummy_mask_view =
+            dummy_mask_texture.create_view(&wgpu::TextureViewDescriptor::default());
 
         let mask_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             layout: &mask_bind_group_layout,
@@ -1244,10 +1338,15 @@ impl WgpuRenderer {
                 aspect: wgpu::TextureAspect::All,
             },
             &[0, 0, 0, 255],
-            wgpu::ImageDataLayout { offset: 0, bytes_per_row: Some(4), rows_per_image: Some(1) },
+            wgpu::ImageDataLayout {
+                offset: 0,
+                bytes_per_row: Some(4),
+                rows_per_image: Some(1),
+            },
             dummy_mask_size,
         );
-        let dummy_shadow_view = dummy_shadow_texture.create_view(&wgpu::TextureViewDescriptor::default());
+        let dummy_shadow_view =
+            dummy_shadow_texture.create_view(&wgpu::TextureViewDescriptor::default());
         let shadow_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             layout: &shadow_bind_group_layout,
             entries: &[
@@ -1328,14 +1427,6 @@ impl WgpuRenderer {
                 },
                 wgpu::BindGroupEntry {
                     binding: 1,
-                    resource: wgpu::BindingResource::Sampler(&sampler),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 2,
-                    resource: wgpu::BindingResource::TextureView(&dummy_mask_view),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 3,
                     resource: wgpu::BindingResource::Sampler(&sampler),
                 },
             ],
@@ -1419,6 +1510,7 @@ impl WgpuRenderer {
             globals_buffer,
             globals_bind_group,
             layer_buffer,
+            layer_bind_group_layout,
             layer_bind_group,
             texture_bind_group_layout,
             dummy_texture_bind_group,
@@ -1501,15 +1593,27 @@ impl WgpuRenderer {
         layer_id: &str,
         params: &TextRasterParams,
     ) -> Option<(u32, u32, std::sync::Arc<wgpu::BindGroup>)> {
-        let (text, font_size, color, font_family, tracking, leading, align) =
-            (params.text.as_str(), params.font_size, params.color, params.font_family.as_str(), params.tracking, params.leading, params.align);
+        let (text, font_size, color, font_family, tracking, leading, align) = (
+            params.text.as_str(),
+            params.font_size,
+            params.color,
+            params.font_family.as_str(),
+            params.tracking,
+            params.leading,
+            params.align,
+        );
         let (stroke_color, stroke_width) = (params.stroke_color, params.stroke_width);
         // Floats hashed via bit patterns (f32 is not Hash)
         let key = (
             layer_id.to_string(),
             text.to_string(),
             font_size,
-            [stroke_color[0].to_bits(), stroke_color[1].to_bits(), stroke_color[2].to_bits(), stroke_color[3].to_bits()],
+            [
+                stroke_color[0].to_bits(),
+                stroke_color[1].to_bits(),
+                stroke_color[2].to_bits(),
+                stroke_color[3].to_bits(),
+            ],
             stroke_width.to_bits(),
         );
         // Cached: return stored dimensions — no CPU rasterization on hits
@@ -1530,19 +1634,38 @@ impl WgpuRenderer {
         };
         let rasterized = crate::core::font_rasterizer::with_font_rasterizer(|r| {
             let family = r.resolve_family(font_family);
-            r.rasterize_text_formatted(&family, text, font_size as f32, color, tracking, leading, 0.0, alignment)
+            r.rasterize_text_formatted(
+                &family,
+                text,
+                font_size as f32,
+                color,
+                tracking,
+                leading,
+                0.0,
+                alignment,
+            )
         })?;
         if rasterized.0 == 0 || rasterized.1 == 0 || rasterized.2.is_empty() {
             return None;
         }
         // Bake stroke (if any) into the bitmap with padding
         let (tw, th, pixels) = if stroke_width > 0.1 {
-            bake_text_stroke(&rasterized.2, rasterized.0, rasterized.1, stroke_color, stroke_width)
+            bake_text_stroke(
+                &rasterized.2,
+                rasterized.0,
+                rasterized.1,
+                stroke_color,
+                stroke_width,
+            )
         } else {
             rasterized
         };
 
-        let size = wgpu::Extent3d { width: tw, height: th, depth_or_array_layers: 1 };
+        let size = wgpu::Extent3d {
+            width: tw,
+            height: th,
+            depth_or_array_layers: 1,
+        };
         let texture = self.device.create_texture(&wgpu::TextureDescriptor {
             label: Some("Text Layer Texture"),
             size,
@@ -1572,8 +1695,14 @@ impl WgpuRenderer {
         let bind_group = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
             layout: &self.texture_bind_group_layout,
             entries: &[
-                wgpu::BindGroupEntry { binding: 0, resource: wgpu::BindingResource::TextureView(&view) },
-                wgpu::BindGroupEntry { binding: 1, resource: wgpu::BindingResource::Sampler(&self.sampler) },
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::TextureView(&view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::Sampler(&self.sampler),
+                },
             ],
             label: Some("text_texture_bind_group"),
         });
@@ -1594,7 +1723,8 @@ impl WgpuRenderer {
         Some((tw, th, bind_group))
     }
 
-    pub fn ensure_target_size(&mut self, width: u32, height: u32) -> bool {        if self.target_size == (width, height) && self.target_texture.is_some() {
+    pub fn ensure_target_size(&mut self, width: u32, height: u32) -> bool {
+        if self.target_size == (width, height) && self.target_texture.is_some() {
             return false;
         }
 
@@ -1611,7 +1741,9 @@ impl WgpuRenderer {
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
             format: wgpu::TextureFormat::Rgba8UnormSrgb,
-            usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT
+                | wgpu::TextureUsages::TEXTURE_BINDING
+                | wgpu::TextureUsages::COPY_DST,
             view_formats: &[],
         });
 
@@ -1624,7 +1756,9 @@ impl WgpuRenderer {
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
             format: wgpu::TextureFormat::Rgba8UnormSrgb,
-            usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT
+                | wgpu::TextureUsages::TEXTURE_BINDING
+                | wgpu::TextureUsages::COPY_DST,
             view_formats: &[],
         });
         let snap_view = snap_texture.create_view(&wgpu::TextureViewDescriptor::default());
@@ -1637,8 +1771,40 @@ impl WgpuRenderer {
         true
     }
 
+    fn ensure_layer_buffer_capacity(&mut self, layer_count: usize) {
+        if layer_count <= MAX_GPU_LAYERS {
+            return;
+        }
+        let size = (LAYER_UNIFORM_STRIDE * layer_count) as u64;
+        self.layer_buffer = self.device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("Layer Buffer (expanded)"),
+            size,
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+        self.layer_bind_group = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
+            layout: &self.layer_bind_group_layout,
+            entries: &[wgpu::BindGroupEntry {
+                binding: 0,
+                resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
+                    buffer: &self.layer_buffer,
+                    offset: 0,
+                    size: Some(LAYER_UNIFORM_SIZE),
+                }),
+            }],
+            label: Some("layer_bind_group_expanded"),
+        });
+    }
+
     /// Internal core rendering implementation for both primary preview and snapshot target views.
-    fn render_internal(&mut self, comp: &Composition, frame: u32, exposure_ev: f32, lut_mode: u32, target_snapshot: bool) -> bool {
+    fn render_internal(
+        &mut self,
+        comp: &Composition,
+        frame: u32,
+        exposure_ev: f32,
+        lut_mode: u32,
+        target_snapshot: bool,
+    ) -> bool {
         // Dirty-checking: the viewport calls render() at display refresh rate even
         // when nothing changed. Skip the full encode/upload/draw pass when the
         // project version, frame, exposure, LUT, and target size are unchanged.
@@ -1646,33 +1812,89 @@ impl WgpuRenderer {
         let (eff_w, eff_h) = match self.preview_max_width {
             Some(cap) if comp.width > cap => {
                 let s = cap as f32 / comp.width as f32;
-                (
-                    cap.max(1),
-                    ((comp.height as f32 * s) as u32).max(1),
-                )
+                (cap.max(1), ((comp.height as f32 * s) as u32).max(1))
             }
             _ => (comp.width, comp.height),
         };
 
+        let composition_key = composition_cache_key(comp);
         let render_key: RenderKey = (
             crate::core::frame_cache::current_version(),
+            composition_key,
             frame,
             exposure_ev.to_bits(),
             lut_mode,
             (eff_w, eff_h),
         );
-        let last_key = if target_snapshot { &self.last_snapshot_key } else { &self.last_main_key };
+        let last_key = if target_snapshot {
+            self.last_snapshot_key
+        } else {
+            self.last_main_key
+        };
         let ram_mode = self.ram_render_idx != usize::MAX;
-        if !ram_mode && *last_key == Some(render_key) {
+        if !ram_mode && last_key == Some(render_key) {
             return false; // nothing changed — reuse the existing target texture
         }
 
         // Clamp to both our sanity limit and the device's texture limit —
         // oversized textures would trip wgpu validation and abort the process.
-        let max_dim = self.device.limits().max_texture_dimension_2d.min(crate::core::software_renderer::MAX_RENDER_DIMENSION);
+        let max_dim = self
+            .device
+            .limits()
+            .max_texture_dimension_2d
+            .min(crate::core::software_renderer::MAX_RENDER_DIMENSION);
         let width = eff_w.clamp(1, max_dim);
         let height = eff_h.clamp(1, max_dim);
         let recreated = self.ensure_target_size(width, height);
+
+        if comp
+            .layers
+            .iter()
+            .any(|layer| layer.track_matte != crate::core::timeline::TrackMatteMode::None)
+        {
+            let pixels = crate::core::software_renderer::render_frame_to_pixels(
+                comp,
+                frame,
+                width,
+                height,
+                exposure_ev,
+                lut_mode,
+            );
+            let texture = if target_snapshot {
+                self.snapshot_texture.as_ref()
+            } else {
+                self.target_texture.as_ref()
+            };
+            if let Some(texture) = texture {
+                self.queue.write_texture(
+                    wgpu::ImageCopyTexture {
+                        texture,
+                        mip_level: 0,
+                        origin: wgpu::Origin3d::ZERO,
+                        aspect: wgpu::TextureAspect::All,
+                    },
+                    &pixels,
+                    wgpu::ImageDataLayout {
+                        offset: 0,
+                        bytes_per_row: Some(width * 4),
+                        rows_per_image: Some(height),
+                    },
+                    wgpu::Extent3d {
+                        width,
+                        height,
+                        depth_or_array_layers: 1,
+                    },
+                );
+            }
+            if !ram_mode {
+                if target_snapshot {
+                    self.last_snapshot_key = Some(render_key);
+                } else {
+                    self.last_main_key = Some(render_key);
+                }
+            }
+            return true;
+        }
 
         // Update Globals Uniform
         let globals = GlobalsUniform {
@@ -1697,7 +1919,6 @@ impl WgpuRenderer {
         }
 
         {
-
             // Viewport projection matrix:
             // Maps [0, width] to [-1, 1] on X, and [0, height] to [1, -1] on Y.
             let m_proj = [
@@ -1724,17 +1945,18 @@ impl WgpuRenderer {
                     || layer.transform.rotation_expression.is_some()
                     || layer.transform.scale_expression.is_some()
                     || layer.transform.opacity_expression.is_some();
-                let (pos, scale, rotation, opacity) = if layer.parent_id.is_some() || layer_has_exprs {
-                    let (p, s, r, o) = comp.resolve_world_transform(layer, frame);
-                    (p, s, r, o / 100.0)
-                } else {
-                    (
-                        layer.transform.position.evaluate(frame),
-                        layer.transform.scale.evaluate(frame),
-                        layer.transform.rotation.evaluate(frame),
-                        layer.transform.opacity.evaluate(frame),
-                    )
-                };
+                let (pos, scale, rotation, opacity) =
+                    if layer.parent_id.is_some() || layer_has_exprs {
+                        let (p, s, r, o) = comp.resolve_world_transform(layer, frame);
+                        (p, s, r, o / 100.0)
+                    } else {
+                        (
+                            layer.transform.position.evaluate(frame),
+                            layer.transform.scale.evaluate(frame),
+                            layer.transform.rotation.evaluate(frame),
+                            layer.transform.opacity.evaluate(frame),
+                        )
+                    };
 
                 // Default layer dimensions (solid size or fallback)
                 let (mut layer_w, mut layer_h) = match &layer.layer_type {
@@ -1757,22 +1979,49 @@ impl WgpuRenderer {
                 // Video layers sample their frame sequence via the image path too,
                 // but keep composition-sized geometry (unlike text, which fits the bitmap).
                 let mut is_video_frame = false;
-                if let LayerType::Video { frames_dir, frame_count, .. } = &layer.layer_type {
+                if let LayerType::Video {
+                    frames_dir,
+                    frame_count,
+                    ..
+                } = &layer.layer_type
+                {
                     let seq_frame = frame.min(frame_count.saturating_sub(1));
-                    if let Some((_, _, bg)) =
-                        self.get_or_create_video_frame_texture(&layer.id, frames_dir, seq_frame, crate::core::frame_cache::current_version())
-                    {
+                    if let Some((_, _, bg)) = self.get_or_create_video_frame_texture(
+                        &layer.id,
+                        frames_dir,
+                        seq_frame,
+                        crate::core::frame_cache::current_version(),
+                    ) {
                         text_bind_group = Some(bg);
                         is_video_frame = true;
                     }
                 }
-                if let LayerType::Text { text, font_size, color, font_family, tracking, leading, align, stroke_color, stroke_width, .. } = &layer.layer_type {
+                if let LayerType::Text {
+                    text,
+                    font_size,
+                    color,
+                    font_family,
+                    tracking,
+                    leading,
+                    align,
+                    stroke_color,
+                    stroke_width,
+                    ..
+                } = &layer.layer_type
+                {
                     let params = TextRasterParams {
-                        text: text.clone(), font_size: *font_size, color: *color,
-                        font_family: font_family.clone(), tracking: *tracking, leading: *leading, align: *align,
-                        stroke_color: *stroke_color, stroke_width: *stroke_width,
+                        text: text.clone(),
+                        font_size: *font_size,
+                        color: *color,
+                        font_family: font_family.clone(),
+                        tracking: *tracking,
+                        leading: *leading,
+                        align: *align,
+                        stroke_color: *stroke_color,
+                        stroke_width: *stroke_width,
                     };
-                    if let Some((tw, th, bg)) = self.get_or_create_text_texture(&layer.id, &params) {
+                    if let Some((tw, th, bg)) = self.get_or_create_text_texture(&layer.id, &params)
+                    {
                         layer_w = tw as f32;
                         layer_h = th as f32;
                         text_bind_group = Some(bg);
@@ -1780,7 +2029,6 @@ impl WgpuRenderer {
                     }
                 }
                 layer_textures.push(text_bind_group);
-
 
                 let anc = layer.transform.anchor_point.evaluate(frame);
 
@@ -1836,10 +2084,45 @@ impl WgpuRenderer {
                 };
 
                 // Prepare Layer Uniform details
-                let (mut layer_type, shape_type, mut color, mut fill_type_u32, mut grad_start, mut grad_end, mut grad_colors, mut grad_center, mut grad_radius) = match &layer.layer_type {
-                    LayerType::Solid { color } => (0u32, 0u32, *color, 0u32, [0.0, 0.0], [1.0, 1.0], [[1.0,1.0,1.0,1.0],[0.0,0.0,0.0,1.0]], [0.5, 0.5], 0.5),
-                    LayerType::Image { .. } | LayerType::Video { .. } => (1u32, 0u32, [1.0, 1.0, 1.0, 1.0], 0u32, [0.0, 0.0], [1.0, 1.0], [[1.0,1.0,1.0,1.0],[0.0,0.0,0.0,1.0]], [0.5, 0.5], 0.5),
-                    LayerType::Shape { shape_type, color, fill_type, .. } => {
+                let (
+                    mut layer_type,
+                    shape_type,
+                    mut color,
+                    mut fill_type_u32,
+                    mut grad_start,
+                    mut grad_end,
+                    mut grad_colors,
+                    mut grad_center,
+                    mut grad_radius,
+                ) = match &layer.layer_type {
+                    LayerType::Solid { color } => (
+                        0u32,
+                        0u32,
+                        *color,
+                        0u32,
+                        [0.0, 0.0],
+                        [1.0, 1.0],
+                        [[1.0, 1.0, 1.0, 1.0], [0.0, 0.0, 0.0, 1.0]],
+                        [0.5, 0.5],
+                        0.5,
+                    ),
+                    LayerType::Image { .. } | LayerType::Video { .. } => (
+                        1u32,
+                        0u32,
+                        [1.0, 1.0, 1.0, 1.0],
+                        0u32,
+                        [0.0, 0.0],
+                        [1.0, 1.0],
+                        [[1.0, 1.0, 1.0, 1.0], [0.0, 0.0, 0.0, 1.0]],
+                        [0.5, 0.5],
+                        0.5,
+                    ),
+                    LayerType::Shape {
+                        shape_type,
+                        color,
+                        fill_type,
+                        ..
+                    } => {
                         let st = match shape_type {
                             ShapeType::Rectangle { .. } => 0u32,
                             ShapeType::Ellipse { .. } => 1u32,
@@ -1848,26 +2131,100 @@ impl WgpuRenderer {
                             ShapeType::FreeformBezier { .. } => 4u32,
                         };
                         let (ft, ge, gs, gc, gcen, gr) = match fill_type {
-                            ShapeFillType::Solid => (0u32, [0.0, 0.0], [1.0, 1.0], [[1.0,1.0,1.0,1.0],[0.0,0.0,0.0,1.0]], [0.5, 0.5], 0.5),
-                            ShapeFillType::LinearGradient { start, end, colors, .. } => {
-                                let c1 = colors.first().copied().unwrap_or([1.0,1.0,1.0,1.0]);
-                                let c2 = colors.get(1).copied().unwrap_or([0.0,0.0,0.0,1.0]);
+                            ShapeFillType::Solid => (
+                                0u32,
+                                [0.0, 0.0],
+                                [1.0, 1.0],
+                                [[1.0, 1.0, 1.0, 1.0], [0.0, 0.0, 0.0, 1.0]],
+                                [0.5, 0.5],
+                                0.5,
+                            ),
+                            ShapeFillType::LinearGradient {
+                                start, end, colors, ..
+                            } => {
+                                let c1 = colors.first().copied().unwrap_or([1.0, 1.0, 1.0, 1.0]);
+                                let c2 = colors.get(1).copied().unwrap_or([0.0, 0.0, 0.0, 1.0]);
                                 (1u32, *start, *end, [c1, c2], [0.5, 0.5], 0.5)
                             }
-                            ShapeFillType::RadialGradient { center, radius, colors, .. } => {
-                                let c1 = colors.first().copied().unwrap_or([1.0,1.0,1.0,1.0]);
-                                let c2 = colors.get(1).copied().unwrap_or([0.0,0.0,0.0,1.0]);
+                            ShapeFillType::RadialGradient {
+                                center,
+                                radius,
+                                colors,
+                                ..
+                            } => {
+                                let c1 = colors.first().copied().unwrap_or([1.0, 1.0, 1.0, 1.0]);
+                                let c2 = colors.get(1).copied().unwrap_or([0.0, 0.0, 0.0, 1.0]);
                                 (2u32, [0.0, 0.0], [1.0, 1.0], [c1, c2], *center, *radius)
                             }
                         };
                         (2u32, st, *color, ft, gs, ge, gc, gcen, gr)
                     }
-                    LayerType::Text { color, .. } => (3u32, 0u32, *color, 0u32, [0.0, 0.0], [1.0, 1.0], [[1.0,1.0,1.0,1.0],[0.0,0.0,0.0,1.0]], [0.5, 0.5], 0.5),
-                    LayerType::Null => (4u32, 0u32, [0.0, 0.0, 0.0, 0.0], 0u32, [0.0, 0.0], [1.0, 1.0], [[1.0,1.0,1.0,1.0],[0.0,0.0,0.0,1.0]], [0.5, 0.5], 0.5),
-                    LayerType::PreComp { .. } => (5u32, 0u32, [1.0, 1.0, 1.0, 1.0], 0u32, [0.0, 0.0], [1.0, 1.0], [[1.0,1.0,1.0,1.0],[0.0,0.0,0.0,1.0]], [0.5, 0.5], 0.5),
-                    LayerType::AdjustmentLayer => (7u32, 0u32, [1.0, 1.0, 1.0, 1.0], 0u32, [0.0, 0.0], [1.0, 1.0], [[1.0,1.0,1.0,1.0],[0.0,0.0,0.0,1.0]], [0.5, 0.5], 0.5),
-                    LayerType::Audio { .. } => (6u32, 0u32, [0.0, 0.0, 0.0, 0.0], 0u32, [0.0, 0.0], [1.0, 1.0], [[1.0,1.0,1.0,1.0],[0.0,0.0,0.0,1.0]], [0.5, 0.5], 0.5),
-                    LayerType::Particle { .. } => (8u32, 0u32, [1.0, 1.0, 1.0, 1.0], 0u32, [0.0, 0.0], [1.0, 1.0], [[1.0,1.0,1.0,1.0],[0.0,0.0,0.0,1.0]], [0.5, 0.5], 0.5),
+                    LayerType::Text { color, .. } => (
+                        3u32,
+                        0u32,
+                        *color,
+                        0u32,
+                        [0.0, 0.0],
+                        [1.0, 1.0],
+                        [[1.0, 1.0, 1.0, 1.0], [0.0, 0.0, 0.0, 1.0]],
+                        [0.5, 0.5],
+                        0.5,
+                    ),
+                    LayerType::Null => (
+                        4u32,
+                        0u32,
+                        [0.0, 0.0, 0.0, 0.0],
+                        0u32,
+                        [0.0, 0.0],
+                        [1.0, 1.0],
+                        [[1.0, 1.0, 1.0, 1.0], [0.0, 0.0, 0.0, 1.0]],
+                        [0.5, 0.5],
+                        0.5,
+                    ),
+                    LayerType::PreComp { .. } => (
+                        5u32,
+                        0u32,
+                        [1.0, 1.0, 1.0, 1.0],
+                        0u32,
+                        [0.0, 0.0],
+                        [1.0, 1.0],
+                        [[1.0, 1.0, 1.0, 1.0], [0.0, 0.0, 0.0, 1.0]],
+                        [0.5, 0.5],
+                        0.5,
+                    ),
+                    LayerType::AdjustmentLayer => (
+                        7u32,
+                        0u32,
+                        [1.0, 1.0, 1.0, 1.0],
+                        0u32,
+                        [0.0, 0.0],
+                        [1.0, 1.0],
+                        [[1.0, 1.0, 1.0, 1.0], [0.0, 0.0, 0.0, 1.0]],
+                        [0.5, 0.5],
+                        0.5,
+                    ),
+                    LayerType::Audio { .. } => (
+                        6u32,
+                        0u32,
+                        [0.0, 0.0, 0.0, 0.0],
+                        0u32,
+                        [0.0, 0.0],
+                        [1.0, 1.0],
+                        [[1.0, 1.0, 1.0, 1.0], [0.0, 0.0, 0.0, 1.0]],
+                        [0.5, 0.5],
+                        0.5,
+                    ),
+                    LayerType::Particle { .. } => (
+                        8u32,
+                        0u32,
+                        [1.0, 1.0, 1.0, 1.0],
+                        0u32,
+                        [0.0, 0.0],
+                        [1.0, 1.0],
+                        [[1.0, 1.0, 1.0, 1.0], [0.0, 0.0, 0.0, 1.0]],
+                        [0.5, 0.5],
+                        0.5,
+                    ),
                 };
 
                 // Textured text uses the image sampling path with unmodified texture colors
@@ -1876,22 +2233,30 @@ impl WgpuRenderer {
                     color = [1.0, 1.0, 1.0, 1.0];
                 }
 
-
                 let mut ep = evaluate_effects(&layer.effects, frame);
 
                 // Lens flare light-link: track a comp light's projected position
                 if ep.flare_enabled == 1 {
-                    if let Some(light_name) = layer.effects.iter().find_map(|e| {
-                        match &e.effect_type {
-                            crate::core::timeline::EffectType::LensFlare { link_to_light: Some(n), .. } if e.enabled => Some(n.clone()),
+                    if let Some(light_name) =
+                        layer.effects.iter().find_map(|e| match &e.effect_type {
+                            crate::core::timeline::EffectType::LensFlare {
+                                link_to_light: Some(n),
+                                ..
+                            } if e.enabled => Some(n.clone()),
                             _ => None,
-                        }
-                    }) {
+                        })
+                    {
                         if let Some(light) = comp.lights.iter().find(|l| l.name == light_name) {
                             let lp = light.position.evaluate(frame);
-                            if let Some(sp) = crate::core::timeline::project_point_to_screen(
-                                comp.resolve_camera(), lp, comp.width as f32, comp.height as f32,
-                            ) {
+                            if let Some(sp) =
+                                crate::core::timeline::project_point_to_screen_at_frame(
+                                    comp.resolve_camera(),
+                                    lp,
+                                    comp.width as f32,
+                                    comp.height as f32,
+                                    frame,
+                                )
+                            {
                                 ep.flare_pos_x = sp[0];
                                 ep.flare_pos_y = sp[1];
                             }
@@ -1904,7 +2269,12 @@ impl WgpuRenderer {
                     LayerType::Shape { shape_type, .. } => match shape_type {
                         ShapeType::Polygon { sides, .. } => [sides.evaluate(frame), 0.0, 0.0, 0.0],
                         ShapeType::Star { points, .. } => [points.evaluate(frame), 0.0, 0.0, 0.0],
-                        ShapeType::Rectangle { corner_radius, width, height, .. } => {
+                        ShapeType::Rectangle {
+                            corner_radius,
+                            width,
+                            height,
+                            ..
+                        } => {
                             let cr = corner_radius.evaluate(frame);
                             let w = width.evaluate(frame).max(1.0);
                             let h = height.evaluate(frame).max(1.0);
@@ -2019,9 +2389,21 @@ impl WgpuRenderer {
                     mask_mode: 0,
                     mask_inverted: 0,
                     mask_feather: 0.0,
-                    trim_start: layer.trim_paths.as_ref().map(|t| t.start.evaluate(frame) / 100.0).unwrap_or(0.0),
-                    trim_end: layer.trim_paths.as_ref().map(|t| t.end.evaluate(frame) / 100.0).unwrap_or(1.0),
-                    trim_offset: layer.trim_paths.as_ref().map(|t| t.offset.evaluate(frame).to_radians() / std::f32::consts::TAU).unwrap_or(0.0),
+                    trim_start: layer
+                        .trim_paths
+                        .as_ref()
+                        .map(|t| t.start.evaluate(frame) / 100.0)
+                        .unwrap_or(0.0),
+                    trim_end: layer
+                        .trim_paths
+                        .as_ref()
+                        .map(|t| t.end.evaluate(frame) / 100.0)
+                        .unwrap_or(1.0),
+                    trim_offset: layer
+                        .trim_paths
+                        .as_ref()
+                        .map(|t| t.offset.evaluate(frame).to_radians() / std::f32::consts::TAU)
+                        .unwrap_or(0.0),
                     _pad_trim: 0.0,
 
                     fill_type: fill_type_u32,
@@ -2057,11 +2439,13 @@ impl WgpuRenderer {
                     ls_gradient_color1_r: layer.style.gradient_overlay.color_start[0],
                     ls_gradient_color1_g: layer.style.gradient_overlay.color_start[1],
                     ls_gradient_color1_b: layer.style.gradient_overlay.color_start[2],
-                    ls_gradient_color1_a: layer.style.gradient_overlay.color_start[3] * (layer.style.gradient_overlay.opacity / 100.0),
+                    ls_gradient_color1_a: layer.style.gradient_overlay.color_start[3]
+                        * (layer.style.gradient_overlay.opacity / 100.0),
                     ls_gradient_color2_r: layer.style.gradient_overlay.color_end[0],
                     ls_gradient_color2_g: layer.style.gradient_overlay.color_end[1],
                     ls_gradient_color2_b: layer.style.gradient_overlay.color_end[2],
-                    ls_gradient_color2_a: layer.style.gradient_overlay.color_end[3] * (layer.style.gradient_overlay.opacity / 100.0),
+                    ls_gradient_color2_a: layer.style.gradient_overlay.color_end[3]
+                        * (layer.style.gradient_overlay.opacity / 100.0),
                     ls_inner_shadow_offset_x: {
                         let rad = layer.style.inner_shadow.angle.to_radians();
                         rad.cos() * layer.style.inner_shadow.distance
@@ -2083,11 +2467,21 @@ impl WgpuRenderer {
                     ls_bevel_light_b: layer.style.bevel_emboss.color_light[2],
                     ls_style_flags: {
                         let mut flags = 0u32;
-                        if layer.style.stroke.enabled { flags |= 1; }
-                        if layer.style.color_overlay.enabled { flags |= 2; }
-                        if layer.style.gradient_overlay.enabled { flags |= 4; }
-                        if layer.style.inner_shadow.enabled { flags |= 8; }
-                        if layer.style.bevel_emboss.enabled { flags |= 16; }
+                        if layer.style.stroke.enabled {
+                            flags |= 1;
+                        }
+                        if layer.style.color_overlay.enabled {
+                            flags |= 2;
+                        }
+                        if layer.style.gradient_overlay.enabled {
+                            flags |= 4;
+                        }
+                        if layer.style.inner_shadow.enabled {
+                            flags |= 8;
+                        }
+                        if layer.style.bevel_emboss.enabled {
+                            flags |= 16;
+                        }
                         flags
                     },
                     _ls_pad1: 0.0,
@@ -2095,7 +2489,9 @@ impl WgpuRenderer {
                     _ls_pad3: 0.0,
 
                     extrusion_depth: match &layer.layer_type {
-                        crate::core::timeline::LayerType::Shape { extrusion_depth, .. } => *extrusion_depth,
+                        crate::core::timeline::LayerType::Shape {
+                            extrusion_depth, ..
+                        } => *extrusion_depth,
                         _ => 0.0,
                     },
                     bevel_depth: match &layer.layer_type {
@@ -2103,27 +2499,104 @@ impl WgpuRenderer {
                         _ => 0.0,
                     },
 
-                    _padding_align: [0.0; 26],
+                    // ── GPU Real-time VFX Shader Extensions ──
+                    chromatic_enabled: ep.chromatic_enabled,
+                    chromatic_amount: ep.chromatic_amount,
+                    chromatic_angle: ep.chromatic_angle,
+                    _pad_chromatic: 0.0,
+
+                    vignette_enabled: ep.vignette_enabled,
+                    vignette_amount: ep.vignette_amount,
+                    vignette_midpoint: ep.vignette_midpoint,
+                    vignette_feather: ep.vignette_feather,
+
+                    invert_enabled: ep.invert_enabled,
+                    posterize_enabled: ep.posterize_enabled,
+                    posterize_levels: ep.posterize_levels,
+                    threshold_level: ep.threshold_level,
+
+                    tint_enabled: ep.tint_enabled,
+                    tint_amount: ep.tint_amount,
+                    _pad_tint1: 0.0,
+                    _pad_tint2: 0.0,
+                    tint_black: ep.tint_black,
+                    tint_white: ep.tint_white,
+
+                    crt_enabled: ep.crt_enabled,
+                    crt_scanline_count: ep.crt_scanline_count,
+                    crt_scanline_intensity: ep.crt_scanline_intensity,
+                    crt_curvature: ep.crt_curvature,
+
+                    _padding_align: [0.0; 4],
+                    _ls_pad4: 0.0,
+                    _ls_pad5: 0.0,
                 };
 
-                layer_mask_plans.push(collect_mask_shapes(
-                    layer, frame, width, height, comp.width, comp.height,
-                )
-                .map(|(key, shapes)| {
-                    if let Some(hit) = self.mask_raster_cache.borrow_mut().get(key) {
-                        return hit;
-                    }
-                    // Drop the short-lived borrow before the (possibly slow)
-                    // raster so we never hold the cache across heavy work.
-                    let raster = std::sync::Arc::new(
-                        rasterize_from_shapes(&shapes, width, height)
-                            .expect("non-empty shapes always yield coverage"),
-                    );
-                    self.mask_raster_cache.borrow_mut().insert(raster.clone());
-                    raster
-                }));
+                layer_mask_plans.push(
+                    collect_mask_shapes(layer, frame, width, height, comp.width, comp.height).map(
+                        |(key, shapes)| {
+                            if let Some(hit) = self.mask_raster_cache.borrow_mut().get(key) {
+                                return hit;
+                            }
+                            // Drop the short-lived borrow before the (possibly slow)
+                            // raster so we never hold the cache across heavy work.
+                            let raster = std::sync::Arc::new(
+                                rasterize_from_shapes(&shapes, width, height)
+                                    .expect("non-empty shapes always yield coverage"),
+                            );
+                            self.mask_raster_cache.borrow_mut().insert(raster.clone());
+                            raster
+                        },
+                    ),
+                );
                 uniforms.push(layer_uniform);
                 active_layers.push(layer);
+            }
+
+            // Expand Shape Repeaters into ordinary GPU draws. Keeping each copy
+            // in the existing layer pipeline preserves masks, blend modes and
+            // effects without introducing a second, subtly different shader path.
+            if active_layers
+                .iter()
+                .any(|layer| layer.shape_repeater.is_some())
+            {
+                let old_layers = std::mem::take(&mut active_layers);
+                let old_uniforms = std::mem::take(&mut uniforms);
+                let old_masks = std::mem::take(&mut layer_mask_plans);
+                let old_textures = std::mem::take(&mut layer_textures);
+                for (((layer, uniform), mask), texture) in old_layers
+                    .into_iter()
+                    .zip(old_uniforms)
+                    .zip(old_masks)
+                    .zip(old_textures)
+                {
+                    let Some(repeater) = &layer.shape_repeater else {
+                        active_layers.push(layer);
+                        uniforms.push(uniform);
+                        layer_mask_plans.push(mask);
+                        layer_textures.push(texture);
+                        continue;
+                    };
+                    for instance in crate::core::shape_repeater::evaluate_shape_repeater_at_frame(
+                        repeater, frame,
+                    ) {
+                        let matrix = instance.transform_matrix;
+                        let copy_transform = [
+                            [matrix[0][0], matrix[0][1], 0.0, 0.0],
+                            [matrix[1][0], matrix[1][1], 0.0, 0.0],
+                            [0.0, 0.0, 1.0, 0.0],
+                            [matrix[0][2], matrix[1][2], 0.0, 1.0],
+                        ];
+                        let mut copy_uniform = uniform;
+                        copy_uniform.transform_matrix =
+                            mat4_mul(uniform.transform_matrix, copy_transform);
+                        copy_uniform.opacity *= instance.opacity;
+                        active_layers.push(layer);
+                        uniforms.push(copy_uniform);
+                        layer_mask_plans.push(mask.clone());
+                        layer_textures.push(texture.clone());
+                    }
+                }
             }
 
             // Per-layer mask rasters were computed in Step 1. Every masked
@@ -2140,18 +2613,14 @@ impl WgpuRenderer {
 
             // Step 2: Upload all Layer Uniforms in a single GPU command write
             if !uniforms.is_empty() {
-                if uniforms.len() > 256 {
-                    log::warn!(
-                        "[WgpuRenderer] Active layer count ({}) exceeds 256 layer limit; extra layers will be truncated",
-                        uniforms.len()
+                self.ensure_layer_buffer_capacity(uniforms.len());
+                for (index, uniform) in uniforms.iter().enumerate() {
+                    self.queue.write_buffer(
+                        &self.layer_buffer,
+                        (index * LAYER_UNIFORM_STRIDE) as u64,
+                        bytemuck::bytes_of(uniform),
                     );
                 }
-                let upload_len = uniforms.len().min(256);
-                self.queue.write_buffer(
-                    &self.layer_buffer,
-                    0,
-                    bytemuck::cast_slice(&uniforms[0..upload_len]),
-                );
             }
 
             // Step 3: One submit per contiguous mask-key run. Layers sharing a
@@ -2164,18 +2633,29 @@ impl WgpuRenderer {
                 end: usize,
                 key: Option<u64>,
             }
-            let draw_count = active_layers.len().min(256);
+            let draw_count = active_layers.len();
             let mut runs: Vec<MaskRun> = Vec::new();
             for i in 0..draw_count {
-                let k = layer_mask_plans.get(i).and_then(|p| p.as_ref()).map(|r| r.key);
+                let k = layer_mask_plans
+                    .get(i)
+                    .and_then(|p| p.as_ref())
+                    .map(|r| r.key);
                 match runs.last_mut() {
                     Some(r) if r.key == k => r.end = i + 1,
-                    _ => runs.push(MaskRun { start: i, end: i + 1, key: k }),
+                    _ => runs.push(MaskRun {
+                        start: i,
+                        end: i + 1,
+                        key: k,
+                    }),
                 }
             }
             if runs.is_empty() {
                 // No layers this frame — still clear to the background color.
-                runs.push(MaskRun { start: 0, end: 0, key: None });
+                runs.push(MaskRun {
+                    start: 0,
+                    end: 0,
+                    key: None,
+                });
             }
 
             for run in &runs {
@@ -2189,7 +2669,10 @@ impl WgpuRenderer {
                         };
                         self.queue.write_texture(
                             wgpu::ImageCopyTexture {
-                                texture: self.mask_texture.as_ref().expect("mask texture just ensured"),
+                                texture: self
+                                    .mask_texture
+                                    .as_ref()
+                                    .expect("mask texture just ensured"),
                                 mip_level: 0,
                                 origin: wgpu::Origin3d::ZERO,
                                 aspect: wgpu::TextureAspect::All,
@@ -2220,15 +2703,23 @@ impl WgpuRenderer {
                 };
                 let Some(view) = view else { return false };
 
-                let mut encoder = self
-                    .device
-                    .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                        label: Some(if target_snapshot { "Snapshot Render Encoder" } else { "Render Encoder" }),
-                    });
+                let mut encoder =
+                    self.device
+                        .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                            label: Some(if target_snapshot {
+                                "Snapshot Render Encoder"
+                            } else {
+                                "Render Encoder"
+                            }),
+                        });
 
                 {
                     let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                        label: Some(if target_snapshot { "Snapshot Render Pass" } else { "Render Pass" }),
+                        label: Some(if target_snapshot {
+                            "Snapshot Render Pass"
+                        } else {
+                            "Render Pass"
+                        }),
                         color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                             view,
                             resolve_target: None,
@@ -2253,12 +2744,20 @@ impl WgpuRenderer {
 
                     render_pass.set_pipeline(&self.render_pipeline);
                     render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
-                    render_pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
+                    render_pass
+                        .set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
                     render_pass.set_bind_group(0, &self.globals_bind_group, &[]);
 
                     for i in run.start..run.end {
+                        if comp.layers.windows(2).any(|pair| {
+                            pair[0].id == active_layers[i].id
+                                && pair[1].track_matte
+                                    != crate::core::timeline::TrackMatteMode::None
+                        }) {
+                            continue;
+                        }
                         // Bind resources using dynamic uniform offset
-                        let dynamic_offset = (i * std::mem::size_of::<LayerUniform>()) as u32;
+                        let dynamic_offset = (i * LAYER_UNIFORM_STRIDE) as u32;
                         render_pass.set_bind_group(1, &self.layer_bind_group, &[dynamic_offset]);
 
                         // Texture binding (use per-layer text texture when available, dummy for solid/SDF shapes)
@@ -2309,7 +2808,11 @@ impl WgpuRenderer {
             self.shadow_active = false;
             return;
         }
-        let max_dim = self.device.limits().max_texture_dimension_2d.min(crate::core::software_renderer::MAX_RENDER_DIMENSION);
+        let max_dim = self
+            .device
+            .limits()
+            .max_texture_dimension_2d
+            .min(crate::core::software_renderer::MAX_RENDER_DIMENSION);
         let (w, h) = (width.min(max_dim), height.min(max_dim));
 
         // Pack f32 density into the R channel of rgba8unorm
@@ -2325,7 +2828,11 @@ impl WgpuRenderer {
         if self.shadow_size != (w, h) || self.shadow_texture.is_none() {
             let tex = self.device.create_texture(&wgpu::TextureDescriptor {
                 label: Some("Shadow Density Map"),
-                size: wgpu::Extent3d { width: w, height: h, depth_or_array_layers: 1 },
+                size: wgpu::Extent3d {
+                    width: w,
+                    height: h,
+                    depth_or_array_layers: 1,
+                },
                 mip_level_count: 1,
                 sample_count: 1,
                 dimension: wgpu::TextureDimension::D2,
@@ -2337,8 +2844,14 @@ impl WgpuRenderer {
             let bg = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
                 layout: &self.shadow_bind_group_layout,
                 entries: &[
-                    wgpu::BindGroupEntry { binding: 0, resource: wgpu::BindingResource::TextureView(&view) },
-                    wgpu::BindGroupEntry { binding: 1, resource: wgpu::BindingResource::Sampler(&self.sampler) },
+                    wgpu::BindGroupEntry {
+                        binding: 0,
+                        resource: wgpu::BindingResource::TextureView(&view),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 1,
+                        resource: wgpu::BindingResource::Sampler(&self.sampler),
+                    },
                 ],
                 label: Some("shadow_bind_group_live"),
             });
@@ -2361,7 +2874,11 @@ impl WgpuRenderer {
                     bytes_per_row: Some(w * 4),
                     rows_per_image: Some(h),
                 },
-                wgpu::Extent3d { width: w, height: h, depth_or_array_layers: 1 },
+                wgpu::Extent3d {
+                    width: w,
+                    height: h,
+                    depth_or_array_layers: 1,
+                },
             );
         }
         self.shadow_active = true;
@@ -2395,7 +2912,10 @@ impl WgpuRenderer {
         }
 
         // Match the live-view resolution logic (preview cap + device limits)
-        let max_dim = self.device.limits().max_texture_dimension_2d
+        let max_dim = self
+            .device
+            .limits()
+            .max_texture_dimension_2d
             .min(crate::core::software_renderer::MAX_RENDER_DIMENSION);
         let (eff_w, eff_h) = match self.preview_max_width {
             Some(cap) if comp.width > cap => {
@@ -2423,7 +2943,11 @@ impl WgpuRenderer {
                 Some((tex, _)) => tex.size().width != width || tex.size().height != height,
             };
             if size_mismatch {
-                let size = wgpu::Extent3d { width, height, depth_or_array_layers: 1 };
+                let size = wgpu::Extent3d {
+                    width,
+                    height,
+                    depth_or_array_layers: 1,
+                };
                 let texture = self.device.create_texture(&wgpu::TextureDescriptor {
                     label: Some("RAM Preview Slot"),
                     size,
@@ -2431,7 +2955,8 @@ impl WgpuRenderer {
                     sample_count: 1,
                     dimension: wgpu::TextureDimension::D2,
                     format: wgpu::TextureFormat::Rgba8UnormSrgb,
-                    usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
+                    usage: wgpu::TextureUsages::RENDER_ATTACHMENT
+                        | wgpu::TextureUsages::TEXTURE_BINDING,
                     view_formats: &[],
                 });
                 let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
@@ -2478,7 +3003,12 @@ impl WgpuRenderer {
             self.video_frame_cache.borrow_mut().clear();
             self.video_cache_version.set(version);
         }
-        if let Some(bg) = self.video_frame_cache.borrow().get(&key).map(|(_, bg)| bg.clone()) {
+        if let Some(bg) = self
+            .video_frame_cache
+            .borrow()
+            .get(&key)
+            .map(|(_, bg)| bg.clone())
+        {
             return Some((1, 1, bg));
         }
         let png_path = std::path::Path::new(frames_dir)
@@ -2488,13 +3018,17 @@ impl WgpuRenderer {
         let (tw, th, pixels) = {
             use crate::core::image_cache::with_image_cache;
             with_image_cache(|cache| {
-                cache.load_image(&png_path).map(|img| {
-                    (img.width, img.height, img.pixels.clone())
-                })
+                cache
+                    .load_image(&png_path)
+                    .map(|img| (img.width, img.height, img.pixels.clone()))
             })?
         };
 
-        let size = wgpu::Extent3d { width: tw, height: th, depth_or_array_layers: 1 };
+        let size = wgpu::Extent3d {
+            width: tw,
+            height: th,
+            depth_or_array_layers: 1,
+        };
         let texture = self.device.create_texture(&wgpu::TextureDescriptor {
             label: Some("Video Frame Texture"),
             size,
@@ -2524,8 +3058,14 @@ impl WgpuRenderer {
         let bind_group = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
             layout: &self.texture_bind_group_layout,
             entries: &[
-                wgpu::BindGroupEntry { binding: 0, resource: wgpu::BindingResource::TextureView(&view) },
-                wgpu::BindGroupEntry { binding: 1, resource: wgpu::BindingResource::Sampler(&self.sampler) },
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::TextureView(&view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::Sampler(&self.sampler),
+                },
             ],
             label: Some("video_frame_bind_group"),
         });
@@ -2557,49 +3097,75 @@ impl WgpuRenderer {
     }
 
     /// Renders the given composition at the specified frame, returning the texture view.
-    pub fn render(&mut self, comp: &Composition, frame: u32, exposure_ev: f32, lut_mode: u32) -> (&wgpu::TextureView, bool) {
+    pub fn render(
+        &mut self,
+        comp: &Composition,
+        frame: u32,
+        exposure_ev: f32,
+        lut_mode: u32,
+    ) -> (&wgpu::TextureView, bool) {
         let recreated = self.render_internal(comp, frame, exposure_ev, lut_mode, false);
         if self.target_view.is_none() {
             log::error!("[WgpuRenderer] render(): target view missing; using fallback view");
             self.dummy_view_or_create(false);
         }
         (
-            self.target_view.as_ref().expect("fallback view just created"),
+            self.target_view
+                .as_ref()
+                .expect("fallback view just created"),
             recreated,
         )
     }
 
     /// Renders the given composition at the specified frame to the snapshot target, returning the snapshot texture view.
-    pub fn render_snapshot_frame(&mut self, comp: &Composition, frame: u32, exposure_ev: f32, lut_mode: u32) -> (&wgpu::TextureView, bool) {
+    pub fn render_snapshot_frame(
+        &mut self,
+        comp: &Composition,
+        frame: u32,
+        exposure_ev: f32,
+        lut_mode: u32,
+    ) -> (&wgpu::TextureView, bool) {
         let recreated = self.render_internal(comp, frame, exposure_ev, lut_mode, true);
         if self.snapshot_view.is_none() {
             log::error!("[WgpuRenderer] render_snapshot_frame(): snapshot view missing; using fallback view");
             self.dummy_view_or_create(true);
         }
         (
-            self.snapshot_view.as_ref().expect("fallback view just created"),
+            self.snapshot_view
+                .as_ref()
+                .expect("fallback view just created"),
             recreated,
         )
     }
 
     /// Last-resort 1x1 fallback view so a missing target can never panic the UI thread.
     fn dummy_view_or_create(&mut self, snapshot: bool) -> &wgpu::TextureView {
-        let slot = if snapshot { &mut self.snapshot_view } else { &mut self.target_view };
+        let slot = if snapshot {
+            &mut self.snapshot_view
+        } else {
+            &mut self.target_view
+        };
         if slot.is_none() {
             let texture = self.device.create_texture(&wgpu::TextureDescriptor {
                 label: Some("Fallback 1x1 Target"),
-                size: wgpu::Extent3d { width: 1, height: 1, depth_or_array_layers: 1 },
+                size: wgpu::Extent3d {
+                    width: 1,
+                    height: 1,
+                    depth_or_array_layers: 1,
+                },
                 mip_level_count: 1,
                 sample_count: 1,
                 dimension: wgpu::TextureDimension::D2,
                 format: wgpu::TextureFormat::Rgba8UnormSrgb,
-                usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
+                usage: wgpu::TextureUsages::RENDER_ATTACHMENT
+                    | wgpu::TextureUsages::TEXTURE_BINDING,
                 view_formats: &[],
             });
             *slot = Some(texture.create_view(&wgpu::TextureViewDescriptor::default()));
         }
         // Invariant: the slot was just populated above (or already held a view).
-        slot.as_ref().expect("fallback target view was just created")
+        slot.as_ref()
+            .expect("fallback target view was just created")
     }
 }
 
@@ -2621,15 +3187,32 @@ mod tests {
     #[test]
     fn test_layer_uniform_memory_alignment() {
         let size = std::mem::size_of::<LayerUniform>();
+        let stride = LAYER_UNIFORM_STRIDE;
+        assert!(size <= stride);
         assert_eq!(
-            size % 256,
+            stride % 256,
             0,
-            "LayerUniform size ({} bytes) must be a multiple of 256 for WGPU dynamic uniform offset alignment",
-            size
+            "Layer uniform stride ({} bytes) must be a multiple of 256 for WGPU dynamic uniform offset alignment",
+            stride
         );
         for align in [64, 256, 512] {
-            assert_eq!(align_uniform_buffer_offset(size as u64, align) % align as u64, 0);
+            assert_eq!(
+                align_uniform_buffer_offset(stride as u64, align) % align as u64,
+                0
+            );
         }
+    }
+
+    #[test]
+    fn composition_cache_key_is_deterministic_and_separates_comps() {
+        let first = Composition::new("comp-a".into(), "A".into(), 16, 16, 30, 1);
+        let mut changed = first.clone();
+        changed.name = "B".into();
+        assert_eq!(composition_cache_key(&first), composition_cache_key(&first));
+        assert_ne!(
+            composition_cache_key(&first),
+            composition_cache_key(&changed)
+        );
     }
 }
 
@@ -2640,7 +3223,11 @@ mod video_cache_tests {
         // 600 frames x 1080p RGBA ≈ 1.5GB — must stay under 2GB
         // (and hold ≥150 frames ≈ 5s at 30fps, enforced by the constant itself).
         let bytes = crate::core::renderer::MAX_VIDEO_FRAME_TEXTURES as u64 * 1920 * 1080 * 4;
-        assert!(bytes < 2 * 1024 * 1024 * 1024, "budget {} bytes too large", bytes);
+        assert!(
+            bytes < 2 * 1024 * 1024 * 1024,
+            "budget {} bytes too large",
+            bytes
+        );
     }
 }
 

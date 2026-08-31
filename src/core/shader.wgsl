@@ -168,7 +168,40 @@ struct Layer {
     extrusion_depth: f32,
     bevel_depth: f32,
 
-    _padding_align: array<vec4<f32>, 6>,
+    // ── GPU Real-time VFX Shader Extensions ──
+    // Chromatic Aberration
+    chromatic_enabled: u32,
+    chromatic_amount: f32,
+    chromatic_angle: f32,
+    _pad_chromatic: f32,
+
+    // Vignette
+    vignette_enabled: u32,
+    vignette_amount: f32,
+    vignette_midpoint: f32,
+    vignette_feather: f32,
+
+    // Invert & Posterize
+    invert_enabled: u32,
+    posterize_enabled: u32,
+    posterize_levels: f32,
+    threshold_level: f32,
+
+    // Tint
+    tint_enabled: u32,
+    tint_amount: f32,
+    _pad_tint1: f32,
+    _pad_tint2: f32,
+    tint_black: vec4<f32>,
+    tint_white: vec4<f32>,
+
+    // CRT Scanlines
+    crt_enabled: u32,
+    crt_scanline_count: f32,
+    crt_scanline_intensity: f32,
+    crt_curvature: f32,
+
+    _padding_align: vec4<f32>,
     _ls_pad4: f32,
     _ls_pad5: f32,
 };
@@ -211,6 +244,10 @@ fn trim_shape_alpha(angle: f32, trim_start: f32, trim_end: f32, trim_offset: f32
     let normalized = fract(angle / 6.2831853 + 1.0);
     let start = fract(trim_start + trim_offset);
     let end = fract(trim_end + trim_offset);
+    // AE treats a zero-length trim as an empty path, not a wrapped full path.
+    if (abs(start - end) < 0.000001) {
+        return 0.0;
+    }
     if (start < end) {
         return select(0.0, 1.0, normalized >= start && normalized <= end);
     } else {
@@ -797,6 +834,51 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
             clamp(final_color.b + grain_b * intensity, 0.0, 1.0),
             final_color.a
         );
+    }
+
+    // --- Invert / Color Inversion ---
+    if (layer.invert_enabled == 1u) {
+        final_color = vec4<f32>(
+            1.0 - final_color.r,
+            1.0 - final_color.g,
+            1.0 - final_color.b,
+            final_color.a
+        );
+    }
+
+    // --- Posterize / Color Quantization ---
+    if (layer.posterize_enabled == 1u && layer.posterize_levels >= 2.0) {
+        let steps = max(layer.posterize_levels - 1.0, 1.0);
+        final_color = vec4<f32>(
+            floor(final_color.rgb * steps + 0.5) / steps,
+            final_color.a
+        );
+    }
+
+    // --- Tint / Dual Color Map ---
+    if (layer.tint_enabled == 1u && layer.tint_amount > 0.0) {
+        let luma = dot(final_color.rgb, vec3<f32>(0.2126, 0.7152, 0.0722));
+        let mapped = mix(layer.tint_black.rgb, layer.tint_white.rgb, luma);
+        let tinted = mix(final_color.rgb, mapped, layer.tint_amount);
+        final_color = vec4<f32>(tinted, final_color.a);
+    }
+
+    // --- Vignette / Lens Falloff ---
+    if (layer.vignette_enabled == 1u && layer.vignette_amount > 0.0) {
+        let center_dist = length(in.local_pos * 2.0);
+        let vig_start = max(layer.vignette_midpoint, 0.0);
+        let vig_feather = max(layer.vignette_feather, 0.01);
+        let vig_factor = 1.0 - smoothstep(vig_start, vig_start + vig_feather, center_dist) * layer.vignette_amount;
+        final_color = vec4<f32>(final_color.rgb * clamp(vig_factor, 0.0, 1.0), final_color.a);
+    }
+
+    // --- CRT Scanlines / TV Glitch ---
+    if (layer.crt_enabled == 1u) {
+        let scan_count = max(layer.crt_scanline_count, 100.0);
+        let scan_phase = in.tex_coords.y * scan_count * 3.14159265;
+        let scanline = 0.5 + 0.5 * sin(scan_phase);
+        let scan_mult = 1.0 - (1.0 - scanline) * layer.crt_scanline_intensity;
+        final_color = vec4<f32>(final_color.rgb * clamp(scan_mult, 0.0, 1.0), final_color.a);
     }
 
     // ── Layer Styles: applied after effects, before compositing ──

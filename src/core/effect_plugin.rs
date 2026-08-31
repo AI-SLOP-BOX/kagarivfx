@@ -104,6 +104,27 @@ pub struct EffectParams {
     pub flare_intensity: f32,
     pub flare_threshold: f32,
     pub flare_color: [f32; 4],
+
+    // ── GPU Real-time Shader Effects ──
+    pub chromatic_amount: f32,
+    pub chromatic_angle: f32,
+
+    pub vignette_amount: f32,
+    pub vignette_midpoint: f32,
+
+    pub invert_enabled: u32,
+    pub posterize_enabled: u32,
+    pub posterize_levels: f32,
+    pub threshold_level: f32,
+
+    pub tint_amount: f32,
+    pub tint_black: [f32; 4],
+    pub tint_white: [f32; 4],
+
+    pub crt_enabled: u32,
+    pub crt_scanline_count: f32,
+    pub crt_scanline_intensity: f32,
+    pub crt_curvature: f32,
 }
 
 impl Default for EffectParams {
@@ -124,10 +145,14 @@ impl Default for EffectParams {
             chromatic_shift_r: 0.0,
             chromatic_shift_b: 0.0,
             chromatic_edge_falloff: 1.0,
+            chromatic_amount: 0.0,
+            chromatic_angle: 0.0,
             vignette_enabled: 0,
             vignette_intensity: 0.0,
             vignette_roundness: 1.0,
             vignette_feather: 50.0,
+            vignette_amount: 0.0,
+            vignette_midpoint: 0.5,
             vignette_color: [0.0, 0.0, 0.0, 1.0],
             lut_enabled: 0,
             lut_intensity: 0.0,
@@ -159,13 +184,24 @@ impl Default for EffectParams {
             motionblur_shutter: 0.5,
             motionblur_velocity_x: 0.0,
             motionblur_velocity_y: 0.0,
-            motionblur_samples: 8,
+            motionblur_samples: 4,
             flare_enabled: 0,
             flare_pos_x: 0.5,
             flare_pos_y: 0.5,
             flare_intensity: 1.0,
-            flare_threshold: 0.8,
-            flare_color: [1.0, 0.95, 0.9, 1.0],
+            flare_threshold: 1.0,
+            flare_color: [1.0, 0.9, 0.7, 1.0],
+            invert_enabled: 0,
+            posterize_enabled: 0,
+            posterize_levels: 4.0,
+            threshold_level: 0.5,
+            tint_amount: 0.0,
+            tint_black: [0.0, 0.0, 0.0, 1.0],
+            tint_white: [1.0, 1.0, 1.0, 1.0],
+            crt_enabled: 0,
+            crt_scanline_count: 240.0,
+            crt_scanline_intensity: 0.5,
+            crt_curvature: 0.1,
         }
     }
 }
@@ -590,6 +626,38 @@ impl RenderEffectPlugin for EnumEffectPlugin {
                 params.flare_threshold = threshold.evaluate(frame);
                 let c = color.evaluate(frame);
                 params.flare_color = [c[0], c[1], c[2], c[3]];
+            }
+            EffectType::Invert { .. } => {
+                params.invert_enabled = 1;
+            }
+            EffectType::Posterize { levels } => {
+                params.posterize_enabled = 1;
+                params.posterize_levels = levels.evaluate(frame);
+            }
+            EffectType::Threshold { threshold } => {
+                params.posterize_enabled = 1;
+                params.posterize_levels = 2.0;
+                params.threshold_level = threshold.evaluate(frame) / 255.0;
+            }
+            EffectType::Tritone {
+                highlight_color,
+                shadow_color,
+                ..
+            } => {
+                params.tint_enabled = 1;
+                params.tint_amount = 1.0;
+                let sh = shadow_color.evaluate(frame);
+                let hi = highlight_color.evaluate(frame);
+                params.tint_black = [sh[0], sh[1], sh[2], 1.0];
+                params.tint_white = [hi[0], hi[1], hi[2], 1.0];
+            }
+            EffectType::CrtScanlines {
+                line_spacing,
+                intensity,
+            } => {
+                params.crt_enabled = 1;
+                params.crt_scanline_count = (1080.0 / line_spacing.evaluate(frame).max(1.0)).clamp(50.0, 1000.0);
+                params.crt_scanline_intensity = intensity.evaluate(frame).clamp(0.0, 1.0);
             }
             _ => {}
         }
