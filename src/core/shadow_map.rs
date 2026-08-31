@@ -216,7 +216,130 @@ pub fn calculate_surface_shading(
     [final_r, final_g, final_b, base_color[3]]
 }
 
-/// Calculates Fresnel reflectance using Schlick's approximation for dielectric surfaces.
+/// Tests intersection between a 3D ray and a planar 3D layer quad.
+/// Returns distance `t` along ray if hit occurs within the quad boundary.
+pub fn ray_intersect_quad(
+    ray_origin: [f32; 3],
+    ray_dir: [f32; 3],
+    quad_corners: &[[f32; 3]; 4],
+) -> Option<f32> {
+    let p0 = quad_corners[0];
+    let p1 = quad_corners[1];
+    let p2 = quad_corners[2];
+
+    // Quad plane normal
+    let e1 = [p1[0] - p0[0], p1[1] - p0[1], p1[2] - p0[2]];
+    let e2 = [p2[0] - p0[0], p2[1] - p0[1], p2[2] - p0[2]];
+    let normal = [
+        e1[1] * e2[2] - e1[2] * e2[1],
+        e1[2] * e2[0] - e1[0] * e2[2],
+        e1[0] * e2[1] - e1[1] * e2[0],
+    ];
+    let n_len = (normal[0].powi(2) + normal[1].powi(2) + normal[2].powi(2)).sqrt();
+    if n_len < 1e-6 {
+        return None;
+    }
+    let n = [normal[0] / n_len, normal[1] / n_len, normal[2] / n_len];
+
+    let denom = n[0] * ray_dir[0] + n[1] * ray_dir[1] + n[2] * ray_dir[2];
+    if denom.abs() < 1e-6 {
+        return None; // Parallel
+    }
+
+    let p0_ro = [p0[0] - ray_origin[0], p0[1] - ray_origin[1], p0[2] - ray_origin[2]];
+    let t = (p0_ro[0] * n[0] + p0_ro[1] * n[1] + p0_ro[2] * n[2]) / denom;
+    if t <= 1e-3 {
+        return None; // Behind ray
+    }
+
+    // Hit point
+    let hit = [
+        ray_origin[0] + ray_dir[0] * t,
+        ray_origin[1] + ray_dir[1] * t,
+        ray_origin[2] + ray_dir[2] * t,
+    ];
+
+    // Inside-outside polygon test for planar quad
+    let mut inside = true;
+    for i in 0..4 {
+        let a = quad_corners[i];
+        let b = quad_corners[(i + 1) % 4];
+        let edge = [b[0] - a[0], b[1] - a[1], b[2] - a[2]];
+        let c = [hit[0] - a[0], hit[1] - a[1], hit[2] - a[2]];
+        let cross = [
+            edge[1] * c[2] - edge[2] * c[1],
+            edge[2] * c[0] - edge[0] * c[2],
+            edge[0] * c[1] - edge[1] * c[0],
+        ];
+        if cross[0] * n[0] + cross[1] * n[1] + cross[2] * n[2] < -1e-4 {
+            inside = false;
+            break;
+        }
+    }
+
+    if inside {
+        Some(t)
+    } else {
+        None
+    }
+}
+
+/// Evaluates ray-traced soft shadows with penumbra from area lights by shooting stochastic shadow rays.
+pub fn calculate_raytraced_shadow(
+    world_pos: [f32; 3],
+    light_pos: [f32; 3],
+    light_radius: f32,
+    num_rays: u32,
+    occluders: &[[[f32; 3]; 4]],
+) -> f32 {
+    if occluders.is_empty() {
+        return 1.0;
+    }
+
+    let samples = num_rays.clamp(1, 64);
+    let mut unoccluded_count = 0.0f32;
+
+    for i in 0..samples {
+        // Sample light disk point
+        let angle = (i as f32 / samples as f32) * std::f32::consts::TAU;
+        let r = ((i as f32 + 0.5) / samples as f32).sqrt() * light_radius;
+        let sample_light_pos = [
+            light_pos[0] + angle.cos() * r,
+            light_pos[1] + angle.sin() * r,
+            light_pos[2],
+        ];
+
+        let to_light = [
+            sample_light_pos[0] - world_pos[0],
+            sample_light_pos[1] - world_pos[1],
+            sample_light_pos[2] - world_pos[2],
+        ];
+        let dist = (to_light[0].powi(2) + to_light[1].powi(2) + to_light[2].powi(2)).sqrt();
+        if dist < 1e-4 {
+            unoccluded_count += 1.0;
+            continue;
+        }
+        let ray_dir = [to_light[0] / dist, to_light[1] / dist, to_light[2] / dist];
+
+        let mut hit = false;
+        for quad in occluders {
+            if let Some(t) = ray_intersect_quad(world_pos, ray_dir, quad) {
+                if t < dist - 1e-2 {
+                    hit = true;
+                    break;
+                }
+            }
+        }
+
+        if !hit {
+            unoccluded_count += 1.0;
+        }
+    }
+
+    unoccluded_count / samples as f32
+}
+
+/// Calculate dielectric Fresnel reflectance using Schlick's approximation. for dielectric surfaces.
 pub fn calculate_fresnel_reflectance(view_dir: [f32; 3], normal: [f32; 3], ior: f32) -> f32 {
     let cos_theta = (view_dir[0] * normal[0] + view_dir[1] * normal[1] + view_dir[2] * normal[2])
         .abs()
@@ -337,6 +460,29 @@ mod tests {
         let env_pixels = vec![128u8; 4 * 4 * 4];
         let rgb = sample_equirectangular_env_map([0.0, 0.0, 1.0], &env_pixels, 4, 4);
         assert!((rgb[0] - 0.5).abs() < 0.1);
+    }
+
+    #[test]
+    fn test_raytraced_shadow_quad_intersection() {
+        let quad = [
+            [-50.0, -50.0, 50.0],
+            [50.0, -50.0, 50.0],
+            [50.0, 50.0, 50.0],
+            [-50.0, 50.0, 50.0],
+        ];
+
+        // Ray passing straight through the quad
+        let hit = ray_intersect_quad([0.0, 0.0, 0.0], [0.0, 0.0, 1.0], &quad);
+        assert!(hit.is_some());
+        assert!((hit.unwrap() - 50.0).abs() < 1e-3);
+
+        // Ray missing the quad
+        let miss = ray_intersect_quad([0.0, 0.0, 0.0], [1.0, 0.0, 0.0], &quad);
+        assert!(miss.is_none());
+
+        // Shadow occlusion test: point behind quad at Z=0 looking at light at Z=100
+        let shadow = calculate_raytraced_shadow([0.0, 0.0, 0.0], [0.0, 0.0, 100.0], 5.0, 8, &[quad]);
+        assert_eq!(shadow, 0.0, "Quad fully occludes point");
     }
 }
 
