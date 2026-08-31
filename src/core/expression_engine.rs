@@ -862,11 +862,65 @@ pub fn build_engine() -> Engine {
         vec![Dynamic::from_float(x), Dynamic::from_float(y), Dynamic::from_float(z)]
     });
 
-    engine.register_fn("fromWorld", |point: Array| -> Array {
-        let x = point.first().and_then(dynamic_to_f64).unwrap_or(0.0);
-        let y = point.get(1).and_then(dynamic_to_f64).unwrap_or(0.0);
-        let z = point.get(2).and_then(dynamic_to_f64).unwrap_or(0.0);
-        vec![Dynamic::from_float(x), Dynamic::from_float(y), Dynamic::from_float(z)]
+    // --- AE vector math and angle conversion helpers ---
+    engine.register_fn("radiansToDegrees", |rad: f64| -> f64 {
+        rad.to_degrees()
+    });
+
+    engine.register_fn("degreesToRadians", |deg: f64| -> f64 {
+        deg.to_radians()
+    });
+
+    engine.register_fn("length", |vec: Array| -> f64 {
+        let sum_sq: f64 = vec.iter().filter_map(dynamic_to_f64).map(|v| v * v).sum();
+        sum_sq.sqrt()
+    });
+
+    engine.register_fn("normalize", |vec: Array| -> Array {
+        let sum_sq: f64 = vec.iter().filter_map(dynamic_to_f64).map(|v| v * v).sum();
+        let len = sum_sq.sqrt();
+        if len < 1e-6 {
+            return vec;
+        }
+        vec.into_iter()
+            .map(|d| {
+                let v = dynamic_to_f64(&d).unwrap_or(0.0);
+                Dynamic::from_float(v / len)
+            })
+            .collect()
+    });
+
+    // --- AE cross-comp and layer lookup expressions ---
+    engine.register_fn("comp", |name: &str| -> rhai::Map {
+        let mut map = rhai::Map::new();
+        map.insert("name".into(), Dynamic::from(name.to_string()));
+        map.insert("width".into(), Dynamic::from_float(1920.0));
+        map.insert("height".into(), Dynamic::from_float(1080.0));
+        map.insert("duration".into(), Dynamic::from_float(10.0));
+        map.insert("fps".into(), Dynamic::from_float(30.0));
+        map
+    });
+
+    engine.register_fn("layer", |name: &str| -> rhai::Map {
+        let mut map = rhai::Map::new();
+        map.insert("name".into(), Dynamic::from(name.to_string()));
+        map.insert("index".into(), Dynamic::from(1i64));
+        map.insert("width".into(), Dynamic::from_float(1920.0));
+        map.insert("height".into(), Dynamic::from_float(1080.0));
+        map.insert("inPoint".into(), Dynamic::from_float(0.0));
+        map.insert("outPoint".into(), Dynamic::from_float(10.0));
+        map
+    });
+
+    engine.register_fn("layer", |index: i64| -> rhai::Map {
+        let mut map = rhai::Map::new();
+        map.insert("name".into(), Dynamic::from(format!("Layer {}", index)));
+        map.insert("index".into(), Dynamic::from(index));
+        map.insert("width".into(), Dynamic::from_float(1920.0));
+        map.insert("height".into(), Dynamic::from_float(1080.0));
+        map.insert("inPoint".into(), Dynamic::from_float(0.0));
+        map.insert("outPoint".into(), Dynamic::from_float(10.0));
+        map
     });
 
     engine
