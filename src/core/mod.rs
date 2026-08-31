@@ -1,6 +1,7 @@
 pub mod aces;
 pub mod aegp_sdk_bridge;
 pub mod aep_parser;
+pub mod ai_runtime_bridge;
 pub mod audio_dsp;
 pub mod audio_engine;
 #[cfg(feature = "gui")]
