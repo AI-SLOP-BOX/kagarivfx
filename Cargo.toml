@@ -54,11 +54,11 @@ cli = ["dep:clap", "dep:png"]
 wgpu = []
 
 [[bin]]
-name = "aevfx"
+name = "hikari"
 path = "src/bin/cli.rs"
 required-features = ["cli"]
 
 [[bin]]
-name = "aftereffects-oss"
+name = "hikari-studio"
 path = "src/main.rs"
 required-features = ["gui"]

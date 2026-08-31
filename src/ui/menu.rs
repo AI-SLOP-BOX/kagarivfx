@@ -1461,7 +1461,7 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
                     ui.close_menu();
                 }
                 ui.separator();
-                if ui.button("ℹ️ About AEVFX Studio...").clicked() {
+                if ui.button("ℹ️ About Hikari Studio...").clicked() {
                     let about_id = egui::Id::new("show_about_modal");
                     ctx.data_mut(|d| d.insert_temp(about_id, true));
                     ui.close_menu();
@@ -1538,17 +1538,17 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
     let about_id = egui::Id::new("show_about_modal");
     let mut show_about = ctx.data_mut(|d| *d.get_temp_mut_or_insert_with(about_id, || false));
     if show_about {
-        egui::Window::new("About AEVFX Studio")
+        egui::Window::new("About Hikari Studio")
             .open(&mut show_about)
             .resizable(false)
             .show(ctx, |ui| {
-                ui.heading("AEVFX Studio (Aether VFX)");
-                ui.label(format!("Version: {} (Experimental Prototype)", env!("CARGO_PKG_VERSION")));
-                ui.label("An open-source 2D/3D compositing & motion graphics research engine written in Rust.");
+                ui.heading("Hikari Studio (光)");
+                ui.label(format!("Version: {} (Open Source)", env!("CARGO_PKG_VERSION")));
+                ui.label("A high-performance Motion Graphics & 32bpc HDR Visual Effects engine written in Rust.");
                 ui.add_space(8.0);
                 ui.separator();
                 ui.add_space(4.0);
-                ui.small("AEVFX Studio is an independent open-source project unrelated to any commercial compositing software.");
+                ui.small("Hikari Studio is an independent open-source project unrelated to any commercial compositing software.");
                 ui.add_space(8.0);
             });
         ctx.data_mut(|d| d.insert_temp(about_id, show_about));

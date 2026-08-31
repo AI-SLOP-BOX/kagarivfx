@@ -15,10 +15,10 @@ cargo test --all-features
 cargo clippy --all-features
 
 # Run the GUI app
-cargo run --features gui --bin aftereffects-oss
+cargo run --features gui --bin hikari-studio
 
 # Run the CLI tool
-cargo run --features cli --bin aevfx -- frame --project test_project.json --frame 0 --output /tmp/test.png
+cargo run --features cli --bin hikari -- frame --project test_project.json --frame 0 --output /tmp/test.png
 ```
 
 ## Architecture

@@ -1,33 +1,34 @@
-# AEVFX Studio (Aether VFX)
+# Hikari Studio (光)
 
 [![Rust CI](https://github.com/kme20988-wq/aevfx/actions/workflows/ci.yml/badge.svg)](https://github.com/kme20988-wq/aevfx/actions)
 [![License: MIT / Apache 2.0](https://img.shields.io/badge/license-MIT%2FApache--2.0-blue.svg)](#license)
 [![Built with Rust](https://img.shields.io/badge/Built%20with-Rust%20🦀-orange.svg)](https://www.rust-lang.org/)
 
-A hobby-driven, experimental open-source compositing and motion graphics application written in Rust. Uses `egui` for the UI and `wgpu` for GPU-accelerated preview rendering. Still rough around the edges, but fun to hack on.
+**Hikari Studio (光)** is a high-performance, open-source Motion Graphics & Visual Effects compositor built with **Rust**, **wgpu (Metal/Vulkan)**, and a modern dark **egui** studio interface. Featuring 32bpc float HDR color science, real-time GPU simulation VFX shaders, and dynamic custom WGSL shader hot-reloading.
 
 ---
 
 > [!IMPORTANT]
-> **Experimental Status**: This project is a hobby-driven research prototype provided **"AS-IS"** without warranties. Issues and PRs are welcome but managed on a casual basis.
+> **Experimental Status**: This project is a community-driven open-source research engine provided **"AS-IS"** without warranties. Issues and PRs are warmly welcome!
 
 ---
 
 ## ✨ Key Features & Architecture
 
 ### 🚀 High-Performance Rendering & Color Science
+- **32bpc Float (Scene-Linear HDR) Pipeline**: Unlimited dynamic range with zero highlight clipping, ACES 1.3 Gamut Compression, and Reinhard tone mapping.
 - **Dual Pipeline Compositor**: Rayon-parallelized 64-bit multi-core CPU software compositor with instant GPU preview (`wgpu 22` on Metal/Vulkan/DirectX 12).
-- **16/32bpc HDR Color Engine**: Full scene-linear floating-point compositing pipeline with ACES 1.3 Gamut Compression, Display P3, and TPDF (Triangular PDF) dithering for smooth gradients.
-- **Subpixel Motion Blur & Ray-Traced 3D Shadows**: High-fidelity shutter angle time-sampling and stochastic soft shadows.
+- **Real-Time GPU Simulation VFX Shaders**: Procedural Fractal Noise (GPU fBM), Turbulent Displace, Wave Warp, Twirl, Bulge, Spherize, Heat Distortion, Rain Ripples, Bloom/Glow, and Lens Flare.
+- **Dynamic Custom WGSL Shader Plugin**: Live code editing with real-time **naga** syntax validation and external `.wgsl` file hot-reloading.
 
-### 🎨 Motion Graphics & 3D Extrusion
+### 🎨 Typography & Motion Graphics
+- **Create Shapes from Text**: Decomposes typography into animatable vector Bézier shape paths with inner-hole counter support and zero external font license dependencies.
 - **Cinema-Style 3D Extrusion**: Real-time watertight solid mesh generation with customizable front/back caps and bevel styles (Linear, Convex, Concave).
 - **Comprehensive Keyframing**: Bezier curve interpolation with 19 ease presets, spatial motion paths, and graph editor velocity curve adjustment.
 - **Rhai Expression Engine**: High-speed, sandboxed expression evaluation supporting `wiggle()`, `loopOut()`, `smooth()`, seed randoms, and dynamic scope injection (`thisComp`, `thisLayer`).
-- **Vector & Shape Pipeline**: Pathfinder boolean operations, signed offset paths, wiggle paths, and SVG/Illustrator Bezier path parsing.
 
 ### 🔍 VFX Tools & Tracking
-- **47+ Built-in Effect Processors**: Gaussian Blur, Advanced Glow, Directional/Radial Blur, Displacement Map, Turbulent Displace, Set Matte, Matte Choker, Hue/Saturation, Curves, Lumetri WB, CRT Glitch, and more.
+- **50+ Built-in Effect Processors**: Gaussian Blur, Advanced Glow, Directional/Radial Blur, Displacement Map, Turbulent Displace, Set Matte, Matte Choker, Hue/Saturation, Curves, Lumetri WB, CRT Glitch, and more.
 - **SAD Motion Tracker & Planar Homography**: Subpixel corner pinning, jitter rejection stabilization, and edge-contour extraction.
 - **Motion Sketch**: Real-time freehand mouse/stylus gesture recording with automatic frame resampling and keyframe baking.
 
@@ -45,19 +46,19 @@ A hobby-driven, experimental open-source compositing and motion graphics applica
 - [Rust toolchain](https://rustup.rs/) (1.75+ recommended)
 - `ffmpeg` (optional, for video sequence decoding & H.264/ProRes/GIF export)
 
-### Build & Run GUI App
+### Build & Run GUI Studio
 ```bash
-# Launch the desktop GUI editor
-cargo run --release --features gui --bin aftereffects-oss
+# Launch Hikari Studio GUI editor
+cargo run --release --features gui --bin hikari-studio
 ```
 
 ### Headless CLI Rendering
 ```bash
 # Render a single frame from project JSON to PNG
-cargo run --release --features cli --bin aevfx -- frame --project my_project.json --frame 0 --output /tmp/frame_000.png
+cargo run --release --features cli --bin hikari -- frame --project my_project.json --frame 0 --output /tmp/frame_000.png
 
 # Render a frame sequence or MP4 video
-cargo run --release --features cli --bin aevfx -- render --project my_project.json --out-dir /tmp/renders/
+cargo run --release --features cli --bin hikari -- render --project my_project.json --out-dir /tmp/renders/
 ```
 
 ### Running Test Suite & Quality Checks
@@ -164,4 +165,4 @@ Distributed under the MIT License or Apache 2.0 License at your option.
 
 ## ⚖️ Trademark Disclaimer
 
-**AEVFX Studio (Aether VFX)** is an independent, community-driven open-source software project. It is **not** affiliated with, sponsored by, endorsed by, or in any way associated with Adobe Inc. or its subsidiaries. "Adobe", "After Effects", and other product names or logos are trademarks or registered trademarks of their respective owners.
+**Hikari Studio (光)** is an independent, community-driven open-source software project. It is **not** affiliated with, sponsored by, endorsed by, or in any way associated with Adobe Inc. or its subsidiaries. "Adobe", "After Effects", and other product names or logos are trademarks or registered trademarks of their respective owners.
