@@ -1,8 +1,10 @@
-use eframe::egui;
-use crate::core::timeline::{Layer, LayerType};
 use crate::core::text_animator::{SelectorShape, TextAnimatorSettings};
-use crate::ui::inspector_property::{draw_property_ui, draw_easy_ease_button, draw_expression_selector};
+use crate::core::timeline::{Layer, LayerType};
+use crate::ui::inspector_property::{
+    draw_easy_ease_button, draw_expression_selector, draw_property_ui,
+};
 use crate::ui::theme::colors;
+use eframe::egui;
 
 pub fn draw_layer_transforms(
     ui: &mut egui::Ui,
@@ -15,82 +17,155 @@ pub fn draw_layer_transforms(
     ui.group(|ui| {
         if layer.is_3d {
             ui.label("Transform 3D");
-            
+
             let pos_before = layer.transform_3d.position.clone();
-            if let Some(nf) = draw_property_ui(current_frame, ui, "Position (XYZ)", &mut layer.transform_3d.position, |ui, val| {
-                ui.horizontal(|ui| {
-                    ui.add(egui::DragValue::new(&mut val[0]).speed(1.0).prefix("X: "));
-                    ui.add(egui::DragValue::new(&mut val[1]).speed(1.0).prefix("Y: "));
-                    ui.add(egui::DragValue::new(&mut val[2]).speed(1.0).prefix("Z: "));
-                });
-            }) { *next_frame = Some(nf); }
+            if let Some(nf) = draw_property_ui(
+                current_frame,
+                ui,
+                "Position (XYZ)",
+                &mut layer.transform_3d.position,
+                |ui, val| {
+                    ui.horizontal(|ui| {
+                        ui.add(egui::DragValue::new(&mut val[0]).speed(1.0).prefix("X: "));
+                        ui.add(egui::DragValue::new(&mut val[1]).speed(1.0).prefix("Y: "));
+                        ui.add(egui::DragValue::new(&mut val[2]).speed(1.0).prefix("Z: "));
+                    });
+                },
+            ) {
+                *next_frame = Some(nf);
+            }
             draw_easy_ease_button(ui, &mut layer.transform_3d.position, project_changed);
-            if pos_before != layer.transform_3d.position { *project_changed = true; }
+            if pos_before != layer.transform_3d.position {
+                *project_changed = true;
+            }
 
             ui.separator();
             let rot_before = layer.transform_3d.rotation.clone();
-            if let Some(nf) = draw_property_ui(current_frame, ui, "Rotation (YPR)", &mut layer.transform_3d.rotation, |ui, val| {
-                ui.horizontal(|ui| {
-                    ui.add(egui::DragValue::new(&mut val[0]).speed(1.0).suffix("° P"));
-                    ui.add(egui::DragValue::new(&mut val[1]).speed(1.0).suffix("° Y"));
-                    ui.add(egui::DragValue::new(&mut val[2]).speed(1.0).suffix("° R"));
-                });
-            }) { *next_frame = Some(nf); }
+            if let Some(nf) = draw_property_ui(
+                current_frame,
+                ui,
+                "Rotation (YPR)",
+                &mut layer.transform_3d.rotation,
+                |ui, val| {
+                    ui.horizontal(|ui| {
+                        ui.add(egui::DragValue::new(&mut val[0]).speed(1.0).suffix("° P"));
+                        ui.add(egui::DragValue::new(&mut val[1]).speed(1.0).suffix("° Y"));
+                        ui.add(egui::DragValue::new(&mut val[2]).speed(1.0).suffix("° R"));
+                    });
+                },
+            ) {
+                *next_frame = Some(nf);
+            }
             draw_easy_ease_button(ui, &mut layer.transform_3d.rotation, project_changed);
-            if rot_before != layer.transform_3d.rotation { *project_changed = true; }
+            if rot_before != layer.transform_3d.rotation {
+                *project_changed = true;
+            }
 
             ui.separator();
             let scale_before = layer.transform_3d.scale.clone();
-            if let Some(nf) = draw_property_ui(current_frame, ui, "Scale (XYZ)", &mut layer.transform_3d.scale, |ui, val| {
-                ui.horizontal(|ui| {
-                    ui.add(egui::DragValue::new(&mut val[0]).speed(0.1).suffix("% X"));
-                    ui.add(egui::DragValue::new(&mut val[1]).speed(0.1).suffix("% Y"));
-                    ui.add(egui::DragValue::new(&mut val[2]).speed(0.1).suffix("% Z"));
-                });
-            }) { *next_frame = Some(nf); }
+            if let Some(nf) = draw_property_ui(
+                current_frame,
+                ui,
+                "Scale (XYZ)",
+                &mut layer.transform_3d.scale,
+                |ui, val| {
+                    ui.horizontal(|ui| {
+                        ui.add(egui::DragValue::new(&mut val[0]).speed(0.1).suffix("% X"));
+                        ui.add(egui::DragValue::new(&mut val[1]).speed(0.1).suffix("% Y"));
+                        ui.add(egui::DragValue::new(&mut val[2]).speed(0.1).suffix("% Z"));
+                    });
+                },
+            ) {
+                *next_frame = Some(nf);
+            }
             draw_easy_ease_button(ui, &mut layer.transform_3d.scale, project_changed);
-            if scale_before != layer.transform_3d.scale { *project_changed = true; }
+            if scale_before != layer.transform_3d.scale {
+                *project_changed = true;
+            }
 
             // ── 3D Material Options ──
             ui.add_space(4.0);
             ui.collapsing("🧱 Material Options", |ui| {
                 let mat = &mut layer.material;
-                if ui.checkbox(&mut mat.cast_shadows, "Casts Shadows").clicked() { *project_changed = true; }
+                if ui
+                    .checkbox(&mut mat.cast_shadows, "Casts Shadows")
+                    .clicked()
+                {
+                    *project_changed = true;
+                }
                 ui.horizontal(|ui| {
                     ui.label("Ambient:");
-                    if ui.add(egui::Slider::new(&mut mat.ambient, 0.0..=1.0)).changed() { *project_changed = true; }
+                    if ui
+                        .add(egui::Slider::new(&mut mat.ambient, 0.0..=1.0))
+                        .changed()
+                    {
+                        *project_changed = true;
+                    }
                 });
                 ui.horizontal(|ui| {
                     ui.label("Diffuse:");
-                    if ui.add(egui::Slider::new(&mut mat.diffuse, 0.0..=1.0)).changed() { *project_changed = true; }
+                    if ui
+                        .add(egui::Slider::new(&mut mat.diffuse, 0.0..=1.0))
+                        .changed()
+                    {
+                        *project_changed = true;
+                    }
                 });
                 ui.horizontal(|ui| {
                     ui.label("Specular:");
-                    if ui.add(egui::Slider::new(&mut mat.specular, 0.0..=1.0)).changed() { *project_changed = true; }
+                    if ui
+                        .add(egui::Slider::new(&mut mat.specular, 0.0..=1.0))
+                        .changed()
+                    {
+                        *project_changed = true;
+                    }
                 });
                 ui.horizontal(|ui| {
                     ui.label("Shininess:");
-                    if ui.add(egui::Slider::new(&mut mat.specular_exponent, 1.0..=256.0)).changed() { *project_changed = true; }
+                    if ui
+                        .add(egui::Slider::new(&mut mat.specular_exponent, 1.0..=256.0))
+                        .changed()
+                    {
+                        *project_changed = true;
+                    }
                 });
                 ui.horizontal(|ui| {
                     ui.label("Metalness:");
-                    if ui.add(egui::Slider::new(&mut mat.metalness, 0.0..=1.0)).changed() { *project_changed = true; }
+                    if ui
+                        .add(egui::Slider::new(&mut mat.metalness, 0.0..=1.0))
+                        .changed()
+                    {
+                        *project_changed = true;
+                    }
                 });
                 ui.horizontal(|ui| {
                     ui.label("Emission:");
-                    if ui.add(egui::Slider::new(&mut mat.emission, 0.0..=1.0)).changed() { *project_changed = true; }
+                    if ui
+                        .add(egui::Slider::new(&mut mat.emission, 0.0..=1.0))
+                        .changed()
+                    {
+                        *project_changed = true;
+                    }
                 });
             });
         } else {
             ui.label("Transform 2D");
-            
+
             let val_before = layer.transform.anchor_point.clone();
-            if let Some(nf) = draw_property_ui(current_frame, ui, "Anchor Point", &mut layer.transform.anchor_point, |ui, val| {
-                ui.horizontal(|ui| {
-                    ui.add(egui::DragValue::new(&mut val[0]).speed(1.0).prefix("X: "));
-                    ui.add(egui::DragValue::new(&mut val[1]).speed(1.0).prefix("Y: "));
-                });
-            }) { *next_frame = Some(nf); }
+            if let Some(nf) = draw_property_ui(
+                current_frame,
+                ui,
+                "Anchor Point",
+                &mut layer.transform.anchor_point,
+                |ui, val| {
+                    ui.horizontal(|ui| {
+                        ui.add(egui::DragValue::new(&mut val[0]).speed(1.0).prefix("X: "));
+                        ui.add(egui::DragValue::new(&mut val[1]).speed(1.0).prefix("Y: "));
+                    });
+                },
+            ) {
+                *next_frame = Some(nf);
+            }
 
             // 🎯 3x3 Anchor Point Quick Grid Picker
             ui.horizontal(|ui| {
@@ -100,59 +175,124 @@ pub fn draw_layer_transforms(
                 let (w, h) = (b_size[0], b_size[1]);
 
                 for (label, ax, ay) in [
-                    ("◤", 0.0, 0.0),      // Top-Left
-                    ("▲", w * 0.5, 0.0),  // Top-Center
-                    ("◥", w, 0.0),        // Top-Right
-                    ("◀", 0.0, h * 0.5),  // Mid-Left
+                    ("◤", 0.0, 0.0),          // Top-Left
+                    ("▲", w * 0.5, 0.0),      // Top-Center
+                    ("◥", w, 0.0),            // Top-Right
+                    ("◀", 0.0, h * 0.5),      // Mid-Left
                     ("🎯", w * 0.5, h * 0.5), // Center
-                    ("▶", w, h * 0.5),    // Mid-Right
-                    ("◣", 0.0, h),        // Bottom-Left
-                    ("▼", w * 0.5, h),    // Bottom-Center
-                    ("◢", w, h),          // Bottom-Right
+                    ("▶", w, h * 0.5),        // Mid-Right
+                    ("◣", 0.0, h),            // Bottom-Left
+                    ("▼", w * 0.5, h),        // Bottom-Center
+                    ("◢", w, h),              // Bottom-Right
                 ] {
-                    if ui.small_button(label).on_hover_text(format!("Snap Anchor Point to ({:.0}, {:.0})", ax, ay)).clicked() {
-                        layer.transform.anchor_point = crate::core::property::Animatable::new_constant([ax, ay]);
+                    if ui
+                        .small_button(label)
+                        .on_hover_text(format!("Snap Anchor Point to ({:.0}, {:.0})", ax, ay))
+                        .clicked()
+                    {
+                        layer.transform.anchor_point =
+                            crate::core::property::Animatable::new_constant([ax, ay]);
                         *project_changed = true;
                     }
                 }
             });
 
-            if val_before != layer.transform.anchor_point { *project_changed = true; }
+            if val_before != layer.transform.anchor_point {
+                *project_changed = true;
+            }
             // Anchor point expression (same rich editor as other properties)
-            draw_expression_selector(ui, "anchor", &mut layer.transform.anchor_point_expression, project_changed, Some(current_frame), Some(fps));
+            draw_expression_selector(
+                ui,
+                "anchor",
+                &mut layer.transform.anchor_point_expression,
+                project_changed,
+                Some(current_frame),
+                Some(fps),
+            );
 
             ui.separator();
             let pos_before = layer.transform.position.clone();
-            if let Some(nf) = draw_property_ui(current_frame, ui, "Position", &mut layer.transform.position, |ui, val| {
-                ui.horizontal(|ui| {
-                    ui.add(egui::DragValue::new(&mut val[0]).speed(1.0).prefix("X: "));
-                    ui.add(egui::DragValue::new(&mut val[1]).speed(1.0).prefix("Y: "));
-                });
-            }) { *next_frame = Some(nf); }
+            if let Some(nf) = draw_property_ui(
+                current_frame,
+                ui,
+                "Position",
+                &mut layer.transform.position,
+                |ui, val| {
+                    ui.horizontal(|ui| {
+                        ui.add(egui::DragValue::new(&mut val[0]).speed(1.0).prefix("X: "));
+                        ui.add(egui::DragValue::new(&mut val[1]).speed(1.0).prefix("Y: "));
+                    });
+                },
+            ) {
+                *next_frame = Some(nf);
+            }
             draw_easy_ease_button(ui, &mut layer.transform.position, project_changed);
-            draw_expression_selector(ui, "position", &mut layer.transform.position_expression, project_changed, Some(current_frame), Some(fps));
-            if pos_before != layer.transform.position { *project_changed = true; }
+            draw_expression_selector(
+                ui,
+                "position",
+                &mut layer.transform.position_expression,
+                project_changed,
+                Some(current_frame),
+                Some(fps),
+            );
+            if pos_before != layer.transform.position {
+                *project_changed = true;
+            }
 
             ui.separator();
             let scale_before = layer.transform.scale.clone();
-            if let Some(nf) = draw_property_ui(current_frame, ui, "Scale", &mut layer.transform.scale, |ui, val| {
-                ui.horizontal(|ui| {
-                    ui.add(egui::DragValue::new(&mut val[0]).speed(0.1).suffix("% X"));
-                    ui.add(egui::DragValue::new(&mut val[1]).speed(0.1).suffix("% Y"));
-                });
-            }) { *next_frame = Some(nf); }
+            if let Some(nf) = draw_property_ui(
+                current_frame,
+                ui,
+                "Scale",
+                &mut layer.transform.scale,
+                |ui, val| {
+                    ui.horizontal(|ui| {
+                        ui.add(egui::DragValue::new(&mut val[0]).speed(0.1).suffix("% X"));
+                        ui.add(egui::DragValue::new(&mut val[1]).speed(0.1).suffix("% Y"));
+                    });
+                },
+            ) {
+                *next_frame = Some(nf);
+            }
             draw_easy_ease_button(ui, &mut layer.transform.scale, project_changed);
-            draw_expression_selector(ui, "scale", &mut layer.transform.scale_expression, project_changed, Some(current_frame), Some(fps));
-            if scale_before != layer.transform.scale { *project_changed = true; }
+            draw_expression_selector(
+                ui,
+                "scale",
+                &mut layer.transform.scale_expression,
+                project_changed,
+                Some(current_frame),
+                Some(fps),
+            );
+            if scale_before != layer.transform.scale {
+                *project_changed = true;
+            }
 
             ui.separator();
             let rot_before = layer.transform.rotation.clone();
-            if let Some(nf) = draw_property_ui(current_frame, ui, "Rotation", &mut layer.transform.rotation, |ui, val| {
-                ui.add(egui::Slider::new(val, -360.0..=360.0).suffix("°"));
-            }) { *next_frame = Some(nf); }
+            if let Some(nf) = draw_property_ui(
+                current_frame,
+                ui,
+                "Rotation",
+                &mut layer.transform.rotation,
+                |ui, val| {
+                    ui.add(egui::Slider::new(val, -360.0..=360.0).suffix("°"));
+                },
+            ) {
+                *next_frame = Some(nf);
+            }
             draw_easy_ease_button(ui, &mut layer.transform.rotation, project_changed);
-            draw_expression_selector(ui, "rotation", &mut layer.transform.rotation_expression, project_changed, Some(current_frame), Some(fps));
-            if rot_before != layer.transform.rotation { *project_changed = true; }
+            draw_expression_selector(
+                ui,
+                "rotation",
+                &mut layer.transform.rotation_expression,
+                project_changed,
+                Some(current_frame),
+                Some(fps),
+            );
+            if rot_before != layer.transform.rotation {
+                *project_changed = true;
+            }
 
             // ── Auto-Orient (AE parity): rotation follows motion path ──
             {
@@ -164,14 +304,25 @@ pub fn draw_layer_transforms(
                     AutoOrientMode::OrientTowardsPoint { .. } => "Orient Towards Point",
                 };
                 ui.horizontal(|ui| {
-                    ui.label(egui::RichText::new("Auto-Orient").small().color(colors::TEXT_SECONDARY));
+                    ui.label(
+                        egui::RichText::new("Auto-Orient")
+                            .small()
+                            .color(colors::TEXT_SECONDARY),
+                    );
                     egui::ComboBox::from_id_salt("insp_auto_orient")
                         .selected_text(mode_text)
                         .show_ui(ui, |ui| {
-                            if ui.selectable_label(layer.auto_orient == AutoOrientMode::Off, "Off").clicked() {
+                            if ui
+                                .selectable_label(layer.auto_orient == AutoOrientMode::Off, "Off")
+                                .clicked()
+                            {
                                 layer.auto_orient = AutoOrientMode::Off;
                             }
-                            if ui.selectable_label(layer.auto_orient == AutoOrientMode::OrientAlongPath, "Orient Along Path")
+                            if ui
+                                .selectable_label(
+                                    layer.auto_orient == AutoOrientMode::OrientAlongPath,
+                                    "Orient Along Path",
+                                )
                                 .on_hover_text("Layer rotates to follow its position motion path")
                                 .clicked()
                             {
@@ -181,40 +332,88 @@ pub fn draw_layer_transforms(
                                 AutoOrientMode::OrientTowardsPoint { target_point } => target_point,
                                 _ => [960.0, 540.0],
                             };
-                            if ui.selectable_label(matches!(layer.auto_orient, AutoOrientMode::OrientTowardsPoint { .. }), "Orient Towards Point")
+                            if ui
+                                .selectable_label(
+                                    matches!(
+                                        layer.auto_orient,
+                                        AutoOrientMode::OrientTowardsPoint { .. }
+                                    ),
+                                    "Orient Towards Point",
+                                )
                                 .on_hover_text("Layer rotates to face a fixed point")
                                 .clicked()
                             {
-                                layer.auto_orient = AutoOrientMode::OrientTowardsPoint { target_point: cur_target };
+                                layer.auto_orient = AutoOrientMode::OrientTowardsPoint {
+                                    target_point: cur_target,
+                                };
                             }
                         });
                 });
-                if let AutoOrientMode::OrientTowardsPoint { target_point } = &mut layer.auto_orient {
+                if let AutoOrientMode::OrientTowardsPoint { target_point } = &mut layer.auto_orient
+                {
                     ui.horizontal(|ui| {
-                        ui.label(egui::RichText::new("Target").small().color(colors::TEXT_SECONDARY));
-                        ui.add(egui::DragValue::new(&mut target_point[0]).prefix("X: ").speed(1.0));
-                        ui.add(egui::DragValue::new(&mut target_point[1]).prefix("Y: ").speed(1.0));
+                        ui.label(
+                            egui::RichText::new("Target")
+                                .small()
+                                .color(colors::TEXT_SECONDARY),
+                        );
+                        ui.add(
+                            egui::DragValue::new(&mut target_point[0])
+                                .prefix("X: ")
+                                .speed(1.0),
+                        );
+                        ui.add(
+                            egui::DragValue::new(&mut target_point[1])
+                                .prefix("Y: ")
+                                .speed(1.0),
+                        );
                     });
                 }
-                if ao_before != layer.auto_orient { *project_changed = true; }
+                if ao_before != layer.auto_orient {
+                    *project_changed = true;
+                }
             }
 
             ui.separator();
             let _op_before = layer.transform.opacity.clone();
-            if let Some(nf) = draw_property_ui(current_frame, ui, "Opacity", &mut layer.transform.opacity, |ui, val| {
-                ui.add(egui::Slider::new(val, 0.0..=100.0).suffix("%"));
-            }) { *next_frame = Some(nf); }
+            if let Some(nf) = draw_property_ui(
+                current_frame,
+                ui,
+                "Opacity",
+                &mut layer.transform.opacity,
+                |ui, val| {
+                    ui.add(egui::Slider::new(val, 0.0..=100.0).suffix("%"));
+                },
+            ) {
+                *next_frame = Some(nf);
+            }
             draw_easy_ease_button(ui, &mut layer.transform.opacity, project_changed);
-            draw_expression_selector(ui, "opacity", &mut layer.transform.opacity_expression, project_changed, Some(current_frame), Some(fps));
+            draw_expression_selector(
+                ui,
+                "opacity",
+                &mut layer.transform.opacity_expression,
+                project_changed,
+                Some(current_frame),
+                Some(fps),
+            );
             if layer.is_3d {
                 ui.separator();
-                ui.label(egui::RichText::new("🧊 3D Spatial Transform").small().strong().color(colors::ACCENT_CYAN));
-                
+                ui.label(
+                    egui::RichText::new("🧊 3D Spatial Transform")
+                        .small()
+                        .strong()
+                        .color(colors::ACCENT_CYAN),
+                );
+
                 let mut pos3d = layer.transform_3d.position.evaluate(current_frame);
                 ui.horizontal(|ui| {
                     ui.label("Position Z (Depth):");
-                    if ui.add(egui::DragValue::new(&mut pos3d[2]).speed(1.0).suffix(" px")).changed() {
-                        layer.transform_3d.position = crate::core::property::Animatable::new_constant(pos3d);
+                    if ui
+                        .add(egui::DragValue::new(&mut pos3d[2]).speed(1.0).suffix(" px"))
+                        .changed()
+                    {
+                        layer.transform_3d.position =
+                            crate::core::property::Animatable::new_constant(pos3d);
                         *project_changed = true;
                     }
                 });
@@ -222,92 +421,149 @@ pub fn draw_layer_transforms(
                 let mut rot3d = layer.transform_3d.rotation.evaluate(current_frame);
                 ui.horizontal(|ui| {
                     ui.label("X Rotation:");
-                    if ui.add(egui::DragValue::new(&mut rot3d[0]).speed(1.0).suffix("°")).changed() {
-                        layer.transform_3d.rotation = crate::core::property::Animatable::new_constant(rot3d);
+                    if ui
+                        .add(egui::DragValue::new(&mut rot3d[0]).speed(1.0).suffix("°"))
+                        .changed()
+                    {
+                        layer.transform_3d.rotation =
+                            crate::core::property::Animatable::new_constant(rot3d);
                         *project_changed = true;
                     }
                 });
                 ui.horizontal(|ui| {
                     ui.label("Y Rotation:");
-                    if ui.add(egui::DragValue::new(&mut rot3d[1]).speed(1.0).suffix("°")).changed() {
-                        layer.transform_3d.rotation = crate::core::property::Animatable::new_constant(rot3d);
+                    if ui
+                        .add(egui::DragValue::new(&mut rot3d[1]).speed(1.0).suffix("°"))
+                        .changed()
+                    {
+                        layer.transform_3d.rotation =
+                            crate::core::property::Animatable::new_constant(rot3d);
                         *project_changed = true;
                     }
                 });
                 ui.horizontal(|ui| {
                     ui.label("Z Rotation:");
-                    if ui.add(egui::DragValue::new(&mut rot3d[2]).speed(1.0).suffix("°")).changed() {
-                        layer.transform_3d.rotation = crate::core::property::Animatable::new_constant(rot3d);
+                    if ui
+                        .add(egui::DragValue::new(&mut rot3d[2]).speed(1.0).suffix("°"))
+                        .changed()
+                    {
+                        layer.transform_3d.rotation =
+                            crate::core::property::Animatable::new_constant(rot3d);
                         *project_changed = true;
                     }
                 });
 
                 // ── 3D Material Options ──
                 ui.separator();
-                ui.label(egui::RichText::new("🎨 Material Options").small().strong().color(colors::ACCENT_YELLOW));
+                ui.label(
+                    egui::RichText::new("🎨 Material Options")
+                        .small()
+                        .strong()
+                        .color(colors::ACCENT_YELLOW),
+                );
 
                 ui.horizontal(|ui| {
                     ui.label("Ambient:");
-                    if ui.add(egui::Slider::new(&mut layer.material.ambient, 0.0..=1.0).step_by(0.01)).changed() {
+                    if ui
+                        .add(
+                            egui::Slider::new(&mut layer.material.ambient, 0.0..=1.0).step_by(0.01),
+                        )
+                        .changed()
+                    {
                         *project_changed = true;
                     }
                 });
                 ui.horizontal(|ui| {
                     ui.label("Diffuse:");
-                    if ui.add(egui::Slider::new(&mut layer.material.diffuse, 0.0..=1.0).step_by(0.01)).changed() {
+                    if ui
+                        .add(
+                            egui::Slider::new(&mut layer.material.diffuse, 0.0..=1.0).step_by(0.01),
+                        )
+                        .changed()
+                    {
                         *project_changed = true;
                     }
                 });
                 ui.horizontal(|ui| {
                     ui.label("Specular:");
-                    if ui.add(egui::Slider::new(&mut layer.material.specular, 0.0..=1.0).step_by(0.01)).changed() {
+                    if ui
+                        .add(
+                            egui::Slider::new(&mut layer.material.specular, 0.0..=1.0)
+                                .step_by(0.01),
+                        )
+                        .changed()
+                    {
                         *project_changed = true;
                     }
                 });
                 ui.horizontal(|ui| {
                     ui.label("Specular Exp:");
-                    if ui.add(egui::DragValue::new(&mut layer.material.specular_exponent).speed(1.0).range(1.0..=256.0)).changed() {
+                    if ui
+                        .add(
+                            egui::DragValue::new(&mut layer.material.specular_exponent)
+                                .speed(1.0)
+                                .range(1.0..=256.0),
+                        )
+                        .changed()
+                    {
                         *project_changed = true;
                     }
                 });
                 ui.horizontal(|ui| {
                     ui.label("Emission:");
-                    if ui.add(egui::Slider::new(&mut layer.material.emission, 0.0..=1.0).step_by(0.01)).changed() {
+                    if ui
+                        .add(
+                            egui::Slider::new(&mut layer.material.emission, 0.0..=1.0)
+                                .step_by(0.01),
+                        )
+                        .changed()
+                    {
                         *project_changed = true;
                     }
                 });
                 ui.horizontal(|ui| {
                     ui.label("Metalness:");
-                    if ui.add(egui::Slider::new(&mut layer.material.metalness, 0.0..=1.0).step_by(0.01)).changed() {
+                    if ui
+                        .add(
+                            egui::Slider::new(&mut layer.material.metalness, 0.0..=1.0)
+                                .step_by(0.01),
+                        )
+                        .changed()
+                    {
                         *project_changed = true;
                     }
                 });
 
                 ui.horizontal(|ui| {
-                    if ui.checkbox(&mut layer.material.cast_shadows, "Casts Shadows").changed() {
+                    if ui
+                        .checkbox(&mut layer.material.cast_shadows, "Casts Shadows")
+                        .changed()
+                    {
                         *project_changed = true;
                     }
                 });
 
-                let mut accepts_shadows = ui.ctx().data(|d| d.get_temp::<bool>(egui::Id::new("mat_accepts_shadows")).unwrap_or(true));
-                let mut accepts_lights = ui.ctx().data(|d| d.get_temp::<bool>(egui::Id::new("mat_accepts_lights")).unwrap_or(true));
-                let mut light_trans = ui.ctx().data(|d| d.get_temp::<f32>(egui::Id::new("mat_light_trans")).unwrap_or(0.0));
-
                 ui.horizontal(|ui| {
-                    if ui.checkbox(&mut accepts_shadows, "Accepts Shadows").changed() {
-                        ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("mat_accepts_shadows"), accepts_shadows));
+                    if ui
+                        .checkbox(&mut layer.material.accepts_shadows, "Accepts Shadows")
+                        .changed()
+                    {
                         *project_changed = true;
                     }
-                    if ui.checkbox(&mut accepts_lights, "Accepts Lights").changed() {
-                        ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("mat_accepts_lights"), accepts_lights));
+                    if ui
+                        .checkbox(&mut layer.material.accepts_lights, "Accepts Lights")
+                        .changed()
+                    {
                         *project_changed = true;
                     }
                 });
 
                 ui.horizontal(|ui| {
                     ui.label("Light Transmission:");
-                    if ui.add(egui::Slider::new(&mut light_trans, 0.0..=100.0).suffix("%")).changed() {
-                        ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("mat_light_trans"), light_trans));
+                    if ui
+                        .add(egui::Slider::new(&mut layer.material.light_transmission, 0.0..=100.0).suffix("%"))
+                        .changed()
+                    {
                         *project_changed = true;
                     }
                 });
@@ -315,17 +571,38 @@ pub fn draw_layer_transforms(
                 // ── 3D Geometry Options (Extrusion & Bevel) ──
                 ui.separator();
                 ui.collapsing("📐 Geometry Options (Extrusion & Bevel)", |ui| {
-                    if let LayerType::Shape { extrusion_depth, bevel_depth, .. } = &mut layer.layer_type {
+                    if let LayerType::Shape {
+                        extrusion_depth,
+                        bevel_depth,
+                        ..
+                    } = &mut layer.layer_type
+                    {
                         ui.horizontal(|ui| {
                             ui.label("Extrusion Depth:");
-                            if ui.add(egui::DragValue::new(extrusion_depth).speed(1.0).range(0.0..=500.0).suffix(" px")).changed() {
+                            if ui
+                                .add(
+                                    egui::DragValue::new(extrusion_depth)
+                                        .speed(1.0)
+                                        .range(0.0..=500.0)
+                                        .suffix(" px"),
+                                )
+                                .changed()
+                            {
                                 *project_changed = true;
                             }
                         });
 
                         ui.horizontal(|ui| {
                             ui.label("Bevel Depth:");
-                            if ui.add(egui::DragValue::new(bevel_depth).speed(0.5).range(0.0..=50.0).suffix(" px")).changed() {
+                            if ui
+                                .add(
+                                    egui::DragValue::new(bevel_depth)
+                                        .speed(0.5)
+                                        .range(0.0..=50.0)
+                                        .suffix(" px"),
+                                )
+                                .changed()
+                            {
                                 *project_changed = true;
                             }
                         });
@@ -346,10 +623,26 @@ pub fn draw_layer_transforms(
                 egui::ComboBox::from_id_salt(format!("pin_h_{}", layer.id))
                     .selected_text(format!("{:?}", layer.constraints.horizontal))
                     .show_ui(ui, |ui| {
-                        ui.selectable_value(&mut layer.constraints.horizontal, HorizontalPin::Left, "Left");
-                        ui.selectable_value(&mut layer.constraints.horizontal, HorizontalPin::Center, "Center");
-                        ui.selectable_value(&mut layer.constraints.horizontal, HorizontalPin::Right, "Right");
-                        ui.selectable_value(&mut layer.constraints.horizontal, HorizontalPin::Scale, "Scale");
+                        ui.selectable_value(
+                            &mut layer.constraints.horizontal,
+                            HorizontalPin::Left,
+                            "Left",
+                        );
+                        ui.selectable_value(
+                            &mut layer.constraints.horizontal,
+                            HorizontalPin::Center,
+                            "Center",
+                        );
+                        ui.selectable_value(
+                            &mut layer.constraints.horizontal,
+                            HorizontalPin::Right,
+                            "Right",
+                        );
+                        ui.selectable_value(
+                            &mut layer.constraints.horizontal,
+                            HorizontalPin::Scale,
+                            "Scale",
+                        );
                     });
             });
 
@@ -358,10 +651,26 @@ pub fn draw_layer_transforms(
                 egui::ComboBox::from_id_salt(format!("pin_v_{}", layer.id))
                     .selected_text(format!("{:?}", layer.constraints.vertical))
                     .show_ui(ui, |ui| {
-                        ui.selectable_value(&mut layer.constraints.vertical, VerticalPin::Top, "Top");
-                        ui.selectable_value(&mut layer.constraints.vertical, VerticalPin::Center, "Center");
-                        ui.selectable_value(&mut layer.constraints.vertical, VerticalPin::Bottom, "Bottom");
-                        ui.selectable_value(&mut layer.constraints.vertical, VerticalPin::Scale, "Scale");
+                        ui.selectable_value(
+                            &mut layer.constraints.vertical,
+                            VerticalPin::Top,
+                            "Top",
+                        );
+                        ui.selectable_value(
+                            &mut layer.constraints.vertical,
+                            VerticalPin::Center,
+                            "Center",
+                        );
+                        ui.selectable_value(
+                            &mut layer.constraints.vertical,
+                            VerticalPin::Bottom,
+                            "Bottom",
+                        );
+                        ui.selectable_value(
+                            &mut layer.constraints.vertical,
+                            VerticalPin::Scale,
+                            "Scale",
+                        );
                     });
             });
 
@@ -375,22 +684,38 @@ pub fn draw_layer_transforms(
             ui.horizontal(|ui| {
                 use crate::core::timeline::LabelColor;
                 for color in [
-                    LabelColor::None, LabelColor::Red, LabelColor::Yellow,
-                    LabelColor::Aqua, LabelColor::Pink, LabelColor::Lavender,
-                    LabelColor::Peach, LabelColor::Sea, LabelColor::Blue,
+                    LabelColor::None,
+                    LabelColor::Red,
+                    LabelColor::Yellow,
+                    LabelColor::Aqua,
+                    LabelColor::Pink,
+                    LabelColor::Lavender,
+                    LabelColor::Peach,
+                    LabelColor::Sea,
+                    LabelColor::Blue,
                     LabelColor::Purple,
                 ] {
                     let rgb = color.to_rgb();
                     let c32 = egui::Color32::from_rgb(
-                        (rgb[0] * 255.0) as u8, (rgb[1] * 255.0) as u8, (rgb[2] * 255.0) as u8,
+                        (rgb[0] * 255.0) as u8,
+                        (rgb[1] * 255.0) as u8,
+                        (rgb[2] * 255.0) as u8,
                     );
-                    let btn = ui.add(egui::Button::new("  ").fill(c32).min_size(egui::vec2(18.0, 18.0)));
+                    let btn = ui.add(
+                        egui::Button::new("  ")
+                            .fill(c32)
+                            .min_size(egui::vec2(18.0, 18.0)),
+                    );
                     if btn.clicked() && layer.label != color {
                         layer.label = color;
                         *project_changed = true;
                     }
                     if layer.label == color {
-                        ui.painter().rect_stroke(btn.rect, 2.0, egui::Stroke::new(2.0, egui::Color32::WHITE));
+                        ui.painter().rect_stroke(
+                            btn.rect,
+                            2.0,
+                            egui::Stroke::new(2.0, egui::Color32::WHITE),
+                        );
                     }
                 }
             });
@@ -405,19 +730,28 @@ pub fn draw_layer_transforms(
                 }
                 ui.horizontal(|ui| {
                     ui.label("Distance:");
-                    if ui.add(egui::Slider::new(&mut ds.distance, 0.0..=200.0).suffix(" px")).changed() {
+                    if ui
+                        .add(egui::Slider::new(&mut ds.distance, 0.0..=200.0).suffix(" px"))
+                        .changed()
+                    {
                         *project_changed = true;
                     }
                 });
                 ui.horizontal(|ui| {
                     ui.label("Blur Size:");
-                    if ui.add(egui::Slider::new(&mut ds.size, 0.0..=100.0).suffix(" px")).changed() {
+                    if ui
+                        .add(egui::Slider::new(&mut ds.size, 0.0..=100.0).suffix(" px"))
+                        .changed()
+                    {
                         *project_changed = true;
                     }
                 });
                 ui.horizontal(|ui| {
                     ui.label("Opacity:");
-                    if ui.add(egui::Slider::new(&mut ds.opacity, 0.0..=1.0)).changed() {
+                    if ui
+                        .add(egui::Slider::new(&mut ds.opacity, 0.0..=1.0))
+                        .changed()
+                    {
                         *project_changed = true;
                     }
                 });
@@ -430,7 +764,10 @@ pub fn draw_layer_transforms(
                 }
                 ui.horizontal(|ui| {
                     ui.label("Size:");
-                    if ui.add(egui::Slider::new(&mut st.size, 1.0..=50.0).suffix(" px")).changed() {
+                    if ui
+                        .add(egui::Slider::new(&mut st.size, 1.0..=50.0).suffix(" px"))
+                        .changed()
+                    {
                         *project_changed = true;
                     }
                 });
@@ -456,44 +793,97 @@ pub fn draw_layer_type_specs(
                     ui.label("Color:");
                     ui.color_edit_button_rgba_unmultiplied(color);
                 });
-                if val_before != *color { *project_changed = true; }
+                if val_before != *color {
+                    *project_changed = true;
+                }
             }
             LayerType::Image { path } => {
                 let val_before = path.clone();
                 ui.text_edit_singleline(path);
-                if !path.is_empty() && ui.small("📂 Reveal File").on_hover_text("Open the source file location in file manager").clicked() {
-                    crate::ui::project_io::reveal_in_file_manager(std::path::Path::new(path.as_str()));
+                if !path.is_empty()
+                    && ui
+                        .small("📂 Reveal File")
+                        .on_hover_text("Open the source file location in file manager")
+                        .clicked()
+                {
+                    crate::ui::project_io::reveal_in_file_manager(std::path::Path::new(
+                        path.as_str(),
+                    ));
                 }
-                if val_before != *path { *project_changed = true; }
+                if val_before != *path {
+                    *project_changed = true;
+                }
 
                 // 🧷 Puppet Mesh & Pins Tool
                 ui.collapsing("🧷 Puppet Tool & Mesh Warp", |ui| {
                     ui.horizontal(|ui| {
-                        if ui.small_button("+ Position Pin").clicked() { *project_changed = true; }
-                        if ui.small_button("🧱 + Starch Pin").on_hover_text("Adds rigidity to mesh area").clicked() { *project_changed = true; }
-                        if ui.small_button("🔀 + Overlap Pin").on_hover_text("Controls in-front/behind depth ordering").clicked() { *project_changed = true; }
-                        if ui.small_button("🔄 + Advanced Pin").on_hover_text("Controls scale and rotation warp").clicked() { *project_changed = true; }
+                        if ui.small_button("+ Position Pin").clicked() {
+                            *project_changed = true;
+                        }
+                        if ui
+                            .small_button("🧱 + Starch Pin")
+                            .on_hover_text("Adds rigidity to mesh area")
+                            .clicked()
+                        {
+                            *project_changed = true;
+                        }
+                        if ui
+                            .small_button("🔀 + Overlap Pin")
+                            .on_hover_text("Controls in-front/behind depth ordering")
+                            .clicked()
+                        {
+                            *project_changed = true;
+                        }
+                        if ui
+                            .small_button("🔄 + Advanced Pin")
+                            .on_hover_text("Controls scale and rotation warp")
+                            .clicked()
+                        {
+                            *project_changed = true;
+                        }
                     });
 
-                    let mut mesh_density = ui.ctx().data(|d| d.get_temp::<u32>(egui::Id::new("puppet_mesh_density")).unwrap_or(50));
-                    let mut mesh_exp = ui.ctx().data(|d| d.get_temp::<f32>(egui::Id::new("puppet_mesh_exp")).unwrap_or(5.0));
+                    let mut mesh_density = ui.ctx().data(|d| {
+                        d.get_temp::<u32>(egui::Id::new("puppet_mesh_density"))
+                            .unwrap_or(50)
+                    });
+                    let mut mesh_exp = ui.ctx().data(|d| {
+                        d.get_temp::<f32>(egui::Id::new("puppet_mesh_exp"))
+                            .unwrap_or(5.0)
+                    });
                     ui.horizontal(|ui| {
                         ui.label("Mesh Density:");
-                        if ui.add(egui::Slider::new(&mut mesh_density, 10..=100).suffix(" tri")).changed() {
-                            ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("puppet_mesh_density"), mesh_density));
+                        if ui
+                            .add(egui::Slider::new(&mut mesh_density, 10..=100).suffix(" tri"))
+                            .changed()
+                        {
+                            ui.ctx().data_mut(|d| {
+                                d.insert_temp(egui::Id::new("puppet_mesh_density"), mesh_density)
+                            });
                             *project_changed = true;
                         }
                     });
                     ui.horizontal(|ui| {
                         ui.label("Expansion:");
-                        if ui.add(egui::Slider::new(&mut mesh_exp, 0.0..=50.0).suffix(" px")).changed() {
-                            ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("puppet_mesh_exp"), mesh_exp));
+                        if ui
+                            .add(egui::Slider::new(&mut mesh_exp, 0.0..=50.0).suffix(" px"))
+                            .changed()
+                        {
+                            ui.ctx().data_mut(|d| {
+                                d.insert_temp(egui::Id::new("puppet_mesh_exp"), mesh_exp)
+                            });
                             *project_changed = true;
                         }
                     });
                 });
             }
-            LayerType::Video { source, frames_dir, frame_count, audio_wav, speed } => {
+            LayerType::Video {
+                source,
+                frames_dir,
+                frame_count,
+                audio_wav,
+                speed,
+            } => {
                 let before_src = source.clone();
                 let before_frames = frames_dir.clone();
                 let before_speed = *speed;
@@ -503,8 +893,15 @@ pub fn draw_layer_type_specs(
                     ui.label("Source:");
                     ui.text_edit_singleline(source);
                 });
-                if !source.is_empty() && ui.small("📂 Reveal File").on_hover_text("Open the source file location in file manager").clicked() {
-                    crate::ui::project_io::reveal_in_file_manager(std::path::Path::new(source.as_str()));
+                if !source.is_empty()
+                    && ui
+                        .small("📂 Reveal File")
+                        .on_hover_text("Open the source file location in file manager")
+                        .clicked()
+                {
+                    crate::ui::project_io::reveal_in_file_manager(std::path::Path::new(
+                        source.as_str(),
+                    ));
                 }
                 ui.horizontal(|ui| {
                     ui.label("Frames dir:");
@@ -541,10 +938,19 @@ pub fn draw_layer_type_specs(
                     if ui.checkbox(&mut new_enabled, "Time Remap").changed() {
                         if new_enabled && !remap_enabled {
                             // Initialize remap: linear 0..frame_count mapping
-                            layer.time_remap = Some(crate::core::property::Animatable::new_animated(vec![
-                                crate::core::keyframe::Keyframe::new(0, 0.0, crate::core::keyframe::InterpolationType::Linear),
-                                crate::core::keyframe::Keyframe::new(0u32, 0.0f32, crate::core::keyframe::InterpolationType::Linear),
-                            ]));
+                            layer.time_remap =
+                                Some(crate::core::property::Animatable::new_animated(vec![
+                                    crate::core::keyframe::Keyframe::new(
+                                        0,
+                                        0.0,
+                                        crate::core::keyframe::InterpolationType::Linear,
+                                    ),
+                                    crate::core::keyframe::Keyframe::new(
+                                        0u32,
+                                        0.0f32,
+                                        crate::core::keyframe::InterpolationType::Linear,
+                                    ),
+                                ]));
                             *project_changed = true;
                         } else if !new_enabled && remap_enabled {
                             layer.time_remap = None;
@@ -559,16 +965,24 @@ pub fn draw_layer_type_specs(
                         ui.small(format!("  {} keyframes", kfs.len()));
                     }
                 }
-                if before_src != *source || before_frames != *frames_dir
-                    || before_speed != *speed || before_count != *frame_count {
+                if before_src != *source
+                    || before_frames != *frames_dir
+                    || before_speed != *speed
+                    || before_count != *frame_count
+                {
                     *project_changed = true;
                 }
             }
-            LayerType::Text { text, font_size, color, .. } => {
+            LayerType::Text {
+                text,
+                font_size,
+                color,
+                ..
+            } => {
                 let val_before_text = text.clone();
                 let val_before_sz = *font_size;
                 let val_before_col = *color;
-                
+
                 ui.text_edit_multiline(text);
                 ui.horizontal(|ui| {
                     ui.label("Font Size:");
@@ -578,7 +992,10 @@ pub fn draw_layer_type_specs(
                     ui.label("Color:");
                     ui.color_edit_button_rgba_unmultiplied(color);
                 });
-                if val_before_text != *text || val_before_sz != *font_size || val_before_col != *color {
+                if val_before_text != *text
+                    || val_before_sz != *font_size
+                    || val_before_col != *color
+                {
                     *project_changed = true;
                 }
 
@@ -588,7 +1005,11 @@ pub fn draw_layer_type_specs(
                         layer.text_animator = Some(TextAnimatorSettings::default());
                     }
                     let Some(anim) = layer.text_animator.as_mut() else {
-                        ui.label(egui::RichText::new("Animator unavailable").small().color(colors::TEXT_MUTED));
+                        ui.label(
+                            egui::RichText::new("Animator unavailable")
+                                .small()
+                                .color(colors::TEXT_MUTED),
+                        );
                         return;
                     };
                     let enabled_before = anim.enabled;
@@ -599,23 +1020,44 @@ pub fn draw_layer_type_specs(
 
                     ui.horizontal(|ui| {
                         ui.label("Range Start:");
-                        if ui.add(egui::DragValue::new(&mut anim.selector.start).speed(0.5).suffix("%").range(0.0..=100.0)).changed() {
+                        if ui
+                            .add(
+                                egui::DragValue::new(&mut anim.selector.start)
+                                    .speed(0.5)
+                                    .suffix("%")
+                                    .range(0.0..=100.0),
+                            )
+                            .changed()
+                        {
                             *project_changed = true;
                         }
                         ui.label("End:");
-                        if ui.add(egui::DragValue::new(&mut anim.selector.end).speed(0.5).suffix("%").range(0.0..=100.0)).changed() {
+                        if ui
+                            .add(
+                                egui::DragValue::new(&mut anim.selector.end)
+                                    .speed(0.5)
+                                    .suffix("%")
+                                    .range(0.0..=100.0),
+                            )
+                            .changed()
+                        {
                             *project_changed = true;
                         }
                     });
 
                     ui.horizontal(|ui| {
                         ui.label("Range Offset:");
-                        if ui.add(egui::Slider::new(&mut anim.selector.offset, -100.0..=100.0).suffix("%")).changed() {
+                        if ui
+                            .add(
+                                egui::Slider::new(&mut anim.selector.offset, -100.0..=100.0)
+                                    .suffix("%"),
+                            )
+                            .changed()
+                        {
                             *project_changed = true;
                         }
                     });
                     ui.horizontal(|ui| {
-
                         ui.label("Shape:");
                         let shape_before = anim.selector.shape;
                         egui::ComboBox::from_id_salt(format!("text_anim_shape_{}", layer.id))
@@ -629,7 +1071,11 @@ pub fn draw_layer_type_specs(
                                     SelectorShape::Round,
                                     SelectorShape::Smooth,
                                 ] {
-                                    ui.selectable_value(&mut anim.selector.shape, shape, format!("{:?}", shape));
+                                    ui.selectable_value(
+                                        &mut anim.selector.shape,
+                                        shape,
+                                        format!("{:?}", shape),
+                                    );
                                 }
                             });
                         if shape_before != anim.selector.shape {
@@ -639,21 +1085,39 @@ pub fn draw_layer_type_specs(
 
                     ui.horizontal(|ui| {
                         ui.label("Position Offset:");
-                        if ui.add(egui::DragValue::new(&mut anim.position_offset[0]).speed(0.5).prefix("X: ")).changed()
-                            || ui.add(egui::DragValue::new(&mut anim.position_offset[1]).speed(0.5).prefix("Y: ")).changed()
+                        if ui
+                            .add(
+                                egui::DragValue::new(&mut anim.position_offset[0])
+                                    .speed(0.5)
+                                    .prefix("X: "),
+                            )
+                            .changed()
+                            || ui
+                                .add(
+                                    egui::DragValue::new(&mut anim.position_offset[1])
+                                        .speed(0.5)
+                                        .prefix("Y: "),
+                                )
+                                .changed()
                         {
                             *project_changed = true;
                         }
                     });
                     ui.horizontal(|ui| {
                         ui.label("Opacity Target:");
-                        if ui.add(egui::Slider::new(&mut anim.opacity, 0.0..=1.0)).changed() {
+                        if ui
+                            .add(egui::Slider::new(&mut anim.opacity, 0.0..=1.0))
+                            .changed()
+                        {
                             *project_changed = true;
                         }
                     });
                     ui.horizontal(|ui| {
                         ui.label("Tracking:");
-                        if ui.add(egui::DragValue::new(&mut anim.tracking).speed(0.5)).changed() {
+                        if ui
+                            .add(egui::DragValue::new(&mut anim.tracking).speed(0.5))
+                            .changed()
+                        {
                             *project_changed = true;
                         }
                     });
@@ -663,79 +1127,152 @@ pub fn draw_layer_type_specs(
                 ui.separator();
                 ui.collapsing("Animator Stack", |ui| {
                     if layer.text_animator_stack.is_none() {
-                        layer.text_animator_stack = Some(crate::core::text_animator_advanced::AnimatorStack::default());
+                        layer.text_animator_stack =
+                            Some(crate::core::text_animator_advanced::AnimatorStack::default());
                     }
-                    let stack = layer.text_animator_stack.as_mut().expect("text_animator_stack");
+                    let Some(stack) = layer.text_animator_stack.as_mut() else {
+                        return;
+                    };
                     let mut pending_remove: Option<usize> = None;
 
                     for (ai, adv) in stack.animators.iter_mut().enumerate() {
                         ui.group(|ui| {
                             ui.horizontal(|ui| {
                                 ui.checkbox(&mut adv.enabled, "");
-                                ui.label(egui::RichText::new(format!("Animator {}", ai + 1)).strong());
+                                ui.label(
+                                    egui::RichText::new(format!("Animator {}", ai + 1)).strong(),
+                                );
                                 if ui.small_button("✕").on_hover_text("Remove").clicked() {
                                     pending_remove = Some(ai);
                                 }
                             });
                             ui.horizontal(|ui| {
                                 ui.label("Unit:");
-                                egui::ComboBox::from_id_salt(format!("adv_unit_{}_{}", layer.id, ai))
-                                    .selected_text(format!("{:?}", adv.unit))
-                                    .show_ui(ui, |ui| {
-                                        use crate::core::text_animator_advanced::SelectorUnit;
-                                        for u in [SelectorUnit::Characters, SelectorUnit::Words, SelectorUnit::Lines] {
-                                            ui.selectable_value(&mut adv.unit, u, format!("{:?}", u));
-                                        }
-                                    });
+                                egui::ComboBox::from_id_salt(format!(
+                                    "adv_unit_{}_{}",
+                                    layer.id, ai
+                                ))
+                                .selected_text(format!("{:?}", adv.unit))
+                                .show_ui(ui, |ui| {
+                                    use crate::core::text_animator_advanced::SelectorUnit;
+                                    for u in [
+                                        SelectorUnit::Characters,
+                                        SelectorUnit::Words,
+                                        SelectorUnit::Lines,
+                                    ] {
+                                        ui.selectable_value(&mut adv.unit, u, format!("{:?}", u));
+                                    }
+                                });
                             });
                             ui.horizontal(|ui| {
                                 ui.label("Range:");
-                                ui.add(egui::DragValue::new(&mut adv.selector.start).speed(0.5).suffix("%").range(0.0..=100.0));
+                                ui.add(
+                                    egui::DragValue::new(&mut adv.selector.start)
+                                        .speed(0.5)
+                                        .suffix("%")
+                                        .range(0.0..=100.0),
+                                );
                                 ui.label("→");
-                                ui.add(egui::DragValue::new(&mut adv.selector.end).speed(0.5).suffix("%").range(0.0..=100.0));
+                                ui.add(
+                                    egui::DragValue::new(&mut adv.selector.end)
+                                        .speed(0.5)
+                                        .suffix("%")
+                                        .range(0.0..=100.0),
+                                );
                             });
                             ui.horizontal(|ui| {
                                 ui.label("Shape:");
-                                egui::ComboBox::from_id_salt(format!("adv_shape_{}_{}", layer.id, ai))
-                                    .selected_text(format!("{:?}", adv.selector.shape))
-                                    .show_ui(ui, |ui| {
-                                        use crate::core::text_animator::SelectorShape;
-                                        for s in [SelectorShape::Square, SelectorShape::RampUp, SelectorShape::RampDown, SelectorShape::Triangle, SelectorShape::Round, SelectorShape::Smooth] {
-                                            ui.selectable_value(&mut adv.selector.shape, s, format!("{:?}", s));
-                                        }
-                                    });
+                                egui::ComboBox::from_id_salt(format!(
+                                    "adv_shape_{}_{}",
+                                    layer.id, ai
+                                ))
+                                .selected_text(format!("{:?}", adv.selector.shape))
+                                .show_ui(ui, |ui| {
+                                    use crate::core::text_animator::SelectorShape;
+                                    for s in [
+                                        SelectorShape::Square,
+                                        SelectorShape::RampUp,
+                                        SelectorShape::RampDown,
+                                        SelectorShape::Triangle,
+                                        SelectorShape::Round,
+                                        SelectorShape::Smooth,
+                                    ] {
+                                        ui.selectable_value(
+                                            &mut adv.selector.shape,
+                                            s,
+                                            format!("{:?}", s),
+                                        );
+                                    }
+                                });
                             });
                             ui.horizontal(|ui| {
                                 ui.label("Position:");
-                                ui.add(egui::DragValue::new(&mut adv.position[0]).speed(0.5).prefix("X: "));
-                                ui.add(egui::DragValue::new(&mut adv.position[1]).speed(0.5).prefix("Y: "));
+                                ui.add(
+                                    egui::DragValue::new(&mut adv.position[0])
+                                        .speed(0.5)
+                                        .prefix("X: "),
+                                );
+                                ui.add(
+                                    egui::DragValue::new(&mut adv.position[1])
+                                        .speed(0.5)
+                                        .prefix("Y: "),
+                                );
                             });
                             ui.horizontal(|ui| {
                                 ui.label("Scale:");
-                                ui.add(egui::DragValue::new(&mut adv.scale[0]).speed(0.5).prefix("X: ").range(0.0..=10.0));
-                                ui.add(egui::DragValue::new(&mut adv.scale[1]).speed(0.5).prefix("Y: ").range(0.0..=10.0));
+                                ui.add(
+                                    egui::DragValue::new(&mut adv.scale[0])
+                                        .speed(0.5)
+                                        .prefix("X: ")
+                                        .range(0.0..=10.0),
+                                );
+                                ui.add(
+                                    egui::DragValue::new(&mut adv.scale[1])
+                                        .speed(0.5)
+                                        .prefix("Y: ")
+                                        .range(0.0..=10.0),
+                                );
                             });
                             ui.horizontal(|ui| {
                                 ui.label("Opacity:");
                                 ui.add(egui::Slider::new(&mut adv.opacity, 0.0..=1.0));
                                 ui.label("Rotation:");
-                                ui.add(egui::DragValue::new(&mut adv.rotation).speed(1.0).suffix("°"));
+                                ui.add(
+                                    egui::DragValue::new(&mut adv.rotation)
+                                        .speed(1.0)
+                                        .suffix("°"),
+                                );
                             });
                             ui.horizontal(|ui| {
                                 ui.label("Blur:");
-                                ui.add(egui::DragValue::new(&mut adv.blur).speed(0.5).range(0.0..=50.0));
+                                ui.add(
+                                    egui::DragValue::new(&mut adv.blur)
+                                        .speed(0.5)
+                                        .range(0.0..=50.0),
+                                );
                                 ui.label("Tracking:");
                                 ui.add(egui::DragValue::new(&mut adv.tracking).speed(0.5));
                             });
                             ui.horizontal(|ui| {
                                 ui.label("Skew:");
-                                ui.add(egui::DragValue::new(&mut adv.advanced.skew).speed(0.5).suffix("°"));
+                                ui.add(
+                                    egui::DragValue::new(&mut adv.advanced.skew)
+                                        .speed(0.5)
+                                        .suffix("°"),
+                                );
                                 ui.label("Axis:");
-                                ui.add(egui::DragValue::new(&mut adv.advanced.skew_axis).speed(0.5).suffix("°"));
+                                ui.add(
+                                    egui::DragValue::new(&mut adv.advanced.skew_axis)
+                                        .speed(0.5)
+                                        .suffix("°"),
+                                );
                             });
                             ui.horizontal(|ui| {
                                 ui.label("Char Offset:");
-                                ui.add(egui::DragValue::new(&mut adv.advanced.character_offset).speed(1));
+                                ui.add(
+                                    egui::DragValue::new(&mut adv.advanced.character_offset)
+                                        .speed(1),
+                                );
                             });
                         });
                         ui.add_space(2.0);
@@ -747,12 +1284,20 @@ pub fn draw_layer_type_specs(
                     }
 
                     if ui.small_button("+ Add Animator").clicked() {
-                        stack.animators.push(crate::core::text_animator_advanced::TextAnimatorAdvanced::default());
+                        stack.animators.push(
+                            crate::core::text_animator_advanced::TextAnimatorAdvanced::default(),
+                        );
                         *project_changed = true;
                     }
                 });
             }
-            LayerType::Shape { shape_type, color, stroke_color, stroke_width, .. } => {
+            LayerType::Shape {
+                shape_type,
+                color,
+                stroke_color,
+                stroke_width,
+                ..
+            } => {
                 ui.label(format!("Shape: {:?}", shape_type));
                 let mut c_arr = *color;
                 ui.horizontal(|ui| {
@@ -765,14 +1310,25 @@ pub fn draw_layer_type_specs(
                 let mut sc_arr = *stroke_color;
                 ui.horizontal(|ui| {
                     ui.label("Stroke Color:");
-                    if ui.color_edit_button_rgba_unmultiplied(&mut sc_arr).changed() {
+                    if ui
+                        .color_edit_button_rgba_unmultiplied(&mut sc_arr)
+                        .changed()
+                    {
                         *stroke_color = sc_arr;
                         *project_changed = true;
                     }
                 });
                 ui.horizontal(|ui| {
                     ui.label("Stroke Width:");
-                    if ui.add(egui::DragValue::new(stroke_width).speed(0.5).range(0.0..=50.0).suffix(" px")).changed() {
+                    if ui
+                        .add(
+                            egui::DragValue::new(stroke_width)
+                                .speed(0.5)
+                                .range(0.0..=50.0)
+                                .suffix(" px"),
+                        )
+                        .changed()
+                    {
                         *project_changed = true;
                     }
                 });
@@ -784,7 +1340,8 @@ pub fn draw_layer_type_specs(
                     ui.horizontal(|ui| {
                         if !has_trim {
                             if ui.button("+ Add Trim Paths").clicked() {
-                                layer.trim_paths = Some(crate::core::timeline::TrimPaths::default());
+                                layer.trim_paths =
+                                    Some(crate::core::timeline::TrimPaths::default());
                                 *project_changed = true;
                             }
                         } else if ui.small_button("🗑 Remove").clicked() {
@@ -797,8 +1354,12 @@ pub fn draw_layer_type_specs(
                         let mut start_val = trim.start.evaluate(current_frame);
                         ui.horizontal(|ui| {
                             ui.label("Start:");
-                            if ui.add(egui::Slider::new(&mut start_val, 0.0..=100.0).suffix("%")).changed() {
-                                trim.start = crate::core::property::Animatable::new_constant(start_val);
+                            if ui
+                                .add(egui::Slider::new(&mut start_val, 0.0..=100.0).suffix("%"))
+                                .changed()
+                            {
+                                trim.start =
+                                    crate::core::property::Animatable::new_constant(start_val);
                                 *project_changed = true;
                             }
                         });
@@ -806,7 +1367,10 @@ pub fn draw_layer_type_specs(
                         let mut end_val = trim.end.evaluate(current_frame);
                         ui.horizontal(|ui| {
                             ui.label("End:");
-                            if ui.add(egui::Slider::new(&mut end_val, 0.0..=100.0).suffix("%")).changed() {
+                            if ui
+                                .add(egui::Slider::new(&mut end_val, 0.0..=100.0).suffix("%"))
+                                .changed()
+                            {
                                 trim.end = crate::core::property::Animatable::new_constant(end_val);
                                 *project_changed = true;
                             }
@@ -815,8 +1379,12 @@ pub fn draw_layer_type_specs(
                         let mut offset_val = trim.offset.evaluate(current_frame);
                         ui.horizontal(|ui| {
                             ui.label("Offset:");
-                            if ui.add(egui::DragValue::new(&mut offset_val).suffix("°")).changed() {
-                                trim.offset = crate::core::property::Animatable::new_constant(offset_val);
+                            if ui
+                                .add(egui::DragValue::new(&mut offset_val).suffix("°"))
+                                .changed()
+                            {
+                                trim.offset =
+                                    crate::core::property::Animatable::new_constant(offset_val);
                                 *project_changed = true;
                             }
                         });
@@ -827,7 +1395,10 @@ pub fn draw_layer_type_specs(
                 ui.collapsing("🔗 Vector Path Operators", |ui| {
                     ui.horizontal(|ui| {
                         ui.label("Merge Paths Mode:");
-                        let mut merge_mode = ui.ctx().data(|d| d.get_temp::<i32>(egui::Id::new("shape_merge_mode")).unwrap_or(0));
+                        let mut merge_mode = ui.ctx().data(|d| {
+                            d.get_temp::<i32>(egui::Id::new("shape_merge_mode"))
+                                .unwrap_or(0)
+                        });
                         egui::ComboBox::from_id_salt("shape_merge_mode_combo")
                             .selected_text(match merge_mode {
                                 0 => "Add (Union)",
@@ -837,18 +1408,63 @@ pub fn draw_layer_type_specs(
                                 _ => "Add",
                             })
                             .show_ui(ui, |ui| {
-                                if ui.selectable_value(&mut merge_mode, 0, "Add (Union)").clicked() { ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("shape_merge_mode"), 0)); *project_changed = true; }
-                                if ui.selectable_value(&mut merge_mode, 1, "Subtract (Difference)").clicked() { ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("shape_merge_mode"), 1)); *project_changed = true; }
-                                if ui.selectable_value(&mut merge_mode, 2, "Intersect").clicked() { ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("shape_merge_mode"), 2)); *project_changed = true; }
-                                if ui.selectable_value(&mut merge_mode, 3, "Exclude (XOR)").clicked() { ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("shape_merge_mode"), 3)); *project_changed = true; }
+                                if ui
+                                    .selectable_value(&mut merge_mode, 0, "Add (Union)")
+                                    .clicked()
+                                {
+                                    ui.ctx().data_mut(|d| {
+                                        d.insert_temp(egui::Id::new("shape_merge_mode"), 0)
+                                    });
+                                    *project_changed = true;
+                                }
+                                if ui
+                                    .selectable_value(&mut merge_mode, 1, "Subtract (Difference)")
+                                    .clicked()
+                                {
+                                    ui.ctx().data_mut(|d| {
+                                        d.insert_temp(egui::Id::new("shape_merge_mode"), 1)
+                                    });
+                                    *project_changed = true;
+                                }
+                                if ui
+                                    .selectable_value(&mut merge_mode, 2, "Intersect")
+                                    .clicked()
+                                {
+                                    ui.ctx().data_mut(|d| {
+                                        d.insert_temp(egui::Id::new("shape_merge_mode"), 2)
+                                    });
+                                    *project_changed = true;
+                                }
+                                if ui
+                                    .selectable_value(&mut merge_mode, 3, "Exclude (XOR)")
+                                    .clicked()
+                                {
+                                    ui.ctx().data_mut(|d| {
+                                        d.insert_temp(egui::Id::new("shape_merge_mode"), 3)
+                                    });
+                                    *project_changed = true;
+                                }
                             });
                     });
 
-                    let mut offset_dist = ui.ctx().data(|d| d.get_temp::<f32>(egui::Id::new("shape_offset_path_amt")).unwrap_or(0.0));
+                    let mut offset_dist = ui.ctx().data(|d| {
+                        d.get_temp::<f32>(egui::Id::new("shape_offset_path_amt"))
+                            .unwrap_or(0.0)
+                    });
                     ui.horizontal(|ui| {
                         ui.label("Offset Paths:");
-                        if ui.add(egui::DragValue::new(&mut offset_dist).speed(0.5).range(-100.0..=100.0).suffix(" px")).changed() {
-                            ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("shape_offset_path_amt"), offset_dist));
+                        if ui
+                            .add(
+                                egui::DragValue::new(&mut offset_dist)
+                                    .speed(0.5)
+                                    .range(-100.0..=100.0)
+                                    .suffix(" px"),
+                            )
+                            .changed()
+                        {
+                            ui.ctx().data_mut(|d| {
+                                d.insert_temp(egui::Id::new("shape_offset_path_amt"), offset_dist)
+                            });
                             *project_changed = true;
                         }
                     });
@@ -856,31 +1472,61 @@ pub fn draw_layer_type_specs(
 
                 // ── Repeater (AE Shape Modifier) ──
                 ui.collapsing("🔁 Repeater", |ui| {
-                    let mut has_rep = ui.ctx().data(|d| d.get_temp::<bool>(egui::Id::new("has_shape_repeater")).unwrap_or(false));
+                    let mut has_rep = ui.ctx().data(|d| {
+                        d.get_temp::<bool>(egui::Id::new("has_shape_repeater"))
+                            .unwrap_or(false)
+                    });
                     ui.horizontal(|ui| {
                         if ui.checkbox(&mut has_rep, "Enable Repeater").clicked() {
-                            ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("has_shape_repeater"), has_rep));
+                            ui.ctx().data_mut(|d| {
+                                d.insert_temp(egui::Id::new("has_shape_repeater"), has_rep)
+                            });
                             *project_changed = true;
                         }
                     });
 
                     if has_rep {
-                        let mut copies = ui.ctx().data(|d| d.get_temp::<u32>(egui::Id::new("rep_copies")).unwrap_or(3));
-                        let mut offset = ui.ctx().data(|d| d.get_temp::<f32>(egui::Id::new("rep_offset")).unwrap_or(0.0));
-                        let mut rep_pos_x = ui.ctx().data(|d| d.get_temp::<f32>(egui::Id::new("rep_pos_x")).unwrap_or(100.0));
-                        let mut rep_pos_y = ui.ctx().data(|d| d.get_temp::<f32>(egui::Id::new("rep_pos_y")).unwrap_or(0.0));
-                        let mut rep_rot = ui.ctx().data(|d| d.get_temp::<f32>(egui::Id::new("rep_rot")).unwrap_or(0.0));
-                        let mut rep_scale = ui.ctx().data(|d| d.get_temp::<f32>(egui::Id::new("rep_scale")).unwrap_or(100.0));
+                        let mut copies = ui
+                            .ctx()
+                            .data(|d| d.get_temp::<u32>(egui::Id::new("rep_copies")).unwrap_or(3));
+                        let mut offset = ui.ctx().data(|d| {
+                            d.get_temp::<f32>(egui::Id::new("rep_offset"))
+                                .unwrap_or(0.0)
+                        });
+                        let mut rep_pos_x = ui.ctx().data(|d| {
+                            d.get_temp::<f32>(egui::Id::new("rep_pos_x"))
+                                .unwrap_or(100.0)
+                        });
+                        let mut rep_pos_y = ui
+                            .ctx()
+                            .data(|d| d.get_temp::<f32>(egui::Id::new("rep_pos_y")).unwrap_or(0.0));
+                        let mut rep_rot = ui
+                            .ctx()
+                            .data(|d| d.get_temp::<f32>(egui::Id::new("rep_rot")).unwrap_or(0.0));
+                        let mut rep_scale = ui.ctx().data(|d| {
+                            d.get_temp::<f32>(egui::Id::new("rep_scale"))
+                                .unwrap_or(100.0)
+                        });
 
                         ui.horizontal(|ui| {
                             ui.label("Copies:");
-                            if ui.add(egui::DragValue::new(&mut copies).range(1..=100)).changed() {
-                                ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("rep_copies"), copies));
+                            if ui
+                                .add(egui::DragValue::new(&mut copies).range(1..=100))
+                                .changed()
+                            {
+                                ui.ctx().data_mut(|d| {
+                                    d.insert_temp(egui::Id::new("rep_copies"), copies)
+                                });
                                 *project_changed = true;
                             }
                             ui.label("Offset:");
-                            if ui.add(egui::DragValue::new(&mut offset).speed(0.1)).changed() {
-                                ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("rep_offset"), offset));
+                            if ui
+                                .add(egui::DragValue::new(&mut offset).speed(0.1))
+                                .changed()
+                            {
+                                ui.ctx().data_mut(|d| {
+                                    d.insert_temp(egui::Id::new("rep_offset"), offset)
+                                });
                                 *project_changed = true;
                             }
                         });
@@ -888,23 +1534,43 @@ pub fn draw_layer_type_specs(
                         ui.collapsing("📐 Transform: Repeater", |ui| {
                             ui.horizontal(|ui| {
                                 ui.label("Position:");
-                                if ui.add(egui::DragValue::new(&mut rep_pos_x).prefix("X: ")).changed() {
-                                    ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("rep_pos_x"), rep_pos_x));
+                                if ui
+                                    .add(egui::DragValue::new(&mut rep_pos_x).prefix("X: "))
+                                    .changed()
+                                {
+                                    ui.ctx().data_mut(|d| {
+                                        d.insert_temp(egui::Id::new("rep_pos_x"), rep_pos_x)
+                                    });
                                     *project_changed = true;
                                 }
-                                if ui.add(egui::DragValue::new(&mut rep_pos_y).prefix("Y: ")).changed() {
-                                    ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("rep_pos_y"), rep_pos_y));
+                                if ui
+                                    .add(egui::DragValue::new(&mut rep_pos_y).prefix("Y: "))
+                                    .changed()
+                                {
+                                    ui.ctx().data_mut(|d| {
+                                        d.insert_temp(egui::Id::new("rep_pos_y"), rep_pos_y)
+                                    });
                                     *project_changed = true;
                                 }
                             });
                             ui.horizontal(|ui| {
                                 ui.label("Rotation / Scale:");
-                                if ui.add(egui::DragValue::new(&mut rep_rot).suffix("°")).changed() {
-                                    ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("rep_rot"), rep_rot));
+                                if ui
+                                    .add(egui::DragValue::new(&mut rep_rot).suffix("°"))
+                                    .changed()
+                                {
+                                    ui.ctx().data_mut(|d| {
+                                        d.insert_temp(egui::Id::new("rep_rot"), rep_rot)
+                                    });
                                     *project_changed = true;
                                 }
-                                if ui.add(egui::DragValue::new(&mut rep_scale).suffix("%")).changed() {
-                                    ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("rep_scale"), rep_scale));
+                                if ui
+                                    .add(egui::DragValue::new(&mut rep_scale).suffix("%"))
+                                    .changed()
+                                {
+                                    ui.ctx().data_mut(|d| {
+                                        d.insert_temp(egui::Id::new("rep_scale"), rep_scale)
+                                    });
                                     *project_changed = true;
                                 }
                             });
@@ -914,27 +1580,53 @@ pub fn draw_layer_type_specs(
 
                 // ── Zig Zag & Round Corners (AE Vector Modifiers) ──
                 ui.collapsing("⚡ Zig Zag & Round Corners", |ui| {
-                    let mut has_zigzag = ui.ctx().data(|d| d.get_temp::<bool>(egui::Id::new("has_shape_zigzag")).unwrap_or(false));
+                    let mut has_zigzag = ui.ctx().data(|d| {
+                        d.get_temp::<bool>(egui::Id::new("has_shape_zigzag"))
+                            .unwrap_or(false)
+                    });
                     ui.horizontal(|ui| {
                         if ui.checkbox(&mut has_zigzag, "⚡ Enable Zig Zag").clicked() {
-                            ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("has_shape_zigzag"), has_zigzag));
+                            ui.ctx().data_mut(|d| {
+                                d.insert_temp(egui::Id::new("has_shape_zigzag"), has_zigzag)
+                            });
                             *project_changed = true;
                         }
                     });
                     if has_zigzag {
-                        let mut zz_size = ui.ctx().data(|d| d.get_temp::<f32>(egui::Id::new("zz_size")).unwrap_or(10.0));
-                        let mut zz_ridges = ui.ctx().data(|d| d.get_temp::<u32>(egui::Id::new("zz_ridges")).unwrap_or(4));
-                        let mut zz_smooth = ui.ctx().data(|d| d.get_temp::<bool>(egui::Id::new("zz_smooth")).unwrap_or(false));
+                        let mut zz_size = ui
+                            .ctx()
+                            .data(|d| d.get_temp::<f32>(egui::Id::new("zz_size")).unwrap_or(10.0));
+                        let mut zz_ridges = ui
+                            .ctx()
+                            .data(|d| d.get_temp::<u32>(egui::Id::new("zz_ridges")).unwrap_or(4));
+                        let mut zz_smooth = ui.ctx().data(|d| {
+                            d.get_temp::<bool>(egui::Id::new("zz_smooth"))
+                                .unwrap_or(false)
+                        });
 
                         ui.horizontal(|ui| {
                             ui.label("Size:");
-                            if ui.add(egui::DragValue::new(&mut zz_size).speed(0.5).range(0.0..=200.0).suffix(" px")).changed() {
-                                ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("zz_size"), zz_size));
+                            if ui
+                                .add(
+                                    egui::DragValue::new(&mut zz_size)
+                                        .speed(0.5)
+                                        .range(0.0..=200.0)
+                                        .suffix(" px"),
+                                )
+                                .changed()
+                            {
+                                ui.ctx()
+                                    .data_mut(|d| d.insert_temp(egui::Id::new("zz_size"), zz_size));
                                 *project_changed = true;
                             }
                             ui.label("Ridges:");
-                            if ui.add(egui::DragValue::new(&mut zz_ridges).range(1..=50)).changed() {
-                                ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("zz_ridges"), zz_ridges));
+                            if ui
+                                .add(egui::DragValue::new(&mut zz_ridges).range(1..=50))
+                                .changed()
+                            {
+                                ui.ctx().data_mut(|d| {
+                                    d.insert_temp(egui::Id::new("zz_ridges"), zz_ridges)
+                                });
                                 *project_changed = true;
                             }
                         });
@@ -942,68 +1634,129 @@ pub fn draw_layer_type_specs(
                             ui.label("Points:");
                             if ui.selectable_label(!zz_smooth, "Corner").clicked() {
                                 zz_smooth = false;
-                                ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("zz_smooth"), false));
+                                ui.ctx()
+                                    .data_mut(|d| d.insert_temp(egui::Id::new("zz_smooth"), false));
                                 *project_changed = true;
                             }
                             if ui.selectable_label(zz_smooth, "Smooth").clicked() {
                                 zz_smooth = true;
-                                ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("zz_smooth"), true));
+                                ui.ctx()
+                                    .data_mut(|d| d.insert_temp(egui::Id::new("zz_smooth"), true));
                                 *project_changed = true;
                             }
                         });
                     }
 
                     ui.separator();
-                    let mut round_radius = ui.ctx().data(|d| d.get_temp::<f32>(egui::Id::new("shape_round_radius")).unwrap_or(0.0));
+                    let mut round_radius = ui.ctx().data(|d| {
+                        d.get_temp::<f32>(egui::Id::new("shape_round_radius"))
+                            .unwrap_or(0.0)
+                    });
                     ui.horizontal(|ui| {
                         ui.label("📐 Round Corners:");
-                        if ui.add(egui::DragValue::new(&mut round_radius).speed(0.5).range(0.0..=100.0).suffix(" px")).changed() {
-                            ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("shape_round_radius"), round_radius));
+                        if ui
+                            .add(
+                                egui::DragValue::new(&mut round_radius)
+                                    .speed(0.5)
+                                    .range(0.0..=100.0)
+                                    .suffix(" px"),
+                            )
+                            .changed()
+                        {
+                            ui.ctx().data_mut(|d| {
+                                d.insert_temp(egui::Id::new("shape_round_radius"), round_radius)
+                            });
                             *project_changed = true;
                         }
                     });
 
                     // ── 🎈 Pucker & Bloat (AE Vector Modifier) ──
                     ui.separator();
-                    let mut pucker_bloat = ui.ctx().data(|d| d.get_temp::<f32>(egui::Id::new("shape_pucker_bloat")).unwrap_or(0.0));
+                    let mut pucker_bloat = ui.ctx().data(|d| {
+                        d.get_temp::<f32>(egui::Id::new("shape_pucker_bloat"))
+                            .unwrap_or(0.0)
+                    });
                     ui.horizontal(|ui| {
                         ui.label("🎈 Pucker & Bloat:");
-                        if ui.add(egui::Slider::new(&mut pucker_bloat, -100.0..=100.0).suffix("%")).changed() {
-                            ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("shape_pucker_bloat"), pucker_bloat));
+                        if ui
+                            .add(egui::Slider::new(&mut pucker_bloat, -100.0..=100.0).suffix("%"))
+                            .changed()
+                        {
+                            ui.ctx().data_mut(|d| {
+                                d.insert_temp(egui::Id::new("shape_pucker_bloat"), pucker_bloat)
+                            });
                             *project_changed = true;
                         }
                     });
 
                     // ── 〰 Wiggle Paths (AE Vector Modifier) ──
                     ui.separator();
-                    let mut has_wiggle_paths = ui.ctx().data(|d| d.get_temp::<bool>(egui::Id::new("shape_has_wiggle")).unwrap_or(false));
+                    let mut has_wiggle_paths = ui.ctx().data(|d| {
+                        d.get_temp::<bool>(egui::Id::new("shape_has_wiggle"))
+                            .unwrap_or(false)
+                    });
                     ui.horizontal(|ui| {
-                        if ui.checkbox(&mut has_wiggle_paths, "〰 Wiggle Paths").clicked() {
-                            ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("shape_has_wiggle"), has_wiggle_paths));
+                        if ui
+                            .checkbox(&mut has_wiggle_paths, "〰 Wiggle Paths")
+                            .clicked()
+                        {
+                            ui.ctx().data_mut(|d| {
+                                d.insert_temp(egui::Id::new("shape_has_wiggle"), has_wiggle_paths)
+                            });
                             *project_changed = true;
                         }
                     });
                     if has_wiggle_paths {
-                        let mut wp_size = ui.ctx().data(|d| d.get_temp::<f32>(egui::Id::new("wp_size")).unwrap_or(15.0));
-                        let mut wp_detail = ui.ctx().data(|d| d.get_temp::<f32>(egui::Id::new("wp_detail")).unwrap_or(5.0));
-                        let mut wp_temporal = ui.ctx().data(|d| d.get_temp::<f32>(egui::Id::new("wp_temporal")).unwrap_or(2.0));
+                        let mut wp_size = ui
+                            .ctx()
+                            .data(|d| d.get_temp::<f32>(egui::Id::new("wp_size")).unwrap_or(15.0));
+                        let mut wp_detail = ui
+                            .ctx()
+                            .data(|d| d.get_temp::<f32>(egui::Id::new("wp_detail")).unwrap_or(5.0));
+                        let mut wp_temporal = ui.ctx().data(|d| {
+                            d.get_temp::<f32>(egui::Id::new("wp_temporal"))
+                                .unwrap_or(2.0)
+                        });
 
                         ui.horizontal(|ui| {
                             ui.label("Size:");
-                            if ui.add(egui::DragValue::new(&mut wp_size).speed(0.5).suffix(" px")).changed() {
-                                ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("wp_size"), wp_size));
+                            if ui
+                                .add(egui::DragValue::new(&mut wp_size).speed(0.5).suffix(" px"))
+                                .changed()
+                            {
+                                ui.ctx()
+                                    .data_mut(|d| d.insert_temp(egui::Id::new("wp_size"), wp_size));
                                 *project_changed = true;
                             }
                             ui.label("Detail:");
-                            if ui.add(egui::DragValue::new(&mut wp_detail).speed(0.5).range(1.0..=50.0)).changed() {
-                                ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("wp_detail"), wp_detail));
+                            if ui
+                                .add(
+                                    egui::DragValue::new(&mut wp_detail)
+                                        .speed(0.5)
+                                        .range(1.0..=50.0),
+                                )
+                                .changed()
+                            {
+                                ui.ctx().data_mut(|d| {
+                                    d.insert_temp(egui::Id::new("wp_detail"), wp_detail)
+                                });
                                 *project_changed = true;
                             }
                         });
                         ui.horizontal(|ui| {
                             ui.label("Wiggles/sec:");
-                            if ui.add(egui::DragValue::new(&mut wp_temporal).speed(0.1).range(0.1..=20.0).suffix(" Hz")).changed() {
-                                ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("wp_temporal"), wp_temporal));
+                            if ui
+                                .add(
+                                    egui::DragValue::new(&mut wp_temporal)
+                                        .speed(0.1)
+                                        .range(0.1..=20.0)
+                                        .suffix(" Hz"),
+                                )
+                                .changed()
+                            {
+                                ui.ctx().data_mut(|d| {
+                                    d.insert_temp(egui::Id::new("wp_temporal"), wp_temporal)
+                                });
                                 *project_changed = true;
                             }
                         });
@@ -1018,16 +1771,27 @@ pub fn draw_layer_type_specs(
             }
             LayerType::Audio { path, volume } => {
                 ui.label(format!("Audio File ({})", path));
-                if !path.is_empty() && ui.small("📂 Reveal File").on_hover_text("Open the source file location in file manager").clicked() {
-                    crate::ui::project_io::reveal_in_file_manager(std::path::Path::new(path.as_str()));
+                if !path.is_empty()
+                    && ui
+                        .small("📂 Reveal File")
+                        .on_hover_text("Open the source file location in file manager")
+                        .clicked()
+                {
+                    crate::ui::project_io::reveal_in_file_manager(std::path::Path::new(
+                        path.as_str(),
+                    ));
                 }
                 let v_before = volume.clone();
-                if let Some(nf) = draw_property_ui(current_frame, ui, "  Volume", volume, |ui, val| {
-                    ui.add(egui::Slider::new(val, -48.0..=12.0).suffix(" dB"));
-                }) {
+                if let Some(nf) =
+                    draw_property_ui(current_frame, ui, "  Volume", volume, |ui, val| {
+                        ui.add(egui::Slider::new(val, -48.0..=12.0).suffix(" dB"));
+                    })
+                {
                     *next_frame = Some(nf);
                 }
-                if v_before != *volume { *project_changed = true; }
+                if v_before != *volume {
+                    *project_changed = true;
+                }
             }
             LayerType::AdjustmentLayer => {
                 ui.label("⚙ Adjustment Layer (Applies effects to lower composite)");
@@ -1036,62 +1800,107 @@ pub fn draw_layer_type_specs(
                 ui.label("✦ Particle Emitter");
                 let mut changed = false;
                 ui.horizontal(|ui| {
-                    changed |= ui.add(egui::DragValue::new(&mut emitter.rate).suffix(" /s")).changed();
+                    changed |= ui
+                        .add(egui::DragValue::new(&mut emitter.rate).suffix(" /s"))
+                        .changed();
                     ui.label("Rate");
                 });
                 ui.horizontal(|ui| {
-                    changed |= ui.add(egui::DragValue::new(&mut emitter.lifetime).suffix(" s")).changed();
+                    changed |= ui
+                        .add(egui::DragValue::new(&mut emitter.lifetime).suffix(" s"))
+                        .changed();
                     ui.label("Lifetime");
                 });
                 ui.horizontal(|ui| {
-                    changed |= ui.add(egui::Slider::new(&mut emitter.speed, 0.0..=2000.0)).changed();
+                    changed |= ui
+                        .add(egui::Slider::new(&mut emitter.speed, 0.0..=2000.0))
+                        .changed();
                     ui.label("Speed");
                 });
                 ui.horizontal(|ui| {
-                    changed |= ui.add(egui::Slider::new(&mut emitter.spread_degrees, 0.0..=360.0).suffix("°")).changed();
+                    changed |= ui
+                        .add(
+                            egui::Slider::new(&mut emitter.spread_degrees, 0.0..=360.0).suffix("°"),
+                        )
+                        .changed();
                     ui.label("Spread");
                 });
                 ui.horizontal(|ui| {
-                    changed |= ui.add(egui::DragValue::new(&mut emitter.gravity[1])).changed();
+                    changed |= ui
+                        .add(egui::DragValue::new(&mut emitter.gravity[1]))
+                        .changed();
                     ui.label("Gravity Y");
                 });
                 ui.horizontal(|ui| {
-                    changed |= ui.add(egui::Slider::new(&mut emitter.turbulence, 0.0..=1000.0)).changed();
+                    changed |= ui
+                        .add(egui::Slider::new(&mut emitter.turbulence, 0.0..=1000.0))
+                        .changed();
                     ui.label("Turbulence");
                 });
                 ui.collapsing("🌀 Forces", |ui| {
                     ui.horizontal(|ui| {
-                        changed |= ui.add(egui::Slider::new(&mut emitter.vortex_strength, -2000.0..=2000.0)).changed();
+                        changed |= ui
+                            .add(egui::Slider::new(
+                                &mut emitter.vortex_strength,
+                                -2000.0..=2000.0,
+                            ))
+                            .changed();
                         ui.label("Vortex (+CW)");
                     });
                     ui.horizontal(|ui| {
-                        changed |= ui.add(egui::DragValue::new(&mut emitter.vortex_center[0])).changed();
-                        changed |= ui.add(egui::DragValue::new(&mut emitter.vortex_center[1])).changed();
+                        changed |= ui
+                            .add(egui::DragValue::new(&mut emitter.vortex_center[0]))
+                            .changed();
+                        changed |= ui
+                            .add(egui::DragValue::new(&mut emitter.vortex_center[1]))
+                            .changed();
                         ui.label("Vortex Center");
                     });
                     ui.horizontal(|ui| {
-                        changed |= ui.add(egui::Slider::new(&mut emitter.attract_strength, -2000.0..=2000.0)).changed();
+                        changed |= ui
+                            .add(egui::Slider::new(
+                                &mut emitter.attract_strength,
+                                -2000.0..=2000.0,
+                            ))
+                            .changed();
                         ui.label("Attract (+) / Repel (−)");
                     });
                     ui.horizontal(|ui| {
-                        changed |= ui.add(egui::DragValue::new(&mut emitter.attract_center[0])).changed();
-                        changed |= ui.add(egui::DragValue::new(&mut emitter.attract_center[1])).changed();
+                        changed |= ui
+                            .add(egui::DragValue::new(&mut emitter.attract_center[0]))
+                            .changed();
+                        changed |= ui
+                            .add(egui::DragValue::new(&mut emitter.attract_center[1]))
+                            .changed();
                         ui.label("Force Point");
                     });
                     ui.separator();
                     let mut ds = emitter.death_spawn_count as i32;
-                    if ui.add(egui::DragValue::new(&mut ds).range(0..=32).prefix("×")).changed() {
+                    if ui
+                        .add(egui::DragValue::new(&mut ds).range(0..=32).prefix("×"))
+                        .changed()
+                    {
                         emitter.death_spawn_count = ds.max(0) as u32;
                         changed = true;
                     }
                     ui.label("Death Spawn");
                     if emitter.death_spawn_count > 0 {
                         ui.horizontal(|ui| {
-                            changed |= ui.add(egui::Slider::new(&mut emitter.death_spawn_speed_scale, 0.05..=2.0)).changed();
+                            changed |= ui
+                                .add(egui::Slider::new(
+                                    &mut emitter.death_spawn_speed_scale,
+                                    0.05..=2.0,
+                                ))
+                                .changed();
                             ui.label("Child Speed ×");
                         });
                         ui.horizontal(|ui| {
-                            changed |= ui.add(egui::Slider::new(&mut emitter.death_spawn_life_scale, 0.05..=1.0)).changed();
+                            changed |= ui
+                                .add(egui::Slider::new(
+                                    &mut emitter.death_spawn_life_scale,
+                                    0.05..=1.0,
+                                ))
+                                .changed();
                             ui.label("Child Life ×");
                         });
                     }
@@ -1106,30 +1915,56 @@ pub fn draw_layer_type_specs(
                         ui.label("Length");
                     });
                     ui.horizontal(|ui| {
-                        changed |= ui.add(egui::Slider::new(&mut emitter.trail_taper, 0.1..=1.0)).changed();
+                        changed |= ui
+                            .add(egui::Slider::new(&mut emitter.trail_taper, 0.1..=1.0))
+                            .changed();
                         ui.label("Taper");
                     });
                 });
                 ui.collapsing("🎥 3D Depth", |ui| {
-                    changed |= ui.checkbox(&mut emitter.depth_enabled, "Project through camera").changed();
+                    changed |= ui
+                        .checkbox(&mut emitter.depth_enabled, "Project through camera")
+                        .changed();
                     if emitter.depth_enabled {
                         ui.horizontal(|ui| {
-                            changed |= ui.add(egui::DragValue::new(&mut emitter.depth_range[0]).suffix(" min")).changed();
+                            changed |= ui
+                                .add(
+                                    egui::DragValue::new(&mut emitter.depth_range[0])
+                                        .suffix(" min"),
+                                )
+                                .changed();
                             ui.label("Z Range");
-                            changed |= ui.add(egui::DragValue::new(&mut emitter.depth_range[1]).suffix(" max")).changed();
+                            changed |= ui
+                                .add(
+                                    egui::DragValue::new(&mut emitter.depth_range[1])
+                                        .suffix(" max"),
+                                )
+                                .changed();
                         });
-                        ui.label(egui::RichText::new("Particles scale with distance from the active camera").small().color(colors::TEXT_MUTED));
+                        ui.label(
+                            egui::RichText::new(
+                                "Particles scale with distance from the active camera",
+                            )
+                            .small()
+                            .color(colors::TEXT_MUTED),
+                        );
                     }
                 });
                 ui.horizontal(|ui| {
-                    changed |= ui.color_edit_button_rgba_unmultiplied(&mut emitter.color_start).changed();
+                    changed |= ui
+                        .color_edit_button_rgba_unmultiplied(&mut emitter.color_start)
+                        .changed();
                     ui.label("Start Color");
                 });
                 ui.horizontal(|ui| {
-                    changed |= ui.color_edit_button_rgba_unmultiplied(&mut emitter.color_end).changed();
+                    changed |= ui
+                        .color_edit_button_rgba_unmultiplied(&mut emitter.color_end)
+                        .changed();
                     ui.label("End Color");
                 });
-                if changed { *project_changed = true; }
+                if changed {
+                    *project_changed = true;
+                }
             }
         }
 
@@ -1137,53 +1972,235 @@ pub fn draw_layer_type_specs(
         // ── Shape Repeater (AE Contents > Repeater parity) ──
         ui.collapsing("⧉ Shape Repeater", |ui| {
             if layer.shape_repeater.is_none() {
-                if ui.button("+ Add Repeater").on_hover_text("Duplicate the shape N times with cumulative offsets").clicked() {
-                    layer.shape_repeater = Some(crate::core::shape_repeater::ShapeRepeaterOptions::default());
+                if ui
+                    .button("+ Add Repeater")
+                    .on_hover_text("Duplicate the shape N times with cumulative offsets")
+                    .clicked()
+                {
+                    layer.shape_repeater =
+                        Some(crate::core::shape_repeater::ShapeRepeaterOptions::default());
                     *project_changed = true;
                 }
             } else if let Some(rep) = &mut layer.shape_repeater {
                 ui.horizontal(|ui| {
                     ui.label("Copies:");
-                    let mut copies_i = rep.copies as i32;
-                    if ui.add(egui::DragValue::new(&mut copies_i).range(1..=500).speed(1)).changed() {
-                        rep.copies = copies_i.max(1) as u32;
-                        *project_changed = true;
+                    if rep.copies_animation.is_none() {
+                        if ui.button("◆ Animate").clicked() {
+                            rep.copies_animation = Some(
+                                crate::core::property::Animatable::new_constant(rep.copies as f32),
+                            );
+                            *project_changed = true;
+                        }
+                        let mut copies_i = rep.copies as i32;
+                        if ui
+                            .add(egui::DragValue::new(&mut copies_i).range(0..=500).speed(1))
+                            .changed()
+                        {
+                            rep.copies = copies_i.max(0) as u32;
+                            *project_changed = true;
+                        }
+                    } else if let Some(copies) = &mut rep.copies_animation {
+                        if let Some(nf) =
+                            draw_property_ui(current_frame, ui, "", copies, |ui, value| {
+                                ui.add(egui::DragValue::new(value).range(0.0..=500.0).speed(1.0));
+                            })
+                        {
+                            *next_frame = Some(nf);
+                        }
+                        if ui.button("× Static").clicked() {
+                            rep.copies = copies.evaluate(current_frame).max(0.0).floor() as u32;
+                            rep.copies_animation = None;
+                            *project_changed = true;
+                        }
                     }
                 });
                 ui.horizontal(|ui| {
                     ui.label("Offset:");
-                    if ui.add(egui::DragValue::new(&mut rep.offset).range(-100.0..=100.0).speed(0.1)).changed() {
+                    if ui
+                        .add(
+                            egui::DragValue::new(&mut rep.offset)
+                                .range(-100.0..=100.0)
+                                .speed(0.1),
+                        )
+                        .changed()
+                    {
                         *project_changed = true;
                     }
                 });
                 ui.horizontal(|ui| {
                     ui.label("Position Offset:");
-                    if ui.add(egui::DragValue::new(&mut rep.position_offset[0]).speed(1.0).prefix("X ")).changed()
-                        || ui.add(egui::DragValue::new(&mut rep.position_offset[1]).speed(1.0).prefix("Y ")).changed() {
-                        *project_changed = true;
+                    if rep.position_offset_animation.is_none() {
+                        if ui.button("◆ Animate").clicked() {
+                            rep.position_offset_animation =
+                                Some(crate::core::property::Animatable::new_constant(
+                                    rep.position_offset,
+                                ));
+                            *project_changed = true;
+                        }
+                        if ui
+                            .add(
+                                egui::DragValue::new(&mut rep.position_offset[0])
+                                    .speed(1.0)
+                                    .prefix("X "),
+                            )
+                            .changed()
+                            || ui
+                                .add(
+                                    egui::DragValue::new(&mut rep.position_offset[1])
+                                        .speed(1.0)
+                                        .prefix("Y "),
+                                )
+                                .changed()
+                        {
+                            *project_changed = true;
+                        }
+                    } else if let Some(position) = &mut rep.position_offset_animation {
+                        if let Some(nf) =
+                            draw_property_ui(current_frame, ui, "", position, |ui, value| {
+                                ui.add(egui::DragValue::new(&mut value[0]).speed(1.0).prefix("X "));
+                                ui.add(egui::DragValue::new(&mut value[1]).speed(1.0).prefix("Y "));
+                            })
+                        {
+                            *next_frame = Some(nf);
+                        }
+                        if ui.button("× Static").clicked() {
+                            rep.position_offset = position.evaluate(current_frame);
+                            rep.position_offset_animation = None;
+                            *project_changed = true;
+                        }
                     }
                 });
                 ui.horizontal(|ui| {
                     ui.label("Scale /copy %:");
-                    if ui.add(egui::DragValue::new(&mut rep.scale_offset[0]).range(0.05..=5.0).speed(0.01).suffix("×")).changed()
-                        || ui.add(egui::DragValue::new(&mut rep.scale_offset[1]).range(0.05..=5.0).speed(0.01).suffix("×")).changed() {
-                        *project_changed = true;
+                    if rep.scale_offset_animation.is_none() {
+                        if ui.button("◆ Animate").clicked() {
+                            rep.scale_offset_animation = Some(
+                                crate::core::property::Animatable::new_constant(rep.scale_offset),
+                            );
+                            *project_changed = true;
+                        }
+                        if ui
+                            .add(
+                                egui::DragValue::new(&mut rep.scale_offset[0])
+                                    .range(0.05..=5.0)
+                                    .speed(0.01)
+                                    .suffix("×"),
+                            )
+                            .changed()
+                            || ui
+                                .add(
+                                    egui::DragValue::new(&mut rep.scale_offset[1])
+                                        .range(0.05..=5.0)
+                                        .speed(0.01)
+                                        .suffix("×"),
+                                )
+                                .changed()
+                        {
+                            *project_changed = true;
+                        }
+                    } else if let Some(scale) = &mut rep.scale_offset_animation {
+                        if let Some(nf) =
+                            draw_property_ui(current_frame, ui, "", scale, |ui, value| {
+                                ui.add(
+                                    egui::DragValue::new(&mut value[0])
+                                        .range(0.05..=5.0)
+                                        .speed(0.01)
+                                        .suffix("×"),
+                                );
+                                ui.add(
+                                    egui::DragValue::new(&mut value[1])
+                                        .range(0.05..=5.0)
+                                        .speed(0.01)
+                                        .suffix("×"),
+                                );
+                            })
+                        {
+                            *next_frame = Some(nf);
+                        }
+                        if ui.button("× Static").clicked() {
+                            rep.scale_offset = scale.evaluate(current_frame);
+                            rep.scale_offset_animation = None;
+                            *project_changed = true;
+                        }
                     }
                 });
                 ui.horizontal(|ui| {
                     ui.label("Rotation /copy:");
-                    if ui.add(egui::DragValue::new(&mut rep.rotation_offset_deg).speed(1.0).suffix("°")).changed() {
-                        *project_changed = true;
+                    if rep.rotation_offset_animation.is_none() {
+                        if ui.button("◆ Animate").clicked() {
+                            rep.rotation_offset_animation =
+                                Some(crate::core::property::Animatable::new_constant(
+                                    rep.rotation_offset_deg,
+                                ));
+                            *project_changed = true;
+                        }
+                        if ui
+                            .add(
+                                egui::DragValue::new(&mut rep.rotation_offset_deg)
+                                    .speed(1.0)
+                                    .suffix("°"),
+                            )
+                            .changed()
+                        {
+                            *project_changed = true;
+                        }
+                    } else if let Some(rotation) = &mut rep.rotation_offset_animation {
+                        if let Some(nf) =
+                            draw_property_ui(current_frame, ui, "", rotation, |ui, value| {
+                                ui.add(egui::DragValue::new(value).speed(1.0).suffix("°"));
+                            })
+                        {
+                            *next_frame = Some(nf);
+                        }
+                        if ui.button("× Static").clicked() {
+                            rep.rotation_offset_deg = rotation.evaluate(current_frame);
+                            rep.rotation_offset_animation = None;
+                            *project_changed = true;
+                        }
                     }
                 });
                 ui.horizontal(|ui| {
                     ui.label("Opacity fade:");
-                    if ui.add(egui::Slider::new(&mut rep.start_opacity, 0.0..=1.0).suffix("%")).changed()
-                        || ui.add(egui::Slider::new(&mut rep.end_opacity, 0.0..=1.0).suffix("%")).changed() {
-                        *project_changed = true;
+                    if rep.opacity_animation.is_none() {
+                        if ui.button("◆ Animate").clicked() {
+                            rep.opacity_animation =
+                                Some(crate::core::property::Animatable::new_constant([
+                                    rep.start_opacity,
+                                    rep.end_opacity,
+                                ]));
+                            *project_changed = true;
+                        }
+                        if ui
+                            .add(egui::Slider::new(&mut rep.start_opacity, 0.0..=1.0).suffix("%"))
+                            .changed()
+                            || ui
+                                .add(egui::Slider::new(&mut rep.end_opacity, 0.0..=1.0).suffix("%"))
+                                .changed()
+                        {
+                            *project_changed = true;
+                        }
+                    } else if let Some(opacity) = &mut rep.opacity_animation {
+                        if let Some(nf) =
+                            draw_property_ui(current_frame, ui, "", opacity, |ui, value| {
+                                ui.add(egui::Slider::new(&mut value[0], 0.0..=1.0).text("Start"));
+                                ui.add(egui::Slider::new(&mut value[1], 0.0..=1.0).text("End"));
+                            })
+                        {
+                            *next_frame = Some(nf);
+                        }
+                        if ui.button("× Static").clicked() {
+                            let values = opacity.evaluate(current_frame);
+                            rep.start_opacity = values[0];
+                            rep.end_opacity = values[1];
+                            rep.opacity_animation = None;
+                            *project_changed = true;
+                        }
                     }
                 });
-                if ui.checkbox(&mut rep.composite_below, "Composite below").changed() {
+                if ui
+                    .checkbox(&mut rep.composite_below, "Composite below")
+                    .changed()
+                {
                     *project_changed = true;
                 }
                 if ui.button("🗑 Remove Repeater").clicked() {
@@ -1197,33 +2214,53 @@ pub fn draw_layer_type_specs(
         // ── Puppet Pins (deformation mesh handles, AE Puppet Tool parity) ──
         ui.collapsing("🧷 Puppet Pins & Mesh", |ui| {
             ui.horizontal(|ui| {
-                if ui.button("+ Position Pin").on_hover_text("Deformation position pin").clicked() {
+                if ui
+                    .button("+ Position Pin")
+                    .on_hover_text("Deformation position pin")
+                    .clicked()
+                {
                     let n = layer.puppet_pins.len() + 1;
                     let center = layer.transform.position.evaluate(current_frame);
-                    layer.puppet_pins.push(crate::core::timeline::PuppetPin::new(
-                        format!("pin_{}", n),
-                        format!("Pin {}", n),
-                        center,
-                    ));
+                    layer
+                        .puppet_pins
+                        .push(crate::core::timeline::PuppetPin::new(
+                            format!("pin_{}", n),
+                            format!("Pin {}", n),
+                            center,
+                        ));
                     *project_changed = true;
                 }
-                if ui.button("🧱 + Starch Pin").on_hover_text("Pin to add stiffness and prevent stretching").clicked() {
+                if ui
+                    .button("🧱 + Starch Pin")
+                    .on_hover_text("Pin to add stiffness and prevent stretching")
+                    .clicked()
+                {
                     let n = layer.puppet_pins.len() + 1;
                     let center = layer.transform.position.evaluate(current_frame);
-                    layer.puppet_pins.push(crate::core::timeline::PuppetPin::new(
-                        format!("starch_{}", n),
-                        format!("Starch {}", n),
-                        center,
-                    ));
+                    layer
+                        .puppet_pins
+                        .push(crate::core::timeline::PuppetPin::new(
+                            format!("starch_{}", n),
+                            format!("Starch {}", n),
+                            center,
+                        ));
                     *project_changed = true;
                 }
             });
 
-            let mut mesh_density = ui.ctx().data(|d| d.get_temp::<f32>(egui::Id::new("puppet_mesh_density")).unwrap_or(50.0));
+            let mut mesh_density = ui.ctx().data(|d| {
+                d.get_temp::<f32>(egui::Id::new("puppet_mesh_density"))
+                    .unwrap_or(50.0)
+            });
             ui.horizontal(|ui| {
                 ui.label("Mesh Density:");
-                if ui.add(egui::Slider::new(&mut mesh_density, 10.0..=100.0).suffix(" tri")).changed() {
-                    ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("puppet_mesh_density"), mesh_density));
+                if ui
+                    .add(egui::Slider::new(&mut mesh_density, 10.0..=100.0).suffix(" tri"))
+                    .changed()
+                {
+                    ui.ctx().data_mut(|d| {
+                        d.insert_temp(egui::Id::new("puppet_mesh_density"), mesh_density)
+                    });
                     *project_changed = true;
                 }
             });
@@ -1231,10 +2268,14 @@ pub fn draw_layer_type_specs(
             for (pi, pin) in layer.puppet_pins.iter_mut().enumerate() {
                 ui.horizontal(|ui| {
                     ui.label(egui::RichText::new(format!("🧷 {}", pin.name)).small());
-                    if let Some(nf) = draw_property_ui(current_frame, ui, "", &mut pin.position, |ui, val| {
-                        ui.add(egui::DragValue::new(&mut val[0]).speed(1.0).prefix("X "));
-                        ui.add(egui::DragValue::new(&mut val[1]).speed(1.0).prefix("Y "));
-                    }) { *next_frame = Some(nf); }
+                    if let Some(nf) =
+                        draw_property_ui(current_frame, ui, "", &mut pin.position, |ui, val| {
+                            ui.add(egui::DragValue::new(&mut val[0]).speed(1.0).prefix("X "));
+                            ui.add(egui::DragValue::new(&mut val[1]).speed(1.0).prefix("Y "));
+                        })
+                    {
+                        *next_frame = Some(nf);
+                    }
                     if ui.small_button("🗑").on_hover_text("Remove pin").clicked() {
                         remove_idx = Some(pi);
                     }
@@ -1251,9 +2292,17 @@ pub fn draw_layer_type_specs(
         ui.collapsing("🖌 Paint Strokes", |ui| {
             let n = layer.paint_strokes.len();
             if n == 0 {
-                ui.label(egui::RichText::new("No strokes — use the Brush tool in the viewport").small().color(colors::TEXT_MUTED));
+                ui.label(
+                    egui::RichText::new("No strokes — use the Brush tool in the viewport")
+                        .small()
+                        .color(colors::TEXT_MUTED),
+                );
             } else {
-                ui.label(egui::RichText::new(format!("{} stroke{}", n, if n == 1 { "" } else { "s" })).small().color(colors::TEXT_SECONDARY));
+                ui.label(
+                    egui::RichText::new(format!("{} stroke{}", n, if n == 1 { "" } else { "s" }))
+                        .small()
+                        .color(colors::TEXT_SECONDARY),
+                );
             }
             let mut remove_idx: Option<usize> = None;
             for (si, s) in layer.paint_strokes.iter_mut().enumerate() {
@@ -1261,22 +2310,41 @@ pub fn draw_layer_type_specs(
                     let cr = (s.color[0] * 255.0) as u8;
                     let cg = (s.color[1] * 255.0) as u8;
                     let cb = (s.color[2] * 255.0) as u8;
-                    let (rct, _) = ui.allocate_exact_size(egui::vec2(10.0, 10.0), egui::Sense::hover());
-                    ui.painter().rect_filled(rct, 2.0, egui::Color32::from_rgb(cr, cg, cb));
-                    ui.label(egui::RichText::new(format!("Stroke {} · {} pts", si + 1, s.points.len())).small());
+                    let (rct, _) =
+                        ui.allocate_exact_size(egui::vec2(10.0, 10.0), egui::Sense::hover());
+                    ui.painter()
+                        .rect_filled(rct, 2.0, egui::Color32::from_rgb(cr, cg, cb));
+                    ui.label(
+                        egui::RichText::new(format!("Stroke {} · {} pts", si + 1, s.points.len()))
+                            .small(),
+                    );
                     ui.add_space(4.0);
                     ui.label(egui::RichText::new("In").small().color(colors::TEXT_MUTED));
-                    if ui.add(egui::DragValue::new(&mut s.start_frame).range(0..=999_999)).changed() {
+                    if ui
+                        .add(egui::DragValue::new(&mut s.start_frame).range(0..=999_999))
+                        .changed()
+                    {
                         *project_changed = true;
                     }
                     ui.label(egui::RichText::new("Out").small().color(colors::TEXT_MUTED));
                     let mut ef = s.end_frame;
                     let suffix = if ef == 0 { " (auto)" } else { "" };
-                    if ui.add(egui::DragValue::new(&mut ef).range(0..=999_999).suffix(suffix)).changed() {
+                    if ui
+                        .add(
+                            egui::DragValue::new(&mut ef)
+                                .range(0..=999_999)
+                                .suffix(suffix),
+                        )
+                        .changed()
+                    {
                         s.end_frame = ef;
                         *project_changed = true;
                     }
-                    if ui.small_button("🗑").on_hover_text("Delete stroke").clicked() {
+                    if ui
+                        .small_button("🗑")
+                        .on_hover_text("Delete stroke")
+                        .clicked()
+                    {
                         remove_idx = Some(si);
                     }
                 });
@@ -1297,21 +2365,37 @@ pub fn draw_layer_type_specs(
             } else if let Some(ref mut trim) = layer.trim_paths {
                 ui.horizontal(|ui| {
                     ui.label("Start:");
-                    if let Some(nf) = draw_property_ui(current_frame, ui, "Start", &mut trim.start, |ui, val| {
-                        ui.add(egui::Slider::new(val, 0.0..=100.0).suffix("%"));
-                    }) { *next_frame = Some(nf); }
+                    if let Some(nf) =
+                        draw_property_ui(current_frame, ui, "Start", &mut trim.start, |ui, val| {
+                            ui.add(egui::Slider::new(val, 0.0..=100.0).suffix("%"));
+                        })
+                    {
+                        *next_frame = Some(nf);
+                    }
                 });
                 ui.horizontal(|ui| {
                     ui.label("End:");
-                    if let Some(nf) = draw_property_ui(current_frame, ui, "End", &mut trim.end, |ui, val| {
-                        ui.add(egui::Slider::new(val, 0.0..=100.0).suffix("%"));
-                    }) { *next_frame = Some(nf); }
+                    if let Some(nf) =
+                        draw_property_ui(current_frame, ui, "End", &mut trim.end, |ui, val| {
+                            ui.add(egui::Slider::new(val, 0.0..=100.0).suffix("%"));
+                        })
+                    {
+                        *next_frame = Some(nf);
+                    }
                 });
                 ui.horizontal(|ui| {
                     ui.label("Offset:");
-                    if let Some(nf) = draw_property_ui(current_frame, ui, "Offset", &mut trim.offset, |ui, val| {
-                        ui.add(egui::DragValue::new(val).speed(1.0).suffix("°"));
-                    }) { *next_frame = Some(nf); }
+                    if let Some(nf) = draw_property_ui(
+                        current_frame,
+                        ui,
+                        "Offset",
+                        &mut trim.offset,
+                        |ui, val| {
+                            ui.add(egui::DragValue::new(val).speed(1.0).suffix("°"));
+                        },
+                    ) {
+                        *next_frame = Some(nf);
+                    }
                 });
             }
         });
@@ -1323,21 +2407,35 @@ pub fn draw_layer_type_specs(
 
             // Stroke
             ui.collapsing("✏ Stroke", |ui| {
-                if ui.checkbox(&mut style.stroke.enabled, "Enabled").clicked() { *project_changed = true; }
+                if ui.checkbox(&mut style.stroke.enabled, "Enabled").clicked() {
+                    *project_changed = true;
+                }
                 ui.horizontal(|ui| {
                     ui.label("Size:");
-                    if ui.add(egui::Slider::new(&mut style.stroke.size, 1.0..=100.0).suffix(" px")).changed() { *project_changed = true; }
+                    if ui
+                        .add(egui::Slider::new(&mut style.stroke.size, 1.0..=100.0).suffix(" px"))
+                        .changed()
+                    {
+                        *project_changed = true;
+                    }
                 });
                 ui.horizontal(|ui| {
                     ui.label("Color:");
                     let c = &mut style.stroke.color;
                     let mut col = egui::Color32::from_rgba_premultiplied(
-                        (c[0] * 255.0) as u8, (c[1] * 255.0) as u8,
-                        (c[2] * 255.0) as u8, (c[3] * 255.0) as u8,
+                        (c[0] * 255.0) as u8,
+                        (c[1] * 255.0) as u8,
+                        (c[2] * 255.0) as u8,
+                        (c[3] * 255.0) as u8,
                     );
                     if ui.color_edit_button_srgba(&mut col).changed() {
                         let [r, g, b, a] = col.to_array();
-                        *c = [r as f32 / 255.0, g as f32 / 255.0, b as f32 / 255.0, a as f32 / 255.0];
+                        *c = [
+                            r as f32 / 255.0,
+                            g as f32 / 255.0,
+                            b as f32 / 255.0,
+                            a as f32 / 255.0,
+                        ];
                         *project_changed = true;
                     }
                 });
@@ -1345,39 +2443,90 @@ pub fn draw_layer_type_specs(
 
             // Drop Shadow
             ui.collapsing("👤 Drop Shadow", |ui| {
-                if ui.checkbox(&mut style.drop_shadow.enabled, "Enabled").clicked() { *project_changed = true; }
+                if ui
+                    .checkbox(&mut style.drop_shadow.enabled, "Enabled")
+                    .clicked()
+                {
+                    *project_changed = true;
+                }
                 ui.horizontal(|ui| {
                     ui.label("Opacity:");
-                    if ui.add(egui::Slider::new(&mut style.drop_shadow.opacity, 0.0..=100.0).suffix("%")).changed() { *project_changed = true; }
+                    if ui
+                        .add(
+                            egui::Slider::new(&mut style.drop_shadow.opacity, 0.0..=100.0)
+                                .suffix("%"),
+                        )
+                        .changed()
+                    {
+                        *project_changed = true;
+                    }
                 });
                 ui.horizontal(|ui| {
                     ui.label("Distance / Size:");
-                    if ui.add(egui::DragValue::new(&mut style.drop_shadow.distance).prefix("Dist: ")).changed() { *project_changed = true; }
-                    if ui.add(egui::DragValue::new(&mut style.drop_shadow.size).prefix("Size: ")).changed() { *project_changed = true; }
+                    if ui
+                        .add(egui::DragValue::new(&mut style.drop_shadow.distance).prefix("Dist: "))
+                        .changed()
+                    {
+                        *project_changed = true;
+                    }
+                    if ui
+                        .add(egui::DragValue::new(&mut style.drop_shadow.size).prefix("Size: "))
+                        .changed()
+                    {
+                        *project_changed = true;
+                    }
                 });
                 ui.horizontal(|ui| {
                     ui.label("Angle:");
-                    if ui.add(egui::Slider::new(&mut style.drop_shadow.angle, -180.0..=180.0).suffix("°")).changed() { *project_changed = true; }
+                    if ui
+                        .add(
+                            egui::Slider::new(&mut style.drop_shadow.angle, -180.0..=180.0)
+                                .suffix("°"),
+                        )
+                        .changed()
+                    {
+                        *project_changed = true;
+                    }
                 });
             });
 
             // Color Overlay
             ui.collapsing("🎨 Color Overlay", |ui| {
-                if ui.checkbox(&mut style.color_overlay.enabled, "Enabled").clicked() { *project_changed = true; }
+                if ui
+                    .checkbox(&mut style.color_overlay.enabled, "Enabled")
+                    .clicked()
+                {
+                    *project_changed = true;
+                }
                 ui.horizontal(|ui| {
                     ui.label("Opacity:");
-                    if ui.add(egui::Slider::new(&mut style.color_overlay.opacity, 0.0..=100.0).suffix("%")).changed() { *project_changed = true; }
+                    if ui
+                        .add(
+                            egui::Slider::new(&mut style.color_overlay.opacity, 0.0..=100.0)
+                                .suffix("%"),
+                        )
+                        .changed()
+                    {
+                        *project_changed = true;
+                    }
                 });
                 ui.horizontal(|ui| {
                     ui.label("Color:");
                     let c = &mut style.color_overlay.color;
                     let mut col = egui::Color32::from_rgba_premultiplied(
-                        (c[0] * 255.0) as u8, (c[1] * 255.0) as u8,
-                        (c[2] * 255.0) as u8, (c[3] * 255.0) as u8,
+                        (c[0] * 255.0) as u8,
+                        (c[1] * 255.0) as u8,
+                        (c[2] * 255.0) as u8,
+                        (c[3] * 255.0) as u8,
                     );
                     if ui.color_edit_button_srgba(&mut col).changed() {
                         let [r, g, b, a] = col.to_array();
-                        *c = [r as f32 / 255.0, g as f32 / 255.0, b as f32 / 255.0, a as f32 / 255.0];
+                        *c = [
+                            r as f32 / 255.0,
+                            g as f32 / 255.0,
+                            b as f32 / 255.0,
+                            a as f32 / 255.0,
+                        ];
                         *project_changed = true;
                     }
                 });
@@ -1385,31 +2534,86 @@ pub fn draw_layer_type_specs(
 
             // Gradient Overlay
             ui.collapsing("🌈 Gradient Overlay", |ui| {
-                if ui.checkbox(&mut style.gradient_overlay.enabled, "Enabled").clicked() { *project_changed = true; }
+                if ui
+                    .checkbox(&mut style.gradient_overlay.enabled, "Enabled")
+                    .clicked()
+                {
+                    *project_changed = true;
+                }
                 let go = &mut style.gradient_overlay;
                 ui.horizontal(|ui| {
                     ui.label("Opacity / Angle:");
-                    if ui.add(egui::DragValue::new(&mut go.opacity).prefix("Op: ").suffix("%")).changed() { *project_changed = true; }
-                    if ui.add(egui::DragValue::new(&mut go.angle).prefix("Ang: ").suffix("°")).changed() { *project_changed = true; }
+                    if ui
+                        .add(
+                            egui::DragValue::new(&mut go.opacity)
+                                .prefix("Op: ")
+                                .suffix("%"),
+                        )
+                        .changed()
+                    {
+                        *project_changed = true;
+                    }
+                    if ui
+                        .add(
+                            egui::DragValue::new(&mut go.angle)
+                                .prefix("Ang: ")
+                                .suffix("°"),
+                        )
+                        .changed()
+                    {
+                        *project_changed = true;
+                    }
                 });
             });
 
             // Bevel & Emboss
             ui.collapsing("🪨 Bevel / Emboss", |ui| {
-                if ui.checkbox(&mut style.bevel_emboss.enabled, "Enabled").clicked() { *project_changed = true; }
+                if ui
+                    .checkbox(&mut style.bevel_emboss.enabled, "Enabled")
+                    .clicked()
+                {
+                    *project_changed = true;
+                }
                 let bv = &mut style.bevel_emboss;
                 ui.horizontal(|ui| {
                     ui.label("Depth / Size:");
-                    if ui.add(egui::DragValue::new(&mut bv.depth).prefix("Depth: ")).changed() { *project_changed = true; }
-                    if ui.add(egui::DragValue::new(&mut bv.size).prefix("Size: ")).changed() { *project_changed = true; }
+                    if ui
+                        .add(egui::DragValue::new(&mut bv.depth).prefix("Depth: "))
+                        .changed()
+                    {
+                        *project_changed = true;
+                    }
+                    if ui
+                        .add(egui::DragValue::new(&mut bv.size).prefix("Size: "))
+                        .changed()
+                    {
+                        *project_changed = true;
+                    }
                 });
                 ui.horizontal(|ui| {
                     ui.label("Highlight / Shadow:");
-                    if ui.add(egui::DragValue::new(&mut bv.highlight).prefix("Hi: ").suffix("%")).changed() { *project_changed = true; }
-                    if ui.add(egui::DragValue::new(&mut bv.shadow).prefix("Sh: ").suffix("%")).changed() { *project_changed = true; }
+                    if ui
+                        .add(
+                            egui::DragValue::new(&mut bv.highlight)
+                                .prefix("Hi: ")
+                                .suffix("%"),
+                        )
+                        .changed()
+                    {
+                        *project_changed = true;
+                    }
+                    if ui
+                        .add(
+                            egui::DragValue::new(&mut bv.shadow)
+                                .prefix("Sh: ")
+                                .suffix("%"),
+                        )
+                        .changed()
+                    {
+                        *project_changed = true;
+                    }
                 });
             });
         });
     });
 }
-

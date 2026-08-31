@@ -708,10 +708,21 @@ pub struct Camera3D {
     pub fov_degrees: f32,
     pub focus_distance: f32,
     pub aperture: f32,
+    /// Optional animated lens tracks. `None` preserves legacy constant-only projects.
+    #[serde(default)]
+    pub fov_animation: Option<Animatable<f32>>,
+    #[serde(default)]
+    pub focus_distance_animation: Option<Animatable<f32>>,
+    #[serde(default)]
+    pub aperture_animation: Option<Animatable<f32>>,
+    #[serde(default)]
+    pub dof_max_blur_animation: Option<Animatable<f32>>,
     pub transform: Transform3D,
     /// Depth of Field toggle
     #[serde(default)]
     pub dof_enabled: bool,
+    #[serde(default)]
+    pub dof_enabled_animation: Option<Animatable<f32>>,
     /// Maximum blur radius in pixels for out-of-focus areas (1–64)
     #[serde(default = "default_dof_max_blur")]
     pub dof_max_blur: f32,
@@ -732,11 +743,117 @@ impl Default for Camera3D {
             fov_degrees: 50.0,
             focus_distance: 1000.0,
             aperture: 2.8,
+            fov_animation: None,
+            focus_distance_animation: None,
+            aperture_animation: None,
+            dof_max_blur_animation: None,
             transform: Transform3D::default(),
             dof_enabled: false,
+            dof_enabled_animation: None,
             dof_max_blur: 16.0,
             dof_iris_sides: 0,
         }
+    }
+}
+
+impl Camera3D {
+    pub fn set_fov_at(&mut self, frame: u32, value: f32) {
+        let value = value.clamp(1.0, 179.0);
+        let legacy = self.fov_degrees;
+        self.fov_animation
+            .get_or_insert_with(|| Animatable::new_constant(legacy))
+            .set_keyframe(crate::core::keyframe::Keyframe::new(
+                frame,
+                value,
+                crate::core::keyframe::InterpolationType::Linear,
+            ));
+        self.fov_degrees = value;
+    }
+
+    pub fn set_focus_distance_at(&mut self, frame: u32, value: f32) {
+        let value = value.max(0.0);
+        let legacy = self.focus_distance;
+        self.focus_distance_animation
+            .get_or_insert_with(|| Animatable::new_constant(legacy))
+            .set_keyframe(crate::core::keyframe::Keyframe::new(
+                frame,
+                value,
+                crate::core::keyframe::InterpolationType::Linear,
+            ));
+        self.focus_distance = value;
+    }
+
+    pub fn set_aperture_at(&mut self, frame: u32, value: f32) {
+        let value = value.max(0.0);
+        let legacy = self.aperture;
+        self.aperture_animation
+            .get_or_insert_with(|| Animatable::new_constant(legacy))
+            .set_keyframe(crate::core::keyframe::Keyframe::new(
+                frame,
+                value,
+                crate::core::keyframe::InterpolationType::Linear,
+            ));
+        self.aperture = value;
+    }
+
+    pub fn fov_at(&self, frame: u32) -> f32 {
+        self.fov_animation
+            .as_ref()
+            .map(|a| a.evaluate(frame))
+            .unwrap_or(self.fov_degrees)
+    }
+
+    pub fn focus_distance_at(&self, frame: u32) -> f32 {
+        self.focus_distance_animation
+            .as_ref()
+            .map(|a| a.evaluate(frame))
+            .unwrap_or(self.focus_distance)
+    }
+
+    pub fn aperture_at(&self, frame: u32) -> f32 {
+        self.aperture_animation
+            .as_ref()
+            .map(|a| a.evaluate(frame))
+            .unwrap_or(self.aperture)
+    }
+
+    pub fn dof_max_blur_at(&self, frame: u32) -> f32 {
+        self.dof_max_blur_animation
+            .as_ref()
+            .map(|a| a.evaluate(frame))
+            .unwrap_or(self.dof_max_blur)
+    }
+
+    pub fn dof_enabled_at(&self, frame: u32) -> bool {
+        self.dof_enabled_animation
+            .as_ref()
+            .map(|a| a.evaluate(frame) >= 0.5)
+            .unwrap_or(self.dof_enabled)
+    }
+
+    pub fn set_dof_enabled_at(&mut self, frame: u32, enabled: bool) {
+        let legacy = if self.dof_enabled { 1.0 } else { 0.0 };
+        self.dof_enabled_animation
+            .get_or_insert_with(|| Animatable::new_constant(legacy))
+            .set_keyframe(crate::core::keyframe::Keyframe::new(
+                frame,
+                if enabled { 1.0 } else { 0.0 },
+                crate::core::keyframe::InterpolationType::Linear,
+            ));
+        self.dof_enabled = enabled;
+    }
+
+    pub fn set_dof_max_blur_at(&mut self, frame: u32, value: f32) {
+        let value = value.clamp(1.0, 64.0);
+        let legacy = self.dof_max_blur;
+        self.dof_max_blur_animation
+            .get_or_insert_with(|| Animatable::new_constant(legacy))
+            .set_keyframe(crate::core::keyframe::Keyframe::new(
+                frame,
+                value,
+                crate::core::keyframe::InterpolationType::Linear,
+            ));
+        self.dof_max_blur = value;
     }
 }
 
@@ -750,11 +867,21 @@ pub fn project_point_to_screen(
     screen_width: f32,
     screen_height: f32,
 ) -> Option<[f32; 2]> {
+    project_point_to_screen_at_frame(cam, point, screen_width, screen_height, 0)
+}
+
+pub fn project_point_to_screen_at_frame(
+    cam: &Camera3D,
+    point: [f32; 3],
+    screen_width: f32,
+    screen_height: f32,
+    frame: u32,
+) -> Option<[f32; 2]> {
     if screen_width <= 0.0 || screen_height <= 0.0 {
         return None;
     }
-    let cam_pos = cam.transform.position.evaluate(0);
-    let cam_rot = cam.transform.rotation.evaluate(0);
+    let cam_pos = cam.transform.position.evaluate(frame);
+    let cam_rot = cam.transform.rotation.evaluate(frame);
     let to_rad = |d: f32| d * std::f32::consts::PI / 180.0;
     let cam_zr = to_rad(cam_rot[2]);
     let (ccrz, ssrz) = (cam_zr.cos(), cam_zr.sin());
@@ -769,7 +896,7 @@ pub fn project_point_to_screen(
         return None;
     }
 
-    let fov_rad = cam.fov_degrees.max(1.0) * std::f32::consts::PI / 180.0;
+    let fov_rad = cam.fov_at(frame).max(1.0) * std::f32::consts::PI / 180.0;
     let focal = (screen_height * 0.5) / (fov_rad * 0.5).tan();
     let sx = screen_width * 0.5 + (cx * focal) / cz;
     let sy = screen_height * 0.5 - (cy * focal) / cz;
@@ -795,6 +922,15 @@ pub struct MaterialOptions {
     /// Whether this layer casts shadows from shadow-casting lights (AE material option).
     #[serde(default = "default_true")]
     pub cast_shadows: bool,
+    /// Whether this layer receives shadows cast by other layers.
+    #[serde(default = "default_true")]
+    pub accepts_shadows: bool,
+    /// Whether this layer is illuminated by 3D lights.
+    #[serde(default = "default_true")]
+    pub accepts_lights: bool,
+    /// Light transmission through layer (0.0–100.0). Default 0.0.
+    #[serde(default)]
+    pub light_transmission: f32,
 }
 
 fn default_true() -> bool {
@@ -814,6 +950,9 @@ impl Default for MaterialOptions {
             emission: 0.0,
             metalness: 0.0,
             cast_shadows: true,
+            accepts_shadows: true,
+            accepts_lights: true,
+            light_transmission: 0.0,
         }
     }
 }
@@ -2521,7 +2660,7 @@ impl Composition {
         let scale3d = layer.transform_3d.scale.evaluate(frame);
 
         // Perspective Projection Matrix for Camera
-        let fov_rad = self.active_camera.fov_degrees.to_radians();
+        let fov_rad = self.resolve_camera().fov_at(frame).to_radians();
         let aspect = self.width as f32 / self.height.max(1) as f32;
         // Guard against degenerate FOV (e.g. fov_degrees=0 → tan(0)=0 → division by zero)
         let f = if fov_rad.abs() < 1e-4 {
@@ -3231,6 +3370,7 @@ mod tests {
 #[cfg(test)]
 mod multi_camera_tests {
     use super::*;
+    use crate::core::keyframe::{InterpolationType, Keyframe};
 
     #[test]
     fn test_resolve_camera_prefers_active_flag() {
@@ -3275,6 +3415,118 @@ mod multi_camera_tests {
     }
 
     #[test]
+    fn camera_lens_tracks_evaluate_and_fallback_to_legacy_values() {
+        let mut camera = Camera3D::default();
+        assert_eq!(camera.fov_at(12), 50.0);
+        assert_eq!(camera.focus_distance_at(12), 1000.0);
+        assert_eq!(camera.aperture_at(12), 2.8);
+        camera.fov_animation = Some(Animatable::new_animated(vec![
+            Keyframe::new(0, 40.0, InterpolationType::Linear),
+            Keyframe::new(10, 80.0, InterpolationType::Linear),
+        ]));
+        camera.focus_distance_animation = Some(Animatable::new_animated(vec![
+            Keyframe::new(0, 500.0, InterpolationType::Linear),
+            Keyframe::new(10, 1500.0, InterpolationType::Linear),
+        ]));
+        camera.aperture_animation = Some(Animatable::new_animated(vec![
+            Keyframe::new(0, 2.0, InterpolationType::Linear),
+            Keyframe::new(10, 4.0, InterpolationType::Linear),
+        ]));
+        assert_eq!(camera.fov_at(0), 40.0);
+        assert_eq!(camera.fov_at(10), 80.0);
+        assert_eq!(camera.focus_distance_at(5), 1000.0);
+        assert_eq!(camera.aperture_at(5), 3.0);
+    }
+
+    #[test]
+    fn legacy_camera_json_deserializes_without_lens_tracks() {
+        let json = r#"{"name":"Legacy","active":true,"fov_degrees":65.0,"focus_distance":900.0,"aperture":4.0,"transform":{"position":{"type":"Constant","value":[0.0,0.0,0.0]},"rotation":{"type":"Constant","value":[0.0,0.0,0.0]},"scale":{"type":"Constant","value":[100.0,100.0,100.0]}},"dof_enabled":false,"dof_max_blur":16.0,"dof_iris_sides":0}"#;
+        let camera: Camera3D = serde_json::from_str(json).expect("legacy camera JSON");
+        assert!(camera.fov_animation.is_none());
+        assert!(camera.focus_distance_animation.is_none());
+        assert!(camera.aperture_animation.is_none());
+        assert_eq!(camera.fov_at(100), 65.0);
+        assert_eq!(camera.focus_distance_at(100), 900.0);
+        assert_eq!(camera.aperture_at(100), 4.0);
+    }
+
+    #[test]
+    fn animated_camera_lens_tracks_survive_json_roundtrip() {
+        let mut camera = Camera3D::default();
+        camera.fov_animation = Some(Animatable::new_animated(vec![
+            Keyframe::new(0, 50.0, InterpolationType::Linear),
+            Keyframe::new(24, 90.0, InterpolationType::Linear),
+        ]));
+        camera.focus_distance_animation = Some(Animatable::new_animated(vec![
+            Keyframe::new(0, 1000.0, InterpolationType::Linear),
+            Keyframe::new(24, 2400.0, InterpolationType::Linear),
+        ]));
+        camera.aperture_animation = Some(Animatable::new_animated(vec![
+            Keyframe::new(0, 2.8, InterpolationType::Linear),
+            Keyframe::new(24, 8.0, InterpolationType::Linear),
+        ]));
+        let restored: Camera3D =
+            serde_json::from_str(&serde_json::to_string(&camera).unwrap()).unwrap();
+        assert_eq!(restored.fov_at(12), 70.0);
+        assert_eq!(restored.focus_distance_at(12), 1700.0);
+        assert!((restored.aperture_at(12) - 5.4).abs() < 1e-4);
+    }
+
+    #[test]
+    fn animated_fov_changes_the_3d_projection_matrix_per_frame() {
+        let mut comp =
+            Composition::new("camera-test".into(), "Camera Test".into(), 640, 360, 30, 30);
+        comp.active_camera.fov_animation = Some(Animatable::new_animated(vec![
+            Keyframe::new(0, 30.0, InterpolationType::Linear),
+            Keyframe::new(10, 90.0, InterpolationType::Linear),
+        ]));
+        let layer = Layer::new(
+            "3d-layer".into(),
+            "3D Layer".into(),
+            LayerType::Solid {
+                color: [1.0, 1.0, 1.0, 1.0],
+            },
+            30,
+        );
+        let near = comp.resolve_world_transform_3d(&layer, 0);
+        let far = comp.resolve_world_transform_3d(&layer, 10);
+        assert_ne!(near[0][0], far[0][0]);
+        assert!((comp.resolve_camera().fov_at(5) - 60.0).abs() < 1e-4);
+    }
+
+    #[test]
+    fn animated_dof_controls_follow_the_current_frame() {
+        let mut camera = Camera3D::default();
+        camera.dof_enabled_animation = Some(Animatable::new_animated(vec![
+            Keyframe::new(0, 0.0, InterpolationType::Linear),
+            Keyframe::new(10, 1.0, InterpolationType::Linear),
+        ]));
+        camera.dof_max_blur_animation = Some(Animatable::new_animated(vec![
+            Keyframe::new(0, 4.0, InterpolationType::Linear),
+            Keyframe::new(10, 24.0, InterpolationType::Linear),
+        ]));
+        assert!(!camera.dof_enabled_at(0));
+        assert!(camera.dof_enabled_at(10));
+        assert_eq!(camera.dof_max_blur_at(5), 14.0);
+    }
+
+    #[test]
+    fn setting_first_lens_key_preserves_legacy_value_before_keyframe() {
+        let mut camera = Camera3D::default();
+        camera.set_fov_at(10, 80.0);
+        camera.set_focus_distance_at(10, 2000.0);
+        camera.set_aperture_at(10, 8.0);
+        camera.set_dof_max_blur_at(10, 32.0);
+        camera.set_dof_enabled_at(10, true);
+        assert_eq!(camera.fov_at(0), 50.0);
+        assert_eq!(camera.focus_distance_at(0), 1000.0);
+        assert_eq!(camera.aperture_at(0), 2.8);
+        assert_eq!(camera.dof_max_blur_at(0), 16.0);
+        assert!(!camera.dof_enabled_at(0));
+        assert!(camera.dof_enabled_at(10));
+    }
+
+    #[test]
     fn test_resolve_camera_mut_targets_active() {
         let mut comp = Composition::new("c".into(), "C".into(), 100, 100, 30, 30);
         let mut c = Camera3D::default();
@@ -3289,6 +3541,7 @@ mod multi_camera_tests {
 #[cfg(test)]
 mod projection_tests {
     use super::*;
+    use crate::core::keyframe::{InterpolationType, Keyframe};
 
     /// Camera pulled back on -Z looking toward +Z (matches renderer convention:
     /// visible points have larger z than the camera).
@@ -3336,6 +3589,25 @@ mod projection_tests {
         let expect_y = (540.0 - 200.0 * focal / 100.0) / 1080.0;
         assert!((sp[0] - expect_x).abs() < 1e-4);
         assert!((sp[1] - expect_y).abs() < 1e-4);
+    }
+
+    #[test]
+    fn frame_aware_projection_uses_animated_camera_transform_and_fov() {
+        let mut cam = default_cam();
+        cam.transform.position = Animatable::new_animated(vec![
+            Keyframe::new(0, [0.0, 0.0, -600.0], InterpolationType::Linear),
+            Keyframe::new(10, [100.0, 0.0, -600.0], InterpolationType::Linear),
+        ]);
+        cam.fov_animation = Some(Animatable::new_animated(vec![
+            Keyframe::new(0, 40.0, InterpolationType::Linear),
+            Keyframe::new(10, 80.0, InterpolationType::Linear),
+        ]));
+        let p0 =
+            project_point_to_screen_at_frame(&cam, [0.0, 0.0, -500.0], 1920.0, 1080.0, 0).unwrap();
+        let p10 =
+            project_point_to_screen_at_frame(&cam, [0.0, 0.0, -500.0], 1920.0, 1080.0, 10).unwrap();
+        assert!((p0[0] - 0.5).abs() < 1e-4);
+        assert!(p10[0] < p0[0]);
     }
 }
 

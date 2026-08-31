@@ -424,16 +424,14 @@ impl ParticleSystem {
             p.y += p.vy * dt;
 
             // Update trail: shift positions and add new one
-            let max_trail = self.emitter.trail_length.min(8);
+            let max_trail = (self.emitter.trail_length as usize).min(8);
             if max_trail > 0 {
-                // Shift existing trail positions
-                let mut i = max_trail as usize;
-                while i > 0 {
+                // Shift existing trail positions safely within 0..max_trail
+                for i in (1..max_trail).rev() {
                     p.trail[i] = p.trail[i - 1];
-                    i -= 1;
                 }
                 p.trail[0] = (p.x, p.y);
-                if p.trail_len < max_trail {
+                if (p.trail_len as usize) < max_trail {
                     p.trail_len += 1;
                 }
             }
@@ -757,7 +755,15 @@ mod tests {
             ([1.0, 1.0], 2.0, 1.0, [f32::INFINITY, 1.0, 1.0]),
         ] {
             let mut pixels = original.clone();
-            draw_dot(&mut pixels, (2, 2), (center[0], center[1]), half, color, alpha, 1);
+            draw_dot(
+                &mut pixels,
+                (2, 2),
+                (center[0], center[1]),
+                half,
+                color,
+                alpha,
+                1,
+            );
             assert_eq!(pixels, original);
         }
     }

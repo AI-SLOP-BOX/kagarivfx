@@ -7,6 +7,11 @@ use crate::ViewportMode;
 use eframe::egui;
 
 pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: u32) {
+    // History is the editable GUI state; keep the production wrapper current so
+    // preview bindings never evaluate a stale project snapshot.
+    if let Some(document) = app.production_document.as_mut() {
+        document.project = app.history.current().clone();
+    }
     egui::CentralPanel::default().show(ctx, |ui| {
         // ── AE Composition Viewport Tab Bar (TOP) ──────────────────────────────────
         let active_comp_name = app.history.current().active_composition().name.clone();
@@ -15,7 +20,7 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: u32) 
                 .fill(colors::BG_DARK)
                 .inner_margin(egui::Margin::symmetric(10.0, 4.0))
                 .stroke(egui::Stroke::new(1.0, colors::BORDER_SUBTLE));
-            
+
             tab_frame.show(ui, |ui| {
                 ui.horizontal(|ui| {
                     ui.label(egui::RichText::new(format!("Composition: {}", active_comp_name)).strong().color(colors::TEXT_PRIMARY));
@@ -167,7 +172,17 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: u32) 
         // Render background
         ui.painter().rect_filled(rect, 4.0, egui::Color32::from_gray(20));
 
-        let comp = app.history.current().active_composition();
+        let active_comp_idx = app.history.current().active_composition_idx;
+        let binding_snapshot = app
+            .production_document
+            .as_ref()
+            .filter(|document| !document.bindings.is_empty())
+            .and_then(|document| {
+                let live_audio = crate::core::expression_engine::audio_binding_source_values();
+                document.composition_for_frame_with_sources(active_comp_idx, current_frame, &live_audio)
+            });
+        let history_comp = app.history.current().active_composition();
+        let comp = binding_snapshot.as_ref().unwrap_or(history_comp);
         let aspect = comp.width as f32 / comp.height as f32;
 
         // ── One-shot bbox focus request (Shift+Z with selection) ──
@@ -198,22 +213,32 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: u32) 
             egui::vec2(draw_w, draw_h),
         );
 
-        // ── Checkerboard transparency grid behind comp canvas ──
+        // ── Checkerboard transparency grid behind comp canvas (Batched single Mesh) ──
         {
-            let cell = 16.0f32;
+            let cell = 20.0f32;
             let light = egui::Color32::from_rgb(180, 180, 180);
             let dark = egui::Color32::from_rgb(130, 130, 130);
             let cols = (draw_w / cell).ceil() as i32;
             let rows = (draw_h / cell).ceil() as i32;
             let p = ui.painter();
+            // Single base rectangle for light squares
+            p.rect_filled(draw_rect, 0.0, light);
+
+            let mut mesh = egui::Mesh::default();
             for r in 0..rows {
                 for c in 0..cols {
-                    let x = draw_rect.left() + c as f32 * cell;
-                    let y = draw_rect.top() + r as f32 * cell;
-                    let cell_rect = egui::Rect::from_min_size(egui::pos2(x, y), egui::vec2(cell, cell)).intersect(draw_rect);
-                    let color = if (r + c) % 2 == 0 { light } else { dark };
-                    p.rect_filled(cell_rect, 0.0, color);
+                    if (r + c) % 2 != 0 {
+                        let x = draw_rect.left() + c as f32 * cell;
+                        let y = draw_rect.top() + r as f32 * cell;
+                        let cell_rect = egui::Rect::from_min_size(egui::pos2(x, y), egui::vec2(cell, cell)).intersect(draw_rect);
+                        if cell_rect.is_positive() {
+                            mesh.add_colored_rect(cell_rect, dark);
+                        }
+                    }
                 }
+            }
+            if !mesh.is_empty() {
+                p.add(mesh);
             }
         }
 
@@ -1121,7 +1146,7 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: u32) 
                                 for (vi, vertex_pt) in verts.iter().enumerate() {
                                     let vx = vertex_pt[0];
                                     let vy = vertex_pt[1];
-                                    
+
                                     // Calculate viewport screen position
                                     let screen_x = origin_x + (vx / comp_w) * draw_w;
                                     let screen_y = origin_y + (vy / comp_h) * draw_h;
@@ -1376,7 +1401,7 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: u32) 
                 } else if let Some((l_idx, m_idx, v_idx, start_vertex_pos, start_ptr)) = app.viewport_mask_drag_state {
                     let delta_x = (pointer_pos.x - start_ptr.x) / draw_w * comp_w;
                     let delta_y = (pointer_pos.y - start_ptr.y) / draw_h * comp_h;
-                    
+
                     let comp_mut = app.history.current_mut().active_composition_mut();
                     if l_idx < comp_mut.layers.len() {
                         let layer = &mut comp_mut.layers[l_idx];
@@ -2093,6 +2118,8 @@ fn smooth_path(points: &[(u32, [f32; 2])]) -> Vec<(u32, [f32; 2])> {
         let avg_y = (window[0].1[1] + window[1].1[1] + window[2].1[1]) / 3.0;
         result.push((window[1].0, [avg_x, avg_y]));
     }
-    result.push(*points.last().expect("points non-empty"));
+    if let Some(last) = points.last() {
+        result.push(*last);
+    }
     result
 }

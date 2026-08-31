@@ -280,8 +280,16 @@ pub fn apply_drop_shadow(
     if width == 0 || height == 0 || pixels.len() != pixel_bytes {
         return;
     }
-    let angle_deg = if angle_deg.is_finite() { angle_deg } else { 0.0 };
-    let distance = if distance.is_finite() { distance.clamp(-4096.0, 4096.0) } else { 0.0 };
+    let angle_deg = if angle_deg.is_finite() {
+        angle_deg
+    } else {
+        0.0
+    };
+    let distance = if distance.is_finite() {
+        distance.clamp(-4096.0, 4096.0)
+    } else {
+        0.0
+    };
     let rad = angle_deg.to_radians();
     let dx = (rad.sin() * distance).round() as i32;
     let dy = (-rad.cos() * distance).round() as i32;
@@ -583,6 +591,9 @@ mod tests {
 /// Computes box-blur radii that approximate a true Gaussian of the given sigma
 /// (W3C/Featherstone standard: three successive box blurs ≈ Gaussian).
 fn boxes_for_gauss(sigma: f32, n: u32) -> [f32; 3] {
+    if !sigma.is_finite() || sigma <= 0.01 || n == 0 {
+        return [0.0, 0.0, 0.0];
+    }
     let n = n as f32;
     let w_ideal = (12.0 * sigma * sigma / n + 1.0).sqrt();
     let mut wl = w_ideal.floor();
@@ -590,11 +601,15 @@ fn boxes_for_gauss(sigma: f32, n: u32) -> [f32; 3] {
         wl -= 1.0;
     }
     let wu = wl + 2.0;
-    let m_ideal = (12.0 * sigma * sigma - n * wl * wl - 4.0 * n * wl - 3.0 * n) / (-4.0 * wl - 4.0);
-    let m = m_ideal.round();
+    let denom = -4.0 * wl - 4.0;
+    let m = if denom.abs() < 1e-4 {
+        0.0
+    } else {
+        ((12.0 * sigma * sigma - n * wl * wl - 4.0 * n * wl - 3.0 * n) / denom).round().max(0.0)
+    };
     let mut out = [0.0f32; 3];
     for (i, slot) in out.iter_mut().enumerate() {
-        *slot = if (i as f32) < m { wl } else { wu };
+        *slot = if (i as f32) < m { wl.max(0.0) } else { wu.max(0.0) };
     }
     out
 }
@@ -1035,6 +1050,15 @@ pub fn apply_inner_shadow(
     if width == 0 || height == 0 {
         return;
     }
+    let Some(pixel_count) = (width as usize).checked_mul(height as usize) else {
+        return;
+    };
+    let Some(pixel_bytes) = pixel_count.checked_mul(4) else {
+        return;
+    };
+    if pixels.len() != pixel_bytes {
+        return;
+    }
     let rad = angle_deg.to_radians();
     let dx = (rad.sin() * distance).round() as i32;
     let dy = (-rad.cos() * distance).round() as i32;
@@ -1103,7 +1127,12 @@ pub fn apply_inner_glow(
     let Some(pixel_bytes) = pixel_count.checked_mul(4) else {
         return;
     };
-    if width == 0 || height == 0 || pixels.len() != pixel_bytes || !opacity.is_finite() || opacity <= 0.0 {
+    if width == 0
+        || height == 0
+        || pixels.len() != pixel_bytes
+        || !opacity.is_finite()
+        || opacity <= 0.0
+    {
         return;
     }
     let strength = (opacity / 100.0).clamp(0.0, 1.0);

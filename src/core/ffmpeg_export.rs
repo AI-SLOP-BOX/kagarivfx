@@ -58,8 +58,6 @@ pub struct ExportConfig {
     pub codec: VideoCodec,
 }
 
-
-
 /// Check whether `ffmpeg` is available in PATH.
 pub fn is_ffmpeg_available() -> bool {
     Command::new("ffmpeg")
@@ -84,7 +82,11 @@ use std::sync::Arc;
 /// Invokes a render closure with the cooperative cancel flag installed on the
 /// current thread, so a cancelled export aborts mid-frame instead of waiting
 /// for the frame to finish.
-fn render_with_cancel<F>(cancel_flag: &std::sync::Arc<std::sync::atomic::AtomicBool>, render_frame_fn: &F, frame_idx: u32) -> Vec<u8>
+fn render_with_cancel<F>(
+    cancel_flag: &std::sync::Arc<std::sync::atomic::AtomicBool>,
+    render_frame_fn: &F,
+    frame_idx: u32,
+) -> Vec<u8>
 where
     F: Fn(u32) -> Vec<u8>,
 {
@@ -126,38 +128,81 @@ where
                 cmd.args(["-i", wav]);
             }
             cmd.args([
-                "-f", "rawvideo",               // Input format: raw video
-                "-pix_fmt", "rgba",             // 4 bytes per pixel
-                "-s", &format!("{}x{}", config.width, config.height),
-                "-r", &config.fps.to_string(),  // Frame rate
-                "-i", "pipe:0",                 // Read from stdin
+                "-f",
+                "rawvideo", // Input format: raw video
+                "-pix_fmt",
+                "rgba", // 4 bytes per pixel
+                "-s",
+                &format!("{}x{}", config.width, config.height),
+                "-r",
+                &config.fps.to_string(), // Frame rate
+                "-i",
+                "pipe:0", // Read from stdin
             ]);
             // Codec-specific encoding args
             match &config.codec {
                 VideoCodec::H264 => {
-                    cmd.args(["-c:v", "libx264", "-preset", "fast", "-crf", "18", "-pix_fmt", "yuv420p"]);
+                    cmd.args([
+                        "-c:v", "libx264", "-preset", "fast", "-crf", "18", "-pix_fmt", "yuv420p",
+                    ]);
                 }
                 VideoCodec::ProRes422 => {
-                    cmd.args(["-c:v", "prores_ks", "-profile:v", "3", "-pix_fmt", "yuv422p10le"]);
+                    cmd.args([
+                        "-c:v",
+                        "prores_ks",
+                        "-profile:v",
+                        "3",
+                        "-pix_fmt",
+                        "yuv422p10le",
+                    ]);
                 }
                 VideoCodec::ProRes4444 => {
-                    cmd.args(["-c:v", "prores_ks", "-profile:v", "4", "-pix_fmt", "yuva444p10le"]);
+                    cmd.args([
+                        "-c:v",
+                        "prores_ks",
+                        "-profile:v",
+                        "4",
+                        "-pix_fmt",
+                        "yuva444p10le",
+                    ]);
                 }
-                VideoCodec::H265 => { cmd.args(["-c:v", "libx265", "-preset", "medium", "-crf", "23", "-pix_fmt", "yuv420p"]); }
+                VideoCodec::H265 => {
+                    cmd.args([
+                        "-c:v", "libx265", "-preset", "medium", "-crf", "23", "-pix_fmt", "yuv420p",
+                    ]);
+                }
                 VideoCodec::Gif => { /* GIF uses separate pipeline */ }
-                VideoCodec::WebP => { cmd.args(["-c:v", "libwebp", "-quality", "80", "-lossless", "0", "-pix_fmt", "rgba"]); }
+                VideoCodec::WebP => {
+                    cmd.args([
+                        "-c:v",
+                        "libwebp",
+                        "-quality",
+                        "80",
+                        "-lossless",
+                        "0",
+                        "-pix_fmt",
+                        "rgba",
+                    ]);
+                }
             }
             if config.audio_wav.is_some() {
                 // Video is input 1 when audio present; encode audio to AAC
                 cmd.args([
-                    "-map", "0:a",
-                    "-map", "1:v",
-                    "-c:a", "aac",
-                    "-b:a", "192k",
+                    "-map",
+                    "0:a",
+                    "-map",
+                    "1:v",
+                    "-c:a",
+                    "aac",
+                    "-b:a",
+                    "192k",
                     "-shortest",
                 ]);
             }
-            cmd.arg("-movflags").arg("+faststart").arg(&config.output_path);
+            cmd.arg("-movflags")
+                .arg("+faststart")
+                .arg("--")
+                .arg(&config.output_path);
 
             let ffmpeg_result = cmd
                 .stdin(Stdio::piped())
@@ -168,7 +213,10 @@ where
             let mut child = match ffmpeg_result {
                 Ok(c) => c,
                 Err(e) => {
-                    let _ = tx.send(ExportEvent::Error(format!("Failed to launch FFmpeg: {}", e)));
+                    let _ = tx.send(ExportEvent::Error(format!(
+                        "Failed to launch FFmpeg: {}",
+                        e
+                    )));
                     return;
                 }
             };
@@ -176,18 +224,28 @@ where
             let mut stdin = match child.stdin.take() {
                 Some(s) => s,
                 None => {
-                    let _ = tx.send(ExportEvent::Error("FFmpeg stdin pipe was not opened".to_string()));
+                    let _ = tx.send(ExportEvent::Error(
+                        "FFmpeg stdin pipe was not opened".to_string(),
+                    ));
                     return;
                 }
             };
 
             if config.total_frames == 0 {
-                let _ = tx.send(ExportEvent::Finished(format!("Export complete (0 frames) → {}", config.output_path)));
+                let _ = tx.send(ExportEvent::Finished(format!(
+                    "Export complete (0 frames) → {}",
+                    config.output_path
+                )));
                 return;
             }
 
-            let Some(frame_bytes) = crate::core::software_renderer::rgba_buffer_size(config.width, config.height) else {
-                let _ = tx.send(ExportEvent::Error(format!("Invalid dimensions: {}x{}", config.width, config.height)));
+            let Some(frame_bytes) =
+                crate::core::software_renderer::rgba_buffer_size(config.width, config.height)
+            else {
+                let _ = tx.send(ExportEvent::Error(format!(
+                    "Invalid dimensions: {}x{}",
+                    config.width, config.height
+                )));
                 return;
             };
 
@@ -205,14 +263,19 @@ where
                 if pixels.len() != frame_bytes {
                     let _ = tx.send(ExportEvent::Error(format!(
                         "Frame {} pixel data mismatch: expected {} bytes, got {}",
-                        frame_idx, frame_bytes, pixels.len()
+                        frame_idx,
+                        frame_bytes,
+                        pixels.len()
                     )));
                     return;
                 }
 
                 // Write RGBA frame to FFmpeg stdin
                 if let Err(e) = stdin.write_all(&pixels) {
-                    let _ = tx.send(ExportEvent::Error(format!("Pipe write error at frame {}: {}", frame_idx, e)));
+                    let _ = tx.send(ExportEvent::Error(format!(
+                        "Pipe write error at frame {}: {}",
+                        frame_idx, e
+                    )));
                     return;
                 }
 
@@ -237,7 +300,8 @@ where
                 }
                 Ok(status) => {
                     // Collect stderr for diagnostics
-                    let stderr_output = child.stderr
+                    let stderr_output = child
+                        .stderr
                         .take()
                         .map(|mut s| {
                             let mut buf = String::new();
@@ -288,29 +352,48 @@ where
             let config = config_clone;
             let palette_path = format!("{}.palette.png", config.output_path);
 
-            let Some(frame_bytes) = crate::core::software_renderer::rgba_buffer_size(config.width, config.height) else {
-                let _ = tx.send(ExportEvent::Error(format!("Invalid dimensions: {}x{}", config.width, config.height)));
+            let Some(frame_bytes) =
+                crate::core::software_renderer::rgba_buffer_size(config.width, config.height)
+            else {
+                let _ = tx.send(ExportEvent::Error(format!(
+                    "Invalid dimensions: {}x{}",
+                    config.width, config.height
+                )));
                 return;
             };
 
             if config.total_frames == 0 {
-                let _ = tx.send(ExportEvent::Finished(format!("GIF export complete (0 frames) → {}", config.output_path)));
+                let _ = tx.send(ExportEvent::Finished(format!(
+                    "GIF export complete (0 frames) → {}",
+                    config.output_path
+                )));
                 return;
             }
 
             // ── Pass 1: Generate palette ──────────────────────────────────
-            let _ = tx.send(ExportEvent::Progress(0.0, "Generating GIF palette...".to_string()));
+            let _ = tx.send(ExportEvent::Progress(
+                0.0,
+                "Generating GIF palette...".to_string(),
+            ));
 
             let palette_result = Command::new("ffmpeg")
                 .args([
                     "-y",
-                    "-f", "rawvideo",
-                    "-pix_fmt", "rgba",
-                    "-s", &format!("{}x{}", config.width, config.height),
-                    "-r", &config.fps.to_string(),
-                    "-i", "pipe:0",
+                    "-f",
+                    "rawvideo",
+                    "-pix_fmt",
+                    "rgba",
+                    "-s",
+                    &format!("{}x{}", config.width, config.height),
+                    "-r",
+                    &config.fps.to_string(),
+                    "-i",
+                    "pipe:0",
                     "-vf",
-                    &format!("fps={},palettegen=max_colors=256:stats_mode=diff", config.fps),
+                    &format!(
+                        "fps={},palettegen=max_colors=256:stats_mode=diff",
+                        config.fps
+                    ),
                     &palette_path,
                 ])
                 .stdin(Stdio::piped())
@@ -321,7 +404,10 @@ where
             let mut palette_child = match palette_result {
                 Ok(c) => c,
                 Err(e) => {
-                    let _ = tx.send(ExportEvent::Error(format!("Failed to launch FFmpeg (palette pass): {}", e)));
+                    let _ = tx.send(ExportEvent::Error(format!(
+                        "Failed to launch FFmpeg (palette pass): {}",
+                        e
+                    )));
                     return;
                 }
             };
@@ -329,7 +415,9 @@ where
             let mut palette_stdin = match palette_child.stdin.take() {
                 Some(s) => s,
                 None => {
-                    let _ = tx.send(ExportEvent::Error("FFmpeg stdin pipe was not opened (palette pass)".to_string()));
+                    let _ = tx.send(ExportEvent::Error(
+                        "FFmpeg stdin pipe was not opened (palette pass)".to_string(),
+                    ));
                     return;
                 }
             };
@@ -345,19 +433,28 @@ where
                 if pixels.len() != frame_bytes {
                     let _ = tx.send(ExportEvent::Error(format!(
                         "Frame {} pixel data mismatch: expected {} bytes, got {}",
-                        frame_idx, frame_bytes, pixels.len()
+                        frame_idx,
+                        frame_bytes,
+                        pixels.len()
                     )));
                     return;
                 }
                 if let Err(e) = palette_stdin.write_all(&pixels) {
-                    let _ = tx.send(ExportEvent::Error(format!("Pipe write error (palette pass) at frame {}: {}", frame_idx, e)));
+                    let _ = tx.send(ExportEvent::Error(format!(
+                        "Pipe write error (palette pass) at frame {}: {}",
+                        frame_idx, e
+                    )));
                     return;
                 }
 
                 let progress = (frame_idx + 1) as f32 / config.total_frames as f32 * 0.5;
                 let _ = tx.send(ExportEvent::Progress(
                     progress,
-                    format!("Palette pass: frame {}/{}", frame_idx + 1, config.total_frames),
+                    format!(
+                        "Palette pass: frame {}/{}",
+                        frame_idx + 1,
+                        config.total_frames
+                    ),
                 ));
             }
 
@@ -366,11 +463,15 @@ where
             match palette_child.wait() {
                 Ok(status) if status.success() => { /* ok */ }
                 Ok(status) => {
-                    let stderr_output = palette_child.stderr.take().map(|mut s| {
-                        let mut buf = String::new();
-                        std::io::Read::read_to_string(&mut s, &mut buf).ok();
-                        buf
-                    }).unwrap_or_default();
+                    let stderr_output = palette_child
+                        .stderr
+                        .take()
+                        .map(|mut s| {
+                            let mut buf = String::new();
+                            std::io::Read::read_to_string(&mut s, &mut buf).ok();
+                            buf
+                        })
+                        .unwrap_or_default();
                     let _ = tx.send(ExportEvent::Error(format!(
                         "FFmpeg palette pass exited with code {:?}\n{}",
                         status.code(),
@@ -380,7 +481,10 @@ where
                     return;
                 }
                 Err(e) => {
-                    let _ = tx.send(ExportEvent::Error(format!("FFmpeg palette pass wait() error: {}", e)));
+                    let _ = tx.send(ExportEvent::Error(format!(
+                        "FFmpeg palette pass wait() error: {}",
+                        e
+                    )));
                     let _ = std::fs::remove_file(&palette_path);
                     return;
                 }
@@ -392,14 +496,22 @@ where
             let gif_result = Command::new("ffmpeg")
                 .args([
                     "-y",
-                    "-f", "rawvideo",
-                    "-pix_fmt", "rgba",
-                    "-s", &format!("{}x{}", config.width, config.height),
-                    "-r", &config.fps.to_string(),
-                    "-i", "pipe:0",
-                    "-i", &palette_path,
-                    "-lavfi", "paletteuse=dither=sierra2_4a",
-                    "-loop", "0",
+                    "-f",
+                    "rawvideo",
+                    "-pix_fmt",
+                    "rgba",
+                    "-s",
+                    &format!("{}x{}", config.width, config.height),
+                    "-r",
+                    &config.fps.to_string(),
+                    "-i",
+                    "pipe:0",
+                    "-i",
+                    &palette_path,
+                    "-lavfi",
+                    "paletteuse=dither=sierra2_4a",
+                    "-loop",
+                    "0",
                     &config.output_path,
                 ])
                 .stdin(Stdio::piped())
@@ -410,7 +522,10 @@ where
             let mut gif_child = match gif_result {
                 Ok(c) => c,
                 Err(e) => {
-                    let _ = tx.send(ExportEvent::Error(format!("Failed to launch FFmpeg (gif pass): {}", e)));
+                    let _ = tx.send(ExportEvent::Error(format!(
+                        "Failed to launch FFmpeg (gif pass): {}",
+                        e
+                    )));
                     let _ = std::fs::remove_file(&palette_path);
                     return;
                 }
@@ -419,7 +534,9 @@ where
             let mut gif_stdin = match gif_child.stdin.take() {
                 Some(s) => s,
                 None => {
-                    let _ = tx.send(ExportEvent::Error("FFmpeg stdin pipe was not opened (gif pass)".to_string()));
+                    let _ = tx.send(ExportEvent::Error(
+                        "FFmpeg stdin pipe was not opened (gif pass)".to_string(),
+                    ));
                     let _ = std::fs::remove_file(&palette_path);
                     return;
                 }
@@ -437,13 +554,18 @@ where
                 if pixels.len() != frame_bytes {
                     let _ = tx.send(ExportEvent::Error(format!(
                         "Frame {} pixel data mismatch: expected {} bytes, got {}",
-                        frame_idx, frame_bytes, pixels.len()
+                        frame_idx,
+                        frame_bytes,
+                        pixels.len()
                     )));
                     let _ = std::fs::remove_file(&palette_path);
                     return;
                 }
                 if let Err(e) = gif_stdin.write_all(&pixels) {
-                    let _ = tx.send(ExportEvent::Error(format!("Pipe write error (gif pass) at frame {}: {}", frame_idx, e)));
+                    let _ = tx.send(ExportEvent::Error(format!(
+                        "Pipe write error (gif pass) at frame {}: {}",
+                        frame_idx, e
+                    )));
                     let _ = std::fs::remove_file(&palette_path);
                     return;
                 }
@@ -466,11 +588,15 @@ where
                     )));
                 }
                 Ok(status) => {
-                    let stderr_output = gif_child.stderr.take().map(|mut s| {
-                        let mut buf = String::new();
-                        std::io::Read::read_to_string(&mut s, &mut buf).ok();
-                        buf
-                    }).unwrap_or_default();
+                    let stderr_output = gif_child
+                        .stderr
+                        .take()
+                        .map(|mut s| {
+                            let mut buf = String::new();
+                            std::io::Read::read_to_string(&mut s, &mut buf).ok();
+                            buf
+                        })
+                        .unwrap_or_default();
                     let _ = tx.send(ExportEvent::Error(format!(
                         "FFmpeg GIF pass exited with code {:?}\n{}",
                         status.code(),
@@ -479,7 +605,10 @@ where
                     let _ = std::fs::remove_file(&palette_path);
                 }
                 Err(e) => {
-                    let _ = tx.send(ExportEvent::Error(format!("FFmpeg GIF pass wait() error: {}", e)));
+                    let _ = tx.send(ExportEvent::Error(format!(
+                        "FFmpeg GIF pass wait() error: {}",
+                        e
+                    )));
                     let _ = std::fs::remove_file(&palette_path);
                 }
             }
@@ -497,7 +626,12 @@ pub fn start_export<F>(
 where
     F: Fn(u32) -> Vec<u8> + Send + 'static,
 {
-    start_export_cancelable(config, tx, Arc::new(AtomicBool::new(false)), render_frame_fn)
+    start_export_cancelable(
+        config,
+        tx,
+        Arc::new(AtomicBool::new(false)),
+        render_frame_fn,
+    )
 }
 
 /// Multi-comp parallel export using `ParallelRenderQueue`.
@@ -516,7 +650,10 @@ pub fn start_parallel_export(
         return Err("No items".to_string());
     }
 
-    let total: u32 = items.iter().map(|i| i.end_frame.saturating_sub(i.start_frame) + 1).sum();
+    let total: u32 = items
+        .iter()
+        .map(|i| i.end_frame.saturating_sub(i.start_frame) + 1)
+        .sum();
     if total == 0 {
         let _ = tx.send(ExportEvent::Error("Total frames is zero".to_string()));
         return Err("Zero frames".to_string());
@@ -529,7 +666,9 @@ pub fn start_parallel_export(
             for item in items {
                 queue.add_item(item);
             }
-            queue.cancelled.store(cancel_flag.load(Ordering::SeqCst), Ordering::Relaxed);
+            queue
+                .cancelled
+                .store(cancel_flag.load(Ordering::SeqCst), Ordering::Relaxed);
 
             let tx_clone = tx.clone();
             let total_frames = total;
@@ -541,12 +680,12 @@ pub fn start_parallel_export(
                 ));
             });
 
-            queue.render_all(|comp_name, frame| {
-                render_frame_fn(comp_name, frame)
-            });
+            queue.render_all(|comp_name, frame| render_frame_fn(comp_name, frame));
 
             let _ = tx.send(ExportEvent::Finished(format!(
-                "Parallel export complete: {} items, {} frames", queue.items.len(), total_frames
+                "Parallel export complete: {} items, {} frames",
+                queue.items.len(),
+                total_frames
             )));
         })
         .map_err(|e| format!("Failed to spawn parallel export thread: {}", e))?;
@@ -567,11 +706,17 @@ pub fn start_png_sequence_export<F>(
     tx: Sender<ExportEvent>,
     cancel_flag: std::sync::Arc<std::sync::atomic::AtomicBool>,
     mut render_frame: F,
-) where F: FnMut(u32) -> Vec<u8> + Send + 'static {
+) where
+    F: FnMut(u32) -> Vec<u8> + Send + 'static,
+{
     use std::sync::atomic::Ordering;
     std::thread::spawn(move || {
         if let Err(e) = std::fs::create_dir_all(&dir) {
-            let _ = tx.send(ExportEvent::Error(format!("Cannot create dir {}: {}", dir.display(), e)));
+            let _ = tx.send(ExportEvent::Error(format!(
+                "Cannot create dir {}: {}",
+                dir.display(),
+                e
+            )));
             return;
         }
         let last = total_frames.saturating_sub(1);
@@ -584,8 +729,14 @@ pub fn start_png_sequence_export<F>(
             }
             let pixels = render_frame(f);
             let path = dir.join(format!("{}_{:04}.png", stem, f));
-            if let Err(e) = image::save_buffer(&path, &pixels, width, height, image::ColorType::Rgba8) {
-                let _ = tx.send(ExportEvent::Error(format!("Failed writing {}: {}", path.display(), e)));
+            if let Err(e) =
+                image::save_buffer(&path, &pixels, width, height, image::ColorType::Rgba8)
+            {
+                let _ = tx.send(ExportEvent::Error(format!(
+                    "Failed writing {}: {}",
+                    path.display(),
+                    e
+                )));
                 return;
             }
             if i % 2 == 0 || i == last {
@@ -596,7 +747,9 @@ pub fn start_png_sequence_export<F>(
             }
         }
         let _ = tx.send(ExportEvent::Finished(format!(
-            "PNG sequence exported: {} frames → {}", total_frames, dir.join(format!("{}_", stem)).display()
+            "PNG sequence exported: {} frames → {}",
+            total_frames,
+            dir.join(format!("{}_", stem)).display()
         )));
     });
 }
@@ -617,10 +770,12 @@ mod tests {
             audio_wav: None,
             codec: VideoCodec::H264,
             output_path: "test.mp4".to_string(),
-            width: 1920, height: 1080, fps: 30, total_frames: 90,
+            width: 1920,
+            height: 1080,
+            fps: 30,
+            total_frames: 90,
         };
         let cfg2 = cfg.clone();
         assert_eq!(cfg.output_path, cfg2.output_path);
     }
 }
-

@@ -466,9 +466,51 @@ fn mix_precomp_audio(
                     );
                 }
             }
-            crate::core::timeline::LayerType::Audio { volume, .. } => {
+            crate::core::timeline::LayerType::Audio { path, volume } => {
                 let vol_db = volume.evaluate(sub_frame);
-                let _layer_gain = gain * 10.0f32.powf(vol_db / 20.0);
+                let layer_gain = gain * 10.0f32.powf(vol_db / 20.0);
+                let time_start = (sub_frame.saturating_sub(layer.in_frame)) as f32 / fps;
+                let source = {
+                    let map = cache.lock().unwrap_or_else(|e| e.into_inner());
+                    if let Some(buf) = map.get(path) {
+                        Some(buf.clone())
+                    } else {
+                        drop(map);
+                        let loaded = AudioBuffer::load_wav(std::path::Path::new(path))
+                            .ok()
+                            .map(|b| std::sync::Arc::new(b.resample(sample_rate)));
+                        if let Some(buf) = &loaded {
+                            cache
+                                .lock()
+                                .unwrap_or_else(|e| e.into_inner())
+                                .insert(path.clone(), buf.clone());
+                        }
+                        loaded
+                    }
+                };
+                if let Some(buf) = source {
+                    for i in 0..buffer_size {
+                        let t = time_start + i as f32 / sample_rate as f32;
+                        let idx =
+                            (t.max(0.0) * buf.sample_rate as f32) as usize * buf.channels as usize;
+                        let l = buf.samples.get(idx).copied().unwrap_or(0.0);
+                        let r = if buf.channels > 1 {
+                            buf.samples.get(idx + 1).copied().unwrap_or(l)
+                        } else {
+                            l
+                        };
+                        let gl = layer_gain * (1.0 - pan.max(0.0));
+                        let gr = layer_gain * (1.0 - (-pan).max(0.0));
+                        let l_idx = i * 2;
+                        let r_idx = i * 2 + 1;
+                        if l_idx < stereo_output.len() {
+                            stereo_output[l_idx] += l * gl;
+                        }
+                        if r_idx < stereo_output.len() {
+                            stereo_output[r_idx] += r * gr;
+                        }
+                    }
+                }
             }
             crate::core::timeline::LayerType::Video {
                 audio_wav: Some(w), ..

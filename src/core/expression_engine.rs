@@ -1,3 +1,4 @@
+use rhai::{export_module, exported_module};
 /// Rhai-powered After Effects-style expression evaluation engine.
 ///
 /// Supports AE-compatible expression APIs:
@@ -6,8 +7,7 @@
 ///   - `loopOut("cycle")` / `loopOut("pingpong")`
 ///   - `thisComp.layer("Name").transform.position[0]`  (inter-layer reference)
 ///   - Any arbitrary Rhai script that returns a number or array.
-use rhai::{Engine, Scope, Dynamic, Array};
-use rhai::{export_module, exported_module};
+use rhai::{Array, Dynamic, Engine, Scope};
 
 /// Per-frame audio data for expression functions (audioAmplitude, audioSpectrum).
 /// Set by the renderer before evaluating expressions each frame.
@@ -20,15 +20,22 @@ pub struct AudioExprData {
 
 impl Default for AudioExprData {
     fn default() -> Self {
-        Self { amplitude: 0.0, bands: [0.0; 5] }
+        Self {
+            amplitude: 0.0,
+            bands: [0.0; 5],
+        }
     }
 }
 
 /// Extracts a scalar from a Rhai result: numbers directly, or the FIRST
 /// element when an Array is returned (AE wiggle returns per-dim arrays).
 fn dynamic_to_f64(v: &Dynamic) -> Option<f64> {
-    if let Ok(f) = v.as_float() { return Some(f); }
-    if let Ok(i) = v.as_int() { return Some(i as f64); }
+    if let Ok(f) = v.as_float() {
+        return Some(f);
+    }
+    if let Ok(i) = v.as_int() {
+        return Some(i as f64);
+    }
     if let Ok(arr) = v.clone().into_array() {
         if let Some(first) = arr.first() {
             return dynamic_to_f64(first);
@@ -55,15 +62,66 @@ pub fn get_audio_amplitude() -> f32 {
 pub fn get_audio_band(idx: usize) -> f32 {
     AUDIO_DATA.with(|d| {
         let data = d.borrow();
-        if idx < 5 { data.bands[idx] } else { 0.0 }
+        if idx < 5 {
+            data.bands[idx]
+        } else {
+            0.0
+        }
     })
+}
+
+/// Export the current expression audio state using the shared binding names.
+/// This keeps GUI preview, expressions, and Audio→VFX automation on one source.
+pub fn audio_binding_source_values() -> std::collections::HashMap<String, f64> {
+    AUDIO_DATA.with(|data| {
+        let data = data.borrow();
+        let mut values = std::collections::HashMap::with_capacity(6);
+        values.insert("audio.amplitude".into(), f64::from(data.amplitude));
+        let names = [
+            "audio.bass",
+            "audio.low_mid",
+            "audio.mid",
+            "audio.high_mid",
+            "audio.treble",
+        ];
+        for (index, value) in data.bands.iter().enumerate() {
+            values.insert(format!("audio.band{index}"), f64::from(*value));
+            values.insert(names[index].into(), f64::from(*value));
+        }
+        values
+    })
+}
+
+/// Apply binding-style Audio source values to the expression context.
+pub fn set_audio_from_binding_sources(values: &std::collections::HashMap<String, f64>) {
+    let amplitude = values
+        .get("audio.amplitude")
+        .copied()
+        .unwrap_or_else(|| values.get("audio.rms").copied().unwrap_or(0.0));
+    let names = ["bass", "low_mid", "mid", "high_mid", "treble"];
+    let mut bands = [0.0; 5];
+    for (index, name) in names.iter().enumerate() {
+        bands[index] = values
+            .get(&format!("audio.{name}"))
+            .or_else(|| values.get(&format!("audio.band{index}")))
+            .copied()
+            .unwrap_or(0.0) as f32;
+    }
+    if amplitude.is_finite() && bands.iter().all(|value| value.is_finite()) {
+        set_audio_expr_data(AudioExprData {
+            amplitude: amplitude.clamp(0.0, 1.0) as f32,
+            bands: bands.map(|value| value.clamp(0.0, 1.0)),
+        });
+    }
 }
 
 /// Build the shared Rhai engine with all AE-compatible functions registered.
 /// Creating the engine is expensive — do it once and cache it.
 /// 64-bit Permuted Congruential Generator (PCG32) hash to produce uniform f64 in [0.0, 1.0).
 pub fn pcg32_hash(mut state: u64) -> f64 {
-    state = state.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+    state = state
+        .wrapping_mul(6364136223846793005)
+        .wrapping_add(1442695040888963407);
     let xorshifted = (((state >> 18) ^ state) >> 27) as u32;
     let rot = (state >> 59) as u32;
     let val = (xorshifted >> rot) | (xorshifted << ((!rot).wrapping_add(1) & 31));
@@ -114,7 +172,10 @@ pub fn build_engine() -> Engine {
                 + ((t + seed) * 5.3_f64).sin() * 0.10;
             n * amp
         };
-        vec![Dynamic::from_float(noise(0.0)), Dynamic::from_float(noise(17.0))]
+        vec![
+            Dynamic::from_float(noise(0.0)),
+            Dynamic::from_float(noise(17.0)),
+        ]
     });
     // Legacy/explicit 3-arg form kept for existing projects.
     engine.register_fn("wiggle", |time: f64, freq: f64, amp: f64| -> f64 {
@@ -129,24 +190,60 @@ pub fn build_engine() -> Engine {
         pub const PI: f64 = std::f64::consts::PI;
         pub const E: f64 = std::f64::consts::E;
         pub const TAU: f64 = std::f64::consts::TAU;
-        pub fn sin(x: f64) -> f64 { x.sin() }
-        pub fn cos(x: f64) -> f64 { x.cos() }
-        pub fn tan(x: f64) -> f64 { x.tan() }
-        pub fn asin(x: f64) -> f64 { x.asin() }
-        pub fn acos(x: f64) -> f64 { x.acos() }
-        pub fn atan(x: f64) -> f64 { x.atan() }
-        pub fn atan2(y: f64, x: f64) -> f64 { y.atan2(x) }
-        pub fn abs(x: f64) -> f64 { x.abs() }
-        pub fn floor(x: f64) -> f64 { x.floor() }
-        pub fn ceil(x: f64) -> f64 { x.ceil() }
-        pub fn round(x: f64) -> f64 { x.round() }
-        pub fn sqrt(x: f64) -> f64 { x.sqrt() }
-        pub fn log(x: f64) -> f64 { x.ln() }
-        pub fn log10(x: f64) -> f64 { x.log10() }
-        pub fn exp(x: f64) -> f64 { x.exp() }
-        pub fn pow(b: f64, e: f64) -> f64 { b.powf(e) }
-        pub fn min(a: f64, b: f64) -> f64 { a.min(b) }
-        pub fn max(a: f64, b: f64) -> f64 { a.max(b) }
+        pub fn sin(x: f64) -> f64 {
+            x.sin()
+        }
+        pub fn cos(x: f64) -> f64 {
+            x.cos()
+        }
+        pub fn tan(x: f64) -> f64 {
+            x.tan()
+        }
+        pub fn asin(x: f64) -> f64 {
+            x.asin()
+        }
+        pub fn acos(x: f64) -> f64 {
+            x.acos()
+        }
+        pub fn atan(x: f64) -> f64 {
+            x.atan()
+        }
+        pub fn atan2(y: f64, x: f64) -> f64 {
+            y.atan2(x)
+        }
+        pub fn abs(x: f64) -> f64 {
+            x.abs()
+        }
+        pub fn floor(x: f64) -> f64 {
+            x.floor()
+        }
+        pub fn ceil(x: f64) -> f64 {
+            x.ceil()
+        }
+        pub fn round(x: f64) -> f64 {
+            x.round()
+        }
+        pub fn sqrt(x: f64) -> f64 {
+            x.sqrt()
+        }
+        pub fn log(x: f64) -> f64 {
+            x.ln()
+        }
+        pub fn log10(x: f64) -> f64 {
+            x.log10()
+        }
+        pub fn exp(x: f64) -> f64 {
+            x.exp()
+        }
+        pub fn pow(b: f64, e: f64) -> f64 {
+            b.powf(e)
+        }
+        pub fn min(a: f64, b: f64) -> f64 {
+            a.min(b)
+        }
+        pub fn max(a: f64, b: f64) -> f64 {
+            a.max(b)
+        }
     }
     engine.register_static_module("Math", exported_module!(math_ns).into());
 
@@ -154,16 +251,25 @@ pub fn build_engine() -> Engine {
     engine.register_fn("sin", |x: f64| -> f64 { x.sin() });
     engine.register_fn("cos", |x: f64| -> f64 { x.cos() });
     engine.register_fn("abs", |x: f64| -> f64 { x.abs() });
-    engine.register_fn("clamp", |v: f64, lo: f64, hi: f64| -> f64 { v.clamp(lo, hi) });
+    engine.register_fn("clamp", |v: f64, lo: f64, hi: f64| -> f64 {
+        v.clamp(lo, hi)
+    });
     // --- AE-compatible Linear interpolation (3-arg & 5-arg, scalar & array) ---
     engine.register_fn("linear", |t: f64, v_min: f64, v_max: f64| -> f64 {
         let s = t.clamp(0.0, 1.0);
         v_min + s * (v_max - v_min)
     });
-    engine.register_fn("linear", |t: f64, t_min: f64, t_max: f64, v_min: f64, v_max: f64| -> f64 {
-        let s = if (t_max - t_min).abs() < 1e-6 { 0.0 } else { ((t - t_min) / (t_max - t_min)).clamp(0.0, 1.0) };
-        v_min + s * (v_max - v_min)
-    });
+    engine.register_fn(
+        "linear",
+        |t: f64, t_min: f64, t_max: f64, v_min: f64, v_max: f64| -> f64 {
+            let s = if (t_max - t_min).abs() < 1e-6 {
+                0.0
+            } else {
+                ((t - t_min) / (t_max - t_min)).clamp(0.0, 1.0)
+            };
+            v_min + s * (v_max - v_min)
+        },
+    );
     engine.register_fn("linear", |t: f64, a1: Array, a2: Array| -> Array {
         let s = t.clamp(0.0, 1.0);
         let n = a1.len().min(a2.len());
@@ -175,17 +281,24 @@ pub fn build_engine() -> Engine {
         }
         out
     });
-    engine.register_fn("linear", |t: f64, t_min: f64, t_max: f64, a1: Array, a2: Array| -> Array {
-        let s = if (t_max - t_min).abs() < 1e-6 { 0.0 } else { ((t - t_min) / (t_max - t_min)).clamp(0.0, 1.0) };
-        let n = a1.len().min(a2.len());
-        let mut out = Vec::with_capacity(n);
-        for i in 0..n {
-            let v1 = dynamic_to_f64(&a1[i]).unwrap_or(0.0);
-            let v2 = dynamic_to_f64(&a2[i]).unwrap_or(0.0);
-            out.push(Dynamic::from_float(v1 + s * (v2 - v1)));
-        }
-        out
-    });
+    engine.register_fn(
+        "linear",
+        |t: f64, t_min: f64, t_max: f64, a1: Array, a2: Array| -> Array {
+            let s = if (t_max - t_min).abs() < 1e-6 {
+                0.0
+            } else {
+                ((t - t_min) / (t_max - t_min)).clamp(0.0, 1.0)
+            };
+            let n = a1.len().min(a2.len());
+            let mut out = Vec::with_capacity(n);
+            for i in 0..n {
+                let v1 = dynamic_to_f64(&a1[i]).unwrap_or(0.0);
+                let v2 = dynamic_to_f64(&a2[i]).unwrap_or(0.0);
+                out.push(Dynamic::from_float(v1 + s * (v2 - v1)));
+            }
+            out
+        },
+    );
 
     // --- AE-compatible Easing functions (3-arg & 5-arg, scalar & array) ---
     engine.register_fn("ease", |t: f64, v_min: f64, v_max: f64| -> f64 {
@@ -193,23 +306,37 @@ pub fn build_engine() -> Engine {
         let smooth_s = s * s * (3.0 - 2.0 * s);
         v_min + smooth_s * (v_max - v_min)
     });
-    engine.register_fn("ease", |t: f64, t_min: f64, t_max: f64, v_min: f64, v_max: f64| -> f64 {
-        let s = if (t_max - t_min).abs() < 1e-6 { 0.0 } else { ((t - t_min) / (t_max - t_min)).clamp(0.0, 1.0) };
-        let smooth_s = s * s * (3.0 - 2.0 * s); // Hermite smoothstep
-        v_min + smooth_s * (v_max - v_min)
-    });
-    engine.register_fn("ease", |t: f64, t_min: f64, t_max: f64, a1: Array, a2: Array| -> Array {
-        let s = if (t_max - t_min).abs() < 1e-6 { 0.0 } else { ((t - t_min) / (t_max - t_min)).clamp(0.0, 1.0) };
-        let smooth_s = s * s * (3.0 - 2.0 * s);
-        let n = a1.len().min(a2.len());
-        let mut out = Vec::with_capacity(n);
-        for i in 0..n {
-            let v1 = dynamic_to_f64(&a1[i]).unwrap_or(0.0);
-            let v2 = dynamic_to_f64(&a2[i]).unwrap_or(0.0);
-            out.push(Dynamic::from_float(v1 + smooth_s * (v2 - v1)));
-        }
-        out
-    });
+    engine.register_fn(
+        "ease",
+        |t: f64, t_min: f64, t_max: f64, v_min: f64, v_max: f64| -> f64 {
+            let s = if (t_max - t_min).abs() < 1e-6 {
+                0.0
+            } else {
+                ((t - t_min) / (t_max - t_min)).clamp(0.0, 1.0)
+            };
+            let smooth_s = s * s * (3.0 - 2.0 * s); // Hermite smoothstep
+            v_min + smooth_s * (v_max - v_min)
+        },
+    );
+    engine.register_fn(
+        "ease",
+        |t: f64, t_min: f64, t_max: f64, a1: Array, a2: Array| -> Array {
+            let s = if (t_max - t_min).abs() < 1e-6 {
+                0.0
+            } else {
+                ((t - t_min) / (t_max - t_min)).clamp(0.0, 1.0)
+            };
+            let smooth_s = s * s * (3.0 - 2.0 * s);
+            let n = a1.len().min(a2.len());
+            let mut out = Vec::with_capacity(n);
+            for i in 0..n {
+                let v1 = dynamic_to_f64(&a1[i]).unwrap_or(0.0);
+                let v2 = dynamic_to_f64(&a2[i]).unwrap_or(0.0);
+                out.push(Dynamic::from_float(v1 + smooth_s * (v2 - v1)));
+            }
+            out
+        },
+    );
     engine.register_fn("ease", |t: f64, a1: Array, a2: Array| -> Array {
         let s = t.clamp(0.0, 1.0);
         let smooth_s = s * s * (3.0 - 2.0 * s);
@@ -227,46 +354,74 @@ pub fn build_engine() -> Engine {
         let s = t.clamp(0.0, 1.0);
         v_min + s * s * (v_max - v_min)
     });
-    engine.register_fn("easeIn", |t: f64, t_min: f64, t_max: f64, v_min: f64, v_max: f64| -> f64 {
-        let s = if (t_max - t_min).abs() < 1e-6 { 0.0 } else { ((t - t_min) / (t_max - t_min)).clamp(0.0, 1.0) };
-        let ease_in_s = s * s; // Quadratic acceleration
-        v_min + ease_in_s * (v_max - v_min)
-    });
-    engine.register_fn("easeIn", |t: f64, t_min: f64, t_max: f64, a1: Array, a2: Array| -> Array {
-        let s = if (t_max - t_min).abs() < 1e-6 { 0.0 } else { ((t - t_min) / (t_max - t_min)).clamp(0.0, 1.0) };
-        let ease_in_s = s * s;
-        let n = a1.len().min(a2.len());
-        let mut out = Vec::with_capacity(n);
-        for i in 0..n {
-            let v1 = dynamic_to_f64(&a1[i]).unwrap_or(0.0);
-            let v2 = dynamic_to_f64(&a2[i]).unwrap_or(0.0);
-            out.push(Dynamic::from_float(v1 + ease_in_s * (v2 - v1)));
-        }
-        out
-    });
+    engine.register_fn(
+        "easeIn",
+        |t: f64, t_min: f64, t_max: f64, v_min: f64, v_max: f64| -> f64 {
+            let s = if (t_max - t_min).abs() < 1e-6 {
+                0.0
+            } else {
+                ((t - t_min) / (t_max - t_min)).clamp(0.0, 1.0)
+            };
+            let ease_in_s = s * s; // Quadratic acceleration
+            v_min + ease_in_s * (v_max - v_min)
+        },
+    );
+    engine.register_fn(
+        "easeIn",
+        |t: f64, t_min: f64, t_max: f64, a1: Array, a2: Array| -> Array {
+            let s = if (t_max - t_min).abs() < 1e-6 {
+                0.0
+            } else {
+                ((t - t_min) / (t_max - t_min)).clamp(0.0, 1.0)
+            };
+            let ease_in_s = s * s;
+            let n = a1.len().min(a2.len());
+            let mut out = Vec::with_capacity(n);
+            for i in 0..n {
+                let v1 = dynamic_to_f64(&a1[i]).unwrap_or(0.0);
+                let v2 = dynamic_to_f64(&a2[i]).unwrap_or(0.0);
+                out.push(Dynamic::from_float(v1 + ease_in_s * (v2 - v1)));
+            }
+            out
+        },
+    );
 
     engine.register_fn("easeOut", |t: f64, v_min: f64, v_max: f64| -> f64 {
         let s = t.clamp(0.0, 1.0);
         let ease_out_s = 1.0 - (1.0 - s) * (1.0 - s);
         v_min + ease_out_s * (v_max - v_min)
     });
-    engine.register_fn("easeOut", |t: f64, t_min: f64, t_max: f64, v_min: f64, v_max: f64| -> f64 {
-        let s = if (t_max - t_min).abs() < 1e-6 { 0.0 } else { ((t - t_min) / (t_max - t_min)).clamp(0.0, 1.0) };
-        let ease_out_s = 1.0 - (1.0 - s) * (1.0 - s); // Quadratic deceleration
-        v_min + ease_out_s * (v_max - v_min)
-    });
-    engine.register_fn("easeOut", |t: f64, t_min: f64, t_max: f64, a1: Array, a2: Array| -> Array {
-        let s = if (t_max - t_min).abs() < 1e-6 { 0.0 } else { ((t - t_min) / (t_max - t_min)).clamp(0.0, 1.0) };
-        let ease_out_s = 1.0 - (1.0 - s) * (1.0 - s);
-        let n = a1.len().min(a2.len());
-        let mut out = Vec::with_capacity(n);
-        for i in 0..n {
-            let v1 = dynamic_to_f64(&a1[i]).unwrap_or(0.0);
-            let v2 = dynamic_to_f64(&a2[i]).unwrap_or(0.0);
-            out.push(Dynamic::from_float(v1 + ease_out_s * (v2 - v1)));
-        }
-        out
-    });
+    engine.register_fn(
+        "easeOut",
+        |t: f64, t_min: f64, t_max: f64, v_min: f64, v_max: f64| -> f64 {
+            let s = if (t_max - t_min).abs() < 1e-6 {
+                0.0
+            } else {
+                ((t - t_min) / (t_max - t_min)).clamp(0.0, 1.0)
+            };
+            let ease_out_s = 1.0 - (1.0 - s) * (1.0 - s); // Quadratic deceleration
+            v_min + ease_out_s * (v_max - v_min)
+        },
+    );
+    engine.register_fn(
+        "easeOut",
+        |t: f64, t_min: f64, t_max: f64, a1: Array, a2: Array| -> Array {
+            let s = if (t_max - t_min).abs() < 1e-6 {
+                0.0
+            } else {
+                ((t - t_min) / (t_max - t_min)).clamp(0.0, 1.0)
+            };
+            let ease_out_s = 1.0 - (1.0 - s) * (1.0 - s);
+            let n = a1.len().min(a2.len());
+            let mut out = Vec::with_capacity(n);
+            for i in 0..n {
+                let v1 = dynamic_to_f64(&a1[i]).unwrap_or(0.0);
+                let v2 = dynamic_to_f64(&a2[i]).unwrap_or(0.0);
+                out.push(Dynamic::from_float(v1 + ease_out_s * (v2 - v1)));
+            }
+            out
+        },
+    );
 
     // --- AE Vector Math (length, distance, normalize, dot, cross, lookAt, add, sub, mul, div) ---
     engine.register_fn("length", |a: Array| -> f64 {
@@ -296,11 +451,19 @@ pub fn build_engine() -> Engine {
         sum_sq.sqrt()
     });
     engine.register_fn("normalize", |a: Array| -> Array {
-        let len: f64 = a.iter().filter_map(dynamic_to_f64).map(|v| v * v).sum::<f64>().sqrt();
+        let len: f64 = a
+            .iter()
+            .filter_map(dynamic_to_f64)
+            .map(|v| v * v)
+            .sum::<f64>()
+            .sqrt();
         if len < 1e-9 {
             a
         } else {
-            a.iter().filter_map(dynamic_to_f64).map(|v| Dynamic::from_float(v / len)).collect()
+            a.iter()
+                .filter_map(dynamic_to_f64)
+                .map(|v| Dynamic::from_float(v / len))
+                .collect()
         }
     });
     engine.register_fn("dot", |a1: Array, a2: Array| -> f64 {
@@ -338,7 +501,11 @@ pub fn build_engine() -> Engine {
         let dz = tz - fz;
         let x_rot = (-dy).atan2((dx * dx + dz * dz).sqrt()).to_degrees();
         let y_rot = dx.atan2(dz).to_degrees();
-        vec![Dynamic::from_float(x_rot), Dynamic::from_float(y_rot), Dynamic::from_float(0.0)]
+        vec![
+            Dynamic::from_float(x_rot),
+            Dynamic::from_float(y_rot),
+            Dynamic::from_float(0.0),
+        ]
     });
     engine.register_fn("add", |a1: Array, a2: Array| -> Array {
         let n = a1.len().min(a2.len());
@@ -361,14 +528,23 @@ pub fn build_engine() -> Engine {
         out
     });
     engine.register_fn("mul", |a: Array, s: f64| -> Array {
-        a.iter().filter_map(dynamic_to_f64).map(|v| Dynamic::from_float(v * s)).collect()
+        a.iter()
+            .filter_map(dynamic_to_f64)
+            .map(|v| Dynamic::from_float(v * s))
+            .collect()
     });
     engine.register_fn("div", |a: Array, s: f64| -> Array {
         let s_inv = if s.abs() < 1e-9 { 1.0 } else { 1.0 / s };
-        a.iter().filter_map(dynamic_to_f64).map(|v| Dynamic::from_float(v * s_inv)).collect()
+        a.iter()
+            .filter_map(dynamic_to_f64)
+            .map(|v| Dynamic::from_float(v * s_inv))
+            .collect()
     });
     engine.register_fn("clamp", |a: Array, lo: f64, hi: f64| -> Array {
-        a.iter().filter_map(dynamic_to_f64).map(|v| Dynamic::from_float(v.clamp(lo, hi))).collect()
+        a.iter()
+            .filter_map(dynamic_to_f64)
+            .map(|v| Dynamic::from_float(v.clamp(lo, hi)))
+            .collect()
     });
 
     // --- AE-compatible Random functions (PCG32 Deterministic Generator with time-variation) ---
@@ -412,10 +588,19 @@ pub fn build_engine() -> Engine {
         vec![Dynamic::from_float(x), Dynamic::from_float(y)]
     });
     engine.register_fn("array3", |x: f64, y: f64, z: f64| -> Array {
-        vec![Dynamic::from_float(x), Dynamic::from_float(y), Dynamic::from_float(z)]
+        vec![
+            Dynamic::from_float(x),
+            Dynamic::from_float(y),
+            Dynamic::from_float(z),
+        ]
     });
     engine.register_fn("array4", |x: f64, y: f64, z: f64, w: f64| -> Array {
-        vec![Dynamic::from_float(x), Dynamic::from_float(y), Dynamic::from_float(z), Dynamic::from_float(w)]
+        vec![
+            Dynamic::from_float(x),
+            Dynamic::from_float(y),
+            Dynamic::from_float(z),
+            Dynamic::from_float(w),
+        ]
     });
 
     // --- Additional AE-compatible math functions ---
@@ -442,10 +627,17 @@ pub fn build_engine() -> Engine {
     engine.register_fn("radiansToDegrees", |r: f64| -> f64 { r.to_degrees() });
 
     // --- Interpolation (more flexible than linear) ---
-    engine.register_fn("interpolate", |t: f64, t1: f64, t2: f64, v1: f64, v2: f64| -> f64 {
-        let s = if (t2 - t1).abs() < 1e-6 { 0.0 } else { ((t - t1) / (t2 - t1)).clamp(0.0, 1.0) };
-        v1 + s * (v2 - v1)
-    });
+    engine.register_fn(
+        "interpolate",
+        |t: f64, t1: f64, t2: f64, v1: f64, v2: f64| -> f64 {
+            let s = if (t2 - t1).abs() < 1e-6 {
+                0.0
+            } else {
+                ((t - t1) / (t2 - t1)).clamp(0.0, 1.0)
+            };
+            v1 + s * (v2 - v1)
+        },
+    );
 
     // --- Smoothstep (AE-compatible) ---
     engine.register_fn("smoothstep", |edge0: f64, edge1: f64, x: f64| -> f64 {
@@ -459,25 +651,39 @@ pub fn build_engine() -> Engine {
     // --- Ping-pong function ---
     engine.register_fn("pingpong", |t: f64, max: f64| -> f64 {
         let t_mod = t.rem_euclid(max * 2.0);
-        if t_mod > max { max * 2.0 - t_mod } else { t_mod }
+        if t_mod > max {
+            max * 2.0 - t_mod
+        } else {
+            t_mod
+        }
     });
 
     // --- Wrap function (AE-style) ---
     engine.register_fn("wrap", |val: f64, min_val: f64, max_val: f64| -> f64 {
         let range = max_val - min_val;
-        if range.abs() < 1e-6 { return min_val; }
+        if range.abs() < 1e-6 {
+            return min_val;
+        }
         let v = (val - min_val).rem_euclid(range);
         min_val + v
     });
 
     // --- AE seedRandom (deterministic random based on seed) ---
     engine.register_fn("seedRandom", |seed: f64| -> f64 {
-        let bits = (seed * 1000.0) as u64;
+        let bits = if seed.is_finite() {
+            (seed.abs() * 1000.0) as u64
+        } else {
+            0
+        };
         pcg32_hash(bits)
     });
     engine.register_fn("seedRandom", |seed: f64, timeless: bool| -> f64 {
         let _ = timeless;
-        let bits = (seed * 1000.0) as u64;
+        let bits = if seed.is_finite() {
+            (seed.abs() * 1000.0) as u64
+        } else {
+            0
+        };
         pcg32_hash(bits)
     });
 
@@ -517,22 +723,27 @@ pub fn build_engine() -> Engine {
     });
 
     // --- AE wiggle with octaves: wiggle(freq, amp, octaves, amp_octaves) ---
-    engine.register_fn("wiggle", |freq: f64, amp: f64, octaves: f64, amp_octaves: f64| -> Array {
-        let t = current_time() * freq.max(1e-4);
-        let mut result = 0.0f64;
-        let mut a = amp;
-        let persistence = amp_octaves.max(0.001);
-        let n_octaves = (octaves.max(1.0)) as i32;
-        for o in 0..n_octaves {
-            let freq_o = t * (2.0f64).powi(o);
-            let noise = freq_o.sin() * 0.70
-                + (freq_o * 2.1).sin() * 0.20
-                + (freq_o * 5.3).sin() * 0.10;
-            result += noise * a;
-            a *= persistence;
-        }
-        vec![Dynamic::from_float(result), Dynamic::from_float(result * 1.3)]
-    });
+    engine.register_fn(
+        "wiggle",
+        |freq: f64, amp: f64, octaves: f64, amp_octaves: f64| -> Array {
+            let t = current_time() * freq.max(1e-4);
+            let mut result = 0.0f64;
+            let mut a = amp;
+            let persistence = amp_octaves.max(0.001);
+            let n_octaves = (octaves.max(1.0)) as i32;
+            for o in 0..n_octaves {
+                let freq_o = t * (2.0f64).powi(o);
+                let noise =
+                    freq_o.sin() * 0.70 + (freq_o * 2.1).sin() * 0.20 + (freq_o * 5.3).sin() * 0.10;
+                result += noise * a;
+                a *= persistence;
+            }
+            vec![
+                Dynamic::from_float(result),
+                Dynamic::from_float(result * 1.3),
+            ]
+        },
+    );
 
     // --- AE wiggle3D(freq, amp): returns Array of 3 ---
     engine.register_fn("wiggle3D", |freq: f64, amp: f64| -> Array {
@@ -543,7 +754,11 @@ pub fn build_engine() -> Engine {
                 + ((t + seed) * 5.3_f64).sin() * 0.10;
             n * amp
         };
-        vec![Dynamic::from_float(noise(0.0)), Dynamic::from_float(noise(17.0)), Dynamic::from_float(noise(31.0))]
+        vec![
+            Dynamic::from_float(noise(0.0)),
+            Dynamic::from_float(noise(17.0)),
+            Dynamic::from_float(noise(31.0)),
+        ]
     });
 
     // --- AE posterizeTime(framesPerSecond): snaps time to discrete steps ---
@@ -568,18 +783,21 @@ pub fn build_engine() -> Engine {
         sum / n
     });
     // smooth(width, sampleRate, samples) — explicit sample count
-    engine.register_fn("smooth", |width: f64, sample_rate: f64, samples: f64| -> f64 {
-        let t = current_time();
-        let n = samples.max(1.0);
-        let mut sum = 0.0;
-        let step = width / (sample_rate * n);
-        for i in 0..n as i32 {
-            let sample_time = t - width * 0.5 + step * i as f64;
-            let _ = sample_time;
-            sum += sample_rate;
-        }
-        sum / n
-    });
+    engine.register_fn(
+        "smooth",
+        |width: f64, sample_rate: f64, samples: f64| -> f64 {
+            let t = current_time();
+            let n = samples.max(1.0);
+            let mut sum = 0.0;
+            let step = width / (sample_rate * n);
+            for i in 0..n as i32 {
+                let sample_time = t - width * 0.5 + step * i as f64;
+                let _ = sample_time;
+                sum += sample_rate;
+            }
+            sum / n
+        },
+    );
 
     engine
 }
@@ -591,13 +809,7 @@ pub fn build_engine() -> Engine {
 /// - `frame` : current frame number (i64)
 /// - `fps`   : frames per second (i64)
 /// - `value` : the un-animated base value (f64)
-pub fn eval_f32(
-    engine: &Engine,
-    script: &str,
-    base: f32,
-    frame: u32,
-    fps: u32,
-) -> f32 {
+pub fn eval_f32(engine: &Engine, script: &str, base: f32, frame: u32, fps: u32) -> f32 {
     let time = frame as f64 / fps.max(1) as f64;
     set_current_time(time);
     let mut scope = Scope::new();
@@ -632,13 +844,7 @@ pub fn eval_f32(
 /// The script may return:
 ///   - A Rhai `Array` of two numbers → `[x, y]`
 ///   - A single number → applied to both X and Y
-pub fn eval_v2(
-    engine: &Engine,
-    script: &str,
-    base: [f32; 2],
-    frame: u32,
-    fps: u32,
-) -> [f32; 2] {
+pub fn eval_v2(engine: &Engine, script: &str, base: [f32; 2], frame: u32, fps: u32) -> [f32; 2] {
     let time = frame as f64 / fps.max(1) as f64;
     set_current_time(time);
     let mut scope = Scope::new();
@@ -724,7 +930,8 @@ pub fn eval_v2_with_diagnostics(
 /// Returns `Ok(())` if the script compiles, or an error message.
 #[allow(dead_code)]
 pub fn validate_script(engine: &Engine, script: &str) -> Result<(), String> {
-    engine.compile(script)
+    engine
+        .compile(script)
         .map(|_| ())
         .map_err(|e| format!("{}", e))
 }
@@ -805,17 +1012,29 @@ impl CompSnapshot {
     }
 
     /// Composition dimensions in pixels.
-    pub fn width(&self) -> f64 { self.comp_width }
-    pub fn height(&self) -> f64 { self.comp_height }
+    pub fn width(&self) -> f64 {
+        self.comp_width
+    }
+    pub fn height(&self) -> f64 {
+        self.comp_height
+    }
 
     /// Total duration in seconds (AE `thisComp.duration`).
     pub fn duration(&self) -> f64 {
-        if self.fps > 0.0 { self.duration_frames / self.fps } else { 0.0 }
+        if self.fps > 0.0 {
+            self.duration_frames / self.fps
+        } else {
+            0.0
+        }
     }
 
     /// Seconds per frame (AE `thisComp.frameDuration`).
     pub fn frame_duration(&self) -> f64 {
-        if self.fps > 0.0 { 1.0 / self.fps } else { 0.0 }
+        if self.fps > 0.0 {
+            1.0 / self.fps
+        } else {
+            0.0
+        }
     }
 }
 
@@ -844,26 +1063,43 @@ fn with_current_xform<T>(f: impl FnOnce([f64; 2], [f64; 2], f64) -> T) -> T {
     })
 }
 
-fn register_comp_types(engine: &mut Engine) {    engine.register_type::<LayerSnapshot>()
+fn register_comp_types(engine: &mut Engine) {
+    engine
+        .register_type::<LayerSnapshot>()
         .register_get("transform", |l: &mut LayerSnapshot| l.clone())
         .register_get("position", |l: &mut LayerSnapshot| -> Array {
-            vec![Dynamic::from_float(l.position[0]), Dynamic::from_float(l.position[1])]
+            vec![
+                Dynamic::from_float(l.position[0]),
+                Dynamic::from_float(l.position[1]),
+            ]
         })
         .register_get("scale", |l: &mut LayerSnapshot| -> Array {
-            vec![Dynamic::from_float(l.scale[0]), Dynamic::from_float(l.scale[1])]
+            vec![
+                Dynamic::from_float(l.scale[0]),
+                Dynamic::from_float(l.scale[1]),
+            ]
         })
         .register_get("rotation", |l: &mut LayerSnapshot| l.rotation)
         .register_get("opacity", |l: &mut LayerSnapshot| l.opacity)
         .register_get("anchorPoint", |l: &mut LayerSnapshot| -> Array {
-            vec![Dynamic::from_float(l.anchor_point[0]), Dynamic::from_float(l.anchor_point[1])]
+            vec![
+                Dynamic::from_float(l.anchor_point[0]),
+                Dynamic::from_float(l.anchor_point[1]),
+            ]
         })
         .register_get("rotationX", |l: &mut LayerSnapshot| l.rotation_3d[0])
         .register_get("rotationY", |l: &mut LayerSnapshot| l.rotation_3d[1])
         .register_get("rotationZ", |l: &mut LayerSnapshot| l.rotation_3d[2])
         .register_get("orientation", |l: &mut LayerSnapshot| -> Array {
-            vec![Dynamic::from_float(l.rotation_3d[0]), Dynamic::from_float(l.rotation_3d[1]), Dynamic::from_float(l.rotation_3d[2])]
+            vec![
+                Dynamic::from_float(l.rotation_3d[0]),
+                Dynamic::from_float(l.rotation_3d[1]),
+                Dynamic::from_float(l.rotation_3d[2]),
+            ]
         })
-        .register_get("timeRemap", |l: &mut LayerSnapshot| l.time_remap.unwrap_or(0.0))
+        .register_get("timeRemap", |l: &mut LayerSnapshot| {
+            l.time_remap.unwrap_or(0.0)
+        })
         .register_get("startTime", |l: &mut LayerSnapshot| l.start_time)
         .register_get("stretch", |l: &mut LayerSnapshot| l.stretch)
         .register_indexer_get(|l: &mut LayerSnapshot, idx: i64| -> Dynamic {
@@ -875,21 +1111,26 @@ fn register_comp_types(engine: &mut Engine) {    engine.register_type::<LayerSna
             }
         });
 
-    engine.register_type::<CompSnapshot>()
+    engine
+        .register_type::<CompSnapshot>()
         .register_fn("layer", |c: &mut CompSnapshot, name: &str| c.layer(name))
-        .register_fn("layer", |c: &mut CompSnapshot, index: i64| c.layer_by_index(index))
+        .register_fn("layer", |c: &mut CompSnapshot, index: i64| {
+            c.layer_by_index(index)
+        })
         .register_fn("numLayers", |c: &mut CompSnapshot| c.num_layers())
         .register_fn("duration", |c: &mut CompSnapshot| c.duration())
         .register_fn("frameDuration", |c: &mut CompSnapshot| c.frame_duration());
 
-    engine.register_fn("effect_param",
+    engine.register_fn(
+        "effect_param",
         |l: &mut LayerSnapshot, effect: &str, param: &str| -> f64 {
             l.effects
                 .get(effect)
                 .and_then(|m| m.get(param))
                 .copied()
                 .unwrap_or(f64::NAN)
-        });
+        },
+    );
 
     // ── AE spatial transforms (thisLayer context) ──
     // toComp(layerPoint): layer-space px → comp-space px
@@ -900,7 +1141,10 @@ fn register_comp_types(engine: &mut Engine) {    engine.register_type::<LayerSna
             let sy = y * scale[1] / 100.0;
             let cx = sx * rad.cos() - sy * rad.sin();
             let cy = sx * rad.sin() + sy * rad.cos();
-            vec![Dynamic::from_float(pos[0] + cx), Dynamic::from_float(pos[1] + cy)]
+            vec![
+                Dynamic::from_float(pos[0] + cx),
+                Dynamic::from_float(pos[1] + cy),
+            ]
         })
     });
     // fromComp(compPoint): comp-space px → layer-space px
@@ -944,7 +1188,10 @@ pub fn build_comp_snapshot(comp: &crate::core::timeline::Composition, frame: u32
     snapshot
 }
 
-fn build_comp_snapshot_uncached(comp: &crate::core::timeline::Composition, frame: u32) -> CompSnapshot {
+fn build_comp_snapshot_uncached(
+    comp: &crate::core::timeline::Composition,
+    frame: u32,
+) -> CompSnapshot {
     let fps = comp.fps;
     let mut layers = std::collections::HashMap::new();
     for l in &comp.layers {
@@ -985,7 +1232,11 @@ fn build_comp_snapshot_uncached(comp: &crate::core::timeline::Composition, frame
         let pos3d = l.transform_3d.position.evaluate(frame);
         let rot3d = l.transform_3d.rotation.evaluate(frame);
         let anchor3d = [0.0, 0.0, 0.0];
-        let time_remap_f = l.time_remap.as_ref().map(|t| t.evaluate(frame) as f64).unwrap_or(0.0);
+        let time_remap_f = l
+            .time_remap
+            .as_ref()
+            .map(|t| t.evaluate(frame) as f64)
+            .unwrap_or(0.0);
         let snap = LayerSnapshot {
             position: [
                 l.transform.eval_position(frame, fps)[0] as f64,
@@ -1031,51 +1282,51 @@ pub fn eval_v2_with_comp(
     this_layer: Option<&LayerSnapshot>,
 ) -> [f32; 2] {
     COMP_ENGINE.with(|engine| {
-    let time = frame as f64 / fps.max(1) as f64;
-    set_current_time(time);
-    // Seed the spatial-transform context for fromComp/toComp
-    if let Some(l) = this_layer {
-        set_current_layer_xform(
-            [l.position[0] as f32, l.position[1] as f32],
-            [l.scale[0] as f32, l.scale[1] as f32],
-            l.rotation as f32,
-        );
-    }
-    let mut scope = Scope::new();
-    scope.push("time", time);
-    scope.push("frame", frame as i64);
-    scope.push("fps", fps as i64);
-    scope.push("index", 0i64); // layer index (threaded at call sites later)
-    let base_arr: Array = vec![
-        Dynamic::from_float(base[0] as f64),
-        Dynamic::from_float(base[1] as f64),
-    ];
-    scope.push("value", base_arr);
-    scope.push("thisComp", comp_snap.clone());
-    if let Some(tl) = this_layer {
-        scope.push("thisLayer", tl.clone());
-    }
+        let time = frame as f64 / fps.max(1) as f64;
+        set_current_time(time);
+        // Seed the spatial-transform context for fromComp/toComp
+        if let Some(l) = this_layer {
+            set_current_layer_xform(
+                [l.position[0] as f32, l.position[1] as f32],
+                [l.scale[0] as f32, l.scale[1] as f32],
+                l.rotation as f32,
+            );
+        }
+        let mut scope = Scope::new();
+        scope.push("time", time);
+        scope.push("frame", frame as i64);
+        scope.push("fps", fps as i64);
+        scope.push("index", 0i64); // layer index (threaded at call sites later)
+        let base_arr: Array = vec![
+            Dynamic::from_float(base[0] as f64),
+            Dynamic::from_float(base[1] as f64),
+        ];
+        scope.push("value", base_arr);
+        scope.push("thisComp", comp_snap.clone());
+        if let Some(tl) = this_layer {
+            scope.push("thisLayer", tl.clone());
+        }
 
-    match engine.eval_with_scope::<Dynamic>(&mut scope, script) {
-        Ok(val) => {
-            if let Ok(arr) = val.clone().into_array() {
-                if arr.len() >= 2 {
-                    return [
-                        arr[0].as_float().unwrap_or(base[0] as f64) as f32,
-                        arr[1].as_float().unwrap_or(base[1] as f64) as f32,
-                    ];
+        match engine.eval_with_scope::<Dynamic>(&mut scope, script) {
+            Ok(val) => {
+                if let Ok(arr) = val.clone().into_array() {
+                    if arr.len() >= 2 {
+                        return [
+                            arr[0].as_float().unwrap_or(base[0] as f64) as f32,
+                            arr[1].as_float().unwrap_or(base[1] as f64) as f32,
+                        ];
+                    }
                 }
+                if let Ok(f) = val.as_float() {
+                    return [base[0] + f as f32, base[1]];
+                }
+                base
             }
-            if let Ok(f) = val.as_float() {
-                return [base[0] + f as f32, base[1]];
+            Err(e) => {
+                log::warn!("[ExprEngine] eval_v2_with_comp error: {}", e);
+                base
             }
-            base
         }
-        Err(e) => {
-            log::warn!("[ExprEngine] eval_v2_with_comp error: {}", e);
-            base
-        }
-    }
     })
 }
 
@@ -1089,34 +1340,34 @@ pub fn eval_f32_with_comp(
     this_layer: Option<&LayerSnapshot>,
 ) -> f32 {
     COMP_ENGINE.with(|engine| {
-    let time = frame as f64 / fps.max(1) as f64;
-    set_current_time(time);
-    let mut scope = Scope::new();
-    scope.push("time", time);
-    scope.push("frame", frame as i64);
-    scope.push("fps", fps as i64);
-    scope.push("index", 0i64); // layer index (threaded at call sites later)
-    scope.push("value", base as f64);
-    scope.push("thisComp", comp_snap.clone());
-    if let Some(tl) = this_layer {
-        scope.push("thisLayer", tl.clone());
-    }
+        let time = frame as f64 / fps.max(1) as f64;
+        set_current_time(time);
+        let mut scope = Scope::new();
+        scope.push("time", time);
+        scope.push("frame", frame as i64);
+        scope.push("fps", fps as i64);
+        scope.push("index", 0i64); // layer index (threaded at call sites later)
+        scope.push("value", base as f64);
+        scope.push("thisComp", comp_snap.clone());
+        if let Some(tl) = this_layer {
+            scope.push("thisLayer", tl.clone());
+        }
 
-    match engine.eval_with_scope::<Dynamic>(&mut scope, script) {
-        Ok(val) => {
-            if let Some(f) = dynamic_to_f64(&val) {
-                return f as f32;
+        match engine.eval_with_scope::<Dynamic>(&mut scope, script) {
+            Ok(val) => {
+                if let Some(f) = dynamic_to_f64(&val) {
+                    return f as f32;
+                }
+                if let Ok(i) = val.as_int() {
+                    return i as f32;
+                }
+                base
             }
-            if let Ok(i) = val.as_int() {
-                return i as f32;
+            Err(e) => {
+                log::warn!("[ExprEngine] eval_f32_with_comp error: {}", e);
+                base
             }
-            base
         }
-        Err(e) => {
-            log::warn!("[ExprEngine] eval_f32_with_comp error: {}", e);
-            base
-        }
-    }
     })
 }
 
@@ -1199,43 +1450,44 @@ pub fn preprocess_loop_script(script: &str) -> String {
 
 /// True if the script references any loop function.
 pub fn script_uses_loops(script: &str) -> bool {
-    script.contains("loopOut") || script.contains("loopIn") || script.contains("loopOutDuration") || script.contains("loopInDuration")
+    script.contains("loopOut")
+        || script.contains("loopIn")
+        || script.contains("loopOutDuration")
+        || script.contains("loopInDuration")
 }
 
 /// Evaluate a scalar Raw script with loop values available.
-pub fn eval_f32_with_loops(
-    script: &str,
-    base: f32,
-    frame: u32,
-    fps: u32,
-    loops: LoopVals,
-) -> f32 {
+pub fn eval_f32_with_loops(script: &str, base: f32, frame: u32, fps: u32, loops: LoopVals) -> f32 {
     let rewritten = preprocess_loop_script(script);
     let time = frame as f64 / fps.max(1) as f64;
     set_current_time(time);
     LOOP_ENGINE.with(|engine| {
-    let mut scope = Scope::new();
-    scope.push("time", time);
-    scope.push("frame", frame as i64);
-    scope.push("fps", fps as i64);
-    scope.push("index", 0i64); // layer index (threaded at call sites later)
-    scope.push("value", base as f64);
-    scope.push("__loop_out_cycle", loops.out_cycle as f64);
-    scope.push("__loop_out_pingpong", loops.out_pingpong as f64);
-    scope.push("__loop_in_cycle", loops.in_cycle as f64);
-    scope.push("__loop_in_pingpong", loops.in_pingpong as f64);
+        let mut scope = Scope::new();
+        scope.push("time", time);
+        scope.push("frame", frame as i64);
+        scope.push("fps", fps as i64);
+        scope.push("index", 0i64); // layer index (threaded at call sites later)
+        scope.push("value", base as f64);
+        scope.push("__loop_out_cycle", loops.out_cycle as f64);
+        scope.push("__loop_out_pingpong", loops.out_pingpong as f64);
+        scope.push("__loop_in_cycle", loops.in_cycle as f64);
+        scope.push("__loop_in_pingpong", loops.in_pingpong as f64);
 
-    match engine.eval_with_scope::<Dynamic>(&mut scope, &rewritten) {
-        Ok(val) => {
-            if let Some(f) = dynamic_to_f64(&val) { return f as f32; }
-            if let Ok(i) = val.as_int() { return i as f32; }
-            base
+        match engine.eval_with_scope::<Dynamic>(&mut scope, &rewritten) {
+            Ok(val) => {
+                if let Some(f) = dynamic_to_f64(&val) {
+                    return f as f32;
+                }
+                if let Ok(i) = val.as_int() {
+                    return i as f32;
+                }
+                base
+            }
+            Err(e) => {
+                log::warn!("[ExprEngine] eval_f32_with_loops error: {}", e);
+                base
+            }
         }
-        Err(e) => {
-            log::warn!("[ExprEngine] eval_f32_with_loops error: {}", e);
-            base
-        }
-    }
     })
 }
 
@@ -1251,42 +1503,52 @@ pub fn eval_v2_with_loops(
     let time = frame as f64 / fps.max(1) as f64;
     set_current_time(time);
     LOOP_ENGINE.with(|engine| {
-    let mut scope = Scope::new();
-    scope.push("time", time);
-    scope.push("frame", frame as i64);
-    scope.push("fps", fps as i64);
-    scope.push("index", 0i64); // layer index (threaded at call sites later)
-    let base_arr: Array = vec![
-        Dynamic::from_float(base[0] as f64),
-        Dynamic::from_float(base[1] as f64),
-    ];
-    scope.push("value", base_arr);
-    let loop_arr = |x: f32, y: f32| vec![Dynamic::from_float(x as f64), Dynamic::from_float(y as f64)];
-    scope.push("__loop_out_cycle", loop_arr(loops.out_cycle, loops.in_cycle));
-    scope.push("__loop_out_pingpong", loop_arr(loops.out_pingpong, loops.in_pingpong));
-    scope.push("__loop_in_cycle", loop_arr(loops.in_cycle, loops.out_cycle));
-    scope.push("__loop_in_pingpong", loop_arr(loops.in_pingpong, loops.out_pingpong));
+        let mut scope = Scope::new();
+        scope.push("time", time);
+        scope.push("frame", frame as i64);
+        scope.push("fps", fps as i64);
+        scope.push("index", 0i64); // layer index (threaded at call sites later)
+        let base_arr: Array = vec![
+            Dynamic::from_float(base[0] as f64),
+            Dynamic::from_float(base[1] as f64),
+        ];
+        scope.push("value", base_arr);
+        let loop_arr =
+            |x: f32, y: f32| vec![Dynamic::from_float(x as f64), Dynamic::from_float(y as f64)];
+        scope.push(
+            "__loop_out_cycle",
+            loop_arr(loops.out_cycle, loops.in_cycle),
+        );
+        scope.push(
+            "__loop_out_pingpong",
+            loop_arr(loops.out_pingpong, loops.in_pingpong),
+        );
+        scope.push("__loop_in_cycle", loop_arr(loops.in_cycle, loops.out_cycle));
+        scope.push(
+            "__loop_in_pingpong",
+            loop_arr(loops.in_pingpong, loops.out_pingpong),
+        );
 
-    match engine.eval_with_scope::<Dynamic>(&mut scope, &rewritten) {
-        Ok(val) => {
-            if let Ok(arr) = val.clone().into_array() {
-                if arr.len() >= 2 {
-                    return [
-                        arr[0].as_float().unwrap_or(base[0] as f64) as f32,
-                        arr[1].as_float().unwrap_or(base[1] as f64) as f32,
-                    ];
+        match engine.eval_with_scope::<Dynamic>(&mut scope, &rewritten) {
+            Ok(val) => {
+                if let Ok(arr) = val.clone().into_array() {
+                    if arr.len() >= 2 {
+                        return [
+                            arr[0].as_float().unwrap_or(base[0] as f64) as f32,
+                            arr[1].as_float().unwrap_or(base[1] as f64) as f32,
+                        ];
+                    }
                 }
+                if let Ok(f) = val.as_float() {
+                    return [base[0] + f as f32, base[1]];
+                }
+                base
             }
-            if let Ok(f) = val.as_float() {
-                return [base[0] + f as f32, base[1]];
+            Err(e) => {
+                log::warn!("[ExprEngine] eval_v2_with_loops error: {}", e);
+                base
             }
-            base
         }
-        Err(e) => {
-            log::warn!("[ExprEngine] eval_v2_with_loops error: {}", e);
-            base
-        }
-    }
     })
 }
 
@@ -1297,7 +1559,9 @@ pub fn eval_expression_f64(script: &str, vars: &[(&str, f64)]) -> f64 {
         for (name, val) in vars {
             scope.push(*name, *val);
         }
-        engine.eval_with_scope::<f64>(&mut scope, script).unwrap_or(0.0)
+        engine
+            .eval_with_scope::<f64>(&mut scope, script)
+            .unwrap_or(0.0)
     })
 }
 
@@ -1305,10 +1569,23 @@ pub fn eval_expression_f64(script: &str, vars: &[(&str, f64)]) -> f64 {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PickWhipTarget {
-    TransformProperty { layer_name: String, prop: String },
-    EffectProperty { layer_name: String, effect_name: String, param_name: String },
-    LayerSelf { layer_name: String },
-    ExternalCompProperty { comp_name: String, layer_name: String, prop_path: String },
+    TransformProperty {
+        layer_name: String,
+        prop: String,
+    },
+    EffectProperty {
+        layer_name: String,
+        effect_name: String,
+        param_name: String,
+    },
+    LayerSelf {
+        layer_name: String,
+    },
+    ExternalCompProperty {
+        comp_name: String,
+        layer_name: String,
+        prop_path: String,
+    },
 }
 
 /// Automatically generates valid AE-compatible expression code when using the Pick Whip tool.
@@ -1321,11 +1598,18 @@ pub fn generate_pick_whip_expression(target: &PickWhipTarget, current_layer_name
                 format!("thisComp.layer(\"{}\").transform.{}", layer_name, prop)
             }
         }
-        PickWhipTarget::EffectProperty { layer_name, effect_name, param_name } => {
+        PickWhipTarget::EffectProperty {
+            layer_name,
+            effect_name,
+            param_name,
+        } => {
             if layer_name == current_layer_name {
                 format!("effect(\"{}\")(\"{}\")", effect_name, param_name)
             } else {
-                format!("thisComp.layer(\"{}\").effect(\"{}\")(\"{}\")", layer_name, effect_name, param_name)
+                format!(
+                    "thisComp.layer(\"{}\").effect(\"{}\")(\"{}\")",
+                    layer_name, effect_name, param_name
+                )
             }
         }
         PickWhipTarget::LayerSelf { layer_name } => {
@@ -1335,8 +1619,15 @@ pub fn generate_pick_whip_expression(target: &PickWhipTarget, current_layer_name
                 format!("thisComp.layer(\"{}\")", layer_name)
             }
         }
-        PickWhipTarget::ExternalCompProperty { comp_name, layer_name, prop_path } => {
-            format!("comp(\"{}\").layer(\"{}\").{}", comp_name, layer_name, prop_path)
+        PickWhipTarget::ExternalCompProperty {
+            comp_name,
+            layer_name,
+            prop_path,
+        } => {
+            format!(
+                "comp(\"{}\").layer(\"{}\").{}",
+                comp_name, layer_name, prop_path
+            )
         }
     }
 }
@@ -1350,7 +1641,11 @@ mod tests {
         let engine = build_engine();
         // At frame 30, fps 30 → time = 1.0
         let result = eval_f32(&engine, "time * 360.0", 0.0, 30, 30);
-        assert!((result - 360.0).abs() < 0.01, "Expected 360, got {}", result);
+        assert!(
+            (result - 360.0).abs() < 0.01,
+            "Expected 360, got {}",
+            result
+        );
     }
 
     #[test]
@@ -1365,8 +1660,16 @@ mod tests {
     fn test_v2_expression() {
         let engine = build_engine();
         let result = eval_v2(&engine, "[time * 100.0, 0.0]", [0.0, 0.0], 30, 30);
-        assert!((result[0] - 100.0).abs() < 0.1, "Expected 100, got {}", result[0]);
-        assert!((result[1] - 0.0).abs() < 0.1, "Expected 0, got {}", result[1]);
+        assert!(
+            (result[0] - 100.0).abs() < 0.1,
+            "Expected 100, got {}",
+            result[0]
+        );
+        assert!(
+            (result[1] - 0.0).abs() < 0.1,
+            "Expected 0, got {}",
+            result[1]
+        );
     }
 
     #[test]
@@ -1380,25 +1683,42 @@ mod tests {
     fn test_ease_expression() {
         let engine = build_engine();
         let mid = eval_f32(&engine, "ease(0.5, 0.0, 1.0, 0.0, 100.0)", 0.0, 0, 30);
-        assert!((mid - 50.0).abs() < 0.01, "Expected 50 at midpoint, got {}", mid);
+        assert!(
+            (mid - 50.0).abs() < 0.01,
+            "Expected 50 at midpoint, got {}",
+            mid
+        );
 
         let ease_in = eval_f32(&engine, "easeIn(0.5, 0.0, 1.0, 0.0, 100.0)", 0.0, 0, 30);
-        assert!((ease_in - 25.0).abs() < 0.01, "Expected 25 for easeIn at midpoint, got {}", ease_in);
+        assert!(
+            (ease_in - 25.0).abs() < 0.01,
+            "Expected 25 for easeIn at midpoint, got {}",
+            ease_in
+        );
 
         let ease_out = eval_f32(&engine, "easeOut(0.5, 0.0, 1.0, 0.0, 100.0)", 0.0, 0, 30);
-        assert!((ease_out - 75.0).abs() < 0.01, "Expected 75 for easeOut at midpoint, got {}", ease_out);
+        assert!(
+            (ease_out - 75.0).abs() < 0.01,
+            "Expected 75 for easeOut at midpoint, got {}",
+            ease_out
+        );
     }
 }
 
 #[cfg(test)]
 mod tests_comp_context {
-    use crate::core::timeline::{Composition, Layer, LayerType, Expression};
     use crate::core::property::Animatable;
+    use crate::core::timeline::{Composition, Expression, Layer, LayerType};
 
     #[test]
     fn test_thiscomp_layer_reference() {
         let mut comp = Composition::new("c".into(), "Comp".into(), 100, 100, 30, 30);
-        let mut target = Layer::new("t1".into(), "Target".into(), LayerType::Solid { color: [0.0; 4] }, 30);
+        let mut target = Layer::new(
+            "t1".into(),
+            "Target".into(),
+            LayerType::Solid { color: [0.0; 4] },
+            30,
+        );
         target.transform.position = Animatable::new_constant([42.0, 24.0]);
         comp.layers.push(target);
         let mut driver = Layer::new("d1".into(), "Driver".into(), LayerType::Null, 30);
@@ -1411,14 +1731,23 @@ mod tests_comp_context {
 
         let driver = comp.layers.iter().find(|l| l.name == driver_name).unwrap();
         let (pos, _, _, _) = comp.resolve_world_transform(driver, 0);
-        assert!((pos[0] - 52.0).abs() < 0.01, "expected 52.0, got {}", pos[0]);
+        assert!(
+            (pos[0] - 52.0).abs() < 0.01,
+            "expected 52.0, got {}",
+            pos[0]
+        );
     }
 
     #[test]
     fn test_effect_param_bridge_cross_layer() {
         use crate::core::timeline::Effect;
         let mut comp = Composition::new("c".into(), "Comp".into(), 100, 100, 30, 30);
-        let mut src = Layer::new("s1".into(), "Source".into(), LayerType::Solid { color: [0.0; 4] }, 30);
+        let mut src = Layer::new(
+            "s1".into(),
+            "Source".into(),
+            LayerType::Solid { color: [0.0; 4] },
+            30,
+        );
         // Animated Gaussian blur radius: 5 at frame 0, 15 at frame 10.
         src.effects.push(Effect {
             id: "fx_test_blur".into(),
@@ -1426,8 +1755,16 @@ mod tests_comp_context {
             name: "Blur".into(),
             effect_type: crate::core::timeline::EffectType::GaussianBlur {
                 blur_radius: Animatable::new_animated(vec![
-                    crate::core::keyframe::Keyframe::new(0, 5.0, crate::core::keyframe::InterpolationType::Linear),
-                    crate::core::keyframe::Keyframe::new(10, 15.0, crate::core::keyframe::InterpolationType::Linear),
+                    crate::core::keyframe::Keyframe::new(
+                        0,
+                        5.0,
+                        crate::core::keyframe::InterpolationType::Linear,
+                    ),
+                    crate::core::keyframe::Keyframe::new(
+                        10,
+                        15.0,
+                        crate::core::keyframe::InterpolationType::Linear,
+                    ),
                 ]),
             },
         });
@@ -1439,37 +1776,57 @@ mod tests_comp_context {
         comp.layers.push(drv);
 
         let snap_f0 = crate::core::expression_engine::build_comp_snapshot(&comp, 0);
-        assert!((snap_f0.layers["Source"].effects["Blur"]["Blur Radius"] - 5.0).abs() < 0.01,
-            "snapshot should carry effect value");
+        assert!(
+            (snap_f0.layers["Source"].effects["Blur"]["Blur Radius"] - 5.0).abs() < 0.01,
+            "snapshot should carry effect value"
+        );
 
         let layer_f10 = &comp.layers[1];
         let (pos, _, _, _) = comp.resolve_world_transform(layer_f10, 10);
-        assert!((pos[0] - 150.0).abs() < 0.05, "expected 150.0 (15*10), got {}", pos[0]);
+        assert!(
+            (pos[0] - 150.0).abs() < 0.05,
+            "expected 150.0 (15*10), got {}",
+            pos[0]
+        );
     }
 
     #[test]
     fn test_thislayer_reference() {
         let mut comp = Composition::new("c".into(), "Comp".into(), 100, 100, 30, 30);
-        let mut l = Layer::new("s1".into(), "Selfy".into(), LayerType::Solid { color: [0.0; 4] }, 30);
+        let mut l = Layer::new(
+            "s1".into(),
+            "Selfy".into(),
+            LayerType::Solid { color: [0.0; 4] },
+            30,
+        );
         l.transform.position = Animatable::new_constant([10.0, 20.0]);
-        l.transform.rotation_expression = Some(Expression::Raw("thisLayer.transform.rotation * 2.0".into()));
+        l.transform.rotation_expression =
+            Some(Expression::Raw("thisLayer.transform.rotation * 2.0".into()));
         comp.layers.push(l);
 
         let layer = &comp.layers[0];
         let (_, _, rot, _) = comp.resolve_world_transform(layer, 0);
-        assert!((rot - 0.0).abs() < 0.01 || rot > 0.0, "rotation expr should evaluate");
+        assert!(
+            (rot - 0.0).abs() < 0.01 || rot > 0.0,
+            "rotation expr should evaluate"
+        );
     }
 }
 
 #[cfg(test)]
 mod tests_comp_extras {
-    use crate::core::timeline::{Composition, Layer, LayerType, Expression};
     use crate::core::property::Animatable;
+    use crate::core::timeline::{Composition, Expression, Layer, LayerType};
 
     #[test]
     fn test_layer_lookup_by_id() {
         let mut comp = Composition::new("c".into(), "Comp".into(), 100, 100, 30, 30);
-        let mut target = Layer::new("tgt_id_1".into(), "TargetName".into(), LayerType::Solid { color: [0.0; 4] }, 30);
+        let mut target = Layer::new(
+            "tgt_id_1".into(),
+            "TargetName".into(),
+            LayerType::Solid { color: [0.0; 4] },
+            30,
+        );
         target.transform.position = Animatable::new_constant([7.0, 3.0]);
         comp.layers.push(target);
         let mut driver = Layer::new("d".into(), "Driver".into(), LayerType::Null, 30);
@@ -1480,7 +1837,11 @@ mod tests_comp_extras {
 
         let driver_ref = &comp.layers[1];
         let (pos, _, _, _) = comp.resolve_world_transform(driver_ref, 0);
-        assert!((pos[0] - 3.0).abs() < 0.01, "expected 3.0 via id lookup, got {}", pos[0]);
+        assert!(
+            (pos[0] - 3.0).abs() < 0.01,
+            "expected 3.0 via id lookup, got {}",
+            pos[0]
+        );
     }
 
     #[test]
@@ -1509,29 +1870,45 @@ mod tests_comp_extras {
 #[cfg(test)]
 mod tests_loops {
     use super::*;
-    use crate::core::timeline::{Composition, Layer, LayerType, Expression};
     use crate::core::keyframe::Keyframe;
     use crate::core::property::Animatable;
+    use crate::core::timeline::{Composition, Expression, Layer, LayerType};
 
     #[test]
     fn test_loopout_in_raw_script() {
         let mut comp = Composition::new("c".into(), "Comp".into(), 100, 100, 30, 30);
-        let mut l = Layer::new("l1".into(), "Looper".into(), LayerType::Solid { color: [0.0; 4] }, 30);
+        let mut l = Layer::new(
+            "l1".into(),
+            "Looper".into(),
+            LayerType::Solid { color: [0.0; 4] },
+            30,
+        );
         // Keyframes: x 0→100 over frames 0..10
         l.transform.position = Animatable::new_animated(vec![
-            Keyframe::new(0, [0.0, 0.0], crate::core::keyframe::InterpolationType::Linear),
-            Keyframe::new(10, [100.0, 0.0], crate::core::keyframe::InterpolationType::Linear),
+            Keyframe::new(
+                0,
+                [0.0, 0.0],
+                crate::core::keyframe::InterpolationType::Linear,
+            ),
+            Keyframe::new(
+                10,
+                [100.0, 0.0],
+                crate::core::keyframe::InterpolationType::Linear,
+            ),
         ]);
         // At frame 25 (past last kf), loopOut("cycle") should reference the cycled value (x=50 at frame 5)
-        l.transform.position_expression = Some(Expression::Raw(
-            "loopOut(\"cycle\") + [0.0, 7.0]".into(),
-        ));
+        l.transform.position_expression =
+            Some(Expression::Raw("loopOut(\"cycle\") + [0.0, 7.0]".into()));
         comp.layers.push(l);
 
         let layer = &comp.layers[0];
         let (pos, _, _, _) = comp.resolve_world_transform(layer, 25);
         // Frame 25 remaps to frame 5 → x = 50
-        assert!((pos[0] - 50.0).abs() < 0.5, "expected x=50 from loopOut cycle, got {}", pos[0]);
+        assert!(
+            (pos[0] - 50.0).abs() < 0.5,
+            "expected x=50 from loopOut cycle, got {}",
+            pos[0]
+        );
     }
 
     #[test]
@@ -1556,7 +1933,11 @@ mod tests_loops {
         let snap = crate::core::expression_engine::build_comp_snapshot(&comp, 0);
         assert_eq!(snap.layer_by_index(1).position[0], 99.0);
         assert_eq!(snap.layer_by_index(2).position[0], 7.0);
-        assert_eq!(snap.layer_by_index(99).position[0], 0.0, "out of range → default");
+        assert_eq!(
+            snap.layer_by_index(99).position[0],
+            0.0,
+            "out of range → default"
+        );
         assert_eq!(snap.num_layers(), 2.0);
     }
 
@@ -1564,7 +1945,10 @@ mod tests_loops {
     fn test_comp_duration_and_frame_duration() {
         let comp = Composition::new("c".into(), "Comp".into(), 100, 100, 25, 50);
         let snap = crate::core::expression_engine::build_comp_snapshot(&comp, 0);
-        assert!((snap.duration() - 2.0).abs() < 1e-6, "50 frames @25fps = 2s");
+        assert!(
+            (snap.duration() - 2.0).abs() < 1e-6,
+            "50 frames @25fps = 2s"
+        );
         assert!((snap.frame_duration() - 0.04).abs() < 1e-6);
     }
 
@@ -1583,12 +1967,24 @@ mod tests_loops {
         set_current_layer_xform([100.0, 50.0], [200.0, 200.0], 90.0);
         // Local point (10, 0) → scaled (20, 0) → rotated 90°: (0, 20) → +pos = (100, 70)
         let out: rhai::Array = COMP_ENGINE.with(|e| e.eval("toComp(10.0, 0.0)").unwrap());
-        assert!((out[0].as_float().unwrap() - 100.0).abs() < 1e-4, "{}", out[0]);
-        assert!((out[1].as_float().unwrap() - 70.0).abs() < 1e-4, "{}", out[1]);
+        assert!(
+            (out[0].as_float().unwrap() - 100.0).abs() < 1e-4,
+            "{}",
+            out[0]
+        );
+        assert!(
+            (out[1].as_float().unwrap() - 70.0).abs() < 1e-4,
+            "{}",
+            out[1]
+        );
 
         // fromComp inverts it
         let inv: rhai::Array = COMP_ENGINE.with(|e| e.eval("fromComp(100.0, 70.0)").unwrap());
-        assert!((inv[0].as_float().unwrap() - 10.0).abs() < 1e-3, "{}", inv[0]);
+        assert!(
+            (inv[0].as_float().unwrap() - 10.0).abs() < 1e-3,
+            "{}",
+            inv[0]
+        );
         assert!(inv[1].as_float().unwrap().abs() < 1e-3, "{}", inv[1]);
     }
 
@@ -1610,7 +2006,9 @@ mod tests_loops {
         assert!((dot - 11.0).abs() < 1e-6);
 
         // Array linear
-        let arr: rhai::Array = engine.eval("linear(0.5, 0.0, 1.0, [10.0, 20.0], [20.0, 40.0])").unwrap();
+        let arr: rhai::Array = engine
+            .eval("linear(0.5, 0.0, 1.0, [10.0, 20.0], [20.0, 40.0])")
+            .unwrap();
         assert_eq!(arr.len(), 2);
         assert!((arr[0].as_float().unwrap() - 15.0).abs() < 1e-6);
         assert!((arr[1].as_float().unwrap() - 30.0).abs() < 1e-6);
@@ -1618,14 +2016,68 @@ mod tests_loops {
 
     #[test]
     fn test_generate_pick_whip_expression() {
-        let t1 = PickWhipTarget::TransformProperty { layer_name: "Logo".into(), prop: "position".into() };
-        assert_eq!(generate_pick_whip_expression(&t1, "Logo"), "transform.position");
-        assert_eq!(generate_pick_whip_expression(&t1, "Background"), "thisComp.layer(\"Logo\").transform.position");
+        let t1 = PickWhipTarget::TransformProperty {
+            layer_name: "Logo".into(),
+            prop: "position".into(),
+        };
+        assert_eq!(
+            generate_pick_whip_expression(&t1, "Logo"),
+            "transform.position"
+        );
+        assert_eq!(
+            generate_pick_whip_expression(&t1, "Background"),
+            "thisComp.layer(\"Logo\").transform.position"
+        );
 
-        let t2 = PickWhipTarget::EffectProperty { layer_name: "Control".into(), effect_name: "Slider Control".into(), param_name: "Slider".into() };
-        assert_eq!(generate_pick_whip_expression(&t2, "Text"), "thisComp.layer(\"Control\").effect(\"Slider Control\")(\"Slider\")");
+        let t2 = PickWhipTarget::EffectProperty {
+            layer_name: "Control".into(),
+            effect_name: "Slider Control".into(),
+            param_name: "Slider".into(),
+        };
+        assert_eq!(
+            generate_pick_whip_expression(&t2, "Text"),
+            "thisComp.layer(\"Control\").effect(\"Slider Control\")(\"Slider\")"
+        );
 
-        let t3 = PickWhipTarget::ExternalCompProperty { comp_name: "PreComp".into(), layer_name: "Null 1".into(), prop_path: "transform.opacity".into() };
-        assert_eq!(generate_pick_whip_expression(&t3, "Main"), "comp(\"PreComp\").layer(\"Null 1\").transform.opacity");
+        let t3 = PickWhipTarget::ExternalCompProperty {
+            comp_name: "PreComp".into(),
+            layer_name: "Null 1".into(),
+            prop_path: "transform.opacity".into(),
+        };
+        assert_eq!(
+            generate_pick_whip_expression(&t3, "Main"),
+            "comp(\"PreComp\").layer(\"Null 1\").transform.opacity"
+        );
+    }
+
+    #[test]
+    fn audio_binding_sources_expose_current_amplitude_and_bands() {
+        set_audio_expr_data(AudioExprData {
+            amplitude: 0.75,
+            bands: [0.1, 0.2, 0.3, 0.4, 0.5],
+        });
+
+        let values = audio_binding_source_values();
+        assert!((values["audio.amplitude"] - 0.75).abs() < 1e-6);
+        assert!((values["audio.band0"] - 0.1).abs() < 1e-6);
+        assert!((values["audio.band4"] - 0.5).abs() < 1e-6);
+        assert!((values["audio.bass"] - 0.1).abs() < 1e-6);
+        assert!((values["audio.treble"] - 0.5).abs() < 1e-6);
+        assert_eq!(values.len(), 11);
+    }
+
+    #[test]
+    fn binding_audio_sources_update_expression_context_with_clamping() {
+        let values = std::collections::HashMap::from([
+            (String::from("audio.amplitude"), 2.0),
+            (String::from("audio.bass"), -1.0),
+            (String::from("audio.band1"), 0.25),
+        ]);
+        set_audio_from_binding_sources(&values);
+
+        assert_eq!(get_audio_amplitude(), 1.0);
+        assert_eq!(get_audio_band(0), 0.0);
+        assert_eq!(get_audio_band(1), 0.25);
+        assert_eq!(get_audio_band(4), 0.0);
     }
 }
