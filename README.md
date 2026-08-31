@@ -88,10 +88,74 @@ cargo clippy --all-features -- -D warnings
 │   │   ├── motion_sketch.rs    # Freehand real-time gesture keyframe baking
 │   │   ├── parenting_engine.rs # Pick Whip world-transform maintaining parenting
 │   │   ├── subtitles.rs        # WebVTT / SRT bidirectional caption parser
+│   │   ├── ai_runtime_bridge.rs# Opt-in AI slot system (SAM / RIFE / Depth-Anything)
 │   │   └── ...
 │   └── ui/                     # egui dark-mode studio panels (Timeline, Viewport, Graph, Scopes)
+│       ├── tutorial.rs         # 12-step interactive guided tutorial with chapter navigation
+│       └── ...
 └── tests/                      # Extensive fuzzing, stress tests & shader validation
 ```
+
+---
+
+## 🎓 Built-in Tutorial
+
+AEVFX Studio includes a **comprehensive 12-step interactive guided tutorial** covering:
+
+| Chapter | Topics |
+|---|---|
+| 1: Interface | Screen layout, toolbars, viewport navigation, Beginner/Pro mode toggle |
+| 2: Compositions & Layers | Creating comps, adding Text / Solid / Shape / Video / Audio layers |
+| 3: Animation & Keyframes | Stopwatch workflow, Easy Ease (F9), Graph Editor, 19 ease presets |
+| 4: Effects | Effects Library, 47+ built-in effects, Expressions (wiggle/loopOut/smooth) |
+| 5: 3D & Advanced | 3D layers, Camera, Lights, Cinema 4D extrusion, Puppet Tool, 32bit Paint |
+| 6: Export & Sharing | MP4 / ProRes / Lottie / GIF / MLT export, headless CLI rendering |
+
+Launch from **Help → 🎓 Start Guided Tutorial** or `Help → Tutorial` in the menu bar.
+
+---
+
+## 📊 Feature Completeness vs. Adobe After Effects
+
+| Feature Area | Status | Notes |
+|---|---|---|
+| **Keyframe Interpolation** | ✅ Complete | 19 ease presets, Bezier, Hold, Linear, Graph Editor |
+| **Expression Engine** | ✅ Complete | Rhai-based: wiggle, loopOut, smooth, time, thisComp |
+| **GPU Real-time Preview** | ✅ Complete | wgpu Metal/Vulkan/DX12, adaptive resolution |
+| **CPU Ground Truth Render** | ✅ Complete | Rayon-parallel, byte-deterministic |
+| **HDR Color Pipeline** | ✅ Complete | 16/32bpc, ACES 1.3, TPDF dithering |
+| **3D Extrusion & Bevel** | ✅ Complete | Cinema 4D-style solid mesh, ray-traced soft shadows |
+| **Motion Tracker** | ✅ Complete | SAD + planar homography, subpixel refinement |
+| **Audio Engine** | ✅ Complete | Multi-track WAV, Mute/Solo, EQ, Compressor |
+| **Particle System** | ✅ Complete | Deterministic emission, GPU textures, force fields |
+| **Puppet Tool (MLS)** | ✅ Complete | ARAP mesh deformation, bone rigs |
+| **32bit HDR Paint** | ✅ Complete | Brush, Eraser, Clone Stamp |
+| **MP4 / ProRes Export** | ✅ Complete | via FFmpeg bridge |
+| **Lottie Export** | ✅ Complete | Bodymovin-compatible JSON |
+| **Motion Sketch** | ✅ Complete | Freehand gesture → keyframe baking |
+| **AI Features** | ⚡ Opt-in | Modular bridge: SAM, RIFE, Depth-Anything, ProPainter |
+| **16/32bpc Full Pipeline** | 🚧 Partial | Viewport 8bpc; export path 16/32bpc on roadmap |
+| **Real-time GPU Effects** | 🚧 Roadmap | Effects currently CPU-dispatched |
+
+---
+
+## 🤝 Contributing
+
+Contributions are very welcome! Before submitting a PR:
+
+```bash
+# All tests must pass
+cargo test --all-features -- --test-threads=1
+
+# Zero Clippy warnings required
+cargo clippy --all-features -- -D warnings
+
+# Commit only the files you changed (multi-AI rule — never git add -A)
+git add <your-files>
+git commit -m "feat: your concise description"
+```
+
+See [AGENTS.md](./AGENTS.md) for full architecture notes, coding conventions, and the egui pitfall list.
 
 ---
 
