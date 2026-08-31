@@ -2,8 +2,16 @@
 /// Advanced Production-Grade After Effects VFX Kernels (Part 11).
 /// All algorithms are implemented with distinct pixel operations.
 // 1. Radial Blur Zoom (Center Zoom Motion Blur)
-pub fn apply_radial_blur_zoom(pixels: &mut [u8], width: u32, height: u32, center: [f32; 2], amount: f32) {
-    if amount <= 0.001 { return; }
+pub fn apply_radial_blur_zoom(
+    pixels: &mut [u8],
+    width: u32,
+    height: u32,
+    center: [f32; 2],
+    amount: f32,
+) {
+    if amount <= 0.001 {
+        return;
+    }
     let temp = pixels.to_vec();
     let samples = 12u32;
 
@@ -49,7 +57,9 @@ pub fn apply_polar_coordinates(pixels: &mut [u8], width: u32, height: u32, to_po
                 let dy = y as f32 - cy;
                 let r = (dx * dx + dy * dy).sqrt() / max_radius * width as f32;
                 let mut theta = dy.atan2(dx);
-                if theta < 0.0 { theta += std::f32::consts::TAU; }
+                if theta < 0.0 {
+                    theta += std::f32::consts::TAU;
+                }
                 let a = (theta / std::f32::consts::TAU) * height as f32;
                 (r, a)
             } else {
@@ -72,7 +82,14 @@ pub fn apply_polar_coordinates(pixels: &mut [u8], width: u32, height: u32, to_po
 }
 
 // 3. Linear Wipe with Feather Edge
-pub fn apply_linear_wipe_feather(pixels: &mut [u8], width: u32, height: u32, completion: f32, angle_deg: f32, feather: f32) {
+pub fn apply_linear_wipe_feather(
+    pixels: &mut [u8],
+    width: u32,
+    height: u32,
+    completion: f32,
+    angle_deg: f32,
+    feather: f32,
+) {
     let rad = angle_deg.to_radians();
     let cos_a = rad.cos();
     let sin_a = rad.sin();
@@ -131,6 +148,70 @@ pub fn apply_channel_mixer(pixels: &mut [u8], matrix: [[f32; 3]; 3]) {
     }
 }
 
+// 6. Advanced Spill Suppression (Despill Green/Blue Keying Fringes)
+pub fn apply_spill_suppression(pixels: &mut [u8], is_green_screen: bool, amount: f32) {
+    let amt = amount.clamp(0.0, 1.0);
+    if amt <= 0.001 {
+        return;
+    }
+
+    for i in (0..pixels.len()).step_by(4) {
+        let r = pixels[i] as f32;
+        let g = pixels[i + 1] as f32;
+        let b = pixels[i + 2] as f32;
+
+        if is_green_screen {
+            // Target Green: clamp green channel to average of Red and Blue
+            let max_allowed_g = (r + b) * 0.5;
+            if g > max_allowed_g {
+                let despilled_g = g + (max_allowed_g - g) * amt;
+                pixels[i + 1] = despilled_g.clamp(0.0, 255.0) as u8;
+            }
+        } else {
+            // Target Blue: clamp blue channel to average of Red and Green
+            let max_allowed_b = (r + g) * 0.5;
+            if b > max_allowed_b {
+                let despilled_b = b + (max_allowed_b - b) * amt;
+                pixels[i + 2] = despilled_b.clamp(0.0, 255.0) as u8;
+            }
+        }
+    }
+}
+
+// 7. Advanced Matte Choker (Alpha Edge Contraction / Expansion)
+pub fn apply_matte_choker(pixels: &mut [u8], width: u32, height: u32, choke_radius: i32) {
+    if choke_radius == 0 || width == 0 || height == 0 {
+        return;
+    }
+    let temp = pixels.to_vec();
+    let r = choke_radius.abs().min(10);
+    let is_choke = choke_radius > 0;
+
+    for y in 0..height as i32 {
+        for x in 0..width as i32 {
+            let mut alpha_val = if is_choke { 255u8 } else { 0u8 };
+
+            for dy in -r..=r {
+                for dx in -r..=r {
+                    if dx * dx + dy * dy <= r * r {
+                        let sx = (x + dx).clamp(0, width as i32 - 1) as usize;
+                        let sy = (y + dy).clamp(0, height as i32 - 1) as usize;
+                        let a = temp[(sy * width as usize + sx) * 4 + 3];
+                        if is_choke {
+                            alpha_val = alpha_val.min(a);
+                        } else {
+                            alpha_val = alpha_val.max(a);
+                        }
+                    }
+                }
+            }
+
+            let idx = (y as usize * width as usize + x as usize) * 4 + 3;
+            pixels[idx] = alpha_val;
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -141,4 +222,25 @@ mod tests {
         apply_exposure_hdr(&mut pixels, 1.0, 0.0, 1.0);
         assert_eq!(pixels.len(), 64);
     }
+
+    #[test]
+    fn test_spill_suppression_green_screen() {
+        // Pixel with excess green: R=50, G=200, B=50
+        let mut pixels = vec![50, 200, 50, 255];
+        apply_spill_suppression(&mut pixels, true, 1.0);
+        // Green should be suppressed to (50 + 50) / 2 = 50
+        assert_eq!(pixels[1], 50);
+    }
+
+    #[test]
+    fn test_matte_choker_reduces_alpha_boundary() {
+        let mut pixels = vec![255; 16 * 4]; // 4x4 image
+        // Make corners transparent
+        pixels[3] = 0;
+        pixels[15] = 0;
+        apply_matte_choker(&mut pixels, 4, 4, 1);
+        // Adjacent pixels should be choked
+        assert!(pixels[7] < 255 || pixels[11] < 255);
+    }
 }
+
