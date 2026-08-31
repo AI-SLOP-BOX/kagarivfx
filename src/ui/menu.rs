@@ -1525,9 +1525,7 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
                 ui.add_space(8.0);
                 ui.separator();
                 ui.add_space(4.0);
-                ui.small("⚠️ Disclaimer & Trademark Notice:");
-                ui.small("Adobe and After Effects are registered trademarks of Adobe Inc.");
-                ui.small("AEVFX is an independent open-source research project and is not affiliated with, sponsored by, or endorsed by Adobe Inc.");
+                ui.small("AEVFX Studio is an independent open-source project unrelated to any commercial compositing software.");
                 ui.add_space(8.0);
             });
         ctx.data_mut(|d| d.insert_temp(about_id, show_about));

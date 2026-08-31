@@ -108,9 +108,9 @@ impl PersistentDiskCache {
                         .ok()
                         .and_then(|json| serde_json::from_str::<DiskCacheMetadata>(&json).ok());
 
-                    if let Some(mut meta) = meta_res.filter(|meta| {
-                        meta.cache_key == key && meta.size_bytes == size
-                    }) {
+                    if let Some(mut meta) =
+                        meta_res.filter(|meta| meta.cache_key == key && meta.size_bytes == size)
+                    {
                         meta.last_access_epoch = current_epoch;
                         self.evict_for_bytes(size);
                         self.current_bytes += size;
@@ -252,7 +252,7 @@ impl PersistentDiskCache {
     }
 }
 
-/// Adobe Dynamic Link live bidirectional message protocol.
+/// Dynamic Link live bidirectional message protocol.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub enum DynamicLinkMessage {
     Ping,
@@ -473,11 +473,7 @@ mod tests {
         ));
         let key = 0x9abcu64;
         fs::create_dir_all(&tmp_dir).unwrap();
-        fs::write(
-            tmp_dir.join(format!("{key:016x}.cache")),
-            [0u8; 101],
-        )
-        .unwrap();
+        fs::write(tmp_dir.join(format!("{key:016x}.cache")), [0u8; 101]).unwrap();
         fs::write(tmp_dir.join(format!("{key:016x}.meta")), b"stale").unwrap();
 
         let mut cache = PersistentDiskCache::with_directory(100, &tmp_dir);

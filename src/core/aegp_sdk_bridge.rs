@@ -1,4 +1,4 @@
-//! Adobe After Effects C++ Plugin SDK & AEGP (After Effects General Plugin) Compatibility Bridge.
+//! VFX compositing C++ Plugin SDK & AEGP (After Effects General Plugin) Compatibility Bridge.
 //!
 //! Provides ABI-compatible host data structures, command dispatchers, and suite handler function pointers
 //! enabling loading and execution of AE-standard C++ effects (.plugin / .aex) and OpenFX plugins.

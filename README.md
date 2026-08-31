@@ -9,9 +9,7 @@ A hobby-driven, experimental open-source compositing and motion graphics applica
 ---
 
 > [!IMPORTANT]
-> ### ⚠️ Trademark & Project Disclaimer
-> - **Trademark Notice**: *Adobe* and *After Effects* are registered trademarks of Adobe Inc. in the United States and other countries. **AEVFX** is an independent, non-commercial open-source research project and is **NOT** affiliated with, associated with, sponsored by, or endorsed by Adobe Inc.
-> - **Experimental Status**: This project is an experimental, hobby-driven research prototype provided **"AS-IS"** without warranties of any kind. Issues and pull requests are managed on a casual, best-effort basis. Feel free to explore, fork, hack, and build upon it!
+> **Experimental Status**: This project is a hobby-driven research prototype provided **"AS-IS"** without warranties. Issues and PRs are welcome but managed on a casual basis.
 
 ---
 
@@ -115,7 +113,7 @@ Launch from **Help → 🎓 Start Guided Tutorial** or `Help → Tutorial` in th
 
 ---
 
-## 📊 Feature Completeness vs. Adobe After Effects
+## 📊 Feature Completeness Overview
 
 | Feature Area | Status | Notes |
 |---|---|---|

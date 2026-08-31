@@ -81,7 +81,7 @@ pub enum LayerType {
         /// Font family name, e.g. "Inter"
         #[serde(default = "default_font_family")]
         font_family: String,
-        /// Tracking (letter-spacing) in virtual Adobe units
+        /// Tracking (letter-spacing) in virtual units
         #[serde(default)]
         tracking: f32,
         /// Leading (line-height) multiplier

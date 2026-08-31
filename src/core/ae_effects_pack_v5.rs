@@ -1,5 +1,5 @@
 #![allow(dead_code)]
-/// Pack of 50 Advanced Adobe After Effects Effects, Keying, Audio & Physics Simulation Kernels (Part 5 - Total 160 Effects).
+/// Pack of 50 Advanced VFX compositing Effects, Keying, Audio & Physics Simulation Kernels (Part 5 - Total 160 Effects).
 // 111. Mesh Warp
 pub fn apply_mesh_warp(pixels: &mut [u8], width: u32, height: u32, grid_rows: u32, grid_cols: u32) {
     let r = grid_rows.max(2);
@@ -8,7 +8,13 @@ pub fn apply_mesh_warp(pixels: &mut [u8], width: u32, height: u32, grid_rows: u3
 }
 
 // 112. Puppet Pin
-pub fn apply_puppet_pin(pixels: &mut [u8], width: u32, height: u32, pin_pos: [f32; 2], target_pos: [f32; 2]) {
+pub fn apply_puppet_pin(
+    pixels: &mut [u8],
+    width: u32,
+    height: u32,
+    pin_pos: [f32; 2],
+    target_pos: [f32; 2],
+) {
     let dx = (target_pos[0] - pin_pos[0]) as i32;
     let dy = (target_pos[1] - pin_pos[1]) as i32;
     crate::core::ae_effects_pack::apply_offset(pixels, width, height, dx, dy);
@@ -71,8 +77,6 @@ pub fn apply_keylight(pixels: &mut [u8], width: u32, height: u32, screen_color: 
     crate::core::chroma_key::apply_chroma_key(pixels, width, height, &opts);
 }
 
-
-
 // 122. Advanced Spill Suppressor
 pub fn apply_spill_suppressor(pixels: &mut [u8]) {
     for i in (0..pixels.len()).step_by(4) {
@@ -126,7 +130,12 @@ pub fn apply_color_link(pixels: &mut [u8], target_color: [u8; 4]) {
 }
 
 // 129. Hue/Saturation
-pub fn apply_hue_saturation(pixels: &mut [u8], _hue_shift_deg: f32, sat_scale: f32, lightness_scale: f32) {
+pub fn apply_hue_saturation(
+    pixels: &mut [u8],
+    _hue_shift_deg: f32,
+    sat_scale: f32,
+    lightness_scale: f32,
+) {
     for i in (0..pixels.len()).step_by(4) {
         let s = (1.0 + sat_scale * 0.01).max(0.0);
         let l = (1.0 + lightness_scale * 0.01).max(0.0);
@@ -152,7 +161,14 @@ pub fn apply_number_generator(pixels: &mut [u8], width: u32, height: u32, value:
     if value > 0 {
         crate::core::ae_effects_pack_v4::apply_exposure(pixels, 0.5);
     } else {
-        crate::core::ae_effects_pack_v2::apply_grid(pixels, width, height, 20, 2, [255, 255, 255, 255]);
+        crate::core::ae_effects_pack_v2::apply_grid(
+            pixels,
+            width,
+            height,
+            20,
+            2,
+            [255, 255, 255, 255],
+        );
     }
 }
 
@@ -168,12 +184,24 @@ pub fn apply_cc_glue_gun(pixels: &mut [u8], width: u32, height: u32) {
 
 // 134. CC Mr. Mercury
 pub fn apply_cc_mr_mercury(pixels: &mut [u8], width: u32, height: u32, frame: u32) {
-    crate::core::ae_effects_pack_v3::apply_cc_particle_world(pixels, width, height, frame, [200, 200, 220, 255]);
+    crate::core::ae_effects_pack_v3::apply_cc_particle_world(
+        pixels,
+        width,
+        height,
+        frame,
+        [200, 200, 220, 255],
+    );
 }
 
 // 135. CC Particle World 3D Engine
 pub fn apply_cc_particle_systems_3d(pixels: &mut [u8], width: u32, height: u32, frame: u32) {
-    crate::core::ae_effects_pack_v3::apply_cc_particle_world(pixels, width, height, frame, [255, 220, 100, 255]);
+    crate::core::ae_effects_pack_v3::apply_cc_particle_world(
+        pixels,
+        width,
+        height,
+        frame,
+        [255, 220, 100, 255],
+    );
 }
 
 // 136. CC Pixel Torrent
@@ -204,14 +232,29 @@ pub fn apply_cc_twister(pixels: &mut [u8], width: u32, height: u32, angle_deg: f
 // 141. Audio Spectrum FX
 pub fn apply_audio_spectrum_fx(pixels: &mut [u8], width: u32, height: u32) {
     let opts = crate::core::audio_spectrum::AudioSpectrumOptions::default();
-    let bands = crate::core::audio_spectrum::generate_audio_spectrum_bands(&[0.1, 0.5, 0.8, 0.3, 0.9, 0.4], 44100, &opts);
-    crate::core::ae_effects_pack_v2::apply_grid(pixels, width, height, 10, bands.len() as u32, [0, 255, 200, 255]);
+    let bands = crate::core::audio_spectrum::generate_audio_spectrum_bands(
+        &[0.1, 0.5, 0.8, 0.3, 0.9, 0.4],
+        44100,
+        &opts,
+    );
+    crate::core::ae_effects_pack_v2::apply_grid(
+        pixels,
+        width,
+        height,
+        10,
+        bands.len() as u32,
+        [0, 255, 200, 255],
+    );
 }
-
 
 // 142. Audio Waveform Display
 pub fn apply_audio_waveform_fx(pixels: &mut [u8], width: u32, height: u32) {
-    crate::core::ae_effects_pack_v4::apply_audio_waveforms(pixels, width, height, [0, 255, 150, 255]);
+    crate::core::ae_effects_pack_v4::apply_audio_waveforms(
+        pixels,
+        width,
+        height,
+        [0, 255, 150, 255],
+    );
 }
 
 // 143. Tone Generator
@@ -263,7 +306,9 @@ pub fn apply_parametric_eq(samples: &mut [f32], gain: f32) {
 
 // 148. Reverb Effect
 pub fn apply_reverb_effect(samples: &mut [f32], delay_samples: usize, decay: f32) {
-    if delay_samples == 0 || delay_samples >= samples.len() { return; }
+    if delay_samples == 0 || delay_samples >= samples.len() {
+        return;
+    }
     for i in delay_samples..samples.len() {
         samples[i] += samples[i - delay_samples] * decay;
     }
@@ -276,7 +321,9 @@ pub fn apply_delay_effect(samples: &mut [f32], delay_samples: usize, feedback: f
 
 // 150. Pitch Shifter
 pub fn apply_pitch_shifter(samples: &mut [f32], pitch_ratio: f32) {
-    if pitch_ratio <= 0.01 { return; }
+    if pitch_ratio <= 0.01 {
+        return;
+    }
     let temp = samples.to_vec();
     for (i, sample) in samples.iter_mut().enumerate() {
         let src_idx = ((i as f32 * pitch_ratio) as usize).min(temp.len() - 1);
@@ -286,7 +333,12 @@ pub fn apply_pitch_shifter(samples: &mut [f32], pitch_ratio: f32) {
 
 // 151. CC Blur Wipe
 pub fn apply_cc_blur_wipe(pixels: &mut [u8], width: u32, height: u32, completion: f32) {
-    crate::core::ae_effects_pack::apply_fast_box_blur(pixels, width, height, (completion * 0.2) as u32);
+    crate::core::ae_effects_pack::apply_fast_box_blur(
+        pixels,
+        width,
+        height,
+        (completion * 0.2) as u32,
+    );
     crate::core::ae_effects_pack::apply_linear_wipe(pixels, width, height, completion, 90.0);
 }
 
@@ -330,7 +382,13 @@ pub fn apply_cc_scale_wipe(pixels: &mut [u8], width: u32, height: u32, completio
 
 // 159. CC Twister Wipe
 pub fn apply_cc_twister_wipe(pixels: &mut [u8], width: u32, height: u32, completion: f32) {
-    crate::core::ae_effects_pack::apply_twirl(pixels, width, height, completion * 3.6, width as f32 * 0.5);
+    crate::core::ae_effects_pack::apply_twirl(
+        pixels,
+        width,
+        height,
+        completion * 3.6,
+        width as f32 * 0.5,
+    );
     crate::core::ae_effects_pack_v2::apply_iris_wipe(pixels, width, height, completion);
 }
 
@@ -341,8 +399,16 @@ pub fn apply_cc_vignette_wipe(pixels: &mut [u8], width: u32, height: u32, comple
 }
 
 // 161. Bass/Treble two-band EQ
-pub fn apply_bass_treble(samples: &mut [f32], sample_rate: f32, bass_db: f32, treble_db: f32, crossover_hz: f32) {
-    if samples.len() < 2 { return; }
+pub fn apply_bass_treble(
+    samples: &mut [f32],
+    sample_rate: f32,
+    bass_db: f32,
+    treble_db: f32,
+    crossover_hz: f32,
+) {
+    if samples.len() < 2 {
+        return;
+    }
     let bass_linear = 10.0f32.powf(bass_db * 0.05);
     let treble_linear = 10.0f32.powf(treble_db * 0.05);
     let rc = 1.0 / (std::f32::consts::PI * crossover_hz);
@@ -358,17 +424,31 @@ pub fn apply_bass_treble(samples: &mut [f32], sample_rate: f32, bass_db: f32, tr
 }
 
 // 162. Flanger (modulated delay with LFO)
-pub fn apply_flanger(samples: &mut [f32], sample_rate: f32, max_delay_ms: f32, rate_hz: f32, feedback: f32, wet_dry: f32) {
+pub fn apply_flanger(
+    samples: &mut [f32],
+    sample_rate: f32,
+    max_delay_ms: f32,
+    rate_hz: f32,
+    feedback: f32,
+    wet_dry: f32,
+) {
     let max_delay_samples = (max_delay_ms * 0.001 * sample_rate) as usize;
-    if max_delay_samples == 0 || samples.len() <= max_delay_samples { return; }
+    if max_delay_samples == 0 || samples.len() <= max_delay_samples {
+        return;
+    }
     let mut delay_buf = vec![0.0f32; max_delay_samples + 1];
     let wet = wet_dry.clamp(0.0, 1.0);
     let dry = 1.0 - wet;
     for (i, s) in samples.iter_mut().enumerate() {
-        let lfo = ((2.0 * std::f32::consts::PI * rate_hz * i as f32 / sample_rate).sin() + 1.0) * 0.5;
+        let lfo =
+            ((2.0 * std::f32::consts::PI * rate_hz * i as f32 / sample_rate).sin() + 1.0) * 0.5;
         let delay_idx = (lfo * max_delay_samples as f32) as usize;
         let delay_idx = delay_idx.min(max_delay_samples);
-        let delayed = if i >= delay_idx { delay_buf[(i - delay_idx) % (max_delay_samples + 1)] } else { 0.0 };
+        let delayed = if i >= delay_idx {
+            delay_buf[(i - delay_idx) % (max_delay_samples + 1)]
+        } else {
+            0.0
+        };
         let output = *s * dry + delayed * wet;
         delay_buf[i % (max_delay_samples + 1)] = *s + delayed * feedback;
         *s = output;
@@ -376,11 +456,21 @@ pub fn apply_flanger(samples: &mut [f32], sample_rate: f32, max_delay_ms: f32, r
 }
 
 // 163. Chorus (multiple detuned delays)
-pub fn apply_chorus(samples: &mut [f32], sample_rate: f32, delay_ms: f32, depth_ms: f32, rate_hz: f32, voices: f32, feedback: f32) {
+pub fn apply_chorus(
+    samples: &mut [f32],
+    sample_rate: f32,
+    delay_ms: f32,
+    depth_ms: f32,
+    rate_hz: f32,
+    voices: f32,
+    feedback: f32,
+) {
     let base_delay = (delay_ms * 0.001 * sample_rate) as usize;
     let depth = (depth_ms * 0.001 * sample_rate) as usize;
     let n_voices = (voices as u32).clamp(2, 8);
-    if base_delay + depth == 0 || samples.len() <= base_delay + depth { return; }
+    if base_delay + depth == 0 || samples.len() <= base_delay + depth {
+        return;
+    }
     let buf_size = base_delay + depth + 1;
     let mut delay_buf = vec![0.0f32; buf_size];
     let wet = 1.0 / n_voices as f32;
@@ -389,10 +479,18 @@ pub fn apply_chorus(samples: &mut [f32], sample_rate: f32, delay_ms: f32, depth_
         let mut out = *s * dry;
         for v in 0..n_voices {
             let phase = v as f32 / n_voices as f32;
-            let lfo = ((2.0 * std::f32::consts::PI * rate_hz * i as f32 / sample_rate + phase * 2.0 * std::f32::consts::PI).sin() + 1.0) * 0.5;
+            let lfo = ((2.0 * std::f32::consts::PI * rate_hz * i as f32 / sample_rate
+                + phase * 2.0 * std::f32::consts::PI)
+                .sin()
+                + 1.0)
+                * 0.5;
             let d = base_delay + (lfo * depth as f32) as usize;
             let d = d.min(buf_size - 1);
-            let delayed = if i >= d { delay_buf[(i - d) % buf_size] } else { 0.0 };
+            let delayed = if i >= d {
+                delay_buf[(i - d) % buf_size]
+            } else {
+                0.0
+            };
             out += delayed * wet;
         }
         delay_buf[i % buf_size] = *s + *s * feedback;
@@ -401,8 +499,16 @@ pub fn apply_chorus(samples: &mut [f32], sample_rate: f32, delay_ms: f32, depth_
 }
 
 // 164. Parametric EQ (single-band bell)
-pub fn apply_parametric_eq_bell(samples: &mut [f32], sample_rate: f32, freq_hz: f32, gain_db: f32, q: f32) {
-    if samples.len() < 3 { return; }
+pub fn apply_parametric_eq_bell(
+    samples: &mut [f32],
+    sample_rate: f32,
+    freq_hz: f32,
+    gain_db: f32,
+    q: f32,
+) {
+    if samples.len() < 3 {
+        return;
+    }
     let a = 10.0f32.powf(gain_db * 0.05);
     let w0 = 2.0 * std::f32::consts::PI * freq_hz / sample_rate;
     let alpha = w0.sin() / (2.0 * q);
@@ -417,7 +523,10 @@ pub fn apply_parametric_eq_bell(samples: &mut [f32], sample_rate: f32, freq_hz: 
         let x0 = *s;
         let y0 = (b0 * x0 + b1 * x1 + b2 * x2 - a1 * y1 - a2 * y2) / a0;
         *s = y0;
-        x2 = x1; x1 = x0; y2 = y1; y1 = y0;
+        x2 = x1;
+        x1 = x0;
+        y2 = y1;
+        y1 = y0;
     }
 }
 

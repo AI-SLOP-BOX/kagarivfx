@@ -1,6 +1,6 @@
-//! Adobe After Effects C++ Plugin SDK (PF / AEGP) Native Host Compatibility Layer (AE Parity).
+//! VFX compositing C++ Plugin SDK (PF / AEGP) Native Host Compatibility Layer (AE Parity).
 //!
-//! Replicates the official Adobe AE SDK ABI data layouts (`PF_EffectWorld`, `PF_ParamDef`,
+//! Replicates the official Plugin SDK ABI data layouts (`PF_EffectWorld`, `PF_ParamDef`,
 //! `PF_Cmd`, `PF_Pixel8`, `PF_Pixel16`, `PF_PixelFloat`) enabling native C++ plugin interoperability.
 
 #![allow(dead_code, non_camel_case_types)]
@@ -57,8 +57,8 @@ pub struct PF_PixelFloat {
     pub b: f32,
 }
 
-/// Adobe AE SDK native C-ABI compatible `PF_EffectWorld` structure.
-/// Layout matches Adobe After Effects SDK struct layout with raw pointer `data`.
+/// Plugin SDK native C-ABI compatible `PF_EffectWorld` structure.
+/// Layout matches VFX compositing SDK struct layout with raw pointer `data`.
 #[repr(C)]
 #[derive(Debug, Clone, Copy)]
 pub struct PF_EffectWorld {
@@ -93,7 +93,10 @@ impl SafeEffectWorld {
                 origin_x: 0,
                 origin_y: 0,
             };
-            return Self { raw, buffer: Vec::new() };
+            return Self {
+                raw,
+                buffer: Vec::new(),
+            };
         }
 
         let w = width as usize;
@@ -104,7 +107,11 @@ impl SafeEffectWorld {
             _ => 0,
         };
         let mut buffer = vec![0u8; total_bytes];
-        let data_ptr = if total_bytes > 0 { buffer.as_mut_ptr() } else { std::ptr::null_mut() };
+        let data_ptr = if total_bytes > 0 {
+            buffer.as_mut_ptr()
+        } else {
+            std::ptr::null_mut()
+        };
 
         let raw = PF_EffectWorld {
             format: 0, // PF_PixelFormat_ARGB32
@@ -133,7 +140,7 @@ impl SafeEffectWorld {
         for i in 0..pixels {
             let src = i * 4;
             let dst = i * 4;
-            // Adobe AE 8-bit format is ARGB: [A, R, G, B]
+            // AEVFX 8-bit format is ARGB: [A, R, G, B]
             world.buffer[dst] = rgba[src + 3]; // A
             world.buffer[dst + 1] = rgba[src]; // R
             world.buffer[dst + 2] = rgba[src + 1]; // G
@@ -146,8 +153,15 @@ impl SafeEffectWorld {
 
     /// Converts ARGB8 effect output back into standard RGBA8 buffer [R, G, B, A].
     pub fn to_rgba_vec(&self) -> Vec<u8> {
-        let pixels = (self.raw.width.max(0) as usize).saturating_mul(self.raw.height.max(0) as usize);
-        let mut out = vec![0u8; pixels * 4];
+        let Some(byte_len) = (self.raw.width.max(0) as usize)
+            .checked_mul(self.raw.height.max(0) as usize)
+            .and_then(|pixels| pixels.checked_mul(4))
+            .filter(|len| *len <= self.buffer.len())
+        else {
+            return Vec::new();
+        };
+        let pixels = byte_len / 4;
+        let mut out = vec![0u8; byte_len];
 
         for i in 0..pixels {
             let src = i * 4;
@@ -172,7 +186,7 @@ impl SafeEffectWorld {
     }
 }
 
-/// Adobe AE Parameter Definition ABI struct (`PF_ParamDef`).
+/// AEVFX Parameter Definition ABI struct (`PF_ParamDef`).
 #[repr(C)]
 #[derive(Debug, Clone)]
 pub struct PF_ParamDef {
@@ -221,5 +235,13 @@ mod tests {
         let converted = SafeEffectWorld::from_rgba_slice(&rgba, 1, 1);
         let roundtrip = converted.to_rgba_vec();
         assert_eq!(roundtrip, rgba);
+    }
+
+    #[test]
+    fn test_zero_sized_world_does_not_create_fake_pixel() {
+        let world = SafeEffectWorld::new_rgba8(0, 0);
+        assert_eq!(world.raw.width, 0);
+        assert_eq!(world.raw.height, 0);
+        assert!(world.buffer.is_empty());
     }
 }

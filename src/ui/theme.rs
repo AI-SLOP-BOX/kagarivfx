@@ -1,45 +1,45 @@
 use eframe::egui;
 
-/// Adobe After Effects Professional Dark Theme Palette
+/// VFX compositing Professional Dark Theme Palette
 /// Based on actual AE CC 2024 color measurements.
 #[allow(dead_code)]
 pub mod colors {
     use eframe::egui::Color32;
 
     // ── Background Layers (darkest → lightest) ──
-    pub const BG_DEEPEST: Color32 = Color32::from_rgb(18, 18, 18);      // Timeline bg
-    pub const BG_DARKEST: Color32 = Color32::from_rgb(23, 23, 23);      // Panel bg
-    pub const BG_DARK: Color32 = Color32::from_rgb(30, 30, 30);         // Header bg
-    pub const BG_MID: Color32 = Color32::from_rgb(38, 38, 38);          // Surface bg
-    pub const BG_PANEL: Color32 = Color32::from_rgb(43, 43, 43);        // Elevated surface
-    pub const BG_SURFACE: Color32 = Color32::from_rgb(52, 52, 52);      // Input fields
-    pub const BG_ELEVATED: Color32 = Color32::from_rgb(60, 60, 60);     // Dropdowns
+    pub const BG_DEEPEST: Color32 = Color32::from_rgb(18, 18, 18); // Timeline bg
+    pub const BG_DARKEST: Color32 = Color32::from_rgb(23, 23, 23); // Panel bg
+    pub const BG_DARK: Color32 = Color32::from_rgb(30, 30, 30); // Header bg
+    pub const BG_MID: Color32 = Color32::from_rgb(38, 38, 38); // Surface bg
+    pub const BG_PANEL: Color32 = Color32::from_rgb(43, 43, 43); // Elevated surface
+    pub const BG_SURFACE: Color32 = Color32::from_rgb(52, 52, 52); // Input fields
+    pub const BG_ELEVATED: Color32 = Color32::from_rgb(60, 60, 60); // Dropdowns
 
     // ── Interactive States ──
-    pub const BG_HOVER: Color32 = Color32::from_rgb(48, 58, 73);        // Button hover
-    pub const BG_ACTIVE: Color32 = Color32::from_rgb(20, 115, 230);     // Selection / active
-    pub const BG_PRESSED: Color32 = Color32::from_rgb(15, 90, 185);     // Button pressed
+    pub const BG_HOVER: Color32 = Color32::from_rgb(48, 58, 73); // Button hover
+    pub const BG_ACTIVE: Color32 = Color32::from_rgb(20, 115, 230); // Selection / active
+    pub const BG_PRESSED: Color32 = Color32::from_rgb(15, 90, 185); // Button pressed
 
     // ── AE Accent Colors ──
-    pub const ACCENT_BLUE: Color32 = Color32::from_rgb(0, 163, 255);    // Primary accent
-    pub const ACCENT_CYAN: Color32 = Color32::from_rgb(0, 215, 255);    // Timeline cursor
-    pub const ACCENT_YELLOW: Color32 = Color32::from_rgb(255, 214, 0);  // Timecode
-    pub const ACCENT_GREEN: Color32 = Color32::from_rgb(0, 210, 90);    // Success / Solo
-    pub const ACCENT_RED: Color32 = Color32::from_rgb(220, 50, 47);     // Error / Mute
-    pub const ACCENT_ORANGE: Color32 = Color32::from_rgb(255, 140, 0);  // Warning
-    pub const ACCENT_PURPLE: Color32 = Color32::from_rgb(160, 120, 255);// Expression
+    pub const ACCENT_BLUE: Color32 = Color32::from_rgb(0, 163, 255); // Primary accent
+    pub const ACCENT_CYAN: Color32 = Color32::from_rgb(0, 215, 255); // Timeline cursor
+    pub const ACCENT_YELLOW: Color32 = Color32::from_rgb(255, 214, 0); // Timecode
+    pub const ACCENT_GREEN: Color32 = Color32::from_rgb(0, 210, 90); // Success / Solo
+    pub const ACCENT_RED: Color32 = Color32::from_rgb(220, 50, 47); // Error / Mute
+    pub const ACCENT_ORANGE: Color32 = Color32::from_rgb(255, 140, 0); // Warning
+    pub const ACCENT_PURPLE: Color32 = Color32::from_rgb(160, 120, 255); // Expression
 
     // ── Borders (crisp 1px) ──
-    pub const BORDER_SUBTLE: Color32 = Color32::from_rgb(40, 40, 40);   // Panel dividers
-    pub const BORDER_MEDIUM: Color32 = Color32::from_rgb(55, 55, 55);   // Input borders
-    pub const BORDER_STRONG: Color32 = Color32::from_rgb(75, 75, 75);   // Active borders
-    pub const BORDER_ACTIVE: Color32 = Color32::from_rgb(0, 163, 255);  // Focused input
+    pub const BORDER_SUBTLE: Color32 = Color32::from_rgb(40, 40, 40); // Panel dividers
+    pub const BORDER_MEDIUM: Color32 = Color32::from_rgb(55, 55, 55); // Input borders
+    pub const BORDER_STRONG: Color32 = Color32::from_rgb(75, 75, 75); // Active borders
+    pub const BORDER_ACTIVE: Color32 = Color32::from_rgb(0, 163, 255); // Focused input
 
     // ── Typography ──
     pub const TEXT_PRIMARY: Color32 = Color32::from_rgb(220, 220, 220); // Main text
     pub const TEXT_SECONDARY: Color32 = Color32::from_rgb(160, 160, 160); // Labels
-    pub const TEXT_MUTED: Color32 = Color32::from_rgb(110, 110, 110);   // Disabled
-    pub const TEXT_ACCENT: Color32 = Color32::from_rgb(0, 180, 255);    // Links / values
+    pub const TEXT_MUTED: Color32 = Color32::from_rgb(110, 110, 110); // Disabled
+    pub const TEXT_ACCENT: Color32 = Color32::from_rgb(0, 180, 255); // Links / values
     pub const TEXT_ON_ACCENT: Color32 = Color32::from_rgb(255, 255, 255); // On blue bg
 
     // ── Layer Label Colors (AE standard) ──
@@ -120,11 +120,11 @@ fn configure_fonts(ctx: &egui::Context) {
         let mut loaded_prop = false;
         for path in &sf_pro_paths {
             if let Ok(data) = std::fs::read(path) {
-                fonts.font_data.insert(
-                    "SFPro".to_string(),
-                    egui::FontData::from_owned(data),
-                );
-                fonts.families
+                fonts
+                    .font_data
+                    .insert("SFPro".to_string(), egui::FontData::from_owned(data));
+                fonts
+                    .families
                     .entry(egui::FontFamily::Proportional)
                     .or_default()
                     .insert(0, "SFPro".to_string());
@@ -140,11 +140,11 @@ fn configure_fonts(ctx: &egui::Context) {
         let mut loaded_mono = false;
         for path in &menlo_paths {
             if let Ok(data) = std::fs::read(path) {
-                fonts.font_data.insert(
-                    "Menlo".to_string(),
-                    egui::FontData::from_owned(data),
-                );
-                fonts.families
+                fonts
+                    .font_data
+                    .insert("Menlo".to_string(), egui::FontData::from_owned(data));
+                fonts
+                    .families
                     .entry(egui::FontFamily::Monospace)
                     .or_default()
                     .insert(0, "Menlo".to_string());
@@ -175,15 +175,29 @@ fn configure_fonts(ctx: &egui::Context) {
 
         for path in &linux_prop_paths {
             if let Ok(data) = std::fs::read(path) {
-                fonts.font_data.insert("LinuxSystemFont".to_string(), egui::FontData::from_owned(data));
-                fonts.families.entry(egui::FontFamily::Proportional).or_default().insert(0, "LinuxSystemFont".to_string());
+                fonts.font_data.insert(
+                    "LinuxSystemFont".to_string(),
+                    egui::FontData::from_owned(data),
+                );
+                fonts
+                    .families
+                    .entry(egui::FontFamily::Proportional)
+                    .or_default()
+                    .insert(0, "LinuxSystemFont".to_string());
                 break;
             }
         }
         for path in &linux_mono_paths {
             if let Ok(data) = std::fs::read(path) {
-                fonts.font_data.insert("LinuxMonoFont".to_string(), egui::FontData::from_owned(data));
-                fonts.families.entry(egui::FontFamily::Monospace).or_default().insert(0, "LinuxMonoFont".to_string());
+                fonts.font_data.insert(
+                    "LinuxMonoFont".to_string(),
+                    egui::FontData::from_owned(data),
+                );
+                fonts
+                    .families
+                    .entry(egui::FontFamily::Monospace)
+                    .or_default()
+                    .insert(0, "LinuxMonoFont".to_string());
                 break;
             }
         }
@@ -192,20 +206,35 @@ fn configure_fonts(ctx: &egui::Context) {
     // Load Windows system fonts (Segoe UI, Consolas)
     #[cfg(target_os = "windows")]
     {
-        let win_prop_paths = ["C:\\Windows\\Fonts\\segoeui.ttf", "C:\\Windows\\Fonts\\arial.ttf"];
+        let win_prop_paths = [
+            "C:\\Windows\\Fonts\\segoeui.ttf",
+            "C:\\Windows\\Fonts\\arial.ttf",
+        ];
         let win_mono_paths = ["C:\\Windows\\Fonts\\consola.ttf"];
 
         for path in &win_prop_paths {
             if let Ok(data) = std::fs::read(path) {
-                fonts.font_data.insert("SegoeUI".to_string(), egui::FontData::from_owned(data));
-                fonts.families.entry(egui::FontFamily::Proportional).or_default().insert(0, "SegoeUI".to_string());
+                fonts
+                    .font_data
+                    .insert("SegoeUI".to_string(), egui::FontData::from_owned(data));
+                fonts
+                    .families
+                    .entry(egui::FontFamily::Proportional)
+                    .or_default()
+                    .insert(0, "SegoeUI".to_string());
                 break;
             }
         }
         for path in &win_mono_paths {
             if let Ok(data) = std::fs::read(path) {
-                fonts.font_data.insert("Consolas".to_string(), egui::FontData::from_owned(data));
-                fonts.families.entry(egui::FontFamily::Monospace).or_default().insert(0, "Consolas".to_string());
+                fonts
+                    .font_data
+                    .insert("Consolas".to_string(), egui::FontData::from_owned(data));
+                fonts
+                    .families
+                    .entry(egui::FontFamily::Monospace)
+                    .or_default()
+                    .insert(0, "Consolas".to_string());
                 break;
             }
         }
@@ -338,13 +367,20 @@ pub fn draw_custom_tab(ui: &mut egui::Ui, selected: bool, title: &str) -> egui::
     let text = egui::RichText::new(title)
         .small()
         .strong()
-        .color(if selected { colors::TEXT_PRIMARY } else { colors::TEXT_SECONDARY });
+        .color(if selected {
+            colors::TEXT_PRIMARY
+        } else {
+            colors::TEXT_SECONDARY
+        });
 
     let response = ui.selectable_label(selected, text);
     if selected {
         let rect = response.rect;
         ui.painter().line_segment(
-            [egui::pos2(rect.left(), rect.bottom() - 1.5), egui::pos2(rect.right(), rect.bottom() - 1.5)],
+            [
+                egui::pos2(rect.left(), rect.bottom() - 1.5),
+                egui::pos2(rect.right(), rect.bottom() - 1.5),
+            ],
             egui::Stroke::new(2.0, colors::ACCENT_CYAN),
         );
     }
@@ -355,12 +391,21 @@ pub fn draw_custom_tab(ui: &mut egui::Ui, selected: bool, title: &str) -> egui::
 #[allow(dead_code)]
 pub fn draw_prop_value(ui: &mut egui::Ui, label: &str, val_str: &str, unit: &str) {
     ui.horizontal(|ui| {
-        ui.label(egui::RichText::new(label).small().color(colors::TEXT_SECONDARY));
+        ui.label(
+            egui::RichText::new(label)
+                .small()
+                .color(colors::TEXT_SECONDARY),
+        );
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
             if !unit.is_empty() {
                 ui.label(egui::RichText::new(unit).small().color(colors::TEXT_MUTED));
             }
-            ui.label(egui::RichText::new(val_str).small().strong().color(colors::TEXT_ACCENT));
+            ui.label(
+                egui::RichText::new(val_str)
+                    .small()
+                    .strong()
+                    .color(colors::TEXT_ACCENT),
+            );
         });
     });
 }

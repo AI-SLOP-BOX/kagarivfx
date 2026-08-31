@@ -1,5 +1,5 @@
 #![allow(dead_code)]
-/// Pack of 50 Advanced Adobe After Effects Effects, Transitions, Keying & Simulation Kernels (Part 4 - Total 110 Effects).
+/// Pack of 50 Advanced VFX compositing Effects, Transitions, Keying & Simulation Kernels (Part 4 - Total 110 Effects).
 // 61. Bevel Edges
 pub fn apply_bevel_edges(pixels: &mut [u8], width: u32, height: u32, thickness: u32) {
     let t = thickness.max(1) as usize;
@@ -49,7 +49,9 @@ pub fn apply_median_filter(pixels: &mut [u8], width: u32, height: u32) {
 
 // 67. Minimax
 pub fn apply_minimax(pixels: &mut [u8], width: u32, height: u32, radius: u32, is_maximum: bool) {
-    if radius == 0 { return; }
+    if radius == 0 {
+        return;
+    }
     let temp = pixels.to_vec();
     let r = radius as i32;
     for y in 0..height as i32 {
@@ -65,7 +67,9 @@ pub fn apply_minimax(pixels: &mut [u8], width: u32, height: u32, radius: u32, is
                 }
             }
             let out_idx = (y as usize * width as usize + x as usize) * 4;
-            pixels[out_idx] = val; pixels[out_idx + 1] = val; pixels[out_idx + 2] = val;
+            pixels[out_idx] = val;
+            pixels[out_idx + 1] = val;
+            pixels[out_idx + 2] = val;
         }
     }
 }
@@ -74,7 +78,9 @@ pub fn apply_minimax(pixels: &mut [u8], width: u32, height: u32, radius: u32, is
 pub fn apply_scatter(pixels: &mut [u8], width: u32, height: u32, amount: f32) {
     let temp = pixels.to_vec();
     let amt = amount as i32;
-    if amt <= 0 { return; }
+    if amt <= 0 {
+        return;
+    }
     for y in 0..height as i32 {
         for x in 0..width as i32 {
             let offset_x = ((x * 17 + y * 31) % (amt * 2 + 1)) - amt;
@@ -106,11 +112,33 @@ pub fn apply_cc_burn_film(pixels: &mut [u8], _width: u32, _height: u32, progress
 }
 
 // 71. Channel Blur
-pub fn apply_channel_blur(pixels: &mut [u8], width: u32, height: u32, r_blur: u32, g_blur: u32, b_blur: u32) {
+pub fn apply_channel_blur(
+    pixels: &mut [u8],
+    width: u32,
+    height: u32,
+    r_blur: u32,
+    g_blur: u32,
+    b_blur: u32,
+) {
     let mut temp = pixels.to_vec();
-    if r_blur > 0 { crate::core::ae_effects_pack::apply_fast_box_blur(&mut temp, width, height, r_blur); for i in (0..pixels.len()).step_by(4) { pixels[i] = temp[i]; } }
-    if g_blur > 0 { crate::core::ae_effects_pack::apply_fast_box_blur(&mut temp, width, height, g_blur); for i in (0..pixels.len()).step_by(4) { pixels[i + 1] = temp[i + 1]; } }
-    if b_blur > 0 { crate::core::ae_effects_pack::apply_fast_box_blur(&mut temp, width, height, b_blur); for i in (0..pixels.len()).step_by(4) { pixels[i + 2] = temp[i + 2]; } }
+    if r_blur > 0 {
+        crate::core::ae_effects_pack::apply_fast_box_blur(&mut temp, width, height, r_blur);
+        for i in (0..pixels.len()).step_by(4) {
+            pixels[i] = temp[i];
+        }
+    }
+    if g_blur > 0 {
+        crate::core::ae_effects_pack::apply_fast_box_blur(&mut temp, width, height, g_blur);
+        for i in (0..pixels.len()).step_by(4) {
+            pixels[i + 1] = temp[i + 1];
+        }
+    }
+    if b_blur > 0 {
+        crate::core::ae_effects_pack::apply_fast_box_blur(&mut temp, width, height, b_blur);
+        for i in (0..pixels.len()).step_by(4) {
+            pixels[i + 2] = temp[i + 2];
+        }
+    }
 }
 
 // 72. Shift Channels
@@ -134,9 +162,14 @@ pub fn apply_color_balance(pixels: &mut [u8], red_shift: f32, green_shift: f32, 
 // 74. Color Balance HLS
 pub fn apply_color_balance_hls(pixels: &mut [u8], _hue: f32, lightness: f32, saturation: f32) {
     for i in (0..pixels.len()).step_by(4) {
-        pixels[i] = (pixels[i] as f32 * (1.0 + lightness * 0.01) * (1.0 + saturation * 0.01)).clamp(0.0, 255.0) as u8;
-        pixels[i + 1] = (pixels[i + 1] as f32 * (1.0 + lightness * 0.01) * (1.0 + saturation * 0.01)).clamp(0.0, 255.0) as u8;
-        pixels[i + 2] = (pixels[i + 2] as f32 * (1.0 + lightness * 0.01) * (1.0 + saturation * 0.01)).clamp(0.0, 255.0) as u8;
+        pixels[i] = (pixels[i] as f32 * (1.0 + lightness * 0.01) * (1.0 + saturation * 0.01))
+            .clamp(0.0, 255.0) as u8;
+        pixels[i + 1] =
+            (pixels[i + 1] as f32 * (1.0 + lightness * 0.01) * (1.0 + saturation * 0.01))
+                .clamp(0.0, 255.0) as u8;
+        pixels[i + 2] =
+            (pixels[i + 2] as f32 * (1.0 + lightness * 0.01) * (1.0 + saturation * 0.01))
+                .clamp(0.0, 255.0) as u8;
     }
 }
 
@@ -160,9 +193,13 @@ pub fn apply_leave_color(pixels: &mut [u8], target_rgb: [u8; 3], tolerance: f32)
         let dg = (pixels[i + 1] as f32 - target_rgb[1] as f32).abs();
         let db = (pixels[i + 2] as f32 - target_rgb[2] as f32).abs();
         if dr + dg + db > tol {
-            let luma = (pixels[i] as u32 * 299 + pixels[i + 1] as u32 * 587 + pixels[i + 2] as u32 * 114) / 1000;
+            let luma =
+                (pixels[i] as u32 * 299 + pixels[i + 1] as u32 * 587 + pixels[i + 2] as u32 * 114)
+                    / 1000;
             let l = luma as u8;
-            pixels[i] = l; pixels[i + 1] = l; pixels[i + 2] = l;
+            pixels[i] = l;
+            pixels[i + 1] = l;
+            pixels[i + 2] = l;
         }
     }
 }
@@ -192,7 +229,14 @@ pub fn apply_exposure(pixels: &mut [u8], exposure_ev: f32) {
 }
 
 // 81. Magnify
-pub fn apply_magnify(pixels: &mut [u8], width: u32, height: u32, center: [f32; 2], magnification: f32, radius: f32) {
+pub fn apply_magnify(
+    pixels: &mut [u8],
+    width: u32,
+    height: u32,
+    center: [f32; 2],
+    magnification: f32,
+    radius: f32,
+) {
     let mag = magnification.max(0.1);
     let temp = pixels.to_vec();
     for y in 0..height {
@@ -229,7 +273,13 @@ pub fn apply_mirror(pixels: &mut [u8], width: u32, height: u32, reflection_angle
 
 // 83. Polar Coordinates
 pub fn apply_polar_coordinates(pixels: &mut [u8], width: u32, height: u32, interpolation: f32) {
-    crate::core::ae_effects_pack::apply_twirl(pixels, width, height, interpolation * 3.6, width as f32 * 0.5);
+    crate::core::ae_effects_pack::apply_twirl(
+        pixels,
+        width,
+        height,
+        interpolation * 3.6,
+        width as f32 * 0.5,
+    );
 }
 
 // 84. Bezier Warp
@@ -249,16 +299,34 @@ pub fn apply_reshape(pixels: &mut [u8], width: u32, height: u32, amount: f32) {
 
 // 87. Spherize FX
 pub fn apply_spherize_fx(pixels: &mut [u8], width: u32, height: u32, amount: f32) {
-    crate::core::ae_effects_pack::apply_bulge(pixels, width, height, amount * 0.01, width as f32 * 0.4);
+    crate::core::ae_effects_pack::apply_bulge(
+        pixels,
+        width,
+        height,
+        amount * 0.01,
+        width as f32 * 0.4,
+    );
 }
 
 // 88. Transform Filter
-pub fn apply_transform_effect(pixels: &mut [u8], width: u32, height: u32, scale: f32, rotation: f32) {
+pub fn apply_transform_effect(
+    pixels: &mut [u8],
+    width: u32,
+    height: u32,
+    scale: f32,
+    rotation: f32,
+) {
     if (scale - 100.0).abs() > 0.1 {
         crate::core::ae_effects_pack_v2::apply_cc_tiler(pixels, width, height, scale);
     }
     if rotation.abs() > 0.1 {
-        crate::core::ae_effects_pack::apply_twirl(pixels, width, height, rotation, width as f32 * 0.5);
+        crate::core::ae_effects_pack::apply_twirl(
+            pixels,
+            width,
+            height,
+            rotation,
+            width as f32 * 0.5,
+        );
     }
 }
 
@@ -278,7 +346,15 @@ pub fn apply_audio_waveforms(pixels: &mut [u8], width: u32, height: u32, wave_co
 }
 
 // 92. Beam — renders a glowing beam with true pixel-width thickness
-pub fn apply_beam(pixels: &mut [u8], width: u32, height: u32, p1: [f32; 2], p2: [f32; 2], thickness: f32, beam_color: [u8; 4]) {
+pub fn apply_beam(
+    pixels: &mut [u8],
+    width: u32,
+    height: u32,
+    p1: [f32; 2],
+    p2: [f32; 2],
+    thickness: f32,
+    beam_color: [u8; 4],
+) {
     let half_t = (thickness * 0.5).max(0.5);
     let num_samples = 200;
     for s in 0..num_samples {
@@ -334,7 +410,7 @@ pub fn apply_radio_waves(pixels: &mut [u8], width: u32, height: u32, wave_count:
             // Draw ring at every `spacing` pixels
             if dist > 0 && dist % spacing < 2 {
                 let idx = ((y * width + x) * 4) as usize;
-                pixels[idx]     = 0;
+                pixels[idx] = 0;
                 pixels[idx + 1] = 200;
                 pixels[idx + 2] = 255;
                 pixels[idx + 3] = 255;
@@ -349,8 +425,23 @@ pub fn apply_stroke_path(pixels: &mut [u8], width: u32, height: u32, color: [u8;
 }
 
 // 96. Write-on
-pub fn apply_write_on(pixels: &mut [u8], width: u32, height: u32, pos: [f32; 2], brush_size: f32, color: [u8; 4]) {
-    apply_beam(pixels, width, height, pos, [pos[0] + brush_size, pos[1]], brush_size, color);
+pub fn apply_write_on(
+    pixels: &mut [u8],
+    width: u32,
+    height: u32,
+    pos: [f32; 2],
+    brush_size: f32,
+    color: [u8; 4],
+) {
+    apply_beam(
+        pixels,
+        width,
+        height,
+        pos,
+        [pos[0] + brush_size, pos[1]],
+        brush_size,
+        color,
+    );
 }
 
 // 97. Lightning
@@ -360,12 +451,24 @@ pub fn apply_lightning(pixels: &mut [u8], width: u32, height: u32, p1: [f32; 2],
 
 // 98. Star Burst
 pub fn apply_star_burst(pixels: &mut [u8], width: u32, height: u32, frame: u32) {
-    crate::core::ae_effects_pack_v3::apply_cc_particle_world(pixels, width, height, frame, [255, 255, 255, 255]);
+    crate::core::ae_effects_pack_v3::apply_cc_particle_world(
+        pixels,
+        width,
+        height,
+        frame,
+        [255, 255, 255, 255],
+    );
 }
 
 // 99. CC Particle Systems II
 pub fn apply_particle_systems_ii(pixels: &mut [u8], width: u32, height: u32, frame: u32) {
-    crate::core::ae_effects_pack_v3::apply_cc_particle_world(pixels, width, height, frame, [255, 180, 50, 255]);
+    crate::core::ae_effects_pack_v3::apply_cc_particle_world(
+        pixels,
+        width,
+        height,
+        frame,
+        [255, 180, 50, 255],
+    );
 }
 
 // 100. CC Drizzle / Rain
@@ -375,7 +478,13 @@ pub fn apply_rain(pixels: &mut [u8], width: u32, height: u32, frame: u32) {
 
 // 101. Block Dissolve
 pub fn apply_block_dissolve(pixels: &mut [u8], width: u32, height: u32, completion: f32) {
-    crate::core::ae_effects_pack_v2::apply_mosaic(pixels, width, height, (completion * 0.5) as u32 + 1, (completion * 0.5) as u32 + 1);
+    crate::core::ae_effects_pack_v2::apply_mosaic(
+        pixels,
+        width,
+        height,
+        (completion * 0.5) as u32 + 1,
+        (completion * 0.5) as u32 + 1,
+    );
 }
 
 // 102. Card Wipe
@@ -416,7 +525,6 @@ pub fn apply_cc_image_wipe(pixels: &mut [u8], width: u32, height: u32, completio
 pub fn apply_cc_jaws(pixels: &mut [u8], width: u32, height: u32, completion: f32) {
     crate::core::ae_effects_pack::apply_venetian_blinds(pixels, width, height, completion, 30);
 }
-
 
 // 110. CC Radial Scale Wipe
 pub fn apply_cc_radial_scale_wipe(pixels: &mut [u8], width: u32, height: u32, completion: f32) {

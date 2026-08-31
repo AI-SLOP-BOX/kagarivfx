@@ -15,9 +15,8 @@ pub struct OcioColorEngine;
 impl OcioColorEngine {
     /// 3x3 Matrix multiplication for ACEScg (AP1) to sRGB (Rec.709) conversion.
     const ACESCG_TO_SRGB_MAT: [f32; 9] = [
-        1.705051, -0.621792, -0.083259,
-       -0.100236,  1.146599, -0.046363,
-       -0.024007, -0.128969,  1.152976,
+        1.705051, -0.621792, -0.083259, -0.100236, 1.146599, -0.046363, -0.024007, -0.128969,
+        1.152976,
     ];
 
     /// Transforms 32-bit float RGBA pixel buffer between OCIO color spaces.
@@ -39,9 +38,21 @@ impl OcioColorEngine {
 
             // 1. Convert to Linear Working Space
             if src_space == OcioColorSpace::SRgb {
-                r = if r <= 0.04045 { r / 12.92 } else { ((r + 0.055) / 1.055).powf(2.4) };
-                g = if g <= 0.04045 { g / 12.92 } else { ((g + 0.055) / 1.055).powf(2.4) };
-                b = if b <= 0.04045 { b / 12.92 } else { ((b + 0.055) / 1.055).powf(2.4) };
+                r = if r <= 0.04045 {
+                    r / 12.92
+                } else {
+                    ((r + 0.055) / 1.055).powf(2.4)
+                };
+                g = if g <= 0.04045 {
+                    g / 12.92
+                } else {
+                    ((g + 0.055) / 1.055).powf(2.4)
+                };
+                b = if b <= 0.04045 {
+                    b / 12.92
+                } else {
+                    ((b + 0.055) / 1.055).powf(2.4)
+                };
             }
 
             // 2. Transform Color Primaries if converting ACEScg -> sRGB
@@ -50,14 +61,28 @@ impl OcioColorEngine {
                 let nr = r * m[0] + g * m[1] + b * m[2];
                 let ng = r * m[3] + g * m[4] + b * m[5];
                 let nb = r * m[6] + g * m[7] + b * m[8];
-                r = nr; g = ng; b = nb;
+                r = nr;
+                g = ng;
+                b = nb;
             }
 
             // 3. Apply Target Gamma / OETF Display Curve
             if dst_space == OcioColorSpace::SRgb {
-                r = if r <= 0.0031308 { r * 12.92 } else { 1.055 * r.powf(1.0 / 2.4) - 0.055 };
-                g = if g <= 0.0031308 { g * 12.92 } else { 1.055 * g.powf(1.0 / 2.4) - 0.055 };
-                b = if b <= 0.0031308 { b * 12.92 } else { 1.055 * b.powf(1.0 / 2.4) - 0.055 };
+                r = if r <= 0.0031308 {
+                    r * 12.92
+                } else {
+                    1.055 * r.powf(1.0 / 2.4) - 0.055
+                };
+                g = if g <= 0.0031308 {
+                    g * 12.92
+                } else {
+                    1.055 * g.powf(1.0 / 2.4) - 0.055
+                };
+                b = if b <= 0.0031308 {
+                    b * 12.92
+                } else {
+                    1.055 * b.powf(1.0 / 2.4) - 0.055
+                };
             }
 
             pixels[idx] = r.clamp(0.0, 1.0);
@@ -74,10 +99,18 @@ mod tests {
     #[test]
     fn test_ocio_srgb_roundtrip() {
         let mut pixels = vec![0.5f32, 0.5f32, 0.5f32, 1.0f32];
-        OcioColorEngine::transform_colorspace(&mut pixels, OcioColorSpace::SRgb, OcioColorSpace::LinearSRgb);
+        OcioColorEngine::transform_colorspace(
+            &mut pixels,
+            OcioColorSpace::SRgb,
+            OcioColorSpace::LinearSRgb,
+        );
         assert!(pixels[0] < 0.5); // Gamma uncompressed linear intensity is lower
 
-        OcioColorEngine::transform_colorspace(&mut pixels, OcioColorSpace::LinearSRgb, OcioColorSpace::SRgb);
+        OcioColorEngine::transform_colorspace(
+            &mut pixels,
+            OcioColorSpace::LinearSRgb,
+            OcioColorSpace::SRgb,
+        );
         assert!((pixels[0] - 0.5).abs() < 0.01);
     }
 }
@@ -149,35 +182,46 @@ impl Lut3D {
 
     #[inline]
     #[allow(clippy::too_many_arguments)]
-    fn tetra(&self, c0: [f32; 3], ca: [f32; 3], cb: [f32; 3], cc: [f32; 3], da: f32, db: f32, dc: f32) -> (f32, f32, f32) {
+    fn tetra(
+        &self,
+        c0: [f32; 3],
+        ca: [f32; 3],
+        cb: [f32; 3],
+        cc: [f32; 3],
+        da: f32,
+        db: f32,
+        dc: f32,
+    ) -> (f32, f32, f32) {
         let mut out = [0.0f32; 3];
         for i in 0..3 {
-            out[i] = c0[i]
-                + (ca[i] - c0[i]) * da
-                + (cb[i] - ca[i]) * db
-                + (cc[i] - cb[i]) * dc;
+            out[i] = c0[i] + (ca[i] - c0[i]) * da + (cb[i] - ca[i]) * db + (cc[i] - cb[i]) * dc;
         }
         (out[0], out[1], out[2])
     }
 
-    /// Parses an Adobe .cube LUT file (TITLE/LUT_1D_SIZE skipped, LUT_3D_SIZE required).
+    /// Parses an .cube LUT file (TITLE/LUT_1D_SIZE skipped, LUT_3D_SIZE required).
     pub fn parse_cube(text: &str) -> Result<Self, String> {
         let mut size = 0usize;
         let mut values: Vec<f32> = Vec::new();
         for line in text.lines() {
             let line = line.trim();
-            if line.is_empty() || line.starts_with('#') || line.starts_with("TITLE")
-                || line.starts_with("DOMAIN_") || line.starts_with("LUT_1D_SIZE")
+            if line.is_empty()
+                || line.starts_with('#')
+                || line.starts_with("TITLE")
+                || line.starts_with("DOMAIN_")
+                || line.starts_with("LUT_1D_SIZE")
             {
                 continue;
             }
             if let Some(rest) = line.strip_prefix("LUT_3D_SIZE") {
-                size = rest.trim().parse::<usize>().map_err(|_| "bad LUT_3D_SIZE")?;
+                size = rest
+                    .trim()
+                    .parse::<usize>()
+                    .map_err(|_| "bad LUT_3D_SIZE")?;
                 continue;
             }
             let mut it = line.split_whitespace();
-            let (Some(r), Some(g), Some(b), None) =
-                (it.next(), it.next(), it.next(), it.next())
+            let (Some(r), Some(g), Some(b), None) = (it.next(), it.next(), it.next(), it.next())
             else {
                 continue; // skip malformed lines rather than failing whole file
             };
@@ -192,7 +236,9 @@ impl Lut3D {
         if values.len() != expected {
             return Err(format!(
                 "expected {} values for size {}, got {}",
-                expected, size, values.len()
+                expected,
+                size,
+                values.len()
             ));
         }
         Ok(Self { size, data: values })
@@ -264,7 +310,12 @@ mod lut_tests {
     #[test]
     fn test_identity_lut_is_identity() {
         let lut = identity_lut(17);
-        for &(r, g, b) in &[(0.0, 0.0, 0.0), (1.0, 1.0, 1.0), (0.25, 0.5, 0.75), (0.9, 0.1, 0.4)] {
+        for &(r, g, b) in &[
+            (0.0, 0.0, 0.0),
+            (1.0, 1.0, 1.0),
+            (0.25, 0.5, 0.75),
+            (0.9, 0.1, 0.4),
+        ] {
             let (nr, ng, nb) = lut.apply(r, g, b);
             assert!((nr - r).abs() < 0.05, "r {} -> {}", r, nr);
             assert!((ng - g).abs() < 0.05, "g {} -> {}", g, ng);

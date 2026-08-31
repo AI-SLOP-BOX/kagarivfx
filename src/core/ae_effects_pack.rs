@@ -1,6 +1,6 @@
 #![allow(dead_code)]
 use rayon::prelude::*;
-/// Pack of 20 Essential Adobe After Effects Effects & Filters.
+/// Pack of 20 Additional Essential VFX Effects & Filters (Part 2).
 // 1. Fast Box Blur (Separable 2-pass with O(n) sliding window per pass)
 pub fn apply_fast_box_blur(pixels: &mut [u8], width: u32, height: u32, radius: u32) {
     if radius == 0 || width == 0 || height == 0 {
