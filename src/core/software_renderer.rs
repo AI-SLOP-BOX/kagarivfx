@@ -488,16 +488,55 @@ fn flatten_collapsed_limited(comp: &Composition, frame: u32, depth: u32) -> Comp
             child.transform.rotation = crate::core::property::Animatable::new_constant(nrot);
             child.transform.opacity = crate::core::property::Animatable::new_constant(nopa);
 
-            // 3D continuity: lift child into parent space along Z
-            if layer.is_3d {
-                let cz = if child.is_3d {
-                    child.transform_3d.position.evaluate(frame)[2]
+            // 3D continuity: cascade full 3D position, rotation and scale into parent space
+            if layer.is_3d || child.is_3d {
+                let p_pos3d = if layer.is_3d {
+                    layer.transform_3d.position.evaluate(frame)
                 } else {
-                    0.0
+                    [ppos[0], ppos[1], 0.0]
                 };
+                let c_pos3d = if child.is_3d {
+                    child.transform_3d.position.evaluate(frame)
+                } else {
+                    [cpos[0], cpos[1], 0.0]
+                };
+                let p_rot3d = if layer.is_3d {
+                    layer.transform_3d.rotation.evaluate(frame)
+                } else {
+                    [0.0, 0.0, prot]
+                };
+                let c_rot3d = if child.is_3d {
+                    child.transform_3d.rotation.evaluate(frame)
+                } else {
+                    [0.0, 0.0, crot]
+                };
+                let p_scale3d = if layer.is_3d {
+                    layer.transform_3d.scale.evaluate(frame)
+                } else {
+                    [pscale[0], pscale[1], 100.0]
+                };
+                let c_scale3d = if child.is_3d {
+                    child.transform_3d.scale.evaluate(frame)
+                } else {
+                    [cscale[0], cscale[1], 100.0]
+                };
+
                 child.is_3d = true;
-                child.transform_3d.position =
-                    crate::core::property::Animatable::new_constant([npos[0], npos[1], pz + cz]);
+                child.transform_3d.position = crate::core::property::Animatable::new_constant([
+                    npos[0],
+                    npos[1],
+                    p_pos3d[2] + c_pos3d[2],
+                ]);
+                child.transform_3d.rotation = crate::core::property::Animatable::new_constant([
+                    p_rot3d[0] + c_rot3d[0],
+                    p_rot3d[1] + c_rot3d[1],
+                    p_rot3d[2] + c_rot3d[2],
+                ]);
+                child.transform_3d.scale = crate::core::property::Animatable::new_constant([
+                    (p_scale3d[0] * c_scale3d[0] / 100.0).max(0.001),
+                    (p_scale3d[1] * c_scale3d[1] / 100.0).max(0.001),
+                    (p_scale3d[2] * c_scale3d[2] / 100.0).max(0.001),
+                ]);
             }
             expanded.push(child);
         }
