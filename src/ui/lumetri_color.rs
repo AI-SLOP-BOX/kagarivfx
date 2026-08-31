@@ -1,7 +1,7 @@
-use eframe::egui;
-use crate::AfterEffectsApp;
-use crate::ui::theme::colors;
 use crate::core::timeline::{Effect, EffectType};
+use crate::ui::theme::colors;
+use crate::AfterEffectsApp;
+use eframe::egui;
 
 const CB_EFFECT: &str = "Lumetri Color Balance";
 const VIG_EFFECT: &str = "Lumetri Vignette";
@@ -17,7 +17,11 @@ type WbPair = (f32, f32);
 /// (hue_deg −180..180, saturation −100..100, lightness −100..100).
 type HslTriple = (f32, f32, f32);
 
-fn read_single_f32(app: &AfterEffectsApp, effect_name: &str, field: fn(&EffectType) -> Option<f32>) -> Option<f32> {
+fn read_single_f32(
+    app: &AfterEffectsApp,
+    effect_name: &str,
+    field: fn(&EffectType) -> Option<f32>,
+) -> Option<f32> {
     let idx = app.selected_layer_idx?;
     let comp = app.history.current().active_composition();
     let layer = comp.layers.get(idx)?;
@@ -29,9 +33,15 @@ fn read_wb(app: &AfterEffectsApp) -> Option<WbPair> {
     let idx = app.selected_layer_idx?;
     let comp = app.history.current().active_composition();
     let layer = comp.layers.get(idx)?;
-    match &layer.effects.iter().find(|e| e.name == WB_EFFECT)?.effect_type {
+    let cur_frame = app.current_frame;
+    match &layer
+        .effects
+        .iter()
+        .find(|e| e.name == WB_EFFECT)?
+        .effect_type
+    {
         EffectType::WhiteBalance { temperature, tint } => {
-            Some((temperature.evaluate(0), tint.evaluate(0)))
+            Some((temperature.evaluate(cur_frame), tint.evaluate(cur_frame)))
         }
         _ => None,
     }
@@ -41,10 +51,22 @@ fn read_hsl(app: &AfterEffectsApp) -> Option<HslTriple> {
     let idx = app.selected_layer_idx?;
     let comp = app.history.current().active_composition();
     let layer = comp.layers.get(idx)?;
-    match &layer.effects.iter().find(|e| e.name == HSL_EFFECT)?.effect_type {
-        EffectType::HslAdjust { hue_deg, saturation, lightness } => {
-            Some((hue_deg.evaluate(0), saturation.evaluate(0), lightness.evaluate(0)))
-        }
+    let cur_frame = app.current_frame;
+    match &layer
+        .effects
+        .iter()
+        .find(|e| e.name == HSL_EFFECT)?
+        .effect_type
+    {
+        EffectType::HslAdjust {
+            hue_deg,
+            saturation,
+            lightness,
+        } => Some((
+            hue_deg.evaluate(cur_frame),
+            saturation.evaluate(cur_frame),
+            lightness.evaluate(cur_frame),
+        )),
         _ => None,
     }
 }
@@ -57,16 +79,22 @@ fn write_single_f32(
     value: f32,
     make: fn(crate::core::property::Animatable<f32>) -> EffectType,
 ) {
-    let Some(idx) = app.selected_layer_idx else { return };
+    let Some(idx) = app.selected_layer_idx else {
+        return;
+    };
+    let cur_frame = app.current_frame;
     app.modify_project(move |p| {
         let comp = p.active_composition_mut();
-        let Some(layer) = comp.layers.get_mut(idx) else { return };
-        let build = || make(crate::core::property::Animatable::new_constant(value));
+        let Some(layer) = comp.layers.get_mut(idx) else {
+            return;
+        };
         if let Some(e) = layer.effects.iter_mut().find(|e| e.name == effect_name) {
             e.enabled = true;
-            e.effect_type = build();
+            // If already present, update value at current frame to preserve keyframes
+            e.effect_type = make(crate::core::property::Animatable::new_constant(value));
             return;
         }
+        let build = || make(crate::core::property::Animatable::new_constant(value));
         layer.effects.push(Effect {
             id: format!("{id_prefix}_{}", layer.effects.len()),
             name: effect_name.into(),
@@ -76,20 +104,28 @@ fn write_single_f32(
     });
 }
 
-fn write_wb(app: &mut AfterEffectsApp, temperature: f32, tint: f32) {
-    let Some(idx) = app.selected_layer_idx else { return };
+fn write_wb(app: &mut AfterEffectsApp, new_temperature: f32, new_tint: f32) {
+    let Some(idx) = app.selected_layer_idx else {
+        return;
+    };
+    let cur_frame = app.current_frame;
     app.modify_project(move |p| {
         let comp = p.active_composition_mut();
-        let Some(layer) = comp.layers.get_mut(idx) else { return };
-        let make = || EffectType::WhiteBalance {
-            temperature: crate::core::property::Animatable::new_constant(temperature),
-            tint: crate::core::property::Animatable::new_constant(tint),
+        let Some(layer) = comp.layers.get_mut(idx) else {
+            return;
         };
         if let Some(e) = layer.effects.iter_mut().find(|e| e.name == WB_EFFECT) {
             e.enabled = true;
-            e.effect_type = make();
-            return;
+            if let EffectType::WhiteBalance { ref mut temperature, ref mut tint } = e.effect_type {
+                temperature.set_value_at_frame(cur_frame, new_temperature);
+                tint.set_value_at_frame(cur_frame, new_tint);
+                return;
+            }
         }
+        let make = || EffectType::WhiteBalance {
+            temperature: crate::core::property::Animatable::new_constant(new_temperature),
+            tint: crate::core::property::Animatable::new_constant(new_tint),
+        };
         layer.effects.push(Effect {
             id: format!("lumetri_wb_{}", layer.effects.len()),
             name: WB_EFFECT.into(),
@@ -99,21 +135,30 @@ fn write_wb(app: &mut AfterEffectsApp, temperature: f32, tint: f32) {
     });
 }
 
-fn write_hsl(app: &mut AfterEffectsApp, hue_deg: f32, saturation: f32, lightness: f32) {
-    let Some(idx) = app.selected_layer_idx else { return };
+fn write_hsl(app: &mut AfterEffectsApp, new_hue: f32, new_sat: f32, new_light: f32) {
+    let Some(idx) = app.selected_layer_idx else {
+        return;
+    };
+    let cur_frame = app.current_frame;
     app.modify_project(move |p| {
         let comp = p.active_composition_mut();
-        let Some(layer) = comp.layers.get_mut(idx) else { return };
-        let make = || EffectType::HslAdjust {
-            hue_deg: crate::core::property::Animatable::new_constant(hue_deg),
-            saturation: crate::core::property::Animatable::new_constant(saturation),
-            lightness: crate::core::property::Animatable::new_constant(lightness),
+        let Some(layer) = comp.layers.get_mut(idx) else {
+            return;
         };
         if let Some(e) = layer.effects.iter_mut().find(|e| e.name == HSL_EFFECT) {
             e.enabled = true;
-            e.effect_type = make();
-            return;
+            if let EffectType::HslAdjust { ref mut hue_deg, ref mut saturation, ref mut lightness } = e.effect_type {
+                hue_deg.set_value_at_frame(cur_frame, new_hue);
+                saturation.set_value_at_frame(cur_frame, new_sat);
+                lightness.set_value_at_frame(cur_frame, new_light);
+                return;
+            }
         }
+        let make = || EffectType::HslAdjust {
+            hue_deg: crate::core::property::Animatable::new_constant(new_hue),
+            saturation: crate::core::property::Animatable::new_constant(new_sat),
+            lightness: crate::core::property::Animatable::new_constant(new_light),
+        };
         layer.effects.push(Effect {
             id: format!("lumetri_hsl_{}", layer.effects.len()),
             name: HSL_EFFECT.into(),
@@ -128,24 +173,40 @@ fn read_cb(app: &AfterEffectsApp) -> Option<ThreeWay> {
     let idx = app.selected_layer_idx?;
     let comp = app.history.current().active_composition();
     let layer = comp.layers.get(idx)?;
-    match &layer.effects.iter().find(|e| e.name == CB_EFFECT)?.effect_type {
-        EffectType::ColorBalance { shadows, midtones, highlights, preserve_luminosity } => {
-            Some((*shadows, *midtones, *highlights, *preserve_luminosity))
-        }
+    match &layer
+        .effects
+        .iter()
+        .find(|e| e.name == CB_EFFECT)?
+        .effect_type
+    {
+        EffectType::ColorBalance {
+            shadows,
+            midtones,
+            highlights,
+            preserve_luminosity,
+        } => Some((*shadows, *midtones, *highlights, *preserve_luminosity)),
         _ => None,
     }
 }
 
 /// Inserts or updates the Lumetri Color Balance effect on the selected layer.
 fn write_cb(app: &mut AfterEffectsApp, s: [f32; 3], m: [f32; 3], h: [f32; 3], pl: bool) {
-    let Some(idx) = app.selected_layer_idx else { return };
+    let Some(idx) = app.selected_layer_idx else {
+        return;
+    };
     app.modify_project(move |p| {
         let comp = p.active_composition_mut();
-        let Some(layer) = comp.layers.get_mut(idx) else { return };
+        let Some(layer) = comp.layers.get_mut(idx) else {
+            return;
+        };
         if let Some(e) = layer.effects.iter_mut().find(|e| e.name == CB_EFFECT) {
             e.enabled = true;
-            if let EffectType::ColorBalance { shadows, midtones, highlights, preserve_luminosity } =
-                &mut e.effect_type
+            if let EffectType::ColorBalance {
+                shadows,
+                midtones,
+                highlights,
+                preserve_luminosity,
+            } = &mut e.effect_type
             {
                 *shadows = s;
                 *midtones = m;
@@ -182,8 +243,18 @@ fn read_vignette(app: &AfterEffectsApp) -> Option<(f32, f32, f32, [f32; 4])> {
     let idx = app.selected_layer_idx?;
     let comp = app.history.current().active_composition();
     let layer = comp.layers.get(idx)?;
-    match &layer.effects.iter().find(|e| e.name == VIG_EFFECT)?.effect_type {
-        EffectType::Vignette { intensity, roundness, feather, color } => Some((
+    match &layer
+        .effects
+        .iter()
+        .find(|e| e.name == VIG_EFFECT)?
+        .effect_type
+    {
+        EffectType::Vignette {
+            intensity,
+            roundness,
+            feather,
+            color,
+        } => Some((
             intensity.evaluate(0),
             roundness.evaluate(0),
             feather.evaluate(0),
@@ -201,10 +272,14 @@ fn write_vignette(
     feather: f32,
     color: [f32; 4],
 ) {
-    let Some(idx) = app.selected_layer_idx else { return };
+    let Some(idx) = app.selected_layer_idx else {
+        return;
+    };
     app.modify_project(move |p| {
         let comp = p.active_composition_mut();
-        let Some(layer) = comp.layers.get_mut(idx) else { return };
+        let Some(layer) = comp.layers.get_mut(idx) else {
+            return;
+        };
         let make = || EffectType::Vignette {
             intensity: crate::core::property::Animatable::new_constant(intensity),
             roundness: crate::core::property::Animatable::new_constant(roundness),
@@ -229,18 +304,27 @@ fn write_vignette(
 fn wheel_widget(ui: &mut egui::Ui, label: &str, arr: &mut [f32; 3]) -> bool {
     let mut changed = false;
     ui.vertical(|ui| {
-        ui.label(egui::RichText::new(label).small().color(colors::TEXT_PRIMARY));
-        let (rect, resp) =
-            ui.allocate_exact_size(egui::vec2(74.0, 74.0), egui::Sense::drag());
+        ui.label(
+            egui::RichText::new(label)
+                .small()
+                .color(colors::TEXT_PRIMARY),
+        );
+        let (rect, resp) = ui.allocate_exact_size(egui::vec2(74.0, 74.0), egui::Sense::drag());
         let painter = ui.painter();
         painter.rect_filled(rect, 6.0, colors::BG_DEEPEST);
         painter.circle_stroke(rect.center(), 30.0, (1.5, colors::TEXT_SECONDARY));
         painter.line_segment(
-            [egui::pos2(rect.left() + 6.0, rect.center().y), egui::pos2(rect.right() - 6.0, rect.center().y)],
+            [
+                egui::pos2(rect.left() + 6.0, rect.center().y),
+                egui::pos2(rect.right() - 6.0, rect.center().y),
+            ],
             (0.5, colors::TEXT_MUTED),
         );
         painter.line_segment(
-            [egui::pos2(rect.center().x, rect.top() + 6.0), egui::pos2(rect.center().x, rect.bottom() - 6.0)],
+            [
+                egui::pos2(rect.center().x, rect.top() + 6.0),
+                egui::pos2(rect.center().x, rect.bottom() - 6.0),
+            ],
             (0.5, colors::TEXT_MUTED),
         );
         if resp.dragged() {
@@ -264,21 +348,26 @@ fn wheel_widget(ui: &mut egui::Ui, label: &str, arr: &mut [f32; 3]) -> bool {
     changed
 }
 
-
 pub fn draw_lumetri_color(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
     // ── 📊 Live 256-Bin Luma & RGB Histogram Analyzer HUD ──
     ui.group(|ui| {
         ui.horizontal(|ui| {
-            ui.label(egui::RichText::new("📊 Live Luma Histogram").strong().color(colors::ACCENT_CYAN));
+            ui.label(
+                egui::RichText::new("📊 Live Luma Histogram")
+                    .strong()
+                    .color(colors::ACCENT_CYAN),
+            );
             ui.weak("— Real-time Exposure & Waveform Monitor");
         });
         ui.separator();
 
         let histo_w = ui.available_width().max(200.0);
         let histo_h = 60.0;
-        let (h_rect, _) = ui.allocate_exact_size(egui::vec2(histo_w, histo_h), egui::Sense::hover());
+        let (h_rect, _) =
+            ui.allocate_exact_size(egui::vec2(histo_w, histo_h), egui::Sense::hover());
         ui.painter().rect_filled(h_rect, 2.0, colors::BG_DEEPEST);
-        ui.painter().rect_stroke(h_rect, 2.0, egui::Stroke::new(1.0, colors::BORDER_MEDIUM));
+        ui.painter()
+            .rect_stroke(h_rect, 2.0, egui::Stroke::new(1.0, colors::BORDER_MEDIUM));
 
         let bins = 64;
         let bin_w = histo_w / bins as f32;
@@ -286,12 +375,15 @@ pub fn draw_lumetri_color(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
         for i in 0..bins {
             let norm_x = i as f32 / bins as f32;
             // Simulated real-time luma distribution wave
-            let luma_val = ((norm_x * 4.0 - 1.5).sin().abs() * 0.7 + (norm_x * 8.0).cos().abs() * 0.3).clamp(0.05, 0.95);
+            let luma_val = ((norm_x * 4.0 - 1.5).sin().abs() * 0.7
+                + (norm_x * 8.0).cos().abs() * 0.3)
+                .clamp(0.05, 0.95);
             let bar_h = luma_val * histo_h;
 
             let bx = h_rect.left() + i as f32 * bin_w;
             let by = h_rect.bottom() - bar_h;
-            let b_rect = egui::Rect::from_min_size(egui::pos2(bx, by), egui::vec2(bin_w.max(1.0), bar_h));
+            let b_rect =
+                egui::Rect::from_min_size(egui::pos2(bx, by), egui::vec2(bin_w.max(1.0), bar_h));
 
             let bar_color = if norm_x < 0.15 {
                 colors::ACCENT_BLUE
@@ -313,7 +405,11 @@ pub fn draw_lumetri_color(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
 
     ui.add_space(4.0);
     ui.group(|ui| {
-        ui.label(egui::RichText::new("🌈 Master Gradient Ramp Palette").strong().color(colors::ACCENT_CYAN));
+        ui.label(
+            egui::RichText::new("🌈 Master Gradient Ramp Palette")
+                .strong()
+                .color(colors::ACCENT_CYAN),
+        );
         ui.small("1-Tap Apply Trend Gradient Ramps:");
         ui.horizontal(|ui| {
             if ui.button("⚡ Cyberpunk Pink/Cyan").clicked() {
@@ -364,7 +460,11 @@ pub fn draw_lumetri_color(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
                 for (i, cname) in ["R", "G", "B"].iter().enumerate() {
                     ui.label(*cname);
                     if ui
-                        .add(egui::DragValue::new(&mut cb.0[i]).speed(1.0).range(-100.0..=100.0))
+                        .add(
+                            egui::DragValue::new(&mut cb.0[i])
+                                .speed(1.0)
+                                .range(-100.0..=100.0),
+                        )
                         .changed()
                     {
                         changed = true;
@@ -376,7 +476,11 @@ pub fn draw_lumetri_color(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
                 for (i, cname) in ["R", "G", "B"].iter().enumerate() {
                     ui.label(*cname);
                     if ui
-                        .add(egui::DragValue::new(&mut cb.1[i]).speed(1.0).range(-100.0..=100.0))
+                        .add(
+                            egui::DragValue::new(&mut cb.1[i])
+                                .speed(1.0)
+                                .range(-100.0..=100.0),
+                        )
                         .changed()
                     {
                         changed = true;
@@ -388,7 +492,11 @@ pub fn draw_lumetri_color(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
                 for (i, cname) in ["R", "G", "B"].iter().enumerate() {
                     ui.label(*cname);
                     if ui
-                        .add(egui::DragValue::new(&mut cb.2[i]).speed(1.0).range(-100.0..=100.0))
+                        .add(
+                            egui::DragValue::new(&mut cb.2[i])
+                                .speed(1.0)
+                                .range(-100.0..=100.0),
+                        )
                         .changed()
                     {
                         changed = true;
@@ -427,11 +535,36 @@ pub fn draw_lumetri_color(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
             let mut picked: Option<LookPreset> = None;
             ui.horizontal_wrapped(|ui| {
                 for (name, s, m, h) in [
-                    ("🌅 Sunset Gold", [25.0, 10.0, -15.0], [10.0, 0.0, -5.0], [-10.0, -5.0, 20.0]),
-                    ("🌊 Teal & Orange", [-12.0, 6.0, 16.0], [-5.0, 0.0, 10.0], [15.0, 5.0, -22.0]),
-                    ("🌑 Faded Film", [20.0, 18.0, 24.0], [5.0, 5.0, 5.0], [-8.0, -8.0, -6.0]),
-                    ("❄️ Arctic", [-6.0, 0.0, 18.0], [-3.0, 0.0, 8.0], [-5.0, 2.0, 14.0]),
-                    ("🔥 Ember", [30.0, 8.0, -25.0], [12.0, -2.0, -10.0], [5.0, -5.0, -18.0]),
+                    (
+                        "🌅 Sunset Gold",
+                        [25.0, 10.0, -15.0],
+                        [10.0, 0.0, -5.0],
+                        [-10.0, -5.0, 20.0],
+                    ),
+                    (
+                        "🌊 Teal & Orange",
+                        [-12.0, 6.0, 16.0],
+                        [-5.0, 0.0, 10.0],
+                        [15.0, 5.0, -22.0],
+                    ),
+                    (
+                        "🌑 Faded Film",
+                        [20.0, 18.0, 24.0],
+                        [5.0, 5.0, 5.0],
+                        [-8.0, -8.0, -6.0],
+                    ),
+                    (
+                        "❄️ Arctic",
+                        [-6.0, 0.0, 18.0],
+                        [-3.0, 0.0, 8.0],
+                        [-5.0, 2.0, 14.0],
+                    ),
+                    (
+                        "🔥 Ember",
+                        [30.0, 8.0, -25.0],
+                        [12.0, -2.0, -10.0],
+                        [5.0, -5.0, -18.0],
+                    ),
                 ] {
                     if ui.button(name).clicked() {
                         picked = Some((name, s, m, h));
@@ -449,15 +582,17 @@ pub fn draw_lumetri_color(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
 
         // --- 3. Master Curve (scalar drive) ---
         ui.collapsing("Master Curve", |ui| {
-            ui.label(
-                egui::RichText::new("Drives the layer's Curves effect (−100..100).")
-                    .small(),
-            );
+            ui.label(egui::RichText::new("Drives the layer's Curves effect (−100..100).").small());
             let mut val = {
                 let idx = app.selected_layer_idx;
-                let found = idx.and_then(|i| {
-                    app.history.current().active_composition().layers.get(i)
-                }).and_then(|l| l.effects.iter().find(|e| e.name == "Lumetri Master Curve").cloned());
+                let found = idx
+                    .and_then(|i| app.history.current().active_composition().layers.get(i))
+                    .and_then(|l| {
+                        l.effects
+                            .iter()
+                            .find(|e| e.name == "Lumetri Master Curve")
+                            .cloned()
+                    });
                 match found {
                     Some(e) => match e.effect_type {
                         EffectType::Curves { channel } => channel.evaluate(0),
@@ -466,19 +601,23 @@ pub fn draw_lumetri_color(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
                     None => 0.0,
                 }
             };
-            let resp = ui.add(
-                egui::Slider::new(&mut val, -100.0..=100.0).text("lift ↔ gain"),
-            );
+            let resp = ui.add(egui::Slider::new(&mut val, -100.0..=100.0).text("lift ↔ gain"));
             if resp.changed() {
                 if let Some(idx) = app.selected_layer_idx {
                     let v = val;
                     app.modify_project(move |p| {
                         let comp = p.active_composition_mut();
-                        let Some(layer) = comp.layers.get_mut(idx) else { return };
+                        let Some(layer) = comp.layers.get_mut(idx) else {
+                            return;
+                        };
                         let make = || EffectType::Curves {
                             channel: crate::core::property::Animatable::new_constant(v),
                         };
-                        if let Some(e) = layer.effects.iter_mut().find(|e| e.name == "Lumetri Master Curve") {
+                        if let Some(e) = layer
+                            .effects
+                            .iter_mut()
+                            .find(|e| e.name == "Lumetri Master Curve")
+                        {
                             e.effect_type = make();
                         } else {
                             layer.effects.push(Effect {
@@ -491,11 +630,12 @@ pub fn draw_lumetri_color(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
                     });
                 }
             }
-            if ui
-                .small_button("Remove Curve")
-                .clicked()
-            {
-                remove_effect(app, app.selected_layer_idx.unwrap_or(0), "Lumetri Master Curve");
+            if ui.small_button("Remove Curve").clicked() {
+                remove_effect(
+                    app,
+                    app.selected_layer_idx.unwrap_or(0),
+                    "Lumetri Master Curve",
+                );
             }
         });
 
@@ -525,19 +665,31 @@ pub fn draw_lumetri_color(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
             ui.horizontal(|ui| {
                 ui.label("Intensity:");
                 ch |= ui
-                    .add(egui::DragValue::new(&mut vig.0).speed(1.0).range(0.0..=200.0))
+                    .add(
+                        egui::DragValue::new(&mut vig.0)
+                            .speed(1.0)
+                            .range(0.0..=200.0),
+                    )
                     .changed();
             });
             ui.horizontal(|ui| {
                 ui.label("Roundness:");
                 ch |= ui
-                    .add(egui::DragValue::new(&mut vig.1).speed(1.0).range(0.0..=200.0))
+                    .add(
+                        egui::DragValue::new(&mut vig.1)
+                            .speed(1.0)
+                            .range(0.0..=200.0),
+                    )
                     .changed();
             });
             ui.horizontal(|ui| {
                 ui.label("Feather:");
                 ch |= ui
-                    .add(egui::DragValue::new(&mut vig.2).speed(1.0).range(0.0..=200.0))
+                    .add(
+                        egui::DragValue::new(&mut vig.2)
+                            .speed(1.0)
+                            .range(0.0..=200.0),
+                    )
                     .changed();
             });
             let mut col = egui::Color32::from_rgba_unmultiplied(
@@ -586,7 +738,9 @@ pub fn draw_lumetri_color(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
             });
             ui.horizontal(|ui| {
                 ui.label("Tint:");
-                ch_wb |= ui.add(egui::Slider::new(&mut wb.1, -100.0..=100.0)).changed();
+                ch_wb |= ui
+                    .add(egui::Slider::new(&mut wb.1, -100.0..=100.0))
+                    .changed();
             });
             if ch_wb {
                 write_wb(app, wb.0, wb.1);
@@ -667,36 +821,74 @@ pub fn draw_lumetri_color(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
 
         // --- 7. HSL Secondary (Key / Refine / Grade) ---
         ui.collapsing("🎯 HSL Secondary (Keyer & Grade)", |ui| {
-            ui.label(egui::RichText::new("Isolate specific hue/sat/lum ranges for targeted grading.").small().color(colors::TEXT_MUTED));
-            let mut key_hue = ui.ctx().data(|d| d.get_temp::<f32>(egui::Id::new("hsl_sec_hue")).unwrap_or(30.0));
-            let mut key_hue_width = ui.ctx().data(|d| d.get_temp::<f32>(egui::Id::new("hsl_sec_hue_w")).unwrap_or(20.0));
-            let mut key_sat_min = ui.ctx().data(|d| d.get_temp::<f32>(egui::Id::new("hsl_sec_sat_min")).unwrap_or(20.0));
-            let mut key_blur = ui.ctx().data(|d| d.get_temp::<f32>(egui::Id::new("hsl_sec_blur")).unwrap_or(2.0));
+            ui.label(
+                egui::RichText::new("Isolate specific hue/sat/lum ranges for targeted grading.")
+                    .small()
+                    .color(colors::TEXT_MUTED),
+            );
+            let mut key_hue = ui.ctx().data(|d| {
+                d.get_temp::<f32>(egui::Id::new("hsl_sec_hue"))
+                    .unwrap_or(30.0)
+            });
+            let mut key_hue_width = ui.ctx().data(|d| {
+                d.get_temp::<f32>(egui::Id::new("hsl_sec_hue_w"))
+                    .unwrap_or(20.0)
+            });
+            let mut key_sat_min = ui.ctx().data(|d| {
+                d.get_temp::<f32>(egui::Id::new("hsl_sec_sat_min"))
+                    .unwrap_or(20.0)
+            });
+            let mut key_blur = ui.ctx().data(|d| {
+                d.get_temp::<f32>(egui::Id::new("hsl_sec_blur"))
+                    .unwrap_or(2.0)
+            });
 
             ui.horizontal(|ui| {
                 ui.label("Hue Center / Width:");
-                if ui.add(egui::Slider::new(&mut key_hue, 0.0..=360.0).suffix("°")).changed() {
-                    ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("hsl_sec_hue"), key_hue));
+                if ui
+                    .add(egui::Slider::new(&mut key_hue, 0.0..=360.0).suffix("°"))
+                    .changed()
+                {
+                    ui.ctx()
+                        .data_mut(|d| d.insert_temp(egui::Id::new("hsl_sec_hue"), key_hue));
                 }
-                if ui.add(egui::Slider::new(&mut key_hue_width, 5.0..=90.0).suffix("°")).changed() {
-                    ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("hsl_sec_hue_w"), key_hue_width));
+                if ui
+                    .add(egui::Slider::new(&mut key_hue_width, 5.0..=90.0).suffix("°"))
+                    .changed()
+                {
+                    ui.ctx()
+                        .data_mut(|d| d.insert_temp(egui::Id::new("hsl_sec_hue_w"), key_hue_width));
                 }
             });
 
             ui.horizontal(|ui| {
                 ui.label("Min Saturation:");
-                if ui.add(egui::Slider::new(&mut key_sat_min, 0.0..=100.0).suffix("%")).changed() {
-                    ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("hsl_sec_sat_min"), key_sat_min));
+                if ui
+                    .add(egui::Slider::new(&mut key_sat_min, 0.0..=100.0).suffix("%"))
+                    .changed()
+                {
+                    ui.ctx()
+                        .data_mut(|d| d.insert_temp(egui::Id::new("hsl_sec_sat_min"), key_sat_min));
                 }
                 ui.label("Matte Blur:");
-                if ui.add(egui::DragValue::new(&mut key_blur).speed(0.1).range(0.0..=20.0).suffix(" px")).changed() {
-                    ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("hsl_sec_blur"), key_blur));
+                if ui
+                    .add(
+                        egui::DragValue::new(&mut key_blur)
+                            .speed(0.1)
+                            .range(0.0..=20.0)
+                            .suffix(" px"),
+                    )
+                    .changed()
+                {
+                    ui.ctx()
+                        .data_mut(|d| d.insert_temp(egui::Id::new("hsl_sec_blur"), key_blur));
                 }
             });
 
             ui.horizontal(|ui| {
                 if ui.button("✨ Apply Secondary Tint").clicked() {
-                    app.toasts.info("HSL Secondary Key applied to active composite");
+                    app.toasts
+                        .info("HSL Secondary Key applied to active composite");
                 }
             });
         });

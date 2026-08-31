@@ -1,5 +1,5 @@
-use eframe::egui;
 use crate::ui::custom_widgets;
+use eframe::egui;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum ActiveTool {
@@ -63,17 +63,34 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
                 for (tool, svg, tooltip) in tools {
                     let is_selected = app.active_tool == tool;
                     let accent = colors::ACCENT_BLUE;
-                    let tint = if is_selected { accent } else { colors::TEXT_SECONDARY };
+                    let tint = if is_selected {
+                        accent
+                    } else {
+                        colors::TEXT_SECONDARY
+                    };
 
-                    let (rect, resp) = ui.allocate_exact_size(egui::vec2(24.0, 24.0), egui::Sense::click());
-                    let fill = if is_selected { colors::BG_HOVER } else { egui::Color32::TRANSPARENT };
+                    let (rect, resp) =
+                        ui.allocate_exact_size(egui::vec2(24.0, 24.0), egui::Sense::click());
+                    let fill = if is_selected {
+                        colors::BG_HOVER
+                    } else {
+                        egui::Color32::TRANSPARENT
+                    };
                     ui.painter().rect_filled(rect, 4.0, fill);
                     if is_selected {
-                        ui.painter().rect_stroke(rect, 4.0, egui::Stroke::new(1.0, accent));
+                        ui.painter()
+                            .rect_stroke(rect, 4.0, egui::Stroke::new(1.0, accent));
                     }
                     // Draw icon centered inside the button rect
                     let icon_rect = rect.shrink(4.0);
-                    let icon_resp = crate::ui::icons::render_svg_at(ui, format!("tool_{:?}", tool), svg, icon_rect.size(), tint, icon_rect.min);
+                    let icon_resp = crate::ui::icons::render_svg_at(
+                        ui,
+                        format!("tool_{:?}", tool),
+                        svg,
+                        icon_rect.size(),
+                        tint,
+                        icon_rect.min,
+                    );
                     let _ = icon_resp;
                     let _ = rect; // rect used above
                     if resp.clicked() {
@@ -87,21 +104,19 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
                 ui.add_space(4.0);
 
                 // AE Snapping Toggle (icon + label)
-                let snap_id = egui::Id::new("ae_snapping_enabled");
-                let mut snapping = ctx.data_mut(|d| *d.get_temp_mut_or_insert_with(snap_id, || true));
-                let snap_changed = {
-                    ui.toggle_value(&mut snapping, "🧲 Snap").changed()
-                };
-                if snap_changed {
-                    ctx.data_mut(|d| d.insert_temp(snap_id, snapping));
-                }
+                ui.toggle_value(&mut app.snap_to_keyframes, "🧲 Snap")
+                    .on_hover_text("Toggle Snapping to Keyframes and Markers (Shift+S)");
 
                 ui.add_space(4.0);
                 ui.separator();
                 ui.add_space(4.0);
 
                 // AE Workspace Layout Switcher Pill Buttons
-                ui.label(egui::RichText::new("Workspace:").small().color(colors::TEXT_SECONDARY));
+                ui.label(
+                    egui::RichText::new("Workspace:")
+                        .small()
+                        .color(colors::TEXT_SECONDARY),
+                );
                 for (name, l_idx, r_idx) in [
                     ("Default", 0, 0),
                     ("Learn", 0, 4),
@@ -123,15 +138,21 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
                 crate::ui::align_hud::draw_alignment_hud(app, ui);
 
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    if custom_widgets::ae_button_accent(ui, "Render Queue (Cmd+M)").clicked()
-                    {
+                    if custom_widgets::ae_button_accent(ui, "Render Queue (Cmd+M)").clicked() {
                         app.show_export_dialog = true;
                     }
                     ui.add_space(8.0);
-                    let search_id = egui::Id::new("ae_toolbar_search_query");
-                    let mut search_query = ctx.data_mut(|d| d.get_temp_mut_or_insert_with(search_id, || "".to_string()).clone());
-                    ui.add_sized([120.0, 18.0], egui::TextEdit::singleline(&mut search_query).hint_text("Search Effects..."));
-                    ctx.data_mut(|d| d.insert_temp(search_id, search_query));
+                    let resp = ui.add_sized(
+                        [120.0, 18.0],
+                        egui::TextEdit::singleline(&mut app.effects_search_query)
+                            .hint_text("Search Effects..."),
+                    );
+                    if resp.changed() {
+                        // Automatically switch right tab to Effects panel (tab 0) if typing search query
+                        if !app.effects_search_query.is_empty() && app.right_tab_idx != 0 {
+                            app.right_tab_idx = 0;
+                        }
+                    }
                 });
             });
         });
