@@ -157,6 +157,56 @@ pub fn aces_filmic_tonemap(x: [f32; 3]) -> [f32; 3] {
     })
 }
 
+const DISPLAY_P3_2_XYZ: [[f32; 3]; 3] = [
+    [0.4865709, 0.2656677, 0.1982173],
+    [0.2289746, 0.6917385, 0.0792869],
+    [0.0000000, 0.0451134, 1.0439444],
+];
+const XYZ_2_DISPLAY_P3: [[f32; 3]; 3] = [
+    [2.4934969, -0.9313836, -0.4027108],
+    [-0.8294890, 1.7626641, 0.0236247],
+    [0.0358458, -0.0761724, 0.9568845],
+];
+
+/// Linear Display P3 (D65) → ACEScg (AP1 linear).
+pub fn display_p3_to_aces_cg(rgb: [f32; 3]) -> [f32; 3] {
+    let xyz = mat_mul(&DISPLAY_P3_2_XYZ, rgb);
+    mat_mul(&XYZ_2_AP1, xyz)
+}
+
+/// ACEScg → Linear Display P3 (D65).
+pub fn aces_cg_to_display_p3(rgb: [f32; 3]) -> [f32; 3] {
+    let xyz = mat_mul(&AP1_2_XYZ, rgb);
+    mat_mul(&XYZ_2_DISPLAY_P3, xyz)
+}
+
+/// ACES 1.3 Reference Gamut Compression algorithm (S-2021-001).
+/// Compresses out-of-gamut / highly saturated colors cleanly without clipping.
+pub fn aces_gamut_compress(rgb: [f32; 3], threshold: f32, limit: f32) -> [f32; 3] {
+    let ach = (rgb[0] + rgb[1] + rgb[2]) / 3.0;
+    if ach.abs() < 1e-6 {
+        return rgb;
+    }
+
+    let compress_channel = |v: f32| -> f32 {
+        let dist = (ach - v) / ach.abs();
+        if dist > threshold {
+            let norm_dist = (dist - threshold) / (limit - threshold).max(1e-4);
+            let compressed_norm = norm_dist / (1.0 + norm_dist.powi(2)).sqrt();
+            let compressed_dist = threshold + compressed_norm * (limit - threshold);
+            ach - compressed_dist * ach.abs()
+        } else {
+            v
+        }
+    };
+
+    [
+        compress_channel(rgb[0]),
+        compress_channel(rgb[1]),
+        compress_channel(rgb[2]),
+    ]
+}
+
 /// Full preview transform: scene-linear sRGB → display via ACES tonemap,
 /// then encode with the exact piecewise sRGB EOTF^-1.
 pub fn aces_preview_transform(linear_srgb: [f32; 3]) -> [f32; 3] {
@@ -206,7 +256,10 @@ mod tests {
     #[test]
     fn test_acescc_log_encoding_monotonic_and_specials() {
         let zero = acescg_to_acescc([0.0, 0.0, 0.0]);
-        assert!((zero[0] - (-0.3584474886)).abs() < 1e-6, "zero maps to floor constant");
+        assert!(
+            (zero[0] - (-0.3584474886)).abs() < 1e-6,
+            "zero maps to floor constant"
+        );
         let lo = acescg_to_acescc([0.01, 0.01, 0.01])[0];
         let hi = acescg_to_acescc([0.10, 0.10, 0.10])[0];
         assert!(hi > lo, "log encoding monotonic");
@@ -217,7 +270,11 @@ mod tests {
     #[test]
     fn test_tonemap_maps_midgray_reasonably_and_clamps() {
         let mid = aces_filmic_tonemap([0.18, 0.18, 0.18]);
-        assert!(mid[0] > 0.08 && mid[0] < 0.30, "18% gray lands in filmic range: {:?}", mid);
+        assert!(
+            mid[0] > 0.08 && mid[0] < 0.30,
+            "18% gray lands in filmic range: {:?}",
+            mid
+        );
         let bright = aces_filmic_tonemap([100.0, 100.0, 100.0]);
         assert!((bright[0] - 1.0).abs() < 1e-4, "highlights clip to white");
         let dark = aces_filmic_tonemap([0.0, 0.0, 0.0]);
@@ -238,5 +295,23 @@ mod tests {
         for c in 0..3 {
             assert!((back_rec2020[c] - rgb[c]).abs() < 1e-4);
         }
+
+        let p3_cg = display_p3_to_aces_cg(rgb);
+        let back_p3 = aces_cg_to_display_p3(p3_cg);
+        for c in 0..3 {
+            assert!((back_p3[c] - rgb[c]).abs() < 1e-4);
+        }
+    }
+
+    #[test]
+    fn test_aces_gamut_compression_preserves_in_gamut_and_compresses_extreme() {
+        let in_gamut = [0.2, 0.4, 0.6];
+        let compressed_in = aces_gamut_compress(in_gamut, 0.8, 1.2);
+        assert_eq!(in_gamut, compressed_in);
+
+        let out_of_gamut = [2.5, -0.8, 0.1]; // Highly saturated with negative component
+        let compressed_out = aces_gamut_compress(out_of_gamut, 0.8, 1.2);
+        assert!(compressed_out[0].is_finite());
+        assert!(compressed_out[1] > out_of_gamut[1], "Negative channel pulled towards achromatic");
     }
 }
