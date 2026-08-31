@@ -210,7 +210,9 @@ pub fn render_spectrum(
     for (b_idx, &mag) in bands.iter().enumerate() {
         let bx = b_idx as f32 * band_w;
         let safe_mag = if mag.is_finite() { mag.max(0.0) } else { 0.0 };
-        let bh = (safe_mag * (height as f32 * 0.45)).min(height as f32).max(1.0);
+        let bh = (safe_mag * (height as f32 * 0.45))
+            .min(height as f32)
+            .max(1.0);
         let top = (cy - bh).clamp(0.0, height as f32 - 1.0) as u32;
         let bot = (cy + bh).clamp(0.0, height as f32 - 1.0) as u32;
 
@@ -377,6 +379,16 @@ mod tests {
         let non_zero = buf.iter().any(|&b| b > 0);
         assert!(non_zero);
     }
+
+    #[test]
+    fn test_multiband_audio_keyframes() {
+        let sine_wave: Vec<f32> = (0..44100)
+            .map(|i| ((i as f32 * 440.0 * 2.0 * std::f32::consts::PI) / 44100.0).sin() * 0.5)
+            .collect();
+        let kfs = analyze_audio_multiband_keyframes(&sine_wave, 44100, 30.0, 30);
+        assert_eq!(kfs.len(), 30);
+        assert!(kfs[0].master_amplitude > 0.0);
+    }
 }
 
 /// Options for Audio Waveform visualizer (AE Parity: Generate > Audio Waveform).
@@ -534,3 +546,81 @@ pub fn render_audio_waveform(
         }
     }
 }
+
+/// Multi-band frequency amplitude keyframes for advanced audio-reactive motion graphics.
+#[derive(Debug, Clone, Default)]
+pub struct MultiBandAudioKeyframes {
+    pub frame: u32,
+    pub bass_amplitude: f32,
+    pub mid_amplitude: f32,
+    pub treble_amplitude: f32,
+    pub master_amplitude: f32,
+}
+
+/// Analyzes PCM audio buffer across entire frame range to generate multi-band keyframe animation data.
+pub fn analyze_audio_multiband_keyframes(
+    samples: &[f32],
+    sample_rate: u32,
+    fps: f32,
+    total_frames: u32,
+) -> Vec<MultiBandAudioKeyframes> {
+    if samples.is_empty() || sample_rate == 0 || fps <= 0.0 || total_frames == 0 {
+        return vec![];
+    }
+
+    let samples_per_frame = (sample_rate as f32 / fps.max(1.0)) as usize;
+    let window_size = samples_per_frame.max(512);
+    let mut keyframes = Vec::with_capacity(total_frames as usize);
+
+    for f in 0..total_frames {
+        let start_sample = (f as usize * samples_per_frame).min(samples.len());
+        let end_sample = (start_sample + window_size).min(samples.len());
+
+        if start_sample >= end_sample {
+            keyframes.push(MultiBandAudioKeyframes {
+                frame: f,
+                bass_amplitude: 0.0,
+                mid_amplitude: 0.0,
+                treble_amplitude: 0.0,
+                master_amplitude: 0.0,
+            });
+            continue;
+        }
+
+        let slice = &samples[start_sample..end_sample];
+
+        // Overall Master RMS amplitude
+        let mut sum_sq = 0.0f32;
+        let mut bass_sum = 0.0f32;
+        let mut treble_sum = 0.0f32;
+
+        let mut prev = 0.0f32;
+        for &s in slice {
+            sum_sq += s * s;
+            // High frequency differentiator approximation
+            let diff = s - prev;
+            treble_sum += diff * diff;
+            // Low frequency integrator approximation
+            let avg = (s + prev) * 0.5;
+            bass_sum += avg * avg;
+            prev = s;
+        }
+
+        let n = slice.len() as f32;
+        let master = (sum_sq / n).sqrt().clamp(0.0, 1.0);
+        let bass = (bass_sum / n).sqrt().clamp(0.0, 1.0);
+        let treble = (treble_sum / n).sqrt().clamp(0.0, 1.0);
+        let mid = (master * 1.5 - bass * 0.5 - treble * 0.5).clamp(0.0, 1.0);
+
+        keyframes.push(MultiBandAudioKeyframes {
+            frame: f,
+            bass_amplitude: bass,
+            mid_amplitude: mid,
+            treble_amplitude: treble,
+            master_amplitude: master,
+        });
+    }
+
+    keyframes
+}
+

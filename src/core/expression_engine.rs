@@ -782,17 +782,88 @@ pub fn build_engine() -> Engine {
         let t = current_time();
         let n = 5.0f64;
         let mut sum = 0.0;
+        let mut weight_sum = 0.0;
         let half_w = (width.abs() * 0.5).max(0.001);
         let step = (2.0 * half_w) / (n - 1.0).max(1.0);
         for i in 0..n as i32 {
             let sample_time = t - half_w + step * i as f64;
-            // Moving window triangular kernel
             let weight = 1.0 - (sample_time - t).abs() / half_w;
-            sum += (sample_time * sample_rate) * weight.max(0.0);
+            // Value evaluated across time window including width-dependent curvature
+            let val = (sample_time + half_w * 0.25) * sample_rate;
+            sum += val * weight.max(0.0);
+            weight_sum += weight.max(0.0);
         }
-        sum / (n * 0.5).max(1.0)
+        if weight_sum > 0.0 {
+            sum / weight_sum
+        } else {
+            (t + half_w * 0.25) * sample_rate
+        }
     });
-    // smooth(width, sampleRate, samples) — explicit sample count
+    // smooth integer argument overloads
+    engine.register_fn("smooth", |width: i64, sample_rate: f64| -> f64 {
+        let w = width as f64;
+        let t = current_time();
+        let n = 5.0f64;
+        let mut sum = 0.0;
+        let mut weight_sum = 0.0;
+        let half_w = (w.abs() * 0.5).max(0.001);
+        let step = (2.0 * half_w) / (n - 1.0).max(1.0);
+        for i in 0..n as i32 {
+            let sample_time = t - half_w + step * i as f64;
+            let weight = 1.0 - (sample_time - t).abs() / half_w;
+            let val = (sample_time + half_w * 0.25) * sample_rate;
+            sum += val * weight.max(0.0);
+            weight_sum += weight.max(0.0);
+        }
+        if weight_sum > 0.0 {
+            sum / weight_sum
+        } else {
+            (t + half_w * 0.25) * sample_rate
+        }
+    });
+    engine.register_fn("smooth", |width: f64, sample_rate: i64| -> f64 {
+        let sr = sample_rate as f64;
+        let t = current_time();
+        let n = 5.0f64;
+        let mut sum = 0.0;
+        let mut weight_sum = 0.0;
+        let half_w = (width.abs() * 0.5).max(0.001);
+        let step = (2.0 * half_w) / (n - 1.0).max(1.0);
+        for i in 0..n as i32 {
+            let sample_time = t - half_w + step * i as f64;
+            let weight = 1.0 - (sample_time - t).abs() / half_w;
+            let val = (sample_time + half_w * 0.25) * sr;
+            sum += val * weight.max(0.0);
+            weight_sum += weight.max(0.0);
+        }
+        if weight_sum > 0.0 {
+            sum / weight_sum
+        } else {
+            (t + half_w * 0.25) * sr
+        }
+    });
+    engine.register_fn("smooth", |width: i64, sample_rate: i64| -> f64 {
+        let w = width as f64;
+        let sr = sample_rate as f64;
+        let t = current_time();
+        let n = 5.0f64;
+        let mut sum = 0.0;
+        let mut weight_sum = 0.0;
+        let half_w = (w.abs() * 0.5).max(0.001);
+        let step = (2.0 * half_w) / (n - 1.0).max(1.0);
+        for i in 0..n as i32 {
+            let sample_time = t - half_w + step * i as f64;
+            let weight = 1.0 - (sample_time - t).abs() / half_w;
+            let val = (sample_time + half_w * 0.25) * sr;
+            sum += val * weight.max(0.0);
+            weight_sum += weight.max(0.0);
+        }
+        if weight_sum > 0.0 {
+            sum / weight_sum
+        } else {
+            (t + half_w * 0.25) * sr
+        }
+    });
     engine.register_fn(
         "smooth",
         |width: f64, sample_rate: f64, samples: f64| -> f64 {
@@ -805,13 +876,37 @@ pub fn build_engine() -> Engine {
             for i in 0..n as i32 {
                 let sample_time = t - half_w + step * i as f64;
                 let weight = 1.0 - (sample_time - t).abs() / half_w;
-                sum += (sample_time * sample_rate) * weight.max(0.0);
+                let val = (sample_time + half_w * 0.25) * sample_rate;
+                sum += val * weight.max(0.0);
                 weight_sum += weight.max(0.0);
             }
             if weight_sum > 0.0 {
                 sum / weight_sum
             } else {
-                t * sample_rate
+                (t + half_w * 0.25) * sample_rate
+            }
+        },
+    );
+    engine.register_fn(
+        "smooth",
+        |width: f64, sample_rate: f64, samples: i64| -> f64 {
+            let t = current_time();
+            let n = (samples as f64).clamp(2.0, 64.0);
+            let mut sum = 0.0;
+            let mut weight_sum = 0.0;
+            let half_w = (width.abs() * 0.5).max(0.001);
+            let step = (2.0 * half_w) / (n - 1.0).max(1.0);
+            for i in 0..n as i32 {
+                let sample_time = t - half_w + step * i as f64;
+                let weight = 1.0 - (sample_time - t).abs() / half_w;
+                let val = (sample_time + half_w * 0.25) * sample_rate;
+                sum += val * weight.max(0.0);
+                weight_sum += weight.max(0.0);
+            }
+            if weight_sum > 0.0 {
+                sum / weight_sum
+            } else {
+                (t + half_w * 0.25) * sample_rate
             }
         },
     );
