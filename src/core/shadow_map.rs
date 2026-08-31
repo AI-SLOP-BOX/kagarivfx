@@ -216,6 +216,52 @@ pub fn calculate_surface_shading(
     [final_r, final_g, final_b, base_color[3]]
 }
 
+/// Calculates Fresnel reflectance using Schlick's approximation for dielectric surfaces.
+pub fn calculate_fresnel_reflectance(view_dir: [f32; 3], normal: [f32; 3], ior: f32) -> f32 {
+    let cos_theta = (view_dir[0] * normal[0] + view_dir[1] * normal[1] + view_dir[2] * normal[2])
+        .abs()
+        .clamp(0.0, 1.0);
+    let n1 = 1.0f32; // air
+    let n2 = ior.max(1.0);
+    let r0 = ((n1 - n2) / (n1 + n2)).powi(2);
+    (r0 + (1.0 - r0) * (1.0 - cos_theta).powi(5)).clamp(0.0, 1.0)
+}
+
+/// Samples an equirectangular 360° HDRI environment map from a 3D reflection or view direction.
+pub fn sample_equirectangular_env_map(
+    dir: [f32; 3],
+    env_pixels: &[u8],
+    env_width: u32,
+    env_height: u32,
+) -> [f32; 3] {
+    if env_pixels.is_empty() || env_width == 0 || env_height == 0 {
+        return [0.0, 0.0, 0.0];
+    }
+
+    let len = (dir[0] * dir[0] + dir[1] * dir[1] + dir[2] * dir[2]).sqrt().max(1e-6);
+    let dx = dir[0] / len;
+    let dy = dir[1] / len;
+    let dz = dir[2] / len;
+
+    // Convert direction vector to spherical coordinates (u, v in 0..1)
+    let u = (dz.atan2(dx) / (2.0 * std::f32::consts::PI) + 0.5).fract();
+    let v = ((-dy).asin() / std::f32::consts::PI + 0.5).clamp(0.0, 1.0);
+
+    let x = (u * (env_width - 1) as f32).clamp(0.0, (env_width - 1) as f32) as usize;
+    let y = (v * (env_height - 1) as f32).clamp(0.0, (env_height - 1) as f32) as usize;
+
+    let idx = (y * env_width as usize + x) * 4;
+    if idx + 2 < env_pixels.len() {
+        [
+            env_pixels[idx] as f32 / 255.0,
+            env_pixels[idx + 1] as f32 / 255.0,
+            env_pixels[idx + 2] as f32 / 255.0,
+        ]
+    } else {
+        [0.0, 0.0, 0.0]
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -235,17 +281,14 @@ mod tests {
     #[test]
     fn test_shadow_map_pcf_sampling() {
         let mut sm = ShadowMap::new(10, 10);
-        // Cast shadow at (5, 5) with depth 10.0
         sm.set_depth(5, 5, 10.0);
 
-        // Point at depth 12.0 behind occluder should be partially in shadow
         let shadow_val = sm.sample_shadow_pcf(5.0, 5.0, 12.0, 0.01);
         assert!(
             shadow_val < 1.0,
             "Point behind occluder must receive shadow"
         );
 
-        // Point in front of occluder (depth 8.0) must be fully lit
         let lit_val = sm.sample_shadow_pcf(5.0, 5.0, 8.0, 0.01);
         assert_eq!(lit_val, 1.0, "Point in front must be 100% lit");
     }
@@ -273,8 +316,8 @@ mod tests {
 
         let shaded = calculate_surface_shading(
             [0.0, 0.0, 0.0],
-            [0.0, 0.0, 1.0],   // Facing camera
-            [0.0, 0.0, 100.0], // Camera in front
+            [0.0, 0.0, 1.0],
+            [0.0, 0.0, 100.0],
             [1.0, 0.5, 0.2, 1.0],
             &mat,
             &[light],
@@ -285,4 +328,15 @@ mod tests {
         assert!(shaded[0] > 0.0 && shaded[0] <= 1.0);
         assert_eq!(shaded[3], 1.0);
     }
+
+    #[test]
+    fn test_fresnel_and_env_map_sampling() {
+        let f = calculate_fresnel_reflectance([0.0, 0.0, 1.0], [0.0, 0.0, 1.0], 1.5);
+        assert!(f >= 0.0 && f <= 1.0);
+
+        let env_pixels = vec![128u8; 4 * 4 * 4];
+        let rgb = sample_equirectangular_env_map([0.0, 0.0, 1.0], &env_pixels, 4, 4);
+        assert!((rgb[0] - 0.5).abs() < 0.1);
+    }
 }
+
