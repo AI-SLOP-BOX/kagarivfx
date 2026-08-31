@@ -75,6 +75,7 @@ pub mod property;
 pub mod proxy;
 pub mod puppet_warp;
 pub mod render_pipeline;
+pub mod render_queue;
 pub mod renderer;
 pub mod rive_runtime;
 pub mod roto_assist;
