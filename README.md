@@ -1,10 +1,10 @@
 # AEVFX Studio (Aether VFX)
 
-[![Rust CI](https://github.com/iwatakoumei/aevfx/actions/workflows/ci.yml/badge.svg)](https://github.com/iwatakoumei/aevfx/actions)
+[![Rust CI](https://github.com/kme20988-wq/aevfx/actions/workflows/ci.yml/badge.svg)](https://github.com/kme20988-wq/aevfx/actions)
 [![License: MIT / Apache 2.0](https://img.shields.io/badge/license-MIT%2FApache--2.0-blue.svg)](#license)
 [![Built with Rust](https://img.shields.io/badge/Built%20with-Rust%20🦀-orange.svg)](https://www.rust-lang.org/)
 
-An experimental, high-performance open-source 2D/3D compositing and motion graphics engine written in Rust, powered by GPU rendering (`wgpu`/Metal), an ergonomic dark GUI (`egui`), and an extensive procedural VFX pipeline.
+A hobby-driven, experimental open-source compositing and motion graphics application written in Rust. Uses `egui` for the UI and `wgpu` for GPU-accelerated preview rendering. Still rough around the edges, but fun to hack on.
 
 ---
 
