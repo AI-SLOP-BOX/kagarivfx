@@ -30,7 +30,11 @@ pub fn apply_polygon_boolean(
     if subject.is_empty() {
         return match op {
             BooleanOp::Union | BooleanOp::Exclude => {
-                if clip.is_empty() { vec![] } else { vec![clip.to_vec()] }
+                if clip.is_empty() {
+                    vec![]
+                } else {
+                    vec![clip.to_vec()]
+                }
             }
             _ => vec![],
         };
@@ -130,7 +134,9 @@ pub fn polygon_subtract(subject: &[[f32; 2]], clip: &[[f32; 2]]) -> Vec<Vec<[f32
             return vec![];
         }
         // Check if clip is an enclosed inner hole inside subject
-        let clip_is_inner_hole = clip.iter().all(|&pt| point_in_polygon(pt[0], pt[1], subject));
+        let clip_is_inner_hole = clip
+            .iter()
+            .all(|&pt| point_in_polygon(pt[0], pt[1], subject));
         if clip_is_inner_hole {
             // Partition region around hole using horizontal bounding band cuts
             let min_y = clip.iter().map(|p| p[1]).fold(f32::INFINITY, f32::min);
@@ -139,15 +145,41 @@ pub fn polygon_subtract(subject: &[[f32; 2]], clip: &[[f32; 2]]) -> Vec<Vec<[f32
             let max_x = clip.iter().map(|p| p[0]).fold(f32::NEG_INFINITY, f32::max);
 
             let sub_min_x = subject.iter().map(|p| p[0]).fold(f32::INFINITY, f32::min);
-            let sub_max_x = subject.iter().map(|p| p[0]).fold(f32::NEG_INFINITY, f32::max);
+            let sub_max_x = subject
+                .iter()
+                .map(|p| p[0])
+                .fold(f32::NEG_INFINITY, f32::max);
             let sub_min_y = subject.iter().map(|p| p[1]).fold(f32::INFINITY, f32::min);
-            let sub_max_y = subject.iter().map(|p| p[1]).fold(f32::NEG_INFINITY, f32::max);
+            let sub_max_y = subject
+                .iter()
+                .map(|p| p[1])
+                .fold(f32::NEG_INFINITY, f32::max);
 
             return vec![
-                vec![[sub_min_x, sub_min_y], [sub_max_x, sub_min_y], [sub_max_x, min_y], [sub_min_x, min_y]], // Bottom
-                vec![[sub_min_x, max_y], [sub_max_x, max_y], [sub_max_x, sub_max_y], [sub_min_x, sub_max_y]], // Top
-                vec![[sub_min_x, min_y], [min_x, min_y], [min_x, max_y], [sub_min_x, max_y]],                 // Left
-                vec![[max_x, min_y], [sub_max_x, min_y], [sub_max_x, max_y], [max_x, max_y]],                 // Right
+                vec![
+                    [sub_min_x, sub_min_y],
+                    [sub_max_x, sub_min_y],
+                    [sub_max_x, min_y],
+                    [sub_min_x, min_y],
+                ], // Bottom
+                vec![
+                    [sub_min_x, max_y],
+                    [sub_max_x, max_y],
+                    [sub_max_x, sub_max_y],
+                    [sub_min_x, sub_max_y],
+                ], // Top
+                vec![
+                    [sub_min_x, min_y],
+                    [min_x, min_y],
+                    [min_x, max_y],
+                    [sub_min_x, max_y],
+                ], // Left
+                vec![
+                    [max_x, min_y],
+                    [sub_max_x, min_y],
+                    [sub_max_x, max_y],
+                    [max_x, max_y],
+                ], // Right
             ];
         }
         return vec![subject.to_vec()];
@@ -201,7 +233,9 @@ pub fn polygon_subtract(subject: &[[f32; 2]], clip: &[[f32; 2]]) -> Vec<Vec<[f32
     }
 
     // Check if clip is an enclosed inner hole (all clip vertices inside subject)
-    let clip_is_inner_hole = clip.iter().all(|&pt| point_in_polygon(pt[0], pt[1], subject));
+    let clip_is_inner_hole = clip
+        .iter()
+        .all(|&pt| point_in_polygon(pt[0], pt[1], subject));
     if clip_is_inner_hole {
         let mut bridged = Vec::new();
         bridged.extend_from_slice(subject);
@@ -352,10 +386,7 @@ pub fn offset_polygon_path(polygon: &[[f32; 2]], delta: f32) -> Vec<[f32; 2]> {
         let nx = dx / len;
         let ny = dy / len;
 
-        offset_poly.push([
-            curr[0] + nx * delta,
-            curr[1] + ny * delta,
-        ]);
+        offset_poly.push([curr[0] + nx * delta, curr[1] + ny * delta]);
     }
 
     offset_poly
@@ -395,10 +426,7 @@ fn line_intersection_edge(
         return None;
     }
     let ua = ((b2[0] - b1[0]) * (a1[1] - b1[1]) - (b2[1] - b1[1]) * (a1[0] - b1[0])) / d;
-    Some([
-        a1[0] + ua * (a2[0] - a1[0]),
-        a1[1] + ua * (a2[1] - a1[1]),
-    ])
+    Some([a1[0] + ua * (a2[0] - a1[0]), a1[1] + ua * (a2[1] - a1[1])])
 }
 
 fn line_segment_intersection(
@@ -416,10 +444,7 @@ fn line_segment_intersection(
     let ub = ((a2[0] - a1[0]) * (a1[1] - b1[1]) - (a2[1] - a1[1]) * (a1[0] - b1[0])) / d;
 
     if (0.001..=0.999).contains(&ua) && (0.001..=0.999).contains(&ub) {
-        Some([
-            a1[0] + ua * (a2[0] - a1[0]),
-            a1[1] + ua * (a2[1] - a1[1]),
-        ])
+        Some([a1[0] + ua * (a2[0] - a1[0]), a1[1] + ua * (a2[1] - a1[1])])
     } else {
         None
     }
@@ -497,6 +522,111 @@ impl CompoundShape2D {
     }
 }
 
+/// Procedural Wiggle Paths Modifier (AE Parity: Add > Wiggle Paths).
+/// Deforms polygon vertices and edges with smooth or jagged pseudo-random motion.
+pub fn apply_wiggle_paths(
+    points: &[[f32; 2]],
+    size: f32,
+    detail: f32,
+    seed: u32,
+    time: f32,
+    is_smooth: bool,
+) -> Vec<[f32; 2]> {
+    if points.is_empty() || size.abs() < 1e-4 {
+        return points.to_vec();
+    }
+
+    let mut out = Vec::with_capacity(points.len() * 2);
+    let n = points.len();
+
+    for i in 0..n {
+        let p = points[i];
+        let next_p = points[(i + 1) % n];
+
+        // Primary vertex displacement
+        let hash_x = ((seed as f32 * 13.37 + i as f32 * 7.19 + time * 2.0).sin() * 43758.5453).fract();
+        let hash_y = ((seed as f32 * 17.13 + i as f32 * 11.31 + time * 2.0).cos() * 23421.6312).fract();
+        let dx = (hash_x - 0.5) * 2.0 * size;
+        let dy = (hash_y - 0.5) * 2.0 * size;
+
+        out.push([p[0] + dx, p[1] + dy]);
+
+        // Intermediate sub-segment subdivision if detail > 1.0
+        let sub_divisions = (detail.round() as usize).clamp(1, 8);
+        if sub_divisions > 1 {
+            for s in 1..sub_divisions {
+                let t = s as f32 / sub_divisions as f32;
+                let mid_x = p[0] + (next_p[0] - p[0]) * t;
+                let mid_y = p[1] + (next_p[1] - p[1]) * t;
+
+                let sub_hash_x = ((seed as f32 * 19.81 + (i * 10 + s) as f32 * 5.73 + time * 2.5).sin() * 37821.12).fract();
+                let sub_hash_y = ((seed as f32 * 23.47 + (i * 10 + s) as f32 * 9.27 + time * 2.5).cos() * 19482.84).fract();
+
+                let sub_dx = (sub_hash_x - 0.5) * 2.0 * size * if is_smooth { 0.5 } else { 1.0 };
+                let sub_dy = (sub_hash_y - 0.5) * 2.0 * size * if is_smooth { 0.5 } else { 1.0 };
+
+                out.push([mid_x + sub_dx, mid_y + sub_dy]);
+            }
+        }
+    }
+
+    out
+}
+
+/// Evaluates Shape Repeater Modifier, generating stacked geometric copies with affine transforms.
+pub fn evaluate_shape_repeater(
+    contours: &[Vec<[f32; 2]>],
+    copies: u32,
+    offset: f32,
+    transform_pos: [f32; 2],
+    transform_scale: [f32; 2],
+    transform_rot_deg: f32,
+    start_opacity: f32,
+    end_opacity: f32,
+) -> Vec<(Vec<[f32; 2]>, f32)> {
+    if contours.is_empty() || copies == 0 {
+        return vec![];
+    }
+
+    let mut result = Vec::with_capacity(contours.len() * copies as usize);
+
+    for c in 0..copies {
+        let copy_index = c as f32 + offset;
+        let progress = if copies > 1 {
+            c as f32 / (copies - 1) as f32
+        } else {
+            0.0
+        };
+        let opacity = (start_opacity + (end_opacity - start_opacity) * progress).clamp(0.0, 1.0);
+
+        let angle_rad = (transform_rot_deg * copy_index).to_radians();
+        let cos_a = angle_rad.cos();
+        let sin_a = angle_rad.sin();
+
+        let sx = transform_scale[0].powf(copy_index);
+        let sy = transform_scale[1].powf(copy_index);
+        let tx = transform_pos[0] * copy_index;
+        let ty = transform_pos[1] * copy_index;
+
+        for contour in contours {
+            let transformed_contour: Vec<[f32; 2]> = contour
+                .iter()
+                .map(|&p| {
+                    let scaled_x = p[0] * sx;
+                    let scaled_y = p[1] * sy;
+                    let rot_x = scaled_x * cos_a - scaled_y * sin_a;
+                    let rot_y = scaled_x * sin_a + scaled_y * cos_a;
+                    [rot_x + tx, rot_y + ty]
+                })
+                .collect();
+
+            result.push((transformed_contour, opacity));
+        }
+    }
+
+    result
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -551,7 +681,10 @@ mod tests {
 
         // Bounds of expanded polygon should be larger
         let min_x = expanded.iter().map(|p| p[0]).fold(f32::INFINITY, f32::min);
-        let max_x = expanded.iter().map(|p| p[0]).fold(f32::NEG_INFINITY, f32::max);
+        let max_x = expanded
+            .iter()
+            .map(|p| p[0])
+            .fold(f32::NEG_INFINITY, f32::max);
         assert!(min_x < 0.0);
         assert!(max_x > 10.0);
     }
@@ -578,7 +711,10 @@ mod tests {
         let subject = vec![[0.0, 0.0], [10.0, 0.0], [10.0, 10.0], [f32::NAN, 10.0]];
         let clip = vec![[2.0, 2.0], [8.0, 2.0], [8.0, 8.0], [2.0, 8.0]];
         let result = std::panic::catch_unwind(|| polygon_subtract(&subject, &clip));
-        assert!(result.is_ok(), "NaN geometry must be rejected or handled safely");
+        assert!(
+            result.is_ok(),
+            "NaN geometry must be rejected or handled safely"
+        );
     }
 
     #[test]
@@ -589,5 +725,32 @@ mod tests {
         assert!(result.iter().any(|p| point_in_polygon(2.0, 2.0, p)));
         assert!(result.iter().any(|p| point_in_polygon(16.0, 16.0, p)));
         assert!(!result.iter().any(|p| point_in_polygon(15.0, 2.0, p)));
+    }
+
+    #[test]
+    fn test_wiggle_paths_deforms_geometry_deterministically() {
+        let sq = vec![[0.0, 0.0], [10.0, 0.0], [10.0, 10.0], [0.0, 10.0]];
+        let wiggled1 = apply_wiggle_paths(&sq, 5.0, 2.0, 42, 1.0, true);
+        let wiggled2 = apply_wiggle_paths(&sq, 5.0, 2.0, 42, 1.0, true);
+        assert_eq!(wiggled1, wiggled2, "Wiggle must be strictly deterministic");
+        assert_ne!(wiggled1[0], sq[0], "Wiggle must displace vertices");
+    }
+
+    #[test]
+    fn test_evaluate_shape_repeater_generates_correct_copy_count() {
+        let sq = vec![[0.0, 0.0], [10.0, 0.0], [10.0, 10.0], [0.0, 10.0]];
+        let copies = evaluate_shape_repeater(
+            &[sq],
+            3,
+            0.0,
+            [20.0, 0.0],
+            [1.0, 1.0],
+            0.0,
+            1.0,
+            0.5,
+        );
+        assert_eq!(copies.len(), 3);
+        assert_eq!(copies[0].1, 1.0);
+        assert_eq!(copies[2].1, 0.5);
     }
 }
