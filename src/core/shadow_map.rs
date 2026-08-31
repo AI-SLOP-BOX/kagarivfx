@@ -99,6 +99,7 @@ pub fn calculate_surface_shading(
     material: &MaterialOptions,
     lights: &[Light3D],
     shadow_map: Option<&ShadowMap>,
+    current_frame: u32,
 ) -> [f32; 4] {
     let mut diffuse_acc = [0.0f32; 3];
     let mut specular_acc = [0.0f32; 3];
@@ -131,7 +132,7 @@ pub fn calculate_surface_shading(
                 ([lx / len, ly / len, lz / len], light.intensity * 0.01)
             }
             LightType::Point => {
-                let lpos = light.position.evaluate(0);
+                let lpos = light.position.evaluate(current_frame);
                 let lx = lpos[0] - world_pos[0];
                 let ly = lpos[1] - world_pos[1];
                 let lz = lpos[2] - world_pos[2];
@@ -143,7 +144,7 @@ pub fn calculate_surface_shading(
                 (l_dir, atten)
             }
             LightType::Spot { cone_angle_deg, .. } => {
-                let lpos = light.position.evaluate(0);
+                let lpos = light.position.evaluate(current_frame);
                 let lx = lpos[0] - world_pos[0];
                 let ly = lpos[1] - world_pos[1];
                 let lz = lpos[2] - world_pos[2];
@@ -278,6 +279,7 @@ mod tests {
             &mat,
             &[light],
             None,
+            0,
         );
 
         assert!(shaded[0] > 0.0 && shaded[0] <= 1.0);
