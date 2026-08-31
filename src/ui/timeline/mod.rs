@@ -42,6 +42,11 @@ pub fn draw(
             }
 
             let mut project_changed = false;
+            let pre_edit_snapshot = if !app.drag_active() && ui.input(|i| i.pointer.any_down()) {
+                Some(app.history.current().clone())
+            } else {
+                None
+            };
             let _compact_mode = ui.ctx().data_mut(|d| {
                 *d.get_temp_mut_or_insert_with(egui::Id::new("ae_compact_timeline"), || false)
             });
@@ -50,6 +55,7 @@ pub fn draw(
             // Context-menu actions deferred to after the layer loop (borrow-safe)
             let mut pending_dup_layer: Option<usize> = None;
             let mut pending_split_layer: Option<usize> = None;
+            let mut pending_create_shapes: Option<usize> = None;
             let mut pending_layer_marker: Option<usize> = None;
             let mut pending_clear_markers: Option<usize> = None;
             let mut pending_select_all_kfs: Option<usize> = None;
@@ -120,6 +126,12 @@ pub fn draw(
 
             ui.add_space(2.0);
 
+            let mut automation_curve = app
+                .production_document
+                .as_ref()
+                .and_then(|document| app.selected_automation_binding
+                    .and_then(|index| document.bindings.get(index)))
+                .map(|binding| binding.curve.clone());
             let temp_project = app.history.current_mut();
 
             // Dual Mode: Graph Editor (Curves) & Node Graph (Network Pipeline)
@@ -141,8 +153,20 @@ pub fn draw(
                     if let Some(layer) = temp_project.active_composition_mut().layers.get_mut(selected_idx) {
                         crate::ui::graph_editor::draw_graph_editor(&mut app.selected_property, ui, duration_f, layer, &mut project_changed, &mut app.linked_tangent);
                     }
+                    if let Some(curve) = automation_curve.as_mut() {
+                        crate::ui::graph_editor::draw_automation_curve(ui, curve, &mut project_changed);
+                    }
                 } else {
                     ui.label("Select a layer to edit keyframe curves in Graph Editor");
+                }
+                if let (Some(curve), Some(index), Some(document)) = (
+                    automation_curve,
+                    app.selected_automation_binding,
+                    app.production_document.as_mut(),
+                ) {
+                    if let Some(binding) = document.bindings.get_mut(index) {
+                        binding.curve = curve;
+                    }
                 }
                 return;
             }
@@ -795,7 +819,7 @@ let type_icon = crate::ui::icons::layer_icon(&layer.layer_type);
                                         (label_rgb[1] * 255.0) as u8,
                                         (label_rgb[2] * 255.0) as u8,
                                     );
-                                    
+
                                     ui.style_mut().visuals.override_text_color = Some(text_color);
                                     let click_resp = ui.selectable_label(is_selected, &layer.name);
 
@@ -898,6 +922,12 @@ let type_icon = crate::ui::icons::layer_icon(&layer.layer_type);
                                             app.selected_layer_idx = Some(i);
                                             app.show_precompose_dialog = true;
                                             ui.close_menu();
+                                        }
+                                        if matches!(layer.layer_type, crate::core::timeline::LayerType::Text { .. }) {
+                                            if ui.button("🔤 Create Shapes from Text").on_hover_text("Decompose this Text layer into animatable vector Bezier Shape paths").clicked() {
+                                                pending_create_shapes = Some(i);
+                                                ui.close_menu();
+                                            }
                                         }
                                         if ui.button("🧊 Toggle 3D Layer").on_hover_text("Switch this layer between 2D and 3D").clicked() {
                                             layer.is_3d = !layer.is_3d;
@@ -1200,10 +1230,10 @@ let type_icon = crate::ui::icons::layer_icon(&layer.layer_type);
                                      );
                                 }
                             }
-                            
+
                             let norm_in = (layer.in_frame.saturating_sub(start_frame)) as f32 / zoom_span as f32;
                             let norm_out = (layer.out_frame.saturating_sub(start_frame)) as f32 / zoom_span as f32;
-                            
+
                             let layer_rect = egui::Rect::from_min_max(
                                 egui::pos2(bar_rect.left() + norm_in * bar_rect.width(), bar_rect.top() + 3.0),
                                 egui::pos2(bar_rect.left() + norm_out * bar_rect.width(), bar_rect.bottom() - 3.0),
@@ -1716,11 +1746,33 @@ let type_icon = crate::ui::icons::layer_icon(&layer.layer_type);
                 }
             }
 
+            // ── Apply pending Create Shapes from Text ──
+            if let Some(idx) = pending_create_shapes {
+                let comp_mut = app.history.current_mut().active_composition_mut();
+                if idx < comp_mut.layers.len() {
+                    if let Some(shape_layer) = crate::core::text_to_shapes::convert_text_to_shapes(
+                        &comp_mut.layers[idx],
+                        comp_mut.width,
+                        comp_mut.height,
+                    ) {
+                        let name = comp_mut.layers[idx].name.clone();
+                        comp_mut.layers.insert(idx, shape_layer);
+                        app.toasts.info(format!("🔤 Created shapes from '{}'", name));
+                        project_changed = true;
+                    }
+                }
+            }
+
             if project_changed {
                 // Transactional undo commit: snapshot on pointer-down, single entry on release
                 let is_pointer_down = ui.input(|i| i.pointer.any_down());
                 if is_pointer_down {
-                    app.begin_drag("Timeline Edit");
+                    let edit_label = if app.show_graph_editor { "Graph Editor Edit" } else { "Timeline Edit" };
+                    if let Some(snapshot) = pre_edit_snapshot {
+                        app.begin_drag_with_snapshot(snapshot, edit_label);
+                    } else if !app.drag_active() {
+                        app.begin_drag(edit_label);
+                    }
                 } else {
                     app.commit_drag();
                 }

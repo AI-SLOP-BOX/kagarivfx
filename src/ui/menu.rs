@@ -987,6 +987,29 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
                     ui.close_menu();
                 }
                 ui.separator();
+                if ui.button("🔤 Create Shapes from Text").on_hover_text("Decompose selected Text layer into animatable vector Bezier Shape paths").clicked() {
+                    let mut created = false;
+                    let selected_idx = app.selected_layer_idx;
+                    app.modify_project(|p| {
+                        let comp = p.active_composition_mut();
+                        if let Some(idx) = selected_idx {
+                            if idx < comp.layers.len() {
+                                if let Some(shape_layer) = crate::core::text_to_shapes::convert_text_to_shapes(&comp.layers[idx], comp.width, comp.height) {
+                                    comp.layers.insert(idx, shape_layer);
+                                    created = true;
+                                }
+                            }
+                        }
+                    });
+                    if created {
+                        crate::core::frame_cache::bump_version();
+                        app.toasts.info("🔤 Created Shapes from Text layer");
+                    } else {
+                        app.toasts.warning("Please select a Text layer first");
+                    }
+                    ui.close_menu();
+                }
+                ui.separator();
                 if ui.add(egui::Button::new("Pre-Compose...").shortcut_text("Cmd+Shift+C")).clicked() {
                     ui.close_menu();
                 }
