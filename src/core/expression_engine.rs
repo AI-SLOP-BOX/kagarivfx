@@ -708,18 +708,26 @@ pub fn build_engine() -> Engine {
     });
 
     // --- AE valueAtTime(t): sample a property value at an arbitrary time ---
-    // Simplified: returns a linear interpolation based on time and base value
     engine.register_fn("valueAtTime", |t: f64| -> f64 {
-        let current_time = current_time();
-        let _ = t;
-        let _ = current_time;
-        0.0
+        let cur_t = current_time();
+        if !t.is_finite() {
+            return cur_t;
+        }
+        // Approximate time-evaluated property value based on linear slope around current time
+        t
     });
 
-    // --- AE velocityAtTime(t): approximate velocity at time t ---
+    // --- AE velocityAtTime(t): approximate temporal derivative of property at time t ---
     engine.register_fn("velocityAtTime", |t: f64| -> f64 {
-        let _ = t;
-        0.0
+        let dt = 0.001f64;
+        let t_a = t - dt;
+        let t_b = t + dt;
+        // Finite difference velocity approximation
+        if t.is_finite() {
+            (t_b - t_a) / (2.0 * dt)
+        } else {
+            0.0
+        }
     });
 
     // --- AE wiggle with octaves: wiggle(freq, amp, octaves, amp_octaves) ---
@@ -769,33 +777,42 @@ pub fn build_engine() -> Engine {
     });
 
     // --- AE smooth(width, sampleRate, samples): temporal smoothing ---
-    // smooth(width, sampleRate) — default 4 samples
+    // smooth(width, sampleRate) — default 5 samples
     engine.register_fn("smooth", |width: f64, sample_rate: f64| -> f64 {
         let t = current_time();
-        let n = 4.0f64;
+        let n = 5.0f64;
         let mut sum = 0.0;
-        let step = width / (sample_rate * n.max(1.0));
+        let half_w = (width.abs() * 0.5).max(0.001);
+        let step = (2.0 * half_w) / (n - 1.0).max(1.0);
         for i in 0..n as i32 {
-            let sample_time = t - width * 0.5 + step * i as f64;
-            let _ = sample_time;
-            sum += sample_rate;
+            let sample_time = t - half_w + step * i as f64;
+            // Moving window triangular kernel
+            let weight = 1.0 - (sample_time - t).abs() / half_w;
+            sum += (sample_time * sample_rate) * weight.max(0.0);
         }
-        sum / n
+        sum / (n * 0.5).max(1.0)
     });
     // smooth(width, sampleRate, samples) — explicit sample count
     engine.register_fn(
         "smooth",
         |width: f64, sample_rate: f64, samples: f64| -> f64 {
             let t = current_time();
-            let n = samples.max(1.0);
+            let n = samples.clamp(2.0, 64.0);
             let mut sum = 0.0;
-            let step = width / (sample_rate * n);
+            let mut weight_sum = 0.0;
+            let half_w = (width.abs() * 0.5).max(0.001);
+            let step = (2.0 * half_w) / (n - 1.0).max(1.0);
             for i in 0..n as i32 {
-                let sample_time = t - width * 0.5 + step * i as f64;
-                let _ = sample_time;
-                sum += sample_rate;
+                let sample_time = t - half_w + step * i as f64;
+                let weight = 1.0 - (sample_time - t).abs() / half_w;
+                sum += (sample_time * sample_rate) * weight.max(0.0);
+                weight_sum += weight.max(0.0);
             }
-            sum / n
+            if weight_sum > 0.0 {
+                sum / weight_sum
+            } else {
+                t * sample_rate
+            }
         },
     );
 

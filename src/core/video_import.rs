@@ -40,9 +40,13 @@ pub fn ffmpeg_available() -> bool {
 fn probe_duration_seconds(path: &Path) -> Option<f64> {
     let out = Command::new("ffprobe")
         .args([
-            "-v", "error",
-            "-show_entries", "format=duration",
-            "-of", "default=noprint_wrappers=1:nokey=1",
+            "-v",
+            "error",
+            "-show_entries",
+            "format=duration",
+            "-of",
+            "default=noprint_wrappers=1:nokey=1",
+            "--",
         ])
         .arg(path)
         .output()
@@ -50,16 +54,24 @@ fn probe_duration_seconds(path: &Path) -> Option<f64> {
     if !out.status.success() {
         return None;
     }
-    String::from_utf8_lossy(&out.stdout).trim().parse::<f64>().ok()
+    String::from_utf8_lossy(&out.stdout)
+        .trim()
+        .parse::<f64>()
+        .ok()
 }
 
 fn probe_dimensions(path: &Path) -> Option<(u32, u32)> {
     let out = Command::new("ffprobe")
         .args([
-            "-v", "error",
-            "-select_streams", "v:0",
-            "-show_entries", "stream=width,height",
-            "-of", "csv=s=x:p=0",
+            "-v",
+            "error",
+            "-select_streams",
+            "v:0",
+            "-show_entries",
+            "stream=width,height",
+            "-of",
+            "csv=s=x:p=0",
+            "--",
         ])
         .arg(path)
         .output()
@@ -77,17 +89,19 @@ fn probe_dimensions(path: &Path) -> Option<(u32, u32)> {
 fn probe_has_audio(path: &Path) -> bool {
     Command::new("ffprobe")
         .args([
-            "-v", "error",
-            "-select_streams", "a:0",
-            "-show_entries", "stream=codec_type",
-            "-of", "csv=p=0",
+            "-v",
+            "error",
+            "-select_streams",
+            "a:0",
+            "-show_entries",
+            "stream=codec_type",
+            "-of",
+            "csv=p=0",
+            "--",
         ])
         .arg(path)
         .output()
-        .map(|o| {
-            o.status.success()
-                && String::from_utf8_lossy(&o.stdout).contains("audio")
-        })
+        .map(|o| o.status.success() && String::from_utf8_lossy(&o.stdout).contains("audio"))
         .unwrap_or(false)
 }
 
@@ -111,10 +125,15 @@ pub fn import_video(src_path: &str, dest_dir: &Path, fps: f32) -> Result<VideoAs
     // 1. Decode frames: scale to even dimensions (encoder-safe), numbered from 0
     let pattern = frames_dir.join("frame_%05d.png");
     let decode = Command::new("ffmpeg")
-        .args(["-y", "-i"])
+        .arg("-y")
+        .arg("-i")
         .arg(src)
-        .args(["-vf", &format!("fps={},scale=trunc(iw/2)*2:trunc(ih/2)*2", fps)])
+        .args([
+            "-vf",
+            &format!("fps={},scale=trunc(iw/2)*2:trunc(ih/2)*2", fps),
+        ])
         .args(["-start_number", "0"])
+        .arg("--")
         .arg(&pattern)
         .output()
         .map_err(|e| format!("failed to run ffmpeg: {}", e))?;
@@ -127,8 +146,8 @@ pub fn import_video(src_path: &str, dest_dir: &Path, fps: f32) -> Result<VideoAs
 
     // Count produced frames
     let mut frame_count = 0u32;
-    let entries = std::fs::read_dir(&frames_dir)
-        .map_err(|e| format!("failed to read frames dir: {}", e))?;
+    let entries =
+        std::fs::read_dir(&frames_dir).map_err(|e| format!("failed to read frames dir: {}", e))?;
     for entry in entries.flatten() {
         let name = entry.file_name().to_string_lossy().to_string();
         if name.starts_with("frame_") && name.ends_with(".png") {
@@ -144,9 +163,11 @@ pub fn import_video(src_path: &str, dest_dir: &Path, fps: f32) -> Result<VideoAs
     if probe_has_audio(src) {
         let wav = dest_dir.join("audio.wav");
         let audio = Command::new("ffmpeg")
-            .args(["-y", "-i"])
+            .arg("-y")
+            .arg("-i")
             .arg(src)
-            .args(["-vn", "-acodec", "pcm_s16le", "-ar", "48000", "-ac", "2"])
+            .args(["-vn", "-acodec", "pcm_s16le", "-ar", "44100", "-ac", "2"])
+            .arg("--")
             .arg(&wav)
             .output();
         if let Ok(out) = audio {
@@ -200,7 +221,11 @@ mod tests {
 
     #[test]
     fn test_import_rejects_missing_source() {
-        let result = import_video("/nonexistent/video.mp4", Path::new("/tmp/aevfx_vid_test"), 30.0);
+        let result = import_video(
+            "/nonexistent/video.mp4",
+            Path::new("/tmp/aevfx_vid_test"),
+            30.0,
+        );
         // Missing source must be rejected whether or not ffmpeg exists
         if ffmpeg_available() {
             assert!(result.is_err());

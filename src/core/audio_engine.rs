@@ -32,7 +32,7 @@ impl AudioBuffer {
         }
     }
 
-    /// Resample PCM audio samples to match destination sample rate (e.g. 44.1kHz -> 48kHz).
+    /// Resample PCM audio samples to match destination sample rate with linear interpolation.
     #[allow(dead_code)]
     pub fn resample(&self, target_sample_rate: u32) -> Self {
         if self.sample_rate == target_sample_rate
@@ -48,14 +48,18 @@ impl AudioBuffer {
         let mut out = Vec::with_capacity(new_frames * 2);
 
         for i in 0..new_frames {
-            let src_idx = (i as f64 * ratio) as usize * 2;
-            if src_idx + 1 < self.samples.len() {
-                out.push(self.samples[src_idx]);
-                out.push(self.samples[src_idx + 1]);
-            } else {
-                out.push(0.0);
-                out.push(0.0);
-            }
+            let src_f = i as f64 * ratio;
+            let idx0 = src_f.floor() as usize;
+            let idx1 = (idx0 + 1).min((self.samples.len() / 2).saturating_sub(1));
+            let frac = (src_f - idx0 as f64) as f32;
+
+            let l0 = self.samples.get(idx0 * 2).copied().unwrap_or(0.0);
+            let r0 = self.samples.get(idx0 * 2 + 1).copied().unwrap_or(l0);
+            let l1 = self.samples.get(idx1 * 2).copied().unwrap_or(l0);
+            let r1 = self.samples.get(idx1 * 2 + 1).copied().unwrap_or(r0);
+
+            out.push(l0 + (l1 - l0) * frac);
+            out.push(r0 + (r1 - r0) * frac);
         }
         Self {
             samples: out,
