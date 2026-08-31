@@ -15,7 +15,9 @@ impl MltExporter {
     pub fn export_to_xml(comp: &Composition) -> String {
         let mut xml = String::with_capacity(4096);
         xml.push_str("<?xml version=\"1.0\" standalone=\"no\"?>\n");
-        xml.push_str("<mlt LC_NUMERIC=\"C\" version=\"7.0.0\" title=\"Exported from AfterEffects OSS\">\n");
+        xml.push_str(
+            "<mlt LC_NUMERIC=\"C\" version=\"7.0.0\" title=\"Exported from AfterEffects OSS\">\n",
+        );
         xml.push_str("  <profile description=\"automatic\" ");
         xml.push_str(&format!(
             "width=\"{}\" height=\"{}\" progressive=\"1\" ",
@@ -48,30 +50,52 @@ impl MltExporter {
                 LayerType::Solid { color } => {
                     // Solids become color producers so the grade survives roundtrip
                     let _ = color;
-                    Some(format!("color:{:02x}{:02x}{:02x}",
-                        (layer.label.to_rgb()[0] * 255.0) as u8, 0, 0))
+                    Some(format!(
+                        "color:{:02x}{:02x}{:02x}",
+                        (layer.label.to_rgb()[0] * 255.0) as u8,
+                        0,
+                        0
+                    ))
                 }
                 _ => None,
             };
             let Some(resource) = resource else { continue };
             let pid = format!("producer{}", idx);
-            let mlt_len = Self::timecode((layer.out_frame as f32 / comp.fps.max(1) as f32).max(0.04), comp.fps as f32);
-            xml.push_str(&format!("  <producer id=\"{}\" in=\"00:00:00.000\" out=\"{}\">\n", pid, mlt_len));
-            xml.push_str(&format!("    <property name=\"length\">{}</property>\n", mlt_len));
-            xml.push_str(&format!("    <property name=\"resource\">{}</property>\n", escape_xml(&resource)));
+            let mlt_len = Self::timecode(
+                (layer.out_frame as f32 / comp.fps.max(1) as f32).max(0.04),
+                comp.fps as f32,
+            );
+            xml.push_str(&format!(
+                "  <producer id=\"{}\" in=\"00:00:00.000\" out=\"{}\">\n",
+                pid, mlt_len
+            ));
+            xml.push_str(&format!(
+                "    <property name=\"length\">{}</property>\n",
+                mlt_len
+            ));
+            xml.push_str(&format!(
+                "    <property name=\"resource\">{}</property>\n",
+                escape_xml(&resource)
+            ));
             let service = match &layer.layer_type {
                 LayerType::Solid { .. } => "color".to_string(),
                 LayerType::Audio { .. } => "avformat-novalidate".to_string(),
                 _ => "avformat".to_string(),
             };
-            xml.push_str(&format!("    <property name=\"mlt_service\">{}</property>\n", service));
+            xml.push_str(&format!(
+                "    <property name=\"mlt_service\">{}</property>\n",
+                service
+            ));
             if let LayerType::Audio { volume, .. } = &layer.layer_type {
                 xml.push_str(&format!(
                     "    <property name=\"volume\">{}</property>\n",
                     10.0f32.powf(volume.evaluate(0) / 20.0)
                 ));
             }
-            xml.push_str(&format!("    <property name=\"name\">{}</property>\n", escape_xml(&layer.name)));
+            xml.push_str(&format!(
+                "    <property name=\"name\">{}</property>\n",
+                escape_xml(&layer.name)
+            ));
             xml.push_str("  </producer>\n");
             producer_count += 1;
         }
@@ -85,7 +109,10 @@ impl MltExporter {
         for (idx, layer) in comp.layers.iter().enumerate() {
             let has_media = matches!(
                 &layer.layer_type,
-                LayerType::Image { .. } | LayerType::Video { .. } | LayerType::Audio { .. } | LayerType::Solid { .. }
+                LayerType::Image { .. }
+                    | LayerType::Video { .. }
+                    | LayerType::Audio { .. }
+                    | LayerType::Solid { .. }
             );
             if !has_media {
                 continue;
@@ -146,12 +173,19 @@ mod tests {
     #[test]
     fn test_mlt_export_structure() {
         let mut comp = Composition::new("c1".into(), "MLTTest".into(), 640, 360, 30, 90);
-        let bg = Layer::new("bg".into(), "BG".into(), LayerType::Solid { color: [0.2; 4] }, 30);
+        let bg = Layer::new(
+            "bg".into(),
+            "BG".into(),
+            LayerType::Solid { color: [0.2; 4] },
+            30,
+        );
         comp.layers.push(bg);
         let img = Layer::new(
             "img".into(),
             "Logo <v1>".into(),
-            LayerType::Image { path: "/tmp/art&work.png".into() },
+            LayerType::Image {
+                path: "/tmp/art&work.png".into(),
+            },
             30,
         );
         let _ = Animatable::<f32>::new_constant(0.0);
@@ -163,7 +197,10 @@ mod tests {
         assert!(xml.contains("width=\"640\" height=\"360\""), "profile dims");
         assert!(xml.contains("frame_rate_num=\"30\""));
         // XML escaping
-        assert!(xml.contains("/tmp/art&amp;work.png"), "special chars escaped");
+        assert!(
+            xml.contains("/tmp/art&amp;work.png"),
+            "special chars escaped"
+        );
         assert!(xml.contains("Logo &lt;v1&gt;"), "names escaped");
         // Producer and entry present
         assert!(xml.contains("id=\"producer1\""));
@@ -227,7 +264,9 @@ pub fn import_from_mlt(xml: &str, fps: u32) -> Result<Vec<MltImportedClip>, Stri
         std::collections::HashMap::new();
     let mut rest = xml;
     while let Some(start) = rest.find("<producer ") {
-        let Some(tag_end) = rest[start..].find('>').map(|i| start + i) else { break; };
+        let Some(tag_end) = rest[start..].find('>').map(|i| start + i) else {
+            break;
+        };
         // Self-closing producers carry no properties
         if rest[..tag_end].ends_with('/') {
             rest = &rest[tag_end..];
@@ -240,7 +279,9 @@ pub fn import_from_mlt(xml: &str, fps: u32) -> Result<Vec<MltImportedClip>, Stri
             .and_then(|s| s.split('"').next())
             .unwrap_or("")
             .to_string();
-        let Some(body_end) = rest[tag_end..].find("</producer>").map(|i| tag_end + i) else { break; };
+        let Some(body_end) = rest[tag_end..].find("</producer>").map(|i| tag_end + i) else {
+            break;
+        };
         let body = &rest[tag_end..body_end];
         let get_prop = |key: &str| -> String {
             body.split(&format!("name=\"{}\"", key))
@@ -252,7 +293,11 @@ pub fn import_from_mlt(xml: &str, fps: u32) -> Result<Vec<MltImportedClip>, Stri
         };
         producers.insert(
             id,
-            (get_prop("resource"), get_prop("name"), get_prop("mlt_service")),
+            (
+                get_prop("resource"),
+                get_prop("name"),
+                get_prop("mlt_service"),
+            ),
         );
         rest = &rest[body_end..];
     }
@@ -261,7 +306,9 @@ pub fn import_from_mlt(xml: &str, fps: u32) -> Result<Vec<MltImportedClip>, Stri
     let mut clips = Vec::new();
     let mut rest = xml;
     while let Some(start) = rest.find("<entry ") {
-        let Some(tag_end) = rest[start..].find('>').map(|i| start + i) else { break; };
+        let Some(tag_end) = rest[start..].find('>').map(|i| start + i) else {
+            break;
+        };
         let header = &rest[start..tag_end];
         let producer_id = header
             .split("producer=\"")
@@ -278,7 +325,9 @@ pub fn import_from_mlt(xml: &str, fps: u32) -> Result<Vec<MltImportedClip>, Stri
             rest = &rest[tag_end..];
             continue;
         }
-        let Some(body_end) = rest[tag_end..].find("</entry>").map(|i| tag_end + i) else { break; };
+        let Some(body_end) = rest[tag_end..].find("</entry>").map(|i| tag_end + i) else {
+            break;
+        };
         let body = &rest[tag_end..body_end];
         let name = body
             .split("name=\"name\"")
@@ -298,7 +347,11 @@ pub fn import_from_mlt(xml: &str, fps: u32) -> Result<Vec<MltImportedClip>, Stri
         };
         let out_frames = timecode_to_frames(out_tc, fps);
         let name = if name.is_empty() || name == "Imported Clip" {
-            if prod_name.is_empty() { producer_id.to_string() } else { prod_name.clone() }
+            if prod_name.is_empty() {
+                producer_id.to_string()
+            } else {
+                prod_name.clone()
+            }
         } else {
             name
         };
@@ -312,7 +365,10 @@ pub fn import_from_mlt(xml: &str, fps: u32) -> Result<Vec<MltImportedClip>, Stri
     }
 
     if clips.is_empty() {
-        return Err(format!("MLT document contains no media entries (producers: {})", producers.len()));
+        return Err(format!(
+            "MLT document contains no media entries (producers: {})",
+            producers.len()
+        ));
     }
     Ok(clips)
 }
@@ -336,6 +392,65 @@ fn unescape_xml(s: &str) -> String {
         .replace("&lt;", "<")
         .replace("&gt;", ">")
         .replace("&quot;", "\"")
+}
+
+/// OpenShot Project (.osp) Exporter for OpenShot video editor interoperability.
+pub struct OpenShotExporter;
+
+impl OpenShotExporter {
+    /// Serializes composition layers into OpenShot (.osp) project JSON.
+    pub fn export_to_json(comp: &Composition) -> Result<String, String> {
+        let mut files = Vec::new();
+        let mut clips = Vec::new();
+
+        for (idx, layer) in comp.layers.iter().enumerate() {
+            let path = match &layer.layer_type {
+                LayerType::Image { path } => Some(path.clone()),
+                LayerType::Video { source, .. } => Some(source.clone()),
+                LayerType::Audio { path, .. } => Some(path.clone()),
+                _ => None,
+            };
+
+            if let Some(resource_path) = path {
+                let file_id = format!("file_{}", idx);
+                let duration_sec = (layer.out_frame as f64 - layer.in_frame as f64) / comp.fps.max(1) as f64;
+                let position_sec = layer.in_frame as f64 / comp.fps.max(1) as f64;
+
+                files.push(serde_json::json!({
+                    "id": file_id,
+                    "path": resource_path,
+                    "media_type": if matches!(layer.layer_type, LayerType::Audio { .. }) { "audio" } else { "video" },
+                    "width": comp.width,
+                    "height": comp.height,
+                    "fps": {"num": comp.fps, "den": 1},
+                }));
+
+                clips.push(serde_json::json!({
+                    "file_id": file_id,
+                    "layer": idx + 1,
+                    "position": position_sec,
+                    "start": 0.0,
+                    "end": duration_sec,
+                    "scale": 1.0,
+                    "alpha": {"Points": [{"co": {"X": 1.0, "Y": 1.0}}]},
+                }));
+            }
+        }
+
+        let osp = serde_json::json!({
+            "width": comp.width,
+            "height": comp.height,
+            "fps": {"num": comp.fps, "den": 1},
+            "sample_rate": 48000,
+            "channels": 2,
+            "channel_layout": 3,
+            "files": files,
+            "clips": clips,
+            "layers": [{"number": 1, "y": 0, "label": "Track 1"}],
+        });
+
+        serde_json::to_string_pretty(&osp).map_err(|e| format!("Failed to serialize OpenShot JSON: {}", e))
+    }
 }
 
 #[cfg(test)]
@@ -402,5 +517,27 @@ mod import_tests {
         assert_eq!(clips.len(), 1);
         assert_eq!(clips[0].resource, "/media/clip.mp4");
         assert_eq!(clips[0].name, "Clip");
+    }
+
+    #[test]
+    fn test_openshot_export_json_structure() {
+        let mut comp = Composition::new("c".into(), "OS".into(), 1920, 1080, 30, 60);
+        let vid = Layer::new(
+            "v".into(),
+            "Shot".into(),
+            LayerType::Video {
+                source: "/path/video.mp4".into(),
+                frames_dir: "/tmp/f".into(),
+                frame_count: 60,
+                audio_wav: None,
+                speed: 1.0,
+            },
+            30,
+        );
+        comp.layers.push(vid);
+        let json = OpenShotExporter::export_to_json(&comp).expect("OpenShot export succeeds");
+        assert!(json.contains("\"width\": 1920"));
+        assert!(json.contains("/path/video.mp4"));
+        assert!(json.contains("\"media_type\": \"video\""));
     }
 }
