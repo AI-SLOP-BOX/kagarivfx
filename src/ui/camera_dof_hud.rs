@@ -1,8 +1,11 @@
-use eframe::egui;
-use crate::AfterEffectsApp;
 use crate::core::property::Animatable;
+use crate::AfterEffectsApp;
+use eframe::egui;
 
 pub fn draw_camera_dof_hud(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
+    let mut project_changed = false;
+    let current_f = app.current_frame;
+
     ui.horizontal(|ui| {
         ui.style_mut().spacing.item_spacing.x = 4.0;
         ui.small("📷 3D DoF:");
@@ -10,69 +13,105 @@ pub fn draw_camera_dof_hud(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
         let selected_idx = app.selected_layer_idx;
 
         // 1. Auto-Focus to Selected Layer Button
-        if ui.button("🎯 Focus to Layer").on_hover_text("Auto-calculate Focus Distance to selected 3D Layer").clicked() {
+        if ui
+            .button("🎯 Focus to Layer")
+            .on_hover_text("Auto-calculate Focus Distance to selected 3D Layer")
+            .clicked()
+        {
             let target_info = if let Some(idx) = selected_idx {
                 let comp = app.history.current().active_composition();
                 if idx < comp.layers.len() {
-                    let target_pos = comp.layers[idx].transform.position.evaluate(app.current_frame);
-                    let distance = (target_pos[0].powi(2) + target_pos[1].powi(2)).sqrt().max(10.0);
-                    Some((idx, comp.layers[idx].name.clone(), target_pos, distance))
-                } else { None }
-            } else { None };
-
-            if let Some((_idx, layer_name, target_pos, distance)) = target_info {
-                let mut temp_proj = app.history.current().clone();
-                let comp_mut = temp_proj.active_composition_mut();
-                if let Some(camera_layer) = comp_mut.layers.iter_mut().find(|l| matches!(l.layer_type, crate::core::timeline::LayerType::Null)) {
-                    camera_layer.transform.position = Animatable::new_constant([target_pos[0], target_pos[1]]);
+                    let target_pos = comp.layers[idx]
+                        .transform
+                        .position
+                        .evaluate(current_f);
+                    let distance = (target_pos[0].powi(2) + target_pos[1].powi(2))
+                        .sqrt()
+                        .max(10.0);
+                    Some((comp.layers[idx].name.clone(), distance))
+                } else {
+                    None
                 }
-                app.history.commit(temp_proj);
-                crate::core::frame_cache::bump_version();
-                app.toasts.info(format!("Focused 3D Camera to {} ({:.0}px)", layer_name, distance));
+            } else {
+                None
+            };
+
+            if let Some((layer_name, distance)) = target_info {
+                let temp_proj = app.history.current_mut();
+                let comp_mut = temp_proj.active_composition_mut();
+                if let Some(cam) = comp_mut.cameras.iter_mut().find(|c| c.active) {
+                    cam.focus_distance = distance;
+                    cam.dof_enabled = true;
+                    project_changed = true;
+                }
+                app.toasts.info(format!(
+                    "Focused 3D Camera to '{}' ({:.0}px)",
+                    layer_name, distance
+                ));
             }
         }
 
-        // 2. Quick Bokeh Aperture Adjuster
-        ui.label(egui::RichText::new("Aperture:").small());
-        let mut mock_aperture = ui.ctx().data(|d| d.get_temp::<f32>(egui::Id::new("dof_aperture")).unwrap_or(25.0));
-        if ui.add(egui::Slider::new(&mut mock_aperture, 0.0..=150.0).suffix(" px").show_value(true)).changed() {
-            ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("dof_aperture"), mock_aperture));
-            crate::core::frame_cache::bump_version();
-        }
+        // 2. DoF Enabled Checkbox
+        let comp = app.history.current_mut().active_composition_mut();
+        if let Some(cam) = comp.cameras.iter_mut().find(|c| c.active) {
+            if ui.checkbox(&mut cam.dof_enabled, "DoF").changed() {
+                project_changed = true;
+            }
 
-        // 3. Bokeh Iris Shape
-        ui.label(egui::RichText::new("Iris:").small());
-        let mut bokeh_shape = ui.ctx().data(|d| d.get_temp::<i32>(egui::Id::new("dof_bokeh_shape")).unwrap_or(0));
-        egui::ComboBox::from_id_salt("bokeh_shape_combo")
-            .selected_text(match bokeh_shape {
-                0 => "Round",
-                1 => "5-Blade",
-                2 => "6-Blade",
-                3 => "8-Blade",
-                4 => "Cat's Eye",
-                _ => "Round",
-            })
-            .show_ui(ui, |ui| {
-                if ui.selectable_value(&mut bokeh_shape, 0, "Round (Circular)").clicked() { ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("dof_bokeh_shape"), 0)); crate::core::frame_cache::bump_version(); }
-                if ui.selectable_value(&mut bokeh_shape, 1, "5-Blade (Pentagon)").clicked() { ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("dof_bokeh_shape"), 1)); crate::core::frame_cache::bump_version(); }
-                if ui.selectable_value(&mut bokeh_shape, 2, "6-Blade (Hexagon)").clicked() { ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("dof_bokeh_shape"), 2)); crate::core::frame_cache::bump_version(); }
-                if ui.selectable_value(&mut bokeh_shape, 3, "8-Blade (Octagon)").clicked() { ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("dof_bokeh_shape"), 3)); crate::core::frame_cache::bump_version(); }
-                if ui.selectable_value(&mut bokeh_shape, 4, "Cat's Eye (Anamorphic)").clicked() { ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("dof_bokeh_shape"), 4)); crate::core::frame_cache::bump_version(); }
-            });
+            ui.label(egui::RichText::new("Aperture:").small());
+            if ui
+                .add(
+                    egui::Slider::new(&mut cam.aperture, 0.0..=150.0)
+                        .suffix(" px")
+                        .show_value(true),
+                )
+                .changed()
+            {
+                project_changed = true;
+            }
 
-        // 4. F-Stop and Blur Level
-        ui.label(egui::RichText::new("F-Stop:").small());
-        let mut f_stop = ui.ctx().data(|d| d.get_temp::<f32>(egui::Id::new("dof_f_stop")).unwrap_or(2.8));
-        if ui.add(egui::DragValue::new(&mut f_stop).range(1.0..=22.0).speed(0.1).prefix("f/")).changed() {
-            ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("dof_f_stop"), f_stop));
-            crate::core::frame_cache::bump_version();
-        }
+            ui.label(egui::RichText::new("Iris:").small());
+            egui::ComboBox::from_id_salt("bokeh_shape_combo")
+                .selected_text(match cam.dof_iris_sides {
+                    3 => "3-Blade (Triangle)",
+                    5 => "5-Blade (Pentagon)",
+                    6 => "6-Blade (Hexagon)",
+                    8 => "8-Blade (Octagon)",
+                    _ => "Round (Circular)",
+                })
+                .show_ui(ui, |ui| {
+                    if ui.selectable_value(&mut cam.dof_iris_sides, 0, "Round (Circular)").clicked() {
+                        project_changed = true;
+                    }
+                    if ui.selectable_value(&mut cam.dof_iris_sides, 5, "5-Blade (Pentagon)").clicked() {
+                        project_changed = true;
+                    }
+                    if ui.selectable_value(&mut cam.dof_iris_sides, 6, "6-Blade (Hexagon)").clicked() {
+                        project_changed = true;
+                    }
+                    if ui.selectable_value(&mut cam.dof_iris_sides, 8, "8-Blade (Octagon)").clicked() {
+                        project_changed = true;
+                    }
+                });
 
-        ui.label(egui::RichText::new("Blur Level:").small());
-        let mut blur_level = ui.ctx().data(|d| d.get_temp::<f32>(egui::Id::new("dof_blur_level")).unwrap_or(100.0));
-        if ui.add(egui::DragValue::new(&mut blur_level).range(0.0..=300.0).speed(1.0).suffix("%")).changed() {
-            ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("dof_blur_level"), blur_level));
-            crate::core::frame_cache::bump_version();
+            ui.label(egui::RichText::new("Focus:").small());
+            if ui
+                .add(
+                    egui::DragValue::new(&mut cam.focus_distance)
+                        .range(10.0..=10000.0)
+                        .speed(5.0)
+                        .suffix(" px"),
+                )
+                .changed()
+            {
+                project_changed = true;
+            }
+        } else {
+            ui.weak("(No Active 3D Camera)");
         }
     });
+
+    if project_changed {
+        crate::core::frame_cache::bump_version();
+    }
 }
