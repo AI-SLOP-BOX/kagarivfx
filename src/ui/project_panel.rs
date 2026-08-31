@@ -486,6 +486,49 @@ pub fn draw(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
             }
         }
 
+        // Process Replace Footage request
+        let replace_info: Option<(usize, String, String)> = ui.ctx().data_mut(|d| {
+            let idx = d.remove_temp::<usize>(egui::Id::new("ae_replace_footage_asset_idx"));
+            let path = d.remove_temp::<String>(egui::Id::new("ae_replace_footage_path"));
+            let name = d.remove_temp::<String>(egui::Id::new("ae_replace_footage_name"));
+            match (idx, path, name) {
+                (Some(i), Some(p), Some(n)) => Some((i, p, n)),
+                _ => None,
+            }
+        });
+
+        if let Some((asset_idx, new_path, new_name)) = replace_info {
+            if let Some(asset) = temp_project.assets.get_mut(asset_idx) {
+                let old_name = asset.name.clone();
+                asset.name = new_name.clone();
+                match &mut asset.item_type {
+                    ProjectItemType::Image { path, .. } => *path = new_path.clone(),
+                    ProjectItemType::Video { path, .. } => *path = new_path.clone(),
+                    ProjectItemType::Audio { path, .. } => *path = new_path.clone(),
+                    _ => {}
+                }
+                // Update layers using this footage
+                for comp in &mut temp_project.compositions {
+                    for layer in &mut comp.layers {
+                        if layer.name == old_name {
+                            layer.name = new_name.clone();
+                        }
+                        match &mut layer.layer_type {
+                            LayerType::Image { path } if path.contains(&old_name) => {
+                                *path = new_path.clone();
+                            }
+                            LayerType::Audio { path, .. } if path.contains(&old_name) => {
+                                *path = new_path.clone();
+                            }
+                            _ => {}
+                        }
+                    }
+                }
+                app.toasts.info(format!("Replaced footage: '{}' → '{}'", old_name, new_name));
+                changed = true;
+            }
+        }
+
         if changed {
             app.history.commit(temp_project);
             crate::core::frame_cache::bump_version();
@@ -505,10 +548,8 @@ fn draw_asset_row(
     move_to_folder: &mut Option<(usize, Option<String>)>,
     folders: &[(usize, String, String)],
 ) {
-    let row_probe = egui::Rect::from_min_size(
-        ui.cursor().min,
-        egui::vec2(ui.available_width(), 20.0),
-    );
+    let row_probe =
+        egui::Rect::from_min_size(ui.cursor().min, egui::vec2(ui.available_width(), 20.0));
     if !ui.is_rect_visible(row_probe) {
         ui.add_space(20.0);
         return;
@@ -524,6 +565,8 @@ fn draw_asset_row(
         T::Folder { .. } => (egui_phosphor::regular::FOLDER_NOTCH, "Folder Bin"),
     };
 
+    let mut replace_footage_req: Option<(usize, std::path::PathBuf)> = None;
+
     ui.horizontal(|ui| {
         let response = ui.selectable_label(is_selected, format!("{} {}", icon_str, item.name));
         if response.clicked() {
@@ -532,6 +575,21 @@ fn draw_asset_row(
         if response.double_clicked() {
             *add_to_timeline_item = Some(item.clone());
         }
+        response.context_menu(|ui| {
+            if ui.button("➕ Add to Composition").clicked() {
+                *add_to_timeline_item = Some(item.clone());
+                ui.close_menu();
+            }
+            if ui.button("🔄 Replace Footage...").clicked() {
+                if let Some(path) = rfd::FileDialog::new()
+                    .add_filter("Media Footage", &["png", "jpg", "jpeg", "webp", "wav", "mp3", "mp4"])
+                    .pick_file()
+                {
+                    replace_footage_req = Some((i, path));
+                }
+                ui.close_menu();
+            }
+        });
         ui.weak(format!("({})", item_tag));
 
         // Move-to-bin dropdown
@@ -556,4 +614,20 @@ fn draw_asset_row(
                 .on_hover_text("Move this asset into/out of a bin");
         }
     });
+
+    if let Some((asset_idx, new_path)) = replace_footage_req {
+        let new_file_name = new_path
+            .file_name()
+            .unwrap_or_default()
+            .to_string_lossy()
+            .to_string();
+        let new_path_str = new_path.to_string_lossy().to_string();
+        // Request replace footage handling
+        *selected_idx_update = Some(Some(asset_idx));
+        ui.ctx().data_mut(|d| {
+            d.insert_temp(egui::Id::new("ae_replace_footage_asset_idx"), asset_idx);
+            d.insert_temp(egui::Id::new("ae_replace_footage_path"), new_path_str);
+            d.insert_temp(egui::Id::new("ae_replace_footage_name"), new_file_name);
+        });
+    }
 }

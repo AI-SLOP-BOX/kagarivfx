@@ -816,6 +816,31 @@ pub fn build_engine() -> Engine {
         },
     );
 
+    // --- AE lookAt(from, target): returns [x_rot, y_rot, z_rot] in degrees ---
+    engine.register_fn("lookAt", |from: Array, target: Array| -> Array {
+        let f_x = from.first().and_then(dynamic_to_f64).unwrap_or(0.0);
+        let f_y = from.get(1).and_then(dynamic_to_f64).unwrap_or(0.0);
+        let f_z = from.get(2).and_then(dynamic_to_f64).unwrap_or(0.0);
+
+        let t_x = target.first().and_then(dynamic_to_f64).unwrap_or(0.0);
+        let t_y = target.get(1).and_then(dynamic_to_f64).unwrap_or(0.0);
+        let t_z = target.get(2).and_then(dynamic_to_f64).unwrap_or(0.0);
+
+        let dx = t_x - f_x;
+        let dy = t_y - f_y;
+        let dz = t_z - f_z;
+
+        let dist_xz = (dx * dx + dz * dz).sqrt();
+        let yaw = dx.atan2(dz.max(1e-6)).to_degrees();
+        let pitch = (-dy).atan2(dist_xz.max(1e-6)).to_degrees();
+
+        vec![
+            Dynamic::from_float(pitch),
+            Dynamic::from_float(yaw),
+            Dynamic::from_float(0.0),
+        ]
+    });
+
     engine
 }
 
