@@ -120,9 +120,10 @@ Launch from **Help → 🎓 Start Guided Tutorial** or `Help → Tutorial` in th
 | **Keyframe Interpolation** | ✅ Complete | 19 ease presets, Bezier, Hold, Linear, Graph Editor |
 | **Expression Engine** | ✅ Complete | Rhai-based: wiggle, loopOut, smooth, time, thisComp |
 | **GPU Real-time Preview** | ✅ Complete | wgpu Metal/Vulkan/DX12, adaptive resolution |
-| **CPU Ground Truth Render** | ✅ Complete | Rayon-parallel, byte-deterministic |
-| **HDR Color Pipeline** | ✅ Complete | 16/32bpc, ACES 1.3, TPDF dithering |
-| **3D Extrusion & Bevel** | ✅ Complete | Cinema 4D-style solid mesh, ray-traced soft shadows |
+| **32bpc / 16bpc HDR Pipeline** | ✅ Complete | Scene-linear float, ACES 1.3, TPDF dithering, instant UI toggle |
+| **Real-time GPU Shader Effects** | ✅ Complete | WGSL shaders: Glow, Levels, Hue/Sat, Grain, Motion Blur, Flare, Corner Pin, Layer Styles |
+| **CPU Ground Truth VFX Suite** | ✅ Complete | 47+ Rayon-parallel CPU kernels for pixel-perfect deterministic export |
+| **3D Extrusion & Bevel** | ✅ Complete | Solid mesh generation, ray-traced soft shadows |
 | **Motion Tracker** | ✅ Complete | SAD + planar homography, subpixel refinement |
 | **Audio Engine** | ✅ Complete | Multi-track WAV, Mute/Solo, EQ, Compressor |
 | **Particle System** | ✅ Complete | Deterministic emission, GPU textures, force fields |
@@ -132,8 +133,6 @@ Launch from **Help → 🎓 Start Guided Tutorial** or `Help → Tutorial` in th
 | **Lottie Export** | ✅ Complete | Bodymovin-compatible JSON |
 | **Motion Sketch** | ✅ Complete | Freehand gesture → keyframe baking |
 | **AI Features** | ⚡ Opt-in | Modular bridge: SAM, RIFE, Depth-Anything, ProPainter |
-| **16/32bpc Full Pipeline** | 🚧 Partial | Viewport 8bpc; export path 16/32bpc on roadmap |
-| **Real-time GPU Effects** | 🚧 Roadmap | Effects currently CPU-dispatched |
 
 ---
 
