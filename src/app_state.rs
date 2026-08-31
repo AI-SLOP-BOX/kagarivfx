@@ -6,6 +6,16 @@ use crate::{ExportEvent, TrackerEvent, ViewportMode};
 
 pub use crate::core::audio_types::MixerChannel;
 
+/// User interface complexity mode (Beginner vs Pro/Studio).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, serde::Serialize, serde::Deserialize)]
+pub enum SkillLevel {
+    /// Simplified streamlined UI focused on essential timeline and inspector controls.
+    Beginner,
+    /// Full professional layout with graph editor, scopes, motion tracking, and 3D tooling.
+    #[default]
+    Pro,
+}
+
 /// Playback domain state: transport, current frame, work area bounds, volume.
 #[derive(Debug, Clone)]
 pub struct PlaybackDomainState {
@@ -372,6 +382,11 @@ pub struct AfterEffectsApp {
     pub custom_workspaces: Vec<crate::ui::workspace_manager::SavedWorkspace>,
     /// Selected expression property index
     pub selected_expression_prop_idx: usize,
+    /// User interface complexity level (Beginner vs Pro Studio)
+    pub skill_level: SkillLevel,
+    /// Guided interactive tutorial modal
+    pub show_guided_tutorial: bool,
+    pub tutorial_step: usize,
 }
 
 #[cfg(feature = "gui")]
@@ -547,6 +562,9 @@ impl Default for AfterEffectsApp {
             display_sim_idx: 0,
             custom_workspaces: Vec::new(),
             selected_expression_prop_idx: 0,
+            skill_level: SkillLevel::Pro,
+            show_guided_tutorial: false,
+            tutorial_step: 0,
         }
     }
 }

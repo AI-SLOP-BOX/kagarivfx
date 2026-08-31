@@ -1432,6 +1432,11 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
                     ctx.data_mut(|d| d.insert_temp(help_id, true));
                     ui.close_menu();
                 }
+                if ui.button("🎓 Start Guided Tutorial...").clicked() {
+                    app.show_guided_tutorial = true;
+                    app.tutorial_step = 0;
+                    ui.close_menu();
+                }
                 ui.separator();
                 if ui.button("ℹ️ About AEVFX Studio...").clicked() {
                     let about_id = egui::Id::new("show_about_modal");
@@ -1439,8 +1444,73 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
                     ui.close_menu();
                 }
             });
+
+            // Right-aligned UI Mode Switcher (Beginner vs Pro)
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                let (btn_text, next_mode) = match app.skill_level {
+                    crate::app_state::SkillLevel::Beginner => ("🔰 Mode: Beginner (Simple)", crate::app_state::SkillLevel::Pro),
+                    crate::app_state::SkillLevel::Pro => ("⚡ Mode: Pro Studio (Full)", crate::app_state::SkillLevel::Beginner),
+                };
+                if ui.button(btn_text).on_hover_text("Click to toggle between Simple Beginner UI and Full Pro Studio Layout").clicked() {
+                    app.skill_level = next_mode;
+                    app.toasts.info(format!("Switched UI Mode to {:?}", next_mode));
+                }
+            });
         });
     });
+
+    let mut show_tutorial = app.show_guided_tutorial;
+    if show_tutorial {
+        let mut finish_tutorial = false;
+        egui::Window::new("🎓 AEVFX Studio — Quickstart Guided Tour")
+            .open(&mut show_tutorial)
+            .resizable(false)
+            .show(ctx, |ui| {
+                ui.heading("Welcome to AEVFX Motion Graphics!");
+                ui.add_space(4.0);
+                match app.tutorial_step {
+                    0 => {
+                        ui.label("Step 1: Composition & Layers");
+                        ui.label("• Left panel contains your Project assets and composition hierarchy.");
+                        ui.label("• Press 'T' on a selected layer to reveal Opacity, or 'P' for Position.");
+                    }
+                    1 => {
+                        ui.label("Step 2: Keyframing & Animation");
+                        ui.label("• Click the stopwatch icon next to any property in the Inspector to add a keyframe.");
+                        ui.label("• Press Spacebar to start smooth real-time GPU/CPU RAM preview playback.");
+                    }
+                    2 => {
+                        ui.label("Step 3: Effects & 3D Extrusion");
+                        ui.label("• Drag effects from the Effects Library into your layers.");
+                        ui.label("• Switch layers to 3D and enable Cinema 4D-style extrusion and ray-traced soft shadows.");
+                    }
+                    _ => {
+                        ui.label("Step 4: Export & Sharing");
+                        ui.label("• Press Cmd+M (or File -> Export) to render high-quality MP4, ProRes, or Lottie JSON.");
+                        ui.label("• You are ready to create mind-blowing motion graphics!");
+                    }
+                }
+                ui.add_space(8.0);
+                ui.separator();
+                ui.horizontal(|ui| {
+                    if app.tutorial_step > 0 && ui.button("◀ Previous").clicked() {
+                        app.tutorial_step -= 1;
+                    }
+                    if app.tutorial_step < 3 {
+                        if ui.button("Next Step ▶").clicked() {
+                            app.tutorial_step += 1;
+                        }
+                    } else if ui.button("Finish Tour 🎉").clicked() {
+                        finish_tutorial = true;
+                    }
+                });
+            });
+        if finish_tutorial {
+            show_tutorial = false;
+            app.toasts.info("Tutorial completed! Have fun animating!");
+        }
+        app.show_guided_tutorial = show_tutorial;
+    }
 
     let about_id = egui::Id::new("show_about_modal");
     let mut show_about = ctx.data_mut(|d| *d.get_temp_mut_or_insert_with(about_id, || false));

@@ -48,3 +48,57 @@ jobs:
           cargo run --example gen_test_project
           cargo run --features cli --bin aevfx -- validate --project test_project.json
           cargo run --features cli --bin aevfx -- frame --project test_project.json --frame 5 --output /tmp/smoke.png
+
+  package-macos:
+    name: Build macOS DMG Bundle
+    runs-on: macos-latest
+    needs: test
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Build Release GUI Binary
+        run: cargo build --release --features gui --bin aftereffects-oss
+
+      - name: Create macOS .app Bundle & DMG
+        run: |
+          mkdir -p "target/bundle/AEVFX Studio.app/Contents/MacOS"
+          mkdir -p "target/bundle/AEVFX Studio.app/Contents/Resources"
+          cp target/release/aftereffects-oss "target/bundle/AEVFX Studio.app/Contents/MacOS/AEVFX Studio"
+          chmod +x "target/bundle/AEVFX Studio.app/Contents/MacOS/AEVFX Studio"
+
+          # Generate Info.plist
+          cat << 'PLIST' > "target/bundle/AEVFX Studio.app/Contents/Info.plist"
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+              <key>CFBundleExecutable</key>
+              <string>AEVFX Studio</string>
+              <key>CFBundleIdentifier</key>
+              <string>org.aevfx.studio</string>
+              <key>CFBundleName</key>
+              <string>AEVFX Studio</string>
+              <key>CFBundlePackageType</key>
+              <string>APPL</string>
+              <key>CFBundleShortVersionString</key>
+              <string>0.1.0</string>
+              <key>LSMinimumSystemVersion</key>
+              <string>11.0</string>
+              <key>NSHighResolutionCapable</key>
+              <true/>
+          </dict>
+          </plist>
+          PLIST
+
+          # Create DMG Image
+          hdiutil create -volname "AEVFX Studio" -srcfolder "target/bundle/AEVFX Studio.app" -ov -format UDZO "AEVFX-Studio-macOS.dmg"
+
+      - name: Upload DMG Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: AEVFX-Studio-macOS-DMG
+          path: AEVFX-Studio-macOS.dmg
+
