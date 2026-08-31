@@ -52,17 +52,22 @@ pub fn init_image_loaders(ctx: &egui::Context) {
 
 /// Render an SVG string directly as an egui Image widget.
 /// SVG bytes are borrowed statically; only the cache URI is allocated per call.
-pub fn render_svg_bytes(ui: &mut egui::Ui, name: &str, svg_str: &'static str, size: egui::Vec2, tint: egui::Color32) -> egui::Response {
+pub fn render_svg_bytes(
+    ui: &mut egui::Ui,
+    name: &str,
+    svg_str: &'static str,
+    size: egui::Vec2,
+    tint: egui::Color32,
+) -> egui::Response {
     ui.add(
         egui::Image::new(egui::ImageSource::Bytes {
             uri: std::borrow::Cow::Owned(name.to_string()),
             bytes: egui::load::Bytes::Static(svg_str.as_bytes()),
         })
         .fit_to_exact_size(size)
-        .tint(tint)
+        .tint(tint),
     )
 }
-
 
 // ── Additional Tool Icons ──
 #[allow(dead_code)]
@@ -81,6 +86,52 @@ pub const SVG_TOOL_PUPPET: &str = r#"<svg xmlns="http://www.w3.org/2000/svg" vie
 pub const SVG_RENDER_QUEUE: &str = r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><rect x="2" y="4" width="20" height="16" rx="2"/><polygon points="10 8 16 12 10 16 10 8" fill="white" stroke="none"/></svg>"#;
 #[allow(dead_code)]
 pub const SVG_SNAP: &str = r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><path d="M3 3v18M21 3v18"/><path d="M7 12h10"/><path d="M7 12l3-3M7 12l3 3M17 12l-3-3M17 12l-3 3"/></svg>"#;
+
+// ── Professional Motion Graphics & VFX SVG Icons ──
+#[allow(dead_code)]
+pub const SVG_SHY: &str = r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="cyan" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M8 15s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg>"#;
+
+#[allow(dead_code)]
+pub const SVG_COLLAPSE_TRANSFORM: &str = r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="orange" stroke-width="2"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg>"#;
+
+#[allow(dead_code)]
+pub const SVG_QUALITY: &str = r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="lightgreen" stroke-width="2"><line x1="4" y1="20" x2="20" y2="4"/><line x1="4" y1="14" x2="14" y2="4"/><line x1="10" y1="20" x2="20" y2="10"/></svg>"#;
+
+#[allow(dead_code)]
+pub const SVG_MOTION_BLUR: &str = r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="deepskyblue" stroke-width="2"><circle cx="8" cy="12" r="6" opacity="0.4"/><circle cx="12" cy="12" r="6" opacity="0.7"/><circle cx="16" cy="12" r="6"/></svg>"#;
+
+#[allow(dead_code)]
+pub const SVG_TRIM_PATHS: &str = r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="magenta" stroke-width="2"><circle cx="12" cy="12" r="9" stroke-dasharray="14 6"/><circle cx="12" cy="3" r="2" fill="magenta"/></svg>"#;
+
+#[allow(dead_code)]
+pub const SVG_EASING_BEZIER: &str = r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="gold" stroke-width="2"><path d="M3 21C8 21 8 3 21 3"/><circle cx="3" cy="21" r="2" fill="gold"/><circle cx="21" cy="3" r="2" fill="gold"/></svg>"#;
+
+#[allow(dead_code)]
+pub const SVG_GRAPH_EDITOR: &str = r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="cyan" stroke-width="2"><path d="M3 3v18h18"/><path d="M3 18C9 18 11 6 21 6"/><circle cx="11" cy="12" r="1.5" fill="cyan"/></svg>"#;
+
+#[allow(dead_code)]
+pub const SVG_3D_CUBE: &str = r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="deepskyblue" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>"#;
+
+#[allow(dead_code)]
+pub const SVG_EXPRESSION: &str = r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="pink" stroke-width="2"><path d="M4 19l4-14M14 8h6M17 5v6M9 12h5"/></svg>"#;
+
+#[allow(dead_code)]
+pub const SVG_LIGHT: &str = r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="yellow" stroke-width="2"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>"#;
+
+#[allow(dead_code)]
+pub const SVG_CAMERA: &str = r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="lightskyblue" stroke-width="2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>"#;
+
+#[allow(dead_code)]
+pub const SVG_TEXT_TO_SHAPES: &str = r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><path d="M4 7V4h10v3M9 4v11"/><polygon points="17 13 22 17 17 21 12 17" fill="cyan" stroke="none"/></svg>"#;
+
+#[allow(dead_code)]
+pub const SVG_HOT_RELOAD: &str = r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="lime" stroke-width="2"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>"#;
+
+#[allow(dead_code)]
+pub const SVG_BRAIN_AI: &str = r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="violet" stroke-width="2"><path d="M12 2a4 4 0 0 0-4 4v1a3 3 0 0 0-3 3v2a3 3 0 0 0 2 2.82V16a4 4 0 0 0 4 4h2a4 4 0 0 0 4-4v-1.18A3 3 0 0 0 19 12v-2a3 3 0 0 0-3-3V6a4 4 0 0 0-4-4z"/><path d="M9 12h6M12 9v6"/></svg>"#;
+
+#[allow(dead_code)]
+pub const SVG_EXPORT: &str = r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>"#;
 
 /// The application logo mark: a stylized composition frame with a playhead.
 /// Drawn procedurally so it stays crisp at any size and adapts to the theme.
@@ -107,7 +158,11 @@ pub fn draw_logo(ui: &mut egui::Ui, size: f32) -> egui::Response {
         egui::pos2(c.x, c.y + s),
         egui::pos2(c.x - s, c.y),
     ];
-    p.add(egui::Shape::convex_polygon(pts.to_vec(), accent, egui::Stroke::NONE));
+    p.add(egui::Shape::convex_polygon(
+        pts.to_vec(),
+        accent,
+        egui::Stroke::NONE,
+    ));
     resp
 }
 
