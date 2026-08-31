@@ -201,6 +201,16 @@ struct Layer {
     crt_scanline_intensity: f32,
     crt_curvature: f32,
 
+    // ── GPU Simulation Effects ──
+    sim_enabled: u32,
+    sim_type: u32,
+    sim_p1: f32,
+    sim_p2: f32,
+    sim_p3: f32,
+    sim_p4: f32,
+    sim_p5: f32,
+    sim_p6: f32,
+
     _padding_align: vec4<f32>,
     _ls_pad4: f32,
     _ls_pad5: f32,
@@ -293,12 +303,100 @@ fn shape_sdf_alpha(local_pos_in: vec2<f32>, blur_extend: f32) -> f32 {
     return alpha * trim_shape_alpha(angle, layer.trim_start, layer.trim_end, layer.trim_offset);
 }
 
+// ─── GPU Procedural Noise & fBM Helpers ───
+
+fn gpu_hash21(p: vec2<f32>) -> f32 {
+    let q = fract(sin(vec2<f32>(dot(p, vec2<f32>(127.1, 311.7)), dot(p, vec2<f32>(269.5, 183.3)))) * 43758.5453);
+    return fract(q.x + q.y);
+}
+
+fn gpu_noise2d(p: vec2<f32>) -> f32 {
+    let i = floor(p);
+    let f = fract(p);
+    let u = f * f * (3.0 - 2.0 * f);
+    let a = gpu_hash21(i + vec2<f32>(0.0, 0.0));
+    let b = gpu_hash21(i + vec2<f32>(1.0, 0.0));
+    let c = gpu_hash21(i + vec2<f32>(0.0, 1.0));
+    let d = gpu_hash21(i + vec2<f32>(1.0, 1.0));
+    return mix(mix(a, b, u.x), mix(c, d, u.x), u.y);
+}
+
+fn gpu_fbm2d(p: vec2<f32>, octaves: i32) -> f32 {
+    var v = 0.0;
+    var amp = 0.5;
+    var freq = 1.0;
+    var pt = p;
+    for (var i = 0; i < 6; i = i + 1) {
+        if (i >= octaves) { break; }
+        v += gpu_noise2d(pt * freq) * amp;
+        freq *= 2.0;
+        amp *= 0.5;
+    }
+    return v;
+}
+
 // Helper: sample layer color at a given local_pos and tex_coords
 fn sample_layer_color(local_pos_in: vec2<f32>, tc_in: vec2<f32>, blur_extend: f32) -> vec4<f32> {
     // Mesh Warp / Corner Pin: bilinear corner-offset displacement field.
     // Corners are pixel offsets from each quad corner; normalize by viewport to get UV deltas.
     var tc = tc_in;
     var local_pos = local_pos_in;
+
+    // ── GPU Spatial Simulation Distortion (Twirl, Bulge, Spherize, Wave Warp, Turbulent Displace) ──
+    if (layer.sim_enabled == 1u) {
+        let center = vec2<f32>(0.5, 0.5);
+        let uv_rel = tc - center;
+        let dist = length(uv_rel);
+
+        if (layer.sim_type == 2u) { // Turbulent Displace
+            let amount = layer.sim_p1 * 0.05;
+            let size = max(layer.sim_p2, 1.0);
+            let n_x = gpu_noise2d((tc + vec2<f32>(layer.sim_p3, 0.0)) * size) - 0.5;
+            let n_y = gpu_noise2d((tc + vec2<f32>(0.0, layer.sim_p3 + 12.3)) * size) - 0.5;
+            tc += vec2<f32>(n_x, n_y) * amount;
+        } else if (layer.sim_type == 3u) { // Wave Warp
+            let freq = layer.sim_p1;
+            let amp = layer.sim_p2 * 0.01;
+            let phase = layer.sim_p3;
+            tc.x += sin(tc.y * freq + phase) * amp;
+        } else if (layer.sim_type == 4u) { // Twirl
+            let radius = max(layer.sim_p1, 0.001);
+            let angle = layer.sim_p2 * 0.0174533; // deg to rad
+            if (dist < radius) {
+                let factor = (1.0 - dist / radius);
+                let a = angle * factor * factor;
+                let sin_a = sin(a);
+                let cos_a = cos(a);
+                let rotated = vec2<f32>(
+                    uv_rel.x * cos_a - uv_rel.y * sin_a,
+                    uv_rel.x * sin_a + uv_rel.y * cos_a
+                );
+                tc = center + rotated;
+            }
+        } else if (layer.sim_type == 5u) { // Bulge
+            let radius = max(layer.sim_p1, 0.001);
+            let amount = layer.sim_p2;
+            if (dist < radius) {
+                let factor = 1.0 - dist / radius;
+                let displace = 1.0 - amount * factor * factor;
+                tc = center + uv_rel * displace;
+            }
+        } else if (layer.sim_type == 6u) { // Spherize
+            let radius = max(layer.sim_p1, 0.001);
+            if (dist < radius) {
+                let d_norm = dist / radius;
+                let z = sqrt(max(1.0 - d_norm * d_norm, 0.0));
+                let r = (1.0 - z) * 0.5 + d_norm * 0.5;
+                tc = center + normalize(uv_rel) * (r * radius);
+            }
+        } else if (layer.sim_type == 7u) { // Heat Distortion
+            let strength = layer.sim_p1 * 0.02;
+            let speed = layer.sim_p2;
+            let n = sin(tc.y * 40.0 + speed * 6.0) * cos(tc.x * 30.0 + speed * 4.0);
+            tc.x += n * strength;
+        }
+    }
+
     if (layer.meshwarp_enabled == 1u) {
         let vp = max(globals.viewport_size, vec2<f32>(1.0, 1.0));
         let d_tl = layer.corner_top_left / vp;
@@ -429,6 +527,18 @@ fn sample_layer_color(local_pos_in: vec2<f32>, tc_in: vec2<f32>, blur_extend: f3
         // return fully transparent so fs_main's alpha check discards this quad.
         c = vec4<f32>(0.0, 0.0, 0.0, 0.0);
     }
+
+    // ── GPU Procedural Fractal Noise Generator ──
+    if (layer.sim_enabled == 1u && layer.sim_type == 1u) {
+        let contrast = layer.sim_p1;
+        let brightness = layer.sim_p2;
+        let evolution = layer.sim_p3;
+        let complexity = clamp(i32(layer.sim_p4), 1, 6);
+        let n_val = gpu_fbm2d(tc * 6.0 + vec2<f32>(evolution * 0.5, evolution * 0.3), complexity);
+        let f_col = clamp((n_val - 0.5) * contrast + 0.5 + brightness, 0.0, 1.0);
+        c = vec4<f32>(f_col, f_col, f_col, 1.0);
+    }
+
     // ── Levels: in_black/gamma/in_white adjustment ──
     if (layer.levels_enabled == 1u) {
         let range = max(layer.levels_in_white - layer.levels_in_black, 0.001);

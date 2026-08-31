@@ -41,10 +41,11 @@ png = { version = "0.17", optional = true }
 ab_glyph = "0.2"
 # image: loading JPEG/PNG image layers
 image = { version = "0.25", default-features = false, features = ["jpeg", "png"] }
+# naga: runtime WGSL syntax and type validation for custom shader plugins
+naga = { version = "0.19", features = ["wgsl-in"] }
 
 [dev-dependencies]
-# WGSL shader syntax validation in tests (same version wgpu uses internally)
-naga = { version = "0.19", features = ["wgsl-in"] }
+pollster = "0.3"
 
 [features]
 default = ["gui"]

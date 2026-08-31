@@ -31,6 +31,7 @@ pub mod continuous_rasterizer;
 pub mod corner_pin;
 pub mod cpu_effects;
 pub mod cpu_effects_new;
+pub mod custom_shader_runtime;
 pub mod difference_matte;
 pub mod displacement_map;
 pub mod echo_effect;

@@ -3772,34 +3772,100 @@ pub fn draw_effect_type_ui(
             core_color,
             glow_color,
         } => {
-            draw_prop(ui, current_frame, project_changed, next_frame, "Start X", start_x, |ui, v| {
-                ui.add(egui::Slider::new(v, 0.0..=1.0));
-            });
-            draw_prop(ui, current_frame, project_changed, next_frame, "Start Y", start_y, |ui, v| {
-                ui.add(egui::Slider::new(v, 0.0..=1.0));
-            });
-            draw_prop(ui, current_frame, project_changed, next_frame, "End X", end_x, |ui, v| {
-                ui.add(egui::Slider::new(v, 0.0..=1.0));
-            });
-            draw_prop(ui, current_frame, project_changed, next_frame, "End Y", end_y, |ui, v| {
-                ui.add(egui::Slider::new(v, 0.0..=1.0));
-            });
-            draw_prop(ui, current_frame, project_changed, next_frame, "Progress", progress, |ui, v| {
-                ui.add(egui::Slider::new(v, 0.0..=1.0));
-            });
-            draw_prop(ui, current_frame, project_changed, next_frame, "Length %", length, |ui, v| {
-                ui.add(egui::Slider::new(v, 1.0..=100.0));
-            });
-            draw_prop(ui, current_frame, project_changed, next_frame, "Start Thickness", starting_thickness, |ui, v| {
-                ui.add(egui::Slider::new(v, 0.5..=50.0));
-            });
-            draw_prop(ui, current_frame, project_changed, next_frame, "End Thickness", ending_thickness, |ui, v| {
-                ui.add(egui::Slider::new(v, 0.5..=50.0));
-            });
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Start X",
+                start_x,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, 0.0..=1.0));
+                },
+            );
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Start Y",
+                start_y,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, 0.0..=1.0));
+                },
+            );
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "End X",
+                end_x,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, 0.0..=1.0));
+                },
+            );
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "End Y",
+                end_y,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, 0.0..=1.0));
+                },
+            );
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Progress",
+                progress,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, 0.0..=1.0));
+                },
+            );
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Length %",
+                length,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, 1.0..=100.0));
+                },
+            );
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Start Thickness",
+                starting_thickness,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, 0.5..=50.0));
+                },
+            );
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "End Thickness",
+                ending_thickness,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, 0.5..=50.0));
+                },
+            );
             let c_before = core_color.clone();
-            if let Some(nf) = draw_property_ui(current_frame, ui, "Core Color", core_color, |ui, val| {
-                ui.color_edit_button_rgba_unmultiplied(val);
-            }) {
+            if let Some(nf) =
+                draw_property_ui(current_frame, ui, "Core Color", core_color, |ui, val| {
+                    ui.color_edit_button_rgba_unmultiplied(val);
+                })
+            {
                 *next_frame = Some(nf);
             }
             if c_before != *core_color {
@@ -3807,9 +3873,11 @@ pub fn draw_effect_type_ui(
             }
 
             let g_before = glow_color.clone();
-            if let Some(nf) = draw_property_ui(current_frame, ui, "Glow Color", glow_color, |ui, val| {
-                ui.color_edit_button_rgba_unmultiplied(val);
-            }) {
+            if let Some(nf) =
+                draw_property_ui(current_frame, ui, "Glow Color", glow_color, |ui, val| {
+                    ui.color_edit_button_rgba_unmultiplied(val);
+                })
+            {
                 *next_frame = Some(nf);
             }
             if g_before != *glow_color {
@@ -4493,24 +4561,35 @@ fn fs_main(@location(0) uv: vec2<f32>) -> @location(0) vec4<f32> {
                 *project_changed = true;
             }
 
-            // Quick validation badge
-            let is_valid = wgsl_source.contains("fn fs_main") || wgsl_source.contains("@fragment");
+            // Real-time naga WGSL validation & hot-reload status
+            let status = crate::core::custom_shader_runtime::CustomShaderRegistry::global().validate_wgsl(wgsl_source);
             ui.horizontal(|ui| {
-                if is_valid {
+                if status.is_valid {
                     ui.label(
-                        egui::RichText::new("✅ WGSL Syntax OK")
+                        egui::RichText::new("✅ Naga WGSL Valid")
                             .small()
                             .color(colors::ACCENT_GREEN),
                     );
                 } else {
+                    let err_snippet = status.error_message.as_deref().unwrap_or("WGSL Syntax Error");
+                    let short_err = err_snippet.lines().next().unwrap_or("Syntax Error");
                     ui.label(
-                        egui::RichText::new("⚠ Missing @fragment entrypoint")
+                        egui::RichText::new(format!("❌ {}", short_err))
                             .small()
-                            .color(colors::ACCENT_ORANGE),
-                    );
+                            .color(colors::ACCENT_RED),
+                    ).on_hover_text(err_snippet);
                 }
 
-                if ui.small_button("+ Add Uniform Float").clicked() {
+                if ui.small_button("📁 Load .wgsl File").on_hover_text("Load and hot-reload shader from disk").clicked() {
+                    if let Some(path) = rfd::FileDialog::new().add_filter("WGSL Shader", &["wgsl", "frag"]).pick_file() {
+                        if let Ok(content) = std::fs::read_to_string(&path) {
+                            *wgsl_source = content;
+                            *project_changed = true;
+                        }
+                    }
+                }
+
+                if ui.small_button("+ Add Float").clicked() {
                     uniform_values.push(1.0);
                     *project_changed = true;
                 }

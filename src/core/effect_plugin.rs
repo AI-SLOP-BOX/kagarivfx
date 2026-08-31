@@ -125,6 +125,16 @@ pub struct EffectParams {
     pub crt_scanline_count: f32,
     pub crt_scanline_intensity: f32,
     pub crt_curvature: f32,
+
+    // ── GPU Simulation Effects ──
+    pub sim_enabled: u32,
+    pub sim_type: u32,
+    pub sim_p1: f32,
+    pub sim_p2: f32,
+    pub sim_p3: f32,
+    pub sim_p4: f32,
+    pub sim_p5: f32,
+    pub sim_p6: f32,
 }
 
 impl Default for EffectParams {
@@ -202,6 +212,14 @@ impl Default for EffectParams {
             crt_scanline_count: 240.0,
             crt_scanline_intensity: 0.5,
             crt_curvature: 0.1,
+            sim_enabled: 0,
+            sim_type: 0,
+            sim_p1: 0.0,
+            sim_p2: 0.0,
+            sim_p3: 0.0,
+            sim_p4: 0.0,
+            sim_p5: 0.0,
+            sim_p6: 0.0,
         }
     }
 }
@@ -658,6 +676,74 @@ impl RenderEffectPlugin for EnumEffectPlugin {
                 params.crt_enabled = 1;
                 params.crt_scanline_count = (1080.0 / line_spacing.evaluate(frame).max(1.0)).clamp(50.0, 1000.0);
                 params.crt_scanline_intensity = intensity.evaluate(frame).clamp(0.0, 1.0);
+            }
+            EffectType::FractalNoise {
+                contrast,
+                brightness,
+                evolution,
+                complexity,
+                ..
+            } => {
+                params.sim_enabled = 1;
+                params.sim_type = 1;
+                params.sim_p1 = contrast.evaluate(frame) / 100.0;
+                params.sim_p2 = brightness.evaluate(frame) / 100.0;
+                params.sim_p3 = evolution.evaluate(frame) / 360.0;
+                params.sim_p4 = complexity.evaluate(frame);
+            }
+            EffectType::TurbulentDisplace {
+                amount,
+                size,
+                evolution,
+                ..
+            } => {
+                params.sim_enabled = 1;
+                params.sim_type = 2;
+                params.sim_p1 = amount.evaluate(frame);
+                params.sim_p2 = size.evaluate(frame) / 10.0;
+                params.sim_p3 = evolution.evaluate(frame) / 360.0;
+            }
+            EffectType::WaveWarp {
+                wave_height,
+                wave_width,
+                speed,
+                ..
+            } => {
+                params.sim_enabled = 1;
+                params.sim_type = 3;
+                let w = wave_width.evaluate(frame).max(1.0);
+                params.sim_p1 = (1000.0 / w).clamp(1.0, 100.0);
+                params.sim_p2 = wave_height.evaluate(frame);
+                params.sim_p3 = (frame as f32) * speed.evaluate(frame) * 0.1;
+            }
+            EffectType::Twirl { angle, radius } => {
+                params.sim_enabled = 1;
+                params.sim_type = 4;
+                params.sim_p1 = (radius.evaluate(frame) / 1000.0).max(0.01);
+                params.sim_p2 = angle.evaluate(frame);
+            }
+            EffectType::Bulge { amount, radius } => {
+                params.sim_enabled = 1;
+                params.sim_type = 5;
+                params.sim_p1 = (radius.evaluate(frame) / 1000.0).max(0.01);
+                params.sim_p2 = amount.evaluate(frame);
+            }
+            EffectType::Spherize { radius, .. } => {
+                params.sim_enabled = 1;
+                params.sim_type = 6;
+                params.sim_p1 = (radius.evaluate(frame) / 1000.0).max(0.01);
+            }
+            EffectType::HeatDistortion { strength, speed } => {
+                params.sim_enabled = 1;
+                params.sim_type = 7;
+                params.sim_p1 = strength.evaluate(frame);
+                params.sim_p2 = (frame as f32) * speed.evaluate(frame) * 0.05;
+            }
+            EffectType::RainRipples { drop_count, wave_strength } => {
+                params.sim_enabled = 1;
+                params.sim_type = 7;
+                params.sim_p1 = wave_strength.evaluate(frame);
+                params.sim_p2 = (frame as f32) * drop_count.evaluate(frame) * 0.02;
             }
             _ => {}
         }

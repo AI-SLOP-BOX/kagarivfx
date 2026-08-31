@@ -266,6 +266,16 @@ struct LayerUniform {
     crt_scanline_intensity: f32,
     crt_curvature: f32,
 
+    // ── GPU Simulation Effects ──
+    sim_enabled: u32,
+    sim_type: u32,
+    sim_p1: f32,
+    sim_p2: f32,
+    sim_p3: f32,
+    sim_p4: f32,
+    sim_p5: f32,
+    sim_p6: f32,
+
     _padding_align: [f32; 4],
     _ls_pad4: f32,
     _ls_pad5: f32,
@@ -2526,6 +2536,15 @@ impl WgpuRenderer {
                     crt_scanline_count: ep.crt_scanline_count,
                     crt_scanline_intensity: ep.crt_scanline_intensity,
                     crt_curvature: ep.crt_curvature,
+
+                    sim_enabled: ep.sim_enabled,
+                    sim_type: ep.sim_type,
+                    sim_p1: ep.sim_p1,
+                    sim_p2: ep.sim_p2,
+                    sim_p3: ep.sim_p3,
+                    sim_p4: ep.sim_p4,
+                    sim_p5: ep.sim_p5,
+                    sim_p6: ep.sim_p6,
 
                     _padding_align: [0.0; 4],
                     _ls_pad4: 0.0,
