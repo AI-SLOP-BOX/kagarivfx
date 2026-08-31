@@ -1,7 +1,7 @@
-use eframe::egui;
-use crate::AfterEffectsApp;
-use crate::ui::theme::colors;
 use crate::ui::custom_widgets;
+use crate::ui::theme::colors;
+use crate::AfterEffectsApp;
+use eframe::egui;
 
 pub fn draw_comp_settings_dialog(app: &mut AfterEffectsApp, ctx: &egui::Context) {
     if !app.show_comp_settings {
@@ -107,7 +107,7 @@ pub fn draw_comp_settings_dialog(app: &mut AfterEffectsApp, ctx: &egui::Context)
             ui.horizontal(|ui| {
                 ui.label("Frame Rate (FPS):");
                 ui.add(egui::DragValue::new(&mut comp.fps).speed(1).range(1..=120));
-                
+
                 let fps_id = ui.make_persistent_id("ae_fps_preset_choice");
                 let mut fps_choice: usize = ui.ctx().data_mut(|d| *d.get_temp_mut_or_insert_with(fps_id, || 0));
                 egui::ComboBox::from_id_salt(fps_id)
@@ -167,22 +167,19 @@ pub fn draw_comp_settings_dialog(app: &mut AfterEffectsApp, ctx: &egui::Context)
                         });
                 });
 
-                let bit_depth_id = ui.make_persistent_id("ae_color_bit_depth");
-                let mut depth_idx: usize = ui.ctx().data_mut(|d| *d.get_temp_mut_or_insert_with(bit_depth_id, || 0));
-                let depth_label = match depth_idx {
-                    0 => "8-bit per channel (8-bpc)",
-                    1 => "16-bit per channel (16-bpc)",
-                    _ => "32-bit Float (HDR / 32-bpc)",
-                };
                 ui.horizontal(|ui| {
                     ui.label("Depth:");
-                    egui::ComboBox::from_id_salt(bit_depth_id)
-                        .selected_text(depth_label)
+                    let before_depth = comp.bit_depth;
+                    egui::ComboBox::from_id_salt("comp_bit_depth_select")
+                        .selected_text(comp.bit_depth.label())
                         .show_ui(ui, |ui| {
-                            if ui.selectable_value(&mut depth_idx, 0, "8-bit per channel (8-bpc)").clicked() { ui.ctx().data_mut(|d| d.insert_temp(bit_depth_id, depth_idx)); }
-                            if ui.selectable_value(&mut depth_idx, 1, "16-bit per channel (16-bpc)").clicked() { ui.ctx().data_mut(|d| d.insert_temp(bit_depth_id, depth_idx)); }
-                            if ui.selectable_value(&mut depth_idx, 2, "32-bit Float (HDR / 32-bpc)").clicked() { ui.ctx().data_mut(|d| d.insert_temp(bit_depth_id, depth_idx)); }
+                            ui.selectable_value(&mut comp.bit_depth, crate::core::color_science::BitDepth::EightBit, "8 bpc (Integer)");
+                            ui.selectable_value(&mut comp.bit_depth, crate::core::color_science::BitDepth::SixteenBit, "16 bpc (Half Float)");
+                            ui.selectable_value(&mut comp.bit_depth, crate::core::color_science::BitDepth::ThirtyTwoBitFloat, "32 bpc (Float / HDR)");
                         });
+                    if comp.bit_depth != before_depth {
+                        crate::core::frame_cache::bump_version();
+                    }
                 });
             });
             ui.horizontal(|ui| {

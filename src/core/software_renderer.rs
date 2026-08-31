@@ -4022,16 +4022,36 @@ pub fn render_frame_range_parallel(
         .collect()
 }
 
+/// Render a frame directly into a 32bpc scene-linear HDR float buffer (`HdrF32Buffer`).
+///
+/// Pixels are stored as 32-bit floats [R, G, B, A] in unbounded scene-linear space,
+/// preserving over-bright highlights (>1.0) and negative deep shadows for EXR / HDR export.
+pub fn render_frame_to_hdr_f32(
+    comp: &Composition,
+    frame: u32,
+    width: u32,
+    height: u32,
+    exposure_ev: f32,
+    lut_mode: u32,
+) -> crate::core::color_science::HdrF32Buffer {
+    let f32_pixels = render_frame_to_pixels_f32(comp, frame, width, height, exposure_ev, lut_mode);
+    let mut hdr = crate::core::color_science::HdrF32Buffer::new(width, height);
+    for (i, px) in f32_pixels.iter().enumerate() {
+        let base = i * 4;
+        if base + 3 < hdr.data.len() {
+            hdr.data[base] = px[0];
+            hdr.data[base + 1] = px[1];
+            hdr.data[base + 2] = px[2];
+            hdr.data[base + 3] = px[3];
+        }
+    }
+    hdr
+}
+
 /// Render a frame and return linear-light f32 RGBA pixels (16/32bpc path).
 ///
-/// The internal compositing still runs on 8bpc buffers (with dithering to
-/// suppress banding), but the final output is decoded back to scene-linear
-/// via the exact IEC sRGB piecewise transfer functions — so the returned
-/// values are suitable for HDR export (EXR / HDR), ACES二次処理, or any
-/// pipeline that needs physically-linear colour values.
-///
-/// Each pixel is `[r, g, b, a]` in `0.0..=∞` (typically 0..1 for LDR
-/// scenes, but highlights can exceed 1.0 after ACES exposure boost).
+/// Returns physically-linear colour values [r, g, b, a] in `0.0..=∞`, suitable
+/// for OpenEXR / HDR export, ACES processing, and full 32bpc floating point workflows.
 pub fn render_frame_to_pixels_f32(
     comp: &Composition,
     frame: u32,
@@ -4048,8 +4068,7 @@ pub fn render_frame_to_pixels_f32(
     let mut out = vec![[0.0f32; 4]; n];
     use crate::core::color::srgb_to_linear_piecewise;
     for (px, dst) in buf8.chunks_exact(4).zip(out.iter_mut()) {
-        // render_frame_to_pixels already applied exposure, so decode
-        // the sRGB-encoded result back to linear (exposure baked in).
+        // Decode the sRGB-encoded result back to linear (exposure baked in).
         let r = srgb_to_linear_piecewise(px[0] as f32 / 255.0);
         let g = srgb_to_linear_piecewise(px[1] as f32 / 255.0);
         let b = srgb_to_linear_piecewise(px[2] as f32 / 255.0);

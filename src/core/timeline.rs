@@ -2256,6 +2256,9 @@ pub struct Composition {
     /// Off for legacy projects/tests to preserve byte-exact renders.
     #[serde(default)]
     pub dither_output: bool,
+    /// Composition color depth: 8bpc integer, 16bpc float, or 32bpc scene-linear float.
+    #[serde(default)]
+    pub bit_depth: crate::core::color_science::BitDepth,
     /// Composition-level proxy settings for preview speed.
     #[serde(default)]
     pub comp_proxy: crate::core::proxy::CompProxy,
@@ -2290,6 +2293,7 @@ impl Composition {
             blend_linear: false,
 
             dither_output: false,
+            bit_depth: crate::core::color_science::BitDepth::EightBit,
             comp_proxy: crate::core::proxy::CompProxy::default(),
         }
     }

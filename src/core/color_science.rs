@@ -670,13 +670,47 @@ pub fn convert_color_space(
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize, Default)]
 pub enum BitDepth {
     #[default]
-    EightBit, // 8bpc (0..255)
+    EightBit, // 8bpc (0..255 integer)
     SixteenBit, // 16bpc Half Float (unclamped HDR)
-    ThirtyTwoBitFloat, // 32bpc Full Float (infinite dynamic range)
+    ThirtyTwoBitFloat, // 32bpc Full Float (infinite dynamic range, scene-linear)
+}
+
+impl BitDepth {
+    pub fn is_hdr(&self) -> bool {
+        matches!(self, BitDepth::SixteenBit | BitDepth::ThirtyTwoBitFloat)
+    }
+
+    pub fn is_32bpc(&self) -> bool {
+        matches!(self, BitDepth::ThirtyTwoBitFloat)
+    }
+
+    pub fn label(&self) -> &'static str {
+        match self {
+            BitDepth::EightBit => "8 bpc",
+            BitDepth::SixteenBit => "16 bpc",
+            BitDepth::ThirtyTwoBitFloat => "32 bpc (float)",
+        }
+    }
+
+    pub fn short_label(&self) -> &'static str {
+        match self {
+            BitDepth::EightBit => "8bpc",
+            BitDepth::SixteenBit => "16bpc",
+            BitDepth::ThirtyTwoBitFloat => "32bpc",
+        }
+    }
+
+    pub fn next(&self) -> Self {
+        match self {
+            BitDepth::EightBit => BitDepth::SixteenBit,
+            BitDepth::SixteenBit => BitDepth::ThirtyTwoBitFloat,
+            BitDepth::ThirtyTwoBitFloat => BitDepth::EightBit,
+        }
+    }
 }
 
 /// High Dynamic Range (HDR) 32bpc / 16bpc scene-linear float pixel buffer.
-/// Stores RGBA components as 32-bit floats with unclamped range [0.0, +inf).
+/// Stores RGBA components as 32-bit floats with unclamped range (-inf, +inf).
 #[derive(Debug, Clone)]
 pub struct HdrF32Buffer {
     pub width: u32,
@@ -710,7 +744,13 @@ impl HdrF32Buffer {
     }
 
     /// Converts HDR float buffer back to 8bpc sRGB for display / 8-bit export.
+    /// Supports exposure EV offset and optional ACES filmic tonemapping.
     pub fn to_rgba8(&self, tonemap: bool, exposure: f32) -> Vec<u8> {
+        self.to_rgba8_dithered(tonemap, exposure, false)
+    }
+
+    /// Converts HDR float buffer to 8bpc sRGB with optional TPDF dithering.
+    pub fn to_rgba8_dithered(&self, tonemap: bool, exposure: f32, dither: bool) -> Vec<u8> {
         let num_pixels = (self.width as usize) * (self.height as usize);
         let mut out = vec![0u8; num_pixels * 4];
         let exp_factor = 2.0f32.powf(exposure);
@@ -724,14 +764,28 @@ impl HdrF32Buffer {
 
             if tonemap {
                 // ACES / Reinhard filmic tonemapping for HDR highlights
-                r = r / (1.0 + r);
-                g = g / (1.0 + g);
-                b = b / (1.0 + b);
+                r = r / (1.0 + r.max(0.0));
+                g = g / (1.0 + g.max(0.0));
+                b = b / (1.0 + b.max(0.0));
             }
 
-            out[base] = (linear_to_srgb(r).clamp(0.0, 1.0) * 255.0).round() as u8;
-            out[base + 1] = (linear_to_srgb(g).clamp(0.0, 1.0) * 255.0).round() as u8;
-            out[base + 2] = (linear_to_srgb(b).clamp(0.0, 1.0) * 255.0).round() as u8;
+            let sr = linear_to_srgb(r);
+            let sg = linear_to_srgb(g);
+            let sb = linear_to_srgb(b);
+
+            if dither {
+                let seed = i as f32 * 0.618_034;
+                let t1 = (seed * 7.13).fract();
+                let t2 = (seed * 3.71).fract();
+                let noise = (t1 - t2) / 255.0;
+                out[base] = ((sr + noise).clamp(0.0, 1.0) * 255.0).round() as u8;
+                out[base + 1] = ((sg + noise).clamp(0.0, 1.0) * 255.0).round() as u8;
+                out[base + 2] = ((sb + noise).clamp(0.0, 1.0) * 255.0).round() as u8;
+            } else {
+                out[base] = (sr.clamp(0.0, 1.0) * 255.0).round() as u8;
+                out[base + 1] = (sg.clamp(0.0, 1.0) * 255.0).round() as u8;
+                out[base + 2] = (sb.clamp(0.0, 1.0) * 255.0).round() as u8;
+            }
             out[base + 3] = (a * 255.0).round() as u8;
         }
         out
@@ -757,6 +811,88 @@ impl HdrF32Buffer {
                 }
                 self.data[base + 3] = out_a;
             }
+        }
+    }
+
+    /// Full 32bpc floating-point blend mode compositor.
+    /// Blends `src` over `self` with arbitrary blend modes in unbounded float space.
+    pub fn blend_layer_mode(
+        &mut self,
+        src: &HdrF32Buffer,
+        opacity: f32,
+        mode: crate::core::timeline::BlendMode,
+    ) {
+        if self.width != src.width || self.height != src.height {
+            return;
+        }
+        let op = opacity.clamp(0.0, 1.0);
+        for i in 0..(self.data.len() / 4) {
+            let base = i * 4;
+            let src_a = (src.data[base + 3] * op).clamp(0.0, 1.0);
+            if src_a <= 1e-6 {
+                continue;
+            }
+            let dst_a = self.data[base + 3].clamp(0.0, 1.0);
+
+            for c in 0..3 {
+                let s = src.data[base + c];
+                let d = self.data[base + c];
+                let blended = match mode {
+                    crate::core::timeline::BlendMode::Normal => s,
+                    crate::core::timeline::BlendMode::Add
+                    | crate::core::timeline::BlendMode::LinearDodge => s + d,
+                    crate::core::timeline::BlendMode::Multiply => s * d,
+                    crate::core::timeline::BlendMode::Screen => s + d - s * d,
+                    crate::core::timeline::BlendMode::Overlay => {
+                        if d < 0.5 {
+                            2.0 * s * d
+                        } else {
+                            1.0 - 2.0 * (1.0 - s) * (1.0 - d)
+                        }
+                    }
+                    crate::core::timeline::BlendMode::HardLight => {
+                        if s < 0.5 {
+                            2.0 * s * d
+                        } else {
+                            1.0 - 2.0 * (1.0 - s) * (1.0 - d)
+                        }
+                    }
+                    crate::core::timeline::BlendMode::SoftLight => {
+                        if s <= 0.5 {
+                            d - (1.0 - 2.0 * s) * d * (1.0 - d)
+                        } else {
+                            let root_d = if d > 0.0 { d.sqrt() } else { 0.0 };
+                            d + (2.0 * s - 1.0) * (root_d - d)
+                        }
+                    }
+                    crate::core::timeline::BlendMode::Difference => (s - d).abs(),
+                    crate::core::timeline::BlendMode::Exclusion => s + d - 2.0 * s * d,
+                    crate::core::timeline::BlendMode::Subtract => (d - s).max(0.0),
+                    crate::core::timeline::BlendMode::Darken => s.min(d),
+                    crate::core::timeline::BlendMode::Lighten => s.max(d),
+                    crate::core::timeline::BlendMode::ColorDodge => {
+                        if (1.0 - s).abs() < 1e-5 {
+                            10.0
+                        } else {
+                            d / (1.0 - s).max(1e-5)
+                        }
+                    }
+                    crate::core::timeline::BlendMode::ColorBurn => {
+                        if s.abs() < 1e-5 {
+                            0.0
+                        } else {
+                            1.0 - (1.0 - d) / s.max(1e-5)
+                        }
+                    }
+                    _ => s,
+                };
+
+                let out_a = src_a + dst_a * (1.0 - src_a);
+                if out_a > 1e-6 {
+                    self.data[base + c] = (blended * src_a + d * dst_a * (1.0 - src_a)) / out_a;
+                }
+            }
+            self.data[base + 3] = (src_a + dst_a * (1.0 - src_a)).clamp(0.0, 1.0);
         }
     }
 }
@@ -788,5 +924,40 @@ mod hdr_tests {
         bg.blend_over(&fg, 1.0);
         assert!(bg.data[0] > 0.0 && bg.data[1] > 0.0);
         assert_eq!(bg.data[3], 1.0);
+    }
+
+    #[test]
+    fn test_hdr_32bpc_overbright_preservation() {
+        let mut bg = HdrF32Buffer::new(1, 1);
+        bg.data[0] = 2.5; // Over-bright HDR red (exceeds 1.0)
+        bg.data[1] = 1.2;
+        bg.data[2] = 0.0;
+        bg.data[3] = 1.0;
+
+        let mut fg = HdrF32Buffer::new(1, 1);
+        fg.data[0] = 1.0;
+        fg.data[1] = 3.0; // Over-bright HDR green
+        fg.data[2] = 0.0;
+        fg.data[3] = 1.0;
+
+        // Additive blend in 32bpc float space preserves HDR values
+        bg.blend_layer_mode(&fg, 1.0, crate::core::timeline::BlendMode::Add);
+        assert!(bg.data[0] >= 3.5);
+        assert!(bg.data[1] >= 4.2);
+
+        // Tonemapping compresses into [0, 255] without clipping artifacts
+        let tonemapped = bg.to_rgba8(true, 0.0);
+        assert_eq!(tonemapped[3], 255);
+    }
+
+    #[test]
+    fn test_bit_depth_cycle() {
+        let b = BitDepth::EightBit;
+        assert_eq!(b.next(), BitDepth::SixteenBit);
+        assert_eq!(b.next().next(), BitDepth::ThirtyTwoBitFloat);
+        assert_eq!(b.next().next().next(), BitDepth::EightBit);
+        assert!(BitDepth::ThirtyTwoBitFloat.is_32bpc());
+        assert!(BitDepth::ThirtyTwoBitFloat.is_hdr());
+        assert!(!BitDepth::EightBit.is_hdr());
     }
 }
