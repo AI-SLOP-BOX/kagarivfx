@@ -2,3 +2,13 @@
 **/*.rs.bk
 test_project.json
 test_text_only.json
+.DS_Store
+*.log
+*.env
+*.env.*
+*.pem
+*.key
+*.p12
+*.credentials
+*.swp
+*.bak
