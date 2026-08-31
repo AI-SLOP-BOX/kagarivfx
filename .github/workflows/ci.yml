@@ -44,10 +44,10 @@ jobs:
 
       - name: CLI smoke test
         run: |
-          cargo run --features cli --bin hikari -- effects
+          cargo run --features cli --bin kagari -- effects
           cargo run --example gen_test_project
-          cargo run --features cli --bin hikari -- validate --project test_project.json
-          cargo run --features cli --bin hikari -- frame --project test_project.json --frame 5 --output /tmp/smoke.png
+          cargo run --features cli --bin kagari -- validate --project test_project.json
+          cargo run --features cli --bin kagari -- frame --project test_project.json --frame 5 --output /tmp/smoke.png
 
   package-macos:
     name: Build macOS DMG Bundle
@@ -60,27 +60,27 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
 
       - name: Build Release GUI Binary
-        run: cargo build --release --features gui --bin hikari-studio
+        run: cargo build --release --features gui --bin kagari-studio
 
       - name: Create macOS .app Bundle & DMG
         run: |
-          mkdir -p "target/bundle/Hikari Studio.app/Contents/MacOS"
-          mkdir -p "target/bundle/Hikari Studio.app/Contents/Resources"
-          cp target/release/hikari-studio "target/bundle/Hikari Studio.app/Contents/MacOS/Hikari Studio"
-          chmod +x "target/bundle/Hikari Studio.app/Contents/MacOS/Hikari Studio"
+          mkdir -p "target/bundle/Kagari Studio.app/Contents/MacOS"
+          mkdir -p "target/bundle/Kagari Studio.app/Contents/Resources"
+          cp target/release/kagari-studio "target/bundle/Kagari Studio.app/Contents/MacOS/Kagari Studio"
+          chmod +x "target/bundle/Kagari Studio.app/Contents/MacOS/Kagari Studio"
 
           # Generate Info.plist
-          cat << 'PLIST' > "target/bundle/Hikari Studio.app/Contents/Info.plist"
+          cat << 'PLIST' > "target/bundle/Kagari Studio.app/Contents/Info.plist"
           <?xml version="1.0" encoding="UTF-8"?>
           <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
           <plist version="1.0">
           <dict>
               <key>CFBundleExecutable</key>
-              <string>Hikari Studio</string>
+              <string>Kagari Studio</string>
               <key>CFBundleIdentifier</key>
-              <string>org.hikari.studio</string>
+              <string>org.kagari.studio</string>
               <key>CFBundleName</key>
-              <string>Hikari Studio</string>
+              <string>Kagari Studio</string>
               <key>CFBundlePackageType</key>
               <string>APPL</string>
               <key>CFBundleShortVersionString</key>
@@ -94,11 +94,11 @@ jobs:
           PLIST
 
           # Create DMG Image
-          hdiutil create -volname "Hikari Studio" -srcfolder "target/bundle/Hikari Studio.app" -ov -format UDZO "Hikari-Studio-macOS.dmg"
+          hdiutil create -volname "Kagari Studio" -srcfolder "target/bundle/Kagari Studio.app" -ov -format UDZO "Kagari-Studio-macOS.dmg"
 
       - name: Upload DMG Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Hikari-Studio-macOS-DMG
-          path: Hikari-Studio-macOS.dmg
+          name: Kagari-Studio-macOS-DMG
+          path: Kagari-Studio-macOS.dmg
 

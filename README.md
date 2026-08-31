@@ -1,10 +1,10 @@
-# Hikari Studio (光)
+# Kagari Studio (篝)
 
 [![Rust CI](https://github.com/kme20988-wq/aevfx/actions/workflows/ci.yml/badge.svg)](https://github.com/kme20988-wq/aevfx/actions)
 [![License: MIT / Apache 2.0](https://img.shields.io/badge/license-MIT%2FApache--2.0-blue.svg)](#license)
 [![Built with Rust](https://img.shields.io/badge/Built%20with-Rust%20🦀-orange.svg)](https://www.rust-lang.org/)
 
-**Hikari Studio (光)** is a high-performance, open-source Motion Graphics & Visual Effects compositor built with **Rust**, **wgpu (Metal/Vulkan)**, and a modern dark **egui** studio interface. Featuring 32bpc float HDR color science, real-time GPU simulation VFX shaders, and dynamic custom WGSL shader hot-reloading.
+**Kagari Studio (篝)** is a high-performance, open-source Motion Graphics & Visual Effects compositor built with **Rust**, **wgpu (Metal/Vulkan)**, and a modern dark **egui** studio interface. Featuring 32bpc float HDR color science, real-time GPU simulation VFX shaders, and dynamic custom WGSL shader hot-reloading.
 
 ---
 
@@ -48,17 +48,17 @@
 
 ### Build & Run GUI Studio
 ```bash
-# Launch Hikari Studio GUI editor
-cargo run --release --features gui --bin hikari-studio
+# Launch Kagari Studio GUI editor
+cargo run --release --features gui --bin kagari-studio
 ```
 
 ### Headless CLI Rendering
 ```bash
 # Render a single frame from project JSON to PNG
-cargo run --release --features cli --bin hikari -- frame --project my_project.json --frame 0 --output /tmp/frame_000.png
+cargo run --release --features cli --bin kagari -- frame --project my_project.json --frame 0 --output /tmp/frame_000.png
 
 # Render a frame sequence or MP4 video
-cargo run --release --features cli --bin hikari -- render --project my_project.json --out-dir /tmp/renders/
+cargo run --release --features cli --bin kagari -- render --project my_project.json --out-dir /tmp/renders/
 ```
 
 ### Running Test Suite & Quality Checks
@@ -165,4 +165,4 @@ Distributed under the MIT License or Apache 2.0 License at your option.
 
 ## ⚖️ Trademark Disclaimer
 
-**Hikari Studio (光)** is an independent, community-driven open-source software project. It is **not** affiliated with, sponsored by, endorsed by, or in any way associated with Adobe Inc. or its subsidiaries. "Adobe", "After Effects", and other product names or logos are trademarks or registered trademarks of their respective owners.
+**Kagari Studio (篝)** is an independent, community-driven open-source software project. It is **not** affiliated with, sponsored by, endorsed by, or in any way associated with Adobe Inc. or its subsidiaries. "Adobe", "After Effects", and other product names or logos are trademarks or registered trademarks of their respective owners.

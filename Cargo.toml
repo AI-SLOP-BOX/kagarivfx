@@ -54,11 +54,11 @@ cli = ["dep:clap", "dep:png"]
 wgpu = []
 
 [[bin]]
-name = "hikari"
+name = "kagari"
 path = "src/bin/cli.rs"
 required-features = ["cli"]
 
 [[bin]]
-name = "hikari-studio"
+name = "kagari-studio"
 path = "src/main.rs"
 required-features = ["gui"]
