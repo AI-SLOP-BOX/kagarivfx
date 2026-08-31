@@ -1,5 +1,5 @@
-use eframe::egui;
 use crate::ui::theme::colors;
+use eframe::egui;
 
 /// Animated hover state for smooth transitions
 pub struct HoverAnim {
@@ -15,7 +15,10 @@ impl Default for HoverAnim {
 
 impl HoverAnim {
     pub fn new() -> Self {
-        Self { progress: 0.0, target: 0.0 }
+        Self {
+            progress: 0.0,
+            target: 0.0,
+        }
     }
 
     pub fn update(&mut self, dt: f32, is_hovered: bool) {
@@ -37,7 +40,11 @@ pub struct ColorAnim {
 
 impl ColorAnim {
     pub fn new(initial: egui::Color32) -> Self {
-        Self { current: initial, target: initial, speed: 8.0 }
+        Self {
+            current: initial,
+            target: initial,
+            speed: 8.0,
+        }
     }
 
     pub fn update(&mut self, dt: f32) {
@@ -57,7 +64,10 @@ impl ColorAnim {
         let new_a = a + (ta - a) * self.speed * dt;
 
         self.current = egui::Color32::from_rgba_premultiplied(
-            new_r as u8, new_g as u8, new_b as u8, new_a as u8
+            new_r as u8,
+            new_g as u8,
+            new_b as u8,
+            new_a as u8,
         );
     }
 
@@ -82,7 +92,12 @@ impl Default for PulseAnim {
 
 impl PulseAnim {
     pub fn new() -> Self {
-        Self { phase: 0.0, speed: 2.0, min_alpha: 180, max_alpha: 255 }
+        Self {
+            phase: 0.0,
+            speed: 2.0,
+            min_alpha: 180,
+            max_alpha: 255,
+        }
     }
 
     pub fn update(&mut self, dt: f32) {
@@ -120,7 +135,8 @@ pub fn ae_button(ui: &mut egui::Ui, label: &str) -> egui::Response {
     if response.hovered() {
         let rect = response.rect;
         ui.painter().rect_filled(rect, 3.0, colors::BG_HOVER);
-        ui.painter().rect_stroke(rect, 3.0, egui::Stroke::new(1.0, colors::BORDER_STRONG));
+        ui.painter()
+            .rect_stroke(rect, 3.0, egui::Stroke::new(1.0, colors::BORDER_STRONG));
     }
 
     response
@@ -171,36 +187,128 @@ pub fn ae_icon_button(ui: &mut egui::Ui, icon: &str, tooltip: &str) -> egui::Res
     response
 }
 
+/// Professional SVG vector icon toggle button for timeline switches and toolbars
+pub fn ae_svg_toggle(
+    ui: &mut egui::Ui,
+    active: &mut bool,
+    svg_str: &'static str,
+    id_name: &str,
+    size: egui::Vec2,
+    active_color: egui::Color32,
+    tooltip: &str,
+) -> egui::Response {
+    let (rect, resp) = ui.allocate_exact_size(size, egui::Sense::click());
+    let is_active = *active;
+    let bg_color = if is_active {
+        colors::BG_HOVER
+    } else if resp.hovered() {
+        colors::BG_MID
+    } else {
+        egui::Color32::TRANSPARENT
+    };
+    ui.painter().rect_filled(rect, 3.0, bg_color);
+    if is_active {
+        ui.painter().rect_stroke(rect, 3.0, egui::Stroke::new(1.0, active_color));
+    }
+    let tint = if is_active {
+        active_color
+    } else if resp.hovered() {
+        colors::TEXT_PRIMARY
+    } else {
+        colors::TEXT_MUTED
+    };
+    let icon_rect = rect.shrink(2.0);
+    let _ = crate::ui::icons::render_svg_at(
+        ui,
+        id_name.to_string(),
+        svg_str,
+        icon_rect.size(),
+        tint,
+        icon_rect.min,
+    );
+    if resp.clicked() {
+        *active = !*active;
+    }
+    resp.on_hover_text(tooltip)
+}
+
+/// Professional SVG vector action button
+pub fn ae_svg_button(
+    ui: &mut egui::Ui,
+    svg_str: &'static str,
+    id_name: &str,
+    size: egui::Vec2,
+    default_color: egui::Color32,
+    tooltip: &str,
+) -> egui::Response {
+    let (rect, resp) = ui.allocate_exact_size(size, egui::Sense::click());
+    let bg_color = if resp.is_pointer_button_down_on() {
+        colors::BG_ACTIVE
+    } else if resp.hovered() {
+        colors::BG_HOVER
+    } else {
+        egui::Color32::TRANSPARENT
+    };
+    ui.painter().rect_filled(rect, 3.0, bg_color);
+    let tint = if resp.hovered() {
+        colors::TEXT_PRIMARY
+    } else {
+        default_color
+    };
+    let icon_rect = rect.shrink(2.0);
+    let _ = crate::ui::icons::render_svg_at(
+        ui,
+        id_name.to_string(),
+        svg_str,
+        icon_rect.size(),
+        tint,
+        icon_rect.min,
+    );
+    resp.on_hover_text(tooltip)
+}
+
 /// AE-style toggle switch
 pub fn ae_toggle(ui: &mut egui::Ui, value: &mut bool, label: &str) -> egui::Response {
     ui.horizontal(|ui| {
-        let (rect, response) = ui.allocate_exact_size(
-            egui::vec2(32.0, 16.0),
-            egui::Sense::click(),
-        );
+        let (rect, response) = ui.allocate_exact_size(egui::vec2(32.0, 16.0), egui::Sense::click());
 
         // Track
-        let track_color = if *value { colors::ACCENT_BLUE } else { colors::BG_SURFACE };
+        let track_color = if *value {
+            colors::ACCENT_BLUE
+        } else {
+            colors::BG_SURFACE
+        };
         ui.painter().rect_filled(rect, 8.0, track_color);
-        ui.painter().rect_stroke(rect, 8.0, egui::Stroke::new(1.0, colors::BORDER_MEDIUM));
+        ui.painter()
+            .rect_stroke(rect, 8.0, egui::Stroke::new(1.0, colors::BORDER_MEDIUM));
 
         // Thumb
-        let thumb_x = if *value { rect.right() - 10.0 } else { rect.left() + 2.0 };
+        let thumb_x = if *value {
+            rect.right() - 10.0
+        } else {
+            rect.left() + 2.0
+        };
         let thumb_rect = egui::Rect::from_center_size(
             egui::pos2(thumb_x, rect.center().y),
             egui::vec2(12.0, 12.0),
         );
-        ui.painter().rect_filled(thumb_rect, 6.0, egui::Color32::WHITE);
+        ui.painter()
+            .rect_filled(thumb_rect, 6.0, egui::Color32::WHITE);
 
         if response.clicked() {
             *value = !*value;
         }
 
         ui.add_space(4.0);
-        ui.label(egui::RichText::new(label).small().color(colors::TEXT_SECONDARY));
+        ui.label(
+            egui::RichText::new(label)
+                .small()
+                .color(colors::TEXT_SECONDARY),
+        );
 
         response
-    }).inner
+    })
+    .inner
 }
 
 /// AE-style section header with accent bar
@@ -227,9 +335,18 @@ pub fn ae_section_header(ui: &mut egui::Ui, title: &str, icon: &str) {
 /// AE-style property row with label and value
 pub fn ae_property_row(ui: &mut egui::Ui, label: &str, value: &str) {
     ui.horizontal(|ui| {
-        ui.label(egui::RichText::new(label).small().color(colors::TEXT_SECONDARY));
+        ui.label(
+            egui::RichText::new(label)
+                .small()
+                .color(colors::TEXT_SECONDARY),
+        );
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            ui.label(egui::RichText::new(value).small().strong().color(colors::TEXT_ACCENT));
+            ui.label(
+                egui::RichText::new(value)
+                    .small()
+                    .strong()
+                    .color(colors::TEXT_ACCENT),
+            );
         });
     });
 }
@@ -248,18 +365,17 @@ pub fn ae_separator(ui: &mut egui::Ui) {
 /// AE-style panel header with subtle gradient
 pub fn ae_panel_header(ui: &mut egui::Ui, title: &str) {
     let rect = ui.available_rect_before_wrap();
-    let header_rect = egui::Rect::from_min_size(
-        rect.min,
-        egui::vec2(rect.width(), 28.0),
-    );
+    let header_rect = egui::Rect::from_min_size(rect.min, egui::vec2(rect.width(), 28.0));
 
     // Subtle gradient background
     ui.painter().rect_filled(header_rect, 0.0, colors::BG_DARK);
 
     // Bottom border
     ui.painter().line_segment(
-        [egui::pos2(header_rect.left(), header_rect.bottom()),
-         egui::pos2(header_rect.right(), header_rect.bottom())],
+        [
+            egui::pos2(header_rect.left(), header_rect.bottom()),
+            egui::pos2(header_rect.right(), header_rect.bottom()),
+        ],
         egui::Stroke::new(1.0, colors::BORDER_SUBTLE),
     );
 
@@ -279,13 +395,11 @@ pub fn ae_panel_header(ui: &mut egui::Ui, title: &str) {
 
 /// AE-style color swatch
 pub fn ae_color_swatch(ui: &mut egui::Ui, color: egui::Color32, size: f32) -> egui::Response {
-    let (rect, response) = ui.allocate_exact_size(
-        egui::vec2(size, size),
-        egui::Sense::click(),
-    );
+    let (rect, response) = ui.allocate_exact_size(egui::vec2(size, size), egui::Sense::click());
 
     // Outer border
-    ui.painter().rect_stroke(rect, 2.0, egui::Stroke::new(1.0, colors::BORDER_MEDIUM));
+    ui.painter()
+        .rect_stroke(rect, 2.0, egui::Stroke::new(1.0, colors::BORDER_MEDIUM));
 
     // Inner color
     let inner = rect.shrink(1.0);
@@ -296,31 +410,37 @@ pub fn ae_color_swatch(ui: &mut egui::Ui, color: egui::Color32, size: f32) -> eg
 
 /// AE-style progress bar
 pub fn ae_progress_bar(ui: &mut egui::Ui, progress: f32, height: f32) {
-    let rect = ui.allocate_ui_with_layout(
-        egui::vec2(ui.available_width(), height),
-        egui::Layout::left_to_right(egui::Align::Center),
-        |_ui| {},
-    ).response.rect;
+    let rect = ui
+        .allocate_ui_with_layout(
+            egui::vec2(ui.available_width(), height),
+            egui::Layout::left_to_right(egui::Align::Center),
+            |_ui| {},
+        )
+        .response
+        .rect;
 
     // Background
     ui.painter().rect_filled(rect, 2.0, colors::BG_SURFACE);
 
     // Fill
     let fill_width = rect.width() * progress.clamp(0.0, 1.0);
-    let fill_rect = egui::Rect::from_min_size(
-        rect.min,
-        egui::vec2(fill_width, rect.height()),
-    );
-    ui.painter().rect_filled(fill_rect, 2.0, colors::ACCENT_BLUE);
+    let fill_rect = egui::Rect::from_min_size(rect.min, egui::vec2(fill_width, rect.height()));
+    ui.painter()
+        .rect_filled(fill_rect, 2.0, colors::ACCENT_BLUE);
 
     // Border
-    ui.painter().rect_stroke(rect, 2.0, egui::Stroke::new(1.0, colors::BORDER_SUBTLE));
+    ui.painter()
+        .rect_stroke(rect, 2.0, egui::Stroke::new(1.0, colors::BORDER_SUBTLE));
 }
 
 /// AE-style text input field
 pub fn ae_text_field(ui: &mut egui::Ui, text: &mut String, placeholder: &str) -> egui::Response {
     let edit = egui::TextEdit::singleline(text)
-        .hint_text(egui::RichText::new(placeholder).small().color(colors::TEXT_MUTED))
+        .hint_text(
+            egui::RichText::new(placeholder)
+                .small()
+                .color(colors::TEXT_MUTED),
+        )
         .desired_width(ui.available_width())
         .margin(egui::Margin::symmetric(6.0, 4.0));
 

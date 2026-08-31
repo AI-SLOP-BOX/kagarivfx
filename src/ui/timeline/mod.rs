@@ -637,51 +637,43 @@ let type_icon = crate::ui::icons::layer_icon(&layer.layer_type);
                 }
             });
 
-                                    let vis = layer.visible;
-                                    let eye_svg = if vis { crate::ui::icons::SVG_EYE_OPEN } else { crate::ui::icons::SVG_EYE_CLOSED };
-                                    let eye_uri = if vis { "bytes://eye_open" } else { "bytes://eye_closed" };
-                                    crate::ui::icons::render_svg_bytes(ui, eye_uri, eye_svg, egui::vec2(14.0, 14.0), egui::Color32::WHITE);
-                                    if ui.small_button(if vis { "V" } else { "v" }).clicked() {
-                                        layer.visible = !vis;
+                                    // ── Vector SVG Layer Switches ──
+                                    use crate::ui::custom_widgets::ae_svg_toggle;
+                                    use crate::ui::icons::*;
+
+                                    let is_vis = layer.visible;
+                                    if ae_svg_toggle(ui, &mut layer.visible, if is_vis { SVG_EYE_OPEN } else { SVG_EYE_CLOSED }, &format!("vis_{}", i), egui::vec2(18.0, 18.0), egui::Color32::WHITE, "Toggle Layer Visibility (V)").clicked() {
                                         project_changed = true;
                                     }
 
-                                    let solo = layer.solo;
-                                    if ui.selectable_label(solo, "S").clicked() {
-                                        layer.solo = !solo;
+                                    if ae_svg_toggle(ui, &mut layer.solo, SVG_SWITCH_SOLO, &format!("solo_{}", i), egui::vec2(18.0, 18.0), egui::Color32::GOLD, "Toggle Solo (S)").clicked() {
                                         project_changed = true;
                                     }
 
-                                    let lkd = layer.locked;
-                                    let lock_svg = if lkd { crate::ui::icons::SVG_LOCK } else { crate::ui::icons::SVG_UNLOCK };
-                                    let lock_uri = if lkd { "bytes://lock_locked" } else { "bytes://lock_unlocked" };
-                                    crate::ui::icons::render_svg_bytes(ui, lock_uri, lock_svg, egui::vec2(14.0, 14.0), egui::Color32::WHITE);
-                                    if ui.selectable_label(lkd, "L").clicked() {
-                                        layer.locked = !lkd;
+                                    let is_lkd = layer.locked;
+                                    if ae_svg_toggle(ui, &mut layer.locked, if is_lkd { SVG_LOCK } else { SVG_UNLOCK }, &format!("lock_{}", i), egui::vec2(18.0, 18.0), colors::ACCENT_ORANGE, "Toggle Layer Lock (L)").clicked() {
                                         project_changed = true;
                                     }
 
-                                    let is_collapsed = layer.is_collapsed;
-                                    if ui.selectable_label(is_collapsed, "✸").on_hover_text("Collapse Transformations / Continuously Rasterize Switch").clicked() {
-                                        layer.is_collapsed = !is_collapsed;
+                                    if ae_svg_toggle(ui, &mut layer.is_collapsed, SVG_COLLAPSE_TRANSFORM, &format!("col_{}", i), egui::vec2(18.0, 18.0), colors::ACCENT_YELLOW, "Collapse Transformations / Continuously Rasterize").clicked() {
+                                        project_changed = true;
+                                    }
+
+                                    if ae_svg_toggle(ui, &mut layer.is_3d, SVG_3D_CUBE, &format!("3d_{}", i), egui::vec2(18.0, 18.0), colors::ACCENT_BLUE, "Toggle 3D Layer").clicked() {
+                                        project_changed = true;
+                                    }
+
+                                    if ae_svg_toggle(ui, &mut layer.motion_blur, SVG_MOTION_BLUR, &format!("mb_{}", i), egui::vec2(18.0, 18.0), colors::ACCENT_CYAN, "Toggle Layer Motion Blur").clicked() {
+                                        project_changed = true;
+                                    }
+
+                                    if ae_svg_toggle(ui, &mut layer.is_shy, SVG_SHY, &format!("shy_{}", i), egui::vec2(18.0, 18.0), colors::ACCENT_GREEN, "Shy Layer (Hide in timeline)").clicked() {
                                         project_changed = true;
                                     }
 
                                     let fx_on = layer.effects_enabled;
                                     if ui.selectable_label(fx_on, "fx").on_hover_text("Toggle All Layer Effects On/Off").clicked() {
                                         layer.effects_enabled = !fx_on;
-                                        project_changed = true;
-                                    }
-
-                                    let is_adj = layer.is_adjustment_layer;
-                                    if ui.selectable_label(is_adj, "◐").on_hover_text("Adjustment Layer Switch").clicked() {
-                                        layer.is_adjustment_layer = !is_adj;
-                                        project_changed = true;
-                                    }
-
-                                    let pt = layer.preserve_transparency;
-                                    if ui.selectable_label(pt, "T").on_hover_text("Preserve Underlying Transparency (Clipping Mask)").clicked() {
-                                        layer.preserve_transparency = !pt;
                                         project_changed = true;
                                     }
 

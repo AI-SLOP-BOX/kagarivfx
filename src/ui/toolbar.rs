@@ -103,9 +103,16 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
                 ui.separator();
                 ui.add_space(4.0);
 
-                // AE Snapping Toggle (icon + label)
-                ui.toggle_value(&mut app.snap_to_keyframes, "🧲 Snap")
-                    .on_hover_text("Toggle Snapping to Keyframes and Markers (Shift+S)");
+                // AE Snapping Toggle (Vector SVG Icon)
+                custom_widgets::ae_svg_toggle(
+                    ui,
+                    &mut app.snap_to_keyframes,
+                    SVG_SNAP,
+                    "tb_snap_btn",
+                    egui::vec2(22.0, 22.0),
+                    colors::ACCENT_CYAN,
+                    "Toggle Snapping to Keyframes and Markers (Shift+S)",
+                );
 
                 ui.add_space(4.0);
                 ui.separator();

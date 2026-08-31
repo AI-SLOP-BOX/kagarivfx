@@ -73,26 +73,26 @@ pub fn draw_timeline_header(
         )
         .on_hover_text("Click or Drag to set current frame timecode");
         ui.add_space(8.0);
-        if ui.button("|< First").clicked() {
+        use crate::ui::icons::*;
+
+        if ui.small_button("⏮").on_hover_text("Go to First Frame (Home)").clicked() {
             *current_frame = 0;
         }
-        if ui.button("< Prev").clicked() {
+        if ui.small_button("◀").on_hover_text("Previous Frame (PageUp / Left)").clicked() {
             *current_frame = current_frame.saturating_sub(1);
         }
+        let play_btn_text = if *state.is_playing { "⏸ Pause" } else { "▶ Play" };
         if ui
-            .button(if *state.is_playing {
-                "|| Pause"
-            } else {
-                "> Play"
-            })
+            .button(egui::RichText::new(play_btn_text).strong().color(if *state.is_playing { colors::ACCENT_YELLOW } else { colors::ACCENT_GREEN }))
+            .on_hover_text("Play / Pause RAM Preview (Spacebar)")
             .clicked()
         {
             *state.is_playing = !*state.is_playing;
         }
-        if ui.button("Next >").clicked() {
+        if ui.small_button("▶").on_hover_text("Next Frame (PageDown / Right)").clicked() {
             *current_frame = (*current_frame + 1).min(total_frames);
         }
-        if ui.button("Last >|").clicked() {
+        if ui.small_button("⏭").on_hover_text("Go to Last Frame (End)").clicked() {
             *current_frame = total_frames;
         }
 
@@ -163,18 +163,28 @@ pub fn draw_timeline_header(
         {
             state.expanded_layers.clear();
         }
-        ui.checkbox(state.snap_to_keyframes, "Snap");
-        let mode_btn_text = if *state.show_graph_editor {
-            "Graph Mode"
-        } else {
-            "Tracks Mode"
-        };
-        if ui
-            .selectable_label(*state.show_graph_editor, mode_btn_text)
-            .clicked()
-        {
-            *state.show_graph_editor = !*state.show_graph_editor;
-        }
+
+        use crate::ui::custom_widgets::ae_svg_toggle;
+
+        ae_svg_toggle(
+            ui,
+            state.snap_to_keyframes,
+            SVG_SNAP,
+            "snap_btn_header",
+            egui::vec2(22.0, 22.0),
+            colors::ACCENT_CYAN,
+            "Toggle Keyframe & Marker Snapping (Shift+S)",
+        );
+
+        ae_svg_toggle(
+            ui,
+            state.show_graph_editor,
+            SVG_GRAPH_EDITOR,
+            "graph_btn_header",
+            egui::vec2(22.0, 22.0),
+            colors::ACCENT_BLUE,
+            "Toggle Graph Editor / Speed Curves (Shift+F3)",
+        );
 
         // ── 8bpc / 16bpc / 32bpc (Float) HDR Color Depth Quick Toggle ──
         ui.add_space(4.0);
