@@ -1,4 +1,6 @@
-use crate::core::keyframe::{solve_bezier_eased_time, BezierControlPoint, InterpolationType, Keyframe};
+use crate::core::keyframe::{
+    solve_bezier_eased_time, BezierControlPoint, InterpolationType, Keyframe,
+};
 use serde::{Deserialize, Serialize};
 
 pub trait Interpolate: Clone {
@@ -10,7 +12,9 @@ impl Interpolate for f32 {
     fn interpolate(start: &Self, end: &Self, t: f32) -> Self {
         start + (end - start) * t
     }
-    fn default_interpolate() -> Self { 0.0 }
+    fn default_interpolate() -> Self {
+        0.0
+    }
 }
 
 impl<const N: usize> Interpolate for [f32; N] {
@@ -21,7 +25,9 @@ impl<const N: usize> Interpolate for [f32; N] {
         }
         out
     }
-    fn default_interpolate() -> Self { [0.0; N] }
+    fn default_interpolate() -> Self {
+        [0.0; N]
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -64,8 +70,14 @@ impl<T: Clone> Animatable<T> {
             }
             for kf in kfs.iter_mut() {
                 kf.interpolation = InterpolationType::Bezier {
-                    outgoing: BezierControlPoint { influence: 0.333, speed: 0.0 },
-                    incoming: BezierControlPoint { influence: 0.333, speed: 0.0 },
+                    outgoing: BezierControlPoint {
+                        influence: 0.333,
+                        speed: 0.0,
+                    },
+                    incoming: BezierControlPoint {
+                        influence: 0.333,
+                        speed: 0.0,
+                    },
                     custom_bezier: None,
                 };
             }
@@ -90,6 +102,66 @@ impl<T: Clone> Animatable<T> {
                 }
             }
         }
+    }
+
+    /// Add or replace a keyframe without retaining a synthetic constant at the
+    /// same frame. This is used by live automation writeback at frame zero.
+    pub fn set_keyframe(&mut self, new_kf: Keyframe<T>) {
+        if new_kf.frame == 0 {
+            if let Animatable::Animated(keyframes) = self {
+                if let Some(existing) = keyframes.iter_mut().find(|kf| kf.frame == 0) {
+                    *existing = new_kf;
+                    return;
+                }
+            }
+            if let Animatable::Constant(_) = self {
+                *self = Animatable::Animated(vec![new_kf]);
+                return;
+            }
+        }
+        self.add_keyframe(new_kf);
+    }
+
+    /// Update value at the specified frame: if constant, updates the constant;
+    /// if animated, updates the existing keyframe or inserts a new one (AE behavior).
+    pub fn set_value_at_frame(&mut self, frame: u32, value: T) {
+        match self {
+            Animatable::Constant(v) => {
+                *v = value;
+            }
+            Animatable::Animated(keyframes) => {
+                if let Some(existing) = keyframes.iter_mut().find(|kf| kf.frame == frame) {
+                    existing.value = value;
+                } else {
+                    keyframes.push(Keyframe::new(frame, value, InterpolationType::Linear));
+                    self.sort_keyframes();
+                }
+            }
+        }
+    }
+
+    pub fn move_keyframe(&mut self, from_frame: u32, to_frame: u32) -> bool {
+        if from_frame == to_frame {
+            return false;
+        }
+        let Some(keyframes) = self.keyframes_mut() else {
+            return false;
+        };
+        let Some(index) = keyframes.iter().position(|key| key.frame == from_frame) else {
+            return false;
+        };
+        let mut key = keyframes.remove(index);
+        key.frame = to_frame;
+        if let Some(existing) = keyframes
+            .iter_mut()
+            .find(|candidate| candidate.frame == to_frame)
+        {
+            *existing = key;
+        } else {
+            keyframes.push(key);
+            keyframes.sort_by_key(|candidate| candidate.frame);
+        }
+        true
     }
 
     fn sort_keyframes(&mut self) {
@@ -170,14 +242,10 @@ impl<T: Interpolate> Animatable<T> {
 
                 match &start_kf.interpolation {
                     InterpolationType::Hold => start_kf.value.clone(),
-                    InterpolationType::Linear => {
-                        T::interpolate(&start_kf.value, &end_kf.value, t)
-                    }
+                    InterpolationType::Linear => T::interpolate(&start_kf.value, &end_kf.value, t),
                     InterpolationType::Bezier { custom_bezier, .. } => {
                         let eased_t = if let Some(coords) = custom_bezier {
-                            solve_bezier_eased_time(
-                                t, coords[0], coords[1], coords[2], coords[3],
-                            )
+                            solve_bezier_eased_time(t, coords[0], coords[1], coords[2], coords[3])
                         } else {
                             solve_bezier_eased_time(t, 0.25, 0.1, 0.25, 1.0)
                         };
@@ -214,5 +282,52 @@ mod tests {
 
         assert_eq!(anim.evaluate_with_hint(20, &mut hint), 200.0);
         assert_eq!(hint, 2);
+    }
+
+    #[test]
+    fn move_keyframe_preserves_value_interpolation_and_order() {
+        let mut anim = Animatable::new_animated(vec![
+            Keyframe::new(5, 10.0, InterpolationType::Hold),
+            Keyframe::new(20, 30.0, InterpolationType::Linear),
+        ]);
+        assert!(anim.move_keyframe(5, 15));
+        let keys = anim.keyframes().unwrap();
+        assert_eq!(
+            keys.iter().map(|key| key.frame).collect::<Vec<_>>(),
+            vec![15, 20]
+        );
+        assert_eq!(keys[0].value, 10.0);
+        assert!(matches!(keys[0].interpolation, InterpolationType::Hold));
+    }
+
+    #[test]
+    fn move_keyframe_replaces_destination_and_rejects_constant() {
+        let mut anim = Animatable::new_animated(vec![
+            Keyframe::new(5, 10.0, InterpolationType::Linear),
+            Keyframe::new(15, 99.0, InterpolationType::Hold),
+        ]);
+        assert!(anim.move_keyframe(5, 15));
+        assert_eq!(anim.keyframes().unwrap().len(), 1);
+        assert_eq!(anim.evaluate(15), 10.0);
+        let mut constant = Animatable::new_constant(3.0f32);
+        assert!(!constant.move_keyframe(0, 4));
+    }
+
+    #[test]
+    fn move_keyframe_preserves_custom_bezier_handles() {
+        let interpolation = InterpolationType::Bezier {
+            outgoing: BezierControlPoint {
+                influence: 0.2,
+                speed: 4.0,
+            },
+            incoming: BezierControlPoint {
+                influence: 0.8,
+                speed: -2.0,
+            },
+            custom_bezier: Some([0.1, 0.4, 0.9, 0.7]),
+        };
+        let mut anim = Animatable::new_animated(vec![Keyframe::new(7, 3.0f32, interpolation)]);
+        assert!(anim.move_keyframe(7, 11));
+        assert_eq!(anim.keyframes().unwrap()[0].interpolation, interpolation);
     }
 }

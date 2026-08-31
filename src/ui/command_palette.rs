@@ -831,19 +831,21 @@ pub fn get_all_commands() -> Vec<PaletteCommand> {
                 if let Some(idx) = app.selected_layer_idx {
                     if idx < comp.layers.len() {
                         let len = comp.layers[idx].effects.len();
-                        comp.layers[idx].effects.push(crate::core::timeline::Effect {
-                            id: format!("lightning_{}", len),
-                            name: "Lightning".to_string(),
-                            effect_type: crate::core::timeline::EffectType::LightningArc {
-                                start_x: crate::core::property::Animatable::new_constant(0.2),
-                                start_y: crate::core::property::Animatable::new_constant(0.2),
-                                end_x: crate::core::property::Animatable::new_constant(0.8),
-                                end_y: crate::core::property::Animatable::new_constant(0.8),
-                                seed: crate::core::property::Animatable::new_constant(12345.0),
-                                glow: crate::core::property::Animatable::new_constant(1.0),
-                            },
-                            enabled: true,
-                        });
+                        comp.layers[idx]
+                            .effects
+                            .push(crate::core::timeline::Effect {
+                                id: format!("lightning_{}", len),
+                                name: "Lightning".to_string(),
+                                effect_type: crate::core::timeline::EffectType::LightningArc {
+                                    start_x: crate::core::property::Animatable::new_constant(0.2),
+                                    start_y: crate::core::property::Animatable::new_constant(0.2),
+                                    end_x: crate::core::property::Animatable::new_constant(0.8),
+                                    end_y: crate::core::property::Animatable::new_constant(0.8),
+                                    seed: crate::core::property::Animatable::new_constant(12345.0),
+                                    glow: crate::core::property::Animatable::new_constant(1.0),
+                                },
+                                enabled: true,
+                            });
                         crate::core::frame_cache::bump_version();
                     }
                 }
@@ -858,23 +860,31 @@ pub fn get_all_commands() -> Vec<PaletteCommand> {
                 if let Some(idx) = app.selected_layer_idx {
                     if idx < comp.layers.len() {
                         let len = comp.layers[idx].effects.len();
-                        comp.layers[idx].effects.push(crate::core::timeline::Effect {
-                            id: format!("laser_{}", len),
-                            name: "Laser Beam".to_string(),
-                            effect_type: crate::core::timeline::EffectType::LaserBeam {
-                                start_x: crate::core::property::Animatable::new_constant(0.1),
-                                start_y: crate::core::property::Animatable::new_constant(0.5),
-                                end_x: crate::core::property::Animatable::new_constant(0.9),
-                                end_y: crate::core::property::Animatable::new_constant(0.5),
-                                progress: crate::core::property::Animatable::new_constant(0.5),
-                                length: crate::core::property::Animatable::new_constant(40.0),
-                                starting_thickness: crate::core::property::Animatable::new_constant(12.0),
-                                ending_thickness: crate::core::property::Animatable::new_constant(4.0),
-                                core_color: crate::core::property::Animatable::new_constant([1.0, 1.0, 1.0, 1.0]),
-                                glow_color: crate::core::property::Animatable::new_constant([1.0, 0.2, 0.1, 0.8]),
-                            },
-                            enabled: true,
-                        });
+                        comp.layers[idx]
+                            .effects
+                            .push(crate::core::timeline::Effect {
+                                id: format!("laser_{}", len),
+                                name: "Laser Beam".to_string(),
+                                effect_type: crate::core::timeline::EffectType::LaserBeam {
+                                    start_x: crate::core::property::Animatable::new_constant(0.1),
+                                    start_y: crate::core::property::Animatable::new_constant(0.5),
+                                    end_x: crate::core::property::Animatable::new_constant(0.9),
+                                    end_y: crate::core::property::Animatable::new_constant(0.5),
+                                    progress: crate::core::property::Animatable::new_constant(0.5),
+                                    length: crate::core::property::Animatable::new_constant(40.0),
+                                    starting_thickness:
+                                        crate::core::property::Animatable::new_constant(12.0),
+                                    ending_thickness:
+                                        crate::core::property::Animatable::new_constant(4.0),
+                                    core_color: crate::core::property::Animatable::new_constant([
+                                        1.0, 1.0, 1.0, 1.0,
+                                    ]),
+                                    glow_color: crate::core::property::Animatable::new_constant([
+                                        1.0, 0.2, 0.1, 0.8,
+                                    ]),
+                                },
+                                enabled: true,
+                            });
                         crate::core::frame_cache::bump_version();
                     }
                 }
@@ -889,20 +899,30 @@ pub fn get_all_commands() -> Vec<PaletteCommand> {
                 let comp = app.history.current().active_composition();
                 if let Some(idx) = app.selected_layer_idx {
                     if let Some(l) = comp.layers.get(idx) {
-                        if let crate::core::timeline::LayerType::Audio { path, .. } = &l.layer_type {
+                        if let crate::core::timeline::LayerType::Audio { path, .. } = &l.layer_type
+                        {
                             audio_source = Some(path.clone());
-                        } else if let crate::core::timeline::LayerType::Video { audio_wav: Some(w), .. } = &l.layer_type {
+                        } else if let crate::core::timeline::LayerType::Video {
+                            audio_wav: Some(w),
+                            ..
+                        } = &l.layer_type
+                        {
                             audio_source = Some(w.clone());
                         }
                     }
                 }
                 if let Some(src) = audio_source {
                     let mut temp_proj = app.history.current().clone();
-                    match crate::core::audio_to_keyframes::convert_multiband_audio_to_keyframes(temp_proj.active_composition_mut(), &src, None) {
+                    match crate::core::audio_to_keyframes::convert_multiband_audio_to_keyframes(
+                        temp_proj.active_composition_mut(),
+                        &src,
+                        None,
+                    ) {
                         Ok(name) => {
                             app.history.commit(temp_proj);
                             crate::core::frame_cache::bump_version();
-                            app.toasts.info(format!("Created '{}' with Master/Bass/Mid/Treble", name));
+                            app.toasts
+                                .info(format!("Created '{}' with Master/Bass/Mid/Treble", name));
                         }
                         Err(e) => app.toasts.error(e),
                     }
@@ -928,10 +948,13 @@ pub fn get_all_commands() -> Vec<PaletteCommand> {
                             dur,
                         );
                         comp.add_layer(null_layer);
-                        crate::core::tracker_engine::TrackerEngine::apply_tracker_to_target(comp, idx, 0, null_idx, true, false);
+                        crate::core::tracker_engine::TrackerEngine::apply_tracker_to_target(
+                            comp, idx, 0, null_idx, true, false,
+                        );
                     });
                     crate::core::frame_cache::bump_version();
-                    app.toasts.info("Created new Null layer with tracked motion!");
+                    app.toasts
+                        .info("Created new Null layer with tracked motion!");
                 }
             }),
         },
@@ -1097,6 +1120,8 @@ pub fn draw_command_palette(app: &mut AfterEffectsApp, ctx: &egui::Context) {
             if let Some(exec_idx) = executed_command_idx {
                 if exec_idx < filtered.len() {
                     (filtered[exec_idx].action)(app);
+                    let current = app.history.current().clone();
+                    app.history.commit_action(current, filtered[exec_idx].name);
                     app.show_command_palette = false;
                     app.command_palette_search.clear();
                     app.command_palette_selected_idx = 0;

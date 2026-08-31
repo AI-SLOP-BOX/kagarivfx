@@ -1,8 +1,8 @@
 use std::collections::HashSet;
 use std::sync::mpsc::Receiver;
 
-use crate::{ExportEvent, TrackerEvent, ViewportMode};
 use crate::core::timeline::Project;
+use crate::{ExportEvent, TrackerEvent, ViewportMode};
 
 pub use crate::core::audio_types::MixerChannel;
 
@@ -198,6 +198,8 @@ pub struct AfterEffectsApp {
     pub project_path: String,
     /// Preserves unified audio/timeline metadata when the GUI opens and saves a project.
     pub production_document: Option<crate::core::production_document::ProductionDocument>,
+    pub automation_undo: Vec<Vec<crate::core::automation_binding::AutomationBinding>>,
+    pub automation_redo: Vec<Vec<crate::core::automation_binding::AutomationBinding>>,
     pub otio_path: String,
     pub expanded_layers: std::collections::HashSet<usize>,
     pub expanded_waveform_layers: std::collections::HashSet<usize>,
@@ -219,12 +221,17 @@ pub struct AfterEffectsApp {
     pub show_the_wiggler: bool,
     pub show_motion_sketch: bool,
     pub show_physics: bool,
+    pub show_inline_numeric_editor: bool,
     pub precompose_name: String,
     pub precompose_move_attributes: bool,
     pub show_command_palette: bool,
     /// 📊 Vectorscope / RGB Parade floating scope window (Shift+F4)
     pub show_vectorscope: bool,
     pub show_history_panel: bool,
+    pub show_quality_check_panel: bool,
+    pub show_automation_panel: bool,
+    pub selected_automation_binding: Option<usize>,
+    pub quality_check_result: Option<crate::ui::quality_check_panel::QualityCheckResult>,
     pub show_welcome: bool,
     /// Skill-level UI mode: Beginner hides advanced panels/menus.
     pub ui_mode: crate::ui::mode::UiMode,
@@ -370,7 +377,6 @@ pub struct AfterEffectsApp {
 #[cfg(feature = "gui")]
 impl Default for AfterEffectsApp {
     fn default() -> Self {
-        
         Self {
             history: crate::core::history::ProjectHistory::new(Project::default()),
             autosave: crate::core::autosave::AutosaveManager::new(
@@ -409,6 +415,8 @@ impl Default for AfterEffectsApp {
             connected_app: None,
             project_path: "project.aevfx.json".to_string(),
             production_document: None,
+            automation_undo: Vec::new(),
+            automation_redo: Vec::new(),
             otio_path: "timeline.otio.json".to_string(),
             expanded_layers: std::collections::HashSet::new(),
             expanded_waveform_layers: std::collections::HashSet::new(),
@@ -426,6 +434,7 @@ impl Default for AfterEffectsApp {
             show_the_wiggler: false,
             show_motion_sketch: false,
             show_physics: false,
+            show_inline_numeric_editor: false,
             precompose_name: String::new(),
             precompose_move_attributes: true,
             snap_to_keyframes: true,
@@ -510,6 +519,10 @@ impl Default for AfterEffectsApp {
             show_command_palette: false,
             show_vectorscope: false,
             show_history_panel: false,
+            show_quality_check_panel: false,
+            show_automation_panel: false,
+            selected_automation_binding: None,
+            quality_check_result: None,
             show_welcome: true,
             ui_mode: crate::ui::mode::load_mode(),
             tutorial: None,
@@ -556,10 +569,14 @@ impl AfterEffectsApp {
             // gestures (which would produce a single giant undo step).
             self.commit_drag();
         }
-        self.drag_tx = Some(DragTransaction::new(
-            self.history.current().clone(),
-            label,
-        ));
+        self.drag_tx = Some(DragTransaction::new(self.history.current().clone(), label));
+    }
+
+    pub fn begin_drag_with_snapshot(&mut self, snapshot: Project, label: &'static str) {
+        if self.drag_tx.is_some() {
+            self.commit_drag();
+        }
+        self.drag_tx = Some(DragTransaction::new(snapshot, label));
     }
 
     /// Whether a drag transaction is currently open.
@@ -568,12 +585,71 @@ impl AfterEffectsApp {
     }
 
     pub fn commit_drag(&mut self) {
-        if self.drag_tx.take().is_some() {
+        if let Some(tx) = self.drag_tx.take() {
             let current = self.history.current().clone();
-            self.history.commit(current);
+            let unchanged = match (
+                serde_json::to_vec(&current),
+                serde_json::to_vec(&tx.snapshot),
+            ) {
+                (Ok(current), Ok(snapshot)) => current == snapshot,
+                _ => false,
+            };
+            if unchanged {
+                return;
+            }
+            self.history.commit_action(current, tx.label);
             crate::core::frame_cache::bump_version();
             self.frame_cache.collect_garbage();
         }
+    }
+
+    pub fn record_automation_edit(
+        &mut self,
+        before: Vec<crate::core::automation_binding::AutomationBinding>,
+    ) -> bool {
+        if self
+            .production_document
+            .as_ref()
+            .is_some_and(|document| document.bindings != before)
+        {
+            self.automation_undo.push(before);
+            self.automation_redo.clear();
+            crate::core::frame_cache::bump_version();
+            return true;
+        }
+        false
+    }
+
+    pub fn clear_automation_history(&mut self) {
+        self.automation_undo.clear();
+        self.automation_redo.clear();
+        self.selected_automation_binding = None;
+    }
+
+    pub fn undo_automation_edit(&mut self) -> bool {
+        let Some(document) = self.production_document.as_mut() else {
+            return false;
+        };
+        let Some(previous) = self.automation_undo.pop() else {
+            return false;
+        };
+        let current = std::mem::replace(&mut document.bindings, previous);
+        self.automation_redo.push(current);
+        crate::core::frame_cache::bump_version();
+        true
+    }
+
+    pub fn redo_automation_edit(&mut self) -> bool {
+        let Some(document) = self.production_document.as_mut() else {
+            return false;
+        };
+        let Some(next) = self.automation_redo.pop() else {
+            return false;
+        };
+        let current = std::mem::replace(&mut document.bindings, next);
+        self.automation_undo.push(current);
+        crate::core::frame_cache::bump_version();
+        true
     }
 
     pub fn cancel_drag(&mut self) {
@@ -612,12 +688,17 @@ impl eframe::App for AfterEffectsApp {
             let _ = std::fs::write(&dirty_exit_marker, std::process::id().to_string());
             if had_crash && self.autosave.has_recovery() {
                 self.recovery_snapshot_time = std::fs::metadata(
-                    std::env::temp_dir().join("aevfx_recovery").join("recovery_0.json"),
+                    std::env::temp_dir()
+                        .join("aevfx_recovery")
+                        .join("recovery_0.json"),
                 )
                 .ok()
                 .and_then(|m| m.modified().ok())
                 .map(|t| {
-                    let secs = t.duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
+                    let secs = t
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .map(|d| d.as_secs())
+                        .unwrap_or(0);
                     format!("#{}", secs)
                 });
                 self.show_recovery_dialog = true;
@@ -682,7 +763,12 @@ impl eframe::App for AfterEffectsApp {
                 );
             }
 
-            match (self.is_playing, audio_enabled, wav, &mut self.audio_playback) {
+            match (
+                self.is_playing,
+                audio_enabled,
+                wav,
+                &mut self.audio_playback,
+            ) {
                 (true, true, Some(wav), Some(playback)) => {
                     if let Err(e) = playback.play(&std::path::PathBuf::from(wav), playhead_sec) {
                         log::warn!("[Audio] playback error: {}", e);
@@ -717,7 +803,10 @@ impl eframe::App for AfterEffectsApp {
         let mut current_frame = self.current_frame;
 
         let wa_start = self.work_area_in.unwrap_or(0);
-        let wa_end = self.work_area_out.unwrap_or(total_frames.saturating_sub(1)).min(total_frames.saturating_sub(1));
+        let wa_end = self
+            .work_area_out
+            .unwrap_or(total_frames.saturating_sub(1))
+            .min(total_frames.saturating_sub(1));
 
         if self.is_playing {
             let speed = self.playback_speed.abs().max(1) as u32;
@@ -726,7 +815,11 @@ impl eframe::App for AfterEffectsApp {
                 current_frame = if next >= wa_end {
                     if self.loop_playback {
                         // Wrap to work-area start (or comp start)
-                        if self.work_area_in.is_some() || self.work_area_out.is_some() { wa_start } else { 0 }
+                        if self.work_area_in.is_some() || self.work_area_out.is_some() {
+                            wa_start
+                        } else {
+                            0
+                        }
                     } else {
                         // Stop at the end when looping is off
                         self.is_playing = false;
@@ -769,7 +862,10 @@ impl eframe::App for AfterEffectsApp {
         let status_frame = egui::Frame::none()
             .fill(crate::ui::theme::colors::BG_DARKEST)
             .inner_margin(egui::Margin::symmetric(8.0, 3.0))
-            .stroke(egui::Stroke::new(1.0, crate::ui::theme::colors::BORDER_SUBTLE));
+            .stroke(egui::Stroke::new(
+                1.0,
+                crate::ui::theme::colors::BORDER_SUBTLE,
+            ));
 
         egui::TopBottomPanel::bottom("ae_status_bar")
             .frame(status_frame)
@@ -778,84 +874,175 @@ impl eframe::App for AfterEffectsApp {
                 ui.horizontal(|ui| {
                     ui.style_mut().spacing.item_spacing.x = 6.0;
                     let (gpu_label, gpu_color) = if self.gpu_rendered {
-                        ("● Metal GPU Render Engine", crate::ui::theme::colors::ACCENT_GREEN)
+                        (
+                            "● Metal GPU Render Engine",
+                            crate::ui::theme::colors::ACCENT_GREEN,
+                        )
                     } else {
-                        ("○ CPU Software Renderer", crate::ui::theme::colors::ACCENT_ORANGE)
+                        (
+                            "○ CPU Software Renderer",
+                            crate::ui::theme::colors::ACCENT_ORANGE,
+                        )
                     };
                     ui.label(egui::RichText::new(gpu_label).small().color(gpu_color));
                     ui.separator();
                     // Timecode
                     let fps = self.history.current().active_composition().fps.max(1);
                     let cf = self.current_frame;
-                    ui.label(egui::RichText::new(format!(
-                        "TC: {:02}:{:02}:{:02}:{:02}",
-                        cf / (fps * 3600), (cf / fps) / 60 % 60,
-                        (cf / fps) % 60, cf % fps
-                    )).monospace().small().color(crate::ui::theme::colors::ACCENT_YELLOW));
+                    ui.label(
+                        egui::RichText::new(format!(
+                            "TC: {:02}:{:02}:{:02}:{:02}",
+                            cf / (fps * 3600),
+                            (cf / fps) / 60 % 60,
+                            (cf / fps) % 60,
+                            cf % fps
+                        ))
+                        .monospace()
+                        .small()
+                        .color(crate::ui::theme::colors::ACCENT_YELLOW),
+                    );
                     ui.separator();
-                    ui.label(egui::RichText::new(format!("Frame: {} / {}", cf, total_frames)).small().color(crate::ui::theme::colors::TEXT_SECONDARY));
+                    ui.label(
+                        egui::RichText::new(format!("Frame: {} / {}", cf, total_frames))
+                            .small()
+                            .color(crate::ui::theme::colors::TEXT_SECONDARY),
+                    );
                     ui.separator();
-                    ui.label(egui::RichText::new("16-bpc | Rec.709").small().color(crate::ui::theme::colors::TEXT_MUTED));
+                    ui.label(
+                        egui::RichText::new("16-bpc | Rec.709")
+                            .small()
+                            .color(crate::ui::theme::colors::TEXT_MUTED),
+                    );
                     ui.separator();
-                    let cached_cnt = (0..total_frames).filter(|&f| self.frame_cache.is_cached(f)).count();
-                    ui.label(egui::RichText::new(format!("RAM Preview: {}/{} frames cached", cached_cnt, total_frames)).small().color(crate::ui::theme::colors::TEXT_MUTED));
+                    let cached_cnt = (0..total_frames)
+                        .filter(|&f| self.frame_cache.is_cached(f))
+                        .count();
+                    ui.label(
+                        egui::RichText::new(format!(
+                            "RAM Preview: {}/{} frames cached",
+                            cached_cnt, total_frames
+                        ))
+                        .small()
+                        .color(crate::ui::theme::colors::TEXT_MUTED),
+                    );
                     ui.separator();
                     // Selection summary: layers + keyframes
                     let kf_count = self.selected_keyframes.len();
                     let layer_count = self.selected_layers.len();
                     if kf_count > 0 {
                         ui.label(
-                            egui::RichText::new(format!("{} keyframes selected (, . move | Del delete | Cmd+C/V)", kf_count))
-                                .small()
-                                .color(crate::ui::theme::colors::ACCENT_ORANGE),
+                            egui::RichText::new(format!(
+                                "{} keyframes selected (, . move | Del delete | Cmd+C/V)",
+                                kf_count
+                            ))
+                            .small()
+                            .color(crate::ui::theme::colors::ACCENT_ORANGE),
                         );
                     } else if layer_count > 0 {
                         ui.label(
-                            egui::RichText::new(format!("{} layer{} selected", layer_count, if layer_count > 1 { "s" } else { "" }))
-                                .small()
-                                .color(crate::ui::theme::colors::ACCENT_BLUE),
+                            egui::RichText::new(format!(
+                                "{} layer{} selected",
+                                layer_count,
+                                if layer_count > 1 { "s" } else { "" }
+                            ))
+                            .small()
+                            .color(crate::ui::theme::colors::ACCENT_BLUE),
                         );
                     }
                     let pointer_pos = ctx.pointer_hover_pos().unwrap_or(egui::pos2(960.0, 540.0));
                     ui.separator();
-                    ui.label(egui::RichText::new(format!("X: {:.0} Y: {:.0} px", pointer_pos.x, pointer_pos.y)).small().color(egui::Color32::from_rgb(0, 180, 255)));
+                    ui.label(
+                        egui::RichText::new(format!(
+                            "X: {:.0} Y: {:.0} px",
+                            pointer_pos.x, pointer_pos.y
+                        ))
+                        .small()
+                        .color(egui::Color32::from_rgb(0, 180, 255)),
+                    );
                     ui.separator();
                     let pixel_rgba = {
                         let comp = self.history.current().active_composition();
                         let px = pointer_pos.x as i32;
                         let py = pointer_pos.y as i32;
-                        if px >= 0 && py >= 0 && (px as u32) < comp.width && (py as u32) < comp.height {
-                            let layer_indices: Vec<usize> = comp.layers.iter().enumerate()
+                        if px >= 0
+                            && py >= 0
+                            && (px as u32) < comp.width
+                            && (py as u32) < comp.height
+                        {
+                            let layer_indices: Vec<usize> = comp
+                                .layers
+                                .iter()
+                                .enumerate()
                                 .filter(|(_, l)| l.is_active(self.current_frame))
                                 .map(|(i, _)| i)
                                 .collect();
-                            if let Some(entry) = self.frame_cache.get_with_layers(self.current_frame, &layer_indices) {
+                            if let Some(entry) = self
+                                .frame_cache
+                                .get_with_layers(self.current_frame, &layer_indices)
+                            {
                                 let idx = ((py as u32 * comp.width + px as u32) * 4) as usize;
                                 if idx + 3 < entry.pixels.len() {
-                                    Some([entry.pixels[idx], entry.pixels[idx+1], entry.pixels[idx+2], entry.pixels[idx+3]])
-                                } else { None }
-                            } else { None }
-                        } else { None }
+                                    Some([
+                                        entry.pixels[idx],
+                                        entry.pixels[idx + 1],
+                                        entry.pixels[idx + 2],
+                                        entry.pixels[idx + 3],
+                                    ])
+                                } else {
+                                    None
+                                }
+                            } else {
+                                None
+                            }
+                        } else {
+                            None
+                        }
                     };
                     if let Some([r, g, b, a]) = pixel_rgba {
-                        ui.label(egui::RichText::new(format!("R: {} G: {} B: {} A: {}", r, g, b, a)).small().color(egui::Color32::from_rgb(255, 200, 100)));
+                        ui.label(
+                            egui::RichText::new(format!("R: {} G: {} B: {} A: {}", r, g, b, a))
+                                .small()
+                                .color(egui::Color32::from_rgb(255, 200, 100)),
+                        );
                     } else {
-                        ui.label(egui::RichText::new("R: – G: – B: – A: –").small().color(egui::Color32::from_rgb(255, 200, 100)));
+                        ui.label(
+                            egui::RichText::new("R: – G: – B: – A: –")
+                                .small()
+                                .color(egui::Color32::from_rgb(255, 200, 100)),
+                        );
                     }
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        ui.label(egui::RichText::new("AE OSS v0.1.0-parity").small().color(egui::Color32::from_gray(120)));
+                        ui.label(
+                            egui::RichText::new("AE OSS v0.1.0-parity")
+                                .small()
+                                .color(egui::Color32::from_gray(120)),
+                        );
                         ui.separator();
-                        ui.label(egui::RichText::new("Tool: Selection (V)").small().color(egui::Color32::from_rgb(255, 230, 0)));
+                        ui.label(
+                            egui::RichText::new("Tool: Selection (V)")
+                                .small()
+                                .color(egui::Color32::from_rgb(255, 230, 0)),
+                        );
                         ui.separator();
-                        ui.label(egui::RichText::new("Dynamic Link: Active").small().color(egui::Color32::from_rgb(100, 180, 255)));
+                        ui.label(
+                            egui::RichText::new("Dynamic Link: Active")
+                                .small()
+                                .color(egui::Color32::from_rgb(100, 180, 255)),
+                        );
                         ui.separator();
-                        ui.label(egui::RichText::new("RAM: 1.4 GB / 32 GB").small().color(egui::Color32::from_gray(160)));
+                        ui.label(
+                            egui::RichText::new("RAM: 1.4 GB / 32 GB")
+                                .small()
+                                .color(egui::Color32::from_gray(160)),
+                        );
                     });
                 });
             });
 
         crate::ui::viewport::draw(self, ctx, current_frame);
         crate::ui::history_panel::draw_history_panel(self, ctx);
+        crate::ui::quality_check_panel::draw(self, ctx);
+        crate::ui::automation_panel::draw(self, ctx);
         crate::ui::drop_import::handle_dropped_files(self, ctx);
         crate::ui::welcome::draw(self, ctx);
         // Auto-open the walkthrough once per session for beginners on first run
@@ -868,7 +1055,8 @@ impl eframe::App for AfterEffectsApp {
         crate::ui::export_dialog::draw(self, ctx);
         crate::ui::comp_settings_dialog::draw_comp_settings_dialog(self, ctx);
 
-        let cmd_k_pressed = ctx.input(|i| (i.modifiers.command || i.modifiers.ctrl) && i.key_pressed(egui::Key::K));
+        let cmd_k_pressed =
+            ctx.input(|i| (i.modifiers.command || i.modifiers.ctrl) && i.key_pressed(egui::Key::K));
         if cmd_k_pressed {
             self.show_command_palette = !self.show_command_palette;
             if self.show_command_palette {
