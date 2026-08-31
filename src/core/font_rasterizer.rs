@@ -337,7 +337,8 @@ impl FontRasterizer {
         color: [f32; 4],
         tracking: f32,
     ) -> Option<(u32, u32, Vec<u8>)> {
-        if !font_size.is_finite() || !(0.1..=8192.0).contains(&font_size)
+        if !font_size.is_finite()
+            || !(0.1..=8192.0).contains(&font_size)
             || !tracking.is_finite()
             || !color.iter().all(|value| value.is_finite())
         {
@@ -739,11 +740,20 @@ impl FontRasterizer {
                                     cov[yi * bw + xi] = coverage;
                                 }
                             });
+                            let (char_r, char_g, char_b) = if let Some(fc) = advanced.get(char_idx).and_then(|a| a.fill_color) {
+                                (
+                                    (fc[0].clamp(0.0, 1.0) * 255.0) as u8,
+                                    (fc[1].clamp(0.0, 1.0) * 255.0) as u8,
+                                    (fc[2].clamp(0.0, 1.0) * 255.0) as u8,
+                                )
+                            } else {
+                                (r, g, b)
+                            };
                             let mut src_rgba = vec![0u8; bw * bh * 4];
                             for (i, cv) in cov.iter().enumerate() {
-                                src_rgba[i * 4] = r;
-                                src_rgba[i * 4 + 1] = g;
-                                src_rgba[i * 4 + 2] = b;
+                                src_rgba[i * 4] = char_r;
+                                src_rgba[i * 4 + 1] = char_g;
+                                src_rgba[i * 4 + 2] = char_b;
                                 src_rgba[i * 4 + 3] = (cv * 255.0) as u8;
                             }
                             let blur_px = c.blur.round().max(0.0) as u32;
