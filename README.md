@@ -10,12 +10,13 @@ Just some random VFX-ish garbage bin I threw together. If it works, consider you
 > **No Warranty**: It's thrown together casually, so it's full of bugs. Don't cry if it breaks.
 
 ---
-
-## 🛠 Usage
-
-If you want to run it, build it yourself.
-```bash
-cargo run --release --features gui --bin kagari-studio
 🤝 Contributions & Bug Fixes
 
-I basically won't look at PRs. If you find a bug, fork it and fix it yourself. It's MIT, so do whatever you want.
+Forks are very welcome! I basically won't look at PRs, so if you find a bug, feel free to fork it and fix it yourself. It's MIT, so do whatever you want.
+## 🛠 Usage
+
+If you want to run it, clone it and build it yourself.
+```bash
+git clone [https://github.com/AI-SLOP-BOX/kagarivfx.git](https://github.com/AI-SLOP-BOX/kagarivfx.git)
+cd kagarivfx
+cargo run --release --features gui --bin kagari-studio
