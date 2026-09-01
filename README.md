@@ -1,7 +1,7 @@
 ```markdown
 # Kagari Studio (篝)
 
-[![Rust CI](https://github.com/kme20988-wq/kagarivfx/actions/workflows/ci.yml/badge.svg)](https://github.com/kme20988-wq/kagarivfx/actions)
+[![Rust CI](https://github.com/AI-SLOP-BOX/kagarivfx/actions/workflows/ci.yml/badge.svg)](https://github.com/AI-SLOP-BOX/kagarivfx/actions)
 [![License: MIT / Apache 2.0](https://img.shields.io/badge/license-MIT%2FApache--2.0-blue.svg)](#license)
 [![Built with Rust](https://img.shields.io/badge/Built%20with-Rust%20🦀-orange.svg)](https://www.rust-lang.org/)
 
