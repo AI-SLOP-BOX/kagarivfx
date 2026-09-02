@@ -1,6 +1,6 @@
-use eframe::egui;
-use crate::AfterEffectsApp;
 use crate::ui::theme::colors;
+use crate::AfterEffectsApp;
+use eframe::egui;
 
 pub fn draw_minimap(
     app: &mut AfterEffectsApp,
@@ -16,11 +16,13 @@ pub fn draw_minimap(
     let map_w = 140.0;
     let map_h = map_w * (comp_h / comp_w);
 
-    let (rect, response) = ui.allocate_exact_size(egui::vec2(map_w, map_h), egui::Sense::click_and_drag());
+    let (rect, response) =
+        ui.allocate_exact_size(egui::vec2(map_w, map_h), egui::Sense::click_and_drag());
 
     // Dark Map Background & Border
     ui.painter().rect_filled(rect, 4.0, colors::HUD_BG);
-    ui.painter().rect_stroke(rect, 4.0, egui::Stroke::new(1.0, colors::ACCENT_BLUE));
+    ui.painter()
+        .rect_stroke(rect, 4.0, egui::Stroke::new(1.0, colors::ACCENT_BLUE));
 
     let scale_x = map_w / comp_w;
     let scale_y = map_h / comp_h;
@@ -41,7 +43,12 @@ pub fn draw_minimap(
 
         let l_rect = egui::Rect::from_center_size(egui::pos2(lx, ly), egui::vec2(lw, lh));
         let rgb = layer.label.to_rgb();
-        let fill_c = egui::Color32::from_rgba_unmultiplied((rgb[0] * 255.0) as u8, (rgb[1] * 255.0) as u8, (rgb[2] * 255.0) as u8, 180);
+        let fill_c = egui::Color32::from_rgba_unmultiplied(
+            (rgb[0] * 255.0) as u8,
+            (rgb[1] * 255.0) as u8,
+            (rgb[2] * 255.0) as u8,
+            180,
+        );
         ui.painter().rect_filled(l_rect, 1.0, fill_c);
     }
 
@@ -51,7 +58,8 @@ pub fn draw_minimap(
     let view_h = (map_h * 0.75).clamp(15.0, map_h);
     let view_rect = egui::Rect::from_center_size(focus_center, egui::vec2(view_w, view_h));
 
-    ui.painter().rect_stroke(view_rect, 2.0, egui::Stroke::new(1.5, colors::ACCENT_CYAN));
+    ui.painter()
+        .rect_stroke(view_rect, 2.0, egui::Stroke::new(1.5, colors::ACCENT_CYAN));
 
     // Handle Minimap Click / Layer Selection Interaction
     if response.clicked() {
@@ -73,9 +81,9 @@ pub fn draw_minimap(
                 }
             }
             if let Some(c_idx) = closest_idx {
-                app.selected_layer_idx = Some(c_idx);
-                app.selected_layers.clear();
-                app.selected_layers.insert(c_idx);
+                app.selection.selected_layer_idx = Some(c_idx);
+                app.selection.selected_layers.clear();
+                app.selection.selected_layers.insert(c_idx);
             }
         }
     }

@@ -27,16 +27,16 @@ pub fn draw(
             let active_comp_name = app.history.current().active_composition().name.clone();
 
             ui.horizontal(|ui| {
-                if crate::ui::theme::draw_custom_tab(ui, app.bottom_dock_tab == 0, &format!("🎞 {}", active_comp_name)).clicked() {
-                    app.bottom_dock_tab = 0;
+                if crate::ui::theme::draw_custom_tab(ui, app.ui_tabs.bottom_dock_tab == 0, &format!("🎞 {}", active_comp_name)).clicked() {
+                    app.ui_tabs.bottom_dock_tab = 0;
                 }
-                if crate::ui::theme::draw_custom_tab(ui, app.bottom_dock_tab == 1, "🚀 Render Queue").clicked() {
-                    app.bottom_dock_tab = 1;
+                if crate::ui::theme::draw_custom_tab(ui, app.ui_tabs.bottom_dock_tab == 1, "🚀 Render Queue").clicked() {
+                    app.ui_tabs.bottom_dock_tab = 1;
                 }
             });
             ui.separator();
 
-            if app.bottom_dock_tab == 1 {
+            if app.ui_tabs.bottom_dock_tab == 1 {
                 crate::ui::render_queue::draw_render_queue_panel(app, ui);
                 return;
             }
@@ -72,15 +72,15 @@ pub fn draw(
             crate::ui::timeline::breadcrumb::draw_comp_breadcrumb(app, ui);
 
             let mut header_state = header::TimelineHeaderState {
-                is_playing: &mut app.is_playing,
+                is_playing: &mut app.playback.is_playing,
                 timeline_zoom: &mut app.timeline_zoom,
                 snap_to_keyframes: &mut app.snap_to_keyframes,
                 show_graph_editor: &mut app.show_graph_editor,
-                layer_filter_text: &mut app.layer_filter_text,
+                layer_filter_text: &mut app.ui_tabs.layer_filter_text,
                 timeline_view_start: &mut app.timeline_view_start,
-                work_area_in: &mut app.work_area_in,
-                work_area_out: &mut app.work_area_out,
-                expanded_layers: &mut app.expanded_layers,
+                work_area_in: &mut app.playback.work_area_in,
+                work_area_out: &mut app.playback.work_area_out,
+                expanded_layers: &mut app.selection.expanded_layers,
                 fit_to_selection: &mut app.timeline_fit_to_selection,
                 fit_all: &mut app.timeline_fit_all,
             };
@@ -99,7 +99,7 @@ pub fn draw(
                     let layers = if app.timeline_fit_all {
                         comp.layers.iter().enumerate().collect::<Vec<_>>()
                     } else {
-                        let sel = &app.selected_layers;
+                        let sel = &app.selection.selected_layers;
                         comp.layers.iter().enumerate().filter(|(i, _)| sel.contains(i)).collect::<Vec<_>>()
                     };
                     if !layers.is_empty() {
@@ -141,17 +141,17 @@ pub fn draw(
                     crate::ui::flowchart_graph::draw_node_graph_panel(
                         ui,
                         comp,
-                        &mut app.selected_layer_idx,
-                        &mut app.selected_layers,
+                        &mut app.selection.selected_layer_idx,
+                        &mut app.selection.selected_layers,
                         &mut app.show_graph_editor,
                     );
                 }
                 ui.add_space(4.0);
 
-                if let Some(selected_idx) = app.selected_layer_idx {
+                if let Some(selected_idx) = app.selection.selected_layer_idx {
                     let duration_f = temp_project.active_composition().duration_frames;
                     if let Some(layer) = temp_project.active_composition_mut().layers.get_mut(selected_idx) {
-                        crate::ui::graph_editor::draw_graph_editor(&mut app.selected_property, ui, duration_f, layer, &mut project_changed, &mut app.linked_tangent);
+                        crate::ui::graph_editor::draw_graph_editor(&mut app.selection.selected_property, ui, duration_f, layer, &mut project_changed, &mut app.linked_tangent);
                     }
                     if let Some(curve) = automation_curve.as_mut() {
                         crate::ui::graph_editor::draw_automation_curve(ui, curve, &mut project_changed);
@@ -173,7 +173,7 @@ pub fn draw(
 
 
             // ── Pre-collect sub-comp layer data (before mutable borrow) ──
-            let precomp_children = crate::ui::timeline::precomp_children::collect(temp_project, &app.expanded_layers);
+            let precomp_children = crate::ui::timeline::precomp_children::collect(temp_project, &app.selection.expanded_layers);
 
             // ── Tracks Mode: Layer List & Keyframe Ruler Area ──
             let comp = temp_project.active_composition_mut();
@@ -188,21 +188,21 @@ pub fn draw(
                     ui.horizontal(|ui| {
                         ui.label(egui::RichText::new("Source Name | Mode | TrkMat | Parent & Link | Switches").small().strong().color(colors::TEXT_SECONDARY));
 
-                        if ui.selectable_label(app.global_shy_active, "Shy").on_hover_text("Hide / Show All Marked Shy Layers").clicked() {
-                            app.global_shy_active = !app.global_shy_active;
+                        if ui.selectable_label(app.ui_tabs.global_shy_active, "Shy").on_hover_text("Hide / Show All Marked Shy Layers").clicked() {
+                            app.ui_tabs.global_shy_active = !app.ui_tabs.global_shy_active;
                         }
 
                         let is_w_hovered = ui.rect_contains_pointer(ui.max_rect());
-                        let w_in_frame = app.work_area_in.unwrap_or(0);
-                        let w_out_frame = app.work_area_out.unwrap_or(total_frames);
+                        let w_in_frame = app.playback.work_area_in.unwrap_or(0);
+                        let w_out_frame = app.playback.work_area_out.unwrap_or(total_frames);
                         ui.weak(format!("Work Area: {}f - {}f", w_in_frame, w_out_frame));
 
                         if is_w_hovered && ui.input(|i| i.key_pressed(egui::Key::B)) {
-                            app.work_area_in = Some(*current_frame);
+                            app.playback.work_area_in = Some(*current_frame);
                             log::info!("Set Work Area In point to frame {}", *current_frame);
                         }
                         if is_w_hovered && ui.input(|i| i.key_pressed(egui::Key::N)) {
-                            app.work_area_out = Some(*current_frame);
+                            app.playback.work_area_out = Some(*current_frame);
                             log::info!("Set Work Area Out point to frame {}", *current_frame);
                         }
                     });
@@ -233,8 +233,8 @@ pub fn draw(
                 let start_frame = app.timeline_view_start;
 
                 // Work area highlighted bar
-                let wa_in = app.work_area_in.unwrap_or(0);
-                let wa_out = app.work_area_out.unwrap_or(total_frames);
+                let wa_in = app.playback.work_area_in.unwrap_or(0);
+                let wa_out = app.playback.work_area_out.unwrap_or(total_frames);
                 let mut wa_drag_active = false;
                 if wa_out > wa_in && wa_out >= start_frame && wa_in <= start_frame + zoom_span {
                     let norm_in = (wa_in.saturating_sub(start_frame)) as f32 / zoom_span as f32;
@@ -267,14 +267,14 @@ pub fn draw(
                     if wa_in_resp.dragged() {
                         wa_drag_active = true;
                         if let Some(f) = wa_frame_from_pointer(&wa_in_resp) {
-                            app.work_area_in = Some(f.min(app.work_area_out.unwrap_or(total_frames).saturating_sub(1)));
+                            app.playback.work_area_in = Some(f.min(app.playback.work_area_out.unwrap_or(total_frames).saturating_sub(1)));
                             crate::core::frame_cache::bump_version();
                         }
                     }
                     if wa_out_resp.dragged() {
                         wa_drag_active = true;
                         if let Some(f) = wa_frame_from_pointer(&wa_out_resp) {
-                            app.work_area_out = Some(f.max(app.work_area_in.unwrap_or(0) + 1));
+                            app.playback.work_area_out = Some(f.max(app.playback.work_area_in.unwrap_or(0) + 1));
                             crate::core::frame_cache::bump_version();
                         }
                     }
@@ -343,8 +343,8 @@ pub fn draw(
                             cur
                         });
                         if let Some(s) = anchor_f {
-                            app.work_area_in = Some(s.min(raw_f));
-                            app.work_area_out = Some(s.max(raw_f).saturating_add(1));
+                            app.playback.work_area_in = Some(s.min(raw_f));
+                            app.playback.work_area_out = Some(s.max(raw_f).saturating_add(1));
                         }
                     }
                 }
@@ -393,15 +393,15 @@ pub fn draw(
                     }
                     ui.separator();
                     if ui.button("🔍 Zoom to Work Area").clicked() {
-                        let w_in = app.work_area_in.unwrap_or(0);
-                        let w_out = app.work_area_out.unwrap_or(total_frames).max(w_in + 1);
+                        let w_in = app.playback.work_area_in.unwrap_or(0);
+                        let w_out = app.playback.work_area_out.unwrap_or(total_frames).max(w_in + 1);
                         let span = (w_out - w_in).max(10);
                         app.timeline_zoom = (total_frames as f32 / span as f32).clamp(0.1, 20.0);
                         app.timeline_view_start = w_in;
                         ui.close_menu();
                     }
                     if ui.button("⏱ Set Comp Duration to Work Area End").clicked() {
-                        let w_out = app.work_area_out.unwrap_or(total_frames);
+                        let w_out = app.playback.work_area_out.unwrap_or(total_frames);
                         if w_out > 0 && w_out <= total_frames {
                             pending_duration = Some(w_out);
                             app.toasts.info(format!("Comp duration set to {} frames", w_out));
@@ -409,8 +409,8 @@ pub fn draw(
                         ui.close_menu();
                     }
                     if ui.button("✂ Trim Comp to Work Area").on_hover_text("Set comp duration to work area and trim layers beyond it").clicked() {
-                        let w_in = app.work_area_in.unwrap_or(0);
-                        let w_out = app.work_area_out.unwrap_or(total_frames);
+                        let w_in = app.playback.work_area_in.unwrap_or(0);
+                        let w_out = app.playback.work_area_out.unwrap_or(total_frames);
                         if w_out > w_in {
                             pending_duration = Some(w_out);
                             pending_trim_work_area = Some((w_in, w_out));
@@ -419,19 +419,19 @@ pub fn draw(
                         ui.close_menu();
                     }
                     if ui.button("↺ Reset Work Area to Full Comp").clicked() {
-                        app.work_area_in = None;
-                        app.work_area_out = None;
+                        app.playback.work_area_in = None;
+                        app.playback.work_area_out = None;
                         ui.close_menu();
                     }
                 });
 
                 // ⌨️ B / N Keyboard Shortcuts for Work Area In / Out
                 if ui.input(|i| i.key_pressed(egui::Key::B)) {
-                    app.work_area_in = Some(*current_frame);
+                    app.playback.work_area_in = Some(*current_frame);
                     app.toasts.info(format!("Set Work Area Start at frame {}", current_frame));
                 }
                 if ui.input(|i| i.key_pressed(egui::Key::N)) {
-                    app.work_area_out = Some(*current_frame);
+                    app.playback.work_area_out = Some(*current_frame);
                     app.toasts.info(format!("Set Work Area End at frame {}", current_frame));
                 }
                 // 🔍 Timeline Zoom Shortcuts (= / -), anchored on the playhead so the
@@ -505,16 +505,16 @@ pub fn draw(
                 for i in 0..layers_len {
                     // Safe index access (.get_mut(i))
                     if let Some(layer) = comp.layers.get_mut(i) {
-                        if app.global_shy_active && layer.is_shy {
+                        if app.ui_tabs.global_shy_active && layer.is_shy {
                             continue;
                         }
-                        if !app.layer_filter_text.is_empty() && !layer.name.to_lowercase().contains(&app.layer_filter_text.to_lowercase()) {
+                        if !app.ui_tabs.layer_filter_text.is_empty() && !layer.name.to_lowercase().contains(&app.ui_tabs.layer_filter_text.to_lowercase()) {
                             continue;
                         }
 
                         // Calculate exact estimated height for this layer based on expanded rows
                         let mut layer_height = 24.0;
-                        if app.expanded_layers.contains(&i) {
+                        if app.selection.expanded_layers.contains(&i) {
                             let prop_count = 5 + layer.effects.len() + layer.masks.len();
                             layer_height += prop_count as f32 * 20.0;
                         }
@@ -556,7 +556,7 @@ let type_icon = crate::ui::icons::layer_icon(&layer.layer_type);
                                             egui::Sense::click(),
                                         );
                                         ui.painter().rect_filled(chip_rect, 2.0, chip_color);
-                                        let row_selected = app.selected_layers.contains(&i) || app.selected_layer_idx == Some(i);
+                                        let row_selected = app.selection.selected_layers.contains(&i) || app.selection.selected_layer_idx == Some(i);
                                         if row_selected {
                                             ui.painter().rect_stroke(chip_rect, 2.0, egui::Stroke::new(1.0, egui::Color32::WHITE));
                                         }
@@ -596,13 +596,13 @@ let type_icon = crate::ui::icons::layer_icon(&layer.layer_type);
                                             swap_request = Some((i, i + 1));
                                         }
 
-                                    let is_expanded = app.expanded_layers.contains(&i);
+                                    let is_expanded = app.selection.expanded_layers.contains(&i);
                                     let arrow = if is_expanded { "v" } else { ">" };
                                     if ui.selectable_label(is_expanded, arrow).clicked() {
                                         if is_expanded {
-                                            app.expanded_layers.remove(&i);
+                                            app.selection.expanded_layers.remove(&i);
                                         } else {
-                                            app.expanded_layers.insert(i);
+                                            app.selection.expanded_layers.insert(i);
                                         }
                                     }
 
@@ -632,8 +632,8 @@ let type_icon = crate::ui::icons::layer_icon(&layer.layer_type);
                 let remaining = ui.available_rect_before_wrap();
                 let bg_resp = ui.interact(remaining, egui::Id::new("timeline_bg_deselect"), egui::Sense::click());
                 if bg_resp.clicked() {
-                    app.selected_layers.clear();
-                    app.selected_layer_idx = None;
+                    app.selection.selected_layers.clear();
+                    app.selection.selected_layer_idx = None;
                 }
             });
 
@@ -804,7 +804,7 @@ let type_icon = crate::ui::icons::layer_icon(&layer.layer_type);
                                         project_changed = true;
                                     }
 
-                                    let is_selected = app.selected_layers.contains(&i) || app.selected_layer_idx == Some(i);
+                                    let is_selected = app.selection.selected_layers.contains(&i) || app.selection.selected_layer_idx == Some(i);
                                     let label_rgb = layer.label.to_rgb();
                                     let text_color = egui::Color32::from_rgb(
                                         (label_rgb[0] * 255.0) as u8,
@@ -817,7 +817,7 @@ let type_icon = crate::ui::icons::layer_icon(&layer.layer_type);
 
                                     // ── Pick Whip: clicking a layer in pick mode sets it as parent ──
                                     if click_resp.clicked() && app.pick_whip_mode {
-                                        if let Some(sel) = app.selected_layer_idx {
+                                        if let Some(sel) = app.selection.selected_layer_idx {
                                             if sel != i {
                                                 pending_pick_whip = Some((sel, i));
                                             }
@@ -887,19 +887,19 @@ let type_icon = crate::ui::icons::layer_icon(&layer.layer_type);
                                     if click_resp.clicked() {
                                         let modifiers = ui.input(|inp| inp.modifiers);
                                         if modifiers.shift || modifiers.command || modifiers.ctrl {
-                                            if app.selected_layers.contains(&i) {
-                                                app.selected_layers.remove(&i);
-                                                if app.selected_layer_idx == Some(i) {
-                                                    app.selected_layer_idx = app.selected_layers.iter().next().copied();
+                                            if app.selection.selected_layers.contains(&i) {
+                                                app.selection.selected_layers.remove(&i);
+                                                if app.selection.selected_layer_idx == Some(i) {
+                                                    app.selection.selected_layer_idx = app.selection.selected_layers.iter().next().copied();
                                                 }
                                             } else {
-                                                app.selected_layers.insert(i);
-                                                app.selected_layer_idx = Some(i);
+                                                app.selection.selected_layers.insert(i);
+                                                app.selection.selected_layer_idx = Some(i);
                                             }
                                         } else {
-                                            app.selected_layers.clear();
-                                            app.selected_layers.insert(i);
-                                            app.selected_layer_idx = Some(i);
+                                            app.selection.selected_layers.clear();
+                                            app.selection.selected_layers.insert(i);
+                                            app.selection.selected_layer_idx = Some(i);
                                         }
                                     }
                                     click_resp.context_menu(|ui| {
@@ -909,9 +909,9 @@ let type_icon = crate::ui::icons::layer_icon(&layer.layer_type);
                                             ui.close_menu();
                                         }
                                         if ui.button("📦 Pre-compose… (Cmd+Shift+C)").on_hover_text("Nest this layer into a new composition").clicked() {
-                                            app.selected_layers.clear();
-                                            app.selected_layers.insert(i);
-                                            app.selected_layer_idx = Some(i);
+                                            app.selection.selected_layers.clear();
+                                            app.selection.selected_layers.insert(i);
+                                            app.selection.selected_layer_idx = Some(i);
                                             app.show_precompose_dialog = true;
                                             ui.close_menu();
                                         }
@@ -1036,8 +1036,8 @@ let type_icon = crate::ui::icons::layer_icon(&layer.layer_type);
                                             ui.close_menu();
                                         }
                                         if ui.button("Pre-Compose Selected... (Cmd+Shift+C)").clicked() {
-                                            let selected_indices: Vec<usize> = if !app.selected_layers.is_empty() {
-                                                let mut s: Vec<usize> = app.selected_layers.iter().copied().collect();
+                                            let selected_indices: Vec<usize> = if !app.selection.selected_layers.is_empty() {
+                                                let mut s: Vec<usize> = app.selection.selected_layers.iter().copied().collect();
                                                 s.sort();
                                                 s
                                             } else {
@@ -1231,7 +1231,7 @@ let type_icon = crate::ui::icons::layer_icon(&layer.layer_type);
                                 egui::pos2(bar_rect.left() + norm_out * bar_rect.width(), bar_rect.bottom() - 3.0),
                             );
 
-                            let fill_c = if app.selected_layer_idx == Some(i) {
+                            let fill_c = if app.selection.selected_layer_idx == Some(i) {
                                 let [r, g, b] = layer.label.to_rgb();
                                 egui::Color32::from_rgb(
                                     (r * 255.0) as u8,
@@ -1624,11 +1624,11 @@ let type_icon = crate::ui::icons::layer_icon(&layer.layer_type);
                         }
 
                         // If expanded, render transform properties & effects
-                        if app.expanded_layers.contains(&i) {
+                        if app.selection.expanded_layers.contains(&i) {
                             crate::ui::timeline::keyframe_rows::draw_expanded_rows(
                                 ui, layer, i,
                                 &mut app.selected_keyframes,
-                                &mut app.selected_property,
+                                &mut app.selection.selected_property,
                                 current_frame, start_frame, zoom_span, left_pane_w,
                                 total_frames, &all_kf_frames, &precomp_children,
                                 &mut pending_open_comp, &mut project_changed,
@@ -1679,14 +1679,14 @@ let type_icon = crate::ui::icons::layer_icon(&layer.layer_type);
             }
 
             if let Some(target_label) = pending_select_label_group {
-                app.selected_layers.clear();
+                app.selection.selected_layers.clear();
                 for (idx, l) in comp.layers.iter().enumerate() {
                     if l.label == target_label {
-                        app.selected_layers.insert(idx);
-                        app.selected_layer_idx = Some(idx);
+                        app.selection.selected_layers.insert(idx);
+                        app.selection.selected_layer_idx = Some(idx);
                     }
                 }
-                app.toasts.info(format!("Selected {} layers in label group", app.selected_layers.len()));
+                app.toasts.info(format!("Selected {} layers in label group", app.selection.selected_layers.len()));
             }
 
             crate::ui::timeline::pending_actions::apply_effect_drops(app, pending_effect_drops, &mut project_changed);
@@ -1694,15 +1694,15 @@ let type_icon = crate::ui::icons::layer_icon(&layer.layer_type);
             // ── AE Timeline Bottom Controls Bar (Toggle Switches / Modes F4) ──
             ui.add_space(2.0);
             ui.horizontal(|ui| {
-                if ui.selectable_label(app.show_switches_pane, "[◧] Switches").on_hover_text("Expand / Collapse Layer Switches Pane").clicked() {
-                    app.show_switches_pane = true;
+                if ui.selectable_label(app.ui_tabs.show_switches_pane, "[◧] Switches").on_hover_text("Expand / Collapse Layer Switches Pane").clicked() {
+                    app.ui_tabs.show_switches_pane = true;
                 }
-                if ui.selectable_label(!app.show_switches_pane, "[⇆] Modes").on_hover_text("Expand / Collapse Transfer Controls Pane (Blend Modes & Track Mattes)").clicked() {
-                    app.show_switches_pane = false;
+                if ui.selectable_label(!app.ui_tabs.show_switches_pane, "[⇆] Modes").on_hover_text("Expand / Collapse Transfer Controls Pane (Blend Modes & Track Mattes)").clicked() {
+                    app.ui_tabs.show_switches_pane = false;
                 }
                 if ui.button("Toggle Switches / Modes (F4)").on_hover_text("Toggle between Layer Switches and Transfer Modes (Shortcut: F4)").clicked() ||
                    ui.input(|i| i.key_pressed(egui::Key::F4)) {
-                    app.show_switches_pane = !app.show_switches_pane;
+                    app.ui_tabs.show_switches_pane = !app.ui_tabs.show_switches_pane;
                 }
                 ui.separator();
                 ui.small(egui::RichText::new("AE Standard Timeline 1:1 Parity Mode").color(colors::TEXT_SECONDARY));

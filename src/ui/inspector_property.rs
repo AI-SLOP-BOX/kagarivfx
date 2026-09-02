@@ -1,20 +1,33 @@
-use eframe::egui;
+use crate::core::keyframe::{BezierControlPoint, InterpolationType, Keyframe};
 use crate::core::property::Animatable;
-use crate::core::keyframe::{Keyframe, InterpolationType, BezierControlPoint};
 use crate::core::timeline::Expression;
-use crate::ui::theme::colors;
 use crate::ui::custom_widgets;
+use crate::ui::theme::colors;
+use eframe::egui;
 
-pub fn draw_easy_ease_button<T: Clone>(ui: &mut egui::Ui, property: &mut Animatable<T>, project_changed: &mut bool) {
+pub fn draw_easy_ease_button<T: Clone>(
+    ui: &mut egui::Ui,
+    property: &mut Animatable<T>,
+    project_changed: &mut bool,
+) {
     ui.horizontal(|ui| {
         ui.add_space(20.0);
-        if custom_widgets::ae_button(ui, "Easy Ease (F9)").on_hover_text("Symmetrical Bezier Ease (F9)").clicked() {
+        if custom_widgets::ae_button(ui, "Easy Ease (F9)")
+            .on_hover_text("Symmetrical Bezier Ease (F9)")
+            .clicked()
+        {
             if let Animatable::Animated(ref mut keyframes) = property {
                 let coords = crate::core::keyframe::EasePreset::Standard.control_points();
                 for kf in keyframes {
                     kf.interpolation = InterpolationType::Bezier {
-                        outgoing: BezierControlPoint { influence: 0.333, speed: 0.0 },
-                        incoming: BezierControlPoint { influence: 0.333, speed: 0.0 },
+                        outgoing: BezierControlPoint {
+                            influence: 0.333,
+                            speed: 0.0,
+                        },
+                        incoming: BezierControlPoint {
+                            influence: 0.333,
+                            speed: 0.0,
+                        },
                         custom_bezier: Some(coords),
                     };
                 }
@@ -28,50 +41,124 @@ pub fn draw_easy_ease_button<T: Clone>(ui: &mut egui::Ui, property: &mut Animata
             .selected_text("✨ Smart Presets...")
             .show_ui(ui, |ui| {
                 for (preset, label, desc) in [
-                    (crate::core::keyframe::EasePreset::Standard, "🟢 Standard Ease", "Symmetrical Smooth Ease"),
-                    (crate::core::keyframe::EasePreset::FastIn, "⚡ Fast Acceleration", "Sudden Speed Up"),
-                    (crate::core::keyframe::EasePreset::SmoothOut, "🎯 Smooth Deceleration", "Gentle Slow Down"),
-                    (crate::core::keyframe::EasePreset::Overshoot, "🏀 Spring Overshoot", "Bounce Back Effect"),
-                    (crate::core::keyframe::EasePreset::Sine, "🌊 Sine Wave", "Ultra Smooth Harmonic Ease"),
-                    (crate::core::keyframe::EasePreset::FastOut, "🚀 Fast Out", "Explosive Start, Quick Settle"),
-                    (crate::core::keyframe::EasePreset::SlowIn, "🐢 Slow In", "Gradual Gentle Acceleration"),
-                    (crate::core::keyframe::EasePreset::Elastic, "🎈 Elastic", "Rubber Band Elastic Motion"),
-                    (crate::core::keyframe::EasePreset::Bounce, "⚽ Bounce", "Ball Bounce Impact"),
-                    (crate::core::keyframe::EasePreset::Cycle, "🔄 Cycle", "Looping Rhythmic Ease"),
-                    (crate::core::keyframe::EasePreset::MirrorEase2, "🪞 Mirror", "Symmetrical Back and Forth"),
-                    (crate::core::keyframe::EasePreset::EaseIn, "📈 Quadratic In", "Classic Quadratic Acceleration"),
-                    (crate::core::keyframe::EasePreset::EaseOut, "📉 Quadratic Out", "Classic Quadratic Deceleration"),
+                    (
+                        crate::core::keyframe::EasePreset::Standard,
+                        "🟢 Standard Ease",
+                        "Symmetrical Smooth Ease",
+                    ),
+                    (
+                        crate::core::keyframe::EasePreset::FastIn,
+                        "⚡ Fast Acceleration",
+                        "Sudden Speed Up",
+                    ),
+                    (
+                        crate::core::keyframe::EasePreset::SmoothOut,
+                        "🎯 Smooth Deceleration",
+                        "Gentle Slow Down",
+                    ),
+                    (
+                        crate::core::keyframe::EasePreset::Overshoot,
+                        "🏀 Spring Overshoot",
+                        "Bounce Back Effect",
+                    ),
+                    (
+                        crate::core::keyframe::EasePreset::Sine,
+                        "🌊 Sine Wave",
+                        "Ultra Smooth Harmonic Ease",
+                    ),
+                    (
+                        crate::core::keyframe::EasePreset::FastOut,
+                        "🚀 Fast Out",
+                        "Explosive Start, Quick Settle",
+                    ),
+                    (
+                        crate::core::keyframe::EasePreset::SlowIn,
+                        "🐢 Slow In",
+                        "Gradual Gentle Acceleration",
+                    ),
+                    (
+                        crate::core::keyframe::EasePreset::Elastic,
+                        "🎈 Elastic",
+                        "Rubber Band Elastic Motion",
+                    ),
+                    (
+                        crate::core::keyframe::EasePreset::Bounce,
+                        "⚽ Bounce",
+                        "Ball Bounce Impact",
+                    ),
+                    (
+                        crate::core::keyframe::EasePreset::Cycle,
+                        "🔄 Cycle",
+                        "Looping Rhythmic Ease",
+                    ),
+                    (
+                        crate::core::keyframe::EasePreset::MirrorEase2,
+                        "🪞 Mirror",
+                        "Symmetrical Back and Forth",
+                    ),
+                    (
+                        crate::core::keyframe::EasePreset::EaseIn,
+                        "📈 Quadratic In",
+                        "Classic Quadratic Acceleration",
+                    ),
+                    (
+                        crate::core::keyframe::EasePreset::EaseOut,
+                        "📉 Quadratic Out",
+                        "Classic Quadratic Deceleration",
+                    ),
                 ] {
                     ui.horizontal(|ui| {
                         // Draw mini bezier thumbnail rect
-                        let (rect, _) = ui.allocate_exact_size(egui::vec2(24.0, 16.0), egui::Sense::hover());
+                        let (rect, _) =
+                            ui.allocate_exact_size(egui::vec2(24.0, 16.0), egui::Sense::hover());
                         ui.painter().rect_filled(rect, 2.0, colors::BG_DEEPEST);
 
                         let pts = preset.control_points();
                         let p0 = egui::pos2(rect.left() + 2.0, rect.bottom() - 2.0);
                         let p3 = egui::pos2(rect.right() - 2.0, rect.top() + 2.0);
-                        let p1 = egui::pos2(rect.left() + 2.0 + pts[0] * (rect.width() - 4.0), rect.bottom() - 2.0 - pts[1] * (rect.height() - 4.0));
-                        let p2 = egui::pos2(rect.left() + 2.0 + pts[2] * (rect.width() - 4.0), rect.bottom() - 2.0 - pts[3] * (rect.height() - 4.0));
+                        let p1 = egui::pos2(
+                            rect.left() + 2.0 + pts[0] * (rect.width() - 4.0),
+                            rect.bottom() - 2.0 - pts[1] * (rect.height() - 4.0),
+                        );
+                        let p2 = egui::pos2(
+                            rect.left() + 2.0 + pts[2] * (rect.width() - 4.0),
+                            rect.bottom() - 2.0 - pts[3] * (rect.height() - 4.0),
+                        );
 
                         // Render preview curve
                         let mut curve_pts = Vec::with_capacity(11);
                         for step in 0..=10 {
                             let t = step as f32 / 10.0;
                             let inv_t = 1.0 - t;
-                            let x = inv_t.powi(3) * p0.x + 3.0 * inv_t.powi(2) * t * p1.x + 3.0 * inv_t * t.powi(2) * p2.x + t.powi(3) * p3.x;
-                            let y = inv_t.powi(3) * p0.y + 3.0 * inv_t.powi(2) * t * p1.y + 3.0 * inv_t * t.powi(2) * p2.y + t.powi(3) * p3.y;
+                            let x = inv_t.powi(3) * p0.x
+                                + 3.0 * inv_t.powi(2) * t * p1.x
+                                + 3.0 * inv_t * t.powi(2) * p2.x
+                                + t.powi(3) * p3.x;
+                            let y = inv_t.powi(3) * p0.y
+                                + 3.0 * inv_t.powi(2) * t * p1.y
+                                + 3.0 * inv_t * t.powi(2) * p2.y
+                                + t.powi(3) * p3.y;
                             curve_pts.push(egui::pos2(x, y));
                         }
                         for window in curve_pts.windows(2) {
-                            ui.painter().line_segment([window[0], window[1]], egui::Stroke::new(1.5, colors::ACCENT_CYAN));
+                            ui.painter().line_segment(
+                                [window[0], window[1]],
+                                egui::Stroke::new(1.5, colors::ACCENT_CYAN),
+                            );
                         }
 
                         if ui.button(label).on_hover_text(desc).clicked() {
                             if let Animatable::Animated(ref mut keyframes) = property {
                                 for kf in keyframes {
                                     kf.interpolation = InterpolationType::Bezier {
-                                        outgoing: BezierControlPoint { influence: 0.333, speed: 0.0 },
-                                        incoming: BezierControlPoint { influence: 0.333, speed: 0.0 },
+                                        outgoing: BezierControlPoint {
+                                            influence: 0.333,
+                                            speed: 0.0,
+                                        },
+                                        incoming: BezierControlPoint {
+                                            influence: 0.333,
+                                            speed: 0.0,
+                                        },
                                         custom_bezier: Some(pts),
                                     };
                                 }
@@ -84,13 +171,22 @@ pub fn draw_easy_ease_button<T: Clone>(ui: &mut egui::Ui, property: &mut Animata
             });
 
         // Physics Spring Bounce Auto Generator Button
-        if custom_widgets::ae_button(ui, "⚽ Physics Spring").on_hover_text("Apply Physics-based Overshoot & Spring Dynamics").clicked() {
+        if custom_widgets::ae_button(ui, "⚽ Physics Spring")
+            .on_hover_text("Apply Physics-based Overshoot & Spring Dynamics")
+            .clicked()
+        {
             if let Animatable::Animated(ref mut keyframes) = property {
                 let spring_bezier = [0.175, 0.885, 0.32, 1.275]; // Elastic Overshoot Control Points
                 for kf in keyframes {
                     kf.interpolation = InterpolationType::Bezier {
-                        outgoing: BezierControlPoint { influence: 0.25, speed: 0.0 },
-                        incoming: BezierControlPoint { influence: 0.75, speed: 0.0 },
+                        outgoing: BezierControlPoint {
+                            influence: 0.25,
+                            speed: 0.0,
+                        },
+                        incoming: BezierControlPoint {
+                            influence: 0.75,
+                            speed: 0.0,
+                        },
                         custom_bezier: Some(spring_bezier),
                     };
                 }
@@ -99,7 +195,12 @@ pub fn draw_easy_ease_button<T: Clone>(ui: &mut egui::Ui, property: &mut Animata
         }
 
         // ⏸ Hold Keyframe Mode (Cmd+Opt+H) Button
-        if custom_widgets::ae_button(ui, "⏸ Hold").on_hover_text("Toggle Toggle Hold Keyframe (Cmd+Opt+H): Values step discretely at keyframes").clicked() {
+        if custom_widgets::ae_button(ui, "⏸ Hold")
+            .on_hover_text(
+                "Toggle Toggle Hold Keyframe (Cmd+Opt+H): Values step discretely at keyframes",
+            )
+            .clicked()
+        {
             if let Animatable::Animated(ref mut keyframes) = property {
                 for kf in keyframes {
                     kf.interpolation = InterpolationType::Hold;
@@ -109,7 +210,10 @@ pub fn draw_easy_ease_button<T: Clone>(ui: &mut egui::Ui, property: &mut Animata
         }
 
         // 📈 Linear Keyframe Mode Button
-        if custom_widgets::ae_button(ui, "📈 Linear").on_hover_text("Linear Keyframe: Values interpolate smoothly at constant speed").clicked() {
+        if custom_widgets::ae_button(ui, "📈 Linear")
+            .on_hover_text("Linear Keyframe: Values interpolate smoothly at constant speed")
+            .clicked()
+        {
             if let Animatable::Animated(ref mut keyframes) = property {
                 for kf in keyframes {
                     kf.interpolation = InterpolationType::Linear;
@@ -119,7 +223,10 @@ pub fn draw_easy_ease_button<T: Clone>(ui: &mut egui::Ui, property: &mut Animata
         }
 
         // ⏩ Keyframe Time Compress (2x Speed / 50% Duration)
-        if custom_widgets::ae_button(ui, "⏩ 2x Speed").on_hover_text("Compress keyframe duration by 50%").clicked() {
+        if custom_widgets::ae_button(ui, "⏩ 2x Speed")
+            .on_hover_text("Compress keyframe duration by 50%")
+            .clicked()
+        {
             if let Animatable::Animated(ref mut keyframes) = property {
                 if let Some(first_kf) = keyframes.first() {
                     let start_f = first_kf.frame;
@@ -133,7 +240,10 @@ pub fn draw_easy_ease_button<T: Clone>(ui: &mut egui::Ui, property: &mut Animata
         }
 
         // ⏪ Keyframe Time Stretch (0.5x Speed / 200% Duration)
-        if custom_widgets::ae_button(ui, "⏪ 0.5x Speed").on_hover_text("Stretch keyframe duration by 200%").clicked() {
+        if custom_widgets::ae_button(ui, "⏪ 0.5x Speed")
+            .on_hover_text("Stretch keyframe duration by 200%")
+            .clicked()
+        {
             if let Animatable::Animated(ref mut keyframes) = property {
                 if let Some(first_kf) = keyframes.first() {
                     let start_f = first_kf.frame;
@@ -159,8 +269,13 @@ pub fn draw_expression_selector(
     ui.horizontal(|ui| {
         ui.small("Expression: ");
         let expr_text = match expr_opt {
-            Some(Expression::Wiggle { frequency, amplitude }) => format!("wiggle({}, {})", frequency, amplitude),
-            Some(Expression::TimeDriver { multiplier, offset }) => format!("time * {} + {}", multiplier, offset),
+            Some(Expression::Wiggle {
+                frequency,
+                amplitude,
+            }) => format!("wiggle({}, {})", frequency, amplitude),
+            Some(Expression::TimeDriver { multiplier, offset }) => {
+                format!("time * {} + {}", multiplier, offset)
+            }
             Some(Expression::LoopOut) => "loopOut()".to_string(),
             Some(Expression::PingPong) => "loopOut(\"pingpong\")".to_string(),
             Some(Expression::Raw(s)) => format!("Custom: {}...", &s[..s.len().min(20)]),
@@ -173,16 +288,47 @@ pub fn draw_expression_selector(
             .selected_text(expr_text)
             .show_ui(ui, |ui| {
                 ui.selectable_value(expr_opt, None, "None");
-                ui.selectable_value(expr_opt, Some(Expression::Wiggle { frequency: 2.0, amplitude: 50.0 }), "Wiggle (2Hz, 50px)");
-                ui.selectable_value(expr_opt, Some(Expression::TimeDriver { multiplier: 30.0, offset: 0.0 }), "Time Spin (30°/s)");
+                ui.selectable_value(
+                    expr_opt,
+                    Some(Expression::Wiggle {
+                        frequency: 2.0,
+                        amplitude: 50.0,
+                    }),
+                    "Wiggle (2Hz, 50px)",
+                );
+                ui.selectable_value(
+                    expr_opt,
+                    Some(Expression::TimeDriver {
+                        multiplier: 30.0,
+                        offset: 0.0,
+                    }),
+                    "Time Spin (30°/s)",
+                );
                 ui.selectable_value(expr_opt, Some(Expression::LoopOut), "loopOut(\"cycle\")");
-                ui.selectable_value(expr_opt, Some(Expression::PingPong), "loopOut(\"pingpong\")");
-                ui.selectable_value(expr_opt, Some(Expression::Raw("value".into())), "Custom Script...");
+                ui.selectable_value(
+                    expr_opt,
+                    Some(Expression::PingPong),
+                    "loopOut(\"pingpong\")",
+                );
+                ui.selectable_value(
+                    expr_opt,
+                    Some(Expression::Raw("value".into())),
+                    "Custom Script...",
+                );
             });
 
         // Expression Pickwhip button (@)
-        if custom_widgets::ae_icon_button(ui, "🌀", "Expression Pickwhip (@): Pick property to auto-generate script expression").clicked() {
-            *expr_opt = Some(Expression::Wiggle { frequency: 3.0, amplitude: 25.0 });
+        if custom_widgets::ae_icon_button(
+            ui,
+            "🌀",
+            "Expression Pickwhip (@): Pick property to auto-generate script expression",
+        )
+        .clicked()
+        {
+            *expr_opt = Some(Expression::Wiggle {
+                frequency: 3.0,
+                amplitude: 25.0,
+            });
             *project_changed = true;
         }
 
@@ -241,7 +387,7 @@ pub fn draw_expression_selector(
                 ui.menu_button("▶ Language ▾", |ui| {
                     ui.label(egui::RichText::new("📖 Expression Language Library").strong().color(colors::ACCENT_CYAN));
                     ui.separator();
-                    
+
                     ui.menu_button("🌐 Global & Comp", |ui| {
                         if ui.button("time (seconds)").clicked() { *script = format!("{}\ntime", script); *project_changed = true; ui.close_menu(); }
                         if ui.button("thisComp.duration").clicked() { *script = format!("{}\nthisComp.duration", script); *project_changed = true; ui.close_menu(); }
@@ -324,7 +470,11 @@ pub fn draw_expression_selector(
 fn test_expression_inline(script: &str, frame: u32, fps: u32) -> String {
     let engine = crate::core::expression_engine::build_engine();
     let (result, diag) = crate::core::expression_engine::eval_v2_with_diagnostics(
-        &engine, script, [0.0, 0.0], frame, fps,
+        &engine,
+        script,
+        [0.0, 0.0],
+        frame,
+        fps,
     );
     if let Some(err) = diag {
         format!("Error: {}", err)
@@ -333,7 +483,9 @@ fn test_expression_inline(script: &str, frame: u32, fps: u32) -> String {
     }
 }
 
-pub fn draw_property_ui<T: Clone + crate::core::property::Interpolate + PartialEq + std::fmt::Debug + 'static>(
+pub fn draw_property_ui<
+    T: Clone + crate::core::property::Interpolate + PartialEq + std::fmt::Debug + 'static,
+>(
     current_frame: u32,
     ui: &mut egui::Ui,
     label: &str,
@@ -343,27 +495,37 @@ pub fn draw_property_ui<T: Clone + crate::core::property::Interpolate + PartialE
     let mut next_frame = None;
     ui.horizontal(|ui| {
         ui.label(label);
-        
+
         let has_keyframes = property.keyframes().is_some();
         if has_keyframes
-            && custom_widgets::ae_icon_button(ui, "◀", "Jump to Previous Keyframe (J)").clicked() {
-                if let Some(kfs) = property.keyframes() {
-                    if let Some(target) = kfs.iter().rev().find(|k| k.frame < current_frame) {
-                        next_frame = Some(target.frame);
-                    }
+            && custom_widgets::ae_icon_button(ui, "◀", "Jump to Previous Keyframe (J)").clicked()
+        {
+            if let Some(kfs) = property.keyframes() {
+                if let Some(target) = kfs.iter().rev().find(|k| k.frame < current_frame) {
+                    next_frame = Some(target.frame);
                 }
             }
+        }
 
         let stopwatch_btn = if has_keyframes { "[K]" } else { "[+]" };
-        if custom_widgets::ae_button(ui, stopwatch_btn).on_hover_text(if has_keyframes { "Disable Keyframes" } else { "Enable Keyframes / Add Keyframe" }).clicked() {
+        if custom_widgets::ae_button(ui, stopwatch_btn)
+            .on_hover_text(if has_keyframes {
+                "Disable Keyframes"
+            } else {
+                "Enable Keyframes / Add Keyframe"
+            })
+            .clicked()
+        {
             if has_keyframes {
                 let current_val = property.evaluate(current_frame);
                 *property = Animatable::Constant(current_val);
             } else {
                 let current_val = property.evaluate(current_frame);
-                *property = Animatable::Animated(vec![
-                    Keyframe::new(current_frame, current_val, InterpolationType::Linear)
-                ]);
+                *property = Animatable::Animated(vec![Keyframe::new(
+                    current_frame,
+                    current_val,
+                    InterpolationType::Linear,
+                )]);
             }
         }
 
@@ -380,8 +542,14 @@ pub fn draw_property_ui<T: Clone + crate::core::property::Interpolate + PartialE
                     if let Animatable::Animated(ref mut kfs) = property {
                         for kf in kfs {
                             kf.interpolation = InterpolationType::Bezier {
-                                outgoing: BezierControlPoint { influence: 0.333, speed: 0.0 },
-                                incoming: BezierControlPoint { influence: 0.333, speed: 0.0 },
+                                outgoing: BezierControlPoint {
+                                    influence: 0.333,
+                                    speed: 0.0,
+                                },
+                                incoming: BezierControlPoint {
+                                    influence: 0.333,
+                                    speed: 0.0,
+                                },
                                 custom_bezier: Some([0.333, 0.0, 0.333, 1.0]),
                             };
                         }
@@ -392,8 +560,14 @@ pub fn draw_property_ui<T: Clone + crate::core::property::Interpolate + PartialE
                     if let Animatable::Animated(ref mut kfs) = property {
                         for kf in kfs {
                             kf.interpolation = InterpolationType::Bezier {
-                                outgoing: BezierControlPoint { influence: 0.1, speed: 0.0 },
-                                incoming: BezierControlPoint { influence: 0.75, speed: 0.0 },
+                                outgoing: BezierControlPoint {
+                                    influence: 0.1,
+                                    speed: 0.0,
+                                },
+                                incoming: BezierControlPoint {
+                                    influence: 0.75,
+                                    speed: 0.0,
+                                },
                                 custom_bezier: Some([0.75, 0.0, 1.0, 1.0]),
                             };
                         }
@@ -404,8 +578,14 @@ pub fn draw_property_ui<T: Clone + crate::core::property::Interpolate + PartialE
                     if let Animatable::Animated(ref mut kfs) = property {
                         for kf in kfs {
                             kf.interpolation = InterpolationType::Bezier {
-                                outgoing: BezierControlPoint { influence: 0.75, speed: 0.0 },
-                                incoming: BezierControlPoint { influence: 0.1, speed: 0.0 },
+                                outgoing: BezierControlPoint {
+                                    influence: 0.75,
+                                    speed: 0.0,
+                                },
+                                incoming: BezierControlPoint {
+                                    influence: 0.1,
+                                    speed: 0.0,
+                                },
                                 custom_bezier: Some([0.0, 0.0, 0.25, 1.0]),
                             };
                         }
@@ -434,8 +614,14 @@ pub fn draw_property_ui<T: Clone + crate::core::property::Interpolate + PartialE
                 if let Animatable::Animated(ref mut kfs) = property {
                     for kf in kfs {
                         kf.interpolation = InterpolationType::Bezier {
-                            outgoing: BezierControlPoint { influence: 0.5, speed: 0.0 },
-                            incoming: BezierControlPoint { influence: 0.5, speed: 0.0 },
+                            outgoing: BezierControlPoint {
+                                influence: 0.5,
+                                speed: 0.0,
+                            },
+                            incoming: BezierControlPoint {
+                                influence: 0.5,
+                                speed: 0.0,
+                            },
                             custom_bezier: Some([0.37, 0.0, 0.63, 1.0]),
                         };
                     }
@@ -460,7 +646,11 @@ pub fn draw_property_ui<T: Clone + crate::core::property::Interpolate + PartialE
                 } else {
                     let evaluated = property.evaluate(current_frame);
                     if temp_val != evaluated {
-                        property.add_keyframe(Keyframe::new(current_frame, temp_val, InterpolationType::Linear));
+                        property.add_keyframe(Keyframe::new(
+                            current_frame,
+                            temp_val,
+                            InterpolationType::Linear,
+                        ));
                     }
                 }
             }
@@ -477,8 +667,7 @@ fn test_expression_with_comp(
     snap: &crate::core::expression_engine::CompSnapshot,
 ) -> String {
     let base_v2 = [0.0f32, 0.0];
-    let result = crate::core::expression_engine::eval_v2_with_comp(
-        script, base_v2, frame, fps, snap, None,
-    );
+    let result =
+        crate::core::expression_engine::eval_v2_with_comp(script, base_v2, frame, fps, snap, None);
     format!("({:.2}, {:.2})", result[0], result[1])
 }

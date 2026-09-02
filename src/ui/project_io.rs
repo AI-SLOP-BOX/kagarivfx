@@ -67,8 +67,8 @@ pub fn open_project_from_path(
     // Restore the persisted GPU-compute preference (respects adapter availability)
     let gpu_pref = app.history.current().use_gpu_compute;
     crate::core::compute_pipeline::set_gpu_effects_enabled(gpu_pref);
-    app.selected_layer_idx = None;
-    app.selected_layers.clear();
+    app.selection.selected_layer_idx = None;
+    app.selection.selected_layers.clear();
     app.project_path = path.to_string_lossy().to_string();
     push_recent(path);
     crate::core::frame_cache::bump_version();

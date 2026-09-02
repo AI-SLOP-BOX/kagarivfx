@@ -1,56 +1,75 @@
-use eframe::egui;
-use crate::ExportEvent;
 use crate::ui::theme::colors;
+use crate::ExportEvent;
+use eframe::egui;
 
 /// Spawn the async FFmpeg (or fallback) render worker for one composition.
 /// Shared by the export dialog button and the Render Queue batch runner.
 pub fn start_comp_export(app: &mut crate::AfterEffectsApp, ctx: &egui::Context, comp_name: &str) {
-    let Some(comp) = app.history.current().compositions.iter().find(|c| c.name == comp_name).cloned() else {
-        app.toasts.error(format!("Queue comp not found: {}", comp_name));
+    let Some(comp) = app
+        .history
+        .current()
+        .compositions
+        .iter()
+        .find(|c| c.name == comp_name)
+        .cloned()
+    else {
+        app.toasts
+            .error(format!("Queue comp not found: {}", comp_name));
         return;
     };
     let comp_total = comp.duration_frames;
     // Range mode: 0 = Entire Comp, 1 = Work Area (falls back to Entire when unset)
-    let range_mode = ctx.data_mut(|d| *d.get_temp_mut_or_insert_with(egui::Id::new("ae_export_range"), || 0u8));
-    let (frame_offset, total_frames) = if range_mode == 1
-        && (app.work_area_in.is_some() || app.work_area_out.is_some())
-    {
-        let s = app.work_area_in.unwrap_or(0);
-        let e = app.work_area_out.unwrap_or(comp_total.saturating_sub(1));
-        (s, e.saturating_sub(s).max(1))
-    } else {
-        (0u32, comp_total)
-    };
+    let range_mode =
+        ctx.data_mut(|d| *d.get_temp_mut_or_insert_with(egui::Id::new("ae_export_range"), || 0u8));
+    let (frame_offset, total_frames) =
+        if range_mode == 1 && (app.playback.work_area_in.is_some() || app.playback.work_area_out.is_some()) {
+            let s = app.playback.work_area_in.unwrap_or(0);
+            let e = app.playback.work_area_out.unwrap_or(comp_total.saturating_sub(1));
+            (s, e.saturating_sub(s).max(1))
+        } else {
+            (0u32, comp_total)
+        };
 
-    app.is_exporting = true;
-    app.export_progress = 0.0;
-    app.export_status = Some(format!("Rendering '{}'…", comp.name));
+    app.export.is_exporting = true;
+    app.export.export_progress = 0.0;
+    app.export.export_status = Some(format!("Rendering '{}'…", comp.name));
 
     // Mux the first video layer's extracted WAV when present AND enabled
-    let include_audio = ctx.data_mut(|d| *d.get_temp_mut_or_insert_with(egui::Id::new("ae_export_include_audio"), || true));
+    let include_audio = ctx.data_mut(|d| {
+        *d.get_temp_mut_or_insert_with(egui::Id::new("ae_export_include_audio"), || true)
+    });
     let audio_wav = if include_audio {
-        comp.layers.iter().find_map(|l| {
-            match &l.layer_type {
-                crate::core::timeline::LayerType::Video { audio_wav, .. } => audio_wav.clone(),
-                _ => None,
-            }
+        comp.layers.iter().find_map(|l| match &l.layer_type {
+            crate::core::timeline::LayerType::Video { audio_wav, .. } => audio_wav.clone(),
+            _ => None,
         })
     } else {
         None
     };
     let codec_idx = app.export_codec_idx;
-    let res_scale = ctx.data_mut(|d| *d.get_temp_mut_or_insert_with(egui::Id::new("ae_export_res_scale"), || 1.0f32));
+    let res_scale = ctx.data_mut(|d| {
+        *d.get_temp_mut_or_insert_with(egui::Id::new("ae_export_res_scale"), || 1.0f32)
+    });
 
-    let output_path = app.export_output_path.clone();
+    let output_path = app.export.export_output_path.clone();
     app.last_export_path = Some(output_path.clone());
     // Final output size.
     let render_w = ((comp.width as f32 * res_scale) as u32).max(2);
     let render_h = ((comp.height as f32 * res_scale) as u32).max(2);
     // Optional 2× supersample render size (clamped by the rasterizer limit).
-    let ssaa = ctx.data_mut(|d| *d.get_temp_mut_or_insert_with(egui::Id::new("ae_export_ssaa"), || true));
+    let ssaa =
+        ctx.data_mut(|d| *d.get_temp_mut_or_insert_with(egui::Id::new("ae_export_ssaa"), || true));
     let max_dim = crate::core::software_renderer::MAX_RENDER_DIMENSION;
-    let ss_w = if ssaa { (render_w.saturating_mul(2)).min(max_dim) } else { render_w };
-    let ss_h = if ssaa { (render_h.saturating_mul(2)).min(max_dim) } else { render_h };
+    let ss_w = if ssaa {
+        (render_w.saturating_mul(2)).min(max_dim)
+    } else {
+        render_w
+    };
+    let ss_h = if ssaa {
+        (render_h.saturating_mul(2)).min(max_dim)
+    } else {
+        render_h
+    };
     let ss_active = ssaa && (ss_w > render_w || ss_h > render_h);
 
     // ── PNG Sequence branch: bypass FFmpeg, write numbered PNGs directly ──
@@ -62,14 +81,17 @@ pub fn start_comp_export(app: &mut crate::AfterEffectsApp, ctx: &egui::Context, 
         app.export_cancel_flag = Some(cancel_flag.clone());
 
         let out = std::path::PathBuf::from(&output_path);
-        let dir = out.parent().map(|p| p.to_path_buf())
+        let dir = out
+            .parent()
+            .map(|p| p.to_path_buf())
             .unwrap_or_else(|| std::path::PathBuf::from("."));
-        let stem = out.file_stem()
+        let stem = out
+            .file_stem()
             .map(|s| s.to_string_lossy().to_string())
             .unwrap_or_else(|| comp.name.clone());
 
         let (tx_ui, rx_ui) = std::sync::mpsc::channel();
-        app.export_rx = Some(rx_ui);
+        app.export.export_rx = Some(rx_ui);
         crate::core::ffmpeg_export::start_png_sequence_export(
             dir,
             stem,
@@ -88,10 +110,14 @@ pub fn start_comp_export(app: &mut crate::AfterEffectsApp, ctx: &egui::Context, 
                     0.0,
                     0,
                 );
-                if ss_active { crate::core::supersample::downsample2x(&px, render_w, render_h) } else { px }
+                if ss_active {
+                    crate::core::supersample::downsample2x(&px, render_w, render_h)
+                } else {
+                    px
+                }
             },
         );
-        log::info!("Spawned PNG sequence export for {}", app.export_output_path);
+        log::info!("Spawned PNG sequence export for {}", app.export.export_output_path);
         return;
     }
 
@@ -120,34 +146,47 @@ pub fn start_comp_export(app: &mut crate::AfterEffectsApp, ctx: &egui::Context, 
     if crate::core::ffmpeg_export::is_ffmpeg_available() {
         let (tx_ff, rx_ff) = std::sync::mpsc::channel();
         let (tx_ui, rx_ui) = std::sync::mpsc::channel();
-        app.export_rx = Some(rx_ui);
+        app.export.export_rx = Some(rx_ui);
 
         std::thread::spawn(move || {
             while let Ok(evt) = rx_ff.recv() {
                 let mapped = match evt {
-                    crate::core::ffmpeg_export::ExportEvent::Progress(p, m) => ExportEvent::Progress(p, m),
-                    crate::core::ffmpeg_export::ExportEvent::Finished(m) => ExportEvent::Finished(m),
+                    crate::core::ffmpeg_export::ExportEvent::Progress(p, m) => {
+                        ExportEvent::Progress(p, m)
+                    }
+                    crate::core::ffmpeg_export::ExportEvent::Finished(m) => {
+                        ExportEvent::Finished(m)
+                    }
                     crate::core::ffmpeg_export::ExportEvent::Error(m) => ExportEvent::Error(m),
                 };
                 let _ = tx_ui.send(mapped);
             }
         });
 
-        let _ = crate::core::ffmpeg_export::start_export_cancelable(config, tx_ff, cancel_flag, move |frame| {
-            let px = crate::core::software_renderer::render_frame_to_pixels(
-                &comp,
-                frame + frame_offset,
-                ss_w,
-                ss_h,
-                0.0,
-                0,
-            );
-            if ss_active { crate::core::supersample::downsample2x(&px, render_w, render_h) } else { px }
-        });
+        let _ = crate::core::ffmpeg_export::start_export_cancelable(
+            config,
+            tx_ff,
+            cancel_flag,
+            move |frame| {
+                let px = crate::core::software_renderer::render_frame_to_pixels(
+                    &comp,
+                    frame + frame_offset,
+                    ss_w,
+                    ss_h,
+                    0.0,
+                    0,
+                );
+                if ss_active {
+                    crate::core::supersample::downsample2x(&px, render_w, render_h)
+                } else {
+                    px
+                }
+            },
+        );
     } else {
         // Fallback async render thread with progress feedback & cancellation support
         let (tx, rx) = std::sync::mpsc::channel();
-        app.export_rx = Some(rx);
+        app.export.export_rx = Some(rx);
         let thread_cancel = cancel_flag.clone();
         let duration = total_frames.max(1);
         std::thread::spawn(move || {
@@ -169,24 +208,27 @@ pub fn start_comp_export(app: &mut crate::AfterEffectsApp, ctx: &egui::Context, 
         });
     }
 
-    log::info!("Spawned async render pipeline for {}", app.export_output_path);
+    log::info!(
+        "Spawned async render pipeline for {}",
+        app.export.export_output_path
+    );
 }
 
 pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
     // ── Non-blocking Channel Event Receiver ──
     let mut finished_export = false;
     let mut next_batch_comp: Option<String> = None;
-    if let Some(ref rx) = app.export_rx {
+    if let Some(ref rx) = app.export.export_rx {
         while let Ok(event) = rx.try_recv() {
             match event {
                 ExportEvent::Progress(prog, msg) => {
-                    app.export_progress = prog;
-                    app.export_status = Some(msg);
+                    app.export.export_progress = prog;
+                    app.export.export_status = Some(msg);
                 }
                 ExportEvent::Finished(msg) => {
-                    app.export_progress = 1.0;
-                    app.export_status = Some(msg.clone());
-                    app.is_exporting = false;
+                    app.export.export_progress = 1.0;
+                    app.export.export_status = Some(msg.clone());
+                    app.export.is_exporting = false;
                     finished_export = true;
                     app.toasts.info(format!("Export Complete: {}", msg));
                     // ── Batch runner: advance to the next queued comp ──
@@ -194,14 +236,15 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
                     if app.batch_idx < app.batch_queue.len() {
                         next_batch_comp = Some(app.batch_queue[app.batch_idx].clone());
                     } else if !app.batch_queue.is_empty() {
-                        app.toasts.info("Batch render complete: all queue items exported");
+                        app.toasts
+                            .info("Batch render complete: all queue items exported");
                         app.batch_queue.clear();
                         app.batch_idx = 0;
                     }
                 }
                 ExportEvent::Error(msg) => {
-                    app.export_status = Some(format!("Error: {}", msg));
-                    app.is_exporting = false;
+                    app.export.export_status = Some(format!("Error: {}", msg));
+                    app.export.is_exporting = false;
                     finished_export = true;
                     app.toasts.error(format!("Export Failed: {}", msg));
                     // A failed item aborts the batch to avoid cascading failures
@@ -216,17 +259,17 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
     }
 
     if finished_export {
-        app.export_rx = None;
+        app.export.export_rx = None;
     }
     if let Some(name) = next_batch_comp {
         start_comp_export(app, ctx, &name);
     }
 
-    if !app.show_export_dialog {
+    if !app.export.show_export_dialog {
         return;
     }
 
-    let mut open = app.show_export_dialog;
+    let mut open = app.export.show_export_dialog;
     egui::Window::new("Export Composition Video")
         .open(&mut open)
         .collapsible(false)
@@ -241,10 +284,10 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
             // Display range length when Work Area mode is active.
             let range_mode = ctx.data_mut(|d| *d.get_temp_mut_or_insert_with(egui::Id::new("ae_export_range"), || 0u8));
             let shown_total = if range_mode == 1
-                && (app.work_area_in.is_some() || app.work_area_out.is_some())
+                && (app.playback.work_area_in.is_some() || app.playback.work_area_out.is_some())
             {
-                let s = app.work_area_in.unwrap_or(0);
-                let e = app.work_area_out.unwrap_or(comp_total.saturating_sub(1));
+                let s = app.playback.work_area_in.unwrap_or(0);
+                let e = app.playback.work_area_out.unwrap_or(comp_total.saturating_sub(1));
                 e.saturating_sub(s).max(1)
             } else {
                 comp_total
@@ -272,7 +315,7 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
                                             crate::core::export_presets::ExportFormat::PngSequence => 2,
                                             _ => 0,
                                         };
-                                        app.export_fps = preset.fps;
+                                        app.export.export_fps = preset.fps;
                                         app.export_resolution_scale = if preset.width >= 1920 { 0 } else if preset.width >= 1280 { 1 } else { 2 };
                                     }
                                 }
@@ -315,12 +358,12 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
 
             ui.horizontal(|ui| {
                 ui.label("Target FPS:");
-                ui.add(egui::DragValue::new(&mut app.export_fps).range(1..=120));
+                ui.add(egui::DragValue::new(&mut app.export.export_fps).range(1..=120));
             });
 
             ui.horizontal(|ui| {
                 ui.label("Output Path:");
-                ui.text_edit_singleline(&mut app.export_output_path);
+                ui.text_edit_singleline(&mut app.export.export_output_path);
             });
 
             ui.add_space(6.0);
@@ -335,7 +378,7 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
                         },
                         width: comp.width,
                         height: comp.height,
-                        fps: app.export_fps,
+                        fps: app.export.export_fps,
                         quality: 85,
                         codec: "h264".into(),
                         audio_enabled: true,
@@ -346,15 +389,15 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
             });
 
             ui.add_space(10.0);
-            if app.is_exporting {
+            if app.export.is_exporting {
                 ctx.request_repaint_after(std::time::Duration::from_millis(100)); // Throttled: progress bar needs ~10fps, not 60+
                 ui.label("Rendering composition in background thread...");
-                ui.add(egui::ProgressBar::new(app.export_progress).show_percentage());
-                if let Some(ref status) = app.export_status {
+                ui.add(egui::ProgressBar::new(app.export.export_progress).show_percentage());
+                if let Some(ref status) = app.export.export_status {
                     ui.weak(status);
                 }
             } else {
-                if let Some(ref status) = app.export_status {
+                if let Some(ref status) = app.export.export_status {
                     let color = if status.contains("Error") { egui::Color32::RED } else { egui::Color32::GREEN };
                     ui.label(egui::RichText::new(status).color(color));
                     ui.add_space(4.0);
@@ -455,7 +498,7 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
                 ui.horizontal(|ui| {
                     ui.label("Range:");
                     let mut range_mode = ctx.data_mut(|d| *d.get_temp_mut_or_insert_with(egui::Id::new("ae_export_range"), || 0u8));
-                    let has_wa = app.work_area_in.is_some() || app.work_area_out.is_some();
+                    let has_wa = app.playback.work_area_in.is_some() || app.playback.work_area_out.is_some();
                     let mut changed = ui.radio_value(&mut range_mode, 0u8, "Entire Comp").changed();
                     changed |= ui.add_enabled(
                         has_wa,
@@ -483,7 +526,7 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
                                 .flat_map(|c| c.layers.iter())
                                 .map(|l| l.effects.iter().filter(|e| e.enabled).count())
                                 .sum();
-                            let mut path = app.export_output_path.trim().to_string();
+                            let mut path = app.export.export_output_path.trim().to_string();
                             if path.is_empty() {
                                 path = format!("{}_lottie", active_comp_name.replace(' ', "_"));
                             }
@@ -492,7 +535,7 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
                             }
                             match std::fs::write(&path, &json) {
                                 Ok(()) => {
-                                    app.export_status =
+                                    app.export.export_status =
                                         Some(format!("Lottie export complete → {}", path));
                                     app.toasts.info(format!(
                                         "Lottie exported → {} ({} bytes)",
@@ -507,7 +550,7 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
                                     }
                                 }
                                 Err(e) => {
-                                    app.export_status =
+                                    app.export.export_status =
                                         Some(format!("Error: Lottie export failed: {}", e));
                                     app.toasts.error(format!("Lottie export failed: {}", e));
                                 }
@@ -517,11 +560,11 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
                         start_comp_export(app, ctx, &active_comp_name);
                     }
                     if ui.button("Close").clicked() {
-                        app.show_export_dialog = false;
+                        app.export.show_export_dialog = false;
                     }
                 });
             }
         });
 
-    app.show_export_dialog = open;
+    app.export.show_export_dialog = open;
 }

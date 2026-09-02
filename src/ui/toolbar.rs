@@ -135,8 +135,8 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
                     ("Libraries", 0, 20),
                 ] {
                     if custom_widgets::ae_icon_button(ui, name, name).clicked() {
-                        app.left_tab_idx = l_idx;
-                        app.right_tab_idx = r_idx;
+                        app.ui_tabs.left_tab_idx = l_idx;
+                        app.ui_tabs.right_tab_idx = r_idx;
                     }
                 }
 
@@ -146,18 +146,18 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
 
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     if custom_widgets::ae_button_accent(ui, "Render Queue (Cmd+M)").clicked() {
-                        app.show_export_dialog = true;
+                        app.export.show_export_dialog = true;
                     }
                     ui.add_space(8.0);
                     let resp = ui.add_sized(
                         [120.0, 18.0],
-                        egui::TextEdit::singleline(&mut app.effects_search_query)
+                        egui::TextEdit::singleline(&mut app.ui_tabs.effects_search_query)
                             .hint_text("Search Effects..."),
                     );
                     if resp.changed() {
                         // Automatically switch right tab to Effects panel (tab 0) if typing search query
-                        if !app.effects_search_query.is_empty() && app.right_tab_idx != 0 {
-                            app.right_tab_idx = 0;
+                        if !app.ui_tabs.effects_search_query.is_empty() && app.ui_tabs.right_tab_idx != 0 {
+                            app.ui_tabs.right_tab_idx = 0;
                         }
                     }
                 });

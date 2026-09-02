@@ -1,20 +1,25 @@
-use eframe::egui;
-use crate::AfterEffectsApp;
 use crate::ui::theme::colors;
+use crate::AfterEffectsApp;
+use eframe::egui;
 
 /// Draw the Essential Properties panel for the selected precomp layer.
 pub fn draw_essential_properties(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
     crate::ui::custom_widgets::ae_section_header(ui, "Essential Properties", "🎬");
 
-    let Some(sel_idx) = app.selected_layer_idx else {
+    let Some(sel_idx) = app.selection.selected_layer_idx else {
         ui.weak("Select a PreComp layer to view its Essential Properties.");
         return;
     };
 
     let (is_precomp, prop_count) = {
         let comp = app.history.current().active_composition();
-        if sel_idx >= comp.layers.len() { return; }
-        let is_precomp = matches!(&comp.layers[sel_idx].layer_type, crate::core::timeline::LayerType::PreComp { .. });
+        if sel_idx >= comp.layers.len() {
+            return;
+        }
+        let is_precomp = matches!(
+            &comp.layers[sel_idx].layer_type,
+            crate::core::timeline::LayerType::PreComp { .. }
+        );
         (is_precomp, comp.layers[sel_idx].essential_properties.len())
     };
 
@@ -39,7 +44,7 @@ pub fn draw_essential_properties(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
                     min_value: 0.0,
                     max_value: 100.0,
                     options: vec![],
-                }
+                },
             );
             crate::core::frame_cache::bump_version();
         }
@@ -59,7 +64,11 @@ pub fn draw_essential_properties(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
 
         ui.group(|ui| {
             ui.horizontal(|ui| {
-                ui.label(egui::RichText::new(&name).strong().color(colors::TEXT_PRIMARY));
+                ui.label(
+                    egui::RichText::new(&name)
+                        .strong()
+                        .color(colors::TEXT_PRIMARY),
+                );
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     if ui.small_button("✕").on_hover_text("Remove").clicked() {
                         remove_idx = Some(i);
@@ -81,15 +90,21 @@ pub fn draw_essential_properties(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
     }
 
     if let Some(idx) = remove_idx {
-        app.history.current_mut().active_composition_mut().layers[sel_idx].essential_properties.remove(idx);
+        app.history.current_mut().active_composition_mut().layers[sel_idx]
+            .essential_properties
+            .remove(idx);
         crate::core::frame_cache::bump_version();
     }
     if let Some(idx) = move_up {
-        app.history.current_mut().active_composition_mut().layers[sel_idx].essential_properties.swap(idx, idx - 1);
+        app.history.current_mut().active_composition_mut().layers[sel_idx]
+            .essential_properties
+            .swap(idx, idx - 1);
         crate::core::frame_cache::bump_version();
     }
     if let Some(idx) = move_down {
-        app.history.current_mut().active_composition_mut().layers[sel_idx].essential_properties.swap(idx, idx + 1);
+        app.history.current_mut().active_composition_mut().layers[sel_idx]
+            .essential_properties
+            .swap(idx, idx + 1);
         crate::core::frame_cache::bump_version();
     }
 
@@ -109,7 +124,7 @@ pub fn draw_essential_properties(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
                 min_value: 0.0,
                 max_value: 100.0,
                 options: vec![],
-            }
+            },
         );
         crate::core::frame_cache::bump_version();
     }

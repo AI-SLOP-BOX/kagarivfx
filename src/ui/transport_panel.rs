@@ -1,9 +1,14 @@
-use eframe::egui;
-use crate::AfterEffectsApp;
-use crate::ui::theme::colors;
 use crate::ui::custom_widgets;
+use crate::ui::theme::colors;
+use crate::AfterEffectsApp;
+use eframe::egui;
 
-pub fn draw_transport_panel(app: &mut AfterEffectsApp, ui: &mut egui::Ui, current_frame: &mut u32, total_frames: u32) {
+pub fn draw_transport_panel(
+    app: &mut AfterEffectsApp,
+    ui: &mut egui::Ui,
+    current_frame: &mut u32,
+    total_frames: u32,
+) {
     ui.heading("Preview / Time Controls");
     ui.separator();
 
@@ -15,11 +20,23 @@ pub fn draw_transport_panel(app: &mut AfterEffectsApp, ui: &mut egui::Ui, curren
         let mins = secs / 60;
         let hours = mins / 60;
         ui.horizontal(|ui| {
-            ui.label(egui::RichText::new(format!("{:02}:{:02}:{:02}:{:02}", hours, mins % 60, secs % 60, sub_f))
-                .strong().color(colors::ACCENT_YELLOW));
+            ui.label(
+                egui::RichText::new(format!(
+                    "{:02}:{:02}:{:02}:{:02}",
+                    hours,
+                    mins % 60,
+                    secs % 60,
+                    sub_f
+                ))
+                .strong()
+                .color(colors::ACCENT_YELLOW),
+            );
             ui.separator();
-            ui.label(egui::RichText::new(format!("Frame {} / {}", current_frame, total_frames))
-                .small().color(colors::TEXT_SECONDARY));
+            ui.label(
+                egui::RichText::new(format!("Frame {} / {}", current_frame, total_frames))
+                    .small()
+                    .color(colors::TEXT_SECONDARY),
+            );
         });
     }
 
@@ -45,14 +62,14 @@ pub fn draw_transport_panel(app: &mut AfterEffectsApp, ui: &mut egui::Ui, curren
         }
 
         // Play / Pause: prominent accent button
-        let (_icon, label) = if app.is_playing {
+        let (_icon, label) = if app.playback.is_playing {
             (SVG_PAUSE, "Pause")
         } else {
             (SVG_PLAY, "Play (Space)")
         };
-        let play_label = if app.is_playing { "⏸ Pause" } else { "▶ Play (Space)" };
+        let play_label = if app.playback.is_playing { "⏸ Pause" } else { "▶ Play (Space)" };
         if custom_widgets::ae_button_accent(ui, play_label).on_hover_text(label).clicked() {
-            app.is_playing = !app.is_playing;
+            app.playback.is_playing = !app.playback.is_playing;
         }
 
         if render_svg_bytes(ui, "t_next", STEP_FWD, size, colors::TEXT_PRIMARY)
@@ -68,7 +85,10 @@ pub fn draw_transport_panel(app: &mut AfterEffectsApp, ui: &mut egui::Ui, curren
 
     ui.add_space(6.0);
     ui.horizontal(|ui| {
-        if ui.checkbox(&mut app.loop_playback, "Loop Playback").changed() {
+        if ui
+            .checkbox(&mut app.loop_playback, "Loop Playback")
+            .changed()
+        {
             // Applied live by the playback loop in app_state
         }
 
@@ -91,9 +111,25 @@ pub fn draw_transport_panel(app: &mut AfterEffectsApp, ui: &mut egui::Ui, curren
             _ => "Quarter (1/4 Resolution)",
         })
         .show_ui(ui, |ui| {
-            ui.selectable_value(&mut app.viewport_render_resolution, 0, "Full (1:1 Resolution)");
-            ui.selectable_value(&mut app.viewport_render_resolution, 1, "Half (1/2 Resolution)");
-            ui.selectable_value(&mut app.viewport_render_resolution, 2, "Third (1/3 Resolution)");
-            ui.selectable_value(&mut app.viewport_render_resolution, 3, "Quarter (1/4 Resolution)");
+            ui.selectable_value(
+                &mut app.viewport_render_resolution,
+                0,
+                "Full (1:1 Resolution)",
+            );
+            ui.selectable_value(
+                &mut app.viewport_render_resolution,
+                1,
+                "Half (1/2 Resolution)",
+            );
+            ui.selectable_value(
+                &mut app.viewport_render_resolution,
+                2,
+                "Third (1/3 Resolution)",
+            );
+            ui.selectable_value(
+                &mut app.viewport_render_resolution,
+                3,
+                "Quarter (1/4 Resolution)",
+            );
         });
 }

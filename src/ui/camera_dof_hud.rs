@@ -4,13 +4,13 @@ use eframe::egui;
 
 pub fn draw_camera_dof_hud(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
     let mut project_changed = false;
-    let current_f = app.current_frame;
+    let current_f = app.playback.current_frame;
 
     ui.horizontal(|ui| {
         ui.style_mut().spacing.item_spacing.x = 4.0;
         ui.small("📷 3D DoF:");
 
-        let selected_idx = app.selected_layer_idx;
+        let selected_idx = app.selection.selected_layer_idx;
 
         // 1. Auto-Focus to Selected Layer Button
         if ui

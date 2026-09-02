@@ -18,7 +18,7 @@ pub fn draw_inline_numeric_editor(
         return;
     }
 
-    let sel_idx = match app.selected_layer_idx {
+    let sel_idx = match app.selection.selected_layer_idx {
         Some(idx) => idx,
         None => return,
     };

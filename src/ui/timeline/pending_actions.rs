@@ -78,11 +78,11 @@ fn apply_swap(app: &mut AfterEffectsApp, a: usize, b: usize, project_changed: &m
                 idx
             }
         };
-        app.selected_layers = app.selected_layers.iter().map(|i| remap(*i)).collect();
-        if let Some(sel) = app.selected_layer_idx {
-            app.selected_layer_idx = Some(remap(sel));
+        app.selection.selected_layers = app.selection.selected_layers.iter().map(|i| remap(*i)).collect();
+        if let Some(sel) = app.selection.selected_layer_idx {
+            app.selection.selected_layer_idx = Some(remap(sel));
         }
-        app.expanded_layers = app.expanded_layers.iter().map(|i| remap(*i)).collect();
+        app.selection.expanded_layers = app.selection.expanded_layers.iter().map(|i| remap(*i)).collect();
         *project_changed = true;
     }
 }
@@ -183,7 +183,7 @@ fn toggle_marker_alt_m(
         return;
     }
     let temp_project = app.history.current_mut();
-    if let Some(sel_idx) = app.selected_layer_idx {
+    if let Some(sel_idx) = app.selection.selected_layer_idx {
         if let Some(layer) = temp_project
             .active_composition_mut()
             .layers
@@ -224,9 +224,9 @@ fn duplicate_layer_at(
             .active_composition_mut()
             .layers
             .insert(idx + 1, cloned);
-        app.selected_layer_idx = Some(idx + 1);
-        app.selected_layers.clear();
-        app.selected_layers.insert(idx + 1);
+        app.selection.selected_layer_idx = Some(idx + 1);
+        app.selection.selected_layers.clear();
+        app.selection.selected_layers.insert(idx + 1);
         *project_changed = true;
     }
 }
@@ -258,9 +258,9 @@ fn split_layer_at(
             .active_composition_mut()
             .layers
             .insert(idx + 1, tail);
-        app.selected_layer_idx = Some(idx + 1);
-        app.selected_layers.clear();
-        app.selected_layers.insert(idx + 1);
+        app.selection.selected_layer_idx = Some(idx + 1);
+        app.selection.selected_layers.clear();
+        app.selection.selected_layers.insert(idx + 1);
         *project_changed = true;
         app.toasts
             .info(format!("Split layer at frame {}", current_frame));
@@ -323,9 +323,9 @@ fn precompose_selected(
     active_comp.layers.insert(insert_pos, precomp_layer);
     temp_project.compositions.push(new_comp);
 
-    app.selected_layers.clear();
-    app.selected_layers.insert(insert_pos);
-    app.selected_layer_idx = Some(insert_pos);
+    app.selection.selected_layers.clear();
+    app.selection.selected_layers.insert(insert_pos);
+    app.selection.selected_layer_idx = Some(insert_pos);
     *project_changed = true;
 }
 
@@ -339,14 +339,14 @@ fn duplicate_shortcut_cmd_d(
     let is_dup = ui.input(|i| i.modifiers.command && !i.modifiers.shift && i.key_pressed(egui::Key::D));
 
     if is_split {
-        if let Some(sel_idx) = app.selected_layer_idx {
+        if let Some(sel_idx) = app.selection.selected_layer_idx {
             split_layer_at(app, sel_idx, current_frame, project_changed);
         }
         return;
     }
 
     if is_dup {
-        if let Some(sel_idx) = app.selected_layer_idx {
+        if let Some(sel_idx) = app.selection.selected_layer_idx {
             duplicate_layer_at(app, sel_idx, project_changed, " (Cmd+D)");
         }
     }
@@ -364,7 +364,7 @@ fn trim_in_out_shortcuts(
         return;
     }
     let temp_project = app.history.current_mut();
-    if let Some(sel_idx) = app.selected_layer_idx {
+    if let Some(sel_idx) = app.selection.selected_layer_idx {
         if let Some(layer) = temp_project
             .active_composition_mut()
             .layers

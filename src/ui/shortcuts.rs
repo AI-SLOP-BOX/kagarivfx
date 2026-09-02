@@ -1,22 +1,36 @@
-use eframe::egui::{self, Key};
 use crate::AfterEffectsApp;
+use eframe::egui::{self, Key};
 
 /// Return platform-native command modifier label ("Cmd" on macOS, "Ctrl" on Windows/Linux)
 pub fn cmd_name() -> &'static str {
-    if cfg!(target_os = "macos") { "Cmd" } else { "Ctrl" }
+    if cfg!(target_os = "macos") {
+        "Cmd"
+    } else {
+        "Ctrl"
+    }
 }
 
 /// Return platform-native option modifier label ("Option" on macOS, "Alt" on Windows/Linux)
 pub fn option_name() -> &'static str {
-    if cfg!(target_os = "macos") { "Option" } else { "Alt" }
+    if cfg!(target_os = "macos") {
+        "Option"
+    } else {
+        "Alt"
+    }
 }
 
 /// Format a keyboard shortcut string dynamically based on host OS target platform.
 pub fn format_shortcut(key: &str, cmd: bool, shift: bool, alt: bool) -> String {
     let mut parts = Vec::new();
-    if cmd { parts.push(cmd_name()); }
-    if alt { parts.push(option_name()); }
-    if shift { parts.push("Shift"); }
+    if cmd {
+        parts.push(cmd_name());
+    }
+    if alt {
+        parts.push(option_name());
+    }
+    if shift {
+        parts.push("Shift");
+    }
     parts.push(key);
     parts.join("+")
 }
@@ -54,8 +68,8 @@ pub fn handle_global_shortcuts(
 
         // Space → Play / Pause RAM Preview (single-key: suppressed while typing)
         if allow_single_key && i.key_pressed(Key::Space) {
-            app.is_playing = !app.is_playing;
-            if !app.is_playing && app.motion_sketch_active {
+            app.playback.is_playing = !app.playback.is_playing;
+            if !app.playback.is_playing && app.motion_sketch_active {
                 app.motion_sketch_active = false;
                 app.toasts.info("Motion Sketch OFF");
             }
@@ -82,13 +96,13 @@ pub fn handle_global_shortcuts(
         // Shift+Z → Viewport zoom to fit / to selected layers' bbox (AE parity)
         if shift && !cmd && i.key_pressed(Key::Z) {
             let mut bbox_request: Option<([f32; 2], [f32; 2])> = None;
-            if !app.selected_layers.is_empty() || app.selected_layer_idx.is_some() {
+            if !app.selection.selected_layers.is_empty() || app.selection.selected_layer_idx.is_some() {
                 let comp = app.history.current().active_composition();
                 let cf = *current_frame;
-                let idxs: Vec<usize> = if app.selected_layers.is_empty() {
-                    app.selected_layer_idx.into_iter().collect()
+                let idxs: Vec<usize> = if app.selection.selected_layers.is_empty() {
+                    app.selection.selected_layer_idx.into_iter().collect()
                 } else {
-                    let mut v: Vec<usize> = app.selected_layers.iter().copied().collect();
+                    let mut v: Vec<usize> = app.selection.selected_layers.iter().copied().collect();
                     v.sort();
                     v
                 };
@@ -111,28 +125,28 @@ pub fn handle_global_shortcuts(
             match bbox_request {
                 Some(b) => app.viewport_focus_bbox = Some(b),
                 None => {
-                    app.viewport_mag_ratio = 0.0;
-                    app.viewport_pan = egui::Vec2::ZERO;
+                    app.ui_tabs.viewport_mag_ratio = 0.0;
+                    app.playback.viewport_pan = egui::Vec2::ZERO;
                 }
             }
         }
         // Cmd+0 → Viewport zoom to fit (AE standard)
         if cmd && i.key_pressed(Key::Num0) {
-            app.viewport_mag_ratio = 0.0;
-            app.viewport_pan = egui::Vec2::ZERO;
+            app.ui_tabs.viewport_mag_ratio = 0.0;
+            app.playback.viewport_pan = egui::Vec2::ZERO;
         }
 
         // B → Set Work Area Start, N → Set Work Area End (single-key)
         if allow_single_key && i.key_pressed(Key::B) && !cmd {
-            app.work_area_in = Some(*current_frame);
+            app.playback.work_area_in = Some(*current_frame);
         }
         if allow_single_key && i.key_pressed(Key::N) && !cmd {
-            app.work_area_out = Some(*current_frame);
+            app.playback.work_area_out = Some(*current_frame);
         }
 
         // ── I / O → Jump to selected layer's in-point / out-point (AE parity) ──
         if allow_single_key && !cmd && i.key_pressed(Key::I) {
-            if let Some(idx) = app.selected_layer_idx {
+            if let Some(idx) = app.selection.selected_layer_idx {
                 let comp = app.history.current().active_composition();
                 if let Some(layer) = comp.layers.get(idx) {
                     *current_frame = layer.in_frame;
@@ -140,7 +154,7 @@ pub fn handle_global_shortcuts(
             }
         }
         if allow_single_key && !cmd && i.key_pressed(Key::O) {
-            if let Some(idx) = app.selected_layer_idx {
+            if let Some(idx) = app.selection.selected_layer_idx {
                 let comp = app.history.current().active_composition();
                 if let Some(layer) = comp.layers.get(idx) {
                     *current_frame = layer.out_frame;
@@ -152,17 +166,17 @@ pub fn handle_global_shortcuts(
         // J/K are reserved for keyframe navigation below (AE standard).
         if allow_single_key && !cmd && !shift {
             if i.key_pressed(Key::L) {
-                if app.is_playing && app.playback_speed > 0 {
+                if app.playback.is_playing && app.playback_speed > 0 {
                     // Already playing forward: increase speed (max 3x)
                     app.playback_speed = (app.playback_speed + 1).min(3);
                 } else {
-                    app.is_playing = true;
+                    app.playback.is_playing = true;
                     app.playback_speed = 1;
                 }
                 app.toasts.info(format!("▶ Forward {}x", app.playback_speed));
             }
             if i.key_pressed(Key::F9) {
-                if let Some(idx) = app.selected_layer_idx {
+                if let Some(idx) = app.selection.selected_layer_idx {
                     let mut temp_proj = app.history.current().clone();
                     let comp = temp_proj.active_composition_mut();
                     if idx < comp.layers.len() {
@@ -205,7 +219,7 @@ pub fn handle_global_shortcuts(
         // Collects keyframe times across all transform properties of the selected layer.
         if allow_single_key && (i.key_pressed(Key::J) || i.key_pressed(Key::K)) {
             let going_next = i.key_pressed(Key::K);
-            if let Some(idx) = app.selected_layer_idx {
+            if let Some(idx) = app.selection.selected_layer_idx {
                 let comp = app.history.current().active_composition();
                 if let Some(layer) = comp.layers.get(idx) {
                     let t = &layer.transform;
@@ -252,7 +266,7 @@ pub fn handle_global_shortcuts(
         let step = if i.modifiers.shift { 10.0 } else { 1.0 };
         let cur_frame = *current_frame;
         let mut arrow_nudge = |dx: f32, dy: f32| -> bool {
-            let Some(idx) = app.selected_layer_idx else { return false };
+            let Some(idx) = app.selection.selected_layer_idx else { return false };
             let project = app.history.current_mut();
             let Some(comp) = project.active_composition_mut().layers.get_mut(idx) else {
                 return false;
@@ -355,10 +369,10 @@ pub fn handle_global_shortcuts(
         // ── Cmd+A: select all layers (AE parity) ──
         if cmd && !shift && i.key_pressed(Key::A) {
             let count = app.history.current().active_composition().layers.len();
-            app.selected_layers.clear();
-            app.selected_layer_idx = Some(count.saturating_sub(1));
+            app.selection.selected_layers.clear();
+            app.selection.selected_layer_idx = Some(count.saturating_sub(1));
             for i in 0..count {
-                app.selected_layers.insert(i);
+                app.selection.selected_layers.insert(i);
             }
         }
 
@@ -456,7 +470,7 @@ pub fn handle_global_shortcuts(
         }
         if cmd && !shift && i.key_pressed(Key::V) && !app.kf_clipboard.is_empty() {
             let paste_origin = *current_frame;
-            let target_layer_idx = app.selected_layer_idx.unwrap_or(0);
+            let target_layer_idx = app.selection.selected_layer_idx.unwrap_or(0);
             let project = app.history.current_mut();
             let Some(layer) = project.active_composition_mut().layers.get_mut(target_layer_idx) else { return };
             let t = &mut layer.transform;
@@ -530,14 +544,14 @@ pub fn handle_global_shortcuts(
             if !app.selected_keyframes.is_empty() {
                 app.selected_keyframes.clear();
             } else {
-                app.selected_layers.clear();
-                app.selected_layer_idx = None;
+                app.selection.selected_layers.clear();
+                app.selection.selected_layer_idx = None;
             }
         }
 
         // F2 → Rename selected layer (standard file manager shortcut)
         if allow_single_key && i.key_pressed(Key::F2) {
-            if let Some(idx) = app.selected_layer_idx {
+            if let Some(idx) = app.selection.selected_layer_idx {
                 app.renaming_layer = Some(idx);
             }
         }
@@ -577,7 +591,7 @@ pub fn handle_global_shortcuts(
 
         // Cmd+M → Render Queue / Export Dialog
         if cmd && !shift && i.key_pressed(Key::M) {
-            app.show_export_dialog = true;
+            app.export.show_export_dialog = true;
         }
 
         // ── Timeline markers: M adds/removes a marker at the playhead ──
@@ -655,7 +669,7 @@ pub fn handle_global_shortcuts(
 
         // ── Cmd+Shift+D → Split Selected Layer at Playhead (AE parity) ──
         if cmd && shift && i.key_pressed(Key::D) {
-            if let Some(sel_idx) = app.selected_layer_idx {
+            if let Some(sel_idx) = app.selection.selected_layer_idx {
                 let cur = *current_frame;
                 let mut split_done = false;
                 app.modify_project(|p| {
@@ -688,7 +702,7 @@ pub fn handle_global_shortcuts(
 
         // ── Cmd+Alt+T → Toggle Time Remapping on selected layer (AE parity) ──
         if cmd && i.modifiers.alt && !shift && i.key_pressed(Key::T) {
-            if let Some(sel_idx) = app.selected_layer_idx {
+            if let Some(sel_idx) = app.selection.selected_layer_idx {
                 let mut enabled = false;
                 app.modify_project(|p| {
                     let dur = p.active_composition().duration_frames;
@@ -721,11 +735,11 @@ pub fn handle_global_shortcuts(
         // Cmd+Shift+C → Pre-Compose Selected Layers
         if cmd && shift && i.key_pressed(Key::C) {
             let mut temp_project = app.history.current().clone();
-            let selected_indices: Vec<usize> = if !app.selected_layers.is_empty() {
-                let mut s: Vec<usize> = app.selected_layers.iter().copied().collect();
+            let selected_indices: Vec<usize> = if !app.selection.selected_layers.is_empty() {
+                let mut s: Vec<usize> = app.selection.selected_layers.iter().copied().collect();
                 s.sort();
                 s
-            } else if let Some(idx) = app.selected_layer_idx {
+            } else if let Some(idx) = app.selection.selected_layer_idx {
                 vec![idx]
             } else {
                 vec![]
@@ -769,9 +783,9 @@ pub fn handle_global_shortcuts(
                 comp_mut.layers.insert(insert_pos, precomp_layer);
                 temp_project.compositions.push(new_comp);
 
-                app.selected_layers.clear();
-                app.selected_layers.insert(insert_pos);
-                app.selected_layer_idx = Some(insert_pos);
+                app.selection.selected_layers.clear();
+                app.selection.selected_layers.insert(insert_pos);
+                app.selection.selected_layer_idx = Some(insert_pos);
                 app.history.commit(temp_project);
                 crate::core::frame_cache::bump_version();
             }
@@ -779,7 +793,7 @@ pub fn handle_global_shortcuts(
 
         // Cmd+D → Duplicate selected layer, Cmd+Shift+D → Split layer at current frame
         if cmd && i.key_pressed(Key::D) {
-            if let Some(idx) = app.selected_layer_idx {
+            if let Some(idx) = app.selection.selected_layer_idx {
                 let mut proj = app.history.current().clone();
                 let cf = *current_frame;
                 let comp = proj.active_composition_mut();
@@ -789,7 +803,7 @@ pub fn handle_global_shortcuts(
                         dup.id = format!("{}_dup_{}", dup.id, comp.layers.len());
                         dup.name = format!("{} Copy", dup.name);
                         comp.layers.insert(idx + 1, dup);
-                        app.selected_layer_idx = Some(idx + 1);
+                        app.selection.selected_layer_idx = Some(idx + 1);
                     } else {
                         let mut split_b = comp.layers[idx].clone();
                         comp.layers[idx].out_frame = cf;
@@ -797,7 +811,7 @@ pub fn handle_global_shortcuts(
                         split_b.id = format!("{}_split_{}", split_b.id, comp.layers.len());
                         split_b.name = format!("{} Split", split_b.name);
                         comp.layers.insert(idx + 1, split_b);
-                        app.selected_layer_idx = Some(idx + 1);
+                        app.selection.selected_layer_idx = Some(idx + 1);
                     }
                     app.history.commit(proj);
                     crate::core::frame_cache::bump_version();
@@ -807,7 +821,7 @@ pub fn handle_global_shortcuts(
 
         // Cmd+[ → Send Backward, Cmd+] → Bring Forward (layer stacking order)
         if cmd && (i.key_pressed(Key::OpenBracket) || i.key_pressed(Key::CloseBracket)) {
-            if let Some(idx) = app.selected_layer_idx {
+            if let Some(idx) = app.selection.selected_layer_idx {
                 let forward = i.key_pressed(Key::CloseBracket);
                 let len = app.history.current().active_composition().layers.len();
                 let target = if forward {
@@ -818,7 +832,7 @@ pub fn handle_global_shortcuts(
                 if let Some(new_idx) = target {
                     let mut proj = app.history.current().clone();
                     proj.active_composition_mut().layers.swap(idx, new_idx);
-                    app.selected_layer_idx = Some(new_idx);
+                    app.selection.selected_layer_idx = Some(new_idx);
                     app.history.commit(proj);
                     crate::core::frame_cache::bump_version();
                 }
@@ -827,7 +841,7 @@ pub fn handle_global_shortcuts(
 
         // Cmd+[ → Send Backward, Cmd+] → Bring Forward (layer stacking order)
         if cmd && (i.key_pressed(Key::OpenBracket) || i.key_pressed(Key::CloseBracket)) {
-            if let Some(idx) = app.selected_layer_idx {
+            if let Some(idx) = app.selection.selected_layer_idx {
                 let forward = i.key_pressed(Key::CloseBracket);
                 let len = app.history.current().active_composition().layers.len();
                 let target = if forward {
@@ -838,7 +852,7 @@ pub fn handle_global_shortcuts(
                 if let Some(new_idx) = target {
                     let mut proj = app.history.current().clone();
                     proj.active_composition_mut().layers.swap(idx, new_idx);
-                    app.selected_layer_idx = Some(new_idx);
+                    app.selection.selected_layer_idx = Some(new_idx);
                     app.history.commit(proj);
                     crate::core::frame_cache::bump_version();
                 }
@@ -847,9 +861,9 @@ pub fn handle_global_shortcuts(
 
         // Delete / Backspace → Delete all selected layers (single-key)
         if allow_single_key && (i.key_pressed(Key::Delete) || i.key_pressed(Key::Backspace)) && !shift {
-            let mut indices: Vec<usize> = app.selected_layers.iter().copied().collect();
+            let mut indices: Vec<usize> = app.selection.selected_layers.iter().copied().collect();
             if indices.is_empty() {
-                if let Some(s) = app.selected_layer_idx {
+                if let Some(s) = app.selection.selected_layer_idx {
                     indices.push(s);
                 }
             }
@@ -863,22 +877,22 @@ pub fn handle_global_shortcuts(
                         }
                     }
                 });
-                app.selected_layers.clear();
-                app.selected_layer_idx = None;
+                app.selection.selected_layers.clear();
+                app.selection.selected_layer_idx = None;
             }
         }
 
         // Property Selection Shortcuts (P, S, T, R) — single-key, suppressed while typing
-        if allow_single_key && i.key_pressed(Key::P) && !cmd { app.selected_property = Some("Position X".to_string()); }
-        if allow_single_key && i.key_pressed(Key::S) && !cmd { app.selected_property = Some("Scale X".to_string()); }
-        if allow_single_key && i.key_pressed(Key::T) && !cmd { app.selected_property = Some("Opacity".to_string()); }
-        if allow_single_key && i.key_pressed(Key::R) && !cmd { app.selected_property = Some("Rotation".to_string()); }
+        if allow_single_key && i.key_pressed(Key::P) && !cmd { app.selection.selected_property = Some("Position X".to_string()); }
+        if allow_single_key && i.key_pressed(Key::S) && !cmd { app.selection.selected_property = Some("Scale X".to_string()); }
+        if allow_single_key && i.key_pressed(Key::T) && !cmd { app.selection.selected_property = Some("Opacity".to_string()); }
+        if allow_single_key && i.key_pressed(Key::R) && !cmd { app.selection.selected_property = Some("Rotation".to_string()); }
 
         // ── I / O: Jump to Layer In / Out Point ─────────────────────────────
         // I = jump CTI to selected layer's in_frame
         // O = jump CTI to selected layer's out_frame - 1
         if allow_single_key && !cmd && i.key_pressed(Key::I) {
-            if let Some(idx) = app.selected_layer_idx {
+            if let Some(idx) = app.selection.selected_layer_idx {
                 let comp = app.history.current().active_composition();
                 if idx < comp.layers.len() {
                     *current_frame = comp.layers[idx].in_frame;
@@ -887,7 +901,7 @@ pub fn handle_global_shortcuts(
             }
         }
         if allow_single_key && !cmd && i.key_pressed(Key::O) {
-            if let Some(idx) = app.selected_layer_idx {
+            if let Some(idx) = app.selection.selected_layer_idx {
                 let comp = app.history.current().active_composition();
                 if idx < comp.layers.len() {
                     *current_frame = comp.layers[idx].out_frame.saturating_sub(1);
@@ -906,18 +920,18 @@ pub fn handle_global_shortcuts(
                 .unwrap_or(false);
             if is_double {
                 // UU → reveal all modified properties (expand layer + select "All Modified")
-                if let Some(idx) = app.selected_layer_idx {
-                    app.expanded_layers.insert(idx);
+                if let Some(idx) = app.selection.selected_layer_idx {
+                    app.selection.expanded_layers.insert(idx);
                 }
-                app.selected_property = Some("All Modified".to_string());
+                app.selection.selected_property = Some("All Modified".to_string());
                 app.toasts.info("UU: Reveal All Modified Properties");
                 app.u_key_last_press = None;
             } else {
                 // U → reveal keyframed properties
-                if let Some(idx) = app.selected_layer_idx {
-                    app.expanded_layers.insert(idx);
+                if let Some(idx) = app.selection.selected_layer_idx {
+                    app.selection.expanded_layers.insert(idx);
                 }
-                app.selected_property = Some("Keyframed".to_string());
+                app.selection.selected_property = Some("Keyframed".to_string());
                 app.toasts.info("U: Reveal Keyframed Properties");
                 app.u_key_last_press = Some(now);
             }
@@ -925,20 +939,20 @@ pub fn handle_global_shortcuts(
         // ── A / AA: Reveal Anchor Point / Position ──────────────────────────
         // A = reveal Anchor Point property in timeline for selected layer
         if allow_single_key && !cmd && i.key_pressed(Key::A) {
-            if let Some(idx) = app.selected_layer_idx {
-                app.expanded_layers.insert(idx);
+            if let Some(idx) = app.selection.selected_layer_idx {
+                app.selection.expanded_layers.insert(idx);
             }
-            app.selected_property = Some("Anchor Point".to_string());
+            app.selection.selected_property = Some("Anchor Point".to_string());
             app.toasts.info("A: Reveal Anchor Point");
         }
 
         // ── Shift+Home / Shift+End: Jump to Work Area In / Out ──────────────
         if allow_single_key && shift && i.key_pressed(Key::Home) {
-            *current_frame = app.work_area_in.unwrap_or(0);
+            *current_frame = app.playback.work_area_in.unwrap_or(0);
         }
         if allow_single_key && shift && i.key_pressed(Key::End) {
             let last = total_frames.saturating_sub(1);
-            *current_frame = app.work_area_out.unwrap_or(last).min(last);
+            *current_frame = app.playback.work_area_out.unwrap_or(last).min(last);
         }
 
         // ── Cmd+1~4: Composition Tab Switcher ───────────────────────────────
@@ -963,24 +977,24 @@ pub fn handle_global_shortcuts(
             let count = app.history.current().active_composition().layers.len();
             if count > 0 {
                 let next = if shift {
-                    app.selected_layer_idx.map_or(count - 1, |i| i.saturating_sub(1))
+                    app.selection.selected_layer_idx.map_or(count - 1, |i| i.saturating_sub(1))
                 } else {
-                    app.selected_layer_idx.map_or(0, |i| (i + 1).min(count - 1))
+                    app.selection.selected_layer_idx.map_or(0, |i| (i + 1).min(count - 1))
                 };
-                app.selected_layer_idx = Some(next);
-                app.selected_layers.clear();
-                app.selected_layers.insert(next);
+                app.selection.selected_layer_idx = Some(next);
+                app.selection.selected_layers.clear();
+                app.selection.selected_layers.insert(next);
             }
         }
 
         // ── Numpad 0 → RAM Preview (force work-area pre-render + play) ──
-        if allow_single_key && i.key_pressed(Key::Num0) && !app.is_playing {
-            app.is_playing = true;
+        if allow_single_key && i.key_pressed(Key::Num0) && !app.playback.is_playing {
+            app.playback.is_playing = true;
         }
 
         // ── Cmd+Alt+F → Fit to Comp (uniform scale + center, AE Layer menu parity) ──
         if cmd && i.modifiers.alt && i.key_pressed(Key::F) {
-            if let Some(idx) = app.selected_layer_idx {
+            if let Some(idx) = app.selection.selected_layer_idx {
                 let dims = { let cc = app.history.current().active_composition(); (cc.width as f32, cc.height as f32) };
                 app.modify_project(move |p| {
                     if let Some(l) = p.active_composition_mut().layers.get_mut(idx) {
@@ -1015,7 +1029,7 @@ pub fn handle_global_shortcuts(
         if cmd && shift && i.key_pressed(Key::K) {
             app.motion_sketch_active = !app.motion_sketch_active;
             if app.motion_sketch_active {
-                app.is_playing = true;
+                app.playback.is_playing = true;
                 app.toasts.info("Motion Sketch ON — drag layer to record position");
             } else {
                 app.toasts.info("Motion Sketch OFF");

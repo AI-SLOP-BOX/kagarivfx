@@ -22,7 +22,7 @@ fn read_single_f32(
     effect_name: &str,
     field: fn(&EffectType) -> Option<f32>,
 ) -> Option<f32> {
-    let idx = app.selected_layer_idx?;
+    let idx = app.selection.selected_layer_idx?;
     let comp = app.history.current().active_composition();
     let layer = comp.layers.get(idx)?;
     let e = layer.effects.iter().find(|e| e.name == effect_name)?;
@@ -30,10 +30,10 @@ fn read_single_f32(
 }
 
 fn read_wb(app: &AfterEffectsApp) -> Option<WbPair> {
-    let idx = app.selected_layer_idx?;
+    let idx = app.selection.selected_layer_idx?;
     let comp = app.history.current().active_composition();
     let layer = comp.layers.get(idx)?;
-    let cur_frame = app.current_frame;
+    let cur_frame = app.playback.current_frame;
     match &layer
         .effects
         .iter()
@@ -48,10 +48,10 @@ fn read_wb(app: &AfterEffectsApp) -> Option<WbPair> {
 }
 
 fn read_hsl(app: &AfterEffectsApp) -> Option<HslTriple> {
-    let idx = app.selected_layer_idx?;
+    let idx = app.selection.selected_layer_idx?;
     let comp = app.history.current().active_composition();
     let layer = comp.layers.get(idx)?;
-    let cur_frame = app.current_frame;
+    let cur_frame = app.playback.current_frame;
     match &layer
         .effects
         .iter()
@@ -79,10 +79,10 @@ fn write_single_f32(
     value: f32,
     make: fn(crate::core::property::Animatable<f32>) -> EffectType,
 ) {
-    let Some(idx) = app.selected_layer_idx else {
+    let Some(idx) = app.selection.selected_layer_idx else {
         return;
     };
-    let cur_frame = app.current_frame;
+    let cur_frame = app.playback.current_frame;
     app.modify_project(move |p| {
         let comp = p.active_composition_mut();
         let Some(layer) = comp.layers.get_mut(idx) else {
@@ -105,10 +105,10 @@ fn write_single_f32(
 }
 
 fn write_wb(app: &mut AfterEffectsApp, new_temperature: f32, new_tint: f32) {
-    let Some(idx) = app.selected_layer_idx else {
+    let Some(idx) = app.selection.selected_layer_idx else {
         return;
     };
-    let cur_frame = app.current_frame;
+    let cur_frame = app.playback.current_frame;
     app.modify_project(move |p| {
         let comp = p.active_composition_mut();
         let Some(layer) = comp.layers.get_mut(idx) else {
@@ -136,10 +136,10 @@ fn write_wb(app: &mut AfterEffectsApp, new_temperature: f32, new_tint: f32) {
 }
 
 fn write_hsl(app: &mut AfterEffectsApp, new_hue: f32, new_sat: f32, new_light: f32) {
-    let Some(idx) = app.selected_layer_idx else {
+    let Some(idx) = app.selection.selected_layer_idx else {
         return;
     };
-    let cur_frame = app.current_frame;
+    let cur_frame = app.playback.current_frame;
     app.modify_project(move |p| {
         let comp = p.active_composition_mut();
         let Some(layer) = comp.layers.get_mut(idx) else {
@@ -170,7 +170,7 @@ fn write_hsl(app: &mut AfterEffectsApp, new_hue: f32, new_sat: f32, new_light: f
 
 /// Reads the live three-way values from the selected layer, if present.
 fn read_cb(app: &AfterEffectsApp) -> Option<ThreeWay> {
-    let idx = app.selected_layer_idx?;
+    let idx = app.selection.selected_layer_idx?;
     let comp = app.history.current().active_composition();
     let layer = comp.layers.get(idx)?;
     match &layer
@@ -191,7 +191,7 @@ fn read_cb(app: &AfterEffectsApp) -> Option<ThreeWay> {
 
 /// Inserts or updates the Lumetri Color Balance effect on the selected layer.
 fn write_cb(app: &mut AfterEffectsApp, s: [f32; 3], m: [f32; 3], h: [f32; 3], pl: bool) {
-    let Some(idx) = app.selected_layer_idx else {
+    let Some(idx) = app.selection.selected_layer_idx else {
         return;
     };
     app.modify_project(move |p| {
@@ -240,7 +240,7 @@ fn remove_effect(app: &mut AfterEffectsApp, layer_idx: usize, effect_name: &str)
 
 /// Reads the live vignette parameters from the selected layer.
 fn read_vignette(app: &AfterEffectsApp) -> Option<(f32, f32, f32, [f32; 4])> {
-    let idx = app.selected_layer_idx?;
+    let idx = app.selection.selected_layer_idx?;
     let comp = app.history.current().active_composition();
     let layer = comp.layers.get(idx)?;
     match &layer
@@ -272,7 +272,7 @@ fn write_vignette(
     feather: f32,
     color: [f32; 4],
 ) {
-    let Some(idx) = app.selected_layer_idx else {
+    let Some(idx) = app.selection.selected_layer_idx else {
         return;
     };
     app.modify_project(move |p| {
@@ -445,7 +445,7 @@ pub fn draw_lumetri_color(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
                     .strong()
                     .color(colors::ACCENT_CYAN),
             );
-            if app.selected_layer_idx.is_none() {
+            if app.selection.selected_layer_idx.is_none() {
                 ui.label(
                     egui::RichText::new("Select a layer to grade.")
                         .small()
@@ -519,7 +519,7 @@ pub fn draw_lumetri_color(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
                     .on_hover_text("Remove the Color Balance effect from the layer")
                     .clicked()
                 {
-                    remove_effect(app, app.selected_layer_idx.unwrap_or(0), CB_EFFECT);
+                    remove_effect(app, app.selection.selected_layer_idx.unwrap_or(0), CB_EFFECT);
                 }
             });
         });
@@ -584,7 +584,7 @@ pub fn draw_lumetri_color(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
         ui.collapsing("Master Curve", |ui| {
             ui.label(egui::RichText::new("Drives the layer's Curves effect (−100..100).").small());
             let mut val = {
-                let idx = app.selected_layer_idx;
+                let idx = app.selection.selected_layer_idx;
                 let found = idx
                     .and_then(|i| app.history.current().active_composition().layers.get(i))
                     .and_then(|l| {
@@ -603,7 +603,7 @@ pub fn draw_lumetri_color(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
             };
             let resp = ui.add(egui::Slider::new(&mut val, -100.0..=100.0).text("lift ↔ gain"));
             if resp.changed() {
-                if let Some(idx) = app.selected_layer_idx {
+                if let Some(idx) = app.selection.selected_layer_idx {
                     let v = val;
                     app.modify_project(move |p| {
                         let comp = p.active_composition_mut();
@@ -633,7 +633,7 @@ pub fn draw_lumetri_color(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
             if ui.small_button("Remove Curve").clicked() {
                 remove_effect(
                     app,
-                    app.selected_layer_idx.unwrap_or(0),
+                    app.selection.selected_layer_idx.unwrap_or(0),
                     "Lumetri Master Curve",
                 );
             }
@@ -714,7 +714,7 @@ pub fn draw_lumetri_color(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
                 write_vignette(app, vig.0, vig.1, vig.2, vig.3);
             }
             if ui.small_button("Remove Vignette").clicked() {
-                remove_effect(app, app.selected_layer_idx.unwrap_or(0), VIG_EFFECT);
+                remove_effect(app, app.selection.selected_layer_idx.unwrap_or(0), VIG_EFFECT);
             }
         });
 
@@ -746,7 +746,7 @@ pub fn draw_lumetri_color(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
                 write_wb(app, wb.0, wb.1);
             }
             if ui.small_button("Remove WB").clicked() {
-                remove_effect(app, app.selected_layer_idx.unwrap_or(0), WB_EFFECT);
+                remove_effect(app, app.selection.selected_layer_idx.unwrap_or(0), WB_EFFECT);
             }
 
             ui.separator();
@@ -767,7 +767,7 @@ pub fn draw_lumetri_color(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
                 });
             }
             if ui.small_button("Remove Vibrance").clicked() {
-                remove_effect(app, app.selected_layer_idx.unwrap_or(0), VIB_EFFECT);
+                remove_effect(app, app.selection.selected_layer_idx.unwrap_or(0), VIB_EFFECT);
             }
 
             ui.separator();
@@ -802,7 +802,7 @@ pub fn draw_lumetri_color(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
                     write_hsl(app, 0.0, 0.0, 0.0);
                 }
                 if ui.small_button("Remove HSL").clicked() {
-                    remove_effect(app, app.selected_layer_idx.unwrap_or(0), HSL_EFFECT);
+                    remove_effect(app, app.selection.selected_layer_idx.unwrap_or(0), HSL_EFFECT);
                 }
             });
 

@@ -1,6 +1,6 @@
-use eframe::egui;
-use crate::AfterEffectsApp;
 use crate::core::timeline::{Composition, Layer, LayerType};
+use crate::AfterEffectsApp;
+use eframe::egui;
 
 pub fn draw_precompose_dialog(app: &mut AfterEffectsApp, ctx: &egui::Context) {
     if !app.show_precompose_dialog {
@@ -28,13 +28,29 @@ pub fn draw_precompose_dialog(app: &mut AfterEffectsApp, ctx: &egui::Context) {
             }
 
             ui.add_space(8.0);
-            ui.radio_value(&mut app.precompose_move_attributes, true, "Move all attributes into the new composition");
-            ui.radio_value(&mut app.precompose_move_attributes, false, "Leave all attributes in current composition");
+            ui.radio_value(
+                &mut app.precompose_move_attributes,
+                true,
+                "Move all attributes into the new composition",
+            );
+            ui.radio_value(
+                &mut app.precompose_move_attributes,
+                false,
+                "Leave all attributes in current composition",
+            );
 
             ui.add_space(4.0);
-            let mut open_new_tab = ui.ctx().data(|d| d.get_temp::<bool>(egui::Id::new("precomp_open_new_tab")).unwrap_or(true));
-            if ui.checkbox(&mut open_new_tab, "Open in New Composition Viewer").changed() {
-                ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("precomp_open_new_tab"), open_new_tab));
+            let mut open_new_tab = ui.ctx().data(|d| {
+                d.get_temp::<bool>(egui::Id::new("precomp_open_new_tab"))
+                    .unwrap_or(true)
+            });
+            if ui
+                .checkbox(&mut open_new_tab, "Open in New Composition Viewer")
+                .changed()
+            {
+                ui.ctx().data_mut(|d| {
+                    d.insert_temp(egui::Id::new("precomp_open_new_tab"), open_new_tab)
+                });
             }
 
             ui.add_space(10.0);
@@ -47,14 +63,23 @@ pub fn draw_precompose_dialog(app: &mut AfterEffectsApp, ctx: &egui::Context) {
                     let next_comp_num = temp_proj.compositions.len() + 1;
                     let current_comp = &mut temp_proj.compositions[current_comp_idx];
 
-                    let (w, h, fps, duration) = (current_comp.width, current_comp.height, current_comp.fps, current_comp.duration_frames);
-                    let selected_indices: Vec<usize> = app.selected_layers.iter().copied().collect();
+                    let (w, h, fps, duration) = (
+                        current_comp.width,
+                        current_comp.height,
+                        current_comp.fps,
+                        current_comp.duration_frames,
+                    );
+                    let selected_indices: Vec<usize> =
+                        app.selection.selected_layers.iter().copied().collect();
 
                     if !selected_indices.is_empty() {
                         let mut new_comp = Composition::new(
                             format!("comp_{}", next_comp_num),
                             app.precompose_name.clone(),
-                            w, h, fps, duration,
+                            w,
+                            h,
+                            fps,
+                            duration,
                         );
 
                         // Move selected layers to new comp
@@ -80,7 +105,9 @@ pub fn draw_precompose_dialog(app: &mut AfterEffectsApp, ctx: &egui::Context) {
                         let mut precomp_layer = Layer::new(
                             format!("precomp_layer_{}", current_comp.layers.len() + 1),
                             app.precompose_name.clone(),
-                            LayerType::PreComp { comp_id: new_comp.id.clone() },
+                            LayerType::PreComp {
+                                comp_id: new_comp.id.clone(),
+                            },
                             duration,
                         );
                         if !app.precompose_move_attributes {
@@ -95,7 +122,8 @@ pub fn draw_precompose_dialog(app: &mut AfterEffectsApp, ctx: &egui::Context) {
                         }
                         app.history.commit(temp_proj);
                         crate::core::frame_cache::bump_version();
-                        app.toasts.info(format!("Pre-composed into '{}'", app.precompose_name));
+                        app.toasts
+                            .info(format!("Pre-composed into '{}'", app.precompose_name));
                     }
 
                     app.show_precompose_dialog = false;

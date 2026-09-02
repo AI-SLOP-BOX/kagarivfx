@@ -1,7 +1,7 @@
+use crate::ui::theme::colors;
+use crate::AfterEffectsApp;
 use eframe::egui;
 use rhai::Dynamic;
-use crate::AfterEffectsApp;
-use crate::ui::theme::colors;
 
 /// Immutable snapshot of the context expressions need, taken before any
 /// mutable borrows so automation runs can coexist with the console UI.
@@ -34,7 +34,7 @@ pub fn draw_scripting_console(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
     let ctx_data = {
         let comp = app.history.current().active_composition();
         let fps = comp.fps as f64;
-        let frame = app.current_frame as f64;
+        let frame = app.playback.current_frame as f64;
         ConsoleCtx {
             frame,
             fps,
@@ -50,7 +50,9 @@ pub fn draw_scripting_console(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
 
     // ── Mode toggle ──
     let mode_id = egui::Id::new("script_console_automation");
-    let automation_mode = ui.ctx().data_mut(|d| d.get_temp::<bool>(mode_id).unwrap_or(false));
+    let automation_mode = ui
+        .ctx()
+        .data_mut(|d| d.get_temp::<bool>(mode_id).unwrap_or(false));
     ui.horizontal(|ui| {
         ui.label(egui::RichText::new("Mode:").small().color(colors::TEXT_SECONDARY));
         for (label, want) in [("Expression", false), ("Automation", true)] {
@@ -86,17 +88,19 @@ pub fn draw_scripting_console(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
     }
 
     ui.add_space(2.0);
-    let run_requested = ui.horizontal(|ui| {
-        let mut run = false;
-        if crate::ui::custom_widgets::ae_button(ui, "▶ Run Script").clicked() {
-            run = true;
-        }
-        if crate::ui::custom_widgets::ae_button(ui, "🗑 Clear").clicked() {
-            output.clear();
-            output.push("[INFO] Console cleared".to_string());
-        }
-        run
-    }).inner;
+    let run_requested = ui
+        .horizontal(|ui| {
+            let mut run = false;
+            if crate::ui::custom_widgets::ae_button(ui, "▶ Run Script").clicked() {
+                run = true;
+            }
+            if crate::ui::custom_widgets::ae_button(ui, "🗑 Clear").clicked() {
+                output.clear();
+                output.push("[INFO] Console cleared".to_string());
+            }
+            run
+        })
+        .inner;
 
     // ── Execute (single mutable pass over app) ──
     if run_requested && !app.script_console_command.trim().is_empty() {
@@ -123,25 +127,36 @@ pub fn draw_scripting_console(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
     }
 
     // ── Output ──
-    ui.label(egui::RichText::new("Output:").small().color(colors::TEXT_SECONDARY));
-    egui::ScrollArea::vertical().max_height(140.0).stick_to_bottom(true).show(ui, |ui| {
-        for line in output.iter() {
-            let color = if line.starts_with("[ERR]") {
-                colors::ACCENT_RED
-            } else if line.starts_with("[OK]") {
-                colors::ACCENT_GREEN
-            } else {
-                colors::TEXT_SECONDARY
-            };
-            ui.label(egui::RichText::new(line).small().monospace().color(color));
-        }
-    });
+    ui.label(
+        egui::RichText::new("Output:")
+            .small()
+            .color(colors::TEXT_SECONDARY),
+    );
+    egui::ScrollArea::vertical()
+        .max_height(140.0)
+        .stick_to_bottom(true)
+        .show(ui, |ui| {
+            for line in output.iter() {
+                let color = if line.starts_with("[ERR]") {
+                    colors::ACCENT_RED
+                } else if line.starts_with("[OK]") {
+                    colors::ACCENT_GREEN
+                } else {
+                    colors::TEXT_SECONDARY
+                };
+                ui.label(egui::RichText::new(line).small().monospace().color(color));
+            }
+        });
 
     ui.add_space(4.0);
     ui.separator();
 
     // ── Command input ──
-    ui.label(egui::RichText::new("Command:").small().color(colors::TEXT_SECONDARY));
+    ui.label(
+        egui::RichText::new("Command:")
+            .small()
+            .color(colors::TEXT_SECONDARY),
+    );
     let response = ui.add(
         egui::TextEdit::singleline(&mut app.script_console_command)
             .hint_text(if automation_mode {
@@ -155,7 +170,11 @@ pub fn draw_scripting_console(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
     // ── IntelliSense Dynamic Layer / Property Autocomplete ──
     let mut autocomplete_token = None;
     ui.horizontal_wrapped(|ui| {
-        ui.label(egui::RichText::new("💡 IntelliSense:").small().color(colors::TEXT_MUTED));
+        ui.label(
+            egui::RichText::new("💡 IntelliSense:")
+                .small()
+                .color(colors::TEXT_MUTED),
+        );
         let comp = app.history.current().active_composition();
         for layer in comp.layers.iter().take(4) {
             let token = format!("thisComp.layer(\"{}\")", layer.name);
@@ -163,7 +182,14 @@ pub fn draw_scripting_console(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
                 autocomplete_token = Some(token);
             }
         }
-        for prop_token in [".transform.position", ".transform.opacity", ".transform.rotation", "time", "frame", "fps"] {
+        for prop_token in [
+            ".transform.position",
+            ".transform.opacity",
+            ".transform.rotation",
+            "time",
+            "frame",
+            "fps",
+        ] {
             if ui.small_button(prop_token).clicked() {
                 autocomplete_token = Some(prop_token.to_string());
             }
@@ -201,7 +227,12 @@ pub fn draw_scripting_console(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
         ui.add_space(2.0);
         ui.collapsing(format!("History ({})", history.len()), |ui| {
             for cmd in history.iter().rev().take(20) {
-                ui.label(egui::RichText::new(format!("> {}", cmd)).small().monospace().color(colors::TEXT_MUTED));
+                ui.label(
+                    egui::RichText::new(format!("> {}", cmd))
+                        .small()
+                        .monospace()
+                        .color(colors::TEXT_MUTED),
+                );
             }
         });
     }
@@ -232,7 +263,11 @@ fn evaluate_script(script: &str, c: &ConsoleCtx) -> Result<String, String> {
             } else if let Some(i) = val.clone().try_cast::<i64>() {
                 Ok(format!("{}", i))
             } else if let Some(b) = val.clone().try_cast::<bool>() {
-                Ok(if b { "true".to_string() } else { "false".to_string() })
+                Ok(if b {
+                    "true".to_string()
+                } else {
+                    "false".to_string()
+                })
             } else {
                 Ok(format!("{:?}", val))
             }

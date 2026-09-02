@@ -4,10 +4,10 @@
 //! reference path, then plots either a BT.709 Cb/Cr vectorscope cloud or
 //! per-channel parade columns. Pure math helpers are unit-tested below.
 
-use eframe::egui;
-use crate::AfterEffectsApp;
 use crate::core::software_renderer;
 use crate::ui::theme::colors;
+use crate::AfterEffectsApp;
+use eframe::egui;
 
 /// BT.709 RGB(0..1) → (Cb, Cr), each normalized to ±0.5.
 pub fn rgb_to_cbcr(r: f32, g: f32, b: f32) -> [f32; 2] {
@@ -66,9 +66,8 @@ pub fn draw_vectorscope_window(app: &mut AfterEffectsApp, ctx: &egui::Context) {
     if !app.show_vectorscope {
         return;
     }
-    let mut mode: u8 = ctx.data_mut(|d| {
-        *d.get_temp_mut_or_insert_with(egui::Id::new(MODE_ID), || 0u8)
-    });
+    let mut mode: u8 =
+        ctx.data_mut(|d| *d.get_temp_mut_or_insert_with(egui::Id::new(MODE_ID), || 0u8));
 
     egui::Window::new("📊 Vectorscope / RGB Parade")
         .open(&mut app.show_vectorscope)
@@ -79,7 +78,7 @@ pub fn draw_vectorscope_window(app: &mut AfterEffectsApp, ctx: &egui::Context) {
             let h = ((w * comp.height.max(1)) / comp.width.max(1)).clamp(16, 240);
             // Scopes conventionally show the unmanaged signal: exposure/LUT 0.
             let pixels =
-                software_renderer::render_frame_to_pixels(comp, app.current_frame, w, h, 0.0, 0);
+                software_renderer::render_frame_to_pixels(comp, app.playback.current_frame, w, h, 0.0, 0);
 
             ui.horizontal(|ui| {
                 ui.radio_value(&mut mode, 0u8, "Vectorscope");
@@ -115,13 +114,23 @@ fn draw_scope(painter: egui::Painter, rect: egui::Rect, pixels: &[u8]) {
 
     // Graticule: outer ring (100%), inner ring (75%), cross axes, skin line.
     painter.circle_stroke(center, radius, egui::Stroke::new(1.0, colors::GRID_LINE));
-    painter.circle_stroke(center, radius * 0.75, egui::Stroke::new(0.7, colors::GRID_LINE));
-    painter.line_segment(
-        [egui::pos2(center.x - radius, center.y), egui::pos2(center.x + radius, center.y)],
+    painter.circle_stroke(
+        center,
+        radius * 0.75,
         egui::Stroke::new(0.7, colors::GRID_LINE),
     );
     painter.line_segment(
-        [egui::pos2(center.x, center.y - radius), egui::pos2(center.x, center.y + radius)],
+        [
+            egui::pos2(center.x - radius, center.y),
+            egui::pos2(center.x + radius, center.y),
+        ],
+        egui::Stroke::new(0.7, colors::GRID_LINE),
+    );
+    painter.line_segment(
+        [
+            egui::pos2(center.x, center.y - radius),
+            egui::pos2(center.x, center.y + radius),
+        ],
         egui::Stroke::new(0.7, colors::GRID_LINE),
     );
     let skin_dir = {
@@ -131,8 +140,14 @@ fn draw_scope(painter: egui::Painter, rect: egui::Rect, pixels: &[u8]) {
     };
     painter.line_segment(
         [
-            egui::pos2(center.x - skin_dir[0] * radius, center.y - skin_dir[1] * radius),
-            egui::pos2(center.x + skin_dir[0] * radius, center.y + skin_dir[1] * radius),
+            egui::pos2(
+                center.x - skin_dir[0] * radius,
+                center.y - skin_dir[1] * radius,
+            ),
+            egui::pos2(
+                center.x + skin_dir[0] * radius,
+                center.y + skin_dir[1] * radius,
+            ),
         ],
         egui::Stroke::new(0.8, egui::Color32::from_rgb(120, 90, 60)),
     );
@@ -216,8 +231,7 @@ mod tests {
     #[test]
     fn transparent_pixels_skipped_counts_match() {
         let px = vec![
-            128u8, 128, 128, 255,
-            0, 0, 0, 0, // skipped
+            128u8, 128, 128, 255, 0, 0, 0, 0, // skipped
             255, 255, 255, 255,
         ];
         let mut samples = Vec::new();
@@ -234,4 +248,3 @@ mod tests {
         assert_eq!(counts[0][63], 1); // white → last bucket
     }
 }
-

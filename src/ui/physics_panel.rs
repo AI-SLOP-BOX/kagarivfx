@@ -1,10 +1,13 @@
-use eframe::egui;
-use crate::AfterEffectsApp;
-use crate::core::physics::{PhysicsWorld, RigidBody, RigidBodyType, bake_physics_simulation_to_keyframes, calc_spring_overshoot};
+use crate::core::keyframe::{InterpolationType, Keyframe};
+use crate::core::physics::{
+    bake_physics_simulation_to_keyframes, calc_spring_overshoot, PhysicsWorld, RigidBody,
+    RigidBodyType,
+};
 use crate::core::property::Animatable;
-use crate::core::keyframe::{Keyframe, InterpolationType};
-use crate::ui::theme::colors;
 use crate::ui::custom_widgets;
+use crate::ui::theme::colors;
+use crate::AfterEffectsApp;
+use eframe::egui;
 
 /// 2D Rigid Body Physics & Spring Dynamics Panel for AE Motion Graphics.
 pub fn draw_physics_panel(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
@@ -17,23 +20,36 @@ pub fn draw_physics_panel(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
     ui.separator();
 
     let gravity_id = egui::Id::new("ae_physics_gravity_y");
-    let mut gravity_y: f32 = ui.ctx().data_mut(|d| *d.get_temp_mut_or_insert_with(gravity_id, || 980.0));
+    let mut gravity_y: f32 = ui
+        .ctx()
+        .data_mut(|d| *d.get_temp_mut_or_insert_with(gravity_id, || 980.0));
 
     let bounciness_id = egui::Id::new("ae_physics_bounciness");
-    let mut bounciness: f32 = ui.ctx().data_mut(|d| *d.get_temp_mut_or_insert_with(bounciness_id, || 0.6));
+    let mut bounciness: f32 = ui
+        .ctx()
+        .data_mut(|d| *d.get_temp_mut_or_insert_with(bounciness_id, || 0.6));
 
     let friction_id = egui::Id::new("ae_physics_friction");
-    let mut friction: f32 = ui.ctx().data_mut(|d| *d.get_temp_mut_or_insert_with(friction_id, || 0.3));
+    let mut friction: f32 = ui
+        .ctx()
+        .data_mut(|d| *d.get_temp_mut_or_insert_with(friction_id, || 0.3));
 
     let floor_id = egui::Id::new("ae_physics_floor_enabled");
-    let mut floor_enabled: bool = ui.ctx().data_mut(|d| *d.get_temp_mut_or_insert_with(floor_id, || true));
+    let mut floor_enabled: bool = ui
+        .ctx()
+        .data_mut(|d| *d.get_temp_mut_or_insert_with(floor_id, || true));
 
     let collider_shape_id = egui::Id::new("ae_physics_collider_shape");
-    let mut collider_shape_idx: usize = ui.ctx().data_mut(|d| *d.get_temp_mut_or_insert_with(collider_shape_id, || 0));
+    let mut collider_shape_idx: usize = ui
+        .ctx()
+        .data_mut(|d| *d.get_temp_mut_or_insert_with(collider_shape_id, || 0));
 
     ui.horizontal(|ui| {
         ui.label("Gravity Y:");
-        if ui.add(egui::Slider::new(&mut gravity_y, -2000.0..=3000.0).suffix(" px/s²")).changed() {
+        if ui
+            .add(egui::Slider::new(&mut gravity_y, -2000.0..=3000.0).suffix(" px/s²"))
+            .changed()
+        {
             ui.ctx().data_mut(|d| d.insert_temp(gravity_id, gravity_y));
         }
     });
@@ -41,15 +57,25 @@ pub fn draw_physics_panel(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
     ui.add_space(4.0);
     ui.horizontal(|ui| {
         ui.label("Bounciness:");
-        if ui.add(egui::Slider::new(&mut bounciness, 0.0..=1.0).custom_formatter(|v, _| format!("{:.0}%", v * 100.0))).changed() {
-            ui.ctx().data_mut(|d| d.insert_temp(bounciness_id, bounciness));
+        if ui
+            .add(
+                egui::Slider::new(&mut bounciness, 0.0..=1.0)
+                    .custom_formatter(|v, _| format!("{:.0}%", v * 100.0)),
+            )
+            .changed()
+        {
+            ui.ctx()
+                .data_mut(|d| d.insert_temp(bounciness_id, bounciness));
         }
     });
 
     ui.add_space(4.0);
     ui.horizontal(|ui| {
         ui.label("Friction:");
-        if ui.add(egui::Slider::new(&mut friction, 0.0..=1.0)).changed() {
+        if ui
+            .add(egui::Slider::new(&mut friction, 0.0..=1.0))
+            .changed()
+        {
             ui.ctx().data_mut(|d| d.insert_temp(friction_id, friction));
         }
     });
@@ -57,17 +83,29 @@ pub fn draw_physics_panel(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
     ui.add_space(4.0);
     ui.horizontal(|ui| {
         ui.label("Collider Shape:");
-        if ui.selectable_value(&mut collider_shape_idx, 0, "📦 Box").clicked() {
-            ui.ctx().data_mut(|d| d.insert_temp(collider_shape_id, collider_shape_idx));
+        if ui
+            .selectable_value(&mut collider_shape_idx, 0, "📦 Box")
+            .clicked()
+        {
+            ui.ctx()
+                .data_mut(|d| d.insert_temp(collider_shape_id, collider_shape_idx));
         }
-        if ui.selectable_value(&mut collider_shape_idx, 1, "⚪ Circle").clicked() {
-            ui.ctx().data_mut(|d| d.insert_temp(collider_shape_id, collider_shape_idx));
+        if ui
+            .selectable_value(&mut collider_shape_idx, 1, "⚪ Circle")
+            .clicked()
+        {
+            ui.ctx()
+                .data_mut(|d| d.insert_temp(collider_shape_id, collider_shape_idx));
         }
     });
 
     ui.add_space(4.0);
-    if ui.checkbox(&mut floor_enabled, "Floor Boundary at Bottom of Comp").changed() {
-        ui.ctx().data_mut(|d| d.insert_temp(floor_id, floor_enabled));
+    if ui
+        .checkbox(&mut floor_enabled, "Floor Boundary at Bottom of Comp")
+        .changed()
+    {
+        ui.ctx()
+            .data_mut(|d| d.insert_temp(floor_id, floor_enabled));
     }
 
     ui.separator();
@@ -77,12 +115,18 @@ pub fn draw_physics_panel(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
     let comp_h = comp.height as f32;
     let dur = comp.duration_frames;
     let fps = comp.fps as f32;
-    let selected_layer_indices: Vec<usize> = app.selected_layers.iter().copied().collect();
+    let selected_layer_indices: Vec<usize> = app.selection.selected_layers.iter().copied().collect();
 
     if selected_layer_indices.is_empty() {
-        ui.colored_label(colors::TEXT_SECONDARY, "Select one or more layers in the Timeline to simulate.");
+        ui.colored_label(
+            colors::TEXT_SECONDARY,
+            "Select one or more layers in the Timeline to simulate.",
+        );
     } else {
-        ui.label(format!("🎯 {} layer(s) selected for physics simulation", selected_layer_indices.len()));
+        ui.label(format!(
+            "🎯 {} layer(s) selected for physics simulation",
+            selected_layer_indices.len()
+        ));
 
         ui.add_space(8.0);
         if custom_widgets::ae_button(ui, "🚀 Simulate & Bake to Keyframes").clicked() {
@@ -110,12 +154,25 @@ pub fn draw_physics_panel(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
                 if let Some(layer) = active_comp.layers.get(idx) {
                     let pos = layer.transform.position.evaluate(0);
                     let body = if collider_shape_idx == 1 {
-                        let mut b = RigidBody::new_circle(Some(idx), pos, 30.0, 1.0, RigidBodyType::Dynamic);
+                        let mut b = RigidBody::new_circle(
+                            Some(idx),
+                            pos,
+                            30.0,
+                            1.0,
+                            RigidBodyType::Dynamic,
+                        );
                         b.restitution = bounciness;
                         b.friction = friction;
                         b
                     } else {
-                        let mut b = RigidBody::new_box(Some(idx), pos, 60.0, 60.0, 1.0, RigidBodyType::Dynamic);
+                        let mut b = RigidBody::new_box(
+                            Some(idx),
+                            pos,
+                            60.0,
+                            60.0,
+                            1.0,
+                            RigidBodyType::Dynamic,
+                        );
                         b.restitution = bounciness;
                         b.friction = friction;
                         b
@@ -125,7 +182,8 @@ pub fn draw_physics_panel(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
             }
 
             // 3. Bake simulation
-            let baked = bake_physics_simulation_to_keyframes(&mut world, 0, dur.saturating_sub(1), fps);
+            let baked =
+                bake_physics_simulation_to_keyframes(&mut world, 0, dur.saturating_sub(1), fps);
 
             // 4. Apply baked keyframes to composition layers
             for (layer_idx, (pos_kfs, rot_kfs)) in baked {

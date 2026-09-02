@@ -1,8 +1,8 @@
 //! Undo History panel: lists named history steps newest-first, highlights
 //! the active entry, and jumps to any step on click.
-use eframe::egui;
-use crate::AfterEffectsApp;
 use crate::ui::theme::colors;
+use crate::AfterEffectsApp;
+use eframe::egui;
 
 pub fn draw_history_panel(app: &mut AfterEffectsApp, ctx: &egui::Context) {
     if !app.show_history_panel {
@@ -45,7 +45,9 @@ pub fn draw_history_panel(app: &mut AfterEffectsApp, ctx: &egui::Context) {
                     let label = if is_future {
                         egui::RichText::new(name).color(colors::TEXT_MUTED)
                     } else if is_current {
-                        egui::RichText::new(format!("▶ {}", name)).strong().color(colors::ACCENT_BLUE)
+                        egui::RichText::new(format!("▶ {}", name))
+                            .strong()
+                            .color(colors::ACCENT_BLUE)
                     } else {
                         egui::RichText::new(name).color(colors::TEXT_PRIMARY)
                     };
@@ -55,7 +57,11 @@ pub fn draw_history_panel(app: &mut AfterEffectsApp, ctx: &egui::Context) {
                 }
                 if let Some(target) = jump_target {
                     if app.history.jump_to(target) {
-                        app.toasts.info(format!("History → step {} ({})", target + 1, names[target]));
+                        app.toasts.info(format!(
+                            "History → step {} ({})",
+                            target + 1,
+                            names[target]
+                        ));
                     }
                 }
             });

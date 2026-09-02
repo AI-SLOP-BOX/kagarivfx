@@ -1,8 +1,8 @@
 //! RAM Preview cache bar + comp markers + beat-detection transients.
-use eframe::egui;
-use crate::AfterEffectsApp;
 use crate::core::timeline::LayerType;
 use crate::ui::theme::colors;
+use crate::AfterEffectsApp;
+use eframe::egui;
 
 pub fn draw_ram_ruler(
     app: &mut AfterEffectsApp,
@@ -49,11 +49,17 @@ pub fn draw_ram_ruler(
 
     // Real beat-detection transient lines from the comp's audio
     // sources (energy-flux onsets, cached per audio file).
-    let audio_paths: Vec<String> = comp_mut.layers.iter().filter_map(|l| match &l.layer_type {
-        LayerType::Audio { path, .. } => Some(path.clone()),
-        LayerType::Video { audio_wav: Some(w), .. } => Some(w.clone()),
-        _ => None,
-    }).collect();
+    let audio_paths: Vec<String> = comp_mut
+        .layers
+        .iter()
+        .filter_map(|l| match &l.layer_type {
+            LayerType::Audio { path, .. } => Some(path.clone()),
+            LayerType::Video {
+                audio_wav: Some(w), ..
+            } => Some(w.clone()),
+            _ => None,
+        })
+        .collect();
     let fps_now = comp_mut.fps.max(1) as f32;
     let mut beat_frames: Vec<u32> = Vec::new();
     for ap in &audio_paths {
@@ -62,7 +68,9 @@ pub fn draw_ram_ruler(
             d.get_temp::<std::sync::Arc<Vec<u32>>>(key)
                 .unwrap_or_else(|| {
                     let v = crate::core::audio_engine::detect_beat_frames(
-                        std::path::Path::new(ap), total_frames, fps_now,
+                        std::path::Path::new(ap),
+                        total_frames,
+                        fps_now,
                     );
                     let arc = std::sync::Arc::new(v);
                     d.insert_temp(key, arc.clone());
@@ -82,7 +90,10 @@ pub fn draw_ram_ruler(
         let b_norm = *bf as f32 / total_frames.max(1) as f32;
         let bx = bar_rect.left() + b_norm * bar_rect.width();
         ui.painter().line_segment(
-            [egui::pos2(bx, bar_rect.top()), egui::pos2(bx, bar_rect.bottom())],
+            [
+                egui::pos2(bx, bar_rect.top()),
+                egui::pos2(bx, bar_rect.bottom()),
+            ],
             egui::Stroke::new(1.0, colors::ACCENT_YELLOW),
         );
     }
@@ -101,7 +112,8 @@ pub fn draw_ram_ruler(
                 (marker.color[1] * 255.0) as u8,
                 (marker.color[2] * 255.0) as u8,
             );
-            ui.painter().add(egui::Shape::convex_polygon(m_pts, mc, egui::Stroke::NONE));
+            ui.painter()
+                .add(egui::Shape::convex_polygon(m_pts, mc, egui::Stroke::NONE));
         }
     }
 

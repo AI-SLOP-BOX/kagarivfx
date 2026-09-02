@@ -1,12 +1,16 @@
-use eframe::egui;
-use crate::AfterEffectsApp;
 use crate::ui::theme::colors;
+use crate::AfterEffectsApp;
+use eframe::egui;
 
 pub fn draw_expression_panel(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
-    let layer_idx = match app.selected_layer_idx {
+    let layer_idx = match app.selection.selected_layer_idx {
         Some(idx) => idx,
         _ => {
-            ui.label(egui::RichText::new("No layer selected.").small().color(colors::TEXT_MUTED));
+            ui.label(
+                egui::RichText::new("No layer selected.")
+                    .small()
+                    .color(colors::TEXT_MUTED),
+            );
             return;
         }
     };
@@ -15,7 +19,11 @@ pub fn draw_expression_panel(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
     let layer_name = {
         let comp = app.history.current().active_composition();
         if layer_idx >= comp.layers.len() {
-            ui.label(egui::RichText::new("Invalid layer.").small().color(colors::TEXT_MUTED));
+            ui.label(
+                egui::RichText::new("Invalid layer.")
+                    .small()
+                    .color(colors::TEXT_MUTED),
+            );
             return;
         }
         comp.layers[layer_idx].name.clone()
@@ -24,22 +32,43 @@ pub fn draw_expression_panel(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
     crate::ui::custom_widgets::ae_section_header(ui, "Expression", "📝");
 
     ui.horizontal(|ui| {
-        ui.label(egui::RichText::new("Layer:").small().color(colors::TEXT_SECONDARY));
-        ui.label(egui::RichText::new(&layer_name).small().strong().color(colors::ACCENT_CYAN));
+        ui.label(
+            egui::RichText::new("Layer:")
+                .small()
+                .color(colors::TEXT_SECONDARY),
+        );
+        ui.label(
+            egui::RichText::new(&layer_name)
+                .small()
+                .strong()
+                .color(colors::ACCENT_CYAN),
+        );
     });
 
     // Property selector
     let properties = ["Position", "Scale", "Rotation", "Opacity", "Anchor Point"];
 
     ui.add_space(2.0);
-    ui.label(egui::RichText::new("Target Property").small().color(colors::TEXT_SECONDARY));
+    ui.label(
+        egui::RichText::new("Target Property")
+            .small()
+            .color(colors::TEXT_SECONDARY),
+    );
     let mut selected_prop = app.selected_expression_prop_idx.min(properties.len() - 1);
     ui.horizontal(|ui| {
         for (i, label) in properties.iter().enumerate() {
             let is_active = selected_prop == i;
-            if ui.selectable_label(is_active, egui::RichText::new(*label).small().color(
-                if is_active { colors::ACCENT_CYAN } else { colors::TEXT_PRIMARY }
-            )).clicked() {
+            if ui
+                .selectable_label(
+                    is_active,
+                    egui::RichText::new(*label).small().color(if is_active {
+                        colors::ACCENT_CYAN
+                    } else {
+                        colors::TEXT_PRIMARY
+                    }),
+                )
+                .clicked()
+            {
                 selected_prop = i;
             }
         }
@@ -82,10 +111,11 @@ pub fn draw_expression_panel(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
         Vec::new()
     };
 
-    ui.add(egui::TextEdit::multiline(&mut script)
-        .code_editor()
-        .desired_rows(6)
-        .desired_width(ui.available_width())
+    ui.add(
+        egui::TextEdit::multiline(&mut script)
+            .code_editor()
+            .desired_rows(6)
+            .desired_width(ui.available_width()),
     );
 
     // Live syntax check (compile only — no execution)
@@ -100,7 +130,11 @@ pub fn draw_expression_panel(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
     match &syntax_status {
         Ok(()) => {}
         Err(msg) => {
-            ui.label(egui::RichText::new(format!("✕ {}", msg)).small().color(colors::ACCENT_RED));
+            ui.label(
+                egui::RichText::new(format!("✕ {}", msg))
+                    .small()
+                    .color(colors::ACCENT_RED),
+            );
         }
     }
 
@@ -126,10 +160,13 @@ pub fn draw_expression_panel(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
     let mut test_expr = false;
 
     ui.horizontal(|ui| {
-        if crate::ui::custom_widgets::ae_button_accent(ui, "▶ Apply").clicked() && !script.trim().is_empty() {
+        if crate::ui::custom_widgets::ae_button_accent(ui, "▶ Apply").clicked()
+            && !script.trim().is_empty()
+        {
             apply_expr = Some(script.clone());
         }
-        if crate::ui::custom_widgets::ae_button(ui, "▶ Test").clicked() && !script.trim().is_empty() {
+        if crate::ui::custom_widgets::ae_button(ui, "▶ Test").clicked() && !script.trim().is_empty()
+        {
             test_expr = true;
         }
         if crate::ui::custom_widgets::ae_button(ui, "✕ Remove").clicked() {
@@ -143,7 +180,10 @@ pub fn draw_expression_panel(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
         if layer_idx < comp.layers.len() {
             set_expression(&mut comp.layers[layer_idx].transform, selected_prop, &expr);
             crate::core::frame_cache::bump_version();
-            app.toasts.info(format!("Applied expression to {}.{}", layer_name, prop_name));
+            app.toasts.info(format!(
+                "Applied expression to {}.{}",
+                layer_name, prop_name
+            ));
         }
     }
 
@@ -153,14 +193,17 @@ pub fn draw_expression_panel(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
         if layer_idx < comp.layers.len() {
             set_expression(&mut comp.layers[layer_idx].transform, selected_prop, "");
             crate::core::frame_cache::bump_version();
-            app.toasts.info(format!("Removed expression from {}.{}", layer_name, prop_name));
+            app.toasts.info(format!(
+                "Removed expression from {}.{}",
+                layer_name, prop_name
+            ));
         }
     }
 
     // Test expression
     if test_expr {
         let comp = app.history.current().active_composition();
-        let cf = app.current_frame;
+        let cf = app.playback.current_frame;
         let result = test_expression(&script, comp, cf);
         app.toasts.info(result);
     }
@@ -180,13 +223,24 @@ pub fn draw_expression_panel(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
     ];
 
     let mut preset_expr = None;
-    egui::ScrollArea::vertical().max_height(100.0).show(ui, |ui| {
-        for (expr, label) in presets {
-            if ui.selectable_label(false, egui::RichText::new(format!("{} — {}", label, expr)).small().monospace().color(colors::TEXT_SECONDARY)).clicked() {
-                preset_expr = Some(expr.to_string());
+    egui::ScrollArea::vertical()
+        .max_height(100.0)
+        .show(ui, |ui| {
+            for (expr, label) in presets {
+                if ui
+                    .selectable_label(
+                        false,
+                        egui::RichText::new(format!("{} — {}", label, expr))
+                            .small()
+                            .monospace()
+                            .color(colors::TEXT_SECONDARY),
+                    )
+                    .clicked()
+                {
+                    preset_expr = Some(expr.to_string());
+                }
             }
-        }
-    });
+        });
 
     if let Some(expr) = preset_expr {
         let comp = app.history.current_mut().active_composition_mut();
@@ -198,7 +252,10 @@ pub fn draw_expression_panel(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
     }
 }
 
-fn get_expression_string(transform: &crate::core::timeline::Transform2D, prop_idx: usize) -> String {
+fn get_expression_string(
+    transform: &crate::core::timeline::Transform2D,
+    prop_idx: usize,
+) -> String {
     let opt = match prop_idx {
         0 => &transform.position_expression,
         1 => &transform.scale_expression,
@@ -209,7 +266,10 @@ fn get_expression_string(transform: &crate::core::timeline::Transform2D, prop_id
     };
     match opt.as_ref() {
         Some(crate::core::timeline::Expression::Raw(s)) => s.clone(),
-        Some(crate::core::timeline::Expression::Wiggle { frequency, amplitude }) => {
+        Some(crate::core::timeline::Expression::Wiggle {
+            frequency,
+            amplitude,
+        }) => {
             format!("wiggle({}, {})", frequency, amplitude)
         }
         Some(crate::core::timeline::Expression::TimeDriver { multiplier, offset }) => {
@@ -221,7 +281,11 @@ fn get_expression_string(transform: &crate::core::timeline::Transform2D, prop_id
     }
 }
 
-fn set_expression(transform: &mut crate::core::timeline::Transform2D, prop_idx: usize, script: &str) {
+fn set_expression(
+    transform: &mut crate::core::timeline::Transform2D,
+    prop_idx: usize,
+    script: &str,
+) {
     let expr = if script.trim().is_empty() {
         None
     } else {
@@ -237,7 +301,11 @@ fn set_expression(transform: &mut crate::core::timeline::Transform2D, prop_idx: 
     }
 }
 
-fn test_expression(script: &str, comp: &crate::core::timeline::Composition, current_frame: u32) -> String {
+fn test_expression(
+    script: &str,
+    comp: &crate::core::timeline::Composition,
+    current_frame: u32,
+) -> String {
     if script.trim().is_empty() {
         return "Empty expression".to_string();
     }
@@ -267,18 +335,37 @@ fn test_expression(script: &str, comp: &crate::core::timeline::Composition, curr
     }
 }
 
-
 /// Static suggestion dictionary covering the AE-style API surface.
 fn completions_for(script: &str) -> Vec<&'static str> {
     let _ = script;
     vec![
-        "thisComp", "thisLayer", "thisComp.layer(", "thisComp.layer(index)",
-        "transform.position", "transform.scale", "transform.rotation",
-        "transform.opacity", ".effect_param(\"Effect\", \"Param\")",
-        "wiggle(freq, amp)", "loopOut(\"cycle\")", "loopOut(\"pingpong\")",
-        "loopIn(\"cycle\")", "linear(t, a, b, c, d)", "ease(t, a, b, c, d)",
-        "random(min, max)", "time", "index", "value", "fps",
-        "toComp(x, y)", "fromComp(x, y)", "Math.sin(", "Math.cos(",
-        "Math.PI", "Math.abs(", "Math.min(", "Math.max(",
+        "thisComp",
+        "thisLayer",
+        "thisComp.layer(",
+        "thisComp.layer(index)",
+        "transform.position",
+        "transform.scale",
+        "transform.rotation",
+        "transform.opacity",
+        ".effect_param(\"Effect\", \"Param\")",
+        "wiggle(freq, amp)",
+        "loopOut(\"cycle\")",
+        "loopOut(\"pingpong\")",
+        "loopIn(\"cycle\")",
+        "linear(t, a, b, c, d)",
+        "ease(t, a, b, c, d)",
+        "random(min, max)",
+        "time",
+        "index",
+        "value",
+        "fps",
+        "toComp(x, y)",
+        "fromComp(x, y)",
+        "Math.sin(",
+        "Math.cos(",
+        "Math.PI",
+        "Math.abs(",
+        "Math.min(",
+        "Math.max(",
     ]
 }

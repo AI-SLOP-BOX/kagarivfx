@@ -112,7 +112,7 @@ pub fn draw_the_wiggler_panel(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
         .on_hover_text("Bake procedural noise into layer keyframes")
         .clicked()
     {
-        let Some(layer_idx) = app.selected_layer_idx else {
+        let Some(layer_idx) = app.selection.selected_layer_idx else {
             app.toasts.error("Select a layer first");
             return;
         };

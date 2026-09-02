@@ -1,12 +1,14 @@
-use eframe::egui;
-use crate::AfterEffectsApp;
 use crate::core::timeline::{Composition, LayerType, TrackMatteMode};
 use crate::core::vfx_graph_compiler::{LayerOpType, VfxGraphCompiler};
 use crate::ui::theme::colors;
+use crate::AfterEffectsApp;
+use eframe::egui;
 
 /// Maps layer_idx → 1-based execution order from a compiled schedule
 /// (first RenderLayer step wins when a layer appears in several ops).
-fn execution_order_map(steps: &[crate::core::vfx_graph_compiler::ExecutionStep]) -> std::collections::HashMap<usize, usize> {
+fn execution_order_map(
+    steps: &[crate::core::vfx_graph_compiler::ExecutionStep],
+) -> std::collections::HashMap<usize, usize> {
     let mut out = std::collections::HashMap::new();
     for (i, step) in steps.iter().enumerate() {
         if let LayerOpType::RenderLayer { layer_idx } = &step.op {
@@ -17,15 +19,11 @@ fn execution_order_map(steps: &[crate::core::vfx_graph_compiler::ExecutionStep])
 }
 
 #[allow(dead_code)]
-pub fn draw_flowchart_view(
-    app: &mut AfterEffectsApp,
-    ui: &mut egui::Ui,
-    comp: &Composition,
-) {
+pub fn draw_flowchart_view(app: &mut AfterEffectsApp, ui: &mut egui::Ui, comp: &Composition) {
     // Compile the dependency graph once per frame: gives topological
     // execution order + parenting/matte/cycle analysis for the overlays.
     let mut graph = VfxGraphCompiler::new();
-    graph.compile(comp, app.current_frame);
+    graph.compile(comp, app.playback.current_frame);
     let order_map = execution_order_map(&graph.steps);
 
     ui.vertical(|ui| {
@@ -112,7 +110,7 @@ pub fn draw_flowchart_view(
             let npos = egui::pos2(start_x, ny);
             node_positions.push(npos);
 
-            let is_selected = app.selected_layers.contains(&i) || app.selected_layer_idx == Some(i);
+            let is_selected = app.selection.selected_layers.contains(&i) || app.selection.selected_layer_idx == Some(i);
             let node_rect = egui::Rect::from_center_size(npos, egui::vec2(140.0, 36.0));
 
             let base_color = match layer.layer_type {
@@ -130,7 +128,11 @@ pub fn draw_flowchart_view(
             };
 
             painter.rect_filled(node_rect, 4.0, base_color);
-            painter.rect_stroke(node_rect, 4.0, egui::Stroke::new(if is_selected { 2.5 } else { 1.0 }, stroke_color));
+            painter.rect_stroke(
+                node_rect,
+                4.0,
+                egui::Stroke::new(if is_selected { 2.5 } else { 1.0 }, stroke_color),
+            );
 
             let tag = match layer.layer_type {
                 LayerType::Text { .. } => "[TXT]",
@@ -208,16 +210,14 @@ pub fn draw_flowchart_view(
                 (node_positions.get(i - 1), node_positions.get(i))
             {
                 let stroke = egui::Stroke::new(1.6, colors::ACCENT_CYAN);
-                for seg in egui::Shape::dashed_line(
-                    &[matte_pos, consumer_pos],
-                    stroke,
-                    6.0,
-                    5.0,
-                ) {
+                for seg in egui::Shape::dashed_line(&[matte_pos, consumer_pos], stroke, 6.0, 5.0) {
                     painter.add(seg);
                 }
                 painter.text(
-                    egui::pos2((matte_pos.x + consumer_pos.x) * 0.5, (matte_pos.y + consumer_pos.y) * 0.5 - 8.0),
+                    egui::pos2(
+                        (matte_pos.x + consumer_pos.x) * 0.5,
+                        (matte_pos.y + consumer_pos.y) * 0.5 - 8.0,
+                    ),
                     egui::Align2::CENTER_CENTER,
                     "matte",
                     egui::FontId::proportional(9.0),
@@ -231,9 +231,9 @@ pub fn draw_flowchart_view(
                 for (i, npos) in node_positions.iter().enumerate() {
                     let nrect = egui::Rect::from_center_size(*npos, egui::vec2(140.0, 36.0));
                     if nrect.contains(ptr) {
-                        app.selected_layers.clear();
-                        app.selected_layers.insert(i);
-                        app.selected_layer_idx = Some(i);
+                        app.selection.selected_layers.clear();
+                        app.selection.selected_layers.insert(i);
+                        app.selection.selected_layer_idx = Some(i);
                         break;
                     }
                 }

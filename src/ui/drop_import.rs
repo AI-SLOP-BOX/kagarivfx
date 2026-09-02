@@ -2,8 +2,8 @@
 //! ffmpeg frame-extraction pipeline on a worker thread, WAVs become Audio
 //! layers. Results stream back through a channel and are inserted above the
 //! current selection.
-use eframe::egui;
 use crate::AfterEffectsApp;
+use eframe::egui;
 
 pub enum ImportResult {
     Video(crate::core::video_import::VideoAsset, String),
@@ -12,7 +12,7 @@ pub enum ImportResult {
 
 fn insert_layer(app: &mut AfterEffectsApp, layer: crate::core::timeline::Layer, label: &str) {
     let comp_dur = app.history.current().active_composition().duration_frames;
-    let insert_at = app.selected_layer_idx.map(|i| i + 1).unwrap_or(0);
+    let insert_at = app.selection.selected_layer_idx.map(|i| i + 1).unwrap_or(0);
     let mut l = layer;
     l.in_frame = l.in_frame.min(comp_dur.saturating_sub(1));
     l.out_frame = comp_dur.max(l.in_frame + 1);
@@ -56,12 +56,19 @@ pub fn handle_dropped_files(app: &mut AfterEffectsApp, ctx: &egui::Context) {
 
     // 2) Pick up newly dropped files.
     let dropped = ctx.input(|i| i.raw.dropped_files.clone());
-    if dropped.is_empty() { return; }
+    if dropped.is_empty() {
+        return;
+    }
     for f in dropped {
         let Some(path) = f.path else { continue };
-        let name = path.file_stem().map(|s| s.to_string_lossy().to_string())
+        let name = path
+            .file_stem()
+            .map(|s| s.to_string_lossy().to_string())
             .unwrap_or_else(|| "media".into());
-        let ext = path.extension().map(|e| e.to_string_lossy().to_lowercase()).unwrap_or_default();
+        let ext = path
+            .extension()
+            .map(|e| e.to_string_lossy().to_lowercase())
+            .unwrap_or_default();
         let path_str = path.to_string_lossy().to_string();
 
         match ext.as_str() {
@@ -76,12 +83,17 @@ pub fn handle_dropped_files(app: &mut AfterEffectsApp, ctx: &egui::Context) {
                         let mut layer = crate::core::timeline::Layer::new(
                             format!("img_{}", name),
                             name.clone(),
-                            crate::core::timeline::LayerType::Image { path: path_str.clone() },
+                            crate::core::timeline::LayerType::Image {
+                                path: path_str.clone(),
+                            },
                             1,
                         );
-                        layer.transform.position = crate::core::property::Animatable::new_constant([cw / 2.0, ch / 2.0]);
-                        layer.transform.scale = crate::core::property::Animatable::new_constant([fit, fit]);
-                        layer.out_frame = app.history.current().active_composition().duration_frames;
+                        layer.transform.position =
+                            crate::core::property::Animatable::new_constant([cw / 2.0, ch / 2.0]);
+                        layer.transform.scale =
+                            crate::core::property::Animatable::new_constant([fit, fit]);
+                        layer.out_frame =
+                            app.history.current().active_composition().duration_frames;
                         insert_layer(app, layer, &format!("image '{}' ({}×{})", name, iw, ih));
                     }
                     Err(e) => app.toasts.error(format!("Cannot read {}: {}", name, e)),
@@ -95,10 +107,14 @@ pub fn handle_dropped_files(app: &mut AfterEffectsApp, ctx: &egui::Context) {
                 let mut layer = crate::core::timeline::Layer::new(
                     format!("aud_{}", name),
                     format!("🔊 {}", name),
-                    crate::core::timeline::LayerType::Audio { path: path_str.clone(), volume: crate::core::property::Animatable::new_constant(1.0) },
+                    crate::core::timeline::LayerType::Audio {
+                        path: path_str.clone(),
+                        volume: crate::core::property::Animatable::new_constant(1.0),
+                    },
                     1,
                 );
-                layer.transform.position = crate::core::property::Animatable::new_constant([cw / 2.0, ch / 2.0]);
+                layer.transform.position =
+                    crate::core::property::Animatable::new_constant([cw / 2.0, ch / 2.0]);
                 layer.out_frame = app.history.current().active_composition().duration_frames;
                 insert_layer(app, layer, &format!("audio '{}'", name));
             }
@@ -107,20 +123,26 @@ pub fn handle_dropped_files(app: &mut AfterEffectsApp, ctx: &egui::Context) {
                     app.toasts.error("Video import needs ffmpeg on PATH");
                     continue;
                 }
-                app.toasts.info(format!("Extracting frames from '{}'…", name));
+                app.toasts
+                    .info(format!("Extracting frames from '{}'…", name));
                 let (tx, rx) = std::sync::mpsc::channel();
                 app.import_rx = Some(rx);
                 let fps = app.history.current().active_composition().fps as f32;
                 let dest = std::path::PathBuf::from("media").join(&name);
                 std::thread::spawn(move || {
                     match crate::core::video_import::import_video(&path_str, &dest, fps) {
-                        Ok(a) => { let _ = tx.send(ImportResult::Video(a, name)); }
-                        Err(e) => { let _ = tx.send(ImportResult::Err(e)); }
+                        Ok(a) => {
+                            let _ = tx.send(ImportResult::Video(a, name));
+                        }
+                        Err(e) => {
+                            let _ = tx.send(ImportResult::Err(e));
+                        }
                     }
                 });
             }
             other => {
-                app.toasts.error(format!("Unsupported file type: .{}", other));
+                app.toasts
+                    .error(format!("Unsupported file type: .{}", other));
             }
         }
     }

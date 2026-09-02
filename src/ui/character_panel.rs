@@ -1,10 +1,10 @@
 #![allow(clippy::field_reassign_with_default)]
 
-use eframe::egui;
-use crate::AfterEffectsApp;
 use crate::core::timeline::{Composition, LayerType};
-use crate::ui::theme::colors;
 use crate::ui::custom_widgets;
+use crate::ui::theme::colors;
+use crate::AfterEffectsApp;
+use eframe::egui;
 
 pub fn draw_character_panel(
     app: &mut AfterEffectsApp,
@@ -25,7 +25,7 @@ pub fn draw_character_panel(
         });
         ui.separator();
 
-        let sel_idx = app.selected_layer_idx;
+        let sel_idx = app.selection.selected_layer_idx;
         if let Some(idx) = sel_idx {
             if idx < comp.layers.len() {
                 let layer = &mut comp.layers[idx];
@@ -447,19 +447,31 @@ pub fn apply_text_preset(
     current_frame: u32,
     duration_frames: u32,
 ) {
-    use crate::core::keyframe::{Keyframe, InterpolationType};
+    use crate::core::keyframe::{InterpolationType, Keyframe};
     use crate::core::property::Animatable;
 
-    let dur = if duration_frames > 0 { duration_frames } else { 30 }; // default: 1s at 30fps
+    let dur = if duration_frames > 0 {
+        duration_frames
+    } else {
+        30
+    }; // default: 1s at 30fps
     let ease = InterpolationType::Bezier {
-        outgoing: crate::core::keyframe::BezierControlPoint { influence: 0.33, speed: 0.0 },
-        incoming: crate::core::keyframe::BezierControlPoint { influence: 0.33, speed: 0.0 },
+        outgoing: crate::core::keyframe::BezierControlPoint {
+            influence: 0.33,
+            speed: 0.0,
+        },
+        incoming: crate::core::keyframe::BezierControlPoint {
+            influence: 0.33,
+            speed: 0.0,
+        },
         custom_bezier: Some([0.25, 0.1, 0.25, 1.0]), // Easy Ease
     };
 
     app.modify_project(|p| {
         let comp = p.active_composition_mut();
-        let Some(layer) = comp.layers.get_mut(layer_idx) else { return };
+        let Some(layer) = comp.layers.get_mut(layer_idx) else {
+            return;
+        };
 
         let base_pos = layer.transform.position.evaluate(current_frame);
         let end_frame = current_frame + dur;
@@ -525,12 +537,24 @@ pub fn draw_animation_presets(
 ) {
     ui.separator();
     ui.label("Text Animation Presets:");
-    let presets = ["Fade In", "Slide In Left", "Slide In Right", "Slide In Up", "Scale Up"];
+    let presets = [
+        "Fade In",
+        "Slide In Left",
+        "Slide In Right",
+        "Slide In Up",
+        "Scale Up",
+    ];
     ui.horizontal_wrapped(|ui| {
         for preset in presets {
             if custom_widgets::ae_button(ui, preset).clicked() {
-                if let Some(idx) = app.selected_layer_idx {
-                    crate::ui::character_panel::apply_text_preset(app, preset, idx, current_frame, duration_frames);
+                if let Some(idx) = app.selection.selected_layer_idx {
+                    crate::ui::character_panel::apply_text_preset(
+                        app,
+                        preset,
+                        idx,
+                        current_frame,
+                        duration_frames,
+                    );
                 }
             }
         }

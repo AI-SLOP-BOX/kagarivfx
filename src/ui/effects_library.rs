@@ -1,15 +1,15 @@
-use eframe::egui;
-use crate::AfterEffectsApp;
 use crate::ui::theme::colors;
+use crate::AfterEffectsApp;
+use eframe::egui;
 
 pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut u32) {
     // Update panel animation
     let dt = ctx.input(|i| i.stable_dt);
     app.effects_animation.update(dt);
 
-    let animated_width = crate::ui::panel_animation::animate_panel_width(
-        ctx, &app.effects_animation, 350.0
-    ).max(200.0);
+    let animated_width =
+        crate::ui::panel_animation::animate_panel_width(ctx, &app.effects_animation, 350.0)
+            .max(200.0);
 
     egui::SidePanel::right("right_panel")
         .resizable(true)
@@ -30,7 +30,7 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
             ];
             let active_cat = TAB_CATEGORIES
                 .iter()
-                .position(|(_, tabs)| tabs.iter().any(|(idx, _)| *idx == app.right_tab_idx))
+                .position(|(_, tabs)| tabs.iter().any(|(idx, _)| *idx == app.ui_tabs.right_tab_idx))
                 .unwrap_or(0);
             let cat_id = egui::Id::new("right_panel_active_category");
 
@@ -44,8 +44,8 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                         // Jump to the first tab of the chosen category so the
                         // body always shows something sensible.
                         if let Some((first_idx, _)) = tabs.first() {
-                            if !tabs.iter().any(|(idx, _)| *idx == app.right_tab_idx) {
-                                app.right_tab_idx = *first_idx;
+                            if !tabs.iter().any(|(idx, _)| *idx == app.ui_tabs.right_tab_idx) {
+                                app.ui_tabs.right_tab_idx = *first_idx;
                             }
                         }
                     }
@@ -66,7 +66,7 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
             egui::ScrollArea::horizontal().show(ui, |ui| {
                 ui.horizontal(|ui| {
                     for (idx, label) in TAB_CATEGORIES[active_cat].1 {
-                        ui.selectable_value(&mut app.right_tab_idx, *idx, *label);
+                        ui.selectable_value(&mut app.ui_tabs.right_tab_idx, *idx, *label);
                     }
                 });
             });
@@ -79,22 +79,22 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
             // Access live project mutably without per-frame cloning
             let temp_project = app.history.current_mut();
 
-            if app.right_tab_idx == 3 {
+            if app.ui_tabs.right_tab_idx == 3 {
                 crate::ui::tracker_panel::draw_tracker_panel(app, ui, *current_frame);
                 return;
             }
 
-            if app.right_tab_idx == 4 {
+            if app.ui_tabs.right_tab_idx == 4 {
                 let total_frames = temp_project.active_composition().duration_frames;
                 crate::ui::transport_panel::draw_transport_panel(app, ui, current_frame, total_frames);
                 return;
             }
 
-            if app.right_tab_idx == 30 {
+            if app.ui_tabs.right_tab_idx == 30 {
                 ui.heading("Effect Controls");
                 ui.separator();
                 let comp = temp_project.active_composition_mut();
-                if let Some(idx) = app.selected_layer_idx {
+                if let Some(idx) = app.selection.selected_layer_idx {
                     if idx < comp.layers.len() {
                         // Capture drag info before borrowing layer
                         let drag_info = app.dragging_effect.clone();
@@ -249,120 +249,120 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                 return;
             }
 
-            if app.right_tab_idx == 5 {
+            if app.ui_tabs.right_tab_idx == 5 {
                 crate::ui::paint_panel::draw_paint_panel(app, ui);
                 return;
             }
 
-            if app.right_tab_idx == 6 {
+            if app.ui_tabs.right_tab_idx == 6 {
                 crate::ui::marker_panel::draw_marker_panel(app, ui, *current_frame);
                 return;
             }
 
-            if app.right_tab_idx == 7 {
+            if app.ui_tabs.right_tab_idx == 7 {
                 crate::ui::audio_meter::draw_content(app, ui);
                 ui.add_space(8.0);
                 crate::ui::audio_panel::draw_audio_panel(app, ui);
                 return;
             }
 
-            if app.right_tab_idx == 8 {
+            if app.ui_tabs.right_tab_idx == 8 {
                 crate::ui::time_remap_panel::draw_time_remap_panel(app, ui);
                 return;
             }
 
-            if app.right_tab_idx == 9 {
+            if app.ui_tabs.right_tab_idx == 9 {
                 crate::ui::mask_panel::draw_mask_panel(app, ui);
                 return;
             }
 
-            if app.right_tab_idx == 10 {
+            if app.ui_tabs.right_tab_idx == 10 {
                 crate::ui::expression_panel::draw_expression_panel(app, ui);
                 return;
             }
 
-            if app.right_tab_idx == 11 {
+            if app.ui_tabs.right_tab_idx == 11 {
                 crate::ui::essential_graphics::draw_essential_graphics(app, ui);
                 return;
             }
 
-            if app.right_tab_idx == 12 {
+            if app.ui_tabs.right_tab_idx == 12 {
                 crate::ui::content_aware_fill::draw_content_aware_fill(app, ui);
                 return;
             }
 
-            if app.right_tab_idx == 13 {
+            if app.ui_tabs.right_tab_idx == 13 {
                 crate::ui::metadata_panel::draw_metadata_panel(app, ui);
                 return;
             }
 
-            if app.right_tab_idx == 14 {
+            if app.ui_tabs.right_tab_idx == 14 {
                 crate::ui::scripting_console::draw_scripting_console(app, ui);
                 return;
             }
 
-            if app.right_tab_idx == 15 {
+            if app.ui_tabs.right_tab_idx == 15 {
                 crate::ui::workspace_manager::draw_workspace_manager(app, ui);
                 return;
             }
 
-            if app.right_tab_idx == 16 {
+            if app.ui_tabs.right_tab_idx == 16 {
                 crate::ui::color_management::draw_color_management(app, ui);
                 return;
             }
 
-            if app.right_tab_idx == 17 {
+            if app.ui_tabs.right_tab_idx == 17 {
                 crate::ui::flowchart_inspector::draw_flowchart_inspector(app, ui);
                 return;
             }
 
-            if app.right_tab_idx == 18 {
+            if app.ui_tabs.right_tab_idx == 18 {
                 crate::ui::camera_views::draw_camera_views(app, ui);
                 return;
             }
 
-            if app.right_tab_idx == 19 {
+            if app.ui_tabs.right_tab_idx == 19 {
                 crate::ui::lumetri_color::draw_lumetri_color(app, ui);
                 return;
             }
 
-            if app.right_tab_idx == 20 {
+            if app.ui_tabs.right_tab_idx == 20 {
                 crate::ui::cc_libraries::draw_cc_libraries(app, ui);
                 return;
             }
 
-            if app.right_tab_idx == 21 {
+            if app.ui_tabs.right_tab_idx == 21 {
                 crate::ui::font_picker::draw_font_picker(app, ui);
                 return;
             }
 
-            if app.right_tab_idx == 22 {
+            if app.ui_tabs.right_tab_idx == 22 {
                 crate::ui::render_presets::draw_render_presets(app, ui);
                 return;
             }
 
-            if app.right_tab_idx == 23 {
+            if app.ui_tabs.right_tab_idx == 23 {
                 crate::ui::audio_mixer::draw_audio_mixer(app, ui);
                 return;
             }
 
-            if app.right_tab_idx == 24 {
-                let cf = app.current_frame;
+            if app.ui_tabs.right_tab_idx == 24 {
+                let cf = app.playback.current_frame;
                 crate::ui::speed_graph_options::draw_speed_graph_options(app, ui, cf);
                 return;
             }
 
-            if app.right_tab_idx == 25 {
+            if app.ui_tabs.right_tab_idx == 25 {
                 crate::ui::camera_light_options::draw_camera_light_options(app, ui);
                 return;
             }
 
-            if app.right_tab_idx == 26 {
+            if app.ui_tabs.right_tab_idx == 26 {
                 crate::ui::layer_styles::draw_layer_styles(app, ui);
                 return;
             }
 
-            if app.right_tab_idx == 27 {
+            if app.ui_tabs.right_tab_idx == 27 {
                 let mut temp_proj = app.history.current().clone();
                 let changed = crate::ui::character_panel::draw_character_panel(app, ui, temp_proj.active_composition_mut(), *current_frame);
                 if changed {
@@ -372,20 +372,20 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                 return;
             }
 
-            if app.right_tab_idx == 28 {
+            if app.ui_tabs.right_tab_idx == 28 {
                 crate::ui::paragraph_panel::draw_paragraph_panel(app, ui);
                 return;
             }
 
-            if app.right_tab_idx == 1 {
+            if app.ui_tabs.right_tab_idx == 1 {
                 crate::ui::align_panel::draw_align_panel(app, ui);
                 return;
             }
 
-            if app.right_tab_idx == 2 {
+            if app.ui_tabs.right_tab_idx == 2 {
                 ui.heading("Info");
                 ui.separator();
-                if let Some(idx) = app.selected_layer_idx {
+                if let Some(idx) = app.selection.selected_layer_idx {
                     let comp = temp_project.active_composition();
                     if idx < comp.layers.len() {
                         let layer = &comp.layers[idx];
@@ -406,11 +406,11 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
             } else {
                 ui.heading("Effects & Presets");
                 ui.separator();
-            
-            if let Some(idx) = app.selected_layer_idx {
+
+            if let Some(idx) = app.selection.selected_layer_idx {
                 // ── Categorized effect browser with search ──
                 let presets = crate::ui::effects_controls::get_all_effect_presets();
-                let search_q = app.effects_search_query.to_lowercase();
+                let search_q = app.ui_tabs.effects_search_query.to_lowercase();
 
                 // Category assignment by effect name.
                 // NOTE: keep in sync with the preset names in effects_controls.rs.
@@ -504,7 +504,7 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                     ui.label(egui::RichText::new("AI Motion VFX Auto-Generator").strong().color(colors::ACCENT_CYAN));
                     ui.small("Enter prompt to auto-build VFX graph:");
                     ui.horizontal(|ui| {
-                        ui.add(egui::TextEdit::singleline(&mut app.effects_search_query).hint_text("e.g. Cyberpunk Neon Glow"));
+                        ui.add(egui::TextEdit::singleline(&mut app.ui_tabs.effects_search_query).hint_text("e.g. Cyberpunk Neon Glow"));
                     });
                     ui.horizontal(|ui| {
                         if ui.button("Cyberpunk").clicked() {
@@ -549,9 +549,9 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
 
                 ui.horizontal(|ui| {
                     ui.small("Search:");
-                    ui.add(egui::TextEdit::singleline(&mut app.effects_search_query).hint_text("Search effects..."));
+                    ui.add(egui::TextEdit::singleline(&mut app.ui_tabs.effects_search_query).hint_text("Search effects..."));
                 });
-                let q = app.effects_search_query.to_lowercase();
+                let q = app.ui_tabs.effects_search_query.to_lowercase();
 
                 ui.vertical(|ui| {
                     for preset in crate::ui::effects_controls::get_all_effect_presets() {
@@ -568,11 +568,11 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
             } else {
                 ui.weak("Select a layer to apply effects");
             }
-            
+
             ui.separator();
-            
+
             // Show list of applied effects
-            if let Some(idx) = app.selected_layer_idx {
+            if let Some(idx) = app.selection.selected_layer_idx {
                 let comp = temp_project.active_composition_mut();
                 if idx < comp.layers.len() {
                     ui.label("Applied Effects:");
@@ -644,11 +644,11 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                 }
             }
             }
-            
+
             ui.separator();
             ui.heading("External NLE Link");
             ui.add_space(4.0);
-            
+
             // Connection Status Indicators
             if let Some(app_name) = &app.connected_app {
                 ui.horizontal(|ui| {
@@ -662,13 +662,13 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                 });
             }
             ui.add_space(8.0);
-            
+
             // OTIO File Path Input
             ui.label("OTIO File Path:");
             ui.horizontal(|ui| {
                 ui.text_edit_singleline(&mut app.otio_path);
             });
-            
+
             ui.horizontal(|ui| {
                 if ui.button("Import OTIO").clicked() {
                     if let Ok(json_str) = std::fs::read_to_string(&app.otio_path) {
@@ -717,7 +717,7 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                 *current_frame = nf;
             }
             if let Some(cf) = current_frame_reset {
-                app.current_frame = cf;
+                app.playback.current_frame = cf;
                 *current_frame = cf;
             }
 

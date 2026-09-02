@@ -63,7 +63,7 @@ pub fn draw_the_smoother_panel(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
         .on_hover_text("Simplify keyframes on active selected layer")
         .clicked()
     {
-        let Some(layer_idx) = app.selected_layer_idx else {
+        let Some(layer_idx) = app.selection.selected_layer_idx else {
             app.toasts
                 .error("Select a layer with animated keyframes first");
             return;

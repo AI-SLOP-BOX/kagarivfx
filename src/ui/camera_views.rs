@@ -1,12 +1,16 @@
-use eframe::egui;
-use crate::AfterEffectsApp;
 use crate::ui::theme::colors;
+use crate::AfterEffectsApp;
+use eframe::egui;
 
 pub fn draw_camera_views(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
     crate::ui::custom_widgets::ae_section_header(ui, "3D Viewports", "📷");
 
     // Viewport layout selector
-    ui.label(egui::RichText::new("Layout").small().color(colors::TEXT_SECONDARY));
+    ui.label(
+        egui::RichText::new("Layout")
+            .small()
+            .color(colors::TEXT_SECONDARY),
+    );
     let layouts = [
         (0, "1 View"),
         (1, "2H Split"),
@@ -16,74 +20,157 @@ pub fn draw_camera_views(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
     ui.horizontal(|ui| {
         for (idx, label) in layouts {
             let is_active = app.camera_view_layout == idx;
-            if ui.selectable_label(is_active, egui::RichText::new(label).small().color(
-                if is_active { colors::ACCENT_CYAN } else { colors::TEXT_PRIMARY }
-            )).clicked() {
+            if ui
+                .selectable_label(
+                    is_active,
+                    egui::RichText::new(label).small().color(if is_active {
+                        colors::ACCENT_CYAN
+                    } else {
+                        colors::TEXT_PRIMARY
+                    }),
+                )
+                .clicked()
+            {
                 app.camera_view_layout = idx;
             }
         }
     });
 
     // Viewport preview (visual indicator of split layout)
-    let preview_rect = ui.allocate_space(egui::vec2(ui.available_width().min(200.0), 120.0)).1;
-    ui.painter().rect_filled(preview_rect, 4.0, colors::BG_DEEPEST);
-    ui.painter().rect_stroke(preview_rect, 4.0, egui::Stroke::new(1.0, colors::BORDER_MEDIUM));
+    let preview_rect = ui
+        .allocate_space(egui::vec2(ui.available_width().min(200.0), 120.0))
+        .1;
+    ui.painter()
+        .rect_filled(preview_rect, 4.0, colors::BG_DEEPEST);
+    ui.painter().rect_stroke(
+        preview_rect,
+        4.0,
+        egui::Stroke::new(1.0, colors::BORDER_MEDIUM),
+    );
 
     let view_names = ["Active", "Front", "Left", "Top", "Right"];
     match app.camera_view_layout {
         0 => {
             // Single view
             ui.painter().text(
-                preview_rect.center(), egui::Align2::CENTER_CENTER,
+                preview_rect.center(),
+                egui::Align2::CENTER_CENTER,
                 view_names[app.camera_view_angle.min(4)],
-                egui::FontId::proportional(11.0), colors::TEXT_SECONDARY,
+                egui::FontId::proportional(11.0),
+                colors::TEXT_SECONDARY,
             );
         }
         1 => {
             // Horizontal split
             let mid = preview_rect.center().x;
             ui.painter().line_segment(
-                [egui::pos2(mid, preview_rect.top()), egui::pos2(mid, preview_rect.bottom())],
+                [
+                    egui::pos2(mid, preview_rect.top()),
+                    egui::pos2(mid, preview_rect.bottom()),
+                ],
                 egui::Stroke::new(1.0, colors::BORDER_STRONG),
             );
-            let left_center = egui::pos2(preview_rect.left() + preview_rect.width() * 0.25, preview_rect.center().y);
-            let right_center = egui::pos2(preview_rect.left() + preview_rect.width() * 0.75, preview_rect.center().y);
-            ui.painter().text(left_center, egui::Align2::CENTER_CENTER, view_names[0], egui::FontId::proportional(9.0), colors::TEXT_MUTED);
-            ui.painter().text(right_center, egui::Align2::CENTER_CENTER, view_names[app.camera_view_angle.min(4)], egui::FontId::proportional(9.0), colors::TEXT_MUTED);
+            let left_center = egui::pos2(
+                preview_rect.left() + preview_rect.width() * 0.25,
+                preview_rect.center().y,
+            );
+            let right_center = egui::pos2(
+                preview_rect.left() + preview_rect.width() * 0.75,
+                preview_rect.center().y,
+            );
+            ui.painter().text(
+                left_center,
+                egui::Align2::CENTER_CENTER,
+                view_names[0],
+                egui::FontId::proportional(9.0),
+                colors::TEXT_MUTED,
+            );
+            ui.painter().text(
+                right_center,
+                egui::Align2::CENTER_CENTER,
+                view_names[app.camera_view_angle.min(4)],
+                egui::FontId::proportional(9.0),
+                colors::TEXT_MUTED,
+            );
         }
         2 => {
             // Vertical split
             let mid = preview_rect.center().y;
             ui.painter().line_segment(
-                [egui::pos2(preview_rect.left(), mid), egui::pos2(preview_rect.right(), mid)],
+                [
+                    egui::pos2(preview_rect.left(), mid),
+                    egui::pos2(preview_rect.right(), mid),
+                ],
                 egui::Stroke::new(1.0, colors::BORDER_STRONG),
             );
-            let top_center = egui::pos2(preview_rect.center().x, preview_rect.top() + preview_rect.height() * 0.25);
-            let bot_center = egui::pos2(preview_rect.center().x, preview_rect.top() + preview_rect.height() * 0.75);
-            ui.painter().text(top_center, egui::Align2::CENTER_CENTER, view_names[0], egui::FontId::proportional(9.0), colors::TEXT_MUTED);
-            ui.painter().text(bot_center, egui::Align2::CENTER_CENTER, view_names[app.camera_view_angle.min(4)], egui::FontId::proportional(9.0), colors::TEXT_MUTED);
+            let top_center = egui::pos2(
+                preview_rect.center().x,
+                preview_rect.top() + preview_rect.height() * 0.25,
+            );
+            let bot_center = egui::pos2(
+                preview_rect.center().x,
+                preview_rect.top() + preview_rect.height() * 0.75,
+            );
+            ui.painter().text(
+                top_center,
+                egui::Align2::CENTER_CENTER,
+                view_names[0],
+                egui::FontId::proportional(9.0),
+                colors::TEXT_MUTED,
+            );
+            ui.painter().text(
+                bot_center,
+                egui::Align2::CENTER_CENTER,
+                view_names[app.camera_view_angle.min(4)],
+                egui::FontId::proportional(9.0),
+                colors::TEXT_MUTED,
+            );
         }
         3 => {
             // 4 views
             let cx = preview_rect.center().x;
             let cy = preview_rect.center().y;
             ui.painter().line_segment(
-                [egui::pos2(cx, preview_rect.top()), egui::pos2(cx, preview_rect.bottom())],
+                [
+                    egui::pos2(cx, preview_rect.top()),
+                    egui::pos2(cx, preview_rect.bottom()),
+                ],
                 egui::Stroke::new(1.0, colors::BORDER_STRONG),
             );
             ui.painter().line_segment(
-                [egui::pos2(preview_rect.left(), cy), egui::pos2(preview_rect.right(), cy)],
+                [
+                    egui::pos2(preview_rect.left(), cy),
+                    egui::pos2(preview_rect.right(), cy),
+                ],
                 egui::Stroke::new(1.0, colors::BORDER_STRONG),
             );
             let positions = [
-                egui::pos2(preview_rect.left() + preview_rect.width() * 0.25, preview_rect.top() + preview_rect.height() * 0.25),
-                egui::pos2(preview_rect.left() + preview_rect.width() * 0.75, preview_rect.top() + preview_rect.height() * 0.25),
-                egui::pos2(preview_rect.left() + preview_rect.width() * 0.25, preview_rect.top() + preview_rect.height() * 0.75),
-                egui::pos2(preview_rect.left() + preview_rect.width() * 0.75, preview_rect.top() + preview_rect.height() * 0.75),
+                egui::pos2(
+                    preview_rect.left() + preview_rect.width() * 0.25,
+                    preview_rect.top() + preview_rect.height() * 0.25,
+                ),
+                egui::pos2(
+                    preview_rect.left() + preview_rect.width() * 0.75,
+                    preview_rect.top() + preview_rect.height() * 0.25,
+                ),
+                egui::pos2(
+                    preview_rect.left() + preview_rect.width() * 0.25,
+                    preview_rect.top() + preview_rect.height() * 0.75,
+                ),
+                egui::pos2(
+                    preview_rect.left() + preview_rect.width() * 0.75,
+                    preview_rect.top() + preview_rect.height() * 0.75,
+                ),
             ];
             let quad_names = ["Top", "Front", "Left", "Active"];
             for (pos, name) in positions.iter().zip(quad_names.iter()) {
-                ui.painter().text(*pos, egui::Align2::CENTER_CENTER, name, egui::FontId::proportional(8.0), colors::TEXT_MUTED);
+                ui.painter().text(
+                    *pos,
+                    egui::Align2::CENTER_CENTER,
+                    name,
+                    egui::FontId::proportional(8.0),
+                    colors::TEXT_MUTED,
+                );
             }
         }
         _ => {}
@@ -93,26 +180,41 @@ pub fn draw_camera_views(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
     crate::ui::custom_widgets::ae_section_header(ui, "Active View", "👁");
 
     let view_labels = [
-        "Active Camera", "Front", "Left", "Top",
-        "Right", "Back", "Bottom",
-        "Custom View 1", "Custom View 2", "Custom View 3",
+        "Active Camera",
+        "Front",
+        "Left",
+        "Top",
+        "Right",
+        "Back",
+        "Bottom",
+        "Custom View 1",
+        "Custom View 2",
+        "Custom View 3",
     ];
 
-    egui::Grid::new("cam_views_grid").striped(true).show(ui, |ui| {
-        for (i, v_name) in view_labels.iter().enumerate() {
-            let is_active = app.camera_view_angle == i;
-            if ui.selectable_label(is_active,
-                egui::RichText::new(*v_name).small().color(
-                    if is_active { colors::ACCENT_CYAN } else { colors::TEXT_PRIMARY }
-                )
-            ).clicked() {
-                app.camera_view_angle = i;
+    egui::Grid::new("cam_views_grid")
+        .striped(true)
+        .show(ui, |ui| {
+            for (i, v_name) in view_labels.iter().enumerate() {
+                let is_active = app.camera_view_angle == i;
+                if ui
+                    .selectable_label(
+                        is_active,
+                        egui::RichText::new(*v_name).small().color(if is_active {
+                            colors::ACCENT_CYAN
+                        } else {
+                            colors::TEXT_PRIMARY
+                        }),
+                    )
+                    .clicked()
+                {
+                    app.camera_view_angle = i;
+                }
+                if (i + 1) % 2 == 0 {
+                    ui.end_row();
+                }
             }
-            if (i + 1) % 2 == 0 {
-                ui.end_row();
-            }
-        }
-    });
+        });
 
     // ── 3D Rendering Engine & Advanced Space ──
     ui.add_space(8.0);

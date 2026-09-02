@@ -64,7 +64,7 @@ fn apply(app: &mut AfterEffectsApp, p: &Prefs) {
     app.autosave.set_interval_secs(p.autosave_secs);
     app.audio_preview_enabled = p.audio_preview;
     if !p.adaptive_preview {
-        app.adaptive_preview_factor = 1.0;
+        app.playback.adaptive_preview_factor = 1.0;
     }
 }
 

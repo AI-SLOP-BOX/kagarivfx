@@ -8,8 +8,8 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
                     app.history = crate::core::history::ProjectHistory::new(
                         crate::core::timeline::Project::default(),
                     );
-                    app.selected_layer_idx = None;
-                    app.selected_layers.clear();
+                    app.selection.selected_layer_idx = None;
+                    app.selection.selected_layers.clear();
                     crate::core::frame_cache::bump_version();
                     ui.close_menu();
                 }
@@ -296,7 +296,7 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
                 }
                 ui.separator();
                 if ui.button("Export Video (MP4)...").clicked() {
-                    app.show_export_dialog = true;
+                    app.export.show_export_dialog = true;
                     ui.close_menu();
                 }
                 if ui.button("⚡ Quick Export Active Comp").on_hover_text("Export the active composition to MP4 with current settings (no dialog)").clicked() {
@@ -328,7 +328,7 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
                 }
                 ui.separator();
                 if ui.add(egui::Button::new("Duplicate").shortcut_text("Cmd+D")).clicked() {
-                    if let Some(sel_idx) = app.selected_layer_idx {
+                    if let Some(sel_idx) = app.selection.selected_layer_idx {
                         let comp = app.history.current_mut().active_composition_mut();
                         if sel_idx < comp.layers.len() {
                             let mut cloned = comp.layers[sel_idx].clone();
@@ -344,8 +344,8 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
                 }
                 ui.separator();
                 if ui.add(egui::Button::new("Auto-Trace Layer")).on_hover_text("Trace selected layer's alpha into a new Shape layer (FreeformBezier)").clicked() {
-                    if let Some(sel_idx) = app.selected_layer_idx {
-                        let cur_frame = app.current_frame;
+                    if let Some(sel_idx) = app.selection.selected_layer_idx {
+                        let cur_frame = app.playback.current_frame;
                         let comp = app.history.current().active_composition();
                         if sel_idx < comp.layers.len() {
                             let layer = &comp.layers[sel_idx];
@@ -437,7 +437,7 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
                 }
                 let rq_sc = crate::ui::shortcuts::format_shortcut("M", true, false, false);
                 if ui.add(egui::Button::new("Add to Render Queue").shortcut_text(rq_sc)).clicked() {
-                    app.show_export_dialog = true;
+                    app.export.show_export_dialog = true;
                     ui.close_menu();
                 }
                 ui.separator();
@@ -467,11 +467,11 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
                         .add_filter("PNG Image", &["png"])
                         .set_file_name(format!("{}_frame_{}.png",
                             app.history.current().active_composition().name,
-                            app.current_frame))
+                            app.playback.current_frame))
                         .save_file()
                     {
                         let comp = app.history.current().active_composition().clone();
-                        let frame = app.current_frame;
+                        let frame = app.playback.current_frame;
                         // 2× supersample render then alpha-weighted downsample
                         // for clean anti-aliased edges (clamped by raster max).
                         let max_dim = crate::core::software_renderer::MAX_RENDER_DIMENSION;
@@ -555,7 +555,7 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
                 ui.menu_button("Transform", |ui| {
                     // Center / Fit / Flip / Reset commands (AE Layer > Transform parity)
                     if ui.button("Center in Comp").on_hover_text("Move position to the composition center").clicked() {
-                        if let Some(idx) = app.selected_layer_idx {
+                        if let Some(idx) = app.selection.selected_layer_idx {
                             let (cw, ch) = { let c = app.history.current().active_composition(); (c.width as f32, c.height as f32) };
                             app.modify_project(move |p| {
                                 if let Some(l) = p.active_composition_mut().layers.get_mut(idx) {
@@ -567,7 +567,7 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
                         }
                     }
                     if ui.button("Fit to Comp").on_hover_text("Scale so the layer covers the full comp frame").clicked() {
-                        if let Some(idx) = app.selected_layer_idx {
+                        if let Some(idx) = app.selection.selected_layer_idx {
                             let (cw, ch) = { let c = app.history.current().active_composition(); (c.width as f32, c.height as f32) };
                             app.modify_project(move |p| {
                                 if let Some(l) = p.active_composition_mut().layers.get_mut(idx) {
@@ -586,7 +586,7 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
                         }
                     }
                     if ui.button("Fit to Comp Width").clicked() {
-                        if let Some(idx) = app.selected_layer_idx {
+                        if let Some(idx) = app.selection.selected_layer_idx {
                             let cw = app.history.current().active_composition().width as f32;
                             app.modify_project(move |p| {
                                 if let Some(l) = p.active_composition_mut().layers.get_mut(idx) {
@@ -602,7 +602,7 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
                         }
                     }
                     if ui.button("Fit to Comp Height").clicked() {
-                        if let Some(idx) = app.selected_layer_idx {
+                        if let Some(idx) = app.selection.selected_layer_idx {
                             let ch = app.history.current().active_composition().height as f32;
                             app.modify_project(move |p| {
                                 if let Some(l) = p.active_composition_mut().layers.get_mut(idx) {
@@ -618,8 +618,8 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
                         }
                     }
                     if ui.button("Flip Horizontal").clicked() {
-                        if let Some(idx) = app.selected_layer_idx {
-                            let cf = app.current_frame;
+                        if let Some(idx) = app.selection.selected_layer_idx {
+                            let cf = app.playback.current_frame;
                             app.modify_project(move |p| {
                                 if let Some(l) = p.active_composition_mut().layers.get_mut(idx) {
                                     let s = l.transform.scale.evaluate(cf);
@@ -631,8 +631,8 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
                         }
                     }
                     if ui.button("Flip Vertical").clicked() {
-                        if let Some(idx) = app.selected_layer_idx {
-                            let cf = app.current_frame;
+                        if let Some(idx) = app.selection.selected_layer_idx {
+                            let cf = app.playback.current_frame;
                             app.modify_project(move |p| {
                                 if let Some(l) = p.active_composition_mut().layers.get_mut(idx) {
                                     let s = l.transform.scale.evaluate(cf);
@@ -645,7 +645,7 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
                     }
                     ui.separator();
                     if ui.button("Reset Position").clicked() {
-                        if let Some(idx) = app.selected_layer_idx {
+                        if let Some(idx) = app.selection.selected_layer_idx {
                             let dims = { let c = app.history.current().active_composition(); (c.width as f32, c.height as f32) };
                             app.modify_project(move |p| {
                                 if let Some(l) = p.active_composition_mut().layers.get_mut(idx) {
@@ -657,7 +657,7 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
                         }
                     }
                     if ui.button("Reset Scale").clicked() {
-                        if let Some(idx) = app.selected_layer_idx {
+                        if let Some(idx) = app.selection.selected_layer_idx {
                             app.modify_project(move |p| {
                                 if let Some(l) = p.active_composition_mut().layers.get_mut(idx) {
                                     l.transform.scale = crate::core::property::Animatable::new_constant([100.0, 100.0]);
@@ -668,7 +668,7 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
                         }
                     }
                     if ui.button("Reset Rotation").clicked() {
-                        if let Some(idx) = app.selected_layer_idx {
+                        if let Some(idx) = app.selection.selected_layer_idx {
                             app.modify_project(move |p| {
                                 if let Some(l) = p.active_composition_mut().layers.get_mut(idx) {
                                     l.transform.rotation = crate::core::property::Animatable::new_constant(0.0);
@@ -679,7 +679,7 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
                         }
                     }
                     if ui.button("Reset All Transforms").clicked() {
-                        if let Some(idx) = app.selected_layer_idx {
+                        if let Some(idx) = app.selection.selected_layer_idx {
                             let dims = { let c = app.history.current().active_composition(); (c.width as f32, c.height as f32) };
                             app.modify_project(move |p| {
                                 if let Some(l) = p.active_composition_mut().layers.get_mut(idx) {
@@ -696,7 +696,7 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
                     }
                     ui.separator();
                     if ui.add(egui::Button::new("Auto-Orient...").shortcut_text("Cmd+Alt+O")).on_hover_text("Rotate layer automatically along its motion path direction").clicked() {
-                        if let Some(idx) = app.selected_layer_idx {
+                        if let Some(idx) = app.selection.selected_layer_idx {
                             app.modify_project(move |p| {
                                 if let Some(l) = p.active_composition_mut().layers.get_mut(idx) {
                                     l.auto_orient = match l.auto_orient {
@@ -714,7 +714,7 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
                 });
                 ui.menu_button("Time", |ui| {
                     if ui.add(egui::Button::new("Enable Time Remapping").shortcut_text("Cmd+Alt+T")).clicked() {
-                        if let Some(idx) = app.selected_layer_idx {
+                        if let Some(idx) = app.selection.selected_layer_idx {
                             app.modify_project(move |p| {
                                 if let Some(l) = p.active_composition_mut().layers.get_mut(idx) {
                                     l.enable_time_remapping();
@@ -728,7 +728,7 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
                         ui.close_menu();
                     }
                     if ui.add(egui::Button::new("Time-Reverse Layer")).clicked() {
-                        if let Some(idx) = app.selected_layer_idx {
+                        if let Some(idx) = app.selection.selected_layer_idx {
                             app.modify_project(move |p| {
                                 if let Some(l) = p.active_composition_mut().layers.get_mut(idx) {
                                     l.time_reverse();
@@ -742,7 +742,7 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
                         ui.close_menu();
                     }
                     if ui.add(egui::Button::new("🎯 Stabilize Motion (from Track)")).on_hover_text("Bake counter-movement position keyframes from the layer's first tracker").clicked() {
-                        if let Some(idx) = app.selected_layer_idx {
+                        if let Some(idx) = app.selection.selected_layer_idx {
                             let mut baked_count = 0usize;
                             app.modify_project(|p| {
                                 if let Some(l) = p.active_composition_mut().layers.get_mut(idx) {
@@ -760,8 +760,8 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
                         ui.close_menu();
                     }
                     if ui.add(egui::Button::new("Freeze Frame at Playhead")).clicked() {
-                        let frame = app.current_frame;
-                        if let Some(idx) = app.selected_layer_idx {
+                        let frame = app.playback.current_frame;
+                        if let Some(idx) = app.selection.selected_layer_idx {
                             app.modify_project(move |p| {
                                 if let Some(l) = p.active_composition_mut().layers.get_mut(idx) {
                                     l.freeze_at(frame);
@@ -775,7 +775,7 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
                         ui.close_menu();
                     }
                     if ui.button("Remove Time Remapping").clicked() {
-                        if let Some(idx) = app.selected_layer_idx {
+                        if let Some(idx) = app.selection.selected_layer_idx {
                             app.modify_project(move |p| {
                                 if let Some(l) = p.active_composition_mut().layers.get_mut(idx) {
                                     l.clear_time_remap();
@@ -790,7 +790,7 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
                     }
                     ui.separator();
                     if ui.button("Posterize Time 12fps (Stop Motion)").on_hover_text("Quantizes layer time to 12fps — toggles off if already enabled").clicked() {
-                        if let Some(idx) = app.selected_layer_idx {
+                        if let Some(idx) = app.selection.selected_layer_idx {
                             let already = matches!(
                                 app.history.current().active_composition().layers.get(idx).and_then(|l| l.posterize_time.as_ref()),
                                 Some(pt) if pt.enabled
@@ -813,7 +813,7 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
                     }
                     ui.separator();
                     if ui.add(egui::Button::new("Time Stretch ×2 (Slow)")).clicked() {
-                        if let Some(idx) = app.selected_layer_idx {
+                        if let Some(idx) = app.selection.selected_layer_idx {
                             app.modify_project(move |p| {
                                 if let Some(l) = p.active_composition_mut().layers.get_mut(idx) {
                                     l.time_stretch(2.0);
@@ -827,7 +827,7 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
                         ui.close_menu();
                     }
                     if ui.add(egui::Button::new("Time Stretch ×0.5 (Fast)")).clicked() {
-                        if let Some(idx) = app.selected_layer_idx {
+                        if let Some(idx) = app.selection.selected_layer_idx {
                             app.modify_project(move |p| {
                                 if let Some(l) = p.active_composition_mut().layers.get_mut(idx) {
                                     l.time_stretch(0.5);
@@ -843,7 +843,7 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
                 });
                 ui.menu_button("Arrange", |ui| {
                     let len = app.history.current().active_composition().layers.len();
-                    let Some(i) = app.selected_layer_idx else {
+                    let Some(i) = app.selection.selected_layer_idx else {
                         ui.label("Select a layer first");
                         return;
                     };
@@ -855,7 +855,7 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
                                 comp.layers.push(l);
                             }
                         });
-                        app.selected_layer_idx = if i < len { Some(len - 1) } else { app.selected_layer_idx };
+                        app.selection.selected_layer_idx = if i < len { Some(len - 1) } else { app.selection.selected_layer_idx };
                         crate::core::frame_cache::bump_version();
                         ui.close_menu();
                     }
@@ -867,7 +867,7 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
                                     comp.layers.swap(i, i + 1);
                                 }
                             });
-                            app.selected_layer_idx = Some(i + 1);
+                            app.selection.selected_layer_idx = Some(i + 1);
                             crate::core::frame_cache::bump_version();
                         }
                         ui.close_menu();
@@ -880,7 +880,7 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
                                     comp.layers.swap(i - 1, i);
                                 }
                             });
-                            app.selected_layer_idx = Some(i - 1);
+                            app.selection.selected_layer_idx = Some(i - 1);
                             crate::core::frame_cache::bump_version();
                         }
                         ui.close_menu();
@@ -893,14 +893,14 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
                                 comp.layers.insert(0, l);
                             }
                         });
-                        app.selected_layer_idx = if i < len { Some(0) } else { app.selected_layer_idx };
+                        app.selection.selected_layer_idx = if i < len { Some(0) } else { app.selection.selected_layer_idx };
                         crate::core::frame_cache::bump_version();
                         ui.close_menu();
                     }
                 });
                 ui.menu_button("Create", |ui| {
                     if ui.button("🔤 Create Shapes from Text").on_hover_text("Convert text characters into editable vector shape layer").clicked() {
-                        if let Some(idx) = app.selected_layer_idx {
+                        if let Some(idx) = app.selection.selected_layer_idx {
                             let mut temp_proj = app.history.current().clone();
                             let comp = temp_proj.active_composition_mut();
                             if let Some(layer) = comp.layers.get(idx) {
@@ -940,7 +940,7 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
                         ui.close_menu();
                     }
                     if ui.button("🎭 Create Masks from Text").on_hover_text("Convert text outline into vector mask").clicked() {
-                        if let Some(idx) = app.selected_layer_idx {
+                        if let Some(idx) = app.selection.selected_layer_idx {
                             let mut temp_proj = app.history.current().clone();
                             let comp = temp_proj.active_composition_mut();
                             if let Some(layer) = comp.layers.get_mut(idx) {
@@ -989,7 +989,7 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
                 ui.separator();
                 if ui.button("🔤 Create Shapes from Text").on_hover_text("Decompose selected Text layer into animatable vector Bezier Shape paths").clicked() {
                     let mut created = false;
-                    let selected_idx = app.selected_layer_idx;
+                    let selected_idx = app.selection.selected_layer_idx;
                     app.modify_project(|p| {
                         let comp = p.active_composition_mut();
                         if let Some(idx) = selected_idx {
@@ -1208,7 +1208,7 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
                     if ui.button("🎵 Convert Audio to Keyframes").on_hover_text("Extract RMS amplitude from audio layer into Slider Controls").clicked() {
                         let mut audio_source: Option<String> = None;
                         let comp = app.history.current().active_composition();
-                        if let Some(idx) = app.selected_layer_idx {
+                        if let Some(idx) = app.selection.selected_layer_idx {
                             if let Some(l) = comp.layers.get(idx) {
                                 if let crate::core::timeline::LayerType::Audio { path, .. } = &l.layer_type {
                                     audio_source = Some(path.clone());
@@ -1235,7 +1235,7 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
                     if ui.button("🎧 Convert Multi-Band Audio (Bass/Mid/Treble)").on_hover_text("Extract frequency-separated amplitude (Master, Bass, Mid, Treble) into Sliders").clicked() {
                         let mut audio_source: Option<String> = None;
                         let comp = app.history.current().active_composition();
-                        if let Some(idx) = app.selected_layer_idx {
+                        if let Some(idx) = app.selection.selected_layer_idx {
                             if let Some(l) = comp.layers.get(idx) {
                                 if let crate::core::timeline::LayerType::Audio { path, .. } = &l.layer_type {
                                     audio_source = Some(path.clone());
@@ -1260,7 +1260,7 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
                         ui.close_menu();
                     }
                     if ui.button("📈 Exponential Scale").on_hover_text("Convert linear scale keyframes into exponential logarithmic zoom").clicked() {
-                        if let Some(idx) = app.selected_layer_idx {
+                        if let Some(idx) = app.selection.selected_layer_idx {
                             let mut temp_proj = app.history.current().clone();
                             let comp = temp_proj.active_composition_mut();
                             if let Some(layer) = comp.layers.get_mut(idx) {
@@ -1292,7 +1292,7 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
                         ui.close_menu();
                     }
                     if ui.button("⏪ Time-Reverse Keyframes").clicked() {
-                        if let Some(idx) = app.selected_layer_idx {
+                        if let Some(idx) = app.selection.selected_layer_idx {
                             let mut temp_proj = app.history.current().clone();
                             let comp = temp_proj.active_composition_mut();
                             if let Some(layer) = comp.layers.get_mut(idx) {
@@ -1317,7 +1317,7 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
                     }
                     ui.separator();
                     if ui.add(egui::Button::new("Easy Ease").shortcut_text("F9")).clicked() {
-                        if let Some(idx) = app.selected_layer_idx {
+                        if let Some(idx) = app.selection.selected_layer_idx {
                             app.modify_project(move |p| {
                                 if let Some(l) = p.active_composition_mut().layers.get_mut(idx) {
                                     l.easy_ease_transform();
@@ -1420,22 +1420,22 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
                 }
                 ui.menu_button("Workspaces", |ui| {
                     if ui.button("Standard").clicked() {
-                        app.right_tab_idx = 0;
+                        app.ui_tabs.right_tab_idx = 0;
                         app.show_graph_editor = false;
                         ui.close_menu();
                     }
                     if ui.button("Motion Graphics").clicked() {
-                        app.right_tab_idx = 0;
+                        app.ui_tabs.right_tab_idx = 0;
                         app.show_graph_editor = true;
                         ui.close_menu();
                     }
                     if ui.button("VFX & Color").clicked() {
-                        app.right_tab_idx = 30; // Effect Controls
+                        app.ui_tabs.right_tab_idx = 30; // Effect Controls
                         app.show_graph_editor = false;
                         ui.close_menu();
                     }
                     if ui.button("Audio Editing").clicked() {
-                        app.right_tab_idx = 7; // Audio Panel
+                        app.ui_tabs.right_tab_idx = 7; // Audio Panel
                         app.show_graph_editor = false;
                         ui.close_menu();
                     }
@@ -1695,7 +1695,7 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
 }
 
 fn apply_effect_by_name(app: &mut crate::AfterEffectsApp, effect_name: &str) {
-    if let Some(idx) = app.selected_layer_idx {
+    if let Some(idx) = app.selection.selected_layer_idx {
         let comp = app.history.current_mut().active_composition_mut();
         if idx < comp.layers.len() {
             let layer = &mut comp.layers[idx];

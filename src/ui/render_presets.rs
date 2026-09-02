@@ -1,6 +1,6 @@
-use eframe::egui;
-use crate::AfterEffectsApp;
 use crate::ui::theme::colors;
+use crate::AfterEffectsApp;
+use eframe::egui;
 
 /// Output-module presets bound to the real export pipeline
 /// (`app.export_format_preset` + the shared codec selector).
@@ -16,7 +16,8 @@ pub fn draw_render_presets(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
         (2, 0, "PNG Image Sequence (RGBA)"),
     ];
 
-    let current = PRESETS.iter()
+    let current = PRESETS
+        .iter()
         .position(|(f, c, _)| *f == app.export_format_preset && *c == app.export_codec_idx)
         .unwrap_or(1);
     let mut selected = current;
@@ -36,7 +37,9 @@ pub fn draw_render_presets(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
 
     ui.add_space(6.0);
     let target = app.history.current().active_composition().name.clone();
-    if !app.render_queue_items.contains(&target) && custom_add_button(ui, "＋ Add Active Comp to Queue") {
+    if !app.render_queue_items.contains(&target)
+        && custom_add_button(ui, "＋ Add Active Comp to Queue")
+    {
         app.render_queue_items.push(target);
     }
     ui.weak(

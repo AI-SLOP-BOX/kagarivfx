@@ -1,6 +1,6 @@
+use crate::ui::theme::colors;
 use eframe::egui;
 use std::time::{Duration, Instant};
-use crate::ui::theme::colors;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ToastLevel {
@@ -63,7 +63,8 @@ impl ToastManager {
 
     pub fn draw(&mut self, ctx: &egui::Context) {
         let now = Instant::now();
-        self.notifications.retain(|t| now.duration_since(t.created_at) < t.duration);
+        self.notifications
+            .retain(|t| now.duration_since(t.created_at) < t.duration);
 
         if self.notifications.is_empty() {
             return;
@@ -77,7 +78,8 @@ impl ToastManager {
                     for toast in self.notifications.iter().rev() {
                         let accent = toast_color(&toast.level);
                         let elapsed = now.duration_since(toast.created_at).as_secs_f32();
-                        let remaining_ratio = (1.0 - elapsed / toast.duration.as_secs_f32()).clamp(0.0, 1.0);
+                        let remaining_ratio =
+                            (1.0 - elapsed / toast.duration.as_secs_f32()).clamp(0.0, 1.0);
 
                         egui::Frame::window(ui.style())
                             .fill(colors::BG_DEEPEST)
@@ -93,10 +95,17 @@ impl ToastManager {
                                         ToastLevel::Error => "❌",
                                     };
                                     ui.label(egui::RichText::new(icon).strong().color(accent));
-                                    ui.label(egui::RichText::new(&toast.message).small().color(colors::TEXT_ON_ACCENT));
+                                    ui.label(
+                                        egui::RichText::new(&toast.message)
+                                            .small()
+                                            .color(colors::TEXT_ON_ACCENT),
+                                    );
                                 });
                                 // Progress bar line
-                                let (rect, _) = ui.allocate_exact_size(egui::vec2(ui.available_width() * remaining_ratio, 2.0), egui::Sense::hover());
+                                let (rect, _) = ui.allocate_exact_size(
+                                    egui::vec2(ui.available_width() * remaining_ratio, 2.0),
+                                    egui::Sense::hover(),
+                                );
                                 ui.painter().rect_filled(rect, 1.0, accent);
                             });
                         ui.add_space(6.0);

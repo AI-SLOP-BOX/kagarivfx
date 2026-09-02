@@ -5472,7 +5472,7 @@ pub fn draw_particle_emitter_controls(app: &mut AfterEffectsApp, ui: &mut egui::
     use crate::core::particle_system::{EmitterShape, ParticleEmitter};
     use crate::core::timeline::LayerType;
 
-    let Some(idx) = app.selected_layer_idx else {
+    let Some(idx) = app.selection.selected_layer_idx else {
         return;
     };
     let is_particle = matches!(

@@ -47,7 +47,11 @@ pub fn compute_draw_layout_pan(
 }
 
 pub fn compute_draw_layout(rect: egui::Rect, aspect: f32, mag_ratio: f32) -> (f32, f32, f32, f32) {
-    let safe_aspect = if aspect.is_nan() || aspect <= 0.001 { 1.0 } else { aspect };
+    let safe_aspect = if aspect.is_nan() || aspect <= 0.001 {
+        1.0
+    } else {
+        aspect
+    };
     let mut fit_w = rect.width();
     let mut fit_h = fit_w / safe_aspect;
     if fit_h > rect.height() {

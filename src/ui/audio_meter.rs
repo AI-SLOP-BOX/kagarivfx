@@ -1,22 +1,23 @@
-use eframe::egui;
-use crate::AfterEffectsApp;
 use crate::ui::theme::colors;
+use crate::AfterEffectsApp;
+use eframe::egui;
 
 pub fn draw_content(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
     ui.vertical_centered(|ui| {
         ui.heading("MASTER VU");
         ui.separator();
 
-        let is_playing = app.is_playing;
-        let current_frame = app.current_frame;
+        let is_playing = app.playback.is_playing;
+        let current_frame = app.playback.current_frame;
 
-        let vol = app.master_volume;
+        let vol = app.playback.master_volume;
 
         // Calculate simulated peak levels based on playing state & frame phase
         let (left_peak, right_peak) = if is_playing {
             let t = current_frame as f32 * 0.2;
             let l = ((t.sin().abs() * 0.7 + (t * 2.3).cos().abs() * 0.3) * vol).clamp(0.05, 0.98);
-            let r = (((t + 0.8).sin().abs() * 0.65 + ((t + 0.8) * 1.9).cos().abs() * 0.35) * vol).clamp(0.05, 0.95);
+            let r = (((t + 0.8).sin().abs() * 0.65 + ((t + 0.8) * 1.9).cos().abs() * 0.35) * vol)
+                .clamp(0.05, 0.95);
             (l, r)
         } else {
             (0.02 * vol, 0.02 * vol)
@@ -37,12 +38,18 @@ pub fn draw_content(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
 
         ui.add_space(8.0);
         ui.separator();
-        ui.label(egui::RichText::new("32-Band FFT Spectrum").small().strong().color(colors::ACCENT_CYAN));
+        ui.label(
+            egui::RichText::new("32-Band FFT Spectrum")
+                .small()
+                .strong()
+                .color(colors::ACCENT_CYAN),
+        );
 
         // 32-Band Live Equalizer Bars
         let spectrum_w = 180.0;
         let spectrum_h = 45.0;
-        let (s_rect, _) = ui.allocate_exact_size(egui::vec2(spectrum_w, spectrum_h), egui::Sense::hover());
+        let (s_rect, _) =
+            ui.allocate_exact_size(egui::vec2(spectrum_w, spectrum_h), egui::Sense::hover());
         ui.painter().rect_filled(s_rect, 2.0, colors::BG_DEEPEST);
 
         let bands = 32;
@@ -68,7 +75,8 @@ pub fn draw_content(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
                 colors::ACCENT_GREEN
             };
 
-            let b_rect = egui::Rect::from_min_size(egui::pos2(bx, by), egui::vec2(bar_w.max(1.0), bar_h));
+            let b_rect =
+                egui::Rect::from_min_size(egui::pos2(bx, by), egui::vec2(bar_w.max(1.0), bar_h));
             ui.painter().rect_filled(b_rect, 0.5, bar_color);
         }
 
@@ -77,8 +85,8 @@ pub fn draw_content(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
 
         // Master Volume Slider
         ui.label(egui::RichText::new("Master").small().strong());
-        ui.add(egui::Slider::new(&mut app.master_volume, 0.0..=1.5).show_value(false));
-        ui.small(format!("{:.0}%", app.master_volume * 100.0));
+        ui.add(egui::Slider::new(&mut app.playback.master_volume, 0.0..=1.5).show_value(false));
+        ui.small(format!("{:.0}%", app.playback.master_volume * 100.0));
     });
 }
 
@@ -109,7 +117,11 @@ fn draw_vu_channel(ui: &mut egui::Ui, label: &str, peak: f32, width: f32, height
             colors::BG_DEEPEST
         };
         painter.rect_filled(clip_rect, 1.0, clip_color);
-        painter.rect_stroke(clip_rect, 1.0, egui::Stroke::new(1.0, colors::BORDER_MEDIUM));
+        painter.rect_stroke(
+            clip_rect,
+            1.0,
+            egui::Stroke::new(1.0, colors::BORDER_MEDIUM),
+        );
 
         painter.rect_stroke(rect, 2.0, egui::Stroke::new(1.0, colors::BORDER_MEDIUM));
 
@@ -123,7 +135,7 @@ fn draw_vu_channel(ui: &mut egui::Ui, label: &str, peak: f32, width: f32, height
         for i in 0..segments {
             let seg_idx_from_bottom = i;
             let ratio = seg_idx_from_bottom as f32 / segments as f32;
-            
+
             let color = if ratio < 0.70 {
                 colors::ACCENT_GREEN
             } else if ratio < 0.88 {

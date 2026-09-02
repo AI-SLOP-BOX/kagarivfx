@@ -1,6 +1,6 @@
-use eframe::egui;
-use crate::AfterEffectsApp;
 use crate::ui::theme::colors;
+use crate::AfterEffectsApp;
+use eframe::egui;
 
 pub fn draw_font_picker(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
     ui.heading("Typography & Faux Font Switches");
@@ -15,18 +15,19 @@ pub fn draw_font_picker(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
 
     // Current family = selected text layer's formatting, else first available
     let current_family = app
-        .selected_layer_idx
+        .selection.selected_layer_idx
         .and_then(|idx| {
             let comp = app.history.current().active_composition();
-            comp.layers.get(idx).and_then(|l| {
-                l.text_formatting
-                    .as_ref()
-                    .map(|tf| tf.font_family.clone())
-            })
+            comp.layers
+                .get(idx)
+                .and_then(|l| l.text_formatting.as_ref().map(|tf| tf.font_family.clone()))
         })
         .unwrap_or_else(|| families[0].clone());
 
-    let mut selected = families.iter().position(|f| *f == current_family).unwrap_or(0);
+    let mut selected = families
+        .iter()
+        .position(|f| *f == current_family)
+        .unwrap_or(0);
     ui.label("Font Family:");
     egui::ComboBox::from_id_salt("font_family_combo")
         .selected_text(families.get(selected).map(|s| s.as_str()).unwrap_or("?"))
@@ -39,8 +40,12 @@ pub fn draw_font_picker(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
 
     ui.add_space(6.0);
     ui.horizontal(|ui| {
-        if ui.button("Apply to Selected Text").on_hover_text("Writes the family into the selected text layer's formatting").clicked() {
-            if let Some(idx) = app.selected_layer_idx {
+        if ui
+            .button("Apply to Selected Text")
+            .on_hover_text("Writes the family into the selected text layer's formatting")
+            .clicked()
+        {
+            if let Some(idx) = app.selection.selected_layer_idx {
                 let fam = families[selected].clone();
                 {
                     let comp = app.history.current_mut().active_composition_mut();
@@ -82,14 +87,23 @@ pub fn draw_font_picker(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
     ui.separator();
     ui.label("Preview:");
     let base = families.get(selected).cloned().unwrap_or_default();
-    let sample = if app.faux_font_switches.2 { "AFTER EFFECTS STUDIO" } else { "After Effects Studio" };
-    ui.add(
-        egui::Label::new(
-            egui::RichText::new(sample)
-                .size(22.0)
-                .color(colors::TEXT_PRIMARY),
-        ),
-    );
-    ui.monospace(format!("family: {} / weight: {}", base,
-        if app.faux_font_switches.0 { "Bold" } else { "Regular" }));
+    let sample = if app.faux_font_switches.2 {
+        "AFTER EFFECTS STUDIO"
+    } else {
+        "After Effects Studio"
+    };
+    ui.add(egui::Label::new(
+        egui::RichText::new(sample)
+            .size(22.0)
+            .color(colors::TEXT_PRIMARY),
+    ));
+    ui.monospace(format!(
+        "family: {} / weight: {}",
+        base,
+        if app.faux_font_switches.0 {
+            "Bold"
+        } else {
+            "Regular"
+        }
+    ));
 }

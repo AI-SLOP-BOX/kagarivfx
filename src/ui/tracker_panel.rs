@@ -7,7 +7,7 @@ pub fn draw_tracker_panel(app: &mut AfterEffectsApp, ui: &mut egui::Ui, current_
     ui.heading("Tracker");
     ui.separator();
 
-    let sel_idx = app.selected_layer_idx;
+    let sel_idx = app.selection.selected_layer_idx;
     let (layer_name, tracker_count, has_media, layer_pos_at_head, _masks_len) = {
         let comp = app.history.current().active_composition();
         match sel_idx.and_then(|i| comp.layers.get(i)) {
@@ -113,7 +113,7 @@ pub fn draw_tracker_panel(app: &mut AfterEffectsApp, ui: &mut egui::Ui, current_
 
             ui.horizontal(|ui| {
                 if custom_widgets::ae_button(ui, "Analyze Forward (Work Area)").on_hover_text("Track the feature through the work area using real SAD matching + subpixel refinement").clicked() {
-                    let wa_out = app.work_area_out.unwrap_or_else(|| {
+                    let wa_out = app.playback.work_area_out.unwrap_or_else(|| {
                         app.history.current().active_composition().duration_frames.saturating_sub(1)
                     });
                     let start = current_frame.max(1).saturating_sub(1);
@@ -134,7 +134,7 @@ pub fn draw_tracker_panel(app: &mut AfterEffectsApp, ui: &mut egui::Ui, current_
                     }
                 }
                 if custom_widgets::ae_button_accent(ui, "🌊 Markerless Optical Flow").on_hover_text("Track the selected point with dense forward/backward optical flow and confidence filtering").clicked() {
-                    let wa_out = app.work_area_out.unwrap_or_else(|| {
+                    let wa_out = app.playback.work_area_out.unwrap_or_else(|| {
                         app.history.current().active_composition().duration_frames.saturating_sub(1)
                     });
                     let start = current_frame;
@@ -166,7 +166,7 @@ pub fn draw_tracker_panel(app: &mut AfterEffectsApp, ui: &mut egui::Ui, current_
                 .on_hover_text("Estimate and stabilize a 2D humanoid pose from the work area")
                 .clicked()
             {
-                let wa_out = app.work_area_out.unwrap_or_else(|| {
+                let wa_out = app.playback.work_area_out.unwrap_or_else(|| {
                     app.history
                         .current()
                         .active_composition()
@@ -410,7 +410,7 @@ pub fn draw_tracker_panel(app: &mut AfterEffectsApp, ui: &mut egui::Ui, current_
                 .on_disabled_hover_text("Add at least 4 tracker points first")
                 .clicked()
             {
-                let wa_out = app.work_area_out.unwrap_or_else(|| {
+                let wa_out = app.playback.work_area_out.unwrap_or_else(|| {
                     app.history
                         .current()
                         .active_composition()

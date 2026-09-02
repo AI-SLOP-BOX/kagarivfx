@@ -43,7 +43,7 @@ pub fn draw_render_queue_panel(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
             // export; the next starts automatically when the previous finishes.
             app.batch_queue = app.render_queue_items.clone();
             app.batch_idx = 0;
-            app.show_export_dialog = true;
+            app.export.show_export_dialog = true;
             let first = app.batch_queue[0].clone();
             crate::ui::export_dialog::start_comp_export(app, ui.ctx(), &first);
         }
@@ -57,7 +57,7 @@ pub fn draw_render_queue_panel(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
         if custom_widgets::ae_button(ui, "Clear Queue")
             .on_hover_text("Remove all items from the queue")
             .clicked()
-            && !app.is_exporting
+            && !app.export.is_exporting
         {
             app.render_queue_items.clear();
         }
@@ -102,7 +102,7 @@ pub fn draw_render_queue_panel(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
                         if ui.selectable_label(is_active, label).clicked() && !is_active {
                             switch_comp = Some(q_name.clone());
                         }
-                        if !app.is_exporting && ui.small_button("✖").clicked() {
+                        if !app.export.is_exporting && ui.small_button("✖").clicked() {
                             remove_idx = Some(idx);
                         }
                     });
@@ -126,9 +126,9 @@ pub fn draw_render_queue_panel(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
 
     // Frame range derived from the work area when one is set.
     let comp_duration = app.history.current().active_composition().duration_frames;
-    let wa_in = app.work_area_in.unwrap_or(0);
+    let wa_in = app.playback.work_area_in.unwrap_or(0);
     let wa_out = app
-        .work_area_out
+        .playback.work_area_out
         .unwrap_or(comp_duration.saturating_sub(1))
         .min(comp_duration.saturating_sub(1));
     let range_frames = wa_out.saturating_sub(wa_in).saturating_add(1);
@@ -142,7 +142,7 @@ pub fn draw_render_queue_panel(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
         .stroke(egui::Stroke::new(1.0, colors::BORDER_SUBTLE));
 
     frame.show(ui, |ui| {
-        let (status_text, status_color) = if app.is_exporting {
+        let (status_text, status_color) = if app.export.is_exporting {
             ("Rendering", colors::ACCENT_GREEN)
         } else {
             ("Queued", egui::Color32::YELLOW)
@@ -194,7 +194,7 @@ pub fn draw_render_queue_panel(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
                 {
                     let mut edit = ui.ctx().data_mut(|d| {
                         d.get_temp_mut_or_insert_with(path_id, || {
-                            std::sync::Arc::new(Mutex::new(app.export_output_path.clone()))
+                            std::sync::Arc::new(Mutex::new(app.export.export_output_path.clone()))
                         })
                         .lock()
                         .map(|g| g.clone())
@@ -213,7 +213,7 @@ pub fn draw_render_queue_panel(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
                                 *g = edit.clone();
                             }
                         });
-                        app.export_output_path = edit;
+                        app.export.export_output_path = edit;
                     }
                 }
                 ui.end_row();
@@ -251,8 +251,8 @@ pub fn draw_render_queue_panel(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
                         .small(),
                     );
                     if changed {
-                        app.work_area_in = Some(in_v.max(0) as u32);
-                        app.work_area_out = Some(out_v.max(in_v.max(0)) as u32);
+                        app.playback.work_area_in = Some(in_v.max(0) as u32);
+                        app.playback.work_area_out = Some(out_v.max(in_v.max(0)) as u32);
                     }
                 });
                 ui.end_row();
@@ -260,13 +260,13 @@ pub fn draw_render_queue_panel(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
 
         ui.add_space(6.0);
 
-        if app.is_exporting {
+        if app.export.is_exporting {
             // Track elapsed time for ETA estimation.
             let start: Instant = ui.ctx().data_mut(|d| {
                 *d.get_temp_mut_or_insert_with(egui::Id::new(START_TIME_ID), Instant::now)
             });
 
-            let progress = app.export_progress.clamp(0.0, 1.0);
+            let progress = app.export.export_progress.clamp(0.0, 1.0);
             let elapsed = start.elapsed().as_secs_f64();
             let eta_secs = if progress > 0.01 {
                 elapsed / progress as f64 * (1.0 - progress as f64)
@@ -289,7 +289,7 @@ pub fn draw_render_queue_panel(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
                         .small()
                         .color(egui::Color32::GRAY),
                 );
-                if let Some(status) = &app.export_status {
+                if let Some(status) = &app.export.export_status {
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         ui.label(
                             egui::RichText::new(status)

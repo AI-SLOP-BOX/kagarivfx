@@ -1,6 +1,6 @@
-use eframe::egui;
-use crate::AfterEffectsApp;
 use crate::core::timeline::{Layer, LayerType, ProjectItemType};
+use crate::AfterEffectsApp;
+use eframe::egui;
 
 /// Local asset library: quick-create solids/text from swatches & styles, and
 /// browse the project's imported assets. (Replaces the fake "Creative Cloud"
@@ -27,10 +27,17 @@ pub fn draw_cc_libraries(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
                     ([0.95, 0.95, 0.95, 1.0], "Off White"),
                 ];
                 for (color, name) in swatches {
-                    let (rect, resp) = ui.allocate_exact_size(egui::vec2(28.0, 28.0), egui::Sense::click());
-                    ui.painter().rect_filled(rect, 3.0, egui::Color32::from_rgb(
-                        (color[0] * 255.0) as u8, (color[1] * 255.0) as u8, (color[2] * 255.0) as u8,
-                    ));
+                    let (rect, resp) =
+                        ui.allocate_exact_size(egui::vec2(28.0, 28.0), egui::Sense::click());
+                    ui.painter().rect_filled(
+                        rect,
+                        3.0,
+                        egui::Color32::from_rgb(
+                            (color[0] * 255.0) as u8,
+                            (color[1] * 255.0) as u8,
+                            (color[2] * 255.0) as u8,
+                        ),
+                    );
                     if resp.clicked() {
                         let lname = format!("Solid: {}", name);
                         app.modify_project(|p| {

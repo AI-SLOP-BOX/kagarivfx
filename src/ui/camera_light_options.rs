@@ -1,9 +1,12 @@
-use eframe::egui;
-use crate::AfterEffectsApp;
+use crate::core::keyframe::{InterpolationType, Keyframe};
+use crate::core::property::Animatable;
 use crate::core::timeline::LightType;
 use crate::ui::theme::colors;
+use crate::AfterEffectsApp;
+use eframe::egui;
 
 pub fn draw_camera_light_options(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
+    let current_frame = app.playback.current_frame;
     let comp = app.history.current_mut().active_composition_mut();
     let mut changed = false;
 
@@ -14,10 +17,18 @@ pub fn draw_camera_light_options(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
         // Multi-camera switching: list scene cameras; active one wins.
         if !comp.cameras.is_empty() {
             ui.horizontal(|ui| {
-                ui.label(egui::RichText::new("Cameras").small().color(colors::TEXT_SECONDARY));
-                if ui.small_button("+ Add").on_hover_text("Add another camera to the scene").clicked() {
+                ui.label(
+                    egui::RichText::new("Cameras")
+                        .small()
+                        .color(colors::TEXT_SECONDARY),
+                );
+                if ui
+                    .small_button("+ Add")
+                    .on_hover_text("Add another camera to the scene")
+                    .clicked()
+                {
                     let next_name = format!("Camera {}", comp.cameras.len() + 1);
-                    let fov = comp.active_camera.fov_degrees;
+                    let fov = comp.resolve_camera().fov_degrees;
                     let c = crate::core::timeline::Camera3D {
                         name: next_name,
                         active: false,
@@ -35,7 +46,11 @@ pub fn draw_camera_light_options(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
                     if ui.selectable_label(c.active, &c.name).clicked() && !c.active {
                         activate_idx = Some(i);
                     }
-                    if ui.small_button("✕").on_hover_text("Remove this camera").clicked() {
+                    if ui
+                        .small_button("✕")
+                        .on_hover_text("Remove this camera")
+                        .clicked()
+                    {
                         remove_idx = Some(i);
                     }
                 });
@@ -53,30 +68,69 @@ pub fn draw_camera_light_options(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
         let cam = comp.resolve_camera_mut();
 
         ui.horizontal(|ui| {
-            ui.label(egui::RichText::new("FOV").small().color(colors::TEXT_SECONDARY));
+            ui.label(
+                egui::RichText::new("FOV")
+                    .small()
+                    .color(colors::TEXT_SECONDARY),
+            );
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 ui.label(egui::RichText::new("°").small().color(colors::TEXT_MUTED));
-                if ui.add(egui::DragValue::new(&mut cam.fov_degrees).speed(1.0).range(1.0..=179.0)).changed() {
+                let mut value = cam.fov_at(current_frame);
+                if ui
+                    .add(
+                        egui::DragValue::new(&mut value)
+                            .speed(1.0)
+                            .range(1.0..=179.0),
+                    )
+                    .changed()
+                {
+                    cam.set_fov_at(current_frame, value);
                     changed = true;
                 }
             });
         });
 
         ui.horizontal(|ui| {
-            ui.label(egui::RichText::new("Focus Distance").small().color(colors::TEXT_SECONDARY));
+            ui.label(
+                egui::RichText::new("Focus Distance")
+                    .small()
+                    .color(colors::TEXT_SECONDARY),
+            );
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 ui.label(egui::RichText::new("px").small().color(colors::TEXT_MUTED));
-                if ui.add(egui::DragValue::new(&mut cam.focus_distance).speed(1.0).range(0.0..=100000.0)).changed() {
+                let mut value = cam.focus_distance_at(current_frame);
+                if ui
+                    .add(
+                        egui::DragValue::new(&mut value)
+                            .speed(1.0)
+                            .range(0.0..=100000.0),
+                    )
+                    .changed()
+                {
+                    cam.set_focus_distance_at(current_frame, value);
                     changed = true;
                 }
             });
         });
 
         ui.horizontal(|ui| {
-            ui.label(egui::RichText::new("Aperture").small().color(colors::TEXT_SECONDARY));
+            ui.label(
+                egui::RichText::new("Aperture")
+                    .small()
+                    .color(colors::TEXT_SECONDARY),
+            );
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 ui.label(egui::RichText::new("px").small().color(colors::TEXT_MUTED));
-                if ui.add(egui::DragValue::new(&mut cam.aperture).speed(0.1).range(0.0..=500.0)).changed() {
+                let mut value = cam.aperture_at(current_frame);
+                if ui
+                    .add(
+                        egui::DragValue::new(&mut value)
+                            .speed(0.1)
+                            .range(0.0..=500.0),
+                    )
+                    .changed()
+                {
+                    cam.set_aperture_at(current_frame, value);
                     changed = true;
                 }
             });
@@ -85,23 +139,54 @@ pub fn draw_camera_light_options(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
         ui.add_space(4.0);
         crate::ui::custom_widgets::ae_section_header(ui, "Depth of Field", "🎯");
 
-        if ui.checkbox(&mut cam.dof_enabled, "Enable DOF").clicked() {
+        let mut dof_enabled = cam.dof_enabled_at(current_frame);
+        if ui.checkbox(&mut dof_enabled, "Enable DOF").clicked() {
+            cam.set_dof_enabled_at(current_frame, dof_enabled);
             changed = true;
         }
 
-        if cam.dof_enabled {
+        if cam.dof_enabled_at(current_frame) {
             ui.horizontal(|ui| {
-                ui.label(egui::RichText::new("Max Blur").small().color(colors::TEXT_SECONDARY));
+                ui.label(
+                    egui::RichText::new("Max Blur")
+                        .small()
+                        .color(colors::TEXT_SECONDARY),
+                );
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     ui.label(egui::RichText::new("px").small().color(colors::TEXT_MUTED));
-                    if ui.add(egui::DragValue::new(&mut cam.dof_max_blur).speed(0.5).range(1.0..=64.0)).changed() {
+                    let mut value = cam.dof_max_blur_at(current_frame);
+                    let changed_value = ui
+                        .add(
+                            egui::DragValue::new(&mut value)
+                                .speed(0.5)
+                                .range(1.0..=64.0),
+                        )
+                        .changed();
+                    let insert_key = ui.small_button("◆").clicked();
+                    let remove_key = ui.small_button("×").clicked();
+                    if remove_key {
+                        if let Some(crate::core::property::Animatable::Animated(keys)) =
+                            &mut cam.dof_max_blur_animation
+                        {
+                            keys.retain(|key| key.frame != current_frame);
+                            if keys.is_empty() {
+                                cam.dof_max_blur_animation = None;
+                            }
+                        }
+                        changed = true;
+                    } else if changed_value || insert_key {
+                        cam.set_dof_max_blur_at(current_frame, value);
                         changed = true;
                     }
                 });
             });
 
             ui.horizontal(|ui| {
-                ui.label(egui::RichText::new("Iris Sides").small().color(colors::TEXT_SECONDARY));
+                ui.label(
+                    egui::RichText::new("Iris Sides")
+                        .small()
+                        .color(colors::TEXT_SECONDARY),
+                );
                 egui::ComboBox::from_id_salt("iris_sides")
                     .selected_text(match cam.dof_iris_sides {
                         0 => "Circle",
@@ -112,11 +197,36 @@ pub fn draw_camera_light_options(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
                         _ => "Circle",
                     })
                     .show_ui(ui, |ui| {
-                        if ui.selectable_value(&mut cam.dof_iris_sides, 0, "Circle").clicked() { changed = true; }
-                        if ui.selectable_value(&mut cam.dof_iris_sides, 3, "Triangle").clicked() { changed = true; }
-                        if ui.selectable_value(&mut cam.dof_iris_sides, 5, "Pentagon").clicked() { changed = true; }
-                        if ui.selectable_value(&mut cam.dof_iris_sides, 6, "Hexagon").clicked() { changed = true; }
-                        if ui.selectable_value(&mut cam.dof_iris_sides, 8, "Octagon").clicked() { changed = true; }
+                        if ui
+                            .selectable_value(&mut cam.dof_iris_sides, 0, "Circle")
+                            .clicked()
+                        {
+                            changed = true;
+                        }
+                        if ui
+                            .selectable_value(&mut cam.dof_iris_sides, 3, "Triangle")
+                            .clicked()
+                        {
+                            changed = true;
+                        }
+                        if ui
+                            .selectable_value(&mut cam.dof_iris_sides, 5, "Pentagon")
+                            .clicked()
+                        {
+                            changed = true;
+                        }
+                        if ui
+                            .selectable_value(&mut cam.dof_iris_sides, 6, "Hexagon")
+                            .clicked()
+                        {
+                            changed = true;
+                        }
+                        if ui
+                            .selectable_value(&mut cam.dof_iris_sides, 8, "Octagon")
+                            .clicked()
+                        {
+                            changed = true;
+                        }
                     });
             });
         }
@@ -127,7 +237,11 @@ pub fn draw_camera_light_options(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
 
         let light_count = comp.lights.len();
         if light_count == 0 {
-            ui.label(egui::RichText::new("No lights in composition.").small().color(colors::TEXT_MUTED));
+            ui.label(
+                egui::RichText::new("No lights in composition.")
+                    .small()
+                    .color(colors::TEXT_MUTED),
+            );
             if crate::ui::custom_widgets::ae_button_accent(ui, "+ Add Light").clicked() {
                 comp.lights.push(crate::core::timeline::Light3D::default());
                 changed = true;
@@ -136,14 +250,25 @@ pub fn draw_camera_light_options(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
             for (li, light) in comp.lights.iter_mut().enumerate() {
                 ui.collapsing(format!("{} {}", light.name, li + 1), |ui| {
                     ui.horizontal(|ui| {
-                        ui.label(egui::RichText::new("Name").small().color(colors::TEXT_SECONDARY));
-                        if ui.add(egui::TextEdit::singleline(&mut light.name).desired_width(120.0)).changed() {
+                        ui.label(
+                            egui::RichText::new("Name")
+                                .small()
+                                .color(colors::TEXT_SECONDARY),
+                        );
+                        if ui
+                            .add(egui::TextEdit::singleline(&mut light.name).desired_width(120.0))
+                            .changed()
+                        {
                             changed = true;
                         }
                     });
 
                     ui.horizontal(|ui| {
-                        ui.label(egui::RichText::new("Type").small().color(colors::TEXT_SECONDARY));
+                        ui.label(
+                            egui::RichText::new("Type")
+                                .small()
+                                .color(colors::TEXT_SECONDARY),
+                        );
                         let mut type_idx = match &light.light_type {
                             LightType::Ambient => 0,
                             LightType::Point => 1,
@@ -167,7 +292,10 @@ pub fn draw_camera_light_options(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
                                     changed = true;
                                 }
                                 if ui.selectable_value(&mut type_idx, 2, "Spot").clicked() {
-                                    light.light_type = LightType::Spot { cone_angle_deg: 90.0, cone_feather_pct: 50.0 };
+                                    light.light_type = LightType::Spot {
+                                        cone_angle_deg: 90.0,
+                                        cone_feather_pct: 50.0,
+                                    };
                                     changed = true;
                                 }
                                 if ui.selectable_value(&mut type_idx, 3, "Parallel").clicked() {
@@ -177,43 +305,82 @@ pub fn draw_camera_light_options(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
                             });
                     });
 
-                    if let LightType::Spot { ref mut cone_angle_deg, ref mut cone_feather_pct } = light.light_type {
+                    if let LightType::Spot {
+                        ref mut cone_angle_deg,
+                        ref mut cone_feather_pct,
+                    } = light.light_type
+                    {
                         ui.horizontal(|ui| {
-                            ui.label(egui::RichText::new("Cone Angle").small().color(colors::TEXT_SECONDARY));
-                            if ui.add(egui::Slider::new(cone_angle_deg, 0.0..=180.0).suffix("°")).changed() {
+                            ui.label(
+                                egui::RichText::new("Cone Angle")
+                                    .small()
+                                    .color(colors::TEXT_SECONDARY),
+                            );
+                            if ui
+                                .add(egui::Slider::new(cone_angle_deg, 0.0..=180.0).suffix("°"))
+                                .changed()
+                            {
                                 changed = true;
                             }
                         });
                         ui.horizontal(|ui| {
-                            ui.label(egui::RichText::new("Cone Feather").small().color(colors::TEXT_SECONDARY));
-                            if ui.add(egui::Slider::new(cone_feather_pct, 0.0..=100.0).suffix("%")).changed() {
+                            ui.label(
+                                egui::RichText::new("Cone Feather")
+                                    .small()
+                                    .color(colors::TEXT_SECONDARY),
+                            );
+                            if ui
+                                .add(egui::Slider::new(cone_feather_pct, 0.0..=100.0).suffix("%"))
+                                .changed()
+                            {
                                 changed = true;
                             }
                         });
                     }
 
                     ui.horizontal(|ui| {
-                        ui.label(egui::RichText::new("Intensity").small().color(colors::TEXT_SECONDARY));
-                        if ui.add(egui::Slider::new(&mut light.intensity, 0.0..=500.0).suffix("%")).changed() {
+                        ui.label(
+                            egui::RichText::new("Intensity")
+                                .small()
+                                .color(colors::TEXT_SECONDARY),
+                        );
+                        if ui
+                            .add(egui::Slider::new(&mut light.intensity, 0.0..=500.0).suffix("%"))
+                            .changed()
+                        {
                             changed = true;
                         }
                     });
 
                     ui.horizontal(|ui| {
-                        ui.label(egui::RichText::new("Color").small().color(colors::TEXT_SECONDARY));
+                        ui.label(
+                            egui::RichText::new("Color")
+                                .small()
+                                .color(colors::TEXT_SECONDARY),
+                        );
                         let c = &mut light.color;
                         let mut col = egui::Color32::from_rgba_premultiplied(
-                            (c[0] * 255.0) as u8, (c[1] * 255.0) as u8,
-                            (c[2] * 255.0) as u8, (c[3] * 255.0) as u8,
+                            (c[0] * 255.0) as u8,
+                            (c[1] * 255.0) as u8,
+                            (c[2] * 255.0) as u8,
+                            (c[3] * 255.0) as u8,
                         );
                         if ui.color_edit_button_srgba(&mut col).changed() {
                             let [r, g, b, a] = col.to_array();
-                            *c = [r as f32 / 255.0, g as f32 / 255.0, b as f32 / 255.0, a as f32 / 255.0];
+                            *c = [
+                                r as f32 / 255.0,
+                                g as f32 / 255.0,
+                                b as f32 / 255.0,
+                                a as f32 / 255.0,
+                            ];
                             changed = true;
                         }
                     });
 
-                    if ui.checkbox(&mut light.casts_shadows, "Casts Shadows").clicked() {
+                    if ui
+                        .checkbox(&mut light.casts_shadows, "Casts Shadows")
+                        .clicked()
+                    {
                         changed = true;
                     }
                 });

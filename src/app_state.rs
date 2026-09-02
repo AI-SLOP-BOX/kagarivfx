@@ -21,13 +21,9 @@ pub enum SkillLevel {
 pub struct PlaybackDomainState {
     pub is_playing: bool,
     /// Adaptive preview quality: multiplier (0.125..=1.0) applied to the viewport
-    /// render width while playing. When frames take longer than the playback
-    /// budget, the factor drops so playback stays smooth; it recovers when fast.
-    /// This mirrors AE's automatic resolution reduction during RAM preview.
+    /// render width while playing.
     pub adaptive_preview_factor: f32,
-    /// Viewport pan offset in screen pixels (used with zoom != Fit).
     pub viewport_pan: eframe::egui::Vec2,
-    /// Exponential moving average of GPU render time in milliseconds.
     pub preview_render_ema_ms: f32,
     pub current_frame: u32,
     pub master_volume: f32,
@@ -128,7 +124,7 @@ impl Default for ExportDomainState {
             export_status: None,
             export_progress: 0.0,
             export_fps: 30,
-            export_output_path: "output.mp4".to_string(),
+            export_output_path: String::new(),
             is_exporting: false,
             export_rx: None,
             tracker_rx: None,
@@ -159,23 +155,22 @@ pub struct AfterEffectsApp {
     pub recovery_checked: bool,
     /// Human-readable timestamp of the recovery snapshot (for the dialog)
     pub recovery_snapshot_time: Option<String>,
-    pub is_playing: bool,
+    /// Playback domain state (transport, frame, work area, volume)
+    pub playback: PlaybackDomainState,
+    /// Selection domain state (selected layers, expanded, property)
+    pub selection: SelectionDomainState,
+    /// UI tabs domain state (tab indices, search queries, shy)
+    pub ui_tabs: UiTabsDomainState,
+    /// Export domain state (dialog, progress, format)
+    pub export: ExportDomainState,
     /// Loop playback at the work area / comp end (Preview panel toggle)
     pub loop_playback: bool,
     /// Adaptive preview quality: multiplier (0.125..=1.0) applied to the viewport
     /// render width while playing. When frames take longer than the playback
     /// budget, the factor drops so playback stays smooth; it recovers when fast.
     /// This mirrors AE's automatic resolution reduction during RAM preview.
-    pub adaptive_preview_factor: f32,
-    /// Viewport pan offset in screen pixels (used with zoom != Fit).
-    pub viewport_pan: eframe::egui::Vec2,
-    /// Exponential moving average of GPU render time in milliseconds.
-    pub preview_render_ema_ms: f32,
-    pub current_frame: u32,
     pub playback_speed: i32,
     pub u_key_last_press: Option<f64>,
-    pub selected_layer_idx: Option<usize>,
-    pub selected_layers: std::collections::HashSet<usize>,
     /// Selected keyframes: (layer_idx, property key, frame).
     pub selected_keyframes: std::collections::HashSet<(usize, String, u32)>,
     pub drag_tx: Option<DragTransaction>,
@@ -211,7 +206,6 @@ pub struct AfterEffectsApp {
     pub automation_undo: Vec<Vec<crate::core::automation_binding::AutomationBinding>>,
     pub automation_redo: Vec<Vec<crate::core::automation_binding::AutomationBinding>>,
     pub otio_path: String,
-    pub expanded_layers: std::collections::HashSet<usize>,
     pub expanded_waveform_layers: std::collections::HashSet<usize>,
     /// Breadcrumb trail of composition indices visited via PreComp
     /// double-click navigation (most recent = last). Back = pop.
@@ -297,26 +291,16 @@ pub struct AfterEffectsApp {
     pub motion_sketch_active: bool,
     /// Motion Sketch recording buffer: (frame, [x, y]) pairs captured during drag.
     pub motion_sketch_recording: Vec<(u32, [f32; 2])>,
-    pub selected_property: Option<String>,
-    pub show_export_dialog: bool,
-    pub export_status: Option<String>,
-    pub export_progress: f32,
-    pub export_fps: u32,
-    pub export_output_path: String,
-    pub is_exporting: bool,
     pub export_format_preset: usize,
     /// Video codec selection shared by Export dialog + Render presets (0=H264,1=ProRes422,2=ProRes4444)
     pub export_codec_idx: usize,
     pub export_resolution_scale: usize,
-    pub export_rx: Option<std::sync::mpsc::Receiver<ExportEvent>>,
     pub import_rx: Option<std::sync::mpsc::Receiver<crate::ui::drop_import::ImportResult>>,
     /// Path of the most recent export (for the "Reveal in Finder" button).
     #[cfg_attr(not(feature = "gui"), allow(dead_code))]
     pub last_export_path: Option<String>,
     pub export_cancel_flag: Option<std::sync::Arc<std::sync::atomic::AtomicBool>>,
-    pub tracker_rx: Option<std::sync::mpsc::Receiver<TrackerEvent>>,
     pub tracker_cancel_flag: Option<std::sync::Arc<std::sync::atomic::AtomicBool>>,
-    pub master_volume: f32,
     pub master_eq_highpass: f32,
     pub master_eq_lowpass: f32,
     pub master_eq_mid_gain: f32,
@@ -326,20 +310,10 @@ pub struct AfterEffectsApp {
     pub master_comp_attack: f32,
     pub master_comp_release: f32,
     pub master_comp_makeup: f32,
-    pub left_tab_idx: usize,
-    pub right_tab_idx: usize,
-    pub viewport_mag_ratio: f32,
     pub viewport_cam_view: usize,
     pub viewport_render_resolution: usize,
     pub viewport_color_channel: usize,
     pub viewport_fast_preview: usize,
-    pub work_area_in: Option<u32>,
-    pub work_area_out: Option<u32>,
-    pub layer_filter_text: String,
-    pub bottom_dock_tab: usize,
-    pub show_switches_pane: bool,
-    pub global_shy_active: bool,
-    pub effects_search_query: String,
     pub project_search_query: String,
     pub cc_libraries_search: String,
     pub audio_mixer_channels: Vec<MixerChannel>,
@@ -400,16 +374,16 @@ impl Default for AfterEffectsApp {
             show_recovery_dialog: false,
             recovery_checked: false,
             recovery_snapshot_time: None,
-            is_playing: false,
+            ui_tabs: UiTabsDomainState::default(),
             loop_playback: true,
-            adaptive_preview_factor: 1.0,
-            viewport_pan: eframe::egui::Vec2::ZERO,
-            preview_render_ema_ms: 0.0,
-            current_frame: 0,
             playback_speed: 1,
             u_key_last_press: None,
-            selected_layer_idx: Some(1),
-            selected_layers: vec![1].into_iter().collect(),
+            selection: SelectionDomainState {
+                selected_layer_idx: Some(1),
+                selected_layers: vec![1].into_iter().collect(),
+                selected_property: None,
+                expanded_layers: std::collections::HashSet::new(),
+            },
             selected_keyframes: std::collections::HashSet::new(),
             drag_tx: None,
             dragging_effect: None,
@@ -433,7 +407,6 @@ impl Default for AfterEffectsApp {
             automation_undo: Vec::new(),
             automation_redo: Vec::new(),
             otio_path: "timeline.otio.json".to_string(),
-            expanded_layers: std::collections::HashSet::new(),
             expanded_waveform_layers: std::collections::HashSet::new(),
             comp_nav_stack: Vec::new(),
             timeline_fit_to_selection: false,
@@ -478,21 +451,31 @@ impl Default for AfterEffectsApp {
             pen_points: Vec::new(),
             motion_sketch_active: false,
             motion_sketch_recording: vec![],
-            selected_property: None,
-            show_export_dialog: false,
-            export_status: None,
-            export_progress: 0.0,
-            export_fps: 30,
-            export_output_path: "output.mp4".to_string(),
-            is_exporting: false,
+            export: ExportDomainState {
+                show_export_dialog: false,
+                export_status: None,
+                export_progress: 0.0,
+                export_fps: 30,
+                export_output_path: "output.mp4".to_string(),
+                is_exporting: false,
+                export_rx: None,
+                tracker_rx: None,
+            },
             export_format_preset: 0,
             export_codec_idx: 0,
             export_resolution_scale: 0,
-            export_rx: None,
             export_cancel_flag: None,
-            tracker_rx: None,
             tracker_cancel_flag: None,
-            master_volume: 0.8,
+            playback: PlaybackDomainState {
+                is_playing: false,
+                adaptive_preview_factor: 1.0,
+                viewport_pan: eframe::egui::Vec2::ZERO,
+                preview_render_ema_ms: 0.0,
+                current_frame: 0,
+                master_volume: 0.8,
+                work_area_in: None,
+                work_area_out: None,
+            },
             master_eq_highpass: 30.0,
             master_eq_lowpass: 18000.0,
             master_eq_mid_gain: 0.0,
@@ -502,20 +485,10 @@ impl Default for AfterEffectsApp {
             master_comp_attack: 10.0,
             master_comp_release: 100.0,
             master_comp_makeup: 0.0,
-            left_tab_idx: 0,
-            right_tab_idx: 0,
-            viewport_mag_ratio: 1.0,
             viewport_cam_view: 0,
             viewport_render_resolution: 0,
             viewport_color_channel: 0,
             viewport_fast_preview: 0,
-            work_area_in: None,
-            work_area_out: None,
-            layer_filter_text: String::new(),
-            bottom_dock_tab: 0,
-            show_switches_pane: true,
-            global_shy_active: false,
-            effects_search_query: String::new(),
             project_search_query: String::new(),
             cc_libraries_search: String::new(),
             audio_mixer_channels: Vec::new(),
@@ -739,7 +712,7 @@ impl eframe::App for AfterEffectsApp {
             // Mix all audio sources and play the result
             let audio_enabled = self.audio_preview_enabled;
             let fps = self.history.current().active_composition().fps.max(1);
-            let playhead_sec = self.current_frame as f32 / fps as f32;
+            let playhead_sec = self.playback.current_frame as f32 / fps as f32;
 
             // Live metering: mix a tiny buffer at the playhead with mixer gains
             {
@@ -758,7 +731,7 @@ impl eframe::App for AfterEffectsApp {
                 };
                 let (_mix, meter) = crate::core::audio_engine::mix_audio_sources_for_frame(
                     comp,
-                    self.current_frame,
+                    self.playback.current_frame,
                     48000,
                     64, // small buffer — metering only
                     Some(&self.audio_mixer_channels),
@@ -772,11 +745,11 @@ impl eframe::App for AfterEffectsApp {
             }
 
             // Mix the entire work area to a temp WAV and play it
-            let wav = if audio_enabled && self.is_playing {
+            let wav = if audio_enabled && self.playback.is_playing {
                 let project = self.history.current();
                 let comp = project.active_composition();
-                let wa_start = self.work_area_in.unwrap_or(0);
-                let wa_end = self.work_area_out.unwrap_or(comp.duration_frames);
+                let wa_start = self.playback.work_area_in.unwrap_or(0);
+                let wa_end = self.playback.work_area_out.unwrap_or(comp.duration_frames);
                 let dsp = crate::core::audio_engine::MasterDspParams {
                     eq_highpass: self.master_eq_highpass,
                     eq_lowpass: self.master_eq_lowpass,
@@ -801,7 +774,7 @@ impl eframe::App for AfterEffectsApp {
             };
 
             match (
-                self.is_playing,
+                self.playback.is_playing,
                 audio_enabled,
                 wav.as_ref(),
                 &mut self.audio_playback,
@@ -821,13 +794,13 @@ impl eframe::App for AfterEffectsApp {
             }
             // Master volume applies to the sink output
             if let Some(playback) = &self.audio_playback {
-                playback.set_volume(self.master_volume);
+                playback.set_volume(self.playback.master_volume);
             }
         }
 
         if let Some(rx_frame) = &self.rx_frame {
             while let Ok(frame) = rx_frame.try_recv() {
-                self.current_frame = frame;
+                self.playback.current_frame = frame;
             }
         }
         if let Some(rx_connection) = &self.rx_connection {
@@ -837,29 +810,29 @@ impl eframe::App for AfterEffectsApp {
         }
 
         let total_frames = self.history.current().active_composition().duration_frames;
-        let mut current_frame = self.current_frame;
+        let mut current_frame = self.playback.current_frame;
 
-        let wa_start = self.work_area_in.unwrap_or(0);
+        let wa_start = self.playback.work_area_in.unwrap_or(0);
         let wa_end = self
-            .work_area_out
+            .playback.work_area_out
             .unwrap_or(total_frames.saturating_sub(1))
             .min(total_frames.saturating_sub(1));
 
-        if self.is_playing {
+        if self.playback.is_playing {
             let speed = self.playback_speed.abs().max(1) as u32;
             if self.playback_speed >= 0 {
                 let next = current_frame.saturating_add(speed);
                 current_frame = if next >= wa_end {
                     if self.loop_playback {
                         // Wrap to work-area start (or comp start)
-                        if self.work_area_in.is_some() || self.work_area_out.is_some() {
+                        if self.playback.work_area_in.is_some() || self.playback.work_area_out.is_some() {
                             wa_start
                         } else {
                             0
                         }
                     } else {
                         // Stop at the end when looping is off
-                        self.is_playing = false;
+                        self.playback.is_playing = false;
                         self.motion_sketch_active = false;
                         wa_end
                     }
@@ -871,7 +844,7 @@ impl eframe::App for AfterEffectsApp {
                     if self.loop_playback {
                         wa_end.saturating_sub(1)
                     } else {
-                        self.is_playing = false;
+                        self.playback.is_playing = false;
                         self.motion_sketch_active = false;
                         wa_start
                     }
@@ -925,7 +898,7 @@ impl eframe::App for AfterEffectsApp {
                     ui.separator();
                     // Timecode
                     let fps = self.history.current().active_composition().fps.max(1);
-                    let cf = self.current_frame;
+                    let cf = self.playback.current_frame;
                     ui.label(
                         egui::RichText::new(format!(
                             "TC: {:02}:{:02}:{:02}:{:02}",
@@ -965,7 +938,7 @@ impl eframe::App for AfterEffectsApp {
                     ui.separator();
                     // Selection summary: layers + keyframes
                     let kf_count = self.selected_keyframes.len();
-                    let layer_count = self.selected_layers.len();
+                    let layer_count = self.selection.selected_layers.len();
                     if kf_count > 0 {
                         ui.label(
                             egui::RichText::new(format!(
@@ -1010,12 +983,12 @@ impl eframe::App for AfterEffectsApp {
                                 .layers
                                 .iter()
                                 .enumerate()
-                                .filter(|(_, l)| l.is_active(self.current_frame))
+                                .filter(|(_, l)| l.is_active(self.playback.current_frame))
                                 .map(|(i, _)| i)
                                 .collect();
                             if let Some(entry) = self
                                 .frame_cache
-                                .get_with_layers(self.current_frame, &layer_indices)
+                                .get_with_layers(self.playback.current_frame, &layer_indices)
                             {
                                 let idx = ((py as u32 * comp.width + px as u32) * 4) as usize;
                                 if idx + 3 < entry.pixels.len() {
@@ -1106,7 +1079,7 @@ impl eframe::App for AfterEffectsApp {
         crate::ui::vectorscope::draw_vectorscope_window(self, ctx);
         crate::ui::shortcuts_dialog::draw_shortcuts_dialog(self, ctx);
         self.toasts.draw(ctx);
-        self.current_frame = current_frame;
+        self.playback.current_frame = current_frame;
     }
 
     fn on_exit(&mut self) {

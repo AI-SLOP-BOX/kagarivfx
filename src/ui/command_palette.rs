@@ -17,7 +17,7 @@ pub fn get_all_commands() -> Vec<PaletteCommand> {
             shortcut_hint: "",
             action: Box::new(|app| {
                 let comp = app.history.current_mut().active_composition_mut();
-                if let Some(idx) = app.selected_layer_idx {
+                if let Some(idx) = app.selection.selected_layer_idx {
                     if idx < comp.layers.len() {
                         let len = comp.layers[idx].effects.len();
                         comp.layers[idx]
@@ -43,7 +43,7 @@ pub fn get_all_commands() -> Vec<PaletteCommand> {
             shortcut_hint: "",
             action: Box::new(|app| {
                 let comp = app.history.current_mut().active_composition_mut();
-                if let Some(idx) = app.selected_layer_idx {
+                if let Some(idx) = app.selection.selected_layer_idx {
                     if idx < comp.layers.len() {
                         let len = comp.layers[idx].effects.len();
                         comp.layers[idx]
@@ -72,7 +72,7 @@ pub fn get_all_commands() -> Vec<PaletteCommand> {
             shortcut_hint: "",
             action: Box::new(|app| {
                 let comp = app.history.current_mut().active_composition_mut();
-                if let Some(idx) = app.selected_layer_idx {
+                if let Some(idx) = app.selection.selected_layer_idx {
                     if idx < comp.layers.len() {
                         let len = comp.layers[idx].effects.len();
                         comp.layers[idx]
@@ -110,7 +110,7 @@ pub fn get_all_commands() -> Vec<PaletteCommand> {
                     dur,
                 );
                 comp.add_layer(layer);
-                app.selected_layer_idx = Some(len);
+                app.selection.selected_layer_idx = Some(len);
                 crate::core::frame_cache::bump_version();
             }),
         },
@@ -133,7 +133,7 @@ pub fn get_all_commands() -> Vec<PaletteCommand> {
                     dur,
                 );
                 comp.add_layer(layer);
-                app.selected_layer_idx = Some(len);
+                app.selection.selected_layer_idx = Some(len);
                 crate::core::frame_cache::bump_version();
             }),
         },
@@ -143,7 +143,7 @@ pub fn get_all_commands() -> Vec<PaletteCommand> {
             shortcut_hint: "",
             action: Box::new(|app| {
                 let comp = app.history.current_mut().active_composition_mut();
-                if let Some(idx) = app.selected_layer_idx {
+                if let Some(idx) = app.selection.selected_layer_idx {
                     if idx < comp.layers.len() {
                         comp.layers[idx].transform = crate::core::timeline::Transform2D::default();
                         crate::core::frame_cache::bump_version();
@@ -164,7 +164,7 @@ pub fn get_all_commands() -> Vec<PaletteCommand> {
             category: "Export",
             shortcut_hint: "Cmd+M",
             action: Box::new(|app| {
-                app.show_export_dialog = true;
+                app.export.show_export_dialog = true;
             }),
         },
         PaletteCommand {
@@ -211,7 +211,7 @@ pub fn get_all_commands() -> Vec<PaletteCommand> {
                     crate::core::property::Animatable::new_animated(pos_kf);
 
                 comp.add_layer(null_layer);
-                app.selected_layer_idx = Some(comp.layers.len() - 1);
+                app.selection.selected_layer_idx = Some(comp.layers.len() - 1);
                 crate::core::frame_cache::bump_version();
             }),
         },
@@ -220,7 +220,7 @@ pub fn get_all_commands() -> Vec<PaletteCommand> {
             category: "Animation",
             shortcut_hint: "",
             action: Box::new(|app| {
-                if let Some(idx) = app.selected_layer_idx {
+                if let Some(idx) = app.selection.selected_layer_idx {
                     app.modify_project(move |p| {
                         if let Some(l) = p.active_composition_mut().layers.get_mut(idx) {
                             if let Some(kfs) = l.transform.position.keyframes_mut() {
@@ -244,7 +244,7 @@ pub fn get_all_commands() -> Vec<PaletteCommand> {
             category: "Animation",
             shortcut_hint: "",
             action: Box::new(|app| {
-                if let Some(idx) = app.selected_layer_idx {
+                if let Some(idx) = app.selection.selected_layer_idx {
                     let mut baked_count = 0usize;
                     app.modify_project(|p| {
                         if let Some(l) = p.active_composition_mut().layers.get_mut(idx) {
@@ -271,7 +271,7 @@ pub fn get_all_commands() -> Vec<PaletteCommand> {
             category: "Layer",
             shortcut_hint: "",
             action: Box::new(|app| {
-                if let Some(idx) = app.selected_layer_idx {
+                if let Some(idx) = app.selection.selected_layer_idx {
                     let dims = {
                         let c = app.history.current().active_composition();
                         (c.width as f32 / 2.0, c.height as f32 / 2.0)
@@ -290,7 +290,7 @@ pub fn get_all_commands() -> Vec<PaletteCommand> {
             category: "Layer",
             shortcut_hint: "",
             action: Box::new(|app| {
-                if let Some(idx) = app.selected_layer_idx {
+                if let Some(idx) = app.selection.selected_layer_idx {
                     let dims = {
                         let c = app.history.current().active_composition();
                         (c.width as f32, c.height as f32)
@@ -318,8 +318,8 @@ pub fn get_all_commands() -> Vec<PaletteCommand> {
             category: "Layer",
             shortcut_hint: "",
             action: Box::new(|app| {
-                if let Some(idx) = app.selected_layer_idx {
-                    let cf = app.current_frame;
+                if let Some(idx) = app.selection.selected_layer_idx {
+                    let cf = app.playback.current_frame;
                     app.modify_project(move |p| {
                         if let Some(l) = p.active_composition_mut().layers.get_mut(idx) {
                             let s = l.transform.scale.evaluate(cf);
@@ -353,7 +353,7 @@ pub fn get_all_commands() -> Vec<PaletteCommand> {
             category: "Layer",
             shortcut_hint: "",
             action: Box::new(|app| {
-                if let Some(idx) = app.selected_layer_idx {
+                if let Some(idx) = app.selection.selected_layer_idx {
                     let cw = app.history.current().active_composition().width as f32;
                     app.modify_project(move |p| {
                         if let Some(l) = p.active_composition_mut().layers.get_mut(idx) {
@@ -373,7 +373,7 @@ pub fn get_all_commands() -> Vec<PaletteCommand> {
             category: "Layer",
             shortcut_hint: "",
             action: Box::new(|app| {
-                if let Some(idx) = app.selected_layer_idx {
+                if let Some(idx) = app.selection.selected_layer_idx {
                     let ch = app.history.current().active_composition().height as f32;
                     app.modify_project(move |p| {
                         if let Some(l) = p.active_composition_mut().layers.get_mut(idx) {
@@ -403,14 +403,14 @@ pub fn get_all_commands() -> Vec<PaletteCommand> {
             category: "Animation",
             shortcut_hint: "",
             action: Box::new(|app| {
-                if let Some(idx) = app.selected_layer_idx {
+                if let Some(idx) = app.selection.selected_layer_idx {
                     let center = app
                         .history
                         .current()
                         .active_composition()
                         .layers
                         .get(idx)
-                        .map(|l| l.transform.position.evaluate(app.current_frame))
+                        .map(|l| l.transform.position.evaluate(app.playback.current_frame))
                         .unwrap_or([0.0, 0.0]);
                     let proj = app.history.current_mut().active_composition_mut();
                     if let Some(l) = proj.layers.get_mut(idx) {
@@ -582,7 +582,7 @@ pub fn get_all_commands() -> Vec<PaletteCommand> {
                 let dir = std::env::temp_dir().join("aevfx_frames");
                 let _ = std::fs::create_dir_all(&dir);
                 let comp = app.history.current().active_composition().clone();
-                let frame = app.current_frame;
+                let frame = app.playback.current_frame;
                 let out = dir.join(format!("{}_f{}.png", comp.name, frame));
                 let pixels = crate::core::software_renderer::render_frame_to_pixels(
                     &comp,
@@ -611,7 +611,7 @@ pub fn get_all_commands() -> Vec<PaletteCommand> {
             shortcut_hint: "",
             action: Box::new(|app| {
                 let comp = app.history.current_mut().active_composition_mut();
-                if let Some(idx) = app.selected_layer_idx {
+                if let Some(idx) = app.selection.selected_layer_idx {
                     if idx < comp.layers.len() {
                         comp.layers[idx].style.stroke.enabled =
                             !comp.layers[idx].style.stroke.enabled;
@@ -626,7 +626,7 @@ pub fn get_all_commands() -> Vec<PaletteCommand> {
             shortcut_hint: "",
             action: Box::new(|app| {
                 let comp = app.history.current_mut().active_composition_mut();
-                if let Some(idx) = app.selected_layer_idx {
+                if let Some(idx) = app.selection.selected_layer_idx {
                     if idx < comp.layers.len() {
                         comp.layers[idx].style.drop_shadow.enabled =
                             !comp.layers[idx].style.drop_shadow.enabled;
@@ -641,7 +641,7 @@ pub fn get_all_commands() -> Vec<PaletteCommand> {
             shortcut_hint: "",
             action: Box::new(|app| {
                 let comp = app.history.current_mut().active_composition_mut();
-                if let Some(idx) = app.selected_layer_idx {
+                if let Some(idx) = app.selection.selected_layer_idx {
                     if idx < comp.layers.len() {
                         comp.layers[idx].style.color_overlay.enabled =
                             !comp.layers[idx].style.color_overlay.enabled;
@@ -656,7 +656,7 @@ pub fn get_all_commands() -> Vec<PaletteCommand> {
             shortcut_hint: "",
             action: Box::new(|app| {
                 let comp = app.history.current_mut().active_composition_mut();
-                if let Some(idx) = app.selected_layer_idx {
+                if let Some(idx) = app.selection.selected_layer_idx {
                     if idx < comp.layers.len() {
                         comp.layers[idx].style.gradient_overlay.enabled =
                             !comp.layers[idx].style.gradient_overlay.enabled;
@@ -671,7 +671,7 @@ pub fn get_all_commands() -> Vec<PaletteCommand> {
             shortcut_hint: "",
             action: Box::new(|app| {
                 let comp = app.history.current_mut().active_composition_mut();
-                if let Some(idx) = app.selected_layer_idx {
+                if let Some(idx) = app.selection.selected_layer_idx {
                     if idx < comp.layers.len() {
                         comp.layers[idx].style.bevel_emboss.enabled =
                             !comp.layers[idx].style.bevel_emboss.enabled;
@@ -687,7 +687,7 @@ pub fn get_all_commands() -> Vec<PaletteCommand> {
             shortcut_hint: "F9",
             action: Box::new(|app| {
                 let comp = app.history.current_mut().active_composition_mut();
-                if let Some(idx) = app.selected_layer_idx {
+                if let Some(idx) = app.selection.selected_layer_idx {
                     if idx < comp.layers.len() {
                         let layer = &mut comp.layers[idx];
                         let pts = crate::core::keyframe::EasePreset::Standard.control_points();
@@ -720,7 +720,7 @@ pub fn get_all_commands() -> Vec<PaletteCommand> {
             shortcut_hint: "",
             action: Box::new(|app| {
                 let comp = app.history.current_mut().active_composition_mut();
-                if let Some(idx) = app.selected_layer_idx {
+                if let Some(idx) = app.selection.selected_layer_idx {
                     if idx < comp.layers.len() {
                         let layer = &mut comp.layers[idx];
                         let pts = crate::core::keyframe::EasePreset::Bounce.control_points();
@@ -753,7 +753,7 @@ pub fn get_all_commands() -> Vec<PaletteCommand> {
             shortcut_hint: "",
             action: Box::new(|app| {
                 let comp = app.history.current_mut().active_composition_mut();
-                if let Some(idx) = app.selected_layer_idx {
+                if let Some(idx) = app.selection.selected_layer_idx {
                     if idx < comp.layers.len() {
                         let layer = &mut comp.layers[idx];
                         let pts = crate::core::keyframe::EasePreset::Elastic.control_points();
@@ -799,7 +799,7 @@ pub fn get_all_commands() -> Vec<PaletteCommand> {
                 );
                 layer.is_adjustment_layer = true;
                 comp.add_layer(layer);
-                app.selected_layer_idx = Some(len);
+                app.selection.selected_layer_idx = Some(len);
                 crate::core::frame_cache::bump_version();
             }),
         },
@@ -818,7 +818,7 @@ pub fn get_all_commands() -> Vec<PaletteCommand> {
                     dur,
                 );
                 comp.add_layer(layer);
-                app.selected_layer_idx = Some(len);
+                app.selection.selected_layer_idx = Some(len);
                 crate::core::frame_cache::bump_version();
             }),
         },
@@ -828,7 +828,7 @@ pub fn get_all_commands() -> Vec<PaletteCommand> {
             shortcut_hint: "",
             action: Box::new(|app| {
                 let comp = app.history.current_mut().active_composition_mut();
-                if let Some(idx) = app.selected_layer_idx {
+                if let Some(idx) = app.selection.selected_layer_idx {
                     if idx < comp.layers.len() {
                         let len = comp.layers[idx].effects.len();
                         comp.layers[idx]
@@ -857,7 +857,7 @@ pub fn get_all_commands() -> Vec<PaletteCommand> {
             shortcut_hint: "",
             action: Box::new(|app| {
                 let comp = app.history.current_mut().active_composition_mut();
-                if let Some(idx) = app.selected_layer_idx {
+                if let Some(idx) = app.selection.selected_layer_idx {
                     if idx < comp.layers.len() {
                         let len = comp.layers[idx].effects.len();
                         comp.layers[idx]
@@ -897,7 +897,7 @@ pub fn get_all_commands() -> Vec<PaletteCommand> {
             action: Box::new(|app| {
                 let mut audio_source: Option<String> = None;
                 let comp = app.history.current().active_composition();
-                if let Some(idx) = app.selected_layer_idx {
+                if let Some(idx) = app.selection.selected_layer_idx {
                     if let Some(l) = comp.layers.get(idx) {
                         if let crate::core::timeline::LayerType::Audio { path, .. } = &l.layer_type
                         {
@@ -936,7 +936,7 @@ pub fn get_all_commands() -> Vec<PaletteCommand> {
             category: "Tracking",
             shortcut_hint: "",
             action: Box::new(|app| {
-                if let Some(idx) = app.selected_layer_idx {
+                if let Some(idx) = app.selection.selected_layer_idx {
                     app.modify_project(|p| {
                         let comp = p.active_composition_mut();
                         let null_idx = comp.layers.len();
@@ -963,7 +963,7 @@ pub fn get_all_commands() -> Vec<PaletteCommand> {
             category: "View",
             shortcut_hint: "",
             action: Box::new(|app| {
-                app.right_tab_idx = 7;
+                app.ui_tabs.right_tab_idx = 7;
             }),
         },
         PaletteCommand {
@@ -971,7 +971,7 @@ pub fn get_all_commands() -> Vec<PaletteCommand> {
             category: "View",
             shortcut_hint: "",
             action: Box::new(|app| {
-                app.right_tab_idx = 8;
+                app.ui_tabs.right_tab_idx = 8;
             }),
         },
         PaletteCommand {
@@ -979,7 +979,7 @@ pub fn get_all_commands() -> Vec<PaletteCommand> {
             category: "View",
             shortcut_hint: "F3",
             action: Box::new(|app| {
-                app.right_tab_idx = 30;
+                app.ui_tabs.right_tab_idx = 30;
             }),
         },
     ]

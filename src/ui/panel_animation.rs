@@ -47,11 +47,19 @@ impl PanelAnimation {
     }
 }
 
-pub fn animate_panel_width(_ctx: &egui::Context, animation: &PanelAnimation, max_width: f32) -> f32 {
+pub fn animate_panel_width(
+    _ctx: &egui::Context,
+    animation: &PanelAnimation,
+    max_width: f32,
+) -> f32 {
     max_width * PanelAnimation::ease(animation.progress)
 }
 
-pub fn animate_panel_height(_ctx: &egui::Context, animation: &PanelAnimation, max_height: f32) -> f32 {
+pub fn animate_panel_height(
+    _ctx: &egui::Context,
+    animation: &PanelAnimation,
+    max_height: f32,
+) -> f32 {
     max_height * PanelAnimation::ease(animation.progress)
 }
 

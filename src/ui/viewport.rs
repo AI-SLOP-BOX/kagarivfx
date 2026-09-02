@@ -71,7 +71,7 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: u32) 
             let scroll_y = ui.input(|i| i.raw_scroll_delta.y);
             if scroll_y != 0.0 && !ui.input(|i| i.modifiers.command) {
                 // Fit mode (0.0) resolves to a concrete ratio first so zooming feels continuous
-                let current = if app.viewport_mag_ratio == 0.0 { 1.0 } else { app.viewport_mag_ratio };
+                let current = if app.ui_tabs.viewport_mag_ratio == 0.0 { 1.0 } else { app.ui_tabs.viewport_mag_ratio };
                 let factor = if scroll_y > 0.0 { 1.1 } else { 1.0 / 1.1 };
                 let new_mag = (current * factor).clamp(0.05, 8.0);
 
@@ -94,16 +94,16 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: u32) 
                     };
                     let center = rect.center();
                     // Content coordinate under the pointer at the OLD zoom
-                    let old_scale = if app.viewport_mag_ratio == 0.0 { 1.0 } else { app.viewport_mag_ratio };
+                    let old_scale = if app.ui_tabs.viewport_mag_ratio == 0.0 { 1.0 } else { app.ui_tabs.viewport_mag_ratio };
                     let content = egui::vec2(
                         (pointer.x - center.x) / (fit_w * old_scale),
                         (pointer.y - center.y) / (fit_h * old_scale),
                     );
                     // Pan adjustment keeps that content point at the pointer
-                    app.viewport_pan.x += content.x * fit_w * (old_scale - new_mag);
-                    app.viewport_pan.y += content.y * fit_h * (old_scale - new_mag);
+                    app.playback.viewport_pan.x += content.x * fit_w * (old_scale - new_mag);
+                    app.playback.viewport_pan.y += content.y * fit_h * (old_scale - new_mag);
                 }
-                app.viewport_mag_ratio = new_mag;
+                app.ui_tabs.viewport_mag_ratio = new_mag;
             }
             // Middle-drag pans regardless of active tool (AE behavior)
             if ui.input(|i| i.pointer.middle_down()) {
@@ -113,8 +113,8 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: u32) 
             // ── Hand tool drag pans the view ──
             if app.active_tool == crate::ui::toolbar::ActiveTool::Hand {
                 let delta = viewport_response.drag_delta();
-                app.viewport_pan.x += delta.x;
-                app.viewport_pan.y += delta.y;
+                app.playback.viewport_pan.x += delta.x;
+                app.playback.viewport_pan.y += delta.y;
                 if viewport_response.hovered() {
                     ui.output_mut(|o| o.cursor_icon = if viewport_response.dragged() { egui::CursorIcon::Grabbing } else { egui::CursorIcon::Grab });
                 }
@@ -125,7 +125,7 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: u32) 
                 if viewport_response.clicked() || viewport_response.secondary_clicked() {
                     let zoom_in = !ui.input(|i| i.modifiers.alt) && !viewport_response.secondary_clicked();
                     let factor = if zoom_in { 2.0 } else { 0.5 };
-                    let current = if app.viewport_mag_ratio == 0.0 { 1.0 } else { app.viewport_mag_ratio };
+                    let current = if app.ui_tabs.viewport_mag_ratio == 0.0 { 1.0 } else { app.ui_tabs.viewport_mag_ratio };
                     let new_mag = (current * factor).clamp(0.05, 8.0);
                     if let Some(pointer) = viewport_response.interact_pointer_pos() {
                         let aspect2 = app.history.current().active_composition().width as f32
@@ -138,10 +138,10 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: u32) 
                             (pointer.x - center.x) / (fw * current),
                             (pointer.y - center.y) / (fh * current),
                         );
-                        app.viewport_pan.x += content.x * fw * (current - new_mag);
-                        app.viewport_pan.y += content.y * fh * (current - new_mag);
+                        app.playback.viewport_pan.x += content.x * fw * (current - new_mag);
+                        app.playback.viewport_pan.y += content.y * fh * (current - new_mag);
                     }
-                    app.viewport_mag_ratio = new_mag;
+                    app.ui_tabs.viewport_mag_ratio = new_mag;
                 }
                 if viewport_response.hovered() {
                     ui.output_mut(|o| o.cursor_icon = if ui.input(|i| i.modifiers.alt) { egui::CursorIcon::ZoomOut } else { egui::CursorIcon::ZoomIn });
@@ -199,15 +199,15 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: u32) 
                 crate::ui::viewport_state::compute_draw_layout_pan(rect, aspect, m, egui::Vec2::ZERO);
             let cx = (bmin[0] + bmax[0]) * 0.5;
             let cy = (bmin[1] + bmax[1]) * 0.5;
-            app.viewport_mag_ratio = m;
-            app.viewport_pan = egui::vec2(
+            app.ui_tabs.viewport_mag_ratio = m;
+            app.playback.viewport_pan = egui::vec2(
                 rect.center().x - (fx + cx * (fw_px / cw)),
                 rect.center().y - (fy + cy * (fh_px / ch)),
             );
         }
 
         let (origin_x, origin_y, draw_w, draw_h) =
-            crate::ui::viewport_state::compute_draw_layout_pan(rect, aspect, app.viewport_mag_ratio, app.viewport_pan);
+            crate::ui::viewport_state::compute_draw_layout_pan(rect, aspect, app.ui_tabs.viewport_mag_ratio, app.playback.viewport_pan);
         let draw_rect = egui::Rect::from_min_size(
             egui::pos2(origin_x, origin_y),
             egui::vec2(draw_w, draw_h),
@@ -282,9 +282,9 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: u32) 
                         || app.viewport_pos_kf_drag_state.is_some()
                         || app.viewport_scale_drag.is_some());
                 let effective_factor = if dragging_now {
-                    app.adaptive_preview_factor.min(0.5)
+                    app.playback.adaptive_preview_factor.min(0.5)
                 } else {
-                    app.adaptive_preview_factor
+                    app.playback.adaptive_preview_factor
                 };
                 let display_px = (draw_w * ctx.pixels_per_point()).ceil();
                 let preview_px = ((display_px * effective_factor) as u32).clamp(64, 4096);
@@ -295,17 +295,17 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: u32) 
                 // instead we chip away at the work area while playback runs.
                 const RAM_PREPASS_FRAMES_PER_TICK: u32 = 6;
                 const RAM_PREPASS_MAX_FRAMES: u32 = 300;
-                if app.is_playing && !app.was_playing_last_frame {
-                    let wa_in = app.work_area_in.unwrap_or(0);
+                if app.playback.is_playing && !app.was_playing_last_frame {
+                    let wa_in = app.playback.work_area_in.unwrap_or(0);
                     let wa_out = app
-                        .work_area_out
+                        .playback.work_area_out
                         .unwrap_or(comp.duration_frames)
                         .min(comp.duration_frames.saturating_sub(1));
                     app.ram_texture_ids.clear();
                     app.ram_prepass_cursor = wa_in;
                     app.ram_prepass_end = wa_in + (wa_out - wa_in).min(RAM_PREPASS_MAX_FRAMES);
                 }
-                if app.is_playing && app.ram_prepass_cursor <= app.ram_prepass_end {
+                if app.playback.is_playing && app.ram_prepass_cursor <= app.ram_prepass_end {
                     let batch_end = app.ram_prepass_cursor + RAM_PREPASS_FRAMES_PER_TICK - 1;
                     let batch_end = batch_end.min(app.ram_prepass_end);
                     renderer.render_ram_preview_range(
@@ -328,17 +328,17 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: u32) 
                     }
                     app.ram_prepass_cursor = batch_end.saturating_add(1);
                 }
-                if !app.is_playing && app.was_playing_last_frame {
+                if !app.playback.is_playing && app.was_playing_last_frame {
                     // Playback stopped: free ring textures and egui ids
                     for (_, id) in app.ram_texture_ids.drain(..) {
                         wgpu_state.renderer.write().free_texture(&id);
                     }
                     renderer.clear_ram_preview();
                 }
-                app.was_playing_last_frame = app.is_playing;
+                app.was_playing_last_frame = app.playback.is_playing;
 
                 // During playback, prefer a cached RAM frame over a live render
-                let ram_id = if app.is_playing {
+                let ram_id = if app.playback.is_playing {
                     app.ram_texture_ids
                         .iter()
                         .find(|(f, _)| *f == current_frame)
@@ -376,22 +376,22 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: u32) 
                     (Some(view), rec)
                 };
                 let render_ms = render_started.elapsed().as_secs_f32() * 1000.0;
-                app.preview_render_ema_ms = if app.preview_render_ema_ms <= 0.0 {
+                app.playback.preview_render_ema_ms = if app.playback.preview_render_ema_ms <= 0.0 {
                     render_ms
                 } else {
-                    app.preview_render_ema_ms * 0.9 + render_ms * 0.1
+                    app.playback.preview_render_ema_ms * 0.9 + render_ms * 0.1
                 };
 
                 // Adapt quality only during playback; idle renders restore full quality
-                if app.is_playing {
+                if app.playback.is_playing {
                     let budget_ms = 1000.0 / comp.fps.max(1) as f32 * 0.8;
-                    if app.preview_render_ema_ms > budget_ms {
-                        app.adaptive_preview_factor = (app.adaptive_preview_factor * 0.8).max(0.125);
-                    } else if app.preview_render_ema_ms < budget_ms * 0.5 {
-                        app.adaptive_preview_factor = (app.adaptive_preview_factor * 1.15).min(1.0);
+                    if app.playback.preview_render_ema_ms > budget_ms {
+                        app.playback.adaptive_preview_factor = (app.playback.adaptive_preview_factor * 0.8).max(0.125);
+                    } else if app.playback.preview_render_ema_ms < budget_ms * 0.5 {
+                        app.playback.adaptive_preview_factor = (app.playback.adaptive_preview_factor * 1.15).min(1.0);
                     }
                 } else {
-                    app.adaptive_preview_factor = app.adaptive_preview_factor.max(0.9); // drift back to full
+                    app.playback.adaptive_preview_factor = app.playback.adaptive_preview_factor.max(0.9); // drift back to full
                 }
                 if let Some(view) = texture_view {
                     if app.viewport_texture_id.is_none() || recreated {
@@ -543,7 +543,7 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: u32) 
                     });
             }
 
-            if let Some(sel_li) = app.selected_layer_idx {
+            if let Some(sel_li) = app.selection.selected_layer_idx {
                 let pointer = viewport_response.interact_pointer_pos();
                 let comp_pt: Option<[f32; 2]> = pointer.map(|pp| {
                     [(pp.x - origin_x) / draw_w * comp_w, (pp.y - origin_y) / draw_h * comp_h]
@@ -722,7 +722,7 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: u32) 
                         });
                     });
             }
-            if let Some(sel_li) = app.selected_layer_idx {
+            if let Some(sel_li) = app.selection.selected_layer_idx {
                 let pointer = viewport_response.interact_pointer_pos();
                 let comp_pt: Option<[f32; 2]> = pointer.map(|pp| {
                     [(pp.x - origin_x) / draw_w * comp_w, (pp.y - origin_y) / draw_h * comp_h]
@@ -825,7 +825,7 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: u32) 
 
         // ── Puppet Pin tool: draw / place / drag pins on the selected layer ──
         if app.active_tool == crate::ui::toolbar::ActiveTool::PuppetPin {
-            if let Some(sel_li) = app.selected_layer_idx {
+            if let Some(sel_li) = app.selection.selected_layer_idx {
                 // 1) Draw pins & detect hover (read-only borrow).
                 let mut hits: Vec<(usize, egui::Pos2)> = Vec::new();
                 let mut placed: Vec<egui::Pos2> = Vec::new();
@@ -926,8 +926,8 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: u32) 
                 if viewport_response.dragged() {
                     let cx = (pp.x - origin_x) / draw_w * comp_w;
                     let cy = (pp.y - origin_y) / draw_h * comp_h;
-                    if let Some(idx) = app.selected_layer_idx {
-                        let cf = app.current_frame;
+                    if let Some(idx) = app.selection.selected_layer_idx {
+                        let cf = app.playback.current_frame;
                         let comp = app.history.current_mut().active_composition_mut();
                         if let Some(layer) = comp.layers.get_mut(idx) {
                             match &mut layer.transform.position {
@@ -948,8 +948,8 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: u32) 
                             crate::core::frame_cache::bump_version();
                         }
                         let max_f = app.history.current().active_composition().duration_frames.saturating_sub(1);
-                        if app.current_frame < max_f {
-                            app.current_frame += 1;
+                        if app.playback.current_frame < max_f {
+                            app.playback.current_frame += 1;
                             ctx.request_repaint();
                         }
                     }
@@ -1011,7 +1011,7 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: u32) 
                         });
                     });
             }
-            if let Some(sel_li) = app.selected_layer_idx {
+            if let Some(sel_li) = app.selection.selected_layer_idx {
                 let stroke_id = egui::Id::new(("roto_live_stroke", sel_li));
                 let alt_held = ctx.input(|i| i.modifiers.alt);
                 let fg_pref = ctx.data_mut(|d| d.get_temp::<bool>(egui::Id::new("roto_fg_mode")).unwrap_or(true));
@@ -1109,7 +1109,7 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: u32) 
                         let hh = (scale[1].abs() * 0.6).max(30.0);
                         if (comp_px - pos[0]).abs() <= hw && (comp_py - pos[1]).abs() <= hh {
                             app.inline_text_edit_layer = Some(i);
-                            app.selected_layer_idx = Some(i);
+                            app.selection.selected_layer_idx = Some(i);
                             break;
                         }
                     }
@@ -1137,7 +1137,7 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: u32) 
                 let mut mask_hit: Option<(usize, usize, usize)> = None;
 
                 // 1. Check if clicking on selected layer's mask vertices
-                if let Some(sel_li) = app.selected_layer_idx {
+                if let Some(sel_li) = app.selection.selected_layer_idx {
                     if sel_li < comp_state.layers.len() {
                         let l = &comp_state.layers[sel_li];
                         for (mi, mask) in l.masks.iter().enumerate() {
@@ -1165,7 +1165,7 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: u32) 
                 // 0. Position keyframe dots on the motion path (spatial editing)
                 let kf_hit: Option<(usize, u32, [f32; 2])> =
                     if app.active_tool == crate::ui::toolbar::ActiveTool::Selection {
-                        app.selected_layer_idx.and_then(|sel_li| {
+                        app.selection.selected_layer_idx.and_then(|sel_li| {
                             let l = comp_state.layers.get(sel_li)?;
                             if l.locked || !l.is_active(current_frame) {
                                 return None;
@@ -1185,13 +1185,13 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: u32) 
 
                 // 1a-tangent. Bezier tangent handle hit detection
                 let tangent_hit: Option<(usize, u32, u8, [f32; 2])> = if app.active_tool == crate::ui::toolbar::ActiveTool::Selection {
-                    if let Some(sel) = app.selected_layer_idx {
+                    if let Some(sel) = app.selection.selected_layer_idx {
                         if sel < comp_state.layers.len() {
                             let l = &comp_state.layers[sel];
                             let pos_kfs = l.transform.position.keyframes().unwrap_or(&[]);
                             if pos_kfs.len() >= 2 {
                                 let aspect = comp_w / comp_h;
-                                let (ox, oy, dw, dh) = crate::ui::viewport_state::compute_draw_layout_pan(draw_rect, aspect, app.viewport_mag_ratio, app.viewport_pan);
+                                let (ox, oy, dw, dh) = crate::ui::viewport_state::compute_draw_layout_pan(draw_rect, aspect, app.ui_tabs.viewport_mag_ratio, app.playback.viewport_pan);
                                 let to_scr = |v: [f32; 2]| -> eframe::egui::Pos2 {
                                     egui::pos2(ox + (v[0] / comp_w) * dw, oy + (v[1] / comp_h) * dh)
                                 };
@@ -1246,7 +1246,7 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: u32) 
                     use crate::ui::toolbar::ActiveTool;
                     let mut scale_hit = false;
                     if app.active_tool == ActiveTool::Selection {
-                        if let Some(sel) = app.selected_layer_idx {
+                        if let Some(sel) = app.selection.selected_layer_idx {
                             if sel < comp_state.layers.len() && !comp_state.layers[sel].locked {
                                 let l = &comp_state.layers[sel];
                                 if l.is_active(current_frame) {
@@ -1293,19 +1293,19 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: u32) 
                         let shift_held = ui.input(|i| i.modifiers.shift);
                         // ── Selection bookkeeping (syncs timeline multi-select) ──
                         if shift_held {
-                            if !app.selected_layers.insert(idx) {
-                                app.selected_layers.remove(&idx);
+                            if !app.selection.selected_layers.insert(idx) {
+                                app.selection.selected_layers.remove(&idx);
                             }
-                            app.selected_layer_idx = Some(idx);
-                        } else if !app.selected_layers.contains(&idx) {
-                            app.selected_layers.clear();
-                            app.selected_layers.insert(idx);
-                            app.selected_layer_idx = Some(idx);
+                            app.selection.selected_layer_idx = Some(idx);
+                        } else if !app.selection.selected_layers.contains(&idx) {
+                            app.selection.selected_layers.clear();
+                            app.selection.selected_layers.insert(idx);
+                            app.selection.selected_layer_idx = Some(idx);
                         }
 
                         // ── Group drag: hit layer part of a multi-selection → move all together ──
-                        if app.active_tool == crate::ui::toolbar::ActiveTool::Selection && app.selected_layers.len() > 1 && app.selected_layers.contains(&idx) {
-                            let starts: Vec<(usize, [f32; 2])> = app.selected_layers.iter()
+                        if app.active_tool == crate::ui::toolbar::ActiveTool::Selection && app.selection.selected_layers.len() > 1 && app.selection.selected_layers.contains(&idx) {
+                            let starts: Vec<(usize, [f32; 2])> = app.selection.selected_layers.iter()
                                 .filter_map(|&li| {
                                     let l = comp_state.layers.get(li)?;
                                     if l.locked { return None; }
@@ -1510,7 +1510,7 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: u32) 
                             _ => {
                                 match &mut layer.transform.position {
                                     Animatable::Constant(ref mut pos) => {
-                                        if app.motion_sketch_active && app.is_playing {
+                                        if app.motion_sketch_active && app.playback.is_playing {
                                             // Motion Sketch: promote Constant → Animated with frame-0 + current
                                             let old_pos = *pos;
                                             let mut kfs = vec![
@@ -1610,9 +1610,9 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: u32) 
                     let comp_mut = app.history.current_mut().active_composition_mut();
                     comp_mut.layers.push(shape_layer);
                     let new_idx = comp_mut.layers.len() - 1;
-                    app.selected_layer_idx = Some(new_idx);
-                    app.selected_layers.clear();
-                    app.selected_layers.insert(new_idx);
+                    app.selection.selected_layer_idx = Some(new_idx);
+                    app.selection.selected_layers.clear();
+                    app.selection.selected_layers.insert(new_idx);
                     crate::core::frame_cache::bump_version();
                     app.toasts.info("Rectangle created (Q tool)");
                 }
@@ -1638,9 +1638,9 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: u32) 
                     let comp_mut = app.history.current_mut().active_composition_mut();
                     comp_mut.layers.push(text_layer);
                     let new_idx = comp_mut.layers.len() - 1;
-                    app.selected_layer_idx = Some(new_idx);
-                    app.selected_layers.clear();
-                    app.selected_layers.insert(new_idx);
+                    app.selection.selected_layer_idx = Some(new_idx);
+                    app.selection.selected_layers.clear();
+                    app.selection.selected_layers.insert(new_idx);
                     app.inline_text_edit_layer = Some(new_idx);
                     crate::core::frame_cache::bump_version();
                 }
@@ -1655,7 +1655,7 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: u32) 
                 }
                 // Motion Sketch: finalize recording buffer into keyframes
                 if app.motion_sketch_active && !app.motion_sketch_recording.is_empty() {
-                    if let Some(sel_idx) = app.selected_layer_idx {
+                    if let Some(sel_idx) = app.selection.selected_layer_idx {
                         let recording = std::mem::take(&mut app.motion_sketch_recording);
                         let recording_count = recording.len();
                         let comp_mut = app.history.current_mut().active_composition_mut();
@@ -1724,7 +1724,7 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: u32) 
 
         // ── Selected-layer transform box + corner scale handles (Selection tool) ──
         if app.show_handles && app.active_tool == crate::ui::toolbar::ActiveTool::Selection {
-            if let Some(sel) = app.selected_layer_idx {
+            if let Some(sel) = app.selection.selected_layer_idx {
                 let comp_state = app.history.current().active_composition();
                 if sel < comp_state.layers.len() {
                     let l = &comp_state.layers[sel];
@@ -1762,16 +1762,16 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: u32) 
         ui.horizontal(|ui| {
             ui.style_mut().spacing.item_spacing.x = 4.0;
             // AE Magnification Ratio Dropdown
-            let mag_val = app.viewport_mag_ratio;
+            let mag_val = app.ui_tabs.viewport_mag_ratio;
             egui::ComboBox::from_id_salt("mag_combo_bottom")
                 .selected_text(if mag_val == 4.0 { "400%" } else if mag_val == 2.0 { "200%" } else if mag_val == 1.0 { "100%" } else if mag_val == 0.5 { "50%" } else if mag_val == 0.25 { "25%" } else { "Fit" })
                 .show_ui(ui, |ui| {
-                    if ui.selectable_label(app.viewport_mag_ratio == 0.0, "Fit").clicked() { app.viewport_mag_ratio = 0.0; }
-                    if ui.selectable_label(app.viewport_mag_ratio == 0.25, "25%").clicked() { app.viewport_mag_ratio = 0.25; }
-                    if ui.selectable_label(app.viewport_mag_ratio == 0.5, "50%").clicked() { app.viewport_mag_ratio = 0.5; }
-                    if ui.selectable_label(app.viewport_mag_ratio == 1.0, "100%").clicked() { app.viewport_mag_ratio = 1.0; }
-                    if ui.selectable_label(app.viewport_mag_ratio == 2.0, "200%").clicked() { app.viewport_mag_ratio = 2.0; }
-                    if ui.selectable_label(app.viewport_mag_ratio == 4.0, "400%").clicked() { app.viewport_mag_ratio = 4.0; }
+                    if ui.selectable_label(app.ui_tabs.viewport_mag_ratio == 0.0, "Fit").clicked() { app.ui_tabs.viewport_mag_ratio = 0.0; }
+                    if ui.selectable_label(app.ui_tabs.viewport_mag_ratio == 0.25, "25%").clicked() { app.ui_tabs.viewport_mag_ratio = 0.25; }
+                    if ui.selectable_label(app.ui_tabs.viewport_mag_ratio == 0.5, "50%").clicked() { app.ui_tabs.viewport_mag_ratio = 0.5; }
+                    if ui.selectable_label(app.ui_tabs.viewport_mag_ratio == 1.0, "100%").clicked() { app.ui_tabs.viewport_mag_ratio = 1.0; }
+                    if ui.selectable_label(app.ui_tabs.viewport_mag_ratio == 2.0, "200%").clicked() { app.ui_tabs.viewport_mag_ratio = 2.0; }
+                    if ui.selectable_label(app.ui_tabs.viewport_mag_ratio == 4.0, "400%").clicked() { app.ui_tabs.viewport_mag_ratio = 4.0; }
                 });
 
             ui.separator();
@@ -1874,7 +1874,7 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: u32) 
 
         // ── Pen tool commit: turn collected points into a mask on the selected layer ──
         if pen_commit && app.pen_points.len() >= 3 {
-            let target_layer = match app.selected_layer_idx {
+            let target_layer = match app.selection.selected_layer_idx {
                 Some(idx) => idx,
                 None => {
                     // No layer selected: create a host solid for the mask
@@ -1892,7 +1892,7 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: u32) 
                     let comp_mut = app.history.current_mut().active_composition_mut();
                     comp_mut.layers.push(solid);
                     let new_idx = comp_mut.layers.len() - 1;
-                    app.selected_layer_idx = Some(new_idx);
+                    app.selection.selected_layer_idx = Some(new_idx);
                     new_idx
                 }
             };

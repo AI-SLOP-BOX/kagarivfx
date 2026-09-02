@@ -1,5 +1,5 @@
-use eframe::egui;
 use super::utils::{draw_keyframe_tick, KeyframeTickResult};
+use eframe::egui;
 
 type KfMenuCb<'a> = Option<&'a mut dyn for<'r> FnMut(&'static str, u32, &'r egui::Response)>;
 type KfBoxSelCb<'a> = Option<&'a mut dyn FnMut(&'static str, Vec<u32>, bool)>;
@@ -16,8 +16,24 @@ pub fn draw_prop_row(
     left_pane_w: f32,
     on_move: Option<&mut dyn FnMut(u32, u32)>,
 ) -> Option<u32> {
-    draw_prop_row_ext(ui, label, kfs, current_frame, start_frame, zoom_span, left_pane_w,
-        &std::collections::HashSet::new(), "", on_move, None, None, None, None, &[], None)
+    draw_prop_row_ext(
+        ui,
+        label,
+        kfs,
+        current_frame,
+        start_frame,
+        zoom_span,
+        left_pane_w,
+        &std::collections::HashSet::new(),
+        "",
+        on_move,
+        None,
+        None,
+        None,
+        None,
+        &[],
+        None,
+    )
 }
 
 /// Extended version with keyframe selection support.
@@ -65,20 +81,30 @@ pub fn draw_prop_row_ext(
 
     // Marquee state persists across frames of an active Shift+drag.
     let marquee_id = egui::Id::new(("kf_marquee", prop_key));
-    let mut marquee_origin: Option<egui::Pos2> = ui.ctx().data_mut(|d| d.get_temp::<egui::Pos2>(marquee_id));
+    let mut marquee_origin: Option<egui::Pos2> =
+        ui.ctx().data_mut(|d| d.get_temp::<egui::Pos2>(marquee_id));
 
     ui.horizontal(|ui| {
         ui.allocate_ui(egui::vec2(left_pane_w, 18.0), |ui| {
-            let lbl_resp = ui.add_sized([left_pane_w, 18.0], egui::Label::new(
-                egui::RichText::new(label).small().color(crate::ui::theme::colors::TEXT_SECONDARY),
-            ).sense(egui::Sense::click()));
+            let lbl_resp = ui.add_sized(
+                [left_pane_w, 18.0],
+                egui::Label::new(
+                    egui::RichText::new(label)
+                        .small()
+                        .color(crate::ui::theme::colors::TEXT_SECONDARY),
+                )
+                .sense(egui::Sense::click()),
+            );
             if lbl_resp.double_clicked() {
-                if let Some(cb) = on_select_all.as_mut() { cb(prop_key); }
+                if let Some(cb) = on_select_all.as_mut() {
+                    cb(prop_key);
+                }
             }
         });
 
         let avail_w = ui.available_width();
-        let (rect, response) = ui.allocate_exact_size(egui::vec2(avail_w, 18.0), egui::Sense::click_and_drag());
+        let (rect, response) =
+            ui.allocate_exact_size(egui::vec2(avail_w, 18.0), egui::Sense::click_and_drag());
         ui.painter().line_segment(
             [rect.left_top(), rect.right_top()],
             egui::Stroke::new(0.5, crate::ui::theme::colors::BORDER_SUBTLE),
@@ -100,7 +126,8 @@ pub fn draw_prop_row_ext(
         // ── Shift+Drag marquee box-select over keyframe ticks (AE parity) ──
         if response.drag_started() && ui.input(|i| i.modifiers.shift) {
             marquee_origin = response.interact_pointer_pos();
-            ui.ctx().data_mut(|d| d.insert_temp(marquee_id, marquee_origin));
+            ui.ctx()
+                .data_mut(|d| d.insert_temp(marquee_id, marquee_origin));
         }
 
         let mut marquee_rect: Option<egui::Rect> = None;
@@ -123,8 +150,13 @@ pub fn draw_prop_row_ext(
 
         if let Some(r) = marquee_rect {
             // Translucent selection rectangle + border
-            ui.painter().rect_filled(r, 2.0, crate::ui::theme::colors::TIMELINE_SELECTION);
-            ui.painter().rect_stroke(r, 2.0, egui::Stroke::new(1.0, crate::ui::theme::colors::BORDER_ACTIVE));
+            ui.painter()
+                .rect_filled(r, 2.0, crate::ui::theme::colors::TIMELINE_SELECTION);
+            ui.painter().rect_stroke(
+                r,
+                2.0,
+                egui::Stroke::new(1.0, crate::ui::theme::colors::BORDER_ACTIVE),
+            );
 
             let mut boxed: Vec<u32> = Vec::new();
             for &(kf_frame, _) in kfs {
@@ -149,7 +181,16 @@ pub fn draw_prop_row_ext(
                 let kf_x = rect.left() + norm * rect.width();
                 let kf_y = rect.center().y;
                 let is_selected = selected_kfs.contains(&(prop_key.to_string(), kf_frame));
-                match draw_keyframe_tick(ui, kf_x, kf_y, true, current_frame, kf_frame, Some(interpolation), is_selected) {
+                match draw_keyframe_tick(
+                    ui,
+                    kf_x,
+                    kf_y,
+                    true,
+                    current_frame,
+                    kf_frame,
+                    Some(interpolation),
+                    is_selected,
+                ) {
                     (KeyframeTickResult::Clicked { shift, cmd }, _resp) => {
                         requested_frame = Some(kf_frame);
                         pending_select = Some((prop_key, kf_frame, shift, cmd));

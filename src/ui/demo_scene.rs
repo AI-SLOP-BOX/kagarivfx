@@ -16,23 +16,29 @@ pub fn build(app: &mut crate::AfterEffectsApp) {
     let mut comp = Composition::new(
         format!("comp_demo_{}", count),
         "🎬 Demo Scene".to_string(),
-        1280, 720, 30, 150,
+        1280,
+        720,
+        30,
+        150,
     );
     comp.blend_linear = false;
     comp.dither_output = true;
 
-
     // ── Background ──
     let bg = Layer::new(
-        "demo_bg".into(), "Background".into(),
-        LayerType::Solid { color: [0.05, 0.07, 0.11, 1.0] },
+        "demo_bg".into(),
+        "Background".into(),
+        LayerType::Solid {
+            color: [0.05, 0.07, 0.11, 1.0],
+        },
         comp.duration_frames,
     );
     comp.layers.push(bg);
 
     // ── Accent circle: scale bounce + constant spin ──
     let mut circle = Layer::new(
-        "demo_circle".into(), "Accent Orb".into(),
+        "demo_circle".into(),
+        "Accent Orb".into(),
         LayerType::Shape {
             shape_type: ShapeType::Ellipse {
                 width: Animatable::new_constant(180.0),
@@ -47,10 +53,8 @@ pub fn build(app: &mut crate::AfterEffectsApp) {
         },
         comp.duration_frames,
     );
-    circle.transform.position = Animatable::new_animated(vec![
-        kfv2(0, [320.0, 500.0]),
-        kfv2(150, [960.0, 220.0]),
-    ]);
+    circle.transform.position =
+        Animatable::new_animated(vec![kfv2(0, [320.0, 500.0]), kfv2(150, [960.0, 220.0])]);
     circle.transform.position.easy_ease();
     circle.transform.scale = Animatable::new_animated(vec![
         kfv2(0, [0.0, 0.0]),
@@ -62,21 +66,21 @@ pub fn build(app: &mut crate::AfterEffectsApp) {
 
     // ── Title: fade + rise ──
     let mut title = Layer::new(
-        "demo_title".into(), "Title".into(),
+        "demo_title".into(),
+        "Title".into(),
         LayerType::new_text("AFTER EFFECTS OSS", 88, [0.95, 0.96, 1.0, 1.0]),
         comp.duration_frames,
     );
-    title.transform.position = Animatable::new_animated(vec![
-        kfv2(10, [640.0, 400.0]),
-        kfv2(50, [640.0, 350.0]),
-    ]);
+    title.transform.position =
+        Animatable::new_animated(vec![kfv2(10, [640.0, 400.0]), kfv2(50, [640.0, 350.0])]);
     title.transform.opacity = Animatable::new_animated(vec![kf(0, 0.0), kf(35, 100.0)]);
     title.transform.opacity.easy_ease();
     comp.layers.push(title);
 
     // ── Subtitle ──
     let mut sub = Layer::new(
-        "demo_sub".into(), "Subtitle".into(),
+        "demo_sub".into(),
+        "Subtitle".into(),
         LayerType::new_text("Rust • GPU • Open Source", 34, [0.55, 0.75, 1.0, 1.0]),
         comp.duration_frames,
     );

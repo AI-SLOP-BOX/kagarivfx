@@ -1,9 +1,9 @@
 #![allow(clippy::too_many_arguments)]
 
-use eframe::egui;
-use crate::AfterEffectsApp;
 use crate::core::timeline::LayerType;
 use crate::ui::theme::colors;
+use crate::AfterEffectsApp;
+use eframe::egui;
 
 pub fn draw_camera_3d_viewport(
     ui: &mut egui::Ui,
@@ -19,8 +19,8 @@ pub fn draw_camera_3d_viewport(
 ) {
     if viewport_response.dragged_by(egui::PointerButton::Secondary) {
         let d = viewport_response.drag_delta();
-        app.camera_orbit.0 += d.x * 0.5;   // yaw
-        app.camera_orbit.1 += d.y * 0.5;   // pitch
+        app.camera_orbit.0 += d.x * 0.5; // yaw
+        app.camera_orbit.1 += d.y * 0.5; // pitch
         app.camera_orbit.1 = app.camera_orbit.1.clamp(-89.0, 89.0);
     }
     // Scroll to zoom
@@ -64,13 +64,15 @@ pub fn draw_camera_3d_viewport(
         let x = gx as f32 * grid_step - comp_w * 0.5 + cx_world;
         let p0 = project_3d(x, comp_h, 0.0);
         let p1 = project_3d(x, 0.0, 0.0);
-        ui.painter().line_segment([p0, p1], egui::Stroke::new(0.8, grid_color));
+        ui.painter()
+            .line_segment([p0, p1], egui::Stroke::new(0.8, grid_color));
     }
     for gy in 0..=grid_n {
         let y = gy as f32 * (comp_h / grid_n as f32);
         let p0 = project_3d(0.0, y, 0.0);
         let p1 = project_3d(comp_w, y, 0.0);
-        ui.painter().line_segment([p0, p1], egui::Stroke::new(0.8, grid_color));
+        ui.painter()
+            .line_segment([p0, p1], egui::Stroke::new(0.8, grid_color));
     }
 
     // Draw comp canvas border in 3D
@@ -90,7 +92,9 @@ pub fn draw_camera_3d_viewport(
     // Draw each 3D layer as a projected billboard
     let comp = app.history.current().active_composition();
     for (li, layer) in comp.layers.iter().enumerate() {
-        if !layer.is_active(current_frame) { continue; }
+        if !layer.is_active(current_frame) {
+            continue;
+        }
         let (pos, scale, _rot, opacity) = comp.resolve_world_transform(layer, current_frame);
         let z_depth = if layer.is_3d {
             layer.transform_3d.position.evaluate(current_frame)[2]
@@ -101,14 +105,18 @@ pub fn draw_camera_3d_viewport(
         let color = match &layer.layer_type {
             LayerType::Solid { color } | LayerType::Text { color, .. } => {
                 egui::Color32::from_rgba_premultiplied(
-                    (color[0] * 255.0) as u8, (color[1] * 255.0) as u8,
-                    (color[2] * 255.0) as u8, (op * 200.0) as u8)
+                    (color[0] * 255.0) as u8,
+                    (color[1] * 255.0) as u8,
+                    (color[2] * 255.0) as u8,
+                    (op * 200.0) as u8,
+                )
             }
-            LayerType::Shape { color, .. } => {
-                egui::Color32::from_rgba_premultiplied(
-                    (color[0] * 255.0) as u8, (color[1] * 255.0) as u8,
-                    (color[2] * 255.0) as u8, (op * 200.0) as u8)
-            }
+            LayerType::Shape { color, .. } => egui::Color32::from_rgba_premultiplied(
+                (color[0] * 255.0) as u8,
+                (color[1] * 255.0) as u8,
+                (color[2] * 255.0) as u8,
+                (op * 200.0) as u8,
+            ),
             _ => egui::Color32::from_rgba_premultiplied(100, 180, 255, (op * 160.0) as u8),
         };
         let center = project_3d(pos[0], pos[1], z_depth);
@@ -116,17 +124,25 @@ pub fn draw_camera_3d_viewport(
         let h = scale[1].abs() * 0.5 * (draw_h / comp_h);
         let bbox = egui::Rect::from_center_size(center, egui::vec2(w, h));
         ui.painter().rect_filled(bbox, 3.0, color);
-        ui.painter().rect_stroke(bbox, 3.0, egui::Stroke::new(1.0,
-            if Some(li) == app.selected_layer_idx {
-                colors::ACCENT_CYAN
-            } else {
-                colors::GRID_LINE
-            }
-        ));
-        ui.painter().text(egui::pos2(center.x, bbox.top() - 10.0),
-            egui::Align2::CENTER_CENTER, &layer.name,
+        ui.painter().rect_stroke(
+            bbox,
+            3.0,
+            egui::Stroke::new(
+                1.0,
+                if Some(li) == app.selection.selected_layer_idx {
+                    colors::ACCENT_CYAN
+                } else {
+                    colors::GRID_LINE
+                },
+            ),
+        );
+        ui.painter().text(
+            egui::pos2(center.x, bbox.top() - 10.0),
+            egui::Align2::CENTER_CENTER,
+            &layer.name,
             egui::FontId::proportional(10.0),
-            colors::HUD_TEXT);
+            colors::HUD_TEXT,
+        );
     }
 
     // 3D Camera HUD overlay
@@ -135,9 +151,16 @@ pub fn draw_camera_3d_viewport(
         egui::vec2(250.0, 28.0),
     );
     ui.painter().rect_filled(hud, 4.0, colors::HUD_BG);
-    ui.painter().rect_stroke(hud, 4.0, egui::Stroke::new(1.0, colors::HUD_STROKE));
-    ui.painter().text(hud.center(), egui::Align2::CENTER_CENTER,
-        format!("[3D CAMERA] Yaw: {:.1}°  Pitch: {:.1}°  Z: {:.0}", yaw_deg, pitch_deg, zoom),
+    ui.painter()
+        .rect_stroke(hud, 4.0, egui::Stroke::new(1.0, colors::HUD_STROKE));
+    ui.painter().text(
+        hud.center(),
+        egui::Align2::CENTER_CENTER,
+        format!(
+            "[3D CAMERA] Yaw: {:.1}°  Pitch: {:.1}°  Z: {:.0}",
+            yaw_deg, pitch_deg, zoom
+        ),
         egui::FontId::proportional(11.0),
-        colors::HUD_STATUS_TEXT);
+        colors::HUD_STATUS_TEXT,
+    );
 }

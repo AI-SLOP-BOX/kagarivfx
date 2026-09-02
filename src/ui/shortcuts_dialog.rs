@@ -1,6 +1,6 @@
-use eframe::egui;
-use crate::AfterEffectsApp;
 use crate::ui::theme::colors;
+use crate::AfterEffectsApp;
+use eframe::egui;
 
 pub fn draw_shortcuts_dialog(app: &mut AfterEffectsApp, ctx: &egui::Context) {
     let mut show = app.show_shortcuts_dialog;
@@ -26,17 +26,29 @@ pub fn draw_shortcuts_dialog(app: &mut AfterEffectsApp, ctx: &egui::Context) {
                         ui.end_row();
 
                         let shortcuts = [
-                            ("Cmd + K / Ctrl + K", "✨ Open Command Palette (Fuzzy Search Everything)"),
+                            (
+                                "Cmd + K / Ctrl + K",
+                                "✨ Open Command Palette (Fuzzy Search Everything)",
+                            ),
                             ("Tab / Shift+Tab", "Cycle Selected Layer Down / Up"),
                             ("0 (Numpad)", "RAM Preview (Force Work Area Pre-Render)"),
-                            ("Double-Click Layer", "✏ Open Canvas Inline Quick Numeric Editor"),
-                            ("Shift + Drag", "🎯 15° Rotation Snap / Orthogonal Axis Movement"),
+                            (
+                                "Double-Click Layer",
+                                "✏ Open Canvas Inline Quick Numeric Editor",
+                            ),
+                            (
+                                "Shift + Drag",
+                                "🎯 15° Rotation Snap / Orthogonal Axis Movement",
+                            ),
                             ("Cmd + Y", "Create New Solid Layer"),
                             ("Cmd + Alt + Shift + T", "Create New Text Layer"),
                             ("Cmd + Alt + Shift + Y", "Create New Null Object Layer"),
                             ("Cmd + Alt + Y", "Create New Adjustment Layer"),
                             ("Cmd + Shift + C", "Pre-Compose Selected Layers"),
-                            ("Cmd + Shift + K", "Toggle Motion Sketch (record position while playing)"),
+                            (
+                                "Cmd + Shift + K",
+                                "Toggle Motion Sketch (record position while playing)",
+                            ),
                             ("Cmd + D", "Duplicate Selected Layer"),
                             ("F9", "Easy Ease Keyframes (with Visual Bezier Presets)"),
                             ("Shift + F9", "Ease In (Slow Acceleration)"),
@@ -53,11 +65,20 @@ pub fn draw_shortcuts_dialog(app: &mut AfterEffectsApp, ctx: &egui::Context) {
                             ("Cmd + Shift + Z", "Redo"),
                             ("Cmd + A", "Select All Layers"),
                             ("Cmd + 0", "Viewport Zoom to Fit"),
-                            ("Shift + Z", "Zoom to Selected Layers' Bounding Box (no sel: Fit)"),
+                            (
+                                "Shift + Z",
+                                "Zoom to Selected Layers' Bounding Box (no sel: Fit)",
+                            ),
                             ("Cmd + Alt + ←", "Breadcrumb Back (previous composition)"),
-                            ("Cmd + Alt + F", "Fit Selected Layer to Comp (scale + center)"),
+                            (
+                                "Cmd + Alt + F",
+                                "Fit Selected Layer to Comp (scale + center)",
+                            ),
                             ("Ctrl + Drag Ruler", "Rubber-band define Work Area In/Out"),
-                            ("Right-Click Audio Layer", "Add 10-frame Audio Fade In / Out"),
+                            (
+                                "Right-Click Audio Layer",
+                                "Add 10-frame Audio Fade In / Out",
+                            ),
                             ("P", "Select Position Property"),
                             ("S", "Select Scale Property"),
                             ("R", "Select Rotation Property"),
@@ -70,7 +91,10 @@ pub fn draw_shortcuts_dialog(app: &mut AfterEffectsApp, ctx: &egui::Context) {
                             ("Q", "Shape Tool (Rectangle / Ellipse)"),
                             ("G", "Pen / Vector Bezier Path Tool"),
                             ("Cmd + T", "Text Tool (in viewport)"),
-                            ("Cmd + P", "Puppet Pin Tool (click viewport to place, drag to animate)"),
+                            (
+                                "Cmd + P",
+                                "Puppet Pin Tool (click viewport to place, drag to animate)",
+                            ),
                             ("C", "3D Camera Tool"),
                             ("Cmd + S", "Save Project (overwrite current path)"),
                             ("Cmd + N", "New Composition (1920×1080 @ 30fps)"),
@@ -78,18 +102,31 @@ pub fn draw_shortcuts_dialog(app: &mut AfterEffectsApp, ctx: &egui::Context) {
                             ("M", "Add / Remove Composition Marker"),
                             ("Shift + ;", "Go to Next Composition Marker"),
                             ("Cmd + ;", "Go to Previous Composition Marker"),
-                            ("Shift + Drag on Keyframe Row", "Marquee Box-Select Keyframes"),
-                            ("Right-Click Keyframe", "Linear / Easy Ease / Hold / Time-Reverse / Delete"),
+                            (
+                                "Shift + Drag on Keyframe Row",
+                                "Marquee Box-Select Keyframes",
+                            ),
+                            (
+                                "Right-Click Keyframe",
+                                "Linear / Easy Ease / Hold / Time-Reverse / Delete",
+                            ),
                             ("Alt + Drag Layer Bar", "Slip Edit (shift content timing)"),
                             ("Double-Click Text Layer", "Edit Source Text in Viewport"),
-                            ("Drag Corner Handle", "Scale Selected Layer (Selection tool)"),
+                            (
+                                "Drag Corner Handle",
+                                "Scale Selected Layer (Selection tool)",
+                            ),
                             ("U", "Reveal Animated Properties Only"),
                             ("UU", "Reveal All Modified Properties"),
                             ("A", "Reveal Anchor Point Property"),
                         ];
 
                         for (sc, desc) in shortcuts {
-                            ui.label(egui::RichText::new(sc).monospace().color(colors::ACCENT_BLUE));
+                            ui.label(
+                                egui::RichText::new(sc)
+                                    .monospace()
+                                    .color(colors::ACCENT_BLUE),
+                            );
                             ui.label(desc);
                             ui.end_row();
                         }

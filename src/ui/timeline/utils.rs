@@ -1,9 +1,11 @@
 use crate::core::keyframe::InterpolationType;
-use eframe::egui;
 use crate::core::property::Animatable;
 use crate::ui::theme::colors;
+use eframe::egui;
 
-pub fn get_kfs<T: Clone>(prop: &Animatable<T>) -> Vec<(u32, crate::core::keyframe::InterpolationType)> {
+pub fn get_kfs<T: Clone>(
+    prop: &Animatable<T>,
+) -> Vec<(u32, crate::core::keyframe::InterpolationType)> {
     prop.keyframes()
         .map(|kfs| kfs.iter().map(|kf| (kf.frame, kf.interpolation)).collect())
         .unwrap_or_default()
@@ -29,12 +31,18 @@ pub fn maybe_snap_frame(frame: u32, snap: bool, comp: &crate::core::timeline::Co
     frame
 }
 
-pub fn snap_to_layer_edges(frame: u32, exclude_idx: usize, comp: &crate::core::timeline::Composition) -> u32 {
+pub fn snap_to_layer_edges(
+    frame: u32,
+    exclude_idx: usize,
+    comp: &crate::core::timeline::Composition,
+) -> u32 {
     let threshold = 5i32;
     let mut best = frame;
     let mut best_dist = threshold + 1;
     for (i, layer) in comp.layers.iter().enumerate() {
-        if i == exclude_idx { continue; }
+        if i == exclude_idx {
+            continue;
+        }
         for edge in [layer.in_frame, layer.out_frame] {
             let dist = (frame as i32 - edge as i32).abs();
             if dist < best_dist {
@@ -50,20 +58,30 @@ pub fn collect_all_kf_frames(comp: &crate::core::timeline::Composition) -> Vec<u
     let mut frames = Vec::new();
     for layer in &comp.layers {
         if let Some(kfs) = layer.transform.position.keyframes() {
-            for kf in kfs { frames.push(kf.frame); }
+            for kf in kfs {
+                frames.push(kf.frame);
+            }
         }
         if let Some(kfs) = layer.transform.scale.keyframes() {
-            for kf in kfs { frames.push(kf.frame); }
+            for kf in kfs {
+                frames.push(kf.frame);
+            }
         }
         if let Some(kfs) = layer.transform.rotation.keyframes() {
-            for kf in kfs { frames.push(kf.frame); }
+            for kf in kfs {
+                frames.push(kf.frame);
+            }
         }
         if let Some(kfs) = layer.transform.opacity.keyframes() {
-            for kf in kfs { frames.push(kf.frame); }
+            for kf in kfs {
+                frames.push(kf.frame);
+            }
         }
         for pin in &layer.puppet_pins {
             if let Some(kfs) = pin.position.keyframes() {
-                for kf in kfs { frames.push(kf.frame); }
+                for kf in kfs {
+                    frames.push(kf.frame);
+                }
             }
         }
     }
@@ -98,7 +116,10 @@ pub fn draw_keyframe_tick(
     is_selected: bool,
 ) -> (KeyframeTickResult, egui::Response) {
     let size = if is_sub_prop { 5.0 } else { 7.0 };
-    let rect = egui::Rect::from_center_size(egui::pos2(x, y), egui::vec2(size * 2.0 + 4.0, size * 2.0 + 4.0));
+    let rect = egui::Rect::from_center_size(
+        egui::pos2(x, y),
+        egui::vec2(size * 2.0 + 4.0, size * 2.0 + 4.0),
+    );
     let color = if is_selected {
         colors::ACCENT_ORANGE
     } else if *current_frame == kf_frame {
@@ -114,10 +135,16 @@ pub fn draw_keyframe_tick(
 
     if is_selected {
         // Selection glow ring behind keyframe
-        painter.circle_filled(egui::pos2(x, y), size + 3.0,
-            egui::Color32::from_rgba_premultiplied(255, 140, 0, 50));
-        painter.circle_stroke(egui::pos2(x, y), size + 2.0,
-            egui::Stroke::new(1.5, colors::ACCENT_ORANGE));
+        painter.circle_filled(
+            egui::pos2(x, y),
+            size + 3.0,
+            egui::Color32::from_rgba_premultiplied(255, 140, 0, 50),
+        );
+        painter.circle_stroke(
+            egui::pos2(x, y),
+            size + 2.0,
+            egui::Stroke::new(1.5, colors::ACCENT_ORANGE),
+        );
     }
 
     if is_linear {
@@ -127,7 +154,9 @@ pub fn draw_keyframe_tick(
         // Hold: square (AE convention)
         painter.rect_filled(
             egui::Rect::from_center_size(egui::pos2(x, y), egui::vec2(size * 1.4, size * 1.4)),
-            1.0, color);
+            1.0,
+            color,
+        );
     } else {
         // Bezier/Default: diamond (AE convention)
         #[allow(clippy::useless_vec)]
@@ -141,7 +170,8 @@ pub fn draw_keyframe_tick(
     }
 
     if is_selected {
-        let sel_rect = egui::Rect::from_center_size(egui::pos2(x, y), egui::vec2(size * 2.0, size * 2.0));
+        let sel_rect =
+            egui::Rect::from_center_size(egui::pos2(x, y), egui::vec2(size * 2.0, size * 2.0));
         painter.rect_stroke(sel_rect, 1.5, egui::Stroke::new(1.5, colors::ACCENT_ORANGE));
     }
 
@@ -152,11 +182,16 @@ pub fn draw_keyframe_tick(
         let interp_name = match _interpolation {
             Some(InterpolationType::Linear) => "Linear",
             Some(InterpolationType::Hold) => "Hold",
-            Some(InterpolationType::Bezier { custom_bezier: Some(_), .. }) => "Bezier (custom)",
+            Some(InterpolationType::Bezier {
+                custom_bezier: Some(_),
+                ..
+            }) => "Bezier (custom)",
             Some(InterpolationType::Bezier { .. }) => "Bezier / Ease",
             None => "Keyframe",
         };
-        response.clone().on_hover_text(format!("Frame {} · {}", kf_frame, interp_name));
+        response
+            .clone()
+            .on_hover_text(format!("Frame {} · {}", kf_frame, interp_name));
     }
     if response.secondary_clicked() {
         return (KeyframeTickResult::RightClicked, response);
@@ -164,7 +199,13 @@ pub fn draw_keyframe_tick(
     if response.clicked() {
         *current_frame = kf_frame;
         let mods = ui.input(|i| i.modifiers);
-        return (KeyframeTickResult::Clicked { shift: mods.shift, cmd: mods.command || mods.ctrl }, response);
+        return (
+            KeyframeTickResult::Clicked {
+                shift: mods.shift,
+                cmd: mods.command || mods.ctrl,
+            },
+            response,
+        );
     }
     if response.dragged() {
         let delta = response.drag_delta().x;
