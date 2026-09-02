@@ -221,13 +221,11 @@ fn apply_one_ctx(
             }
         }
         EffectType::LinearWipe { completion, angle } => {
-            pack::apply_linear_wipe(
-                pixels,
-                width,
-                height,
-                completion.evaluate(frame).clamp(0.0, 100.0),
-                angle.evaluate(frame),
-            );
+            let c = completion.evaluate(frame).clamp(0.0, 100.0) / 100.0;
+            let a = angle.evaluate(frame).to_radians();
+            if !crate::core::compute_pipeline::try_gpu_linear_wipe(pixels, width, height, c, a, 0.01) {
+                pack::apply_linear_wipe(pixels, width, height, c * 100.0, a);
+            }
         }
         EffectType::SimpleChoker { choke_amount } => {
             pack::apply_simple_choker(pixels, choke_amount.evaluate(frame));
@@ -241,15 +239,15 @@ fn apply_one_ctx(
             clip_white,
         } => {
             let sc = screen_color.evaluate(frame);
-            let opts = crate::core::chroma_key::ChromaKeyOptions {
-                screen_color: sc,
-                screen_gain: screen_gain.evaluate(frame),
-                screen_balance: 0.5,
-                despill_strength: 0.8,
-                clip_black: clip_black.evaluate(frame),
-                clip_white: clip_white.evaluate(frame),
-            };
-            crate::core::chroma_key::apply_chroma_key(pixels, width, height, &opts);
+            let gain = screen_gain.evaluate(frame);
+            let softness = (clip_white.evaluate(frame) - clip_black.evaluate(frame)).max(0.01);
+            if !crate::core::compute_pipeline::try_gpu_chroma_key(pixels, width, height, sc, gain, softness) {
+                let opts = crate::core::chroma_key::ChromaKeyOptions {
+                    screen_color: sc, screen_gain: gain, screen_balance: 0.5,
+                    despill_strength: 0.8, clip_black: clip_black.evaluate(frame), clip_white: clip_white.evaluate(frame),
+                };
+                crate::core::chroma_key::apply_chroma_key(pixels, width, height, &opts);
+            }
         }
         EffectType::Spherize {
             radius,
@@ -294,20 +292,17 @@ fn apply_one_ctx(
             preset_index,
             cycle_phase,
         } => {
-            let idx = preset_index.evaluate(frame).round() as u32 % 4;
-            let preset = match idx {
-                0 => crate::core::colorama::ColoramaPreset::Rainbow,
-                1 => crate::core::colorama::ColoramaPreset::Heatmap,
-                2 => crate::core::colorama::ColoramaPreset::Sepia,
-                _ => crate::core::colorama::ColoramaPreset::Solarize,
-            };
-            crate::core::colorama::apply_colorama(
-                pixels,
-                width,
-                height,
-                preset,
-                cycle_phase.evaluate(frame),
-            );
+            let cp = cycle_phase.evaluate(frame);
+            if !crate::core::compute_pipeline::try_gpu_colorama(pixels, width, height, cp, 1.0, 1.0) {
+                let idx = preset_index.evaluate(frame).round() as u32 % 4;
+                let preset = match idx {
+                    0 => crate::core::colorama::ColoramaPreset::Rainbow,
+                    1 => crate::core::colorama::ColoramaPreset::Heatmap,
+                    2 => crate::core::colorama::ColoramaPreset::Sepia,
+                    _ => crate::core::colorama::ColoramaPreset::Solarize,
+                };
+                crate::core::colorama::apply_colorama(pixels, width, height, preset, cp);
+            }
         }
 
         // Effects with CPU kernels: dispatch to cpu_effects_new
@@ -465,26 +460,21 @@ fn apply_one_ctx(
             }
         }
         EffectType::ColorSpaceConvert { mode } => {
-            crate::core::cpu_effects_new::apply_color_space_convert(
-                pixels,
-                width,
-                height,
-                *mode as u32,
-            );
+            let m = *mode as u32;
+            if !crate::core::compute_pipeline::try_gpu_color_space_convert(pixels, width, height, m) {
+                crate::core::cpu_effects_new::apply_color_space_convert(pixels, width, height, m);
+            }
         }
         EffectType::FilmGrain {
             intensity,
             grain_size,
             color_film: _,
         } => {
-            crate::core::cpu_effects_new::apply_film_grain(
-                pixels,
-                width,
-                height,
-                intensity.evaluate(frame),
-                *grain_size as u32,
-                frame,
-            );
+            let inten = intensity.evaluate(frame);
+            let seed = frame as f32;
+            if !crate::core::compute_pipeline::try_gpu_film_grain(pixels, width, height, inten, seed) {
+                crate::core::cpu_effects_new::apply_film_grain(pixels, width, height, inten, *grain_size as u32, frame);
+            }
         }
         EffectType::FractalNoise {
             fractal_type,
@@ -493,16 +483,15 @@ fn apply_one_ctx(
             complexity,
             evolution,
         } => {
-            crate::core::cpu_effects_new::apply_fractal_noise(
-                pixels,
-                width,
-                height,
-                fractal_type.evaluate(frame),
-                contrast.evaluate(frame),
-                brightness.evaluate(frame),
-                complexity.evaluate(frame),
-                evolution.evaluate(frame),
-            );
+            let br = brightness.evaluate(frame);
+            let evo = evolution.evaluate(frame);
+            let blend = contrast.evaluate(frame);
+            if !crate::core::compute_pipeline::try_gpu_fractal_noise(pixels, width, height, br, evo, blend) {
+                crate::core::cpu_effects_new::apply_fractal_noise(
+                    pixels, width, height, fractal_type.evaluate(frame),
+                    contrast.evaluate(frame), br, complexity.evaluate(frame), evo,
+                );
+            }
         }
         EffectType::Curves { channel } => {
             crate::core::cpu_effects_new::apply_curves(
@@ -552,15 +541,13 @@ fn apply_one_ctx(
             take_blue,
             take_alpha,
         } => {
-            crate::core::cpu_effects_new::apply_shift_channels(
-                pixels,
-                width,
-                height,
-                take_red.evaluate(frame),
-                take_green.evaluate(frame),
-                take_blue.evaluate(frame),
-                take_alpha.evaluate(frame),
-            );
+            let r = take_red.evaluate(frame) as u32;
+            let g = take_green.evaluate(frame) as u32;
+            let b = take_blue.evaluate(frame) as u32;
+            let a = take_alpha.evaluate(frame) as u32;
+            if !crate::core::compute_pipeline::try_gpu_shift_channels(pixels, width, height, r, g, b, a) {
+                crate::core::cpu_effects_new::apply_shift_channels(pixels, width, height, r as f32, g as f32, b as f32, a as f32);
+            }
         }
 
         // ── Effects migrated from ExtEffect ──
@@ -600,47 +587,35 @@ fn apply_one_ctx(
             }
         }
         EffectType::CcLens { convergence, zoom } => {
-            use crate::core::ae_effects_pack_v27::{apply_cc_lens_pro, CcLensParams};
-            apply_cc_lens_pro(
-                pixels,
-                width,
-                height,
-                &CcLensParams {
-                    convergence: convergence.evaluate(frame),
-                    zoom: zoom.evaluate(frame),
-                },
-            );
+            let cv = convergence.evaluate(frame);
+            let z = zoom.evaluate(frame);
+            if !crate::core::compute_pipeline::try_gpu_cc_lens(pixels, width, height, cv, z) {
+                use crate::core::ae_effects_pack_v27::{apply_cc_lens_pro, CcLensParams};
+                apply_cc_lens_pro(pixels, width, height, &CcLensParams { convergence: cv, zoom: z });
+            }
         }
         EffectType::PolarCoordinates {
             to_polar,
             interpolation,
         } => {
-            use crate::core::ae_effects_pack_v27::{apply_polar_coordinates_pro, PolarMode};
-            let mode = if *to_polar {
-                PolarMode::RectToPolar
-            } else {
-                PolarMode::PolarToRect
-            };
-            apply_polar_coordinates_pro(pixels, width, height, mode, interpolation.evaluate(frame));
+            if !crate::core::compute_pipeline::try_gpu_polar_coords(pixels, width, height, *to_polar) {
+                use crate::core::ae_effects_pack_v27::{apply_polar_coordinates_pro, PolarMode};
+                let mode = if *to_polar { PolarMode::RectToPolar } else { PolarMode::PolarToRect };
+                apply_polar_coordinates_pro(pixels, width, height, mode, interpolation.evaluate(frame));
+            }
         }
         EffectType::OpticsCompensation {
             field_of_view_deg,
             reverse,
             zoom,
         } => {
-            use crate::core::ae_effects_pack_v27::{
-                apply_optics_compensation, OpticsCompensationParams,
-            };
-            apply_optics_compensation(
-                pixels,
-                width,
-                height,
-                &OpticsCompensationParams {
-                    field_of_view_deg: field_of_view_deg.evaluate(frame),
-                    reverse: *reverse,
-                    zoom: zoom.evaluate(frame),
-                },
-            );
+            let fov = field_of_view_deg.evaluate(frame);
+            if !crate::core::compute_pipeline::try_gpu_optics_comp(pixels, width, height, fov, *reverse) {
+                use crate::core::ae_effects_pack_v27::{apply_optics_compensation, OpticsCompensationParams};
+                apply_optics_compensation(pixels, width, height, &OpticsCompensationParams {
+                    field_of_view_deg: fov, reverse: *reverse, zoom: zoom.evaluate(frame),
+                });
+            }
         }
         EffectType::ColorBalance {
             shadows,
@@ -648,16 +623,14 @@ fn apply_one_ctx(
             highlights,
             preserve_luminosity,
         } => {
-            use crate::core::color_correction::{apply_color_balance, ColorBalance};
-            apply_color_balance(
-                pixels,
-                &ColorBalance {
-                    shadows: *shadows,
-                    midtones: *midtones,
-                    highlights: *highlights,
-                    preserve_luminosity: *preserve_luminosity,
-                },
-            );
+            let s = *shadows;
+            let m = *midtones;
+            let h = *highlights;
+            let shift = [s[0]+m[0]+h[0], s[1]+m[1]+h[1], s[2]+m[2]+h[2]];
+            if !crate::core::compute_pipeline::try_gpu_color_balance(pixels, width, height, shift) {
+                use crate::core::color_correction::{apply_color_balance, ColorBalance};
+                apply_color_balance(pixels, &ColorBalance { shadows: s, midtones: m, highlights: h, preserve_luminosity: *preserve_luminosity });
+            }
         }
         EffectType::ChannelMixer { matrix, monochrome } => {
             use crate::core::color_correction::{apply_channel_mixer, ChannelMixer};
@@ -707,43 +680,36 @@ fn apply_one_ctx(
             top_offset,
             bottom_offset,
         } => {
-            use crate::core::ae_effects_pack_v28::apply_cc_bend_it_pro;
-            apply_cc_bend_it_pro(
-                pixels,
-                width,
-                height,
-                top_offset.evaluate(frame),
-                bottom_offset.evaluate(frame),
-            );
+            let t = top_offset.evaluate(frame);
+            let b = bottom_offset.evaluate(frame);
+            if !crate::core::compute_pipeline::try_gpu_bend_it(pixels, width, height, t, b) {
+                use crate::core::ae_effects_pack_v28::apply_cc_bend_it_pro;
+                apply_cc_bend_it_pro(pixels, width, height, t, b);
+            }
         }
         EffectType::Tiler {
             scale_percent,
             mirror,
         } => {
-            use crate::core::ae_effects_pack_v28::{apply_cc_tiler_pro, TileEdgeMode};
-            let mode = if *mirror {
-                TileEdgeMode::Mirror
-            } else {
-                TileEdgeMode::Repeat
-            };
-            apply_cc_tiler_pro(pixels, width, height, scale_percent.evaluate(frame), mode);
+            let sc = scale_percent.evaluate(frame) / 100.0;
+            if !crate::core::compute_pipeline::try_gpu_tiler(pixels, width, height, sc) {
+                use crate::core::ae_effects_pack_v28::{apply_cc_tiler_pro, TileEdgeMode};
+                let mode = if *mirror { TileEdgeMode::Mirror } else { TileEdgeMode::Repeat };
+                apply_cc_tiler_pro(pixels, width, height, scale_percent.evaluate(frame), mode);
+            }
         }
         EffectType::Tritone {
             shadow_color,
             mid_color,
             highlight_color,
         } => {
-            let to_c3 = |c: [f32; 3]| {
-                [
-                    (c[0].clamp(0.0, 1.0) * 255.0).round() as u8,
-                    (c[1].clamp(0.0, 1.0) * 255.0).round() as u8,
-                    (c[2].clamp(0.0, 1.0) * 255.0).round() as u8,
-                ]
-            };
-            let s = to_c3(shadow_color.evaluate(frame));
-            let m = to_c3(mid_color.evaluate(frame));
-            let h = to_c3(highlight_color.evaluate(frame));
-            pack::apply_tritone(pixels, s, m, h);
+            let s = shadow_color.evaluate(frame);
+            let m = mid_color.evaluate(frame);
+            let h = highlight_color.evaluate(frame);
+            if !crate::core::compute_pipeline::try_gpu_tritone(pixels, width, height, s, m, h) {
+                let to_c3 = |c: [f32; 3]| [(c[0].clamp(0.0,1.0)*255.0).round() as u8, (c[1].clamp(0.0,1.0)*255.0).round() as u8, (c[2].clamp(0.0,1.0)*255.0).round() as u8];
+                pack::apply_tritone(pixels, to_c3(s), to_c3(m), to_c3(h));
+            }
         }
         EffectType::MatteChoker {
             choke_amount,
@@ -759,41 +725,38 @@ fn apply_one_ctx(
             completion,
             width: blind_width,
         } => {
-            pack::apply_venetian_blinds(
-                pixels,
-                width,
-                height,
-                completion.evaluate(frame),
-                blind_width.evaluate(frame).max(1.0) as u32,
-            );
+            let c = completion.evaluate(frame);
+            let bw = blind_width.evaluate(frame).max(1.0);
+            if !crate::core::compute_pipeline::try_gpu_venetian_blinds(pixels, width, height, c, bw) {
+                pack::apply_venetian_blinds(pixels, width, height, c, bw as u32);
+            }
         }
         EffectType::Vibrance { amount } => {
-            crate::core::color_correction::apply_vibrance(pixels, amount.evaluate(frame));
+            let a = amount.evaluate(frame);
+            if !crate::core::compute_pipeline::try_gpu_vibrance(pixels, width, height, a) {
+                crate::core::color_correction::apply_vibrance(pixels, a);
+            }
         }
         EffectType::WhiteBalance { temperature, tint } => {
-            use crate::core::color_correction::{apply_white_balance, WhiteBalance};
-            apply_white_balance(
-                pixels,
-                &WhiteBalance {
-                    temperature: temperature.evaluate(frame),
-                    tint: tint.evaluate(frame),
-                },
-            );
+            let t = temperature.evaluate(frame);
+            let ti = tint.evaluate(frame);
+            if !crate::core::compute_pipeline::try_gpu_white_balance(pixels, width, height, t, ti) {
+                use crate::core::color_correction::{apply_white_balance, WhiteBalance};
+                apply_white_balance(pixels, &WhiteBalance { temperature: t, tint: ti });
+            }
         }
         EffectType::HslAdjust {
             hue_deg,
             saturation,
             lightness,
         } => {
-            use crate::core::color_correction::{apply_hsl_adjust, HslAdjust};
-            apply_hsl_adjust(
-                pixels,
-                &HslAdjust {
-                    hue_deg: hue_deg.evaluate(frame),
-                    saturation: saturation.evaluate(frame),
-                    lightness: lightness.evaluate(frame),
-                },
-            );
+            let h = hue_deg.evaluate(frame);
+            let s = saturation.evaluate(frame);
+            let l = lightness.evaluate(frame);
+            if !crate::core::compute_pipeline::try_gpu_hsl_adjust(pixels, width, height, h, s, l) {
+                use crate::core::color_correction::{apply_hsl_adjust, HslAdjust};
+                apply_hsl_adjust(pixels, &HslAdjust { hue_deg: h, saturation: s, lightness: l });
+            }
         }
         EffectType::GlowPro {
             threshold,
@@ -814,27 +777,22 @@ fn apply_one_ctx(
             line_spacing,
             intensity,
         } => {
-            use crate::core::ae_effects_pack_v12::apply_crt_scanlines;
-            apply_crt_scanlines(
-                pixels,
-                width,
-                height,
-                line_spacing.evaluate(frame).round().clamp(1.0, 200.0) as u32,
-                intensity.evaluate(frame),
-            );
+            let sp = line_spacing.evaluate(frame).round().clamp(1.0, 200.0) as f32;
+            let inten = intensity.evaluate(frame);
+            if !crate::core::compute_pipeline::try_gpu_crt_scanlines(pixels, width, height, sp, inten) {
+                use crate::core::ae_effects_pack_v12::apply_crt_scanlines;
+                apply_crt_scanlines(pixels, width, height, sp as u32, inten);
+            }
         }
         EffectType::Vortex { radius, angle_deg } => {
-            use crate::core::ae_effects_pack_v13::apply_vortex_distortion;
-            let cx = width as f32 * 0.5;
-            let cy = height as f32 * 0.5;
-            apply_vortex_distortion(
-                pixels,
-                width,
-                height,
-                [cx, cy],
-                radius.evaluate(frame).max(1.0),
-                angle_deg.evaluate(frame),
-            );
+            let r = radius.evaluate(frame).max(1.0);
+            let a = angle_deg.evaluate(frame);
+            if !crate::core::compute_pipeline::try_gpu_vortex(pixels, width, height, a, r) {
+                use crate::core::ae_effects_pack_v13::apply_vortex_distortion;
+                let cx = width as f32 * 0.5;
+                let cy = height as f32 * 0.5;
+                apply_vortex_distortion(pixels, width, height, [cx, cy], r, a);
+            }
         }
         EffectType::HeatDistortion { strength, speed } => {
             use crate::core::ae_effects_pack_v13::apply_heat_distortion;
@@ -856,28 +814,27 @@ fn apply_one_ctx(
             );
         }
         EffectType::Fisheye { strength } => {
-            use crate::core::ae_effects_pack_v21::apply_fisheye;
-            apply_fisheye(pixels, width, height, strength.evaluate(frame));
+            let s = strength.evaluate(frame);
+            if !crate::core::compute_pipeline::try_gpu_fisheye(pixels, width, height, s) {
+                use crate::core::ae_effects_pack_v21::apply_fisheye;
+                apply_fisheye(pixels, width, height, s);
+            }
         }
         EffectType::LensCorrection { k1, k2 } => {
-            use crate::core::ae_effects_pack_v21::apply_barrel_correction;
-            apply_barrel_correction(
-                pixels,
-                width,
-                height,
-                k1.evaluate(frame),
-                k2.evaluate(frame),
-            );
+            let k1v = k1.evaluate(frame);
+            let k2v = k2.evaluate(frame);
+            if !crate::core::compute_pipeline::try_gpu_lens_correction(pixels, width, height, k1v, k2v) {
+                use crate::core::ae_effects_pack_v21::apply_barrel_correction;
+                apply_barrel_correction(pixels, width, height, k1v, k2v);
+            }
         }
         EffectType::GlitchDisplacement { seed, amount } => {
-            use crate::core::ae_effects_pack_v13::apply_glitch_displacement;
-            apply_glitch_displacement(
-                pixels,
-                width,
-                height,
-                seed.evaluate(frame).round().clamp(0.0, 99999.0) as u32,
-                amount.evaluate(frame),
-            );
+            let s = seed.evaluate(frame).round().clamp(0.0, 99999.0) as f32;
+            let a = amount.evaluate(frame);
+            if !crate::core::compute_pipeline::try_gpu_glitch_displacement(pixels, width, height, a, s) {
+                use crate::core::ae_effects_pack_v13::apply_glitch_displacement;
+                apply_glitch_displacement(pixels, width, height, s as u32, a);
+            }
         }
         EffectType::MatteChokeSpread { radius, expand } => {
             use crate::core::ae_effects_pack_v22::apply_matte_choke;
@@ -899,8 +856,10 @@ fn apply_one_ctx(
             );
         }
         EffectType::AlphaFromLuminance { invert } => {
-            use crate::core::ae_effects_pack_v22::apply_alpha_from_luminance;
-            apply_alpha_from_luminance(pixels, *invert);
+            if !crate::core::compute_pipeline::try_gpu_alpha_from_luminance(pixels, width, height, *invert) {
+                use crate::core::ae_effects_pack_v22::apply_alpha_from_luminance;
+                apply_alpha_from_luminance(pixels, *invert);
+            }
         }
         EffectType::NightVision { amplification } => {
             use crate::core::ae_effects_pack_v20::apply_night_vision;
@@ -1032,14 +991,12 @@ fn apply_one_ctx(
             apply_sobel_edges(pixels, width, height, *invert);
         }
         EffectType::Mosaic { block_w, block_h } => {
-            use crate::core::ae_effects_pack_v19::apply_mosaic;
-            apply_mosaic(
-                pixels,
-                width,
-                height,
-                block_w.evaluate(frame).round().clamp(1.0, 256.0) as u32,
-                block_h.evaluate(frame).round().clamp(1.0, 256.0) as u32,
-            );
+            let bw = block_w.evaluate(frame).round().clamp(1.0, 256.0) as f32;
+            let bh = block_h.evaluate(frame).round().clamp(1.0, 256.0) as f32;
+            if !crate::core::compute_pipeline::try_gpu_mosaic(pixels, width, height, bw, bh) {
+                use crate::core::ae_effects_pack_v19::apply_mosaic;
+                apply_mosaic(pixels, width, height, bw as u32, bh as u32);
+            }
         }
         EffectType::OpticalFlares {
             position,
@@ -1370,22 +1327,19 @@ fn apply_one_ctx(
             high_threshold,
             invert,
         } => {
-            use crate::core::ae_effects_pack_v16::apply_luma_key_range;
-            apply_luma_key_range(
-                pixels,
-                low_threshold.evaluate(frame).round().clamp(0.0, 255.0) as u8,
-                high_threshold.evaluate(frame).round().clamp(0.0, 255.0) as u8,
-                *invert,
-            );
+            let low = low_threshold.evaluate(frame).round().clamp(0.0, 255.0) / 255.0;
+            let high = high_threshold.evaluate(frame).round().clamp(0.0, 255.0) / 255.0;
+            if !crate::core::compute_pipeline::try_gpu_luma_key_range(pixels, width, height, low, high, *invert) {
+                use crate::core::ae_effects_pack_v16::apply_luma_key_range;
+                apply_luma_key_range(pixels, (low * 255.0) as u8, (high * 255.0) as u8, *invert);
+            }
         }
         EffectType::Halftone { cell_size } => {
-            use crate::core::ae_effects_pack_v14::apply_halftone_screen;
-            apply_halftone_screen(
-                pixels,
-                width,
-                height,
-                cell_size.evaluate(frame).round().clamp(2.0, 64.0) as u32,
-            );
+            let cs = cell_size.evaluate(frame).round().clamp(2.0, 64.0) as f32;
+            if !crate::core::compute_pipeline::try_gpu_halftone(pixels, width, height, cs) {
+                use crate::core::ae_effects_pack_v14::apply_halftone_screen;
+                apply_halftone_screen(pixels, width, height, cs as u32);
+            }
         }
         EffectType::Solarize { threshold } => {
             let t = threshold.evaluate(frame).round().clamp(0.0, 255.0);
@@ -1404,29 +1358,22 @@ fn apply_one_ctx(
             );
         }
         EffectType::PinchPunch { radius, amount } => {
-            use crate::core::ae_effects_pack_v15::apply_pinch_punch_distortion;
-            let center = [width as f32 * 0.5, height as f32 * 0.5];
-            apply_pinch_punch_distortion(
-                pixels,
-                width,
-                height,
-                center,
-                radius.evaluate(frame).max(1.0),
-                amount.evaluate(frame),
-            );
+            let amt = amount.evaluate(frame);
+            if !crate::core::compute_pipeline::try_gpu_pinch_punch(pixels, width, height, amt) {
+                use crate::core::ae_effects_pack_v15::apply_pinch_punch_distortion;
+                apply_pinch_punch_distortion(pixels, width, height, [width as f32 * 0.5, height as f32 * 0.5], radius.evaluate(frame).max(1.0), amt);
+            }
         }
         EffectType::ScanlineGlitch {
             jitter_amount,
             seed,
         } => {
-            use crate::core::ae_effects_pack_v15::apply_scanline_glitch_jitter;
-            apply_scanline_glitch_jitter(
-                pixels,
-                width,
-                height,
-                jitter_amount.evaluate(frame),
-                seed.evaluate(frame).round().clamp(0.0, 99999.0) as u32 ^ frame,
-            );
+            let ja = jitter_amount.evaluate(frame);
+            let s = (seed.evaluate(frame).round().clamp(0.0, 99999.0) as u32 ^ frame) as f32;
+            if !crate::core::compute_pipeline::try_gpu_scanline_glitch(pixels, width, height, ja, s) {
+                use crate::core::ae_effects_pack_v15::apply_scanline_glitch_jitter;
+                apply_scanline_glitch_jitter(pixels, width, height, ja, s as u32);
+            }
         }
         EffectType::GlassEdgeBevel {
             bevel_size,
@@ -1445,46 +1392,33 @@ fn apply_one_ctx(
             angle_deg,
             strength,
         } => {
-            use crate::core::ae_effects_pack_v15::apply_directional_sharpen;
-            apply_directional_sharpen(
-                pixels,
-                width,
-                height,
-                angle_deg.evaluate(frame),
-                strength.evaluate(frame),
-            );
+            let a = angle_deg.evaluate(frame).to_radians();
+            let s = strength.evaluate(frame);
+            if !crate::core::compute_pipeline::try_gpu_directional_sharpen(pixels, width, height, a, s) {
+                use crate::core::ae_effects_pack_v15::apply_directional_sharpen;
+                apply_directional_sharpen(pixels, width, height, a, s);
+            }
         }
         EffectType::RefractionLens { radius, ior } => {
-            use crate::core::ae_effects_pack_v16::apply_spherical_refraction_lens;
-            let center = [width as f32 * 0.5, height as f32 * 0.5];
-            apply_spherical_refraction_lens(
-                pixels,
-                width,
-                height,
-                center,
-                radius.evaluate(frame).max(1.0),
-                ior.evaluate(frame),
-            );
+            let i = ior.evaluate(frame);
+            if !crate::core::compute_pipeline::try_gpu_refraction(pixels, width, height, i) {
+                use crate::core::ae_effects_pack_v16::apply_spherical_refraction_lens;
+                apply_spherical_refraction_lens(pixels, width, height, [width as f32 * 0.5, height as f32 * 0.5], radius.evaluate(frame).max(1.0), i);
+            }
         }
         EffectType::GradientMap {
             low_color,
             mid_color,
             high_color,
         } => {
-            use crate::core::ae_effects_pack_v15::apply_gradient_map_color;
-            let to_c3 = |c: [f32; 3]| {
-                [
-                    (c[0].clamp(0.0, 1.0) * 255.0).round() as u8,
-                    (c[1].clamp(0.0, 1.0) * 255.0).round() as u8,
-                    (c[2].clamp(0.0, 1.0) * 255.0).round() as u8,
-                ]
-            };
-            apply_gradient_map_color(
-                pixels,
-                to_c3(low_color.evaluate(frame)),
-                to_c3(mid_color.evaluate(frame)),
-                to_c3(high_color.evaluate(frame)),
-            );
+            let l = low_color.evaluate(frame);
+            let m = mid_color.evaluate(frame);
+            let h = high_color.evaluate(frame);
+            if !crate::core::compute_pipeline::try_gpu_gradient_map(pixels, width, height, l, m, h) {
+                use crate::core::ae_effects_pack_v15::apply_gradient_map_color;
+                let to_c3 = |c: [f32; 3]| [(c[0].clamp(0.0,1.0)*255.0).round() as u8, (c[1].clamp(0.0,1.0)*255.0).round() as u8, (c[2].clamp(0.0,1.0)*255.0).round() as u8];
+                apply_gradient_map_color(pixels, to_c3(l), to_c3(m), to_c3(h));
+            }
         }
         EffectType::LightLeak {
             pos_x,
@@ -1510,27 +1444,23 @@ fn apply_one_ctx(
             depth,
             light_angle_deg,
         } => {
-            use crate::core::ae_effects_pack_v14::apply_bevel_alpha_3d;
-            apply_bevel_alpha_3d(
-                pixels,
-                width,
-                height,
-                depth.evaluate(frame).round().clamp(1.0, 32.0) as u32,
-                light_angle_deg.evaluate(frame),
-            );
+            let d = depth.evaluate(frame) as f32;
+            let a = light_angle_deg.evaluate(frame).to_radians();
+            if !crate::core::compute_pipeline::try_gpu_bevel_alpha(pixels, width, height, d, a) {
+                use crate::core::ae_effects_pack_v14::apply_bevel_alpha_3d;
+                apply_bevel_alpha_3d(pixels, width, height, d.round().clamp(1.0, 32.0) as u32, a);
+            }
         }
         EffectType::CrossHatch {
             line_gap,
             threshold,
         } => {
-            use crate::core::ae_effects_pack_v17::apply_cross_hatch;
-            apply_cross_hatch(
-                pixels,
-                width,
-                height,
-                line_gap.evaluate(frame).round().clamp(2.0, 64.0) as u32,
-                threshold.evaluate(frame).round().clamp(0.0, 255.0) as u8,
-            );
+            let gap = line_gap.evaluate(frame).round().clamp(2.0, 64.0) as f32;
+            let thr = threshold.evaluate(frame).round().clamp(0.0, 255.0) / 255.0;
+            if !crate::core::compute_pipeline::try_gpu_crosshatch(pixels, width, height, gap, thr) {
+                use crate::core::ae_effects_pack_v17::apply_cross_hatch;
+                apply_cross_hatch(pixels, width, height, gap as u32, (thr * 255.0) as u8);
+            }
         }
         EffectType::CmykHalftone { dot_size } => {
             use crate::core::ae_effects_pack_v16::apply_color_halftone_cmyk;
@@ -1546,15 +1476,12 @@ fn apply_one_ctx(
             fade_dist,
             opacity,
         } => {
-            use crate::core::ae_effects_pack_v21::apply_reflection_map;
-            apply_reflection_map(
-                pixels,
-                width,
-                height,
-                reflect_y.evaluate(frame).round().clamp(0.0, 4096.0) as u32,
-                fade_dist.evaluate(frame).max(1.0),
-                opacity.evaluate(frame).clamp(0.0, 1.0),
-            );
+            let ry = reflect_y.evaluate(frame) > 0.5;
+            let fd = fade_dist.evaluate(frame).max(1.0);
+            if !crate::core::compute_pipeline::try_gpu_reflection_map(pixels, width, height, ry, fd) {
+                use crate::core::ae_effects_pack_v21::apply_reflection_map;
+                apply_reflection_map(pixels, width, height, ry as u32, fd, opacity.evaluate(frame).clamp(0.0, 1.0));
+            }
         }
         EffectType::PerlinFlow { scale } => {
             use crate::core::ae_effects_pack_v16::apply_perlin_flow_noise;
@@ -1578,8 +1505,11 @@ fn apply_one_ctx(
             );
         }
         EffectType::Letterbox { frac } => {
-            use crate::core::ae_effects_pack_v24::apply_letterbox;
-            apply_letterbox(pixels, width, height, frac.evaluate(frame));
+            let f = frac.evaluate(frame);
+            if !crate::core::compute_pipeline::try_gpu_letterbox(pixels, width, height, f) {
+                use crate::core::ae_effects_pack_v24::apply_letterbox;
+                apply_letterbox(pixels, width, height, f);
+            }
         }
         // Expression Controls: non-rendering utility effects (values are read
         // by the expression engine via effect_param), so CPU pass is a no-op.

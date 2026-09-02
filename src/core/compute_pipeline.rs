@@ -1098,6 +1098,114 @@ impl GpuComputeContext {
             "gpu_mini",
         )
     }
+    pub fn gpu_linear_wipe(&self, p: &mut [u8], w: u32, h: u32, completion: f32, angle: f32, feather: f32) -> bool {
+        self.dispatch_fx(p, w, h, ParamsUniform { width: w, height: h, radius: 0, mode: 26, angle, brightness: completion, contrast: feather, saturation: 1.0, hue_shift: 0.0, param_f3: 0.0, param_f4: 0.0, param_f5: 0.0, param_f6: 0.0, param_f7: 0.0, param_f8: 0.0, _pad: 0.0 }, "gpu_lwipe")
+    }
+    pub fn gpu_shift_channels(&self, p: &mut [u8], w: u32, h: u32, r: u32, g: u32, b: u32, a: u32) -> bool {
+        self.dispatch_fx(p, w, h, ParamsUniform { width: w, height: h, radius: 0, mode: 28, angle: 0.0, brightness: r as f32, contrast: g as f32, saturation: b as f32, hue_shift: a as f32, param_f3: 0.0, param_f4: 0.0, param_f5: 0.0, param_f6: 0.0, param_f7: 0.0, param_f8: 0.0, _pad: 0.0 }, "gpu_shift")
+    }
+    pub fn gpu_color_balance(&self, p: &mut [u8], w: u32, h: u32, shift: [f32; 3]) -> bool {
+        self.dispatch_fx(p, w, h, ParamsUniform { width: w, height: h, radius: 0, mode: 29, angle: 0.0, brightness: shift[0], contrast: shift[1], saturation: shift[2], hue_shift: 0.0, param_f3: 0.0, param_f4: 0.0, param_f5: 0.0, param_f6: 0.0, param_f7: 0.0, param_f8: 0.0, _pad: 0.0 }, "gpu_cb")
+    }
+    pub fn gpu_vibrance(&self, p: &mut [u8], w: u32, h: u32, amount: f32) -> bool {
+        self.dispatch_fx(p, w, h, ParamsUniform { width: w, height: h, radius: 0, mode: 30, angle: 0.0, brightness: amount, contrast: 1.0, saturation: 1.0, hue_shift: 0.0, param_f3: 0.0, param_f4: 0.0, param_f5: 0.0, param_f6: 0.0, param_f7: 0.0, param_f8: 0.0, _pad: 0.0 }, "gpu_vib")
+    }
+    pub fn gpu_white_balance(&self, p: &mut [u8], w: u32, h: u32, temp: f32, tint: f32) -> bool {
+        self.dispatch_fx(p, w, h, ParamsUniform { width: w, height: h, radius: 0, mode: 31, angle: 0.0, brightness: temp, contrast: tint, saturation: 1.0, hue_shift: 0.0, param_f3: 0.0, param_f4: 0.0, param_f5: 0.0, param_f6: 0.0, param_f7: 0.0, param_f8: 0.0, _pad: 0.0 }, "gpu_wb")
+    }
+    pub fn gpu_hsl_adjust(&self, p: &mut [u8], w: u32, h: u32, hue: f32, sat: f32, light: f32) -> bool {
+        self.dispatch_fx(p, w, h, ParamsUniform { width: w, height: h, radius: 0, mode: 32, angle: 0.0, brightness: hue, contrast: sat, saturation: light, hue_shift: 0.0, param_f3: 0.0, param_f4: 0.0, param_f5: 0.0, param_f6: 0.0, param_f7: 0.0, param_f8: 0.0, _pad: 0.0 }, "gpu_hsl")
+    }
+    pub fn gpu_crt_scanlines(&self, p: &mut [u8], w: u32, h: u32, spacing: f32, intensity: f32) -> bool {
+        self.dispatch_fx(p, w, h, ParamsUniform { width: w, height: h, radius: 0, mode: 33, angle: 0.0, brightness: spacing, contrast: intensity, saturation: 1.0, hue_shift: 0.0, param_f3: 0.0, param_f4: 0.0, param_f5: 0.0, param_f6: 0.0, param_f7: 0.0, param_f8: 0.0, _pad: 0.0 }, "gpu_crt")
+    }
+    pub fn gpu_alpha_from_luminance(&self, p: &mut [u8], w: u32, h: u32, invert: bool) -> bool {
+        self.dispatch_fx(p, w, h, ParamsUniform { width: w, height: h, radius: 0, mode: 34, angle: 0.0, brightness: if invert { 1.0 } else { 0.0 }, contrast: 1.0, saturation: 1.0, hue_shift: 0.0, param_f3: 0.0, param_f4: 0.0, param_f5: 0.0, param_f6: 0.0, param_f7: 0.0, param_f8: 0.0, _pad: 0.0 }, "gpu_afl")
+    }
+    pub fn gpu_luma_key_range(&self, p: &mut [u8], w: u32, h: u32, low: f32, high: f32, invert: bool) -> bool {
+        self.dispatch_fx(p, w, h, ParamsUniform { width: w, height: h, radius: 0, mode: 35, angle: 0.0, brightness: low, contrast: high, saturation: if invert { 1.0 } else { 0.0 }, hue_shift: 0.0, param_f3: 0.0, param_f4: 0.0, param_f5: 0.0, param_f6: 0.0, param_f7: 0.0, param_f8: 0.0, _pad: 0.0 }, "gpu_lk")
+    }
+    pub fn gpu_venetian_blinds(&self, p: &mut [u8], w: u32, h: u32, completion: f32, width: f32) -> bool {
+        self.dispatch_fx(p, w, h, ParamsUniform { width: w, height: h, radius: 0, mode: 36, angle: 0.0, brightness: completion, contrast: width, saturation: 1.0, hue_shift: 0.0, param_f3: 0.0, param_f4: 0.0, param_f5: 0.0, param_f6: 0.0, param_f7: 0.0, param_f8: 0.0, _pad: 0.0 }, "gpu_vb")
+    }
+    pub fn gpu_tritone(&self, p: &mut [u8], w: u32, h: u32, shadow: [f32; 3], mid: [f32; 3], highlight: [f32; 3]) -> bool {
+        self.dispatch_fx(p, w, h, ParamsUniform { width: w, height: h, radius: 0, mode: 37, angle: 0.0, brightness: shadow[0], contrast: shadow[1], saturation: shadow[2], hue_shift: mid[0], param_f3: mid[1], param_f4: mid[2], param_f5: highlight[0], param_f6: highlight[1], param_f7: highlight[2], param_f8: 0.0, _pad: 0.0 }, "gpu_tri")
+    }
+    pub fn gpu_gradient_map(&self, p: &mut [u8], w: u32, h: u32, low: [f32; 3], mid: [f32; 3], high: [f32; 3]) -> bool {
+        self.dispatch_fx(p, w, h, ParamsUniform { width: w, height: h, radius: 0, mode: 38, angle: 0.0, brightness: low[0], contrast: low[1], saturation: low[2], hue_shift: mid[0], param_f3: mid[1], param_f4: mid[2], param_f5: high[0], param_f6: high[1], param_f7: high[2], param_f8: 0.0, _pad: 0.0 }, "gpu_gm")
+    }
+    pub fn gpu_letterbox(&self, p: &mut [u8], w: u32, h: u32, frac: f32) -> bool {
+        self.dispatch_fx(p, w, h, ParamsUniform { width: w, height: h, radius: 0, mode: 39, angle: 0.0, brightness: frac, contrast: 1.0, saturation: 1.0, hue_shift: 0.0, param_f3: 0.0, param_f4: 0.0, param_f5: 0.0, param_f6: 0.0, param_f7: 0.0, param_f8: 0.0, _pad: 0.0 }, "gpu_lb")
+    }
+    pub fn gpu_cc_lens(&self, p: &mut [u8], w: u32, h: u32, convergence: f32, zoom: f32) -> bool {
+        self.dispatch_fx(p, w, h, ParamsUniform { width: w, height: h, radius: 0, mode: 40, angle: 0.0, brightness: convergence, contrast: zoom, saturation: 1.0, hue_shift: 0.0, param_f3: 0.0, param_f4: 0.0, param_f5: 0.0, param_f6: 0.0, param_f7: 0.0, param_f8: 0.0, _pad: 0.0 }, "gpu_lens")
+    }
+    pub fn gpu_polar_coords(&self, p: &mut [u8], w: u32, h: u32, to_polar: bool) -> bool {
+        self.dispatch_fx(p, w, h, ParamsUniform { width: w, height: h, radius: 0, mode: 41, angle: 0.0, brightness: if to_polar { 1.0 } else { 0.0 }, contrast: 1.0, saturation: 1.0, hue_shift: 0.0, param_f3: 0.0, param_f4: 0.0, param_f5: 0.0, param_f6: 0.0, param_f7: 0.0, param_f8: 0.0, _pad: 0.0 }, "gpu_polar")
+    }
+    pub fn gpu_optics_comp(&self, p: &mut [u8], w: u32, h: u32, fov: f32, reverse: bool) -> bool {
+        self.dispatch_fx(p, w, h, ParamsUniform { width: w, height: h, radius: 0, mode: 42, angle: 0.0, brightness: fov, contrast: if reverse { 1.0 } else { 0.0 }, saturation: 1.0, hue_shift: 0.0, param_f3: 0.0, param_f4: 0.0, param_f5: 0.0, param_f6: 0.0, param_f7: 0.0, param_f8: 0.0, _pad: 0.0 }, "gpu_oc")
+    }
+    pub fn gpu_fisheye(&self, p: &mut [u8], w: u32, h: u32, strength: f32) -> bool {
+        self.dispatch_fx(p, w, h, ParamsUniform { width: w, height: h, radius: 0, mode: 43, angle: 0.0, brightness: strength, contrast: 1.0, saturation: 1.0, hue_shift: 0.0, param_f3: 0.0, param_f4: 0.0, param_f5: 0.0, param_f6: 0.0, param_f7: 0.0, param_f8: 0.0, _pad: 0.0 }, "gpu_fish")
+    }
+    pub fn gpu_lens_correction(&self, p: &mut [u8], w: u32, h: u32, k1: f32, k2: f32) -> bool {
+        self.dispatch_fx(p, w, h, ParamsUniform { width: w, height: h, radius: 0, mode: 44, angle: 0.0, brightness: k1, contrast: k2, saturation: 1.0, hue_shift: 0.0, param_f3: 0.0, param_f4: 0.0, param_f5: 0.0, param_f6: 0.0, param_f7: 0.0, param_f8: 0.0, _pad: 0.0 }, "gpu_lc")
+    }
+    pub fn gpu_vortex(&self, p: &mut [u8], w: u32, h: u32, angle: f32, radius: f32) -> bool {
+        self.dispatch_fx(p, w, h, ParamsUniform { width: w, height: h, radius: 0, mode: 45, angle: 0.0, brightness: angle, contrast: radius, saturation: 1.0, hue_shift: 0.0, param_f3: 0.0, param_f4: 0.0, param_f5: 0.0, param_f6: 0.0, param_f7: 0.0, param_f8: 0.0, _pad: 0.0 }, "gpu_vtx")
+    }
+    pub fn gpu_pinch_punch(&self, p: &mut [u8], w: u32, h: u32, strength: f32) -> bool {
+        self.dispatch_fx(p, w, h, ParamsUniform { width: w, height: h, radius: 0, mode: 46, angle: 0.0, brightness: strength, contrast: 1.0, saturation: 1.0, hue_shift: 0.0, param_f3: 0.0, param_f4: 0.0, param_f5: 0.0, param_f6: 0.0, param_f7: 0.0, param_f8: 0.0, _pad: 0.0 }, "gpu_pp")
+    }
+    pub fn gpu_refraction(&self, p: &mut [u8], w: u32, h: u32, ior: f32) -> bool {
+        self.dispatch_fx(p, w, h, ParamsUniform { width: w, height: h, radius: 0, mode: 47, angle: 0.0, brightness: ior, contrast: 1.0, saturation: 1.0, hue_shift: 0.0, param_f3: 0.0, param_f4: 0.0, param_f5: 0.0, param_f6: 0.0, param_f7: 0.0, param_f8: 0.0, _pad: 0.0 }, "gpu_refr")
+    }
+    pub fn gpu_bend_it(&self, p: &mut [u8], w: u32, h: u32, top: f32, bottom: f32) -> bool {
+        self.dispatch_fx(p, w, h, ParamsUniform { width: w, height: h, radius: 0, mode: 48, angle: 0.0, brightness: top, contrast: bottom, saturation: 1.0, hue_shift: 0.0, param_f3: 0.0, param_f4: 0.0, param_f5: 0.0, param_f6: 0.0, param_f7: 0.0, param_f8: 0.0, _pad: 0.0 }, "gpu_bend")
+    }
+    pub fn gpu_tiler(&self, p: &mut [u8], w: u32, h: u32, scale: f32) -> bool {
+        self.dispatch_fx(p, w, h, ParamsUniform { width: w, height: h, radius: 0, mode: 49, angle: 0.0, brightness: scale, contrast: 1.0, saturation: 1.0, hue_shift: 0.0, param_f3: 0.0, param_f4: 0.0, param_f5: 0.0, param_f6: 0.0, param_f7: 0.0, param_f8: 0.0, _pad: 0.0 }, "gpu_tile")
+    }
+    pub fn gpu_directional_sharpen(&self, p: &mut [u8], w: u32, h: u32, angle: f32, strength: f32) -> bool {
+        self.dispatch_fx(p, w, h, ParamsUniform { width: w, height: h, radius: 0, mode: 50, angle: 0.0, brightness: angle, contrast: strength, saturation: 1.0, hue_shift: 0.0, param_f3: 0.0, param_f4: 0.0, param_f5: 0.0, param_f6: 0.0, param_f7: 0.0, param_f8: 0.0, _pad: 0.0 }, "gpu_dsh")
+    }
+    pub fn gpu_halftone(&self, p: &mut [u8], w: u32, h: u32, cell_size: f32) -> bool {
+        self.dispatch_fx(p, w, h, ParamsUniform { width: w, height: h, radius: 0, mode: 51, angle: 0.0, brightness: cell_size, contrast: 1.0, saturation: 1.0, hue_shift: 0.0, param_f3: 0.0, param_f4: 0.0, param_f5: 0.0, param_f6: 0.0, param_f7: 0.0, param_f8: 0.0, _pad: 0.0 }, "gpu_ht")
+    }
+    pub fn gpu_mosaic(&self, p: &mut [u8], w: u32, h: u32, bw: f32, bh: f32) -> bool {
+        self.dispatch_fx(p, w, h, ParamsUniform { width: w, height: h, radius: 0, mode: 52, angle: 0.0, brightness: bw, contrast: bh, saturation: 1.0, hue_shift: 0.0, param_f3: 0.0, param_f4: 0.0, param_f5: 0.0, param_f6: 0.0, param_f7: 0.0, param_f8: 0.0, _pad: 0.0 }, "gpu_mos")
+    }
+    pub fn gpu_crosshatch(&self, p: &mut [u8], w: u32, h: u32, gap: f32, threshold: f32) -> bool {
+        self.dispatch_fx(p, w, h, ParamsUniform { width: w, height: h, radius: 0, mode: 53, angle: 0.0, brightness: gap, contrast: threshold, saturation: 1.0, hue_shift: 0.0, param_f3: 0.0, param_f4: 0.0, param_f5: 0.0, param_f6: 0.0, param_f7: 0.0, param_f8: 0.0, _pad: 0.0 }, "gpu_ch")
+    }
+    pub fn gpu_colorama(&self, p: &mut [u8], w: u32, h: u32, hue_offset: f32, sat: f32, light: f32) -> bool {
+        self.dispatch_fx(p, w, h, ParamsUniform { width: w, height: h, radius: 0, mode: 54, angle: 0.0, brightness: hue_offset, contrast: sat, saturation: light, hue_shift: 0.0, param_f3: 0.0, param_f4: 0.0, param_f5: 0.0, param_f6: 0.0, param_f7: 0.0, param_f8: 0.0, _pad: 0.0 }, "gpu_cma")
+    }
+    pub fn gpu_bevel_alpha(&self, p: &mut [u8], w: u32, h: u32, depth: f32, angle: f32) -> bool {
+        self.dispatch_fx(p, w, h, ParamsUniform { width: w, height: h, radius: 0, mode: 55, angle: 0.0, brightness: depth, contrast: angle, saturation: 1.0, hue_shift: 0.0, param_f3: 0.0, param_f4: 0.0, param_f5: 0.0, param_f6: 0.0, param_f7: 0.0, param_f8: 0.0, _pad: 0.0 }, "gpu_bv")
+    }
+    pub fn gpu_chroma_key(&self, p: &mut [u8], w: u32, h: u32, key_rgb: [f32; 3], gain: f32, softness: f32) -> bool {
+        self.dispatch_fx(p, w, h, ParamsUniform { width: w, height: h, radius: 0, mode: 56, angle: 0.0, brightness: key_rgb[0], contrast: key_rgb[1], saturation: key_rgb[2], hue_shift: gain, param_f3: softness, param_f4: 0.0, param_f5: 0.0, param_f6: 0.0, param_f7: 0.0, param_f8: 0.0, _pad: 0.0 }, "gpu_ck")
+    }
+    pub fn gpu_color_space_convert(&self, p: &mut [u8], w: u32, h: u32, mode: u32) -> bool {
+        self.dispatch_fx(p, w, h, ParamsUniform { width: w, height: h, radius: 0, mode: 57, angle: 0.0, brightness: mode as f32, contrast: 1.0, saturation: 1.0, hue_shift: 0.0, param_f3: 0.0, param_f4: 0.0, param_f5: 0.0, param_f6: 0.0, param_f7: 0.0, param_f8: 0.0, _pad: 0.0 }, "gpu_csc")
+    }
+    pub fn gpu_film_grain(&self, p: &mut [u8], w: u32, h: u32, intensity: f32, seed: f32) -> bool {
+        self.dispatch_fx(p, w, h, ParamsUniform { width: w, height: h, radius: 0, mode: 58, angle: 0.0, brightness: intensity, contrast: 1.0, saturation: 1.0, hue_shift: 0.0, param_f3: 0.0, param_f4: 0.0, param_f5: seed, param_f6: 0.0, param_f7: 0.0, param_f8: 0.0, _pad: 0.0 }, "gpu_fg")
+    }
+    pub fn gpu_fractal_noise(&self, p: &mut [u8], w: u32, h: u32, scale: f32, evolution: f32, blend: f32) -> bool {
+        self.dispatch_fx(p, w, h, ParamsUniform { width: w, height: h, radius: 0, mode: 59, angle: 0.0, brightness: scale, contrast: evolution, saturation: blend, hue_shift: 0.0, param_f3: 0.0, param_f4: 0.0, param_f5: 0.0, param_f6: 0.0, param_f7: 0.0, param_f8: 0.0, _pad: 0.0 }, "gpu_fn")
+    }
+    pub fn gpu_glitch_displacement(&self, p: &mut [u8], w: u32, h: u32, amount: f32, seed: f32) -> bool {
+        self.dispatch_fx(p, w, h, ParamsUniform { width: w, height: h, radius: 0, mode: 60, angle: 0.0, brightness: amount, contrast: 1.0, saturation: 1.0, hue_shift: 0.0, param_f3: 0.0, param_f4: 0.0, param_f5: seed, param_f6: 0.0, param_f7: 0.0, param_f8: 0.0, _pad: 0.0 }, "gpu_gd")
+    }
+    pub fn gpu_scanline_glitch(&self, p: &mut [u8], w: u32, h: u32, amount: f32, seed: f32) -> bool {
+        self.dispatch_fx(p, w, h, ParamsUniform { width: w, height: h, radius: 0, mode: 61, angle: 0.0, brightness: amount, contrast: 1.0, saturation: 1.0, hue_shift: 0.0, param_f3: 0.0, param_f4: 0.0, param_f5: seed, param_f6: 0.0, param_f7: 0.0, param_f8: 0.0, _pad: 0.0 }, "gpu_sg")
+    }
+    pub fn gpu_reflection_map(&self, p: &mut [u8], w: u32, h: u32, reflect_y: bool, fade: f32) -> bool {
+        self.dispatch_fx(p, w, h, ParamsUniform { width: w, height: h, radius: 0, mode: 62, angle: 0.0, brightness: if reflect_y { 1.0 } else { 0.0 }, contrast: fade, saturation: 1.0, hue_shift: 0.0, param_f3: 0.0, param_f4: 0.0, param_f5: 0.0, param_f6: 0.0, param_f7: 0.0, param_f8: 0.0, _pad: 0.0 }, "gpu_rm")
+    }
 
     fn alloc_buf_set(&self, dev: &wgpu::Device, buf_len: u64) -> BufSet {
         let any = wgpu::BufferUsages::STORAGE
@@ -1367,6 +1475,150 @@ pub fn try_gpu_vignette(pixels: &mut [u8], w: u32, h: u32, radius: f32, softness
 pub fn try_gpu_minimax(pixels: &mut [u8], w: u32, h: u32, radius: u32, maximize: bool) -> bool {
     if !gpu_effects_enabled() { return false; }
     global().map(|c| c.gpu_minimax(pixels, w, h, radius, maximize)).unwrap_or(false)
+}
+pub fn try_gpu_linear_wipe(p: &mut [u8], w: u32, h: u32, completion: f32, angle: f32, feather: f32) -> bool {
+    if !gpu_effects_enabled() { return false; }
+    global().map(|c| c.gpu_linear_wipe(p, w, h, completion, angle, feather)).unwrap_or(false)
+}
+pub fn try_gpu_shift_channels(p: &mut [u8], w: u32, h: u32, r: u32, g: u32, b: u32, a: u32) -> bool {
+    if !gpu_effects_enabled() { return false; }
+    global().map(|c| c.gpu_shift_channels(p, w, h, r, g, b, a)).unwrap_or(false)
+}
+pub fn try_gpu_color_balance(p: &mut [u8], w: u32, h: u32, shift: [f32; 3]) -> bool {
+    if !gpu_effects_enabled() { return false; }
+    global().map(|c| c.gpu_color_balance(p, w, h, shift)).unwrap_or(false)
+}
+pub fn try_gpu_vibrance(p: &mut [u8], w: u32, h: u32, amount: f32) -> bool {
+    if !gpu_effects_enabled() { return false; }
+    global().map(|c| c.gpu_vibrance(p, w, h, amount)).unwrap_or(false)
+}
+pub fn try_gpu_white_balance(p: &mut [u8], w: u32, h: u32, temp: f32, tint: f32) -> bool {
+    if !gpu_effects_enabled() { return false; }
+    global().map(|c| c.gpu_white_balance(p, w, h, temp, tint)).unwrap_or(false)
+}
+pub fn try_gpu_hsl_adjust(p: &mut [u8], w: u32, h: u32, hue: f32, sat: f32, light: f32) -> bool {
+    if !gpu_effects_enabled() { return false; }
+    global().map(|c| c.gpu_hsl_adjust(p, w, h, hue, sat, light)).unwrap_or(false)
+}
+pub fn try_gpu_crt_scanlines(p: &mut [u8], w: u32, h: u32, spacing: f32, intensity: f32) -> bool {
+    if !gpu_effects_enabled() { return false; }
+    global().map(|c| c.gpu_crt_scanlines(p, w, h, spacing, intensity)).unwrap_or(false)
+}
+pub fn try_gpu_alpha_from_luminance(p: &mut [u8], w: u32, h: u32, invert: bool) -> bool {
+    if !gpu_effects_enabled() { return false; }
+    global().map(|c| c.gpu_alpha_from_luminance(p, w, h, invert)).unwrap_or(false)
+}
+pub fn try_gpu_luma_key_range(p: &mut [u8], w: u32, h: u32, low: f32, high: f32, invert: bool) -> bool {
+    if !gpu_effects_enabled() { return false; }
+    global().map(|c| c.gpu_luma_key_range(p, w, h, low, high, invert)).unwrap_or(false)
+}
+pub fn try_gpu_venetian_blinds(p: &mut [u8], w: u32, h: u32, completion: f32, width: f32) -> bool {
+    if !gpu_effects_enabled() { return false; }
+    global().map(|c| c.gpu_venetian_blinds(p, w, h, completion, width)).unwrap_or(false)
+}
+pub fn try_gpu_tritone(p: &mut [u8], w: u32, h: u32, shadow: [f32; 3], mid: [f32; 3], highlight: [f32; 3]) -> bool {
+    if !gpu_effects_enabled() { return false; }
+    global().map(|c| c.gpu_tritone(p, w, h, shadow, mid, highlight)).unwrap_or(false)
+}
+pub fn try_gpu_gradient_map(p: &mut [u8], w: u32, h: u32, low: [f32; 3], mid: [f32; 3], high: [f32; 3]) -> bool {
+    if !gpu_effects_enabled() { return false; }
+    global().map(|c| c.gpu_gradient_map(p, w, h, low, mid, high)).unwrap_or(false)
+}
+pub fn try_gpu_letterbox(p: &mut [u8], w: u32, h: u32, frac: f32) -> bool {
+    if !gpu_effects_enabled() { return false; }
+    global().map(|c| c.gpu_letterbox(p, w, h, frac)).unwrap_or(false)
+}
+pub fn try_gpu_cc_lens(p: &mut [u8], w: u32, h: u32, convergence: f32, zoom: f32) -> bool {
+    if !gpu_effects_enabled() { return false; }
+    global().map(|c| c.gpu_cc_lens(p, w, h, convergence, zoom)).unwrap_or(false)
+}
+pub fn try_gpu_polar_coords(p: &mut [u8], w: u32, h: u32, to_polar: bool) -> bool {
+    if !gpu_effects_enabled() { return false; }
+    global().map(|c| c.gpu_polar_coords(p, w, h, to_polar)).unwrap_or(false)
+}
+pub fn try_gpu_optics_comp(p: &mut [u8], w: u32, h: u32, fov: f32, reverse: bool) -> bool {
+    if !gpu_effects_enabled() { return false; }
+    global().map(|c| c.gpu_optics_comp(p, w, h, fov, reverse)).unwrap_or(false)
+}
+pub fn try_gpu_fisheye(p: &mut [u8], w: u32, h: u32, strength: f32) -> bool {
+    if !gpu_effects_enabled() { return false; }
+    global().map(|c| c.gpu_fisheye(p, w, h, strength)).unwrap_or(false)
+}
+pub fn try_gpu_lens_correction(p: &mut [u8], w: u32, h: u32, k1: f32, k2: f32) -> bool {
+    if !gpu_effects_enabled() { return false; }
+    global().map(|c| c.gpu_lens_correction(p, w, h, k1, k2)).unwrap_or(false)
+}
+pub fn try_gpu_vortex(p: &mut [u8], w: u32, h: u32, angle: f32, radius: f32) -> bool {
+    if !gpu_effects_enabled() { return false; }
+    global().map(|c| c.gpu_vortex(p, w, h, angle, radius)).unwrap_or(false)
+}
+pub fn try_gpu_pinch_punch(p: &mut [u8], w: u32, h: u32, strength: f32) -> bool {
+    if !gpu_effects_enabled() { return false; }
+    global().map(|c| c.gpu_pinch_punch(p, w, h, strength)).unwrap_or(false)
+}
+pub fn try_gpu_refraction(p: &mut [u8], w: u32, h: u32, ior: f32) -> bool {
+    if !gpu_effects_enabled() { return false; }
+    global().map(|c| c.gpu_refraction(p, w, h, ior)).unwrap_or(false)
+}
+pub fn try_gpu_bend_it(p: &mut [u8], w: u32, h: u32, top: f32, bottom: f32) -> bool {
+    if !gpu_effects_enabled() { return false; }
+    global().map(|c| c.gpu_bend_it(p, w, h, top, bottom)).unwrap_or(false)
+}
+pub fn try_gpu_tiler(p: &mut [u8], w: u32, h: u32, scale: f32) -> bool {
+    if !gpu_effects_enabled() { return false; }
+    global().map(|c| c.gpu_tiler(p, w, h, scale)).unwrap_or(false)
+}
+pub fn try_gpu_directional_sharpen(p: &mut [u8], w: u32, h: u32, angle: f32, strength: f32) -> bool {
+    if !gpu_effects_enabled() { return false; }
+    global().map(|c| c.gpu_directional_sharpen(p, w, h, angle, strength)).unwrap_or(false)
+}
+pub fn try_gpu_halftone(p: &mut [u8], w: u32, h: u32, cell_size: f32) -> bool {
+    if !gpu_effects_enabled() { return false; }
+    global().map(|c| c.gpu_halftone(p, w, h, cell_size)).unwrap_or(false)
+}
+pub fn try_gpu_mosaic(p: &mut [u8], w: u32, h: u32, bw: f32, bh: f32) -> bool {
+    if !gpu_effects_enabled() { return false; }
+    global().map(|c| c.gpu_mosaic(p, w, h, bw, bh)).unwrap_or(false)
+}
+pub fn try_gpu_crosshatch(p: &mut [u8], w: u32, h: u32, gap: f32, threshold: f32) -> bool {
+    if !gpu_effects_enabled() { return false; }
+    global().map(|c| c.gpu_crosshatch(p, w, h, gap, threshold)).unwrap_or(false)
+}
+pub fn try_gpu_colorama(p: &mut [u8], w: u32, h: u32, hue_offset: f32, sat: f32, light: f32) -> bool {
+    if !gpu_effects_enabled() { return false; }
+    global().map(|c| c.gpu_colorama(p, w, h, hue_offset, sat, light)).unwrap_or(false)
+}
+pub fn try_gpu_bevel_alpha(p: &mut [u8], w: u32, h: u32, depth: f32, angle: f32) -> bool {
+    if !gpu_effects_enabled() { return false; }
+    global().map(|c| c.gpu_bevel_alpha(p, w, h, depth, angle)).unwrap_or(false)
+}
+pub fn try_gpu_chroma_key(p: &mut [u8], w: u32, h: u32, key_rgb: [f32; 3], gain: f32, softness: f32) -> bool {
+    if !gpu_effects_enabled() { return false; }
+    global().map(|c| c.gpu_chroma_key(p, w, h, key_rgb, gain, softness)).unwrap_or(false)
+}
+pub fn try_gpu_color_space_convert(p: &mut [u8], w: u32, h: u32, mode: u32) -> bool {
+    if !gpu_effects_enabled() { return false; }
+    global().map(|c| c.gpu_color_space_convert(p, w, h, mode)).unwrap_or(false)
+}
+pub fn try_gpu_film_grain(p: &mut [u8], w: u32, h: u32, intensity: f32, seed: f32) -> bool {
+    if !gpu_effects_enabled() { return false; }
+    global().map(|c| c.gpu_film_grain(p, w, h, intensity, seed)).unwrap_or(false)
+}
+pub fn try_gpu_fractal_noise(p: &mut [u8], w: u32, h: u32, scale: f32, evolution: f32, blend: f32) -> bool {
+    if !gpu_effects_enabled() { return false; }
+    global().map(|c| c.gpu_fractal_noise(p, w, h, scale, evolution, blend)).unwrap_or(false)
+}
+pub fn try_gpu_glitch_displacement(p: &mut [u8], w: u32, h: u32, amount: f32, seed: f32) -> bool {
+    if !gpu_effects_enabled() { return false; }
+    global().map(|c| c.gpu_glitch_displacement(p, w, h, amount, seed)).unwrap_or(false)
+}
+pub fn try_gpu_scanline_glitch(p: &mut [u8], w: u32, h: u32, amount: f32, seed: f32) -> bool {
+    if !gpu_effects_enabled() { return false; }
+    global().map(|c| c.gpu_scanline_glitch(p, w, h, amount, seed)).unwrap_or(false)
+}
+pub fn try_gpu_reflection_map(p: &mut [u8], w: u32, h: u32, reflect_y: bool, fade: f32) -> bool {
+    if !gpu_effects_enabled() { return false; }
+    global().map(|c| c.gpu_reflection_map(p, w, h, reflect_y, fade)).unwrap_or(false)
 }
 
 #[cfg(test)]
