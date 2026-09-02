@@ -149,22 +149,22 @@ fn apply_one_ctx(
 
         // New CPU-only kernels (no GPU equivalent yet).
         EffectType::Twirl { angle, radius } => {
-            pack::apply_twirl(
-                pixels,
-                width,
-                height,
-                angle.evaluate(frame),
-                radius.evaluate(frame).max(1.0),
-            );
+            let a = angle.evaluate(frame);
+            let r = radius.evaluate(frame).max(1.0);
+            let cx = width as f32 * 0.5;
+            let cy = height as f32 * 0.5;
+            if !crate::core::compute_pipeline::try_gpu_twirl(pixels, width, height, a, cx, cy) {
+                pack::apply_twirl(pixels, width, height, a, r);
+            }
         }
         EffectType::Bulge { amount, radius } => {
-            pack::apply_bulge(
-                pixels,
-                width,
-                height,
-                amount.evaluate(frame),
-                radius.evaluate(frame).max(1.0),
-            );
+            let amt = amount.evaluate(frame);
+            let r = radius.evaluate(frame).max(1.0);
+            let cx = width as f32 * 0.5;
+            let cy = height as f32 * 0.5;
+            if !crate::core::compute_pipeline::try_gpu_bulge(pixels, width, height, amt, cx, cy) {
+                pack::apply_bulge(pixels, width, height, amt, r);
+            }
         }
         EffectType::Posterize { levels } => {
             let lv = levels.evaluate(frame).max(2.0) as u32;
@@ -255,13 +255,17 @@ fn apply_one_ctx(
             radius,
             refractive_index,
         } => {
-            let opts = crate::core::spherize::SpherizeOptions {
-                radius: radius.evaluate(frame),
-                center: [width as f32 * 0.5, height as f32 * 0.5],
-                refractive_index: refractive_index.evaluate(frame),
-            };
-            let out = crate::core::spherize::apply_spherize(pixels, width, height, &opts);
-            pixels.copy_from_slice(&out);
+            let r = radius.evaluate(frame);
+            let ri = refractive_index.evaluate(frame);
+            let cx = width as f32 * 0.5;
+            let cy = height as f32 * 0.5;
+            if !crate::core::compute_pipeline::try_gpu_spherize(pixels, width, height, ri, cx, cy) {
+                let opts = crate::core::spherize::SpherizeOptions {
+                    radius: r, center: [cx, cy], refractive_index: ri,
+                };
+                let out = crate::core::spherize::apply_spherize(pixels, width, height, &opts);
+                pixels.copy_from_slice(&out);
+            }
         }
         EffectType::TurbulentDisplace {
             amount,
@@ -269,17 +273,22 @@ fn apply_one_ctx(
             evolution,
             complexity,
         } => {
-            let opts = crate::core::turbulent_displace::TurbulentDisplaceOptions {
-                displace_type: crate::core::turbulent_displace::TurbulentDisplaceType::Turbulent,
-                amount: amount.evaluate(frame),
-                size: size.evaluate(frame),
-                evolution_deg: evolution.evaluate(frame),
-                complexity: complexity.evaluate(frame).max(1.0) as u32,
-            };
-            let out = crate::core::turbulent_displace::apply_turbulent_displace(
-                pixels, width, height, &opts,
-            );
-            pixels.copy_from_slice(&out);
+            let amt = amount.evaluate(frame);
+            let sz = size.evaluate(frame);
+            if !crate::core::compute_pipeline::try_gpu_turbulent_displace(
+                pixels, width, height, amt, sz.max(1.0),
+            ) {
+                let opts = crate::core::turbulent_displace::TurbulentDisplaceOptions {
+                    displace_type: crate::core::turbulent_displace::TurbulentDisplaceType::Turbulent,
+                    amount: amt, size: sz,
+                    evolution_deg: evolution.evaluate(frame),
+                    complexity: complexity.evaluate(frame).max(1.0) as u32,
+                };
+                let out = crate::core::turbulent_displace::apply_turbulent_displace(
+                    pixels, width, height, &opts,
+                );
+                pixels.copy_from_slice(&out);
+            }
         }
         EffectType::Colorama {
             preset_index,
@@ -311,30 +320,27 @@ fn apply_one_ctx(
             let mut sr = shift_r.evaluate(frame);
             let mut sb = shift_b.evaluate(frame);
             if *iris_linked {
-                // Use camera DOF parameters for physically-plausible aberration
                 let (aperture, iris_sides) = comp.map(|c| {
                     let cam = c.resolve_camera();
                     (cam.aperture, cam.dof_iris_sides)
                 }).unwrap_or((2.8, 8));
-                // CoC scale: wider aperture (lower f-number) → more aberration
                 let coc = (2.8 / aperture.max(0.5)).clamp(0.1, 4.0);
-                // Iris blade modulation: more blades → tighter, more uniform fringing
                 let blade_scale = if iris_sides > 0 {
                     (iris_sides as f32 / 8.0).clamp(0.3, 1.0)
                 } else {
-                    0.625 // default 5-blade approximation
+                    0.625
                 };
                 sr *= coc * blade_scale;
                 sb *= coc * blade_scale;
             }
-            crate::core::cpu_effects_new::apply_chromatic_aberration(
-                pixels,
-                width,
-                height,
-                sr,
-                sb,
-                edge_falloff.evaluate(frame),
-            );
+            let avg_amount = (sr.abs() + sb.abs()) * 0.5;
+            if !crate::core::compute_pipeline::try_gpu_chromatic_aberration(
+                pixels, width, height, avg_amount,
+            ) {
+                crate::core::cpu_effects_new::apply_chromatic_aberration(
+                    pixels, width, height, sr, sb, edge_falloff.evaluate(frame),
+                );
+            }
         }
         EffectType::Vignette {
             intensity,
@@ -342,15 +348,14 @@ fn apply_one_ctx(
             feather,
             color,
         } => {
-            crate::core::cpu_effects_new::apply_vignette(
-                pixels,
-                width,
-                height,
-                intensity.evaluate(frame),
-                roundness.evaluate(frame),
-                feather.evaluate(frame),
-                color.evaluate(frame),
-            );
+            let i = intensity.evaluate(frame);
+            let r = roundness.evaluate(frame);
+            let f = feather.evaluate(frame);
+            if !crate::core::compute_pipeline::try_gpu_vignette(pixels, width, height, r, f) {
+                crate::core::cpu_effects_new::apply_vignette(
+                    pixels, width, height, i, r, f, color.evaluate(frame),
+                );
+            }
         }
         EffectType::Levels {
             input_black,
@@ -534,13 +539,12 @@ fn apply_one_ctx(
             );
         }
         EffectType::Minimax { operation, radius } => {
-            crate::core::cpu_effects_new::apply_minimax(
-                pixels,
-                width,
-                height,
-                operation.evaluate(frame),
-                radius.evaluate(frame),
-            );
+            let op = operation.evaluate(frame);
+            let r = radius.evaluate(frame) as u32;
+            let maximize = op > 0.5;
+            if !crate::core::compute_pipeline::try_gpu_minimax(pixels, width, height, r, maximize) {
+                crate::core::cpu_effects_new::apply_minimax(pixels, width, height, op, r as f32);
+            }
         }
         EffectType::ShiftChannels {
             take_red,
@@ -568,30 +572,32 @@ fn apply_one_ctx(
             wave_type,
             pinning,
         } => {
-            use crate::core::ae_effects_pack_v27::{
-                apply_wave_warp_pro, PinKind, WaveType, WaveWarpParams,
-            };
-            let params = WaveWarpParams {
-                wave_height: wave_height.evaluate(frame),
-                wave_width: wave_width.evaluate(frame),
-                speed: speed.evaluate(frame),
-                time: frame as f32 / fps.max(1) as f32,
-                direction_deg: direction_deg.evaluate(frame),
-                wave_type: match wave_type {
-                    1 => WaveType::Triangle,
-                    2 => WaveType::Square,
-                    3 => WaveType::Sawtooth,
-                    _ => WaveType::Sine,
-                },
-                pinning: match pinning {
-                    1 => PinKind::LeftRight,
-                    2 => PinKind::TopBottom,
-                    3 => PinKind::None,
-                    _ => PinKind::All,
-                },
-                ..Default::default()
-            };
-            apply_wave_warp_pro(pixels, width, height, &params);
+            let wh = wave_height.evaluate(frame);
+            let ww = wave_width.evaluate(frame);
+            let sp = speed.evaluate(frame);
+            let time = frame as f32 / fps.max(1) as f32;
+            let dir = direction_deg.evaluate(frame).to_radians();
+            if !crate::core::compute_pipeline::try_gpu_wave_warp(
+                pixels, width, height, wh, 6.2831853 / ww.max(1.0), sp * time, dir,
+            ) {
+                use crate::core::ae_effects_pack_v27::{
+                    apply_wave_warp_pro, PinKind, WaveType, WaveWarpParams,
+                };
+                let params = WaveWarpParams {
+                    wave_height: wh, wave_width: ww, speed: sp,
+                    time, direction_deg: direction_deg.evaluate(frame),
+                    wave_type: match wave_type {
+                        1 => WaveType::Triangle, 2 => WaveType::Square,
+                        3 => WaveType::Sawtooth, _ => WaveType::Sine,
+                    },
+                    pinning: match pinning {
+                        1 => PinKind::LeftRight, 2 => PinKind::TopBottom,
+                        3 => PinKind::None, _ => PinKind::All,
+                    },
+                    ..Default::default()
+                };
+                apply_wave_warp_pro(pixels, width, height, &params);
+            }
         }
         EffectType::CcLens { convergence, zoom } => {
             use crate::core::ae_effects_pack_v27::{apply_cc_lens_pro, CcLensParams};

@@ -114,6 +114,10 @@ struct ParamsUniform {
     hue_shift: f32,
     param_f3: f32,
     param_f4: f32,
+    param_f5: f32,
+    param_f6: f32,
+    param_f7: f32,
+    param_f8: f32,
     _pad: f32,
 }
 
@@ -245,8 +249,7 @@ impl GpuComputeContext {
                 saturation: 1.0,
                 hue_shift: 0.0,
                 param_f3: 0.5,
-                param_f4: 8.0,
-                _pad: 0.0,
+                param_f4: 8.0, param_f5: 0.0, param_f6: 0.0, param_f7: 0.0, param_f8: 0.0, _pad: 0.0,
             }),
         );
 
@@ -327,8 +330,7 @@ impl GpuComputeContext {
                     saturation: 1.0,
                     hue_shift: 0.0,
                     param_f3: 0.5,
-                    param_f4: 8.0,
-                    _pad: 0.0,
+                    param_f4: 8.0, param_f5: 0.0, param_f6: 0.0, param_f7: 0.0, param_f8: 0.0, _pad: 0.0,
                 }),
             );
             pass.set_bind_group(0, &bg_v, &[]);
@@ -419,8 +421,7 @@ impl GpuComputeContext {
                 saturation: 1.0,
                 hue_shift: 0.0,
                 param_f3: 0.5,
-                param_f4: 8.0,
-                _pad: 0.0,
+                param_f4: 8.0, param_f5: 0.0, param_f6: 0.0, param_f7: 0.0, param_f8: 0.0, _pad: 0.0,
             }),
         );
 
@@ -538,8 +539,7 @@ impl GpuComputeContext {
                 saturation: 1.0,
                 hue_shift: 0.0,
                 param_f3: 0.5,
-                param_f4: 8.0,
-                _pad: 0.0,
+                param_f4: 8.0, param_f5: 0.0, param_f6: 0.0, param_f7: 0.0, param_f8: 0.0, _pad: 0.0,
             }),
         );
 
@@ -734,8 +734,7 @@ impl GpuComputeContext {
                 saturation: sat,
                 hue_shift: hue,
                 param_f3: 0.0,
-                param_f4: 0.0,
-                _pad: 0.0,
+                param_f4: 0.0, param_f5: 0.0, param_f6: 0.0, param_f7: 0.0, param_f8: 0.0, _pad: 0.0,
             },
             "gpu_cc",
         )
@@ -756,8 +755,7 @@ impl GpuComputeContext {
                 saturation: 1.0,
                 hue_shift: 0.0,
                 param_f3: 0.0,
-                param_f4: 0.0,
-                _pad: 0.0,
+                param_f4: 0.0, param_f5: 0.0, param_f6: 0.0, param_f7: 0.0, param_f8: 0.0, _pad: 0.0,
             },
             "gpu_sharp",
         )
@@ -778,8 +776,7 @@ impl GpuComputeContext {
                 saturation: 1.0,
                 hue_shift: 0.0,
                 param_f3: cutoff,
-                param_f4: 0.0,
-                _pad: 0.0,
+                param_f4: 0.0, param_f5: 0.0, param_f6: 0.0, param_f7: 0.0, param_f8: 0.0, _pad: 0.0,
             },
             "gpu_thresh",
         )
@@ -800,8 +797,7 @@ impl GpuComputeContext {
                 saturation: 1.0,
                 hue_shift: 0.0,
                 param_f3: 0.0,
-                param_f4: 0.0,
-                _pad: 0.0,
+                param_f4: 0.0, param_f5: 0.0, param_f6: 0.0, param_f7: 0.0, param_f8: 0.0, _pad: 0.0,
             },
             "gpu_emboss",
         )
@@ -822,8 +818,7 @@ impl GpuComputeContext {
                 saturation: 1.0,
                 hue_shift: 0.0,
                 param_f3: 0.0,
-                param_f4: 0.0,
-                _pad: 0.0,
+                param_f4: 0.0, param_f5: 0.0, param_f6: 0.0, param_f7: 0.0, param_f8: 0.0, _pad: 0.0,
             },
             "gpu_edge",
         )
@@ -844,8 +839,7 @@ impl GpuComputeContext {
                 saturation: 1.0,
                 hue_shift: 0.0,
                 param_f3: 0.0,
-                param_f4: 0.0,
-                _pad: 0.0,
+                param_f4: 0.0, param_f5: 0.0, param_f6: 0.0, param_f7: 0.0, param_f8: 0.0, _pad: 0.0,
             },
             "gpu_inv",
         )
@@ -866,8 +860,7 @@ impl GpuComputeContext {
                 saturation: 1.0,
                 hue_shift: 0.0,
                 param_f3: threshold,
-                param_f4: 0.0,
-                _pad: 0.0,
+                param_f4: 0.0, param_f5: 0.0, param_f6: 0.0, param_f7: 0.0, param_f8: 0.0, _pad: 0.0,
             },
             "gpu_solar",
         )
@@ -888,8 +881,7 @@ impl GpuComputeContext {
                 saturation: 1.0,
                 hue_shift: 0.0,
                 param_f3: 0.0,
-                param_f4: levels,
-                _pad: 0.0,
+                param_f4: levels, param_f5: 0.0, param_f6: 0.0, param_f7: 0.0, param_f8: 0.0, _pad: 0.0,
             },
             "gpu_post",
         )
@@ -902,7 +894,7 @@ impl GpuComputeContext {
                 width: w, height: h, radius: 0, mode: 12,
                 angle: 0.0, brightness: tint_rgb[0], contrast: tint_rgb[1],
                 saturation: tint_rgb[2], hue_shift: intensity,
-                param_f3: 0.0, param_f4: 0.0, _pad: 0.0,
+                param_f3: 0.0, param_f4: 0.0, param_f5: 0.0, param_f6: 0.0, param_f7: 0.0, param_f8: 0.0, _pad: 0.0,
             },
             "gpu_tint",
         )
@@ -920,7 +912,7 @@ impl GpuComputeContext {
                 width: w, height: h, radius: blur_r.min(32), mode: 13,
                 angle: 0.0, brightness: color[0], contrast: color[1],
                 saturation: color[2], hue_shift: color[3],
-                param_f3: dx, param_f4: dy, _pad: 0.0,
+                param_f3: dx, param_f4: dy, param_f5: 0.0, param_f6: 0.0, param_f7: 0.0, param_f8: 0.0, _pad: 0.0,
             },
             "gpu_shadow",
         )
@@ -935,7 +927,7 @@ impl GpuComputeContext {
                 width: w, height: h, radius: radius.min(32), mode: 14,
                 angle: 0.0, brightness: 0.0, contrast: 1.0,
                 saturation: 1.0, hue_shift: 0.0,
-                param_f3: threshold, param_f4: intensity, _pad: 0.0,
+                param_f3: threshold, param_f4: intensity, param_f5: 0.0, param_f6: 0.0, param_f7: 0.0, param_f8: 0.0, _pad: 0.0,
             },
             "gpu_glow",
         )
@@ -950,7 +942,7 @@ impl GpuComputeContext {
                 width: w, height: h, radius: 0, mode: 15,
                 angle: 0.0, brightness: in_black / 255.0, contrast: in_white / 255.0,
                 saturation: gamma, hue_shift: out_black / 255.0,
-                param_f3: out_white / 255.0, param_f4: 0.0, _pad: 0.0,
+                param_f3: out_white / 255.0, param_f4: 0.0, param_f5: 0.0, param_f6: 0.0, param_f7: 0.0, param_f8: 0.0, _pad: 0.0,
             },
             "gpu_levels",
         )
@@ -965,7 +957,7 @@ impl GpuComputeContext {
                 width: w, height: h, radius: 0, mode: 16,
                 angle: 0.0, brightness: hue_shift, contrast: saturation,
                 saturation: lightness, hue_shift: 0.0,
-                param_f3: 0.0, param_f4: 0.0, _pad: 0.0,
+                param_f3: 0.0, param_f4: 0.0, param_f5: 0.0, param_f6: 0.0, param_f7: 0.0, param_f8: 0.0, _pad: 0.0,
             },
             "gpu_hsl",
         )
@@ -979,9 +971,131 @@ impl GpuComputeContext {
                 width: w, height: h, radius: 0, mode: 17,
                 angle: 0.0, brightness: 0.0, contrast: 1.0,
                 saturation: 1.0, hue_shift: 0.0,
-                param_f3: shift_x as f32, param_f4: shift_y as f32, _pad: 0.0,
+                param_f3: shift_x as f32, param_f4: shift_y as f32,
+                param_f5: 0.0, param_f6: 0.0, param_f7: 0.0, param_f8: 0.0, _pad: 0.0,
             },
             "gpu_offset",
+        )
+    }
+    pub fn gpu_twirl(
+        &self, pixels: &mut [u8], w: u32, h: u32, angle: f32, cx: f32, cy: f32,
+    ) -> bool {
+        self.dispatch_fx(
+            pixels, w, h,
+            ParamsUniform {
+                width: w, height: h, radius: 0, mode: 18,
+                angle: 0.0, brightness: angle, contrast: 1.0,
+                saturation: 1.0, hue_shift: 0.0,
+                param_f3: 0.0, param_f4: 0.0,
+                param_f5: cx, param_f6: cy, param_f7: 0.0, param_f8: 0.0, _pad: 0.0,
+            },
+            "gpu_twirl",
+        )
+    }
+    pub fn gpu_bulge(
+        &self, pixels: &mut [u8], w: u32, h: u32, strength: f32, cx: f32, cy: f32,
+    ) -> bool {
+        self.dispatch_fx(
+            pixels, w, h,
+            ParamsUniform {
+                width: w, height: h, radius: 0, mode: 19,
+                angle: 0.0, brightness: strength, contrast: 1.0,
+                saturation: 1.0, hue_shift: 0.0,
+                param_f3: 0.0, param_f4: 0.0,
+                param_f5: cx, param_f6: cy, param_f7: 0.0, param_f8: 0.0, _pad: 0.0,
+            },
+            "gpu_bulge",
+        )
+    }
+    pub fn gpu_spherize(
+        &self, pixels: &mut [u8], w: u32, h: u32, strength: f32, cx: f32, cy: f32,
+    ) -> bool {
+        self.dispatch_fx(
+            pixels, w, h,
+            ParamsUniform {
+                width: w, height: h, radius: 0, mode: 20,
+                angle: 0.0, brightness: strength, contrast: 1.0,
+                saturation: 1.0, hue_shift: 0.0,
+                param_f3: 0.0, param_f4: 0.0,
+                param_f5: cx, param_f6: cy, param_f7: 0.0, param_f8: 0.0, _pad: 0.0,
+            },
+            "gpu_spherize",
+        )
+    }
+    pub fn gpu_wave_warp(
+        &self, pixels: &mut [u8], w: u32, h: u32,
+        amplitude: f32, frequency: f32, phase: f32, direction: f32,
+    ) -> bool {
+        self.dispatch_fx(
+            pixels, w, h,
+            ParamsUniform {
+                width: w, height: h, radius: 0, mode: 21,
+                angle: phase, brightness: amplitude, contrast: frequency,
+                saturation: 1.0, hue_shift: 0.0,
+                param_f3: 0.0, param_f4: 0.0,
+                param_f5: direction, param_f6: 0.0, param_f7: 0.0, param_f8: 0.0, _pad: 0.0,
+            },
+            "gpu_wave",
+        )
+    }
+    pub fn gpu_turbulent_displace(
+        &self, pixels: &mut [u8], w: u32, h: u32, amplitude: f32, scale: f32,
+    ) -> bool {
+        self.dispatch_fx(
+            pixels, w, h,
+            ParamsUniform {
+                width: w, height: h, radius: 0, mode: 22,
+                angle: 0.0, brightness: amplitude, contrast: scale,
+                saturation: 1.0, hue_shift: 0.0,
+                param_f3: 0.0, param_f4: 0.0,
+                param_f5: 0.0, param_f6: 0.0, param_f7: 0.0, param_f8: 0.0, _pad: 0.0,
+            },
+            "gpu_turb",
+        )
+    }
+    pub fn gpu_chromatic_aberration(
+        &self, pixels: &mut [u8], w: u32, h: u32, amount: f32,
+    ) -> bool {
+        self.dispatch_fx(
+            pixels, w, h,
+            ParamsUniform {
+                width: w, height: h, radius: 0, mode: 23,
+                angle: 0.0, brightness: amount, contrast: 1.0,
+                saturation: 1.0, hue_shift: 0.0,
+                param_f3: 0.0, param_f4: 0.0,
+                param_f5: 0.0, param_f6: 0.0, param_f7: 0.0, param_f8: 0.0, _pad: 0.0,
+            },
+            "gpu_chroma",
+        )
+    }
+    pub fn gpu_vignette(
+        &self, pixels: &mut [u8], w: u32, h: u32, radius: f32, softness: f32,
+    ) -> bool {
+        self.dispatch_fx(
+            pixels, w, h,
+            ParamsUniform {
+                width: w, height: h, radius: 0, mode: 24,
+                angle: 0.0, brightness: radius, contrast: softness,
+                saturation: 1.0, hue_shift: 0.0,
+                param_f3: 0.0, param_f4: 0.0,
+                param_f5: 0.0, param_f6: 0.0, param_f7: 0.0, param_f8: 0.0, _pad: 0.0,
+            },
+            "gpu_vign",
+        )
+    }
+    pub fn gpu_minimax(
+        &self, pixels: &mut [u8], w: u32, h: u32, radius: u32, maximize: bool,
+    ) -> bool {
+        self.dispatch_fx(
+            pixels, w, h,
+            ParamsUniform {
+                width: w, height: h, radius: radius.min(16), mode: 25,
+                angle: 0.0, brightness: 0.0, contrast: 1.0,
+                saturation: 1.0, hue_shift: 0.0,
+                param_f3: 0.0, param_f4: 0.0,
+                param_f5: if maximize { 1.0 } else { 0.0 }, param_f6: 0.0, param_f7: 0.0, param_f8: 0.0, _pad: 0.0,
+            },
+            "gpu_mini",
         )
     }
 
@@ -1218,6 +1332,41 @@ pub fn try_gpu_hue_saturation(
 pub fn try_gpu_offset(pixels: &mut [u8], w: u32, h: u32, shift_x: i32, shift_y: i32) -> bool {
     if !gpu_effects_enabled() { return false; }
     global().map(|c| c.gpu_offset(pixels, w, h, shift_x, shift_y)).unwrap_or(false)
+}
+pub fn try_gpu_twirl(pixels: &mut [u8], w: u32, h: u32, angle: f32, cx: f32, cy: f32) -> bool {
+    if !gpu_effects_enabled() { return false; }
+    global().map(|c| c.gpu_twirl(pixels, w, h, angle, cx, cy)).unwrap_or(false)
+}
+pub fn try_gpu_bulge(pixels: &mut [u8], w: u32, h: u32, strength: f32, cx: f32, cy: f32) -> bool {
+    if !gpu_effects_enabled() { return false; }
+    global().map(|c| c.gpu_bulge(pixels, w, h, strength, cx, cy)).unwrap_or(false)
+}
+pub fn try_gpu_spherize(pixels: &mut [u8], w: u32, h: u32, strength: f32, cx: f32, cy: f32) -> bool {
+    if !gpu_effects_enabled() { return false; }
+    global().map(|c| c.gpu_spherize(pixels, w, h, strength, cx, cy)).unwrap_or(false)
+}
+pub fn try_gpu_wave_warp(
+    pixels: &mut [u8], w: u32, h: u32,
+    amplitude: f32, frequency: f32, phase: f32, direction: f32,
+) -> bool {
+    if !gpu_effects_enabled() { return false; }
+    global().map(|c| c.gpu_wave_warp(pixels, w, h, amplitude, frequency, phase, direction)).unwrap_or(false)
+}
+pub fn try_gpu_turbulent_displace(pixels: &mut [u8], w: u32, h: u32, amplitude: f32, scale: f32) -> bool {
+    if !gpu_effects_enabled() { return false; }
+    global().map(|c| c.gpu_turbulent_displace(pixels, w, h, amplitude, scale)).unwrap_or(false)
+}
+pub fn try_gpu_chromatic_aberration(pixels: &mut [u8], w: u32, h: u32, amount: f32) -> bool {
+    if !gpu_effects_enabled() { return false; }
+    global().map(|c| c.gpu_chromatic_aberration(pixels, w, h, amount)).unwrap_or(false)
+}
+pub fn try_gpu_vignette(pixels: &mut [u8], w: u32, h: u32, radius: f32, softness: f32) -> bool {
+    if !gpu_effects_enabled() { return false; }
+    global().map(|c| c.gpu_vignette(pixels, w, h, radius, softness)).unwrap_or(false)
+}
+pub fn try_gpu_minimax(pixels: &mut [u8], w: u32, h: u32, radius: u32, maximize: bool) -> bool {
+    if !gpu_effects_enabled() { return false; }
+    global().map(|c| c.gpu_minimax(pixels, w, h, radius, maximize)).unwrap_or(false)
 }
 
 #[cfg(test)]

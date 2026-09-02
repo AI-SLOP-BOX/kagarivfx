@@ -15,23 +15,20 @@
 struct Params {
     width: u32,
     height: u32,
-    // Gaussian: kernel tap count per side. Directional: total tap count.
     radius: u32,
-    // 0=gauss H, 1=directional, 2=gauss V, 3=radial zoom,
-    // 4=color_correct, 5=sharpen, 6=threshold, 7=emboss,
-    // 8=edge_detect, 9=invert, 10=solarize, 11=posterize
     mode: u32,
-    // Directional angle / color correction params
     angle: f32,
-    // color_correct: brightness (-1..1), contrast (0..4)
     brightness: f32,
     contrast: f32,
-    // color_correct: saturation (0..4), hue_shift (radians)
     saturation: f32,
     hue_shift: f32,
-    // threshold: cutoff (0..1), posterize: levels (2..32)
     param_f3: f32,
     param_f4: f32,
+    param_f5: f32,
+    param_f6: f32,
+    param_f7: f32,
+    param_f8: f32,
+    _pad: f32,
 };
 
 @group(0) @binding(0) var<uniform> params: Params;
@@ -88,6 +85,11 @@ fn hsv_to_rgb(hsv: vec3<f32>) -> vec3<f32> {
     else if h < 5.0 { rgb = vec3<f32>(x, 0.0, c); }
     else { rgb = vec3<f32>(c, 0.0, x); }
     return rgb + vec3<f32>(m);
+}
+
+fn hash2(p: vec2<f32>) -> f32 {
+    let h = dot(p, vec2<f32>(127.1, 311.7));
+    return fract(sin(h) * 43758.5453);
 }
 
 @compute @workgroup_size(8, 8)
@@ -391,6 +393,174 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         let sx = u32(((ox % i32(w) + i32(w)) % i32(w)));
         let sy = u32(((oy % i32(h) + i32(h)) % i32(h)));
         dst[y * w + x] = src[sy * w + sx];
+        return;
+    }
+
+    // ── Mode 18: Twirl ──
+    if (params.mode == 18u) {
+        let cx = params.param_f5;
+        let cy = params.param_f6;
+        let strength = params.brightness;
+        let dx = f32(x) - cx;
+        let dy = f32(y) - cy;
+        let dist = sqrt(dx * dx + dy * dy);
+        let max_r = max(f32(min(w, h)) * 0.5, 1.0);
+        let t = clamp(1.0 - dist / max_r, 0.0, 1.0);
+        let angle = strength * t * t;
+        let cos_a = cos(angle);
+        let sin_a = sin(angle);
+        let rx = dx * cos_a - dy * sin_a + cx;
+        let ry = dx * sin_a + dy * cos_a + cy;
+        let sx = u32(clamp(i32(rx), 0, i32(w - 1u)));
+        let sy = u32(clamp(i32(ry), 0, i32(h - 1u)));
+        dst[y * w + x] = src[sy * w + sx];
+        return;
+    }
+
+    // ── Mode 19: Bulge ──
+    if (params.mode == 19u) {
+        let cx = params.param_f5;
+        let cy = params.param_f6;
+        let strength = params.brightness;
+        let dx = f32(x) - cx;
+        let dy = f32(y) - cy;
+        let dist = sqrt(dx * dx + dy * dy);
+        let max_r = max(f32(min(w, h)) * 0.5, 1.0);
+        let t = clamp(dist / max_r, 0.0, 1.0);
+        let scale = 1.0 + strength * (1.0 - t * t);
+        let rx = cx + dx / scale;
+        let ry = cy + dy / scale;
+        let sx = u32(clamp(i32(rx), 0, i32(w - 1u)));
+        let sy = u32(clamp(i32(ry), 0, i32(h - 1u)));
+        dst[y * w + x] = src[sy * w + sx];
+        return;
+    }
+
+    // ── Mode 20: Spherize ──
+    if (params.mode == 20u) {
+        let cx = params.param_f5;
+        let cy = params.param_f6;
+        let strength = params.brightness;
+        let dx = (f32(x) - cx) / (f32(w) * 0.5);
+        let dy = (f32(y) - cy) / (f32(h) * 0.5);
+        let d2 = dx * dx + dy * dy;
+        let r2 = sqrt(d2);
+        if (r2 < 1.0) {
+            let z = sqrt(1.0 - d2);
+            let rx = cx + dx * z * strength * f32(w) * 0.5;
+            let ry = cy + dy * z * strength * f32(h) * 0.5;
+            let sx = u32(clamp(i32(rx), 0, i32(w - 1u)));
+            let sy = u32(clamp(i32(ry), 0, i32(h - 1u)));
+            dst[y * w + x] = src[sy * w + sx];
+        } else {
+            dst[y * w + x] = src[y * w + x];
+        }
+        return;
+    }
+
+    // ── Mode 21: Wave Warp ──
+    if (params.mode == 21u) {
+        let amplitude = params.brightness;
+        let frequency = params.contrast;
+        let phase = params.angle;
+        let direction = params.param_f5;
+        let dx = cos(direction);
+        let dy = sin(direction);
+        let d = f32(x) * dx + f32(y) * dy;
+        let offset = sin(d * frequency + phase) * amplitude;
+        let sx = u32(clamp(i32(f32(x) + offset * dy), 0, i32(w - 1u)));
+        let sy = u32(clamp(i32(f32(y) - offset * dx), 0, i32(h - 1u)));
+        dst[y * w + x] = src[sy * w + sx];
+        return;
+    }
+
+    // ── Mode 22: Turbulent Displace ──
+    if (params.mode == 22u) {
+        let amplitude = params.brightness;
+        let scale = max(params.contrast, 0.001);
+        // Simple hash-based noise
+        let nx = f32(x) * scale / f32(w);
+        let ny = f32(y) * scale / f32(h);
+        let ix = floor(nx);
+        let iy = floor(ny);
+        let fx = fract(nx);
+        let fy = fract(ny);
+        let n00 = hash2(vec2<f32>(ix, iy));
+        let n10 = hash2(vec2<f32>(ix + 1.0, iy));
+        let n01 = hash2(vec2<f32>(ix, iy + 1.0));
+        let n11 = hash2(vec2<f32>(ix + 1.0, iy + 1.0));
+        let nx_interp = mix(mix(n00, n10, fx), mix(n01, n11, fx), fy);
+        let angle = nx_interp * 6.2831853;
+        let disp = amplitude;
+        let sx = u32(clamp(i32(f32(x) + cos(angle) * disp), 0, i32(w - 1u)));
+        let sy = u32(clamp(i32(f32(y) + sin(angle) * disp), 0, i32(h - 1u)));
+        dst[y * w + x] = src[sy * w + sx];
+        return;
+    }
+
+    // ── Mode 23: Chromatic Aberration ──
+    if (params.mode == 23u) {
+        let cx = f32(w) * 0.5;
+        let cy = f32(h) * 0.5;
+        let amount = params.brightness;
+        let dx = (f32(x) - cx) / cx;
+        let dy = (f32(y) - cy) / cy;
+        let dist2 = dx * dx + dy * dy;
+        let offset = dist2 * amount;
+        let r_x = u32(clamp(i32(f32(x) + dx * offset * 2.0), 0, i32(w - 1u)));
+        let r_y = u32(clamp(i32(f32(y) + dy * offset * 2.0), 0, i32(h - 1u)));
+        let g_x = x;
+        let g_y = y;
+        let b_x = u32(clamp(i32(f32(x) - dx * offset * 2.0), 0, i32(w - 1u)));
+        let b_y = u32(clamp(i32(f32(y) - dy * offset * 2.0), 0, i32(h - 1u)));
+        let r = unpack(src[r_y * w + r_x]).r;
+        let g = unpack(src[g_y * w + g_x]).g;
+        let b = unpack(src[b_y * w + b_x]).b;
+        let a = unpack(src[y * w + x]).a;
+        dst[y * w + x] = pack(vec4<f32>(r, g, b, a));
+        return;
+    }
+
+    // ── Mode 24: Vignette ──
+    if (params.mode == 24u) {
+        let cx = f32(w) * 0.5;
+        let cy = f32(h) * 0.5;
+        let radius = params.brightness;
+        let softness = max(params.contrast, 0.01);
+        let dx = (f32(x) - cx) / cx;
+        let dy = (f32(y) - cy) / cy;
+        let d = sqrt(dx * dx + dy * dy);
+        let v = smoothstep(radius, radius + softness, d);
+        let c = unpack(src[y * w + x]);
+        let rgb = c.rgb * (1.0 - v);
+        dst[y * w + x] = pack(vec4<f32>(rgb, c.a));
+        return;
+    }
+
+    // ── Mode 25: Minimax (dilate/erode) ──
+    if (params.mode == 25u) {
+        let radius = max(params.radius, 1u);
+        let mode_flag = params.param_f5;
+        var extreme: f32 = select(0.0, 1.0, mode_flag > 0.5);
+        let c0 = unpack(src[y * w + x]);
+        var result = c0;
+        for (var dy: i32 = -i32(radius); dy <= i32(radius); dy++) {
+            for (var dx: i32 = -i32(radius); dx <= i32(radius); dx++) {
+                let sx = u32(clamp(i32(x) + dx, 0, i32(w - 1u)));
+                let sy = u32(clamp(i32(y) + dy, 0, i32(h - 1u)));
+                let c = unpack(src[sy * w + sx]);
+                if (mode_flag > 0.5) {
+                    result.r = max(result.r, c.r);
+                    result.g = max(result.g, c.g);
+                    result.b = max(result.b, c.b);
+                } else {
+                    result.r = min(result.r, c.r);
+                    result.g = min(result.g, c.g);
+                    result.b = min(result.b, c.b);
+                }
+            }
+        }
+        dst[y * w + x] = pack(result);
         return;
     }
 
