@@ -736,17 +736,7 @@ impl eframe::App for AfterEffectsApp {
 
         // ── Synced audio playback: follow the playhead while playing ──
         {
-            // First video layer's extracted WAV drives the preview audio
-            let wav = self
-                .history
-                .current()
-                .active_composition()
-                .layers
-                .iter()
-                .find_map(|l| match &l.layer_type {
-                    crate::core::timeline::LayerType::Video { audio_wav, .. } => audio_wav.clone(),
-                    _ => None,
-                });
+            // Mix all audio sources and play the result
             let audio_enabled = self.audio_preview_enabled;
             let fps = self.history.current().active_composition().fps.max(1);
             let playhead_sec = self.current_frame as f32 / fps as f32;
@@ -781,14 +771,43 @@ impl eframe::App for AfterEffectsApp {
                 );
             }
 
+            // Mix the entire work area to a temp WAV and play it
+            let wav = if audio_enabled && self.is_playing {
+                let project = self.history.current();
+                let comp = project.active_composition();
+                let wa_start = self.work_area_in.unwrap_or(0);
+                let wa_end = self.work_area_out.unwrap_or(comp.duration_frames);
+                let dsp = crate::core::audio_engine::MasterDspParams {
+                    eq_highpass: self.master_eq_highpass,
+                    eq_lowpass: self.master_eq_lowpass,
+                    eq_mid_gain: self.master_eq_mid_gain,
+                    eq_mid_freq: self.master_eq_mid_freq,
+                    comp_threshold: self.master_comp_threshold,
+                    comp_ratio: self.master_comp_ratio,
+                    comp_attack: self.master_comp_attack,
+                    comp_release: self.master_comp_release,
+                    comp_makeup: self.master_comp_makeup,
+                };
+                crate::core::audio_engine::mix_composition_to_wav(
+                    comp,
+                    wa_start,
+                    wa_end,
+                    48000,
+                    Some(&self.audio_mixer_channels),
+                    &dsp,
+                )
+            } else {
+                None
+            };
+
             match (
                 self.is_playing,
                 audio_enabled,
-                wav,
+                wav.as_ref(),
                 &mut self.audio_playback,
             ) {
                 (true, true, Some(wav), Some(playback)) => {
-                    if let Err(e) = playback.play(&std::path::PathBuf::from(wav), playhead_sec) {
+                    if let Err(e) = playback.play(wav, playhead_sec) {
                         log::warn!("[Audio] playback error: {}", e);
                     }
                 }

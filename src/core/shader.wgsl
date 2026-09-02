@@ -227,6 +227,10 @@ struct Layer {
 @group(4) @binding(0) var t_shadow: texture_2d<f32>;
 @group(4) @binding(1) var s_shadow: sampler;
 
+// Track matte source texture (the layer ABOVE this one in AE track matte order)
+@group(5) @binding(0) var t_matte: texture_2d<f32>;
+@group(5) @binding(1) var s_matte: sampler;
+
 struct VertexInput {
     @location(0) position: vec2<f32>,
     @location(1) tex_coords: vec2<f32>,
@@ -1064,7 +1068,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
 
     // --- Track Matte Masking ---
     if (layer.track_matte_mode > 0u) {
-        let matte_tex = textureSample(t_diffuse, s_diffuse, in.tex_coords);
+        let matte_tex = textureSample(t_matte, s_matte, in.tex_coords);
         var matte_alpha = 1.0;
         if (layer.track_matte_mode == 1u) {
             matte_alpha = matte_tex.a;

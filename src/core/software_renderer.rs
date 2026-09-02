@@ -766,6 +766,28 @@ fn composition_content_revision(comp: &Composition) -> u64 {
     })
 }
 
+/// Render a single layer from `comp` at the given frame, returning an RGBA8 buffer
+/// of size `width * height * 4`. Used by effects like SetMatte that need another
+/// layer's pixel data.
+pub(crate) fn render_single_layer_pixels(
+    comp: &Composition,
+    layer_idx: usize,
+    frame: u32,
+    width: u32,
+    height: u32,
+) -> Vec<u8> {
+    let size = rgba_buffer_size(width, height).unwrap_or(0);
+    if size == 0 || layer_idx >= comp.layers.len() {
+        return vec![0u8; size as usize];
+    }
+    // Create a minimal composition with only the target layer
+    let mut single = comp.clone();
+    let target = single.layers.remove(layer_idx);
+    single.layers.clear();
+    single.layers.push(target);
+    render_frame_to_pixels(&single, frame, width, height, 0.0, 0)
+}
+
 fn render_precomp_layers_inner(
     _comp: &Composition,
     precomp_comp: &Composition,
@@ -792,7 +814,7 @@ fn render_precomp_layers_inner(
         .iter()
         .any(|l| l.is_active(frame) && l.solo);
 
-    for layer in &precomp_comp.layers {
+    for (layer_idx, layer) in precomp_comp.layers.iter().enumerate() {
         if !layer.is_active(frame) || !layer.visible || layer.is_guide_layer {
             continue;
         }
@@ -820,6 +842,8 @@ fn render_precomp_layers_inner(
             if !layer.effects.is_empty() && l_opacity > 0.003 {
                 let mut adjusted = buffer.clone();
                 crate::core::cpu_effects::apply_layer_effects(
+                    Some(precomp_comp),
+                    Some(layer_idx),
                     &mut adjusted,
                     width,
                     height,
@@ -1145,6 +1169,8 @@ fn render_precomp_layers_inner(
         }
 
         crate::core::cpu_effects::apply_layer_effects(
+            Some(precomp_comp),
+            Some(layer_idx),
             &mut layer_buf,
             bw,
             bh,
@@ -2019,6 +2045,8 @@ pub fn render_frame_to_pixels(
             if !layer.effects.is_empty() && l_opacity > 0.003 {
                 let mut adjusted = buffer.clone();
                 crate::core::cpu_effects::apply_layer_effects(
+                    Some(comp),
+                    Some(sorted_idx),
                     &mut adjusted,
                     width,
                     height,
@@ -2308,6 +2336,8 @@ pub fn render_frame_to_pixels(
 
             // Apply the layer's CPU effect stack to the full frame
             crate::core::cpu_effects::apply_layer_effects(
+                Some(comp),
+                Some(sorted_idx),
                 &mut buffer,
                 width,
                 height,
@@ -3012,6 +3042,8 @@ pub fn render_frame_to_pixels(
                     })
             });
         crate::core::cpu_effects::apply_layer_effects_ctx(
+            Some(comp),
+            Some(sorted_idx),
             &mut layer_buf,
             bw,
             bh,
@@ -4762,7 +4794,7 @@ mod tests {
             enabled: true,
         }];
 
-        cpu_effects::apply_layer_effects(&mut buf, 16, 16, &effects, 0, 30);
+        cpu_effects::apply_layer_effects(None, None, &mut buf, 16, 16, &effects, 0, 30);
 
         // The twirl should have moved the red pixel away from (8,10).
         let orig_val = ((px_y * 16 + px_x) * 4) as usize;

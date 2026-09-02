@@ -6,6 +6,39 @@
 /// - Peak RMS VU meter calculation for audio mixers
 use crate::core::timeline::{Composition, EffectType, Layer, LayerType};
 
+/// Validates that a WAV path is safe to load: rejects path traversal (`..`)
+/// and absolute paths outside the project directory.
+/// Returns `Err(reason)` if the path is suspicious, `Ok(())` if safe.
+pub fn validate_wav_path(path: &str) -> Result<(), String> {
+    let p = std::path::Path::new(path);
+    // Reject empty paths
+    if path.is_empty() {
+        return Err("WAV path is empty".into());
+    }
+    // Reject paths with .. components (traversal)
+    for component in p.components() {
+        if matches!(component, std::path::Component::ParentDir) {
+            return Err(format!("WAV path contains '..' traversal: {}", path));
+        }
+    }
+    // Reject absolute paths to sensitive system directories
+    if p.is_absolute() {
+        let forbidden = ["/etc", "/proc", "/sys", "/dev", "/private/etc"];
+        for prefix in &forbidden {
+            if let Ok(canonical) = p.canonicalize() {
+                if canonical.starts_with(prefix) {
+                    return Err(format!("WAV path targets system directory: {}", path));
+                }
+            }
+            // If canonicalize fails (path doesn't exist yet), check prefix string
+            if p.starts_with(prefix) {
+                return Err(format!("WAV path targets system directory: {}", path));
+            }
+        }
+    }
+    Ok(())
+}
+
 #[allow(dead_code)]
 #[derive(Debug, Clone)]
 pub struct AudioBuffer {
@@ -480,16 +513,20 @@ fn mix_precomp_audio(
                         Some(buf.clone())
                     } else {
                         drop(map);
-                        let loaded = AudioBuffer::load_wav(std::path::Path::new(path))
-                            .ok()
-                            .map(|b| std::sync::Arc::new(b.resample(sample_rate)));
-                        if let Some(buf) = &loaded {
-                            cache
-                                .lock()
-                                .unwrap_or_else(|e| e.into_inner())
-                                .insert(path.clone(), buf.clone());
+                        if validate_wav_path(path).is_err() {
+                            None
+                        } else {
+                            let loaded = AudioBuffer::load_wav(std::path::Path::new(path))
+                                .ok()
+                                .map(|b| std::sync::Arc::new(b.resample(sample_rate)));
+                            if let Some(buf) = &loaded {
+                                cache
+                                    .lock()
+                                    .unwrap_or_else(|e| e.into_inner())
+                                    .insert(path.clone(), buf.clone());
+                            }
+                            loaded
                         }
-                        loaded
                     }
                 };
                 if let Some(buf) = source {
@@ -526,16 +563,20 @@ fn mix_precomp_audio(
                         Some(buf.clone())
                     } else {
                         drop(map);
-                        let loaded = AudioBuffer::load_wav(std::path::Path::new(w))
-                            .ok()
-                            .map(|b| std::sync::Arc::new(b.resample(sample_rate)));
-                        if let Some(buf) = &loaded {
-                            cache
-                                .lock()
-                                .unwrap_or_else(|e| e.into_inner())
-                                .insert(w.clone(), buf.clone());
+                        if validate_wav_path(w).is_err() {
+                            None
+                        } else {
+                            let loaded = AudioBuffer::load_wav(std::path::Path::new(w))
+                                .ok()
+                                .map(|b| std::sync::Arc::new(b.resample(sample_rate)));
+                            if let Some(buf) = &loaded {
+                                cache
+                                    .lock()
+                                    .unwrap_or_else(|e| e.into_inner())
+                                    .insert(w.clone(), buf.clone());
+                            }
+                            loaded
                         }
-                        loaded
                     }
                 };
                 if let Some(buf) = source {
@@ -671,16 +712,20 @@ pub fn mix_audio_sources_for_frame(
                     Some(buf.clone())
                 } else {
                     drop(map);
-                    let loaded = AudioBuffer::load_wav(std::path::Path::new(p))
-                        .ok()
-                        .map(|b| std::sync::Arc::new(b.resample(sample_rate)));
-                    if let Some(buf) = &loaded {
-                        cache
-                            .lock()
-                            .unwrap_or_else(|e| e.into_inner())
-                            .insert(p.clone(), buf.clone());
+                    if validate_wav_path(p).is_err() {
+                        None
+                    } else {
+                        let loaded = AudioBuffer::load_wav(std::path::Path::new(p))
+                            .ok()
+                            .map(|b| std::sync::Arc::new(b.resample(sample_rate)));
+                        if let Some(buf) = &loaded {
+                            cache
+                                .lock()
+                                .unwrap_or_else(|e| e.into_inner())
+                                .insert(p.clone(), buf.clone());
+                        }
+                        loaded
                     }
-                    loaded
                 }
             }
             None => None,
@@ -842,6 +887,73 @@ pub fn detect_beat_frames(path: &std::path::Path, total_frames: u32, fps: f32) -
         }
     }
     beats
+}
+
+/// Mix all audio sources in the composition for the given frame range and write
+/// to a temporary WAV file. Returns the path to the mixed WAV.
+pub fn mix_composition_to_wav(
+    comp: &Composition,
+    start_frame: u32,
+    end_frame: u32,
+    sample_rate: u32,
+    mixer: Option<&[crate::core::audio_types::MixerChannel]>,
+    dsp: &MasterDspParams,
+) -> Option<std::path::PathBuf> {
+    use std::io::Write;
+
+    let fps = comp.fps.max(1);
+    let total_frames = end_frame.saturating_sub(start_frame);
+    if total_frames == 0 {
+        return None;
+    }
+    let buffer_size = 2048;
+    let mut all_samples: Vec<f32> = Vec::new();
+
+    for frame in start_frame..end_frame {
+        let (stereo_buf, _) = mix_audio_sources_for_frame(
+            comp,
+            frame,
+            sample_rate,
+            buffer_size,
+            mixer,
+            dsp,
+        );
+        all_samples.extend_from_slice(&stereo_buf);
+    }
+
+    if all_samples.is_empty() {
+        return None;
+    }
+
+    let dir = std::env::temp_dir();
+    let path = dir.join(format!("kagari_mix_{}.wav", std::process::id()));
+    let data_len = (all_samples.len() * 2) as u32;
+    let byte_rate = sample_rate * 2 * 2;
+    let block_align = 4u16;
+    let bits_per_sample = 16u16;
+
+    let mut f = std::fs::File::create(&path).ok()?;
+    f.write_all(b"RIFF").ok()?;
+    f.write_all(&(36 + data_len).to_le_bytes()).ok()?;
+    f.write_all(b"WAVE").ok()?;
+    f.write_all(b"fmt ").ok()?;
+    f.write_all(&16u32.to_le_bytes()).ok()?;
+    f.write_all(&1u16.to_le_bytes()).ok()?;
+    f.write_all(&2u16.to_le_bytes()).ok()?;
+    f.write_all(&sample_rate.to_le_bytes()).ok()?;
+    f.write_all(&byte_rate.to_le_bytes()).ok()?;
+    f.write_all(&block_align.to_le_bytes()).ok()?;
+    f.write_all(&bits_per_sample.to_le_bytes()).ok()?;
+    f.write_all(b"data").ok()?;
+    f.write_all(&data_len.to_le_bytes()).ok()?;
+
+    for &s in &all_samples {
+        let clamped = s.clamp(-1.0, 1.0);
+        let i16_val = (clamped * 32767.0) as i16;
+        f.write_all(&i16_val.to_le_bytes()).ok()?;
+    }
+
+    Some(path)
 }
 
 #[cfg(test)]

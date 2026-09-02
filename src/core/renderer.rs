@@ -3,6 +3,37 @@ use crate::core::timeline::{Composition, LayerType, ShapeFillType, ShapeType};
 
 use std::sync::Arc;
 
+/// Convert RGBA8 pixel data to RGBA16Float bytes for HDR texture upload.
+fn rgba8_to_rgba16f_bytes(pixels: &[u8]) -> Vec<u8> {
+    let mut out = Vec::with_capacity(pixels.len() * 2);
+    for chunk in pixels.chunks_exact(4) {
+        let r = chunk[0] as f32 / 255.0;
+        let g = chunk[1] as f32 / 255.0;
+        let b = chunk[2] as f32 / 255.0;
+        let a = chunk[3] as f32 / 255.0;
+        // Write as f32 (wgpu handles f32→f16 conversion for Rgba16Float)
+        out.extend_from_slice(&r.to_le_bytes());
+        out.extend_from_slice(&g.to_le_bytes());
+        out.extend_from_slice(&b.to_le_bytes());
+        out.extend_from_slice(&a.to_le_bytes());
+    }
+    out
+}
+
+/// Convert a single RGBA8 color to RGBA16Float bytes.
+fn rgba8_color_to_rgba16f_bytes(r: u8, g: u8, b: u8, a: u8) -> [u8; 16] {
+    let mut out = [0u8; 16];
+    let rf = r as f32 / 255.0;
+    let gf = g as f32 / 255.0;
+    let bf = b as f32 / 255.0;
+    let af = a as f32 / 255.0;
+    out[0..4].copy_from_slice(&rf.to_le_bytes());
+    out[4..8].copy_from_slice(&gf.to_le_bytes());
+    out[8..12].copy_from_slice(&bf.to_le_bytes());
+    out[12..16].copy_from_slice(&af.to_le_bytes());
+    out
+}
+
 // Helper matrix functions
 #[allow(dead_code)]
 fn mat4_identity() -> [[f32; 4]; 4] {
@@ -1081,6 +1112,10 @@ pub struct WgpuRenderer {
     shadow_texture: Option<wgpu::Texture>,
     shadow_size: (u32, u32),
     shadow_active: bool,
+
+    // Track matte source (group 5): per-layer matte texture binding
+    matte_bind_group_layout: wgpu::BindGroupLayout,
+    matte_bind_group: wgpu::BindGroup,
     /// Content-addressed cache so static masks skip EDT re-raster during
     /// playback of other layers.
     mask_raster_cache: std::cell::RefCell<MaskRasterCache>,
@@ -1270,7 +1305,7 @@ impl WgpuRenderer {
             mip_level_count: 1,
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
-            format: wgpu::TextureFormat::Rgba8UnormSrgb,
+            format: wgpu::TextureFormat::Rgba16Float,
             usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
             view_formats: &[],
         });
@@ -1281,10 +1316,10 @@ impl WgpuRenderer {
                 origin: wgpu::Origin3d::ZERO,
                 aspect: wgpu::TextureAspect::All,
             },
-            &[255, 255, 255, 255],
+            &rgba8_color_to_rgba16f_bytes(255, 255, 255, 255),
             wgpu::ImageDataLayout {
                 offset: 0,
-                bytes_per_row: Some(4),
+                bytes_per_row: Some(16),
                 rows_per_image: Some(1),
             },
             dummy_mask_size,
@@ -1336,7 +1371,7 @@ impl WgpuRenderer {
             mip_level_count: 1,
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
-            format: wgpu::TextureFormat::Rgba8UnormSrgb,
+            format: wgpu::TextureFormat::Rgba16Float,
             usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
             view_formats: &[],
         });
@@ -1347,10 +1382,10 @@ impl WgpuRenderer {
                 origin: wgpu::Origin3d::ZERO,
                 aspect: wgpu::TextureAspect::All,
             },
-            &[0, 0, 0, 255],
+            &rgba8_color_to_rgba16f_bytes(0, 0, 0, 255),
             wgpu::ImageDataLayout {
                 offset: 0,
-                bytes_per_row: Some(4),
+                bytes_per_row: Some(16),
                 rows_per_image: Some(1),
             },
             dummy_mask_size,
@@ -1370,6 +1405,71 @@ impl WgpuRenderer {
                 },
             ],
             label: Some("shadow_bind_group"),
+        });
+
+        // Track matte source resources (group 5) — 1x1 dummy until layer assigned
+        let matte_bind_group_layout =
+            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                entries: &[
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 0,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Texture {
+                            multisampled: false,
+                            view_dimension: wgpu::TextureViewDimension::D2,
+                            sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                        },
+                        count: None,
+                    },
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 1,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                        count: None,
+                    },
+                ],
+                label: Some("matte_bind_group_layout"),
+            });
+        let dummy_matte_texture = device.create_texture(&wgpu::TextureDescriptor {
+            label: Some("Dummy Matte Texture"),
+            size: dummy_mask_size,
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: wgpu::TextureFormat::Rgba16Float,
+            usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+            view_formats: &[],
+        });
+        queue.write_texture(
+            wgpu::ImageCopyTexture {
+                texture: &dummy_matte_texture,
+                mip_level: 0,
+                origin: wgpu::Origin3d::ZERO,
+                aspect: wgpu::TextureAspect::All,
+            },
+            &rgba8_color_to_rgba16f_bytes(255, 255, 255, 255),
+            wgpu::ImageDataLayout {
+                offset: 0,
+                bytes_per_row: Some(16),
+                rows_per_image: Some(1),
+            },
+            dummy_mask_size,
+        );
+        let dummy_matte_view =
+            dummy_matte_texture.create_view(&wgpu::TextureViewDescriptor::default());
+        let matte_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            layout: &matte_bind_group_layout,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::TextureView(&dummy_matte_view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::Sampler(&sampler),
+                },
+            ],
+            label: Some("matte_bind_group"),
         });
 
         let layer_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
@@ -1397,7 +1497,7 @@ impl WgpuRenderer {
             mip_level_count: 1,
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
-            format: wgpu::TextureFormat::Rgba8UnormSrgb,
+            format: wgpu::TextureFormat::Rgba16Float,
             usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
             view_formats: &[],
         });
@@ -1408,10 +1508,10 @@ impl WgpuRenderer {
                 origin: wgpu::Origin3d::ZERO,
                 aspect: wgpu::TextureAspect::All,
             },
-            &[255, 255, 255, 255],
+            &rgba8_color_to_rgba16f_bytes(255, 255, 255, 255),
             wgpu::ImageDataLayout {
                 offset: 0,
-                bytes_per_row: Some(4),
+                bytes_per_row: Some(16),
                 rows_per_image: Some(1),
             },
             dummy_size,
@@ -1453,6 +1553,7 @@ impl WgpuRenderer {
                     &texture_bind_group_layout,
                     &mask_bind_group_layout,
                     &shadow_bind_group_layout,
+                    &matte_bind_group_layout,
                 ],
                 push_constant_ranges: &[],
             });
@@ -1488,7 +1589,7 @@ impl WgpuRenderer {
                 module: &shader,
                 entry_point: "fs_main",
                 targets: &[Some(wgpu::ColorTargetState {
-                    format: wgpu::TextureFormat::Rgba8UnormSrgb,
+                    format: wgpu::TextureFormat::Rgba16Float,
                     blend: Some(wgpu::BlendState::ALPHA_BLENDING),
                     write_mask: wgpu::ColorWrites::ALL,
                 })],
@@ -1536,6 +1637,8 @@ impl WgpuRenderer {
             shadow_texture: None,
             shadow_size: (0, 0),
             shadow_active: false,
+            matte_bind_group_layout,
+            matte_bind_group,
             target_texture: None,
             target_view: None,
             target_size: (0, 0),
@@ -1569,7 +1672,7 @@ impl WgpuRenderer {
             mip_level_count: 1,
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
-            format: wgpu::TextureFormat::Rgba8UnormSrgb,
+            format: wgpu::TextureFormat::Rgba16Float,
             usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
             view_formats: &[],
         });
@@ -1682,7 +1785,7 @@ impl WgpuRenderer {
             mip_level_count: 1,
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
-            format: wgpu::TextureFormat::Rgba8UnormSrgb,
+            format: wgpu::TextureFormat::Rgba16Float,
             usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
             view_formats: &[],
         });
@@ -1693,10 +1796,10 @@ impl WgpuRenderer {
                 origin: wgpu::Origin3d::ZERO,
                 aspect: wgpu::TextureAspect::All,
             },
-            &pixels,
+            &rgba8_to_rgba16f_bytes(&pixels),
             wgpu::ImageDataLayout {
                 offset: 0,
-                bytes_per_row: Some(tw * 4),
+                bytes_per_row: Some(tw * 16),
                 rows_per_image: Some(th),
             },
             size,
@@ -1750,7 +1853,7 @@ impl WgpuRenderer {
             mip_level_count: 1,
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
-            format: wgpu::TextureFormat::Rgba8UnormSrgb,
+            format: wgpu::TextureFormat::Rgba16Float,
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT
                 | wgpu::TextureUsages::TEXTURE_BINDING
                 | wgpu::TextureUsages::COPY_DST,
@@ -1765,7 +1868,7 @@ impl WgpuRenderer {
             mip_level_count: 1,
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
-            format: wgpu::TextureFormat::Rgba8UnormSrgb,
+            format: wgpu::TextureFormat::Rgba16Float,
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT
                 | wgpu::TextureUsages::TEXTURE_BINDING
                 | wgpu::TextureUsages::COPY_DST,
@@ -1856,55 +1959,6 @@ impl WgpuRenderer {
         let width = eff_w.clamp(1, max_dim);
         let height = eff_h.clamp(1, max_dim);
         let recreated = self.ensure_target_size(width, height);
-
-        if comp
-            .layers
-            .iter()
-            .any(|layer| layer.track_matte != crate::core::timeline::TrackMatteMode::None)
-        {
-            let pixels = crate::core::software_renderer::render_frame_to_pixels(
-                comp,
-                frame,
-                width,
-                height,
-                exposure_ev,
-                lut_mode,
-            );
-            let texture = if target_snapshot {
-                self.snapshot_texture.as_ref()
-            } else {
-                self.target_texture.as_ref()
-            };
-            if let Some(texture) = texture {
-                self.queue.write_texture(
-                    wgpu::ImageCopyTexture {
-                        texture,
-                        mip_level: 0,
-                        origin: wgpu::Origin3d::ZERO,
-                        aspect: wgpu::TextureAspect::All,
-                    },
-                    &pixels,
-                    wgpu::ImageDataLayout {
-                        offset: 0,
-                        bytes_per_row: Some(width * 4),
-                        rows_per_image: Some(height),
-                    },
-                    wgpu::Extent3d {
-                        width,
-                        height,
-                        depth_or_array_layers: 1,
-                    },
-                );
-            }
-            if !ram_mode {
-                if target_snapshot {
-                    self.last_snapshot_key = Some(render_key);
-                } else {
-                    self.last_main_key = Some(render_key);
-                }
-            }
-            return true;
-        }
 
         // Update Globals Uniform
         let globals = GlobalsUniform {
@@ -2696,10 +2750,10 @@ impl WgpuRenderer {
                                 origin: wgpu::Origin3d::ZERO,
                                 aspect: wgpu::TextureAspect::All,
                             },
-                            &raster.pixels,
+                            &rgba8_to_rgba16f_bytes(&raster.pixels),
                             wgpu::ImageDataLayout {
                                 offset: 0,
-                                bytes_per_row: Some(width * 4),
+                                bytes_per_row: Some(width * 16),
                                 rows_per_image: Some(height),
                             },
                             size,
@@ -2768,13 +2822,6 @@ impl WgpuRenderer {
                     render_pass.set_bind_group(0, &self.globals_bind_group, &[]);
 
                     for i in run.start..run.end {
-                        if comp.layers.windows(2).any(|pair| {
-                            pair[0].id == active_layers[i].id
-                                && pair[1].track_matte
-                                    != crate::core::timeline::TrackMatteMode::None
-                        }) {
-                            continue;
-                        }
                         // Bind resources using dynamic uniform offset
                         let dynamic_offset = (i * LAYER_UNIFORM_STRIDE) as u32;
                         render_pass.set_bind_group(1, &self.layer_bind_group, &[dynamic_offset]);
@@ -2787,6 +2834,8 @@ impl WgpuRenderer {
                         render_pass.set_bind_group(2, tex_bg, &[]);
                         render_pass.set_bind_group(3, &self.mask_bind_group, &[]);
                         render_pass.set_bind_group(4, &self.shadow_bind_group, &[]);
+                        // Track matte: use dummy unless the layer has a matte source
+                        render_pass.set_bind_group(5, &self.matte_bind_group, &[]);
 
                         // Draw!
                         render_pass.draw_indexed(0..(INDICES.len() as u32), 0, 0..1);
@@ -2834,13 +2883,16 @@ impl WgpuRenderer {
             .min(crate::core::software_renderer::MAX_RENDER_DIMENSION);
         let (w, h) = (width.min(max_dim), height.min(max_dim));
 
-        // Pack f32 density into the R channel of rgba8unorm
-        let mut bytes = Vec::with_capacity((w * h * 4) as usize);
+        // Pack f32 density into Rgba16Float (f32 per channel)
+        let mut bytes = Vec::with_capacity((w * h * 16) as usize);
         for y in 0..h {
             for x in 0..w {
                 let d = density[(y as usize) * width as usize + x as usize];
-                let v = (d.clamp(0.0, 1.0) * 255.0).round() as u8;
-                bytes.extend_from_slice(&[v, 0, 0, 255]);
+                let v = d.clamp(0.0, 1.0);
+                bytes.extend_from_slice(&v.to_le_bytes());
+                bytes.extend_from_slice(&0.0f32.to_le_bytes());
+                bytes.extend_from_slice(&0.0f32.to_le_bytes());
+                bytes.extend_from_slice(&1.0f32.to_le_bytes());
             }
         }
 
@@ -2855,7 +2907,7 @@ impl WgpuRenderer {
                 mip_level_count: 1,
                 sample_count: 1,
                 dimension: wgpu::TextureDimension::D2,
-                format: wgpu::TextureFormat::Rgba8UnormSrgb,
+                format: wgpu::TextureFormat::Rgba16Float,
                 usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
                 view_formats: &[],
             });
@@ -2890,7 +2942,7 @@ impl WgpuRenderer {
                 &bytes,
                 wgpu::ImageDataLayout {
                     offset: 0,
-                    bytes_per_row: Some(w * 4),
+                    bytes_per_row: Some(w * 16),
                     rows_per_image: Some(h),
                 },
                 wgpu::Extent3d {
@@ -2973,7 +3025,7 @@ impl WgpuRenderer {
                     mip_level_count: 1,
                     sample_count: 1,
                     dimension: wgpu::TextureDimension::D2,
-                    format: wgpu::TextureFormat::Rgba8UnormSrgb,
+                    format: wgpu::TextureFormat::Rgba16Float,
                     usage: wgpu::TextureUsages::RENDER_ATTACHMENT
                         | wgpu::TextureUsages::TEXTURE_BINDING,
                     view_formats: &[],
@@ -3054,7 +3106,7 @@ impl WgpuRenderer {
             mip_level_count: 1,
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
-            format: wgpu::TextureFormat::Rgba8UnormSrgb,
+            format: wgpu::TextureFormat::Rgba16Float,
             usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
             view_formats: &[],
         });
@@ -3065,10 +3117,10 @@ impl WgpuRenderer {
                 origin: wgpu::Origin3d::ZERO,
                 aspect: wgpu::TextureAspect::All,
             },
-            &pixels,
+            &rgba8_to_rgba16f_bytes(&pixels),
             wgpu::ImageDataLayout {
                 offset: 0,
-                bytes_per_row: Some(tw * 4),
+                bytes_per_row: Some(tw * 16),
                 rows_per_image: Some(th),
             },
             size,
@@ -3175,7 +3227,7 @@ impl WgpuRenderer {
                 mip_level_count: 1,
                 sample_count: 1,
                 dimension: wgpu::TextureDimension::D2,
-                format: wgpu::TextureFormat::Rgba8UnormSrgb,
+                format: wgpu::TextureFormat::Rgba16Float,
                 usage: wgpu::TextureUsages::RENDER_ATTACHMENT
                     | wgpu::TextureUsages::TEXTURE_BINDING,
                 view_formats: &[],

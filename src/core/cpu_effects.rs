@@ -33,6 +33,8 @@ fn color3_to_u8(c: [f32; 4]) -> [u8; 3] {
 /// `width*height*4`. Effects are applied in order, mirroring After Effects'
 /// top-to-bottom effect stack within a layer.
 pub fn apply_layer_effects(
+    comp: Option<&crate::core::timeline::Composition>,
+    layer_idx: Option<usize>,
     pixels: &mut [u8],
     width: u32,
     height: u32,
@@ -40,12 +42,14 @@ pub fn apply_layer_effects(
     frame: u32,
     fps: u32,
 ) {
-    apply_layer_effects_ctx(pixels, width, height, effects, frame, fps, None);
+    apply_layer_effects_ctx(comp, layer_idx, pixels, width, height, effects, frame, fps, None);
 }
 
 /// Like [`apply_layer_effects`], with an optional pre-projected light position
 /// (normalized 0..1) for lens flares that link to a comp light.
 pub fn apply_layer_effects_ctx(
+    comp: Option<&crate::core::timeline::Composition>,
+    layer_idx: Option<usize>,
     pixels: &mut [u8],
     width: u32,
     height: u32,
@@ -59,6 +63,8 @@ pub fn apply_layer_effects_ctx(
             continue;
         }
         apply_one_ctx(
+            comp,
+            layer_idx,
             pixels,
             width,
             height,
@@ -71,6 +77,8 @@ pub fn apply_layer_effects_ctx(
 }
 
 fn apply_one_ctx(
+    comp: Option<&crate::core::timeline::Composition>,
+    layer_idx: Option<usize>,
     pixels: &mut [u8],
     width: u32,
     height: u32,
@@ -292,13 +300,20 @@ fn apply_one_ctx(
         } => {
             let mut sr = shift_r.evaluate(frame);
             let mut sb = shift_b.evaluate(frame);
-            // Iris-linked mode: aberration scales with DOF circle-of-confusion
-            // and iris blade count for physically-plausible fringing.
             if *iris_linked {
-                let coc = crate::core::expression_engine::get_audio_band(0).abs() * 0.0 + 1.0;
-                // Use audio band 0 as a proxy for layer DOF intensity (0..1)
-                // More blades → tighter fringing; wider aperture → stronger shift
-                let blade_scale = (5.0_f32 / 8.0).max(0.3); // typical 5-8 blade iris
+                // Use camera DOF parameters for physically-plausible aberration
+                let (aperture, iris_sides) = comp.map(|c| {
+                    let cam = c.resolve_camera();
+                    (cam.aperture, cam.dof_iris_sides)
+                }).unwrap_or((2.8, 8));
+                // CoC scale: wider aperture (lower f-number) → more aberration
+                let coc = (2.8 / aperture.max(0.5)).clamp(0.1, 4.0);
+                // Iris blade modulation: more blades → tighter, more uniform fringing
+                let blade_scale = if iris_sides > 0 {
+                    (iris_sides as f32 / 8.0).clamp(0.3, 1.0)
+                } else {
+                    0.625 // default 5-blade approximation
+                };
                 sr *= coc * blade_scale;
                 sb *= coc * blade_scale;
             }
@@ -1080,29 +1095,78 @@ fn apply_one_ctx(
                 invert_matte: *invert_matte,
                 composite_mode: *composite_mode,
             };
-            let dummy_src = pixels.to_vec();
-            crate::core::set_matte::apply_set_matte(
-                pixels, width, height, &dummy_src, width, height, &params,
-            );
+            let src_pixels = comp.map(|c| {
+                crate::core::software_renderer::render_single_layer_pixels(
+                    c,
+                    *source_layer_idx as usize,
+                    frame,
+                    width,
+                    height,
+                )
+            });
+            match src_pixels {
+                Some(src) => {
+                    crate::core::set_matte::apply_set_matte(
+                        pixels, width, height, &src, width, height, &params,
+                    );
+                }
+                None => {
+                    let fallback = pixels.to_vec();
+                    crate::core::set_matte::apply_set_matte(
+                        pixels, width, height, &fallback, width, height, &params,
+                    );
+                }
+            }
         }
         EffectType::Echo {
-            echo_time_seconds: _,
-            num_echoes: _,
+            echo_time_seconds,
+            num_echoes,
             starting_intensity,
             decay,
             operator,
         } => {
             let start_w = starting_intensity.evaluate(frame);
             let dec = decay.evaluate(frame);
-            let echo_copy = pixels.to_vec();
-            crate::core::echo_effect::blend_echo_frame(
-                pixels,
-                &echo_copy,
-                width,
-                height,
-                start_w * dec,
-                *operator,
-            );
+            let echo_dt = echo_time_seconds.evaluate(frame);
+            let n = (*num_echoes as i32).max(1);
+            let fps_val = fps as f32;
+            let current_layer = layer_idx.unwrap_or(0);
+            for i in 1..=n {
+                let offset_secs = echo_dt * i as f32;
+                let offset_frames = (offset_secs * fps_val).round() as i32;
+                let echo_frame = (frame as i32 - offset_frames).max(0) as u32;
+                let weight = start_w * dec.powi(i);
+                if weight < 0.001 {
+                    continue;
+                }
+                if let Some(c) = comp {
+                    let echo_pixels = crate::core::software_renderer::render_single_layer_pixels(
+                        c,
+                        current_layer,
+                        echo_frame,
+                        width,
+                        height,
+                    );
+                    crate::core::echo_effect::blend_echo_frame(
+                        pixels,
+                        &echo_pixels,
+                        width,
+                        height,
+                        weight,
+                        *operator,
+                    );
+                } else {
+                    let echo_copy = pixels.to_vec();
+                    crate::core::echo_effect::blend_echo_frame(
+                        pixels,
+                        &echo_copy,
+                        width,
+                        height,
+                        weight,
+                        *operator,
+                    );
+                }
+            }
         }
         EffectType::FindEdges { invert } => {
             let params = crate::core::find_edges::FindEdgesParams { invert: *invert };
@@ -1705,6 +1769,8 @@ mod tests {
         let mut px = solid_layer(4, 4, 100, 150, 200);
         let before = px[1];
         apply_layer_effects(
+            None,
+            None,
             &mut px,
             4,
             4,
@@ -1725,6 +1791,8 @@ mod tests {
     fn test_posterize_reduces_levels() {
         let mut px = solid_layer(8, 8, 123, 45, 67);
         apply_layer_effects(
+            None,
+            None,
             &mut px,
             8,
             8,
@@ -1747,6 +1815,8 @@ mod tests {
     fn test_threshold_binaries() {
         let mut px = solid_layer(8, 8, 123, 200, 10);
         apply_layer_effects(
+            None,
+            None,
             &mut px,
             8,
             8,
@@ -1781,6 +1851,8 @@ mod tests {
         px[cx + 2] = 255;
 
         apply_layer_effects(
+            None,
+            None,
             &mut px,
             8,
             8,
@@ -1809,7 +1881,7 @@ mod tests {
             },
         );
         eff.enabled = false;
-        apply_layer_effects(&mut px, 4, 4, &[eff], 0, 30);
+        apply_layer_effects(None, None, &mut px, 4, 4, &[eff], 0, 30);
         assert_eq!(px[0], 100);
     }
 
@@ -1827,6 +1899,8 @@ mod tests {
         px[idx + 2] = 0;
 
         apply_layer_effects(
+            None,
+            None,
             &mut px,
             8,
             8,
@@ -1851,6 +1925,8 @@ mod tests {
     fn test_vibrance_boosts_chroma_but_not_gray() {
         let mut gray = solid_layer(4, 4, 128, 128, 128);
         apply_layer_effects(
+            None,
+            None,
             &mut gray,
             4,
             4,
@@ -1872,6 +1948,8 @@ mod tests {
         let mut colored = solid_layer(4, 4, 90, 140, 200);
         let before = colored.clone();
         apply_layer_effects(
+            None,
+            None,
             &mut colored,
             4,
             4,
@@ -1895,6 +1973,8 @@ mod tests {
     fn test_white_balance_warms_and_cools() {
         let mut warm = solid_layer(4, 4, 120, 120, 120);
         apply_layer_effects(
+            None,
+            None,
             &mut warm,
             4,
             4,
@@ -1915,6 +1995,8 @@ mod tests {
 
         let mut cool = solid_layer(4, 4, 120, 120, 120);
         apply_layer_effects(
+            None,
+            None,
             &mut cool,
             4,
             4,
@@ -1939,6 +2021,8 @@ mod tests {
         let mut px = solid_layer(4, 4, 90, 140, 200);
         let before = px.clone();
         apply_layer_effects(
+            None,
+            None,
             &mut px,
             4,
             4,
@@ -1957,6 +2041,8 @@ mod tests {
 
         let mut red = solid_layer(4, 4, 255, 40, 40);
         apply_layer_effects(
+            None,
+            None,
             &mut red,
             4,
             4,
@@ -1990,6 +2076,8 @@ mod tests {
         px[cx + 2] = 255;
 
         apply_layer_effects(
+            None,
+            None,
             &mut px,
             8,
             8,
@@ -2010,6 +2098,8 @@ mod tests {
         let mut idle = solid_layer(4, 4, 200, 200, 200);
         let before = idle.clone();
         apply_layer_effects(
+            None,
+            None,
             &mut idle,
             4,
             4,
@@ -2034,6 +2124,8 @@ mod tests {
 
         let mut px = base.clone();
         apply_layer_effects(
+            None,
+            None,
             &mut px,
             8,
             8,
@@ -2051,6 +2143,8 @@ mod tests {
 
         let mut px = base.clone();
         apply_layer_effects(
+            None,
+            None,
             &mut px,
             8,
             8,
@@ -2069,6 +2163,8 @@ mod tests {
         // CRT scanlines must darken even rows only.
         let mut px = base.clone();
         apply_layer_effects(
+            None,
+            None,
             &mut px,
             8,
             8,
@@ -2094,6 +2190,8 @@ mod tests {
 
         let mut px = base.clone();
         apply_layer_effects(
+            None,
+            None,
             &mut px,
             8,
             8,
@@ -2110,6 +2208,8 @@ mod tests {
 
         let mut px = base.clone();
         apply_layer_effects(
+            None,
+            None,
             &mut px,
             8,
             8,
@@ -2127,6 +2227,8 @@ mod tests {
 
         let mut px = base.clone();
         apply_layer_effects(
+            None,
+            None,
             &mut px,
             8,
             8,
@@ -2160,6 +2262,8 @@ mod tests {
         // Choke with radius 1 must shrink the matte: corner pixel (1,1) loses alpha.
         let mut px = base.clone();
         apply_layer_effects(
+            None,
+            None,
             &mut px,
             8,
             8,
@@ -2179,6 +2283,8 @@ mod tests {
         // Spread must re-dilate it back.
         let mut px = base.clone();
         apply_layer_effects(
+            None,
+            None,
             &mut px,
             8,
             8,
@@ -2205,6 +2311,8 @@ mod tests {
         px[6] = 0;
         px[7] = 255;
         apply_layer_effects(
+            None,
+            None,
             &mut px,
             2,
             1,
@@ -2228,6 +2336,8 @@ mod tests {
         px[6] = 0;
         px[7] = 255;
         apply_layer_effects(
+            None,
+            None,
             &mut px,
             2,
             1,
@@ -2247,6 +2357,8 @@ mod tests {
         // Night vision output must be phosphor-green dominant.
         let mut px = solid_layer(4, 4, 90, 140, 200);
         apply_layer_effects(
+            None,
+            None,
             &mut px,
             4,
             4,
@@ -2265,6 +2377,8 @@ mod tests {
         // Determinism: same frame → identical output.
         let mut again = solid_layer(4, 4, 90, 140, 200);
         apply_layer_effects(
+            None,
+            None,
             &mut again,
             4,
             4,
@@ -2283,6 +2397,8 @@ mod tests {
         let base = solid_layer(8, 8, 90, 140, 200);
         let mut px = base.clone();
         apply_layer_effects(
+            None,
+            None,
             &mut px,
             8,
             8,
@@ -2300,6 +2416,8 @@ mod tests {
         // Same for radial wipe.
         let mut px = base.clone();
         apply_layer_effects(
+            None,
+            None,
             &mut px,
             8,
             8,
@@ -2322,6 +2440,8 @@ mod tests {
         // Neutral ASC CDL grade must stay within rounding distance of identity.
         let mut px = base.clone();
         apply_layer_effects(
+            None,
+            None,
             &mut px,
             8,
             8,
@@ -2358,6 +2478,8 @@ mod tests {
         // God rays with zero weight adds no light.
         let mut px = base.clone();
         apply_layer_effects(
+            None,
+            None,
             &mut px,
             8,
             8,
@@ -2379,6 +2501,8 @@ mod tests {
         // Zero-amount zoom blur must be a no-op.
         let mut px = base.clone();
         apply_layer_effects(
+            None,
+            None,
             &mut px,
             8,
             8,
@@ -2396,6 +2520,8 @@ mod tests {
         // Positive zoom blur must keep the centre bright on a uniform image.
         let mut px = vec![255u8; 16 * 16 * 4];
         apply_layer_effects(
+            None,
+            None,
             &mut px,
             16,
             16,
@@ -2418,6 +2544,8 @@ mod tests {
         let base = solid_layer(8, 8, 90, 140, 200);
         let mut px = base.clone();
         apply_layer_effects(
+            None,
+            None,
             &mut px,
             8,
             8,
@@ -2435,6 +2563,8 @@ mod tests {
         // Mosaic with block size 1x1 must be identity.
         let mut px = base.clone();
         apply_layer_effects(
+            None,
+            None,
             &mut px,
             8,
             8,
@@ -2454,6 +2584,8 @@ mod tests {
         // (The kernel leaves the 1px border untouched, so only check interior.)
         let mut px = base.clone();
         apply_layer_effects(
+            None,
+            None,
             &mut px,
             8,
             8,
@@ -2480,6 +2612,8 @@ mod tests {
         // Fire with zero intensity is a no-op.
         let mut px = base.clone();
         apply_layer_effects(
+            None,
+            None,
             &mut px,
             8,
             8,
@@ -2498,6 +2632,8 @@ mod tests {
         let run_stars = || {
             let mut px = base.clone();
             apply_layer_effects(
+                None,
+                None,
                 &mut px,
                 8,
                 8,
@@ -2519,6 +2655,8 @@ mod tests {
         let run_bolt = || {
             let mut px = base.clone();
             apply_layer_effects(
+                None,
+                None,
                 &mut px,
                 8,
                 8,
@@ -2550,6 +2688,8 @@ mod tests {
         // Solarize with threshold 255 never triggers — identity.
         let mut px = base.clone();
         apply_layer_effects(
+            None,
+            None,
             &mut px,
             8,
             8,
@@ -2567,6 +2707,8 @@ mod tests {
         // Luma key non-inverted: pixels inside the band become transparent.
         let mut px = base.clone();
         apply_layer_effects(
+            None,
+            None,
             &mut px,
             8,
             8,
@@ -2586,6 +2728,8 @@ mod tests {
         // Inverted: pixels outside the band become transparent instead.
         let mut px = base.clone();
         apply_layer_effects(
+            None,
+            None,
             &mut px,
             8,
             8,
@@ -2609,6 +2753,8 @@ mod tests {
 
         let mut px = base.clone();
         apply_layer_effects(
+            None,
+            None,
             &mut px,
             8,
             8,
@@ -2626,6 +2772,8 @@ mod tests {
 
         let mut px = base.clone();
         apply_layer_effects(
+            None,
+            None,
             &mut px,
             8,
             8,
@@ -2643,6 +2791,8 @@ mod tests {
 
         let mut px = base.clone();
         apply_layer_effects(
+            None,
+            None,
             &mut px,
             8,
             8,
@@ -2669,6 +2819,8 @@ mod tests {
         // A flat single-colour gradient maps every pixel to that colour.
         let mut px = base.clone();
         apply_layer_effects(
+            None,
+            None,
             &mut px,
             8,
             8,
@@ -2692,6 +2844,8 @@ mod tests {
         // Zero-intensity light leak must be a no-op.
         let mut px = base.clone();
         apply_layer_effects(
+            None,
+            None,
             &mut px,
             8,
             8,
@@ -2716,6 +2870,8 @@ mod tests {
         // Zero-opacity reflection is a no-op.
         let mut px = base.clone();
         apply_layer_effects(
+            None,
+            None,
             &mut px,
             8,
             8,
@@ -2735,7 +2891,7 @@ mod tests {
         // Perlin flow and FBM turbulence are deterministic per frame.
         let run = |et: EffectType| {
             let mut px = base.clone();
-            apply_layer_effects(&mut px, 8, 8, &[effect("gen", et)], 3, 30);
+            apply_layer_effects(None, None, &mut px, 8, 8, &[effect("gen", et)], 3, 30);
             px
         };
         let p1 = run(EffectType::PerlinFlow {
