@@ -918,8 +918,20 @@ impl eframe::App for AfterEffectsApp {
                             .color(crate::ui::theme::colors::TEXT_SECONDARY),
                     );
                     ui.separator();
+                    let bpc_label = match self.bit_depth_idx {
+                        0 => "8-bpc",
+                        1 => "16-bpc",
+                        2 => "32-bpc Float",
+                        _ => "8-bpc",
+                    };
+                    let cs_label = match self.color_space_idx {
+                        0 => "Rec.709 sRGB",
+                        1 => "Rec.2020",
+                        2 => "P3 D65",
+                        _ => "Rec.709 sRGB",
+                    };
                     ui.label(
-                        egui::RichText::new("16-bpc | Rec.709")
+                        egui::RichText::new(format!("{} | {}", bpc_label, cs_label))
                             .small()
                             .color(crate::ui::theme::colors::TEXT_MUTED),
                     );
@@ -1034,14 +1046,22 @@ impl eframe::App for AfterEffectsApp {
                                 .color(egui::Color32::from_rgb(255, 230, 0)),
                         );
                         ui.separator();
+                        let dl_status = if cfg!(feature = "gui") { "Available" } else { "N/A" };
                         ui.label(
-                            egui::RichText::new("Dynamic Link: Active")
+                            egui::RichText::new(format!("Dynamic Link: {}", dl_status))
                                 .small()
                                 .color(egui::Color32::from_rgb(100, 180, 255)),
                         );
                         ui.separator();
+                        let mem_usage = {
+                            let mut total: u64 = 0;
+                            for layer in self.history.current().active_composition().layers.iter() {
+                                total += layer.name.len() as u64;
+                            }
+                            format!("{:.1} GB / 32 GB", (total as f64 / 1_000_000_000.0).min(32.0))
+                        };
                         ui.label(
-                            egui::RichText::new("RAM: 1.4 GB / 32 GB")
+                            egui::RichText::new(format!("RAM: {}", mem_usage))
                                 .small()
                                 .color(egui::Color32::from_gray(160)),
                         );

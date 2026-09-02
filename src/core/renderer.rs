@@ -1,17 +1,18 @@
 use crate::core::effect_plugin::evaluate_effects;
 use crate::core::timeline::{Composition, LayerType, ShapeFillType, ShapeType};
+use half::f16;
 
 use std::sync::Arc;
 
 /// Convert RGBA8 pixel data to RGBA16Float bytes for HDR texture upload.
+/// Each pixel: 4 channels × 2 bytes (f16) = 8 bytes.
 fn rgba8_to_rgba16f_bytes(pixels: &[u8]) -> Vec<u8> {
     let mut out = Vec::with_capacity(pixels.len() * 2);
     for chunk in pixels.chunks_exact(4) {
-        let r = chunk[0] as f32 / 255.0;
-        let g = chunk[1] as f32 / 255.0;
-        let b = chunk[2] as f32 / 255.0;
-        let a = chunk[3] as f32 / 255.0;
-        // Write as f32 (wgpu handles f32→f16 conversion for Rgba16Float)
+        let r = f16::from_f32(chunk[0] as f32 / 255.0);
+        let g = f16::from_f32(chunk[1] as f32 / 255.0);
+        let b = f16::from_f32(chunk[2] as f32 / 255.0);
+        let a = f16::from_f32(chunk[3] as f32 / 255.0);
         out.extend_from_slice(&r.to_le_bytes());
         out.extend_from_slice(&g.to_le_bytes());
         out.extend_from_slice(&b.to_le_bytes());
@@ -21,16 +22,17 @@ fn rgba8_to_rgba16f_bytes(pixels: &[u8]) -> Vec<u8> {
 }
 
 /// Convert a single RGBA8 color to RGBA16Float bytes.
-fn rgba8_color_to_rgba16f_bytes(r: u8, g: u8, b: u8, a: u8) -> [u8; 16] {
-    let mut out = [0u8; 16];
-    let rf = r as f32 / 255.0;
-    let gf = g as f32 / 255.0;
-    let bf = b as f32 / 255.0;
-    let af = a as f32 / 255.0;
-    out[0..4].copy_from_slice(&rf.to_le_bytes());
-    out[4..8].copy_from_slice(&gf.to_le_bytes());
-    out[8..12].copy_from_slice(&bf.to_le_bytes());
-    out[12..16].copy_from_slice(&af.to_le_bytes());
+/// Returns 8 bytes (4 × f16).
+fn rgba8_color_to_rgba16f_bytes(r: u8, g: u8, b: u8, a: u8) -> [u8; 8] {
+    let mut out = [0u8; 8];
+    let rf = f16::from_f32(r as f32 / 255.0);
+    let gf = f16::from_f32(g as f32 / 255.0);
+    let bf = f16::from_f32(b as f32 / 255.0);
+    let af = f16::from_f32(a as f32 / 255.0);
+    out[0..2].copy_from_slice(&rf.to_le_bytes());
+    out[2..4].copy_from_slice(&gf.to_le_bytes());
+    out[4..6].copy_from_slice(&bf.to_le_bytes());
+    out[6..8].copy_from_slice(&af.to_le_bytes());
     out
 }
 
@@ -1319,7 +1321,7 @@ impl WgpuRenderer {
             &rgba8_color_to_rgba16f_bytes(255, 255, 255, 255),
             wgpu::ImageDataLayout {
                 offset: 0,
-                bytes_per_row: Some(16),
+                bytes_per_row: Some(8),
                 rows_per_image: Some(1),
             },
             dummy_mask_size,
@@ -1385,7 +1387,7 @@ impl WgpuRenderer {
             &rgba8_color_to_rgba16f_bytes(0, 0, 0, 255),
             wgpu::ImageDataLayout {
                 offset: 0,
-                bytes_per_row: Some(16),
+                bytes_per_row: Some(8),
                 rows_per_image: Some(1),
             },
             dummy_mask_size,
@@ -1450,7 +1452,7 @@ impl WgpuRenderer {
             &rgba8_color_to_rgba16f_bytes(255, 255, 255, 255),
             wgpu::ImageDataLayout {
                 offset: 0,
-                bytes_per_row: Some(16),
+                bytes_per_row: Some(8),
                 rows_per_image: Some(1),
             },
             dummy_mask_size,
@@ -1511,7 +1513,7 @@ impl WgpuRenderer {
             &rgba8_color_to_rgba16f_bytes(255, 255, 255, 255),
             wgpu::ImageDataLayout {
                 offset: 0,
-                bytes_per_row: Some(16),
+                bytes_per_row: Some(8),
                 rows_per_image: Some(1),
             },
             dummy_size,
@@ -1799,7 +1801,7 @@ impl WgpuRenderer {
             &rgba8_to_rgba16f_bytes(&pixels),
             wgpu::ImageDataLayout {
                 offset: 0,
-                bytes_per_row: Some(tw * 16),
+                bytes_per_row: Some(tw * 8),
                 rows_per_image: Some(th),
             },
             size,
@@ -2753,7 +2755,7 @@ impl WgpuRenderer {
                             &rgba8_to_rgba16f_bytes(&raster.pixels),
                             wgpu::ImageDataLayout {
                                 offset: 0,
-                                bytes_per_row: Some(width * 16),
+                                bytes_per_row: Some(width * 8),
                                 rows_per_image: Some(height),
                             },
                             size,
@@ -2942,7 +2944,7 @@ impl WgpuRenderer {
                 &bytes,
                 wgpu::ImageDataLayout {
                     offset: 0,
-                    bytes_per_row: Some(w * 16),
+                    bytes_per_row: Some(w * 8),
                     rows_per_image: Some(h),
                 },
                 wgpu::Extent3d {
@@ -3120,7 +3122,7 @@ impl WgpuRenderer {
             &rgba8_to_rgba16f_bytes(&pixels),
             wgpu::ImageDataLayout {
                 offset: 0,
-                bytes_per_row: Some(tw * 16),
+                bytes_per_row: Some(tw * 8),
                 rows_per_image: Some(th),
             },
             size,

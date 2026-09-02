@@ -1,9 +1,9 @@
 //! Synced audio playback for AV preview.
 //!
 //! Owns the rodio output stream and a sink playing the active composition's
-//! audio (currently the first video layer's extracted WAV). Playback position is
-//! periodically reconciled against the playhead so audio stays in sync even if
-//! the UI drops frames.
+//! mixed audio (all audio layers blended via mix_composition_to_wav). Playback
+//! position is periodically reconciled against the playhead so audio stays in
+//! sync even if the UI drops frames.
 
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -39,17 +39,15 @@ impl AudioPlayback {
     pub fn play(&mut self, wav_path: &PathBuf, offset_sec: f32) -> Result<(), String> {
         // Restart required if the file changed or the sink died
         let needs_reload = match (&self.sink, &self.loaded_path) {
-            (Some(sink), Some(p)) => {
-                p != wav_path || sink.empty()
-            }
+            (Some(sink), Some(p)) => p != wav_path || sink.empty(),
             _ => true,
         };
         if needs_reload {
             self.stop();
-            let sink = rodio::Sink::try_new(&self.handle)
-                .map_err(|e| format!("audio sink: {}", e))?;
-            let file = std::fs::File::open(wav_path)
-                .map_err(|e| format!("cannot open audio: {}", e))?;
+            let sink =
+                rodio::Sink::try_new(&self.handle).map_err(|e| format!("audio sink: {}", e))?;
+            let file =
+                std::fs::File::open(wav_path).map_err(|e| format!("cannot open audio: {}", e))?;
             let source = rodio::Decoder::new(std::io::BufReader::new(file))
                 .map_err(|e| format!("audio decode: {}", e))?;
             sink.append(source);
@@ -95,12 +93,14 @@ impl AudioPlayback {
 
     /// Current playback position in seconds, if a sink is live.
     pub fn position_sec(&self) -> Option<f32> {
-        self.sink.as_ref().and_then(|s| {
-            (!s.is_paused() || !s.empty()).then(|| s.get_pos().as_secs_f32())
-        })
+        self.sink
+            .as_ref()
+            .and_then(|s| (!s.is_paused() || !s.empty()).then(|| s.get_pos().as_secs_f32()))
     }
 
     pub fn is_playing(&self) -> bool {
-        self.sink.as_ref().is_some_and(|s| !s.is_paused() && !s.empty())
+        self.sink
+            .as_ref()
+            .is_some_and(|s| !s.is_paused() && !s.empty())
     }
 }
