@@ -107,7 +107,10 @@ fn apply_one_ctx(
         EffectType::ColorTint { color, intensity } => {
             let rgb = color3_to_u8(color.evaluate(frame));
             let amount = (intensity.evaluate(frame) / 100.0).clamp(0.0, 1.0);
-            pack::apply_tint(pixels, rgb, rgb, amount);
+            let tint_f3 = [rgb[0] as f32 / 255.0, rgb[1] as f32 / 255.0, rgb[2] as f32 / 255.0];
+            if !crate::core::compute_pipeline::try_gpu_color_tint(pixels, width, height, tint_f3, amount) {
+                pack::apply_tint(pixels, rgb, rgb, amount);
+            }
         }
         EffectType::DropShadow {
             color,
@@ -118,15 +121,15 @@ fn apply_one_ctx(
         } => {
             let mut sc = color_to_u8(color.evaluate(frame));
             sc[3] = (sc[3] as f32 * (opacity.evaluate(frame) / 100.0)).clamp(0.0, 255.0) as u8;
-            pack::apply_drop_shadow(
-                pixels,
-                width,
-                height,
-                distance.evaluate(frame),
-                direction.evaluate(frame),
-                softness.evaluate(frame).max(0.0) as u32,
-                sc,
-            );
+            let dist = distance.evaluate(frame);
+            let dir = direction.evaluate(frame);
+            let blur = softness.evaluate(frame).max(0.0) as u32;
+            let sc_f32 = [sc[0] as f32 / 255.0, sc[1] as f32 / 255.0, sc[2] as f32 / 255.0, sc[3] as f32 / 255.0];
+            if !crate::core::compute_pipeline::try_gpu_drop_shadow(
+                pixels, width, height, sc_f32, dist, dir, blur.min(32),
+            ) {
+                pack::apply_drop_shadow(pixels, width, height, dist, dir, blur, sc);
+            }
         }
         EffectType::Glow {
             threshold,
@@ -134,14 +137,14 @@ fn apply_one_ctx(
             intensity,
             ..
         } => {
-            pack::apply_glow(
-                pixels,
-                width,
-                height,
-                threshold.evaluate(frame) / 100.0,
-                radius.evaluate(frame).max(0.0) as u32,
-                intensity.evaluate(frame) / 100.0,
-            );
+            let thr = threshold.evaluate(frame) / 100.0;
+            let rad = radius.evaluate(frame).max(0.0) as u32;
+            let inten = intensity.evaluate(frame) / 100.0;
+            if !crate::core::compute_pipeline::try_gpu_glow(
+                pixels, width, height, thr, rad.min(32), inten,
+            ) {
+                pack::apply_glow(pixels, width, height, thr, rad, inten);
+            }
         }
 
         // New CPU-only kernels (no GPU equivalent yet).
@@ -164,7 +167,10 @@ fn apply_one_ctx(
             );
         }
         EffectType::Posterize { levels } => {
-            pack::apply_posterize(pixels, levels.evaluate(frame).max(2.0) as u32);
+            let lv = levels.evaluate(frame).max(2.0) as u32;
+            if !crate::core::compute_pipeline::try_gpu_posterize(pixels, width, height, lv as f32) {
+                pack::apply_posterize(pixels, lv);
+            }
         }
         EffectType::Invert { invert_alpha } => {
             if !crate::core::compute_pipeline::try_gpu_invert(pixels, width, height) {
@@ -172,13 +178,11 @@ fn apply_one_ctx(
             }
         }
         EffectType::Offset { shift_x, shift_y } => {
-            pack::apply_offset(
-                pixels,
-                width,
-                height,
-                shift_x.evaluate(frame) as i32,
-                shift_y.evaluate(frame) as i32,
-            );
+            let sx = shift_x.evaluate(frame) as i32;
+            let sy = shift_y.evaluate(frame) as i32;
+            if !crate::core::compute_pipeline::try_gpu_offset(pixels, width, height, sx, sy) {
+                pack::apply_offset(pixels, width, height, sx, sy);
+            }
         }
         EffectType::DirectionalBlur { angle, length } => {
             let a = angle.evaluate(frame);
@@ -205,10 +209,16 @@ fn apply_one_ctx(
             }
         }
         EffectType::Sharpen { amount } => {
-            pack::apply_sharpen(pixels, width, height, amount.evaluate(frame));
+            let a = amount.evaluate(frame);
+            if !crate::core::compute_pipeline::try_gpu_sharpen(pixels, width, height, a) {
+                pack::apply_sharpen(pixels, width, height, a);
+            }
         }
         EffectType::Threshold { threshold } => {
-            pack::apply_threshold(pixels, threshold.evaluate(frame).clamp(0.0, 255.0) as u8);
+            let t = threshold.evaluate(frame).clamp(0.0, 255.0);
+            if !crate::core::compute_pipeline::try_gpu_threshold(pixels, width, height, t / 255.0) {
+                pack::apply_threshold(pixels, t as u8);
+            }
         }
         EffectType::LinearWipe { completion, angle } => {
             pack::apply_linear_wipe(
@@ -349,30 +359,28 @@ fn apply_one_ctx(
             output_black,
             output_white,
         } => {
-            crate::core::cpu_effects_new::apply_levels(
-                pixels,
-                width,
-                height,
-                input_black.evaluate(frame),
-                input_white.evaluate(frame),
-                gamma.evaluate(frame),
-                output_black.evaluate(frame),
-                output_white.evaluate(frame),
-            );
+            let ib = input_black.evaluate(frame);
+            let iw = input_white.evaluate(frame);
+            let g = gamma.evaluate(frame);
+            let ob = output_black.evaluate(frame);
+            let ow = output_white.evaluate(frame);
+            if !crate::core::compute_pipeline::try_gpu_levels(
+                pixels, width, height, ib, iw, g, ob, ow,
+            ) {
+                crate::core::cpu_effects_new::apply_levels(pixels, width, height, ib, iw, g, ob, ow);
+            }
         }
         EffectType::HueSaturation {
             hue_shift,
             saturation,
             lightness,
         } => {
-            crate::core::cpu_effects_new::apply_hue_saturation(
-                pixels,
-                width,
-                height,
-                hue_shift.evaluate(frame),
-                saturation.evaluate(frame),
-                lightness.evaluate(frame),
-            );
+            let h = hue_shift.evaluate(frame);
+            let s = saturation.evaluate(frame);
+            let l = lightness.evaluate(frame);
+            if !crate::core::compute_pipeline::try_gpu_hue_saturation(pixels, width, height, h, s, l) {
+                crate::core::cpu_effects_new::apply_hue_saturation(pixels, width, height, h, s, l);
+            }
         }
         EffectType::MotionBlur {
             shutter_angle,
@@ -1263,14 +1271,12 @@ fn apply_one_ctx(
             );
         }
         EffectType::Emboss { angle_deg, depth } => {
-            use crate::core::ae_effects_pack_v17::apply_emboss;
-            apply_emboss(
-                pixels,
-                width,
-                height,
-                angle_deg.evaluate(frame),
-                depth.evaluate(frame),
-            );
+            let a = angle_deg.evaluate(frame);
+            let d = depth.evaluate(frame);
+            if !crate::core::compute_pipeline::try_gpu_emboss(pixels, width, height, d) {
+                use crate::core::ae_effects_pack_v17::apply_emboss;
+                apply_emboss(pixels, width, height, a, d);
+            }
         }
         EffectType::StarField {
             num_stars,
@@ -1376,11 +1382,11 @@ fn apply_one_ctx(
             );
         }
         EffectType::Solarize { threshold } => {
-            use crate::core::ae_effects_pack_v14::apply_solarize_effect;
-            apply_solarize_effect(
-                pixels,
-                threshold.evaluate(frame).round().clamp(0.0, 255.0) as u8,
-            );
+            let t = threshold.evaluate(frame).round().clamp(0.0, 255.0);
+            if !crate::core::compute_pipeline::try_gpu_solarize(pixels, width, height, t / 255.0) {
+                use crate::core::ae_effects_pack_v14::apply_solarize_effect;
+                apply_solarize_effect(pixels, t as u8);
+            }
         }
         EffectType::PixelSort { threshold } => {
             use crate::core::ae_effects_pack_v14::apply_pixel_sort_glitch;

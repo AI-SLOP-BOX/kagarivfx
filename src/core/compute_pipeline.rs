@@ -127,17 +127,16 @@ impl GpuComputeContext {
             compatible_surface: None,
             force_fallback_adapter: false,
         }))?;
-        let (device, queue) =
-            block_on(adapter.request_device(
-                &wgpu::DeviceDescriptor {
-                    label: Some("aevfx-compute"),
-                    required_features: wgpu::Features::empty(),
-                    required_limits: wgpu::Limits::default(),
-                    memory_hints: wgpu::MemoryHints::default(),
-                },
-                None,
-            ))
-            .ok()?;
+        let (device, queue) = block_on(adapter.request_device(
+            &wgpu::DeviceDescriptor {
+                label: Some("aevfx-compute"),
+                required_features: wgpu::Features::empty(),
+                required_limits: wgpu::Limits::default(),
+                memory_hints: wgpu::MemoryHints::default(),
+            },
+            None,
+        ))
+        .ok()?;
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("compute_blur.wgsl"),
             source: wgpu::ShaderSource::Wgsl(SHADER.into()),
@@ -152,7 +151,12 @@ impl GpuComputeContext {
         });
         let info = adapter.get_info();
         Some(Self {
-            inner: Mutex::new(Inner { device, queue, pipeline, bufs: None }),
+            inner: Mutex::new(Inner {
+                device,
+                queue,
+                pipeline,
+                bufs: None,
+            }),
             label: format!("{} ({})", info.name.trim(), info.backend.to_str()),
         })
     }
@@ -172,7 +176,8 @@ impl GpuComputeContext {
         if pixels.is_empty() || width == 0 || height == 0 {
             return false;
         }
-        self.gaussian_blur_inner(pixels, width, height, radius).is_some()
+        self.gaussian_blur_inner(pixels, width, height, radius)
+            .is_some()
     }
 
     fn gaussian_blur_inner(
@@ -199,7 +204,10 @@ impl GpuComputeContext {
 
         // (Re)allocate cached buffers when size changes
         if inner.bufs.as_ref().is_none_or(|b| b.len != buf_len) {
-            let fresh = { let dev = &inner.device; self.alloc_buf_set(dev, buf_len) };
+            let fresh = {
+                let dev = &inner.device;
+                self.alloc_buf_set(dev, buf_len)
+            };
             inner.bufs = Some(fresh);
         }
         let bufs = inner.bufs.as_ref()?;
@@ -217,31 +225,72 @@ impl GpuComputeContext {
         }
 
         // Upload input + kernel + params
-        inner.queue.write_buffer(&bufs.src, 0, bytemuck::cast_slice(pixels));
-        inner.queue.write_buffer(&bufs.kernel, 0, bytemuck::cast_slice(&weights));
+        inner
+            .queue
+            .write_buffer(&bufs.src, 0, bytemuck::cast_slice(pixels));
+        inner
+            .queue
+            .write_buffer(&bufs.kernel, 0, bytemuck::cast_slice(&weights));
         inner.queue.write_buffer(
             &bufs.params,
             0,
-            bytemuck::bytes_of(&ParamsUniform { width, height, radius, mode: 0, angle: 0.0, brightness: 0.0, contrast: 1.0, saturation: 1.0, hue_shift: 0.0, param_f3: 0.5, param_f4: 8.0, _pad: 0.0 }),
+            bytemuck::bytes_of(&ParamsUniform {
+                width,
+                height,
+                radius,
+                mode: 0,
+                angle: 0.0,
+                brightness: 0.0,
+                contrast: 1.0,
+                saturation: 1.0,
+                hue_shift: 0.0,
+                param_f3: 0.5,
+                param_f4: 8.0,
+                _pad: 0.0,
+            }),
         );
 
         let bg_h = inner.device.create_bind_group(&wgpu::BindGroupDescriptor {
             layout: &inner.pipeline.get_bind_group_layout(0),
             entries: &[
-                wgpu::BindGroupEntry { binding: 0, resource: bufs.params.as_entire_binding() },
-                wgpu::BindGroupEntry { binding: 1, resource: bufs.src.as_entire_binding() },
-                wgpu::BindGroupEntry { binding: 2, resource: bufs.mid.as_entire_binding() },
-                wgpu::BindGroupEntry { binding: 3, resource: bufs.kernel.as_entire_binding() },
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: bufs.params.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: bufs.src.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 2,
+                    resource: bufs.mid.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 3,
+                    resource: bufs.kernel.as_entire_binding(),
+                },
             ],
             label: Some("bg_h"),
         });
         let bg_v = inner.device.create_bind_group(&wgpu::BindGroupDescriptor {
             layout: &inner.pipeline.get_bind_group_layout(0),
             entries: &[
-                wgpu::BindGroupEntry { binding: 0, resource: bufs.params.as_entire_binding() },
-                wgpu::BindGroupEntry { binding: 1, resource: bufs.mid.as_entire_binding() },
-                wgpu::BindGroupEntry { binding: 2, resource: bufs.dst.as_entire_binding() },
-                wgpu::BindGroupEntry { binding: 3, resource: bufs.kernel.as_entire_binding() },
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: bufs.params.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: bufs.mid.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 2,
+                    resource: bufs.dst.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 3,
+                    resource: bufs.kernel.as_entire_binding(),
+                },
             ],
             label: Some("bg_v"),
         });
@@ -249,7 +298,11 @@ impl GpuComputeContext {
         let wg_x = width.div_ceil(8);
         let wg_y = height.div_ceil(8);
 
-        let mut encoder = inner.device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: Some("blur_enc") });
+        let mut encoder = inner
+            .device
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                label: Some("blur_enc"),
+            });
         {
             let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
                 label: Some("blur_pass"),
@@ -263,7 +316,20 @@ impl GpuComputeContext {
             inner.queue.write_buffer(
                 &bufs.params,
                 0,
-                bytemuck::bytes_of(&ParamsUniform { width, height, radius, mode: 2, angle: 0.0, brightness: 0.0, contrast: 1.0, saturation: 1.0, hue_shift: 0.0, param_f3: 0.5, param_f4: 8.0, _pad: 0.0 }),
+                bytemuck::bytes_of(&ParamsUniform {
+                    width,
+                    height,
+                    radius,
+                    mode: 2,
+                    angle: 0.0,
+                    brightness: 0.0,
+                    contrast: 1.0,
+                    saturation: 1.0,
+                    hue_shift: 0.0,
+                    param_f3: 0.5,
+                    param_f4: 8.0,
+                    _pad: 0.0,
+                }),
             );
             pass.set_bind_group(0, &bg_v, &[]);
             pass.dispatch_workgroups(wg_x, wg_y, 1);
@@ -273,9 +339,11 @@ impl GpuComputeContext {
 
         // Block until done, then read back
         let (tx, rx) = std::sync::mpsc::channel();
-        bufs.staging_out.slice(..).map_async(wgpu::MapMode::Read, move |res| {
-            let _ = tx.send(res);
-        });
+        bufs.staging_out
+            .slice(..)
+            .map_async(wgpu::MapMode::Read, move |res| {
+                let _ = tx.send(res);
+            });
         inner.device.poll(wgpu::Maintain::Wait);
         rx.recv().ok()?.ok()?;
         {
@@ -303,7 +371,8 @@ impl GpuComputeContext {
         if pixels.is_empty() || width == 0 || height == 0 || length_px < 2 {
             return false;
         }
-        self.directional_blur_inner(pixels, width, height, length_px, angle_deg).is_some()
+        self.directional_blur_inner(pixels, width, height, length_px, angle_deg)
+            .is_some()
     }
 
     fn directional_blur_inner(
@@ -325,12 +394,17 @@ impl GpuComputeContext {
 
         // Reuse the same cached buffer set (kernel unused in this mode)
         if inner.bufs.as_ref().is_none_or(|b| b.len != buf_len) {
-            let fresh = { let dev = &inner.device; self.alloc_buf_set(dev, buf_len) };
+            let fresh = {
+                let dev = &inner.device;
+                self.alloc_buf_set(dev, buf_len)
+            };
             inner.bufs = Some(fresh);
         }
         let bufs = inner.bufs.as_ref()?;
 
-        inner.queue.write_buffer(&bufs.src, 0, bytemuck::cast_slice(pixels));
+        inner
+            .queue
+            .write_buffer(&bufs.src, 0, bytemuck::cast_slice(pixels));
         inner.queue.write_buffer(
             &bufs.params,
             0,
@@ -339,16 +413,36 @@ impl GpuComputeContext {
                 height,
                 radius: taps.min(256),
                 mode: 1,
-                angle: angle_deg.to_radians(), brightness: 0.0, contrast: 1.0, saturation: 1.0, hue_shift: 0.0, param_f3: 0.5, param_f4: 8.0, _pad: 0.0 }),
+                angle: angle_deg.to_radians(),
+                brightness: 0.0,
+                contrast: 1.0,
+                saturation: 1.0,
+                hue_shift: 0.0,
+                param_f3: 0.5,
+                param_f4: 8.0,
+                _pad: 0.0,
+            }),
         );
 
         let bg = inner.device.create_bind_group(&wgpu::BindGroupDescriptor {
             layout: &inner.pipeline.get_bind_group_layout(0),
             entries: &[
-                wgpu::BindGroupEntry { binding: 0, resource: bufs.params.as_entire_binding() },
-                wgpu::BindGroupEntry { binding: 1, resource: bufs.src.as_entire_binding() },
-                wgpu::BindGroupEntry { binding: 2, resource: bufs.dst.as_entire_binding() },
-                wgpu::BindGroupEntry { binding: 3, resource: bufs.kernel.as_entire_binding() },
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: bufs.params.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: bufs.src.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 2,
+                    resource: bufs.dst.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 3,
+                    resource: bufs.kernel.as_entire_binding(),
+                },
             ],
             label: Some("bg_dir"),
         });
@@ -356,7 +450,11 @@ impl GpuComputeContext {
         let wg_x = width.div_ceil(8);
         let wg_y = height.div_ceil(8);
 
-        let mut encoder = inner.device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: Some("dir_enc") });
+        let mut encoder = inner
+            .device
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                label: Some("dir_enc"),
+            });
         {
             let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
                 label: Some("dir_pass"),
@@ -370,9 +468,11 @@ impl GpuComputeContext {
         inner.queue.submit(Some(encoder.finish()));
 
         let (tx, rx) = std::sync::mpsc::channel();
-        bufs.staging_out.slice(..).map_async(wgpu::MapMode::Read, move |res| {
-            let _ = tx.send(res);
-        });
+        bufs.staging_out
+            .slice(..)
+            .map_async(wgpu::MapMode::Read, move |res| {
+                let _ = tx.send(res);
+            });
         inner.device.poll(wgpu::Maintain::Wait);
         rx.recv().ok()?.ok()?;
         {
@@ -393,10 +493,17 @@ impl GpuComputeContext {
         if pixels.is_empty() || width == 0 || height == 0 || taps < 2 {
             return false;
         }
-        self.radial_blur_inner(pixels, width, height, taps).is_some()
+        self.radial_blur_inner(pixels, width, height, taps)
+            .is_some()
     }
 
-    fn radial_blur_inner(&self, pixels: &mut [u8], width: u32, height: u32, taps: u32) -> Option<()> {
+    fn radial_blur_inner(
+        &self,
+        pixels: &mut [u8],
+        width: u32,
+        height: u32,
+        taps: u32,
+    ) -> Option<()> {
         use std::time::Instant;
         let t = Instant::now();
         let mut inner = self.inner.lock().ok()?;
@@ -406,25 +513,55 @@ impl GpuComputeContext {
             return None;
         }
         if inner.bufs.as_ref().is_none_or(|b| b.len != buf_len) {
-            let fresh = { let dev = &inner.device; self.alloc_buf_set(dev, buf_len) };
+            let fresh = {
+                let dev = &inner.device;
+                self.alloc_buf_set(dev, buf_len)
+            };
             inner.bufs = Some(fresh);
         }
         let bufs = inner.bufs.as_ref()?;
 
-        inner.queue.write_buffer(&bufs.src, 0, bytemuck::cast_slice(pixels));
+        inner
+            .queue
+            .write_buffer(&bufs.src, 0, bytemuck::cast_slice(pixels));
         inner.queue.write_buffer(
             &bufs.params,
             0,
-            bytemuck::bytes_of(&ParamsUniform { width, height, radius: taps.min(256), mode: 3, angle: 0.0, brightness: 0.0, contrast: 1.0, saturation: 1.0, hue_shift: 0.0, param_f3: 0.5, param_f4: 8.0, _pad: 0.0 }),
+            bytemuck::bytes_of(&ParamsUniform {
+                width,
+                height,
+                radius: taps.min(256),
+                mode: 3,
+                angle: 0.0,
+                brightness: 0.0,
+                contrast: 1.0,
+                saturation: 1.0,
+                hue_shift: 0.0,
+                param_f3: 0.5,
+                param_f4: 8.0,
+                _pad: 0.0,
+            }),
         );
 
         let bg = inner.device.create_bind_group(&wgpu::BindGroupDescriptor {
             layout: &inner.pipeline.get_bind_group_layout(0),
             entries: &[
-                wgpu::BindGroupEntry { binding: 0, resource: bufs.params.as_entire_binding() },
-                wgpu::BindGroupEntry { binding: 1, resource: bufs.src.as_entire_binding() },
-                wgpu::BindGroupEntry { binding: 2, resource: bufs.dst.as_entire_binding() },
-                wgpu::BindGroupEntry { binding: 3, resource: bufs.kernel.as_entire_binding() },
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: bufs.params.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: bufs.src.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 2,
+                    resource: bufs.dst.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 3,
+                    resource: bufs.kernel.as_entire_binding(),
+                },
             ],
             label: Some("bg_radial"),
         });
@@ -432,7 +569,11 @@ impl GpuComputeContext {
         let wg_x = width.div_ceil(8);
         let wg_y = height.div_ceil(8);
 
-        let mut encoder = inner.device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: Some("radial_enc") });
+        let mut encoder = inner
+            .device
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                label: Some("radial_enc"),
+            });
         {
             let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
                 label: Some("radial_pass"),
@@ -446,9 +587,11 @@ impl GpuComputeContext {
         inner.queue.submit(Some(encoder.finish()));
 
         let (tx, rx) = std::sync::mpsc::channel();
-        bufs.staging_out.slice(..).map_async(wgpu::MapMode::Read, move |res| {
-            let _ = tx.send(res);
-        });
+        bufs.staging_out
+            .slice(..)
+            .map_async(wgpu::MapMode::Read, move |res| {
+                let _ = tx.send(res);
+            });
         inner.device.poll(wgpu::Maintain::Wait);
         rx.recv().ok()?.ok()?;
         {
@@ -463,38 +606,81 @@ impl GpuComputeContext {
         Some(())
     }
 
-    fn dispatch_fx(&self, pixels: &mut [u8], width: u32, height: u32, params: ParamsUniform, label: &str) -> bool {
-        self.dispatch_fx_inner(pixels, width, height, params, label).is_some()
+    fn dispatch_fx(
+        &self,
+        pixels: &mut [u8],
+        width: u32,
+        height: u32,
+        params: ParamsUniform,
+        label: &str,
+    ) -> bool {
+        self.dispatch_fx_inner(pixels, width, height, params, label)
+            .is_some()
     }
 
-    fn dispatch_fx_inner(&self, pixels: &mut [u8], width: u32, height: u32, params: ParamsUniform, label: &str) -> Option<()> {
+    fn dispatch_fx_inner(
+        &self,
+        pixels: &mut [u8],
+        width: u32,
+        height: u32,
+        params: ParamsUniform,
+        label: &str,
+    ) -> Option<()> {
         use std::time::Instant;
         let t = Instant::now();
         let mut inner = self.inner.lock().ok()?;
         let buf_len = (width as u64) * (height as u64) * 4;
-        if buf_len > inner.device.limits().max_storage_buffer_binding_size as u64 { return None; }
+        if buf_len > inner.device.limits().max_storage_buffer_binding_size as u64 {
+            return None;
+        }
         if inner.bufs.as_ref().is_none_or(|b| b.len != buf_len) {
-            let fresh = { let dev = &inner.device; self.alloc_buf_set(dev, buf_len) };
+            let fresh = {
+                let dev = &inner.device;
+                self.alloc_buf_set(dev, buf_len)
+            };
             inner.bufs = Some(fresh);
         }
         let bufs = inner.bufs.as_ref()?;
-        inner.queue.write_buffer(&bufs.src, 0, bytemuck::cast_slice(pixels));
-        inner.queue.write_buffer(&bufs.params, 0, bytemuck::bytes_of(&params));
+        inner
+            .queue
+            .write_buffer(&bufs.src, 0, bytemuck::cast_slice(pixels));
+        inner
+            .queue
+            .write_buffer(&bufs.params, 0, bytemuck::bytes_of(&params));
         let bg = inner.device.create_bind_group(&wgpu::BindGroupDescriptor {
             layout: &inner.pipeline.get_bind_group_layout(0),
             entries: &[
-                wgpu::BindGroupEntry { binding: 0, resource: bufs.params.as_entire_binding() },
-                wgpu::BindGroupEntry { binding: 1, resource: bufs.src.as_entire_binding() },
-                wgpu::BindGroupEntry { binding: 2, resource: bufs.dst.as_entire_binding() },
-                wgpu::BindGroupEntry { binding: 3, resource: bufs.kernel.as_entire_binding() },
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: bufs.params.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: bufs.src.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 2,
+                    resource: bufs.dst.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 3,
+                    resource: bufs.kernel.as_entire_binding(),
+                },
             ],
             label: Some(label),
         });
         let wg_x = width.div_ceil(8);
         let wg_y = height.div_ceil(8);
-        let mut encoder = inner.device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: Some("fx_enc") });
+        let mut encoder = inner
+            .device
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                label: Some("fx_enc"),
+            });
         {
-            let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor { label: Some("fx_pass"), timestamp_writes: None });
+            let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+                label: Some("fx_pass"),
+                timestamp_writes: None,
+            });
             pass.set_pipeline(&inner.pipeline);
             pass.set_bind_group(0, &bg, &[]);
             pass.dispatch_workgroups(wg_x, wg_y, 1);
@@ -503,7 +689,11 @@ impl GpuComputeContext {
         inner.queue.submit(Some(encoder.finish()));
         let (tx, rx) = std::sync::mpsc::channel();
         if let Some(b) = inner.bufs.as_ref() {
-            b.staging_out.slice(..).map_async(wgpu::MapMode::Read, move |r| { let _ = tx.send(r); });
+            b.staging_out
+                .slice(..)
+                .map_async(wgpu::MapMode::Read, move |r| {
+                    let _ = tx.send(r);
+                });
         }
         inner.device.poll(wgpu::Maintain::Wait);
         let _ = rx.recv();
@@ -519,38 +709,306 @@ impl GpuComputeContext {
     }
 
     #[allow(clippy::too_many_arguments)]
-    pub fn gpu_color_correct(&self, pixels: &mut [u8], w: u32, h: u32, br: f32, ct: f32, sat: f32, hue: f32) -> bool {
-        self.dispatch_fx(pixels, w, h, ParamsUniform { width: w, height: h, radius: 0, mode: 4, angle: 0.0, brightness: br, contrast: ct, saturation: sat, hue_shift: hue, param_f3: 0.0, param_f4: 0.0, _pad: 0.0 }, "gpu_cc")
+    pub fn gpu_color_correct(
+        &self,
+        pixels: &mut [u8],
+        w: u32,
+        h: u32,
+        br: f32,
+        ct: f32,
+        sat: f32,
+        hue: f32,
+    ) -> bool {
+        self.dispatch_fx(
+            pixels,
+            w,
+            h,
+            ParamsUniform {
+                width: w,
+                height: h,
+                radius: 0,
+                mode: 4,
+                angle: 0.0,
+                brightness: br,
+                contrast: ct,
+                saturation: sat,
+                hue_shift: hue,
+                param_f3: 0.0,
+                param_f4: 0.0,
+                _pad: 0.0,
+            },
+            "gpu_cc",
+        )
     }
     pub fn gpu_sharpen(&self, pixels: &mut [u8], w: u32, h: u32, strength: f32) -> bool {
-        self.dispatch_fx(pixels, w, h, ParamsUniform { width: w, height: h, radius: 0, mode: 5, angle: 0.0, brightness: strength, contrast: 1.0, saturation: 1.0, hue_shift: 0.0, param_f3: 0.0, param_f4: 0.0, _pad: 0.0 }, "gpu_sharp")
+        self.dispatch_fx(
+            pixels,
+            w,
+            h,
+            ParamsUniform {
+                width: w,
+                height: h,
+                radius: 0,
+                mode: 5,
+                angle: 0.0,
+                brightness: strength,
+                contrast: 1.0,
+                saturation: 1.0,
+                hue_shift: 0.0,
+                param_f3: 0.0,
+                param_f4: 0.0,
+                _pad: 0.0,
+            },
+            "gpu_sharp",
+        )
     }
     pub fn gpu_threshold(&self, pixels: &mut [u8], w: u32, h: u32, cutoff: f32) -> bool {
-        self.dispatch_fx(pixels, w, h, ParamsUniform { width: w, height: h, radius: 0, mode: 6, angle: 0.0, brightness: 0.0, contrast: 1.0, saturation: 1.0, hue_shift: 0.0, param_f3: cutoff, param_f4: 0.0, _pad: 0.0 }, "gpu_thresh")
+        self.dispatch_fx(
+            pixels,
+            w,
+            h,
+            ParamsUniform {
+                width: w,
+                height: h,
+                radius: 0,
+                mode: 6,
+                angle: 0.0,
+                brightness: 0.0,
+                contrast: 1.0,
+                saturation: 1.0,
+                hue_shift: 0.0,
+                param_f3: cutoff,
+                param_f4: 0.0,
+                _pad: 0.0,
+            },
+            "gpu_thresh",
+        )
     }
     pub fn gpu_emboss(&self, pixels: &mut [u8], w: u32, h: u32, strength: f32) -> bool {
-        self.dispatch_fx(pixels, w, h, ParamsUniform { width: w, height: h, radius: 0, mode: 7, angle: 0.0, brightness: strength, contrast: 1.0, saturation: 1.0, hue_shift: 0.0, param_f3: 0.0, param_f4: 0.0, _pad: 0.0 }, "gpu_emboss")
+        self.dispatch_fx(
+            pixels,
+            w,
+            h,
+            ParamsUniform {
+                width: w,
+                height: h,
+                radius: 0,
+                mode: 7,
+                angle: 0.0,
+                brightness: strength,
+                contrast: 1.0,
+                saturation: 1.0,
+                hue_shift: 0.0,
+                param_f3: 0.0,
+                param_f4: 0.0,
+                _pad: 0.0,
+            },
+            "gpu_emboss",
+        )
     }
     pub fn gpu_edge_detect(&self, pixels: &mut [u8], w: u32, h: u32, blend: f32) -> bool {
-        self.dispatch_fx(pixels, w, h, ParamsUniform { width: w, height: h, radius: 0, mode: 8, angle: 0.0, brightness: blend, contrast: 1.0, saturation: 1.0, hue_shift: 0.0, param_f3: 0.0, param_f4: 0.0, _pad: 0.0 }, "gpu_edge")
+        self.dispatch_fx(
+            pixels,
+            w,
+            h,
+            ParamsUniform {
+                width: w,
+                height: h,
+                radius: 0,
+                mode: 8,
+                angle: 0.0,
+                brightness: blend,
+                contrast: 1.0,
+                saturation: 1.0,
+                hue_shift: 0.0,
+                param_f3: 0.0,
+                param_f4: 0.0,
+                _pad: 0.0,
+            },
+            "gpu_edge",
+        )
     }
     pub fn gpu_invert(&self, pixels: &mut [u8], w: u32, h: u32) -> bool {
-        self.dispatch_fx(pixels, w, h, ParamsUniform { width: w, height: h, radius: 0, mode: 9, angle: 0.0, brightness: 0.0, contrast: 1.0, saturation: 1.0, hue_shift: 0.0, param_f3: 0.0, param_f4: 0.0, _pad: 0.0 }, "gpu_inv")
+        self.dispatch_fx(
+            pixels,
+            w,
+            h,
+            ParamsUniform {
+                width: w,
+                height: h,
+                radius: 0,
+                mode: 9,
+                angle: 0.0,
+                brightness: 0.0,
+                contrast: 1.0,
+                saturation: 1.0,
+                hue_shift: 0.0,
+                param_f3: 0.0,
+                param_f4: 0.0,
+                _pad: 0.0,
+            },
+            "gpu_inv",
+        )
     }
     pub fn gpu_solarize(&self, pixels: &mut [u8], w: u32, h: u32, threshold: f32) -> bool {
-        self.dispatch_fx(pixels, w, h, ParamsUniform { width: w, height: h, radius: 0, mode: 10, angle: 0.0, brightness: 0.0, contrast: 1.0, saturation: 1.0, hue_shift: 0.0, param_f3: threshold, param_f4: 0.0, _pad: 0.0 }, "gpu_solar")
+        self.dispatch_fx(
+            pixels,
+            w,
+            h,
+            ParamsUniform {
+                width: w,
+                height: h,
+                radius: 0,
+                mode: 10,
+                angle: 0.0,
+                brightness: 0.0,
+                contrast: 1.0,
+                saturation: 1.0,
+                hue_shift: 0.0,
+                param_f3: threshold,
+                param_f4: 0.0,
+                _pad: 0.0,
+            },
+            "gpu_solar",
+        )
     }
     pub fn gpu_posterize(&self, pixels: &mut [u8], w: u32, h: u32, levels: f32) -> bool {
-        self.dispatch_fx(pixels, w, h, ParamsUniform { width: w, height: h, radius: 0, mode: 11, angle: 0.0, brightness: 0.0, contrast: 1.0, saturation: 1.0, hue_shift: 0.0, param_f3: 0.0, param_f4: levels, _pad: 0.0 }, "gpu_post")
+        self.dispatch_fx(
+            pixels,
+            w,
+            h,
+            ParamsUniform {
+                width: w,
+                height: h,
+                radius: 0,
+                mode: 11,
+                angle: 0.0,
+                brightness: 0.0,
+                contrast: 1.0,
+                saturation: 1.0,
+                hue_shift: 0.0,
+                param_f3: 0.0,
+                param_f4: levels,
+                _pad: 0.0,
+            },
+            "gpu_post",
+        )
+    }
+
+    pub fn gpu_color_tint(&self, pixels: &mut [u8], w: u32, h: u32, tint_rgb: [f32; 3], intensity: f32) -> bool {
+        self.dispatch_fx(
+            pixels, w, h,
+            ParamsUniform {
+                width: w, height: h, radius: 0, mode: 12,
+                angle: 0.0, brightness: tint_rgb[0], contrast: tint_rgb[1],
+                saturation: tint_rgb[2], hue_shift: intensity,
+                param_f3: 0.0, param_f4: 0.0, _pad: 0.0,
+            },
+            "gpu_tint",
+        )
+    }
+    pub fn gpu_drop_shadow(
+        &self, pixels: &mut [u8], w: u32, h: u32,
+        color: [f32; 4], distance: f32, angle: f32, blur_r: u32,
+    ) -> bool {
+        let rad = angle.to_radians();
+        let dx = distance * rad.sin();
+        let dy = -distance * rad.cos();
+        self.dispatch_fx(
+            pixels, w, h,
+            ParamsUniform {
+                width: w, height: h, radius: blur_r.min(32), mode: 13,
+                angle: 0.0, brightness: color[0], contrast: color[1],
+                saturation: color[2], hue_shift: color[3],
+                param_f3: dx, param_f4: dy, _pad: 0.0,
+            },
+            "gpu_shadow",
+        )
+    }
+    pub fn gpu_glow(
+        &self, pixels: &mut [u8], w: u32, h: u32,
+        threshold: f32, radius: u32, intensity: f32,
+    ) -> bool {
+        self.dispatch_fx(
+            pixels, w, h,
+            ParamsUniform {
+                width: w, height: h, radius: radius.min(32), mode: 14,
+                angle: 0.0, brightness: 0.0, contrast: 1.0,
+                saturation: 1.0, hue_shift: 0.0,
+                param_f3: threshold, param_f4: intensity, _pad: 0.0,
+            },
+            "gpu_glow",
+        )
+    }
+    pub fn gpu_levels(
+        &self, pixels: &mut [u8], w: u32, h: u32,
+        in_black: f32, in_white: f32, gamma: f32, out_black: f32, out_white: f32,
+    ) -> bool {
+        self.dispatch_fx(
+            pixels, w, h,
+            ParamsUniform {
+                width: w, height: h, radius: 0, mode: 15,
+                angle: 0.0, brightness: in_black / 255.0, contrast: in_white / 255.0,
+                saturation: gamma, hue_shift: out_black / 255.0,
+                param_f3: out_white / 255.0, param_f4: 0.0, _pad: 0.0,
+            },
+            "gpu_levels",
+        )
+    }
+    pub fn gpu_hue_saturation(
+        &self, pixels: &mut [u8], w: u32, h: u32,
+        hue_shift: f32, saturation: f32, lightness: f32,
+    ) -> bool {
+        self.dispatch_fx(
+            pixels, w, h,
+            ParamsUniform {
+                width: w, height: h, radius: 0, mode: 16,
+                angle: 0.0, brightness: hue_shift, contrast: saturation,
+                saturation: lightness, hue_shift: 0.0,
+                param_f3: 0.0, param_f4: 0.0, _pad: 0.0,
+            },
+            "gpu_hsl",
+        )
+    }
+    pub fn gpu_offset(
+        &self, pixels: &mut [u8], w: u32, h: u32, shift_x: i32, shift_y: i32,
+    ) -> bool {
+        self.dispatch_fx(
+            pixels, w, h,
+            ParamsUniform {
+                width: w, height: h, radius: 0, mode: 17,
+                angle: 0.0, brightness: 0.0, contrast: 1.0,
+                saturation: 1.0, hue_shift: 0.0,
+                param_f3: shift_x as f32, param_f4: shift_y as f32, _pad: 0.0,
+            },
+            "gpu_offset",
+        )
     }
 
     fn alloc_buf_set(&self, dev: &wgpu::Device, buf_len: u64) -> BufSet {
-        let any = wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::COPY_SRC;
+        let any = wgpu::BufferUsages::STORAGE
+            | wgpu::BufferUsages::COPY_DST
+            | wgpu::BufferUsages::COPY_SRC;
         BufSet {
             len: buf_len,
-            src: dev.create_buffer(&wgpu::BufferDescriptor { label: Some("blur_src"), size: buf_len, usage: any, mapped_at_creation: false }),
-            mid: dev.create_buffer(&wgpu::BufferDescriptor { label: Some("blur_mid"), size: buf_len, usage: any, mapped_at_creation: false }),
-            dst: dev.create_buffer(&wgpu::BufferDescriptor { label: Some("blur_dst"), size: buf_len, usage: any, mapped_at_creation: false }),
+            src: dev.create_buffer(&wgpu::BufferDescriptor {
+                label: Some("blur_src"),
+                size: buf_len,
+                usage: any,
+                mapped_at_creation: false,
+            }),
+            mid: dev.create_buffer(&wgpu::BufferDescriptor {
+                label: Some("blur_mid"),
+                size: buf_len,
+                usage: any,
+                mapped_at_creation: false,
+            }),
+            dst: dev.create_buffer(&wgpu::BufferDescriptor {
+                label: Some("blur_dst"),
+                size: buf_len,
+                usage: any,
+                mapped_at_creation: false,
+            }),
             kernel: dev.create_buffer(&wgpu::BufferDescriptor {
                 label: Some("blur_kernel"),
                 size: ((2 * MAX_BLUR_RADIUS + 1) * 4) as u64,
@@ -608,7 +1066,9 @@ static GLOBAL: OnceLock<Option<Arc<GpuComputeContext>>> = OnceLock::new();
 /// Lazily initialize the global compute context. Returns None when the
 /// machine has no usable adapter; the result is memoized either way.
 pub fn global() -> Option<&'static Arc<GpuComputeContext>> {
-    GLOBAL.get_or_init(|| GpuComputeContext::new().map(Arc::new)).as_ref()
+    GLOBAL
+        .get_or_init(|| GpuComputeContext::new().map(Arc::new))
+        .as_ref()
 }
 
 /// Try running a GPU gaussian blur with the global context.
@@ -643,41 +1103,121 @@ pub fn try_gpu_directional_blur(
 
 /// Try running a GPU radial (zoom) blur with the global context.
 pub fn try_gpu_radial_blur(pixels: &mut [u8], width: u32, height: u32, taps: u32) -> bool {
-    if !gpu_effects_enabled() { return false; }
-    global().map(|c| c.radial_blur(pixels, width, height, taps)).unwrap_or(false)
+    if !gpu_effects_enabled() {
+        return false;
+    }
+    global()
+        .map(|c| c.radial_blur(pixels, width, height, taps))
+        .unwrap_or(false)
 }
 
-pub fn try_gpu_color_correct(pixels: &mut [u8], w: u32, h: u32, br: f32, ct: f32, sat: f32, hue: f32) -> bool {
-    if !gpu_effects_enabled() { return false; }
-    global().map(|c| c.gpu_color_correct(pixels, w, h, br, ct, sat, hue)).unwrap_or(false)
+pub fn try_gpu_color_correct(
+    pixels: &mut [u8],
+    w: u32,
+    h: u32,
+    br: f32,
+    ct: f32,
+    sat: f32,
+    hue: f32,
+) -> bool {
+    if !gpu_effects_enabled() {
+        return false;
+    }
+    global()
+        .map(|c| c.gpu_color_correct(pixels, w, h, br, ct, sat, hue))
+        .unwrap_or(false)
 }
 pub fn try_gpu_sharpen(pixels: &mut [u8], w: u32, h: u32, strength: f32) -> bool {
-    if !gpu_effects_enabled() { return false; }
-    global().map(|c| c.gpu_sharpen(pixels, w, h, strength)).unwrap_or(false)
+    if !gpu_effects_enabled() {
+        return false;
+    }
+    global()
+        .map(|c| c.gpu_sharpen(pixels, w, h, strength))
+        .unwrap_or(false)
 }
 pub fn try_gpu_threshold(pixels: &mut [u8], w: u32, h: u32, cutoff: f32) -> bool {
-    if !gpu_effects_enabled() { return false; }
-    global().map(|c| c.gpu_threshold(pixels, w, h, cutoff)).unwrap_or(false)
+    if !gpu_effects_enabled() {
+        return false;
+    }
+    global()
+        .map(|c| c.gpu_threshold(pixels, w, h, cutoff))
+        .unwrap_or(false)
 }
 pub fn try_gpu_emboss(pixels: &mut [u8], w: u32, h: u32, strength: f32) -> bool {
-    if !gpu_effects_enabled() { return false; }
-    global().map(|c| c.gpu_emboss(pixels, w, h, strength)).unwrap_or(false)
+    if !gpu_effects_enabled() {
+        return false;
+    }
+    global()
+        .map(|c| c.gpu_emboss(pixels, w, h, strength))
+        .unwrap_or(false)
 }
 pub fn try_gpu_edge_detect(pixels: &mut [u8], w: u32, h: u32, blend: f32) -> bool {
-    if !gpu_effects_enabled() { return false; }
-    global().map(|c| c.gpu_edge_detect(pixels, w, h, blend)).unwrap_or(false)
+    if !gpu_effects_enabled() {
+        return false;
+    }
+    global()
+        .map(|c| c.gpu_edge_detect(pixels, w, h, blend))
+        .unwrap_or(false)
 }
 pub fn try_gpu_invert(pixels: &mut [u8], w: u32, h: u32) -> bool {
-    if !gpu_effects_enabled() { return false; }
-    global().map(|c| c.gpu_invert(pixels, w, h)).unwrap_or(false)
+    if !gpu_effects_enabled() {
+        return false;
+    }
+    global()
+        .map(|c| c.gpu_invert(pixels, w, h))
+        .unwrap_or(false)
 }
 pub fn try_gpu_solarize(pixels: &mut [u8], w: u32, h: u32, threshold: f32) -> bool {
-    if !gpu_effects_enabled() { return false; }
-    global().map(|c| c.gpu_solarize(pixels, w, h, threshold)).unwrap_or(false)
+    if !gpu_effects_enabled() {
+        return false;
+    }
+    global()
+        .map(|c| c.gpu_solarize(pixels, w, h, threshold))
+        .unwrap_or(false)
 }
 pub fn try_gpu_posterize(pixels: &mut [u8], w: u32, h: u32, levels: f32) -> bool {
+    if !gpu_effects_enabled() {
+        return false;
+    }
+    global()
+        .map(|c| c.gpu_posterize(pixels, w, h, levels))
+        .unwrap_or(false)
+}
+pub fn try_gpu_color_tint(pixels: &mut [u8], w: u32, h: u32, tint_rgb: [f32; 3], intensity: f32) -> bool {
     if !gpu_effects_enabled() { return false; }
-    global().map(|c| c.gpu_posterize(pixels, w, h, levels)).unwrap_or(false)
+    global().map(|c| c.gpu_color_tint(pixels, w, h, tint_rgb, intensity)).unwrap_or(false)
+}
+pub fn try_gpu_drop_shadow(
+    pixels: &mut [u8], w: u32, h: u32,
+    color: [f32; 4], distance: f32, angle: f32, blur_r: u32,
+) -> bool {
+    if !gpu_effects_enabled() { return false; }
+    global().map(|c| c.gpu_drop_shadow(pixels, w, h, color, distance, angle, blur_r)).unwrap_or(false)
+}
+pub fn try_gpu_glow(
+    pixels: &mut [u8], w: u32, h: u32,
+    threshold: f32, radius: u32, intensity: f32,
+) -> bool {
+    if !gpu_effects_enabled() { return false; }
+    global().map(|c| c.gpu_glow(pixels, w, h, threshold, radius, intensity)).unwrap_or(false)
+}
+pub fn try_gpu_levels(
+    pixels: &mut [u8], w: u32, h: u32,
+    in_black: f32, in_white: f32, gamma: f32, out_black: f32, out_white: f32,
+) -> bool {
+    if !gpu_effects_enabled() { return false; }
+    global().map(|c| c.gpu_levels(pixels, w, h, in_black, in_white, gamma, out_black, out_white)).unwrap_or(false)
+}
+pub fn try_gpu_hue_saturation(
+    pixels: &mut [u8], w: u32, h: u32,
+    hue_shift: f32, saturation: f32, lightness: f32,
+) -> bool {
+    if !gpu_effects_enabled() { return false; }
+    global().map(|c| c.gpu_hue_saturation(pixels, w, h, hue_shift, saturation, lightness)).unwrap_or(false)
+}
+pub fn try_gpu_offset(pixels: &mut [u8], w: u32, h: u32, shift_x: i32, shift_y: i32) -> bool {
+    if !gpu_effects_enabled() { return false; }
+    global().map(|c| c.gpu_offset(pixels, w, h, shift_x, shift_y)).unwrap_or(false)
 }
 
 #[cfg(test)]
@@ -728,7 +1268,13 @@ mod tests {
         set_gpu_effects_enabled(true);
         // Noise pattern
         let mut px: Vec<u8> = (0..16 * 16 * 4)
-            .map(|i| if i % 4 == 3 { 255 } else { ((i * 37) % 256) as u8 })
+            .map(|i| {
+                if i % 4 == 3 {
+                    255
+                } else {
+                    ((i * 37) % 256) as u8
+                }
+            })
             .collect();
         let before_var = variance(&px);
         assert!(ctx.gaussian_blur(&mut px, 16, 16, 3));
@@ -746,7 +1292,13 @@ mod tests {
         set_gpu_effects_enabled(true);
         let run = || {
             let mut px: Vec<u8> = (0..12 * 12 * 4)
-                .map(|i| if i % 4 == 3 { 200 } else { ((i * 91) % 256) as u8 })
+                .map(|i| {
+                    if i % 4 == 3 {
+                        200
+                    } else {
+                        ((i * 91) % 256) as u8
+                    }
+                })
                 .collect();
             assert!(ctx.gaussian_blur(&mut px, 12, 12, 2));
             px
@@ -772,9 +1324,16 @@ mod tests {
         px[dot + 3] = 255;
         assert!(ctx.directional_blur(&mut px, 24, 8, 9, 0.0));
         // Count lit pixels on the dot's row vs the row above
-        let row_lit = (0..24).filter(|x| px[((4 * 24 + x) * 4) as usize + 3] > 0).count();
-        let above_lit = (0..24).filter(|x| px[((2 * 24 + x) * 4) as usize + 3] > 0).count();
-        assert!(row_lit >= 5, "horizontal smear must light multiple taps: {row_lit}");
+        let row_lit = (0..24)
+            .filter(|x| px[((4 * 24 + x) * 4) as usize + 3] > 0)
+            .count();
+        let above_lit = (0..24)
+            .filter(|x| px[((2 * 24 + x) * 4) as usize + 3] > 0)
+            .count();
+        assert!(
+            row_lit >= 5,
+            "horizontal smear must light multiple taps: {row_lit}"
+        );
         assert!(above_lit <= row_lit / 2, "vertical bleed must stay small");
         set_gpu_effects_enabled(false);
     }
@@ -792,7 +1351,10 @@ mod tests {
         set_gpu_effects_enabled(false);
         let line = timing_hud_line();
         assert!(line.contains("GPU compute"), "hud: {line}");
-        assert!(!line.contains("idle"), "after a call hud shows stats: {line}");
+        assert!(
+            !line.contains("idle"),
+            "after a call hud shows stats: {line}"
+        );
     }
 
     #[test]

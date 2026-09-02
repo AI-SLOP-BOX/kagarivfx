@@ -274,7 +274,127 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         return;
     }
 
-    // ── Gaussian separable pass ──    // ── Gaussian separable pass ──
+    // ── Mode 12: ColorTint ──
+    if (params.mode == 12u) {
+        let c = unpack(src[y * w + x]);
+        let tint_rgb = vec3<f32>(params.brightness, params.contrast, params.saturation);
+        let intensity = clamp(params.hue_shift, 0.0, 1.0);
+        let rgb = mix(c.rgb, tint_rgb, intensity);
+        dst[y * w + x] = pack(vec4<f32>(rgb, c.a));
+        return;
+    }
+
+    // ── Mode 13: DropShadow (offset + directional blur) ──
+    if (params.mode == 13u) {
+        let shadow_c = vec4<f32>(params.brightness, params.contrast, params.saturation, params.hue_shift);
+        let dx = params.param_f3;
+        let dy = params.param_f4;
+        let blur_r = params.radius;
+        var acc = vec4<f32>(0.0);
+        var wsum = 0.0;
+        let n = max(blur_r, 1u);
+        for (var i: i32 = -i32(n); i <= i32(n); i = i + 1) {
+            let sx = u32(clamp(i32(x) + i, 0, i32(w - 1u)));
+            let sy = u32(clamp(i32(y) + i, 0, i32(h - 1u)));
+            let c = unpack(src[sy * w + sx]);
+            acc = acc + vec4<f32>(c.rgb * c.a, c.a);
+            wsum = wsum + 1.0;
+        }
+        let inv = 1.0 / max(wsum, 0.0001);
+        let blurred = acc * inv;
+        let blur_a = clamp(blurred.a, 0.0, 1.0);
+        let blur_rgb = select(vec3<f32>(0.0), blurred.rgb / max(blur_a, 0.0001), blur_a > 0.0001);
+        let shadow_pixel = vec4<f32>(blur_rgb * shadow_c.a, blur_a * shadow_c.a);
+        let c0 = unpack(src[y * w + x]);
+        let osx = u32(clamp(i32(x) + i32(dx), 0, i32(w - 1u)));
+        let osy = u32(clamp(i32(y) + i32(dy), 0, i32(h - 1u)));
+        let original = unpack(src[osy * w + osx]);
+        let out_a = clamp(original.a + shadow_pixel.a * (1.0 - original.a), 0.0, 1.0);
+        var out_rgb: vec3<f32>;
+        if (out_a > 0.0001) {
+            out_rgb = (original.rgb * original.a + shadow_pixel.rgb * (1.0 - original.a)) / out_a;
+        } else {
+            out_rgb = vec3<f32>(0.0);
+        }
+        dst[y * w + x] = pack(vec4<f32>(out_rgb, out_a));
+        return;
+    }
+
+    // ── Mode 14: Glow (threshold bright pixels + blur + composite) ──
+    if (params.mode == 14u) {
+        let c0 = unpack(src[y * w + x]);
+        let threshold = params.param_f3;
+        let intensity = params.param_f4;
+        let lum = dot(c0.rgb, vec3<f32>(0.2126, 0.7152, 0.0722));
+        if (lum > threshold) {
+            let blur_r = params.radius;
+            var acc = vec4<f32>(0.0);
+            var wsum = 0.0;
+            let n = max(blur_r, 1u);
+            for (var i: i32 = -i32(n); i <= i32(n); i = i + 1) {
+                let sx = u32(clamp(i32(x) + i, 0, i32(w - 1u)));
+                let sy = u32(clamp(i32(y) + i, 0, i32(h - 1u)));
+                let c = unpack(src[sy * w + sx]);
+                acc = acc + vec4<f32>(c.rgb * c.a, c.a);
+                wsum = wsum + 1.0;
+            }
+            let inv = 1.0 / max(wsum, 0.0001);
+            let blurred = acc * inv;
+            let blur_a = clamp(blurred.a, 0.0, 1.0);
+            let blur_rgb = select(vec3<f32>(0.0), blurred.rgb / max(blur_a, 0.0001), blur_a > 0.0001);
+            let glow = blur_rgb * intensity;
+            let out_rgb = clamp(c0.rgb + glow, vec3<f32>(0.0), vec3<f32>(1.0));
+            dst[y * w + x] = pack(vec4<f32>(out_rgb, c0.a));
+        } else {
+            dst[y * w + x] = src[y * w + x];
+        }
+        return;
+    }
+
+    // ── Mode 15: Levels (input range + gamma + output range) ──
+    if (params.mode == 15u) {
+        let c = unpack(src[y * w + x]);
+        let in_black = params.brightness;
+        let in_white = params.contrast;
+        let gamma = max(params.saturation, 0.01);
+        let out_black = params.hue_shift;
+        let out_white = params.param_f3;
+        let range = max(in_white - in_black, 0.001);
+        let t = clamp((c.r - in_black) / range, 0.0, 1.0);
+        let r = mix(out_black, out_white, pow(t, 1.0 / gamma));
+        let tg = clamp((c.g - in_black) / range, 0.0, 1.0);
+        let g = mix(out_black, out_white, pow(tg, 1.0 / gamma));
+        let tb = clamp((c.b - in_black) / range, 0.0, 1.0);
+        let b = mix(out_black, out_white, pow(tb, 1.0 / gamma));
+        dst[y * w + x] = pack(vec4<f32>(clamp(r, 0.0, 1.0), clamp(g, 0.0, 1.0), clamp(b, 0.0, 1.0), c.a));
+        return;
+    }
+
+    // ── Mode 16: Hue/Saturation/Lightness ──
+    if (params.mode == 16u) {
+        let c = unpack(src[y * w + x]);
+        let hsv = rgb_to_hsv(c.rgb);
+        var h = hsv.x + params.brightness / 6.2831853;
+        if (h < 0.0) { h = h + 1.0; }
+        if (h > 1.0) { h = h - 1.0; }
+        let s = clamp(hsv.y * (1.0 + params.contrast), 0.0, 1.0);
+        let v = clamp(hsv.z + params.saturation, 0.0, 1.0);
+        let rgb = hsv_to_rgb(vec3<f32>(h, s, v));
+        dst[y * w + x] = pack(vec4<f32>(rgb, c.a));
+        return;
+    }
+
+    // ── Mode 17: Offset (wrap) ──
+    if (params.mode == 17u) {
+        let ox = i32(x) + i32(params.param_f3);
+        let oy = i32(y) + i32(params.param_f4);
+        let sx = u32(((ox % i32(w) + i32(w)) % i32(w)));
+        let sy = u32(((oy % i32(h) + i32(h)) % i32(h)));
+        dst[y * w + x] = src[sy * w + sx];
+        return;
+    }
+
+    // ── Gaussian separable pass ──
     let r = params.radius;
 
     // Premultiplied accumulators
