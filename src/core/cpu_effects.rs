@@ -95,13 +95,14 @@ fn apply_one_ctx(
             let r = blur_radius.evaluate(frame).max(0.0) as u32;
             // GPU compute path (opt-in via settings); CPU fallback keeps
             // byte-deterministic output when disabled or unavailable.
+            let clamped = r.min(crate::core::compute_pipeline::MAX_BLUR_RADIUS);
             if !crate::core::compute_pipeline::try_gpu_gaussian_blur(
                 pixels,
                 width,
                 height,
-                r.min(crate::core::compute_pipeline::MAX_BLUR_RADIUS),
+                clamped,
             ) {
-                pack::apply_gaussian_blur(pixels, width, height, r);
+                pack::apply_gaussian_blur(pixels, width, height, clamped);
             }
         }
         EffectType::ColorTint { color, intensity } => {
@@ -121,9 +122,9 @@ fn apply_one_ctx(
         } => {
             let mut sc = color_to_u8(color.evaluate(frame));
             sc[3] = (sc[3] as f32 * (opacity.evaluate(frame) / 100.0)).clamp(0.0, 255.0) as u8;
-            let dist = distance.evaluate(frame);
-            let dir = direction.evaluate(frame);
-            let blur = softness.evaluate(frame).max(0.0) as u32;
+            let dist = distance.evaluate(frame).clamp(-10000.0, 10000.0);
+            let dir = direction.evaluate(frame).clamp(-3600.0, 3600.0);
+            let blur = softness.evaluate(frame).clamp(0.0, 1000.0) as u32;
             let sc_f32 = [sc[0] as f32 / 255.0, sc[1] as f32 / 255.0, sc[2] as f32 / 255.0, sc[3] as f32 / 255.0];
             if !crate::core::compute_pipeline::try_gpu_drop_shadow(
                 pixels, width, height, sc_f32, dist, dir, blur.min(32),
@@ -138,7 +139,7 @@ fn apply_one_ctx(
             ..
         } => {
             let thr = threshold.evaluate(frame) / 100.0;
-            let rad = radius.evaluate(frame).max(0.0) as u32;
+            let rad = radius.evaluate(frame).clamp(0.0, 1000.0) as u32;
             let inten = intensity.evaluate(frame) / 100.0;
             if !crate::core::compute_pipeline::try_gpu_glow(
                 pixels, width, height, thr, rad.min(32), inten,
@@ -149,8 +150,8 @@ fn apply_one_ctx(
 
         // New CPU-only kernels (no GPU equivalent yet).
         EffectType::Twirl { angle, radius } => {
-            let a = angle.evaluate(frame);
-            let r = radius.evaluate(frame).max(1.0);
+            let a = angle.evaluate(frame).clamp(-7200.0, 7200.0);
+            let r = radius.evaluate(frame).clamp(1.0, 10000.0);
             let cx = width as f32 * 0.5;
             let cy = height as f32 * 0.5;
             if !crate::core::compute_pipeline::try_gpu_twirl(pixels, width, height, a, cx, cy) {
@@ -158,8 +159,8 @@ fn apply_one_ctx(
             }
         }
         EffectType::Bulge { amount, radius } => {
-            let amt = amount.evaluate(frame);
-            let r = radius.evaluate(frame).max(1.0);
+            let amt = amount.evaluate(frame).clamp(-1000.0, 1000.0);
+            let r = radius.evaluate(frame).clamp(1.0, 10000.0);
             let cx = width as f32 * 0.5;
             let cy = height as f32 * 0.5;
             if !crate::core::compute_pipeline::try_gpu_bulge(pixels, width, height, amt, cx, cy) {
@@ -167,7 +168,7 @@ fn apply_one_ctx(
             }
         }
         EffectType::Posterize { levels } => {
-            let lv = levels.evaluate(frame).max(2.0) as u32;
+            let lv = levels.evaluate(frame).clamp(2.0, 256.0) as u32;
             if !crate::core::compute_pipeline::try_gpu_posterize(pixels, width, height, lv as f32) {
                 pack::apply_posterize(pixels, lv);
             }
@@ -280,7 +281,7 @@ fn apply_one_ctx(
                     displace_type: crate::core::turbulent_displace::TurbulentDisplaceType::Turbulent,
                     amount: amt, size: sz,
                     evolution_deg: evolution.evaluate(frame),
-                    complexity: complexity.evaluate(frame).max(1.0) as u32,
+                    complexity: complexity.evaluate(frame).clamp(1.0, 100.0) as u32,
                 };
                 let out = crate::core::turbulent_displace::apply_turbulent_displace(
                     pixels, width, height, &opts,
@@ -541,7 +542,7 @@ fn apply_one_ctx(
         }
         EffectType::Minimax { operation, radius } => {
             let op = operation.evaluate(frame);
-            let r = radius.evaluate(frame) as u32;
+            let r = radius.evaluate(frame).clamp(0.0, 100.0) as u32;
             let maximize = op > 0.5;
             if !crate::core::compute_pipeline::try_gpu_minimax(pixels, width, height, r, maximize) {
                 crate::core::cpu_effects_new::apply_minimax(pixels, width, height, op, r as f32);
@@ -553,9 +554,9 @@ fn apply_one_ctx(
             take_blue,
             take_alpha,
         } => {
-            let r = take_red.evaluate(frame) as u32;
-            let g = take_green.evaluate(frame) as u32;
-            let b = take_blue.evaluate(frame) as u32;
+            let r = take_red.evaluate(frame).clamp(0.0, 3.0) as u32;
+            let g = take_green.evaluate(frame).clamp(0.0, 3.0) as u32;
+            let b = take_blue.evaluate(frame).clamp(0.0, 3.0) as u32;
             let a = take_alpha.evaluate(frame) as u32;
             if !crate::core::compute_pipeline::try_gpu_shift_channels(pixels, width, height, r, g, b, a) {
                 crate::core::cpu_effects_new::apply_shift_channels(pixels, width, height, r as f32, g as f32, b as f32, a as f32);
@@ -797,7 +798,7 @@ fn apply_one_ctx(
             }
         }
         EffectType::Vortex { radius, angle_deg } => {
-            let r = radius.evaluate(frame).max(1.0);
+            let r = radius.evaluate(frame).clamp(1.0, 10000.0);
             let a = angle_deg.evaluate(frame);
             if !crate::core::compute_pipeline::try_gpu_vortex(pixels, width, height, a, r) {
                 use crate::core::ae_effects_pack_v13::apply_vortex_distortion;
