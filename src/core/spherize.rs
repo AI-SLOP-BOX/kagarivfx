@@ -139,14 +139,31 @@ mod tests {
     fn test_spherize_rejects_invalid_dimensions_and_options() {
         let pixels = vec![7u8; 4];
         let invalid_options = [
-            SpherizeOptions { radius: f32::NAN, ..SpherizeOptions::default_for_size(1.0, 1.0) },
-            SpherizeOptions { center: [f32::INFINITY, 0.0], ..SpherizeOptions::default_for_size(1.0, 1.0) },
-            SpherizeOptions { refractive_index: f32::NAN, ..SpherizeOptions::default_for_size(1.0, 1.0) },
+            SpherizeOptions {
+                radius: f32::NAN,
+                ..SpherizeOptions::default_for_size(1.0, 1.0)
+            },
+            SpherizeOptions {
+                center: [f32::INFINITY, 0.0],
+                ..SpherizeOptions::default_for_size(1.0, 1.0)
+            },
+            SpherizeOptions {
+                refractive_index: f32::NAN,
+                ..SpherizeOptions::default_for_size(1.0, 1.0)
+            },
         ];
         for options in invalid_options {
             assert_eq!(apply_spherize(&pixels, 1, 1, &options), pixels);
         }
-        assert_eq!(apply_spherize(&pixels, u32::MAX, u32::MAX, &SpherizeOptions::default_for_size(1.0, 1.0)), pixels);
+        assert_eq!(
+            apply_spherize(
+                &pixels,
+                u32::MAX,
+                u32::MAX,
+                &SpherizeOptions::default_for_size(1.0, 1.0)
+            ),
+            pixels
+        );
     }
 
     #[test]

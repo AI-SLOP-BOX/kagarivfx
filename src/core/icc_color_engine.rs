@@ -47,7 +47,9 @@ pub fn convert_rgba8_to_rgba32f(src: &[u8], dst: &mut [f32]) {
     let len = src.len().min(dst.len());
     for i in 0..len {
         let v = src[i] as f32 / 255.0;
-        dst[i] = if v <= 0.04045 {
+        dst[i] = if i % 4 == 3 {
+            v
+        } else if v <= 0.04045 {
             v / 12.92
         } else {
             ((v + 0.055) / 1.055).powf(2.4)
@@ -60,7 +62,9 @@ pub fn convert_rgba32f_to_rgba8(src: &[f32], dst: &mut [u8]) {
     let len = src.len().min(dst.len());
     for i in 0..len {
         let v = src[i].clamp(0.0, 1.0);
-        let srgb = if v <= 0.0031308 {
+        let srgb = if i % 4 == 3 {
+            v
+        } else if v <= 0.0031308 {
             v * 12.92
         } else {
             1.055 * v.powf(1.0 / 2.4) - 0.055
@@ -116,5 +120,20 @@ mod tests {
         convert_rgba8_to_rgba16(&original_8, &mut buf_16);
         convert_rgba16_to_rgba8(&buf_16, &mut back_8);
         assert_eq!(original_8, back_8);
+    }
+
+    #[test]
+    fn test_srgb_transfer_curve_midpoint() {
+        let mut linear = [0.0f32; 1];
+        convert_rgba8_to_rgba32f(&[128], &mut linear);
+        assert!((linear[0] - 0.2158605).abs() < 1e-4);
+    }
+
+    #[test]
+    fn test_alpha_channel_remains_linear() {
+        let mut linear = [0.0f32; 4];
+        convert_rgba8_to_rgba32f(&[128, 128, 128, 128], &mut linear);
+        assert!((linear[0] - 0.2158605).abs() < 1e-4);
+        assert!((linear[3] - 128.0 / 255.0).abs() < 1e-6);
     }
 }

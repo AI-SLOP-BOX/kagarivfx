@@ -3,7 +3,7 @@
 #[derive(Debug, Clone)]
 pub struct LightTransmissionOptions {
     pub cast_shadows: bool,
-    pub shadow_darkness: f32, // Percentage (100.0 = full dark)
+    pub shadow_darkness: f32,    // Percentage (100.0 = full dark)
     pub light_transmission: f32, // Percentage translucency transmission (0.0 .. 100.0)
     pub shadow_color: [f32; 4],
 }

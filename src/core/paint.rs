@@ -139,7 +139,9 @@ pub fn draw_stroke(
     let Some(expected_len) = (w as usize)
         .checked_mul(h as usize)
         .and_then(|count| count.checked_mul(4))
-    else { return; };
+    else {
+        return;
+    };
     if points.is_empty()
         || !size.is_finite()
         || size <= 0.0

@@ -1,4 +1,4 @@
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
 /// A master property exposed from a precomp for external override.
 /// Analogous to AE's Essential Properties (formerly Master Properties).
@@ -25,8 +25,12 @@ pub struct EssentialProperty {
     pub options: Vec<String>,
 }
 
-fn default_min() -> f32 { 0.0 }
-fn default_max() -> f32 { 100.0 }
+fn default_min() -> f32 {
+    0.0
+}
+fn default_max() -> f32 {
+    100.0
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum EssentialPropertyType {
@@ -54,7 +58,9 @@ pub enum EssentialValue {
 }
 
 impl Default for EssentialValue {
-    fn default() -> Self { EssentialValue::Float(0.0) }
+    fn default() -> Self {
+        EssentialValue::Float(0.0)
+    }
 }
 
 /// Collects all essential properties defined across precomp layers in a composition.
@@ -79,7 +85,9 @@ pub fn apply_essential_overrides(
     overrides: &[EssentialProperty],
 ) {
     for ep in overrides {
-        if !ep.overridden { continue; }
+        if !ep.overridden {
+            continue;
+        }
         for layer in &mut precomp.layers {
             match &mut layer.layer_type {
                 crate::core::timeline::LayerType::Text { text, .. } => {
@@ -133,7 +141,12 @@ mod tests {
     #[test]
     fn test_collect_essential_empty_comp() {
         let comp = crate::core::timeline::Composition::new(
-            "c1".into(), "Test".into(), 1920, 1080, 30, 300,
+            "c1".into(),
+            "Test".into(),
+            1920,
+            1080,
+            30,
+            300,
         );
         let props = collect_essential_properties(&comp);
         assert!(props.is_empty());
@@ -142,7 +155,12 @@ mod tests {
     #[test]
     fn test_apply_essential_overrides_noop() {
         let mut comp = crate::core::timeline::Composition::new(
-            "c1".into(), "Test".into(), 1920, 1080, 30, 300,
+            "c1".into(),
+            "Test".into(),
+            1920,
+            1080,
+            30,
+            300,
         );
         apply_essential_overrides(&mut comp, &[]);
         assert!(comp.layers.is_empty());

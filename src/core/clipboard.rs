@@ -95,21 +95,16 @@ impl ClipboardState {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::core::timeline::{LayerType, Composition};
+    use crate::core::timeline::{Composition, LayerType};
 
     fn make_test_comp() -> Composition {
-        let mut comp = Composition::new(
-            "comp1".into(),
-            "Test".into(),
-            1920,
-            1080,
-            30,
-            300,
-        );
+        let mut comp = Composition::new("comp1".into(), "Test".into(), 1920, 1080, 30, 300);
         comp.layers.push(Layer::new(
             "layer1".into(),
             "Layer 1".into(),
-            LayerType::Solid { color: [1.0, 0.0, 0.0, 1.0] },
+            LayerType::Solid {
+                color: [1.0, 0.0, 0.0, 1.0],
+            },
             300,
         ));
         comp.layers.push(Layer::new(

@@ -48,11 +48,7 @@ pub fn generate_content_aware_fill(
     let Some(pixel_bytes) = pixel_count.checked_mul(4) else {
         return;
     };
-    if width == 0
-        || height == 0
-        || pixels.len() != pixel_bytes
-        || hole_mask.len() != pixel_count
-    {
+    if width == 0 || height == 0 || pixels.len() != pixel_bytes || hole_mask.len() != pixel_count {
         return;
     }
 

@@ -13,9 +13,19 @@ pub struct Rgbaf {
 }
 
 impl Rgbaf {
-    pub const ZERO: Self = Self { r: 0.0, g: 0.0, b: 0.0, a: 0.0 };
+    pub const ZERO: Self = Self {
+        r: 0.0,
+        g: 0.0,
+        b: 0.0,
+        a: 0.0,
+    };
     pub const TRANSPARENT: Self = Self::ZERO;
-    pub const WHITE: Self = Self { r: 1.0, g: 1.0, b: 1.0, a: 1.0 };
+    pub const WHITE: Self = Self {
+        r: 1.0,
+        g: 1.0,
+        b: 1.0,
+        a: 1.0,
+    };
 
     #[inline]
     pub fn new(r: f32, g: f32, b: f32, a: f32) -> Self {
@@ -58,15 +68,27 @@ impl Rgbaf {
     /// Premultiplied alpha in linear space.
     #[inline]
     pub fn premultiply(self) -> Self {
-        Self { r: self.r * self.a, g: self.g * self.a, b: self.b * self.a, a: self.a }
+        Self {
+            r: self.r * self.a,
+            g: self.g * self.a,
+            b: self.b * self.a,
+            a: self.a,
+        }
     }
 
     /// Reverse premultiplication (divide by alpha, safe for alpha > 0).
     #[inline]
     pub fn unpremultiply(self) -> Self {
-        if self.a <= 1e-6 { return Self::ZERO; }
+        if self.a <= 1e-6 {
+            return Self::ZERO;
+        }
         let inv = 1.0 / self.a;
-        Self { r: self.r * inv, g: self.g * inv, b: self.b * inv, a: self.a }
+        Self {
+            r: self.r * inv,
+            g: self.g * inv,
+            b: self.b * inv,
+            a: self.a,
+        }
     }
 
     /// Over operator (Porter-Duff): self over background, both in premultiplied linear.
@@ -74,7 +96,9 @@ impl Rgbaf {
     pub fn over(self, bg: Self) -> Self {
         let src = self.premultiply();
         let out_a = src.a + bg.a * (1.0 - src.a);
-        if out_a <= 1e-6 { return Self::ZERO; }
+        if out_a <= 1e-6 {
+            return Self::ZERO;
+        }
         let inv = 1.0 / out_a;
         Self {
             r: (src.r + bg.r * bg.a * (1.0 - src.a)) * inv,

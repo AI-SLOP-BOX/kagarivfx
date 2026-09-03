@@ -48,10 +48,18 @@ pub struct PlacedGlyph {
 pub fn calculate_bezier_arc_length(p0: [f32; 2], p1: [f32; 2], p2: [f32; 2], p3: [f32; 2]) -> f32 {
     // Gauss-Legendre 5-point quadrature weights and nodes on [-1, 1]
     let nodes = [
-        -0.9061798459, -0.5384693101, 0.0, 0.5384693101, 0.9061798459,
+        -0.9061798459,
+        -0.5384693101,
+        0.0,
+        0.5384693101,
+        0.9061798459,
     ];
     let weights = [
-        0.2369268851, 0.4786286705, 0.5688888889, 0.4786286705, 0.2369268851,
+        0.2369268851,
+        0.4786286705,
+        0.5688888889,
+        0.4786286705,
+        0.2369268851,
     ];
 
     let mut length = 0.0f32;
@@ -61,8 +69,12 @@ pub fn calculate_bezier_arc_length(p0: [f32; 2], p1: [f32; 2], p2: [f32; 2], p3:
 
         // Derivative dP/dt of cubic Bezier
         let inv_t = 1.0 - t;
-        let d0 = 3.0 * inv_t * inv_t * (p1[0] - p0[0]) + 6.0 * inv_t * t * (p2[0] - p1[0]) + 3.0 * t * t * (p3[0] - p2[0]);
-        let d1 = 3.0 * inv_t * inv_t * (p1[1] - p0[1]) + 6.0 * inv_t * t * (p2[1] - p1[1]) + 3.0 * t * t * (p3[1] - p2[1]);
+        let d0 = 3.0 * inv_t * inv_t * (p1[0] - p0[0])
+            + 6.0 * inv_t * t * (p2[0] - p1[0])
+            + 3.0 * t * t * (p3[0] - p2[0]);
+        let d1 = 3.0 * inv_t * inv_t * (p1[1] - p0[1])
+            + 6.0 * inv_t * t * (p2[1] - p1[1])
+            + 3.0 * t * t * (p3[1] - p2[1]);
 
         let speed = (d0 * d0 + d1 * d1).sqrt();
         length += speed * weights[i] as f32;
@@ -92,8 +104,12 @@ pub fn sample_cubic_bezier(
         b0 * p0[1] + b1 * p1[1] + b2 * p2[1] + b3 * p3[1],
     ];
 
-    let d0 = 3.0 * inv_t * inv_t * (p1[0] - p0[0]) + 6.0 * inv_t * t * (p2[0] - p1[0]) + 3.0 * t * t * (p3[0] - p2[0]);
-    let d1 = 3.0 * inv_t * inv_t * (p1[1] - p0[1]) + 6.0 * inv_t * t * (p2[1] - p1[1]) + 3.0 * t * t * (p3[1] - p2[1]);
+    let d0 = 3.0 * inv_t * inv_t * (p1[0] - p0[0])
+        + 6.0 * inv_t * t * (p2[0] - p1[0])
+        + 3.0 * t * t * (p3[0] - p2[0]);
+    let d1 = 3.0 * inv_t * inv_t * (p1[1] - p0[1])
+        + 6.0 * inv_t * t * (p2[1] - p1[1])
+        + 3.0 * t * t * (p3[1] - p2[1]);
 
     let speed = (d0 * d0 + d1 * d1).sqrt().max(0.0001);
     let tangent = [d0 / speed, d1 / speed];
@@ -120,7 +136,11 @@ pub fn layout_text_along_path(
     }
 
     // Step 1: Compute cumulative arc-lengths for all Bezier segments
-    let num_segments = if closed { path_vertices.len() } else { path_vertices.len() - 1 };
+    let num_segments = if closed {
+        path_vertices.len()
+    } else {
+        path_vertices.len() - 1
+    };
     let mut total_path_length = 0.0f32;
     let mut segment_lengths = Vec::with_capacity(num_segments);
 
@@ -158,7 +178,11 @@ pub fn layout_text_along_path(
             let seg_len = segment_lengths[i];
             if current_dist <= accum_d + seg_len || i == num_segments - 1 {
                 let local_d = (current_dist - accum_d).clamp(0.0, seg_len);
-                let seg_t = if seg_len > 0.0001 { local_d / seg_len } else { 0.0 };
+                let seg_t = if seg_len > 0.0001 {
+                    local_d / seg_len
+                } else {
+                    0.0
+                };
 
                 let v0 = &path_vertices[i];
                 let v1 = &path_vertices[(i + 1) % path_vertices.len()];
@@ -199,10 +223,7 @@ mod tests {
 
     #[test]
     fn test_layout_text_along_straight_path() {
-        let vertices = vec![
-            MaskVertex::new(0.0, 0.0),
-            MaskVertex::new(500.0, 0.0),
-        ];
+        let vertices = vec![MaskVertex::new(0.0, 0.0), MaskVertex::new(500.0, 0.0)];
 
         let options = PathTextOptions::default();
         let glyphs = layout_text_along_path("AURA", 24.0, &vertices, false, &options);

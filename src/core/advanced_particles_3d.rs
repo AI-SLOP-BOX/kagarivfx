@@ -89,19 +89,25 @@ impl ParticleSimulation3D {
     }
 
     pub fn update(&mut self, dt: f32, config: &EmitterConfig3D) {
-        let safe_dt = if dt.is_finite() && dt > 0.0 { dt.min(1.0) } else { 0.0 };
+        let safe_dt = if dt.is_finite() && dt > 0.0 {
+            dt.min(1.0)
+        } else {
+            0.0
+        };
         if safe_dt <= 0.0 {
             return;
         }
 
         // 1. Spawning (guards for negative/zero lifespan and bounds on spawn rate)
         if config.lifespan_sec > 0.0 && config.lifespan_sec.is_finite() {
-            let safe_birth_rate = if config.birth_rate_per_sec.is_finite() && config.birth_rate_per_sec > 0.0 {
-                config.birth_rate_per_sec
-            } else {
-                0.0
-            };
-            self.spawn_accumulator = (self.spawn_accumulator + safe_birth_rate * safe_dt).clamp(0.0, 50_000.0);
+            let safe_birth_rate =
+                if config.birth_rate_per_sec.is_finite() && config.birth_rate_per_sec > 0.0 {
+                    config.birth_rate_per_sec
+                } else {
+                    0.0
+                };
+            self.spawn_accumulator =
+                (self.spawn_accumulator + safe_birth_rate * safe_dt).clamp(0.0, 50_000.0);
             let spawn_count = (self.spawn_accumulator.floor() as usize).min(2000);
             self.spawn_accumulator -= spawn_count as f32;
 
@@ -109,10 +115,11 @@ impl ParticleSimulation3D {
             let actual_spawn = spawn_count.min(remaining_budget);
 
             for _ in 0..actual_spawn {
-                let mut pos = config.position;
+                let mut pos = config.position.map(|v| if v.is_finite() { v } else { 0.0 });
                 match config.emitter_type {
                     EmitterType3D::Point => {}
                     EmitterType3D::Box { size } => {
+                        let size = size.map(|v| if v.is_finite() { v.abs() } else { 0.0 });
                         pos[0] += (self.next_f32() - 0.5) * size[0];
                         pos[1] += (self.next_f32() - 0.5) * size[1];
                         pos[2] += (self.next_f32() - 0.5) * size[2];
@@ -120,6 +127,11 @@ impl ParticleSimulation3D {
                     EmitterType3D::Sphere { radius } => {
                         let theta = self.next_f32() * std::f32::consts::TAU;
                         let phi = (self.next_f32() * 2.0 - 1.0).acos();
+                        let radius = if radius.is_finite() {
+                            radius.abs()
+                        } else {
+                            0.0
+                        };
                         let r = radius * self.next_f32().cbrt();
                         pos[0] += r * phi.sin() * theta.cos();
                         pos[1] += r * phi.sin() * theta.sin();
@@ -130,7 +142,17 @@ impl ParticleSimulation3D {
                 // Random spherical velocity
                 let theta = self.next_f32() * std::f32::consts::TAU;
                 let phi = (self.next_f32() * 2.0 - 1.0).acos();
-                let speed = config.initial_speed * (1.0 + (self.next_f32() - 0.5) * 2.0 * config.speed_random);
+                let initial_speed = if config.initial_speed.is_finite() {
+                    config.initial_speed
+                } else {
+                    0.0
+                };
+                let speed_random = if config.speed_random.is_finite() {
+                    config.speed_random.clamp(0.0, 1.0)
+                } else {
+                    0.0
+                };
+                let speed = initial_speed * (1.0 + (self.next_f32() - 0.5) * 2.0 * speed_random);
                 let vel = [
                     speed * phi.sin() * theta.cos(),
                     speed * phi.sin() * theta.sin(),
@@ -164,9 +186,19 @@ impl ParticleSimulation3D {
             }
 
             // Apply gravity and wind
-            p.velocity[0] += (config.gravity[0] + config.wind[0]) * safe_dt;
-            p.velocity[1] += (config.gravity[1] + config.wind[1]) * safe_dt;
-            p.velocity[2] += (config.gravity[2] + config.wind[2]) * safe_dt;
+            for axis in 0..3 {
+                let gravity = if config.gravity[axis].is_finite() {
+                    config.gravity[axis]
+                } else {
+                    0.0
+                };
+                let wind = if config.wind[axis].is_finite() {
+                    config.wind[axis]
+                } else {
+                    0.0
+                };
+                p.velocity[axis] += (gravity + wind) * safe_dt;
+            }
 
             p.position[0] += p.velocity[0] * safe_dt;
             p.position[1] += p.velocity[1] * safe_dt;
@@ -176,11 +208,17 @@ impl ParticleSimulation3D {
 
             // Handle collision planes
             for plane in &config.collision_planes {
-                let n_len = (plane.normal[0].powi(2) + plane.normal[1].powi(2) + plane.normal[2].powi(2)).sqrt();
+                let n_len =
+                    (plane.normal[0].powi(2) + plane.normal[1].powi(2) + plane.normal[2].powi(2))
+                        .sqrt();
                 if n_len < 1e-6 || !n_len.is_finite() {
                     continue; // Skip zero-length or non-finite normal
                 }
-                let n = [plane.normal[0] / n_len, plane.normal[1] / n_len, plane.normal[2] / n_len];
+                let n = [
+                    plane.normal[0] / n_len,
+                    plane.normal[1] / n_len,
+                    plane.normal[2] / n_len,
+                ];
                 let rel = [
                     p.position[0] - plane.origin[0],
                     p.position[1] - plane.origin[1],
@@ -195,7 +233,8 @@ impl ParticleSimulation3D {
                     p.position[2] -= n[2] * dist;
 
                     // Reflect velocity: v' = v - (1 + e) * (v . n) * n
-                    let v_dot_n = p.velocity[0] * n[0] + p.velocity[1] * n[1] + p.velocity[2] * n[2];
+                    let v_dot_n =
+                        p.velocity[0] * n[0] + p.velocity[1] * n[1] + p.velocity[2] * n[2];
                     if v_dot_n < 0.0 {
                         let e = plane.bounce_restitution.clamp(0.0, 1.0);
                         p.velocity[0] -= (1.0 + e) * v_dot_n * n[0];
@@ -248,7 +287,11 @@ mod tests {
         assert!(!sim.particles.is_empty());
         // All particles must be above the floor (Y <= 600)
         for p in &sim.particles {
-            assert!(p.position[1] <= 600.1, "Particle breached floor: {}", p.position[1]);
+            assert!(
+                p.position[1] <= 600.1,
+                "Particle breached floor: {}",
+                p.position[1]
+            );
         }
     }
 
@@ -332,7 +375,10 @@ mod tests {
 
         render_particles_to_buffer(&mut pixels, 100, 100, &[p], 1000.0, true);
         let center_idx = (50 * 100 + 50) * 4;
-        assert!(pixels[center_idx] > 200, "Center pixel should have bright red color");
+        assert!(
+            pixels[center_idx] > 200,
+            "Center pixel should have bright red color"
+        );
     }
 }
 
@@ -345,14 +391,21 @@ pub fn render_particles_to_buffer(
     camera_fov: f32, // e.g. 1000.0
     additive_blend: bool,
 ) {
-    let Some(expected_len) = (width as usize).checked_mul(height as usize).and_then(|s| s.checked_mul(4)) else {
+    let Some(expected_len) = (width as usize)
+        .checked_mul(height as usize)
+        .and_then(|s| s.checked_mul(4))
+    else {
         return;
     };
     if pixels.len() != expected_len || width == 0 || height == 0 || particles.is_empty() {
         return;
     }
 
-    let fov = if camera_fov.is_finite() && camera_fov > 10.0 { camera_fov } else { 1000.0 };
+    let fov = if camera_fov.is_finite() && camera_fov > 10.0 {
+        camera_fov
+    } else {
+        1000.0
+    };
     let half_w = width as f32 * 0.5;
     let half_h = height as f32 * 0.5;
 
@@ -412,18 +465,28 @@ pub fn render_particles_to_buffer(
 
                     let idx = ((y * width + x) * 4) as usize;
                     if additive_blend {
-                        pixels[idx] = (pixels[idx] as f32 + col_r * falloff).clamp(0.0, 255.0) as u8;
-                        pixels[idx + 1] = (pixels[idx + 1] as f32 + col_g * falloff).clamp(0.0, 255.0) as u8;
-                        pixels[idx + 2] = (pixels[idx + 2] as f32 + col_b * falloff).clamp(0.0, 255.0) as u8;
-                        pixels[idx + 3] = (pixels[idx + 3] as f32 + col_a * falloff).clamp(0.0, 255.0) as u8;
+                        pixels[idx] =
+                            (pixels[idx] as f32 + col_r * falloff).clamp(0.0, 255.0) as u8;
+                        pixels[idx + 1] =
+                            (pixels[idx + 1] as f32 + col_g * falloff).clamp(0.0, 255.0) as u8;
+                        pixels[idx + 2] =
+                            (pixels[idx + 2] as f32 + col_b * falloff).clamp(0.0, 255.0) as u8;
+                        pixels[idx + 3] =
+                            (pixels[idx + 3] as f32 + col_a * falloff).clamp(0.0, 255.0) as u8;
                     } else {
                         // Standard alpha over composite
                         let src_a = falloff;
                         let inv_a = 1.0 - src_a;
-                        pixels[idx] = (col_r * src_a + pixels[idx] as f32 * inv_a).clamp(0.0, 255.0) as u8;
-                        pixels[idx + 1] = (col_g * src_a + pixels[idx + 1] as f32 * inv_a).clamp(0.0, 255.0) as u8;
-                        pixels[idx + 2] = (col_b * src_a + pixels[idx + 2] as f32 * inv_a).clamp(0.0, 255.0) as u8;
-                        pixels[idx + 3] = ((pixels[idx + 3] as f32 / 255.0 + src_a * (1.0 - pixels[idx + 3] as f32 / 255.0)) * 255.0).clamp(0.0, 255.0) as u8;
+                        pixels[idx] =
+                            (col_r * src_a + pixels[idx] as f32 * inv_a).clamp(0.0, 255.0) as u8;
+                        pixels[idx + 1] = (col_g * src_a + pixels[idx + 1] as f32 * inv_a)
+                            .clamp(0.0, 255.0) as u8;
+                        pixels[idx + 2] = (col_b * src_a + pixels[idx + 2] as f32 * inv_a)
+                            .clamp(0.0, 255.0) as u8;
+                        pixels[idx + 3] = ((pixels[idx + 3] as f32 / 255.0
+                            + src_a * (1.0 - pixels[idx + 3] as f32 / 255.0))
+                            * 255.0)
+                            .clamp(0.0, 255.0) as u8;
                     }
                 }
             }

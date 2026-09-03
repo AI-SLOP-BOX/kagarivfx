@@ -54,7 +54,11 @@ pub fn apply_transform_effect(
 
     let mut dst = vec![0u8; pixel_count * 4];
     let finite = |value: f32, fallback: f32| {
-        if value.is_finite() { value } else { fallback }
+        if value.is_finite() {
+            value
+        } else {
+            fallback
+        }
     };
 
     let sx = (if params.uniform_scale {

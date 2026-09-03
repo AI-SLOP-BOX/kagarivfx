@@ -201,7 +201,8 @@ impl TextAnimatorAdvanced {
             return amounts;
         }
         for (unit_idx, (s, e)) in ranges.iter().enumerate() {
-            let amt = TextAnimatorEngine::compute_amount(unit_idx, total_units, &self.selector, 0.0);
+            let amt =
+                TextAnimatorEngine::compute_amount(unit_idx, total_units, &self.selector, 0.0);
             for slot in amounts.iter_mut().take(*e).skip(*s) {
                 *slot = amt;
             }
@@ -233,7 +234,11 @@ impl TextAnimatorAdvanced {
                 fill_color: a.fill_color,
                 fill_mix: if a.fill_color.is_some() { amount } else { 0.0 },
                 stroke_color: a.stroke_color,
-                stroke_mix: if a.stroke_color.is_some() { amount } else { 0.0 },
+                stroke_mix: if a.stroke_color.is_some() {
+                    amount
+                } else {
+                    0.0
+                },
                 stroke_width_add: a.stroke_width * amount,
                 character_offset: (a.character_offset as f32 * amount).round() as i32,
                 base,
@@ -299,7 +304,12 @@ mod tests {
     use crate::core::text_animator::SelectorShape;
 
     fn square(start: f32, end: f32) -> RangeSelector {
-        RangeSelector { shape: SelectorShape::Square, start, end, ..Default::default() }
+        RangeSelector {
+            shape: SelectorShape::Square,
+            start,
+            end,
+            ..Default::default()
+        }
     }
 
     #[test]
@@ -353,7 +363,10 @@ mod tests {
     #[test]
     fn test_eval_applies_advanced_channels_by_amount() {
         let mut anim = TextAnimatorAdvanced {
-            selector: RangeSelector { shape: SelectorShape::RampUp, ..Default::default() },
+            selector: RangeSelector {
+                shape: SelectorShape::RampUp,
+                ..Default::default()
+            },
             ..Default::default()
         };
         anim.advanced.fill_color = Some([1.0, 0.0, 0.0, 1.0]);
@@ -385,7 +398,9 @@ mod tests {
         second.position = [5.0, -5.0];
         second.advanced.fill_color = Some([0.0, 0.0, 1.0, 1.0]);
 
-        let stack = AnimatorStack { animators: vec![first, second] };
+        let stack = AnimatorStack {
+            animators: vec![first, second],
+        };
         let composed = stack.compose("ab");
         assert_eq!(composed.len(), 2);
         let c = &composed[0];
@@ -404,9 +419,13 @@ mod tests {
         };
         anim.enabled = false;
         anim.position = [99.0, 99.0];
-        let stack = AnimatorStack { animators: vec![anim] };
+        let stack = AnimatorStack {
+            animators: vec![anim],
+        };
         let composed = stack.compose("xy");
-        assert!(composed.iter().all(|t| t.base.position_offset == [0.0, 0.0]));
+        assert!(composed
+            .iter()
+            .all(|t| t.base.position_offset == [0.0, 0.0]));
     }
 
     #[test]

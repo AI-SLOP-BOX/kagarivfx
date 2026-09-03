@@ -1,8 +1,17 @@
 #![allow(dead_code)]
 /// After Effects VFX Kernels Part 21 — Warp & Geometry Distortion Suite
 // 1. Mesh Warp (Bilinear Grid Deformation)
-pub fn apply_mesh_warp(pixels: &mut [u8], width: u32, height: u32, grid_x: u32, grid_y: u32, offsets: &[(f32, f32)]) {
-    if grid_x == 0 || grid_y == 0 { return; }
+pub fn apply_mesh_warp(
+    pixels: &mut [u8],
+    width: u32,
+    height: u32,
+    grid_x: u32,
+    grid_y: u32,
+    offsets: &[(f32, f32)],
+) {
+    if grid_x == 0 || grid_y == 0 {
+        return;
+    }
     let temp = pixels.to_vec();
     let cell_w = width as f32 / grid_x as f32;
     let cell_h = height as f32 / grid_y as f32;
@@ -18,10 +27,15 @@ pub fn apply_mesh_warp(pixels: &mut [u8], width: u32, height: u32, grid_x: u32, 
             let i00 = gy * (grid_x as usize + 1) + gx;
             let i10 = gy * (grid_x as usize + 1) + (gx + 1).min(grid_x as usize);
             let i01 = (gy + 1).min(grid_y as usize - 1) * (grid_x as usize + 1) + gx;
-            let i11 = (gy + 1).min(grid_y as usize - 1) * (grid_x as usize + 1) + (gx + 1).min(grid_x as usize);
+            let i11 = (gy + 1).min(grid_y as usize - 1) * (grid_x as usize + 1)
+                + (gx + 1).min(grid_x as usize);
 
             let get_off = |i: usize| -> (f32, f32) {
-                if i < offsets.len() { offsets[i] } else { (0.0, 0.0) }
+                if i < offsets.len() {
+                    offsets[i]
+                } else {
+                    (0.0, 0.0)
+                }
             };
 
             let (o00x, o00y) = get_off(i00);
@@ -29,10 +43,14 @@ pub fn apply_mesh_warp(pixels: &mut [u8], width: u32, height: u32, grid_x: u32, 
             let (o01x, o01y) = get_off(i01);
             let (o11x, o11y) = get_off(i11);
 
-            let off_x = o00x * (1.0 - tx) * (1.0 - ty) + o10x * tx * (1.0 - ty)
-                       + o01x * (1.0 - tx) * ty + o11x * tx * ty;
-            let off_y = o00y * (1.0 - tx) * (1.0 - ty) + o10y * tx * (1.0 - ty)
-                       + o01y * (1.0 - tx) * ty + o11y * tx * ty;
+            let off_x = o00x * (1.0 - tx) * (1.0 - ty)
+                + o10x * tx * (1.0 - ty)
+                + o01x * (1.0 - tx) * ty
+                + o11x * tx * ty;
+            let off_y = o00y * (1.0 - tx) * (1.0 - ty)
+                + o10y * tx * (1.0 - ty)
+                + o01y * (1.0 - tx) * ty
+                + o11y * tx * ty;
 
             let sx = (x as f32 + off_x).clamp(0.0, (width - 1) as f32) as usize;
             let sy = (y as f32 + off_y).clamp(0.0, (height - 1) as f32) as usize;
@@ -45,13 +63,24 @@ pub fn apply_mesh_warp(pixels: &mut [u8], width: u32, height: u32, grid_x: u32, 
 }
 
 // 2. Reflection Map (Mirror Reflection Compositing)
-pub fn apply_reflection_map(pixels: &mut [u8], width: u32, height: u32, reflect_y: u32, fade_dist: f32, opacity: f32) {
-    if opacity <= 0.001 { return; }
+pub fn apply_reflection_map(
+    pixels: &mut [u8],
+    width: u32,
+    height: u32,
+    reflect_y: u32,
+    fade_dist: f32,
+    opacity: f32,
+) {
+    if opacity <= 0.001 {
+        return;
+    }
     let temp = pixels.to_vec();
 
     for y in reflect_y..height {
         let mirror_y = reflect_y as i32 - (y as i32 - reflect_y as i32);
-        if mirror_y < 0 { break; }
+        if mirror_y < 0 {
+            break;
+        }
 
         let fade = (1.0 - (y - reflect_y) as f32 / fade_dist.max(1.0)).clamp(0.0, 1.0) * opacity;
 
@@ -61,7 +90,8 @@ pub fn apply_reflection_map(pixels: &mut [u8], width: u32, height: u32, reflect_
 
             for c in 0..3 {
                 let reflected = temp[src_idx + c] as f32 * fade;
-                pixels[dst_idx + c] = (pixels[dst_idx + c] as f32 * (1.0 - fade) + reflected).clamp(0.0, 255.0) as u8;
+                pixels[dst_idx + c] =
+                    (pixels[dst_idx + c] as f32 * (1.0 - fade) + reflected).clamp(0.0, 255.0) as u8;
             }
         }
     }
@@ -69,7 +99,9 @@ pub fn apply_reflection_map(pixels: &mut [u8], width: u32, height: u32, reflect_
 
 // 3. Fisheye Lens Distortion
 pub fn apply_fisheye(pixels: &mut [u8], width: u32, height: u32, strength: f32) {
-    if strength.abs() <= 0.001 { return; }
+    if strength.abs() <= 0.001 {
+        return;
+    }
     let temp = pixels.to_vec();
     let cx = width as f32 * 0.5;
     let cy = height as f32 * 0.5;
@@ -95,7 +127,15 @@ pub fn apply_fisheye(pixels: &mut [u8], width: u32, height: u32, strength: f32) 
 }
 
 // 4. Displacement Map with Channel Selection
-pub fn apply_displacement_channel(pixels: &mut [u8], width: u32, height: u32, disp_map: &[u8], h_channel: usize, v_channel: usize, max_disp: f32) {
+pub fn apply_displacement_channel(
+    pixels: &mut [u8],
+    width: u32,
+    height: u32,
+    disp_map: &[u8],
+    h_channel: usize,
+    v_channel: usize,
+    max_disp: f32,
+) {
     let temp = pixels.to_vec();
 
     for y in 0..height {

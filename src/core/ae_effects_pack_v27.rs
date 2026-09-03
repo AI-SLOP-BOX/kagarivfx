@@ -60,7 +60,11 @@ impl WaveType {
                 1.0 - 4.0 * (f - 0.5).abs()
             }
             WaveType::Square => {
-                if phase.rem_euclid(TAU) < PI { 1.0 } else { -1.0 }
+                if phase.rem_euclid(TAU) < PI {
+                    1.0
+                } else {
+                    -1.0
+                }
             }
             WaveType::Sawtooth => {
                 let f = (phase / TAU).rem_euclid(1.0);
@@ -156,7 +160,14 @@ pub fn apply_wave_warp_pro(pixels: &mut [u8], width: u32, height: u32, p: &WaveW
             let att = pin_attenuation(p.pinning, x, y, width, height);
             let d = disp * att;
             let mut rgba = [0u8; 4];
-            sample_bilinear(&temp, width, height, x as f32 + dx * d, y as f32 + dy * d, &mut rgba);
+            sample_bilinear(
+                &temp,
+                width,
+                height,
+                x as f32 + dx * d,
+                y as f32 + dy * d,
+                &mut rgba,
+            );
             let idx = ((y * width + x) * 4) as usize;
             pixels[idx..idx + 4].copy_from_slice(&rgba);
         }
@@ -176,7 +187,10 @@ pub struct CcLensParams {
 
 impl Default for CcLensParams {
     fn default() -> Self {
-        Self { convergence: 50.0, zoom: 1.0 }
+        Self {
+            convergence: 50.0,
+            zoom: 1.0,
+        }
     }
 }
 
@@ -202,7 +216,14 @@ pub fn apply_cc_lens_pro(pixels: &mut [u8], width: u32, height: u32, p: &CcLensP
             let src_rn = rn.powf(1.0 + k);
             let scale = if rn > 1e-6 { src_rn / rn } else { 1.0 };
             let mut rgba = [0u8; 4];
-            sample_bilinear(&temp, width, height, cx + rx * scale, cy + ry * scale, &mut rgba);
+            sample_bilinear(
+                &temp,
+                width,
+                height,
+                cx + rx * scale,
+                cy + ry * scale,
+                &mut rgba,
+            );
             let idx = ((y * width + x) * 4) as usize;
             pixels[idx..idx + 4].copy_from_slice(&rgba);
         }
@@ -263,7 +284,9 @@ pub fn apply_polar_coordinates_pro(
             if mix < 1.0 {
                 for c in 0..4 {
                     let orig = temp[idx + c] as f32;
-                    rgba[c] = (orig + (rgba[c] as f32 - orig) * mix).round().clamp(0.0, 255.0) as u8;
+                    rgba[c] = (orig + (rgba[c] as f32 - orig) * mix)
+                        .round()
+                        .clamp(0.0, 255.0) as u8;
                 }
             }
             pixels[idx..idx + 4].copy_from_slice(&rgba);
@@ -287,7 +310,11 @@ pub struct OpticsCompensationParams {
 
 impl Default for OpticsCompensationParams {
     fn default() -> Self {
-        Self { field_of_view_deg: 0.0, reverse: false, zoom: 1.0 }
+        Self {
+            field_of_view_deg: 0.0,
+            reverse: false,
+            zoom: 1.0,
+        }
     }
 }
 
@@ -321,7 +348,14 @@ pub fn apply_optics_compensation(
             let src_rn = (rn * (1.0 + c * rn * rn)).clamp(0.0, 1.0);
             let scale = if rn > 1e-6 { src_rn / rn } else { 1.0 };
             let mut rgba = [0u8; 4];
-            sample_bilinear(&temp, width, height, cx + rx * scale, cy + ry * scale, &mut rgba);
+            sample_bilinear(
+                &temp,
+                width,
+                height,
+                cx + rx * scale,
+                cy + ry * scale,
+                &mut rgba,
+            );
             let idx = ((y * width + x) * 4) as usize;
             pixels[idx..idx + 4].copy_from_slice(&rgba);
         }
@@ -342,7 +376,12 @@ mod tests {
 
     #[test]
     fn test_waveforms_bounded_and_periodic() {
-        for wt in [WaveType::Sine, WaveType::Triangle, WaveType::Square, WaveType::Sawtooth] {
+        for wt in [
+            WaveType::Sine,
+            WaveType::Triangle,
+            WaveType::Square,
+            WaveType::Sawtooth,
+        ] {
             for i in 0..360 {
                 // Half-degree offsets avoid landing exactly on the Square
                 // waveform's discontinuity at phase = PI.
@@ -351,7 +390,10 @@ mod tests {
                 assert!((-1.0..=1.0).contains(&v), "{wt:?} out of range at {i}");
                 // Periodicity: phase + full turn reproduces the value (within fp tolerance).
                 let shifted = wt.waveform(phase + TAU);
-                assert!((v - shifted).abs() < 1e-4, "{wt:?} not periodic at {i}: {v} vs {shifted}");
+                assert!(
+                    (v - shifted).abs() < 1e-4,
+                    "{wt:?} not periodic at {i}: {v} vs {shifted}"
+                );
             }
         }
         assert_eq!(WaveType::Square.waveform(0.0), 1.0);
@@ -367,7 +409,12 @@ mod tests {
         let src = solid(16, 16, [128, 64, 32, 255]);
         let mut a = src.clone();
         let mut b = src.clone();
-        let params = WaveWarpParams { wave_height: 6.0, wave_width: 8.0, time: 1.5, ..Default::default() };
+        let params = WaveWarpParams {
+            wave_height: 6.0,
+            wave_width: 8.0,
+            time: 1.5,
+            ..Default::default()
+        };
         apply_wave_warp_pro(&mut a, 16, 16, &params);
         apply_wave_warp_pro(&mut b, 16, 16, &params);
         assert_eq!(a, b);
@@ -387,7 +434,12 @@ mod tests {
             }
         }
         let mut warped = img.clone();
-        let params = WaveWarpParams { wave_height: 20.0, wave_width: 10.0, pinning: PinKind::All, ..Default::default() };
+        let params = WaveWarpParams {
+            wave_height: 20.0,
+            wave_width: 10.0,
+            pinning: PinKind::All,
+            ..Default::default()
+        };
         apply_wave_warp_pro(&mut warped, 24, 24, &params);
         for (x, y) in [(0u32, 0u32), (23, 0), (0, 23), (23, 23)] {
             let i = ((y * 24 + x) * 4) as usize;
@@ -410,14 +462,30 @@ mod tests {
         // Centre pixel must survive any convergence.
         for conv in [-80.0f32, 0.0, 80.0] {
             let mut out = img.clone();
-            apply_cc_lens_pro(&mut out, 17, 17, &CcLensParams { convergence: conv, zoom: 1.0 });
+            apply_cc_lens_pro(
+                &mut out,
+                17,
+                17,
+                &CcLensParams {
+                    convergence: conv,
+                    zoom: 1.0,
+                },
+            );
             let c = ((8 * 17 + 8) * 4) as usize;
             assert_eq!(out[c], img[c]);
             assert_eq!(out[c + 1], img[c + 1]);
         }
         // Zero convergence + zoom 1 == identity everywhere.
         let mut out = img.clone();
-        apply_cc_lens_pro(&mut out, 17, 17, &CcLensParams { convergence: 0.0, zoom: 1.0 });
+        apply_cc_lens_pro(
+            &mut out,
+            17,
+            17,
+            &CcLensParams {
+                convergence: 0.0,
+                zoom: 1.0,
+            },
+        );
         assert_eq!(out, img);
     }
 
@@ -427,7 +495,10 @@ mod tests {
         for mode in [PolarMode::RectToPolar, PolarMode::PolarToRect] {
             let mut out = src.clone();
             apply_polar_coordinates_pro(&mut out, 20, 20, mode, 1.0);
-            assert!(out.chunks(4).all(|px| px == [10, 200, 30, 255]), "{mode:?} broke solid");
+            assert!(
+                out.chunks(4).all(|px| px == [10, 200, 30, 255]),
+                "{mode:?} broke solid"
+            );
         }
         // Interpolation 0 == identity even on structured input.
         let mut grad = vec![0u8; 20 * 20 * 4];
@@ -457,9 +528,15 @@ mod tests {
         // Centre pixel invariant under any FOV.
         for fov in [-120.0f32, 120.0] {
             let mut o = img.clone();
-            apply_optics_compensation(&mut o, 16, 16, &OpticsCompensationParams {
-                field_of_view_deg: fov, ..Default::default()
-            });
+            apply_optics_compensation(
+                &mut o,
+                16,
+                16,
+                &OpticsCompensationParams {
+                    field_of_view_deg: fov,
+                    ..Default::default()
+                },
+            );
             let c = ((8 * 16 + 8) * 4) as usize;
             assert_eq!(o[c], img[c]);
         }

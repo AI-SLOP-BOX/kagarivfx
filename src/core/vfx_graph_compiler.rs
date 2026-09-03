@@ -1,6 +1,6 @@
 #![allow(dead_code)]
-use std::collections::{HashMap, HashSet, VecDeque};
 use crate::core::timeline::{Composition, TrackMatteMode};
+use std::collections::{HashMap, HashSet, VecDeque};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum LayerOpType {
@@ -9,7 +9,10 @@ pub enum LayerOpType {
     /// Parent transform evaluation pass
     EvaluateParentTransform { layer_idx: usize },
     /// Track Matte compositing pass
-    CompositeTrackMatte { layer_idx: usize, matte_layer_idx: usize },
+    CompositeTrackMatte {
+        layer_idx: usize,
+        matte_layer_idx: usize,
+    },
     /// PreComp evaluation step
     EvaluatePreComp { layer_idx: usize, comp_id: String },
 }
@@ -88,15 +91,14 @@ impl VfxGraphCompiler {
             }
 
             // B) Track Matte dependency
-            if layer.track_matte != TrackMatteMode::None
-                && idx > 0 {
-                    let matte_idx = idx - 1;
-                    if matte_idx < num_layers {
-                        adj.entry(matte_idx).or_default().push(idx);
-                        in_degree[idx] += 1;
-                        active_nodes.insert(matte_idx);
-                    }
+            if layer.track_matte != TrackMatteMode::None && idx > 0 {
+                let matte_idx = idx - 1;
+                if matte_idx < num_layers {
+                    adj.entry(matte_idx).or_default().push(idx);
+                    in_degree[idx] += 1;
+                    active_nodes.insert(matte_idx);
                 }
+            }
         }
 
         // ── 2. Topological Sort (Kahn's Algorithm) ──
@@ -125,7 +127,10 @@ impl VfxGraphCompiler {
 
         if sorted_order.len() < active_nodes.len() {
             self.cycle_detected = true;
-            log::error!("VfxGraphCompiler: Parent or Matte cyclic dependency detected in Composition '{}'!", comp.name);
+            log::error!(
+                "VfxGraphCompiler: Parent or Matte cyclic dependency detected in Composition '{}'!",
+                comp.name
+            );
             for &idx in &active_nodes {
                 if !sorted_order.contains(&idx) {
                     sorted_order.push(idx);
@@ -138,10 +143,12 @@ impl VfxGraphCompiler {
             let layer = &comp.layers[idx];
 
             let op = match &layer.layer_type {
-                crate::core::timeline::LayerType::PreComp { comp_id } => LayerOpType::EvaluatePreComp {
-                    layer_idx: idx,
-                    comp_id: comp_id.clone(),
-                },
+                crate::core::timeline::LayerType::PreComp { comp_id } => {
+                    LayerOpType::EvaluatePreComp {
+                        layer_idx: idx,
+                        comp_id: comp_id.clone(),
+                    }
+                }
                 _ => {
                     if layer.track_matte != TrackMatteMode::None && idx > 0 {
                         LayerOpType::CompositeTrackMatte {
@@ -160,9 +167,7 @@ impl VfxGraphCompiler {
                 .layers
                 .iter()
                 .enumerate()
-                .filter(|(dep_idx, _)| {
-                    adj.get(dep_idx).is_some_and(|list| list.contains(&idx))
-                })
+                .filter(|(dep_idx, _)| adj.get(dep_idx).is_some_and(|list| list.contains(&idx)))
                 .map(|(dep_idx, _)| dep_idx)
                 .collect();
 
@@ -182,14 +187,35 @@ mod tests {
 
     #[test]
     fn test_topological_parent_order() {
-        let mut comp = Composition::new("test_comp".to_string(), "Test Comp".to_string(), 1920, 1080, 30, 300);
-        
-        let parent_layer = Layer::new("parent".to_string(), "Parent Layer".to_string(), LayerType::Solid { color: [1.0, 0.0, 0.0, 1.0] }, 300);
-        let mut child_layer = Layer::new("child".to_string(), "Child Layer".to_string(), LayerType::Solid { color: [0.0, 1.0, 0.0, 1.0] }, 300);
+        let mut comp = Composition::new(
+            "test_comp".to_string(),
+            "Test Comp".to_string(),
+            1920,
+            1080,
+            30,
+            300,
+        );
+
+        let parent_layer = Layer::new(
+            "parent".to_string(),
+            "Parent Layer".to_string(),
+            LayerType::Solid {
+                color: [1.0, 0.0, 0.0, 1.0],
+            },
+            300,
+        );
+        let mut child_layer = Layer::new(
+            "child".to_string(),
+            "Child Layer".to_string(),
+            LayerType::Solid {
+                color: [0.0, 1.0, 0.0, 1.0],
+            },
+            300,
+        );
         child_layer.parent_id = Some("parent".to_string());
 
         comp.add_layer(parent_layer); // idx 0
-        comp.add_layer(child_layer);  // idx 1
+        comp.add_layer(child_layer); // idx 1
 
         let mut compiler = VfxGraphCompiler::new();
         compiler.compile(&comp, 0);
@@ -207,10 +233,31 @@ mod tests {
 
     #[test]
     fn test_dead_code_elimination() {
-        let mut comp = Composition::new("test_comp".to_string(), "Test Comp".to_string(), 1920, 1080, 30, 300);
-        
-        let active_layer = Layer::new("active".to_string(), "Active Layer".to_string(), LayerType::Solid { color: [1.0, 0.0, 0.0, 1.0] }, 300);
-        let mut inactive_layer = Layer::new("inactive".to_string(), "Inactive Layer".to_string(), LayerType::Solid { color: [0.0, 1.0, 0.0, 1.0] }, 300);
+        let mut comp = Composition::new(
+            "test_comp".to_string(),
+            "Test Comp".to_string(),
+            1920,
+            1080,
+            30,
+            300,
+        );
+
+        let active_layer = Layer::new(
+            "active".to_string(),
+            "Active Layer".to_string(),
+            LayerType::Solid {
+                color: [1.0, 0.0, 0.0, 1.0],
+            },
+            300,
+        );
+        let mut inactive_layer = Layer::new(
+            "inactive".to_string(),
+            "Inactive Layer".to_string(),
+            LayerType::Solid {
+                color: [0.0, 1.0, 0.0, 1.0],
+            },
+            300,
+        );
         inactive_layer.in_frame = 50;
 
         comp.add_layer(active_layer);

@@ -1,4 +1,4 @@
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
 /// Proxy resolution level for layer previews.
 /// When enabled, the layer renders at a fraction of full resolution
@@ -105,23 +105,43 @@ mod tests {
 
     #[test]
     fn test_effective_proxy_scale_final_render_ignores_proxy() {
-        let lp = Some(LayerProxy { enabled: true, resolution: ProxyResolution::Quarter, proxy_path: None });
-        assert_eq!(effective_proxy_scale(lp.as_ref(), true, ProxyResolution::Half, true), 1.0);
+        let lp = Some(LayerProxy {
+            enabled: true,
+            resolution: ProxyResolution::Quarter,
+            proxy_path: None,
+        });
+        assert_eq!(
+            effective_proxy_scale(lp.as_ref(), true, ProxyResolution::Half, true),
+            1.0
+        );
     }
 
     #[test]
     fn test_effective_proxy_scale_layer_priority() {
-        let lp = Some(LayerProxy { enabled: true, resolution: ProxyResolution::Eighth, proxy_path: None });
-        assert_eq!(effective_proxy_scale(lp.as_ref(), true, ProxyResolution::Half, false), 0.125);
+        let lp = Some(LayerProxy {
+            enabled: true,
+            resolution: ProxyResolution::Eighth,
+            proxy_path: None,
+        });
+        assert_eq!(
+            effective_proxy_scale(lp.as_ref(), true, ProxyResolution::Half, false),
+            0.125
+        );
     }
 
     #[test]
     fn test_effective_proxy_scale_comp_fallback() {
-        assert_eq!(effective_proxy_scale(None, true, ProxyResolution::Quarter, false), 0.25);
+        assert_eq!(
+            effective_proxy_scale(None, true, ProxyResolution::Quarter, false),
+            0.25
+        );
     }
 
     #[test]
     fn test_effective_proxy_scale_no_proxy() {
-        assert_eq!(effective_proxy_scale(None, false, ProxyResolution::Half, false), 1.0);
+        assert_eq!(
+            effective_proxy_scale(None, false, ProxyResolution::Half, false),
+            1.0
+        );
     }
 }

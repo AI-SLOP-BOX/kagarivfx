@@ -569,7 +569,9 @@ fn intersect_bounds(a: PixelBounds, b: PixelBounds) -> Option<PixelBounds> {
     let x = a.x.max(b.x);
     let y = a.y.max(b.y);
     let right = a.x.saturating_add(a.width).min(b.x.saturating_add(b.width));
-    let bottom = a.y.saturating_add(a.height).min(b.y.saturating_add(b.height));
+    let bottom =
+        a.y.saturating_add(a.height)
+            .min(b.y.saturating_add(b.height));
     if right <= x || bottom <= y {
         return None;
     }
@@ -1191,7 +1193,15 @@ mod tests {
             }],
         )
         .unwrap();
-        assert_eq!(crop, PixelBounds { x: 0, y: 0, width: 100, height: 100 });
+        assert_eq!(
+            crop,
+            PixelBounds {
+                x: 0,
+                y: 0,
+                width: 100,
+                height: 100
+            }
+        );
     }
 
     #[test]

@@ -2,7 +2,9 @@
 /// After Effects VFX Kernels Part 22 — Matte Tools & Alpha Compositing
 // 1. Simple Choke / Spread Matte (Morphological Erosion/Dilation)
 pub fn apply_matte_choke(pixels: &mut [u8], width: u32, height: u32, radius: u32, expand: bool) {
-    if radius == 0 { return; }
+    if radius == 0 {
+        return;
+    }
     let temp = pixels.to_vec();
     let r = radius as i32;
 
@@ -16,7 +18,11 @@ pub fn apply_matte_choke(pixels: &mut [u8], width: u32, height: u32, radius: u32
                 for kx in -r..=r {
                     let px = (x + kx).clamp(0, width as i32 - 1) as usize;
                     let a = temp[(py * width as usize + px) * 4 + 3];
-                    if expand { extreme = extreme.max(a); } else { extreme = extreme.min(a); }
+                    if expand {
+                        extreme = extreme.max(a);
+                    } else {
+                        extreme = extreme.min(a);
+                    }
                 }
             }
 
@@ -27,7 +33,9 @@ pub fn apply_matte_choke(pixels: &mut [u8], width: u32, height: u32, radius: u32
 
 // 2. Soft Matte Edge Blur (Alpha Feather)
 pub fn apply_alpha_feather(pixels: &mut [u8], width: u32, height: u32, radius: u32) {
-    if radius == 0 { return; }
+    if radius == 0 {
+        return;
+    }
     let temp = pixels.to_vec();
     let r = radius as i32;
 
@@ -57,7 +65,9 @@ pub fn apply_alpha_feather(pixels: &mut [u8], width: u32, height: u32, radius: u
 // 3. Alpha From Luminance (Luminance to Alpha Conversion)
 pub fn apply_alpha_from_luminance(pixels: &mut [u8], invert: bool) {
     for i in (0..pixels.len()).step_by(4) {
-        let luma = (pixels[i] as u32 * 299 + pixels[i + 1] as u32 * 587 + pixels[i + 2] as u32 * 114) / 1000;
+        let luma =
+            (pixels[i] as u32 * 299 + pixels[i + 1] as u32 * 587 + pixels[i + 2] as u32 * 114)
+                / 1000;
         pixels[i + 3] = if invert { 255 - luma as u8 } else { luma as u8 };
     }
 }

@@ -57,7 +57,9 @@ pub fn apply_window(samples: &mut [f32], win: &[f32]) {
 /// Returns magnitude spectrum of `size` bins from `input.len()` samples.
 pub fn magnitude_spectrum(input: &[f32], size: usize) -> Vec<f32> {
     let n = size.min(input.len()).next_power_of_two();
-    if n < 2 { return vec![0.0; size]; }
+    if n < 2 {
+        return vec![0.0; size];
+    }
 
     // Copy input into complex buffer (real part only, imaginary = 0)
     let mut re: Vec<f64> = input.iter().take(n).map(|&v| v as f64).collect();
@@ -136,7 +138,11 @@ mod tests {
         assert_eq!(mags.len(), n);
         let expected = 2.0 / n as f32;
         for (i, &m) in mags.iter().enumerate().take(n / 2) {
-            assert!((m - expected).abs() < 1e-6, "bin {i} magnitude {} != {expected}", m);
+            assert!(
+                (m - expected).abs() < 1e-6,
+                "bin {i} magnitude {} != {expected}",
+                m
+            );
         }
     }
 
@@ -156,7 +162,12 @@ mod tests {
         // Spectral leakage into far bins stays small relative to the peak.
         let peak_val = mags[64];
         let far_val = mags[200].max(mags[30]);
-        assert!(far_val < peak_val * 0.05, "leakage {} vs peak {}", far_val, peak_val);
+        assert!(
+            far_val < peak_val * 0.05,
+            "leakage {} vs peak {}",
+            far_val,
+            peak_val
+        );
     }
 
     #[test]
@@ -176,7 +187,9 @@ mod tests {
             assert!(
                 (mb[i] - 2.0 * ma[i]).abs() < 1e-3,
                 "linearity broken at bin {}: {} vs {}",
-                i, mb[i], ma[i]
+                i,
+                mb[i],
+                ma[i]
             );
         }
     }
@@ -185,7 +198,11 @@ mod tests {
     fn test_dc_offset_lands_in_bin_zero() {
         let dc = vec![0.8f32; 512];
         let mags = magnitude_spectrum(&dc, 512);
-        assert!(mags[0] > 0.7, "DC energy must appear in bin 0, got {}", mags[0]);
+        assert!(
+            mags[0] > 0.7,
+            "DC energy must appear in bin 0, got {}",
+            mags[0]
+        );
         // Non-zero bins stay tiny for a pure DC signal.
         assert!(mags[50] < 1e-3);
     }

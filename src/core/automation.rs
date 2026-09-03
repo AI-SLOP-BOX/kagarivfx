@@ -154,13 +154,15 @@ fn build_engine(log_sink: Arc<Mutex<Vec<String>>>) -> rhai::Engine {
     // ── Layer creation ──
     engine.register_fn("add_solid", |name: &str, color_hex: &str| -> String {
         with_project(|p| {
-            let Some(idx) = p.compositions.get(p.active_composition_idx).map(|_| p.active_composition_idx) else {
+            let Some(idx) = p
+                .compositions
+                .get(p.active_composition_idx)
+                .map(|_| p.active_composition_idx)
+            else {
                 return String::new();
             };
             let c = parse_hex(color_hex);
-            let comp_len = {
-                p.compositions[idx].duration_frames
-            };
+            let comp_len = { p.compositions[idx].duration_frames };
             let mut layer = Layer::new(
                 gen_id(),
                 name.to_string(),
@@ -182,12 +184,14 @@ fn build_engine(log_sink: Arc<Mutex<Vec<String>>>) -> rhai::Engine {
     });
     engine.register_fn("add_text", |name: &str, text: &str, size: i64| -> String {
         with_project(|p| {
-            let Some(idx) = p.compositions.get(p.active_composition_idx).map(|_| p.active_composition_idx) else {
+            let Some(idx) = p
+                .compositions
+                .get(p.active_composition_idx)
+                .map(|_| p.active_composition_idx)
+            else {
                 return String::new();
             };
-            let comp_len = {
-                p.compositions[idx].duration_frames
-            };
+            let comp_len = { p.compositions[idx].duration_frames };
             let mut layer = Layer::new(
                 gen_id(),
                 name.to_string(),
@@ -220,7 +224,11 @@ fn build_engine(log_sink: Arc<Mutex<Vec<String>>>) -> rhai::Engine {
     // ── Property animation ──
     engine.register_fn("set_position", |layer: &str, x: f64, y: f64| {
         with_project(|p| {
-            let Some(idx) = p.compositions.get(p.active_composition_idx).map(|_| p.active_composition_idx) else {
+            let Some(idx) = p
+                .compositions
+                .get(p.active_composition_idx)
+                .map(|_| p.active_composition_idx)
+            else {
                 return;
             };
             if let Some(i) = p.compositions[idx]
@@ -235,7 +243,11 @@ fn build_engine(log_sink: Arc<Mutex<Vec<String>>>) -> rhai::Engine {
     });
     engine.register_fn("set_opacity", |layer: &str, pct: f64| {
         with_project(|p| {
-            let Some(idx) = p.compositions.get(p.active_composition_idx).map(|_| p.active_composition_idx) else {
+            let Some(idx) = p
+                .compositions
+                .get(p.active_composition_idx)
+                .map(|_| p.active_composition_idx)
+            else {
                 return;
             };
             if let Some(i) = p.compositions[idx]
@@ -250,7 +262,11 @@ fn build_engine(log_sink: Arc<Mutex<Vec<String>>>) -> rhai::Engine {
     });
     engine.register_fn("set_opacity", |layer: &str, pct: i64| {
         with_project(|p| {
-            let Some(idx) = p.compositions.get(p.active_composition_idx).map(|_| p.active_composition_idx) else {
+            let Some(idx) = p
+                .compositions
+                .get(p.active_composition_idx)
+                .map(|_| p.active_composition_idx)
+            else {
                 return;
             };
             if let Some(i) = p.compositions[idx]
@@ -265,7 +281,11 @@ fn build_engine(log_sink: Arc<Mutex<Vec<String>>>) -> rhai::Engine {
     });
     engine.register_fn("key_position", |layer: &str, frame: i64, x: f64, y: f64| {
         with_project(|p| {
-            let Some(idx) = p.compositions.get(p.active_composition_idx).map(|_| p.active_composition_idx) else {
+            let Some(idx) = p
+                .compositions
+                .get(p.active_composition_idx)
+                .map(|_| p.active_composition_idx)
+            else {
                 return;
             };
             let Some(i) = p.compositions[idx]
@@ -417,7 +437,12 @@ mod tests {
         )
         .unwrap();
         let layer = project.active_composition().layers.last().unwrap();
-        assert!(layer.transform.position.evaluate(1).iter().all(|v| v.is_finite()));
+        assert!(layer
+            .transform
+            .position
+            .evaluate(1)
+            .iter()
+            .all(|v| v.is_finite()));
         assert!(layer.transform.opacity.evaluate(1).is_finite());
     }
 
@@ -442,6 +467,9 @@ mod tests {
             LayerType::Text { font_size, .. } => assert_eq!(*font_size, u32::MAX),
             other => panic!("expected text layer, got {other:?}"),
         }
-        assert_eq!(comp.layers[0].transform.position.evaluate(u32::MAX), [1.0, 2.0]);
+        assert_eq!(
+            comp.layers[0].transform.position.evaluate(u32::MAX),
+            [1.0, 2.0]
+        );
     }
 }

@@ -54,7 +54,11 @@ pub fn generate_lightning_arcs(config: &AdvancedLightningConfig) -> Vec<Lightnin
     }
 
     let mut branches = Vec::new();
-    let mut rng = if config.seed == 0 { 0x853c49e6748fea9b } else { config.seed };
+    let mut rng = if config.seed == 0 {
+        0x853c49e6748fea9b
+    } else {
+        config.seed
+    };
 
     let mut next_f32 = || {
         rng ^= rng << 13;
@@ -64,7 +68,11 @@ pub fn generate_lightning_arcs(config: &AdvancedLightningConfig) -> Vec<Lightnin
     };
 
     // Calculate max depth from segments: 2^max_depth ~= segments
-    let max_depth = (config.segments as f32).max(2.0).log2().round().clamp(1.0, 7.0) as usize;
+    let max_depth = (config.segments as f32)
+        .max(2.0)
+        .log2()
+        .round()
+        .clamp(1.0, 7.0) as usize;
     let branch_prob = config.branch_probability.clamp(0.0, 1.0);
     let amp = config.displacement_amplitude.max(0.0);
 
@@ -92,8 +100,24 @@ pub fn generate_lightning_arcs(config: &AdvancedLightningConfig) -> Vec<Lightnin
         let offset = (rng_fn() - 0.5) * 2.0 * amp;
         let displaced_mid = [mid[0] + normal[0] * offset, mid[1] + normal[1] * offset];
 
-        displace_segment(p0, displaced_mid, depth + 1, max_depth, amp * 0.55, rng_fn, out_pts);
-        displace_segment(displaced_mid, p1, depth + 1, max_depth, amp * 0.55, rng_fn, out_pts);
+        displace_segment(
+            p0,
+            displaced_mid,
+            depth + 1,
+            max_depth,
+            amp * 0.55,
+            rng_fn,
+            out_pts,
+        );
+        displace_segment(
+            displaced_mid,
+            p1,
+            depth + 1,
+            max_depth,
+            amp * 0.55,
+            rng_fn,
+            out_pts,
+        );
     }
 
     let mut main_pts = vec![config.origin];
@@ -119,10 +143,7 @@ pub fn generate_lightning_arcs(config: &AdvancedLightningConfig) -> Vec<Lightnin
         for i in 1..num_main - 1 {
             if next_f32() < branch_prob {
                 let start = main_pts[i];
-                let dir = [
-                    (next_f32() - 0.5) * 200.0,
-                    (next_f32() - 0.5) * 200.0,
-                ];
+                let dir = [(next_f32() - 0.5) * 200.0, (next_f32() - 0.5) * 200.0];
                 let branch_dest = [start[0] + dir[0], start[1] + dir[1]];
 
                 let mut fork_pts = vec![start];
@@ -152,7 +173,7 @@ pub fn generate_lightning_arcs(config: &AdvancedLightningConfig) -> Vec<Lightnin
 pub struct LaserBeamConfig {
     pub start_point: [f32; 2],
     pub end_point: [f32; 2],
-    pub time_progress: f32, // 0.0 .. 1.0
+    pub time_progress: f32,       // 0.0 .. 1.0
     pub beam_length_percent: f32, // 0.0 .. 100.0
     pub starting_thickness: f32,
     pub ending_thickness: f32,
@@ -176,7 +197,9 @@ impl Default for LaserBeamConfig {
 }
 
 /// Evaluates current head and tail positions and interpolated thicknesses of a laser beam.
-pub fn evaluate_laser_beam_segment(config: &LaserBeamConfig) -> Option<([f32; 2], [f32; 2], f32, f32)> {
+pub fn evaluate_laser_beam_segment(
+    config: &LaserBeamConfig,
+) -> Option<([f32; 2], [f32; 2], f32, f32)> {
     if !config.start_point[0].is_finite()
         || !config.start_point[1].is_finite()
         || !config.end_point[0].is_finite()
@@ -217,8 +240,10 @@ pub fn evaluate_laser_beam_segment(config: &LaserBeamConfig) -> Option<([f32; 2]
         p0[1] + (p1[1] - p0[1]) * tail_t,
     ];
 
-    let head_thick = config.starting_thickness + (config.ending_thickness - config.starting_thickness) * head_t;
-    let tail_thick = config.starting_thickness + (config.ending_thickness - config.starting_thickness) * tail_t;
+    let head_thick =
+        config.starting_thickness + (config.ending_thickness - config.starting_thickness) * head_t;
+    let tail_thick =
+        config.starting_thickness + (config.ending_thickness - config.starting_thickness) * tail_t;
 
     Some((tail_pos, head_pos, tail_thick, head_thick))
 }
@@ -230,7 +255,10 @@ pub fn render_lightning_to_buffer(
     height: u32,
     config: &AdvancedLightningConfig,
 ) {
-    let Some(expected_len) = (width as usize).checked_mul(height as usize).and_then(|s| s.checked_mul(4)) else {
+    let Some(expected_len) = (width as usize)
+        .checked_mul(height as usize)
+        .and_then(|s| s.checked_mul(4))
+    else {
         return;
     };
     if pixels.len() != expected_len || width == 0 || height == 0 {
@@ -262,10 +290,14 @@ pub fn render_lightning_to_buffer(
         for seg_idx in 0..n - 1 {
             let p0 = branch.points[seg_idx];
             let p1 = branch.points[seg_idx + 1];
-            let min_x = ((p0[0].min(p1[0]) - glow_rad).floor() as i32).clamp(0, width as i32 - 1) as u32;
-            let max_x = ((p0[0].max(p1[0]) + glow_rad).ceil() as i32).clamp(0, width as i32 - 1) as u32;
-            let min_y = ((p0[1].min(p1[1]) - glow_rad).floor() as i32).clamp(0, height as i32 - 1) as u32;
-            let max_y = ((p0[1].max(p1[1]) + glow_rad).ceil() as i32).clamp(0, height as i32 - 1) as u32;
+            let min_x =
+                ((p0[0].min(p1[0]) - glow_rad).floor() as i32).clamp(0, width as i32 - 1) as u32;
+            let max_x =
+                ((p0[0].max(p1[0]) + glow_rad).ceil() as i32).clamp(0, width as i32 - 1) as u32;
+            let min_y =
+                ((p0[1].min(p1[1]) - glow_rad).floor() as i32).clamp(0, height as i32 - 1) as u32;
+            let max_y =
+                ((p0[1].max(p1[1]) + glow_rad).ceil() as i32).clamp(0, height as i32 - 1) as u32;
 
             let vx = p1[0] - p0[0];
             let vy = p1[1] - p0[1];
@@ -283,12 +315,27 @@ pub fn render_lightning_to_buffer(
                     if dist < glow_rad {
                         let idx = ((y * width + x) * 4) as usize;
                         let glow_factor = (1.0 - dist / glow_rad).powi(2) * branch.alpha;
-                        let core_factor = if dist < thick { (1.0 - dist / thick) * branch.alpha } else { 0.0 };
+                        let core_factor = if dist < thick {
+                            (1.0 - dist / thick) * branch.alpha
+                        } else {
+                            0.0
+                        };
 
-                        pixels[idx] = (pixels[idx] as f32 + glow_col[0] * glow_factor + core_col[0] * core_factor).clamp(0.0, 255.0) as u8;
-                        pixels[idx + 1] = (pixels[idx + 1] as f32 + glow_col[1] * glow_factor + core_col[1] * core_factor).clamp(0.0, 255.0) as u8;
-                        pixels[idx + 2] = (pixels[idx + 2] as f32 + glow_col[2] * glow_factor + core_col[2] * core_factor).clamp(0.0, 255.0) as u8;
-                        pixels[idx + 3] = (pixels[idx + 3] as f32 + (glow_col[3] * glow_factor + core_col[3] * core_factor) * 0.7).clamp(0.0, 255.0) as u8;
+                        pixels[idx] = (pixels[idx] as f32
+                            + glow_col[0] * glow_factor
+                            + core_col[0] * core_factor)
+                            .clamp(0.0, 255.0) as u8;
+                        pixels[idx + 1] = (pixels[idx + 1] as f32
+                            + glow_col[1] * glow_factor
+                            + core_col[1] * core_factor)
+                            .clamp(0.0, 255.0) as u8;
+                        pixels[idx + 2] = (pixels[idx + 2] as f32
+                            + glow_col[2] * glow_factor
+                            + core_col[2] * core_factor)
+                            .clamp(0.0, 255.0) as u8;
+                        pixels[idx + 3] = (pixels[idx + 3] as f32
+                            + (glow_col[3] * glow_factor + core_col[3] * core_factor) * 0.7)
+                            .clamp(0.0, 255.0) as u8;
                     }
                 }
             }
@@ -303,7 +350,10 @@ pub fn render_laser_beam_to_buffer(
     height: u32,
     config: &LaserBeamConfig,
 ) {
-    let Some(expected_len) = (width as usize).checked_mul(height as usize).and_then(|s| s.checked_mul(4)) else {
+    let Some(expected_len) = (width as usize)
+        .checked_mul(height as usize)
+        .and_then(|s| s.checked_mul(4))
+    else {
         return;
     };
     if pixels.len() != expected_len || width == 0 || height == 0 {
@@ -317,10 +367,13 @@ pub fn render_laser_beam_to_buffer(
     let max_thick = tail_thick.max(head_thick).max(1.0);
     let glow_rad = max_thick * 3.0;
 
-    let min_x = ((tail[0].min(head[0]) - glow_rad).floor() as i32).clamp(0, width as i32 - 1) as u32;
+    let min_x =
+        ((tail[0].min(head[0]) - glow_rad).floor() as i32).clamp(0, width as i32 - 1) as u32;
     let max_x = ((tail[0].max(head[0]) + glow_rad).ceil() as i32).clamp(0, width as i32 - 1) as u32;
-    let min_y = ((tail[1].min(head[1]) - glow_rad).floor() as i32).clamp(0, height as i32 - 1) as u32;
-    let max_y = ((tail[1].max(head[1]) + glow_rad).ceil() as i32).clamp(0, height as i32 - 1) as u32;
+    let min_y =
+        ((tail[1].min(head[1]) - glow_rad).floor() as i32).clamp(0, height as i32 - 1) as u32;
+    let max_y =
+        ((tail[1].max(head[1]) + glow_rad).ceil() as i32).clamp(0, height as i32 - 1) as u32;
 
     let vx = head[0] - tail[0];
     let vy = head[1] - tail[1];
@@ -354,12 +407,26 @@ pub fn render_laser_beam_to_buffer(
             if dist < local_glow {
                 let idx = ((y * width + x) * 4) as usize;
                 let glow_factor = (1.0 - dist / local_glow).powi(2);
-                let core_factor = if dist < local_thick { 1.0 - dist / local_thick } else { 0.0 };
+                let core_factor = if dist < local_thick {
+                    1.0 - dist / local_thick
+                } else {
+                    0.0
+                };
 
-                pixels[idx] = (pixels[idx] as f32 + glow_col[0] * glow_factor + core_col[0] * core_factor).clamp(0.0, 255.0) as u8;
-                pixels[idx + 1] = (pixels[idx + 1] as f32 + glow_col[1] * glow_factor + core_col[1] * core_factor).clamp(0.0, 255.0) as u8;
-                pixels[idx + 2] = (pixels[idx + 2] as f32 + glow_col[2] * glow_factor + core_col[2] * core_factor).clamp(0.0, 255.0) as u8;
-                pixels[idx + 3] = (pixels[idx + 3] as f32 + (glow_col[3] * glow_factor + core_col[3] * core_factor) * 0.8).clamp(0.0, 255.0) as u8;
+                pixels[idx] =
+                    (pixels[idx] as f32 + glow_col[0] * glow_factor + core_col[0] * core_factor)
+                        .clamp(0.0, 255.0) as u8;
+                pixels[idx + 1] = (pixels[idx + 1] as f32
+                    + glow_col[1] * glow_factor
+                    + core_col[1] * core_factor)
+                    .clamp(0.0, 255.0) as u8;
+                pixels[idx + 2] = (pixels[idx + 2] as f32
+                    + glow_col[2] * glow_factor
+                    + core_col[2] * core_factor)
+                    .clamp(0.0, 255.0) as u8;
+                pixels[idx + 3] = (pixels[idx + 3] as f32
+                    + (glow_col[3] * glow_factor + core_col[3] * core_factor) * 0.8)
+                    .clamp(0.0, 255.0) as u8;
             }
         }
     }
@@ -414,8 +481,9 @@ mod tests {
             ..Default::default()
         };
         let points = &generate_lightning_arcs(&config)[0].points;
-        assert!(points.windows(3).any(|w| (w[1][1] - w[0][1]).abs() > 1e-5
-            || (w[2][1] - w[1][1]).abs() > 1e-5));
+        assert!(points
+            .windows(3)
+            .any(|w| (w[1][1] - w[0][1]).abs() > 1e-5 || (w[2][1] - w[1][1]).abs() > 1e-5));
     }
 
     #[test]

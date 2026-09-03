@@ -130,7 +130,14 @@ pub fn apply_radial_fast_blur(
                 let t = s as f32 / (n - 1) as f32;
                 let scale = 1.0 - amt * t;
                 let mut rgba = [0u8; 4];
-                sample_bilinear(&temp, width, height, cx + (x as f32 - cx) * scale, cy + (y as f32 - cy) * scale, &mut rgba);
+                sample_bilinear(
+                    &temp,
+                    width,
+                    height,
+                    cx + (x as f32 - cx) * scale,
+                    cy + (y as f32 - cy) * scale,
+                    &mut rgba,
+                );
                 for c in 0..4 {
                     acc[c] += rgba[c] as f32;
                 }
@@ -356,13 +363,18 @@ mod tests {
     fn test_light_sweep_adds_brightness_in_band_only() {
         let mut img = gradient(32, 32);
         let before = img.clone();
-        apply_light_sweep(&mut img, 32, 32, &LightSweepParams {
-            direction_deg: 0.0,
-            center: 0.5,
-            width: 0.2,
-            sweep_intensity: 0.8,
-            edge_intensity: 0.0,
-        });
+        apply_light_sweep(
+            &mut img,
+            32,
+            32,
+            &LightSweepParams {
+                direction_deg: 0.0,
+                center: 0.5,
+                width: 0.2,
+                sweep_intensity: 0.8,
+                edge_intensity: 0.0,
+            },
+        );
         // Centre column must brighten; far-left column must stay identical.
         let mid = ((16 * 32 + 16) * 4) as usize;
         assert!(img[mid] > before[mid], "band centre should brighten");
@@ -374,7 +386,16 @@ mod tests {
     fn test_light_sweep_zero_intensity_is_identity() {
         let mut img = gradient(16, 16);
         let before = img.clone();
-        apply_light_sweep(&mut img, 16, 16, &LightSweepParams { sweep_intensity: 0.0, edge_intensity: 0.0, ..Default::default() });
+        apply_light_sweep(
+            &mut img,
+            16,
+            16,
+            &LightSweepParams {
+                sweep_intensity: 0.0,
+                edge_intensity: 0.0,
+                ..Default::default()
+            },
+        );
         assert_eq!(img, before);
     }
 
@@ -403,18 +424,24 @@ mod tests {
         // Top row (+5): destination (6,0) shows source (11,0).
         let top_after = (6 * 4) as usize;
         let top_src = (11 * 4) as usize;
-        assert!((img[top_after] as i32 - before[top_src] as i32).abs() <= 1,
-            "top row must shift by +5px");
+        assert!(
+            (img[top_after] as i32 - before[top_src] as i32).abs() <= 1,
+            "top row must shift by +5px"
+        );
         // Bottom row (-5): destination (14,19) shows source (9,19).
         let bot_after = ((19 * 20 + 14) * 4) as usize;
         let bot_src = ((19 * 20 + 9) * 4) as usize;
-        assert!((img[bot_after] as i32 - before[bot_src] as i32).abs() <= 1,
-            "bottom row must shift by -5px");
+        assert!(
+            (img[bot_after] as i32 - before[bot_src] as i32).abs() <= 1,
+            "bottom row must shift by -5px"
+        );
         // Middle row eased shift ≈ ±0.4px on a ~12.75 level/px gradient → small drift.
         let mid_before = ((10 * 20 + 10) * 4) as usize;
         let mid_after = ((10 * 20 + 10) * 4) as usize;
-        assert!((img[mid_after] as i32 - before[mid_before] as i32).abs() <= 8,
-            "middle row must move far less than the edges");
+        assert!(
+            (img[mid_after] as i32 - before[mid_before] as i32).abs() <= 8,
+            "middle row must move far less than the edges"
+        );
     }
 
     #[test]

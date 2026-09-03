@@ -1,5 +1,5 @@
-use serde::{Serialize, Deserialize};
 use crate::core::timeline::Effect;
+use serde::{Deserialize, Serialize};
 
 /// A saved effect preset that can be stored as JSON and applied to any layer.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -35,17 +35,14 @@ impl EffectPreset {
     pub fn save_to_file(&self, path: &std::path::Path) -> Result<(), String> {
         let json = serde_json::to_string_pretty(self)
             .map_err(|e| format!("Serialization error: {}", e))?;
-        std::fs::write(path, json)
-            .map_err(|e| format!("File write error: {}", e))?;
+        std::fs::write(path, json).map_err(|e| format!("File write error: {}", e))?;
         Ok(())
     }
 
     /// Load a preset from a JSON file
     pub fn load_from_file(path: &std::path::Path) -> Result<Self, String> {
-        let json = std::fs::read_to_string(path)
-            .map_err(|e| format!("File read error: {}", e))?;
-        serde_json::from_str(&json)
-            .map_err(|e| format!("Parse error: {}", e))
+        let json = std::fs::read_to_string(path).map_err(|e| format!("File read error: {}", e))?;
+        serde_json::from_str(&json).map_err(|e| format!("Parse error: {}", e))
     }
 
     /// Apply this preset to a layer by creating a new Effect instance
@@ -65,7 +62,8 @@ fn chrono_free_timestamp() -> String {
         .duration_since(UNIX_EPOCH)
         .unwrap_or_default()
         .as_secs();
-    format!("{}-{:02}-{:02}T00:00:00Z",
+    format!(
+        "{}-{:02}-{:02}T00:00:00Z",
         1970 + (secs / 31536000) as u32,
         ((secs % 31536000) / 2592000) % 12 + 1,
         ((secs % 2592000) / 86400) + 1,
@@ -78,7 +76,10 @@ pub fn discover_presets_in_dir(dir: &std::path::Path) -> Vec<(String, std::path:
     if dir.is_dir() {
         for entry in std::fs::read_dir(dir).into_iter().flatten().flatten() {
             let path = entry.path();
-            if path.extension().is_some_and(|e| e == "json" || e == "aevfx-preset") {
+            if path
+                .extension()
+                .is_some_and(|e| e == "json" || e == "aevfx-preset")
+            {
                 if let Ok(preset) = EffectPreset::load_from_file(&path) {
                     presets.push((preset.name.clone(), path));
                 }

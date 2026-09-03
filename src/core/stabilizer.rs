@@ -76,9 +76,13 @@ pub fn stabilize_layer_smoothed(layer: &mut Layer, smooth_radius: usize) -> usiz
     new_kfs.dedup_by(|a, b| a.frame == b.frame);
 
     layer.transform.position = Animatable::Animated(new_kfs);
-    layer.transform.position.keyframes().map(|k| k.len()).unwrap_or(0)
+    layer
+        .transform
+        .position
+        .keyframes()
+        .map(|k| k.len())
+        .unwrap_or(0)
 }
-
 
 /// Windowed moving average over a track path (clamped at the ends).
 fn moving_average_smooth(track: &[(u32, [f32; 2])], radius: usize) -> Vec<(u32, [f32; 2])> {
@@ -102,10 +106,18 @@ mod tests {
     use crate::core::timeline::{LayerType, TrackerPoint};
 
     fn make_layer(track: Vec<(u32, [f32; 2])>) -> Layer {
-        let mut l = Layer::new("l".into(), "L".into(), LayerType::Solid { color: [1.0; 4] }, 30);
+        let mut l = Layer::new(
+            "l".into(),
+            "L".into(),
+            LayerType::Solid { color: [1.0; 4] },
+            30,
+        );
         l.transform.position = Animatable::new_constant([500.0, 400.0]);
         let mut tp = TrackerPoint::new("t".into(), "T".into(), track[0].1);
-        let kfs: Vec<Keyframe<[f32; 2]>> = track.iter().map(|&(f, p)| Keyframe::new(f, p, InterpolationType::Linear)).collect();
+        let kfs: Vec<Keyframe<[f32; 2]>> = track
+            .iter()
+            .map(|&(f, p)| Keyframe::new(f, p, InterpolationType::Linear))
+            .collect();
         tp.position = Animatable::Animated(kfs);
         l.trackers.push(tp);
         l
@@ -114,7 +126,11 @@ mod tests {
     #[test]
     fn test_stabilize_bakes_counter_motion() {
         // Tracker wanders +10x/+5y over 3 frames.
-        let mut l = make_layer(vec![(0, [100.0, 100.0]), (1, [110.0, 105.0]), (2, [120.0, 110.0])]);
+        let mut l = make_layer(vec![
+            (0, [100.0, 100.0]),
+            (1, [110.0, 105.0]),
+            (2, [120.0, 110.0]),
+        ]);
         let n = stabilize_layer(&mut l);
         assert_eq!(n, 3);
         assert!(matches!(l.transform.position, Animatable::Animated(_)));
@@ -127,7 +143,12 @@ mod tests {
 
     #[test]
     fn test_stabilize_without_trackers_is_noop() {
-        let mut l = Layer::new("l".into(), "L".into(), LayerType::Solid { color: [1.0; 4] }, 30);
+        let mut l = Layer::new(
+            "l".into(),
+            "L".into(),
+            LayerType::Solid { color: [1.0; 4] },
+            30,
+        );
         l.transform.position = Animatable::new_constant([10.0, 20.0]);
         assert_eq!(stabilize_layer(&mut l), 0);
         assert_eq!(l.transform.position.evaluate(0), [10.0, 20.0]);
@@ -155,7 +176,9 @@ mod tests {
         let n_sm = stabilize_layer_smoothed(&mut l2, 1);
         assert_eq!(n_raw, n_sm);
         // Smoothed bake differs from raw bake at interior frames.
-        assert_ne!(l.transform.position.evaluate(4), l2.transform.position.evaluate(4));
+        assert_ne!(
+            l.transform.position.evaluate(4),
+            l2.transform.position.evaluate(4)
+        );
     }
-
 }

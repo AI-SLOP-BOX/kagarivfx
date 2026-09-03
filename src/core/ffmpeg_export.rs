@@ -111,6 +111,20 @@ where
         return Err(msg);
     }
 
+    // Validate paths: reject anything starting with '-' (FFmpeg arg injection)
+    if let Some(wav) = &config.audio_wav {
+        if wav.starts_with('-') {
+            let msg = format!("audio_wav path must not start with '-': {}", wav);
+            let _ = tx.send(ExportEvent::Error(msg.clone()));
+            return Err(msg);
+        }
+    }
+    if config.output_path.starts_with('-') {
+        let msg = format!("output_path must not start with '-': {}", config.output_path);
+        let _ = tx.send(ExportEvent::Error(msg.clone()));
+        return Err(msg);
+    }
+
     let config_clone = config.clone();
     std::thread::Builder::new()
         .name("ffmpeg_export".to_string())
@@ -340,6 +354,13 @@ where
 {
     if !is_ffmpeg_available() {
         let msg = "FFmpeg not found. Install it via `brew install ffmpeg` (macOS) or your package manager.".to_string();
+        let _ = tx.send(ExportEvent::Error(msg.clone()));
+        return Err(msg);
+    }
+
+    // Validate paths: reject anything starting with '-' (FFmpeg arg injection)
+    if config.output_path.starts_with('-') {
+        let msg = format!("output_path must not start with '-': {}", config.output_path);
         let _ = tx.send(ExportEvent::Error(msg.clone()));
         return Err(msg);
     }

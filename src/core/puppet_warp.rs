@@ -7,12 +7,7 @@
 //! sampled bilinearly from the pre-warp copy.
 
 /// Pins as `(source_xy, current_xy)` pairs in buffer pixel coordinates.
-pub fn warp_layer_buf(
-    buf: &mut [u8],
-    w: u32,
-    h: u32,
-    pins: &[([f32; 2], [f32; 2])],
-) {
+pub fn warp_layer_buf(buf: &mut [u8], w: u32, h: u32, pins: &[([f32; 2], [f32; 2])]) {
     if w == 0 || h == 0 || pins.is_empty() {
         return;
     }
@@ -29,8 +24,6 @@ pub fn warp_layer_buf(
     }
 
     let src = buf.to_vec();
-
-
 
     for py in 0..h {
         for px in 0..w {
@@ -127,9 +120,24 @@ fn delaunay_triangulate(points: &[TriPoint]) -> Vec<Triangle> {
 
     // Build working array: super-triangle vertices first, then real points
     let mut all: Vec<TriPoint> = Vec::with_capacity(points.len() + 3);
-    all.push(TriPoint { x: midx + 2.0 * dmax, y: midy - dmax, dx: 0.0, dy: 0.0 });
-    all.push(TriPoint { x: midx, y: midy + 2.0 * dmax, dx: 0.0, dy: 0.0 });
-    all.push(TriPoint { x: midx - 2.0 * dmax, y: midy - dmax, dx: 0.0, dy: 0.0 });
+    all.push(TriPoint {
+        x: midx + 2.0 * dmax,
+        y: midy - dmax,
+        dx: 0.0,
+        dy: 0.0,
+    });
+    all.push(TriPoint {
+        x: midx,
+        y: midy + 2.0 * dmax,
+        dx: 0.0,
+        dy: 0.0,
+    });
+    all.push(TriPoint {
+        x: midx - 2.0 * dmax,
+        y: midy - dmax,
+        dx: 0.0,
+        dy: 0.0,
+    });
     let super_count = 3;
     all.extend_from_slice(points);
 
@@ -169,7 +177,10 @@ fn delaunay_triangulate(points: &[TriPoint]) -> Vec<Triangle> {
     // Remove triangles that touch any super-triangle vertex
     triangles.retain(|tri| tri.0 >= super_count && tri.1 >= super_count && tri.2 >= super_count);
     // Shift indices back: subtract super_count to map back to original points
-    triangles.iter().map(|t| Triangle(t.0 - super_count, t.1 - super_count, t.2 - super_count)).collect()
+    triangles
+        .iter()
+        .map(|t| Triangle(t.0 - super_count, t.1 - super_count, t.2 - super_count))
+        .collect()
 }
 
 fn in_circumcircle(px: f32, py: f32, a: TriPoint, b: TriPoint, c: TriPoint) -> bool {
@@ -179,13 +190,18 @@ fn in_circumcircle(px: f32, py: f32, a: TriPoint, b: TriPoint, c: TriPoint) -> b
     let by = b.y - py;
     let cx = c.x - px;
     let cy = c.y - py;
-    let det = (ax * ax + ay * ay) * (bx * cy - cx * by)
-        - (bx * bx + by * by) * (ax * cy - cx * ay)
+    let det = (ax * ax + ay * ay) * (bx * cy - cx * by) - (bx * bx + by * by) * (ax * cy - cx * ay)
         + (cx * cx + cy * cy) * (ax * by - bx * ay);
     det > 0.0
 }
 
-fn barycentric_coords(px: f32, py: f32, a: (f32, f32), b: (f32, f32), c: (f32, f32)) -> Option<(f32, f32, f32)> {
+fn barycentric_coords(
+    px: f32,
+    py: f32,
+    a: (f32, f32),
+    b: (f32, f32),
+    c: (f32, f32),
+) -> Option<(f32, f32, f32)> {
     let v0x = b.0 - a.0;
     let v0y = b.1 - a.1;
     let v1x = c.0 - a.0;
@@ -209,12 +225,7 @@ fn barycentric_coords(px: f32, py: f32, a: (f32, f32), b: (f32, f32), c: (f32, f
 
 /// Mesh-based warp using Delaunay triangulation + barycentric interpolation.
 /// Produces smoother, more predictable deformation than Shepard interpolation.
-pub fn warp_layer_buf_mesh(
-    buf: &mut [u8],
-    w: u32,
-    h: u32,
-    pins: &[([f32; 2], [f32; 2])],
-) {
+pub fn warp_layer_buf_mesh(buf: &mut [u8], w: u32, h: u32, pins: &[([f32; 2], [f32; 2])]) {
     if w == 0 || h == 0 || pins.is_empty() {
         return;
     }
@@ -229,17 +240,33 @@ pub fn warp_layer_buf_mesh(
             break;
         }
     }
-    if !moved { return; }
+    if !moved {
+        return;
+    }
 
-    let mut points: Vec<TriPoint> = pins.iter().map(|(s, d)| TriPoint {
-        x: s[0], y: s[1], dx: d[0] - s[0], dy: d[1] - s[1],
-    }).collect();
+    let mut points: Vec<TriPoint> = pins
+        .iter()
+        .map(|(s, d)| TriPoint {
+            x: s[0],
+            y: s[1],
+            dx: d[0] - s[0],
+            dy: d[1] - s[1],
+        })
+        .collect();
     // Add boundary corner points (no displacement) for full coverage
     let corners: &[[f32; 2]] = &[
-        [0.0, 0.0], [w as f32, 0.0], [w as f32, h as f32], [0.0, h as f32],
+        [0.0, 0.0],
+        [w as f32, 0.0],
+        [w as f32, h as f32],
+        [0.0, h as f32],
     ];
     for c in corners {
-        points.push(TriPoint { x: c[0], y: c[1], dx: 0.0, dy: 0.0 });
+        points.push(TriPoint {
+            x: c[0],
+            y: c[1],
+            dx: 0.0,
+            dy: 0.0,
+        });
     }
 
     let triangles = delaunay_triangulate(&points);
@@ -256,10 +283,9 @@ pub fn warp_layer_buf_mesh(
                 let a = points[tri.0];
                 let b = points[tri.1];
                 let c = points[tri.2];
-                if let Some((u, v, w_b)) = barycentric_coords(
-                    ppx, ppy,
-                    (a.x, a.y), (b.x, b.y), (c.x, c.y),
-                ) {
+                if let Some((u, v, w_b)) =
+                    barycentric_coords(ppx, ppy, (a.x, a.y), (b.x, b.y), (c.x, c.y))
+                {
                     if u >= -0.001 && v >= -0.001 && w_b >= -0.001 {
                         let dx = u * a.dx + v * b.dx + w_b * c.dx;
                         let dy = u * a.dy + v * b.dy + w_b * c.dy;
@@ -276,8 +302,15 @@ pub fn warp_layer_buf_mesh(
                                 return [0.0; 4];
                             }
                             let idx = ((yy as u32 * w + xx as u32) * 4) as usize;
-                            if idx + 3 >= src.len() { return [0.0; 4]; }
-                            [src[idx] as f32, src[idx+1] as f32, src[idx+2] as f32, src[idx+3] as f32]
+                            if idx + 3 >= src.len() {
+                                return [0.0; 4];
+                            }
+                            [
+                                src[idx] as f32,
+                                src[idx + 1] as f32,
+                                src[idx + 2] as f32,
+                                src[idx + 3] as f32,
+                            ]
                         };
                         let c00 = sample(x0i, y0i);
                         let c10 = sample(x0i + 1, y0i);
@@ -285,7 +318,9 @@ pub fn warp_layer_buf_mesh(
                         let c11 = sample(x0i + 1, y0i + 1);
                         let lerp = |a: f32, b: f32, t: f32| a + (b - a) * t;
                         let idx = ((py * w + px) * 4) as usize;
-                        if idx + 3 >= buf.len() { continue; }
+                        if idx + 3 >= buf.len() {
+                            continue;
+                        }
                         for ch in 0..4 {
                             let top = lerp(c00[ch], c10[ch], fx);
                             let bot = lerp(c01[ch], c11[ch], fx);
@@ -305,7 +340,10 @@ mod tests {
     fn solid(w: u32, h: u32) -> Vec<u8> {
         let mut v = vec![0u8; (w * h * 4) as usize];
         for p in v.chunks_exact_mut(4) {
-            p[0] = 100; p[1] = 100; p[2] = 100; p[3] = 255;
+            p[0] = 100;
+            p[1] = 100;
+            p[2] = 100;
+            p[3] = 255;
         }
         v
     }
@@ -338,10 +376,30 @@ mod tests {
     #[test]
     fn test_delaunay_triangulate_basic() {
         let pts = vec![
-            TriPoint { x: 0.0, y: 0.0, dx: 0.0, dy: 0.0 },
-            TriPoint { x: 4.0, y: 0.0, dx: 0.0, dy: 0.0 },
-            TriPoint { x: 2.0, y: 3.0, dx: 0.0, dy: 0.0 },
-            TriPoint { x: 1.0, y: 1.0, dx: 0.0, dy: 0.0 },
+            TriPoint {
+                x: 0.0,
+                y: 0.0,
+                dx: 0.0,
+                dy: 0.0,
+            },
+            TriPoint {
+                x: 4.0,
+                y: 0.0,
+                dx: 0.0,
+                dy: 0.0,
+            },
+            TriPoint {
+                x: 2.0,
+                y: 3.0,
+                dx: 0.0,
+                dy: 0.0,
+            },
+            TriPoint {
+                x: 1.0,
+                y: 1.0,
+                dx: 0.0,
+                dy: 0.0,
+            },
         ];
         let tris = delaunay_triangulate(&pts);
         assert!(!tris.is_empty(), "expected triangles, got 0");
@@ -370,13 +428,18 @@ mod tests {
     #[test]
     fn test_warp_mesh_moves_pixels() {
         let mut img = solid(4, 4);
-        warp_layer_buf_mesh(&mut img, 4, 4, &[
-            ([0.0, 0.0], [0.0, 0.0]),
-            ([4.0, 0.0], [4.0, 0.0]),
-            ([4.0, 4.0], [4.0, 4.0]),
-            ([0.0, 4.0], [0.0, 4.0]),
-            ([2.0, 2.0], [3.0, 2.0]),
-        ]);
+        warp_layer_buf_mesh(
+            &mut img,
+            4,
+            4,
+            &[
+                ([0.0, 0.0], [0.0, 0.0]),
+                ([4.0, 0.0], [4.0, 0.0]),
+                ([4.0, 4.0], [4.0, 4.0]),
+                ([0.0, 4.0], [0.0, 4.0]),
+                ([2.0, 2.0], [3.0, 2.0]),
+            ],
+        );
         // Should execute without panic
         assert!(img.iter().any(|&b| b > 0));
     }
@@ -386,8 +449,12 @@ mod tests {
         let mut a = solid(4, 4);
         let orig = a.clone();
         // Only 2 pins — should fall back to shepard (which is a noop when unmoved)
-        warp_layer_buf_mesh(&mut a, 4, 4, &[([1.0, 1.0], [1.0, 1.0]), ([3.0, 3.0], [3.0, 3.0])]);
+        warp_layer_buf_mesh(
+            &mut a,
+            4,
+            4,
+            &[([1.0, 1.0], [1.0, 1.0]), ([3.0, 3.0], [3.0, 3.0])],
+        );
         assert_eq!(a, orig);
     }
 }
-

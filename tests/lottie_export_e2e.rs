@@ -21,7 +21,9 @@ fn project_with_layers(layer_count: usize, bg: [f32; 4]) -> Project {
         comp.layers.push(Layer::new(
             format!("l{i}"),
             format!("Solid {i}"),
-            LayerType::Solid { color: [1.0, 0.0, 0.0, 1.0] },
+            LayerType::Solid {
+                color: [1.0, 0.0, 0.0, 1.0],
+            },
             30,
         ));
     }

@@ -197,7 +197,8 @@ mod tests {
 
     #[test]
     fn failed_reload_and_deleted_source_do_not_expose_stale_pixels() {
-        let dir = std::env::temp_dir().join(format!("aevfx_image_cache_stale_{}", std::process::id()));
+        let dir =
+            std::env::temp_dir().join(format!("aevfx_image_cache_stale_{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         let path = dir.join("stale.png");

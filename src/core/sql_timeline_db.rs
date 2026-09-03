@@ -34,7 +34,13 @@ impl SqlTimelineDb {
     }
 
     /// Inserts a new keyframe record into the relational DB index.
-    pub fn insert_keyframe(&mut self, layer_id: &str, property_name: &str, frame: u32, value: f32) -> u64 {
+    pub fn insert_keyframe(
+        &mut self,
+        layer_id: &str,
+        property_name: &str,
+        frame: u32,
+        value: f32,
+    ) -> u64 {
         let id = self.next_id;
         self.next_id += 1;
 
@@ -57,12 +63,21 @@ impl SqlTimelineDb {
     }
 
     /// SQL Query: `SELECT * FROM keyframes WHERE layer_id = ? AND frame BETWEEN ? AND ?`
-    pub fn query_range(&self, layer_id: &str, property_name: &str, start_frame: u32, end_frame: u32) -> Vec<&KeyframeRecord> {
+    pub fn query_range(
+        &self,
+        layer_id: &str,
+        property_name: &str,
+        start_frame: u32,
+        end_frame: u32,
+    ) -> Vec<&KeyframeRecord> {
         let mut results = Vec::new();
         if let Some(indices) = self.index_by_layer.get(layer_id) {
             for &idx in indices {
                 let rec = &self.records[idx];
-                if rec.property_name == property_name && rec.frame >= start_frame && rec.frame <= end_frame {
+                if rec.property_name == property_name
+                    && rec.frame >= start_frame
+                    && rec.frame <= end_frame
+                {
                     results.push(rec);
                 }
             }

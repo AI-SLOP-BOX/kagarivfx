@@ -4,25 +4,38 @@
 //! that parsing never panics, rendering never panics, and the expression engine
 //! always returns (fallback or value — never a crash or hang).
 
-use aftereffects_oss::core::timeline::{Composition, Layer, LayerType, Project};
+use aftereffects_oss::core::expression_engine::{build_engine, eval_f32};
 use aftereffects_oss::core::property::Animatable;
 use aftereffects_oss::core::software_renderer::render_frame_to_pixels;
-use aftereffects_oss::core::expression_engine::{build_engine, eval_f32};
+use aftereffects_oss::core::timeline::{Composition, Layer, LayerType, Project};
 
 fn seed_project_json() -> String {
     let mut comp = Composition::new("c1".into(), "Seed".into(), 32, 32, 30, 30);
-    let mut l = Layer::new("l1".into(), "Solid".into(), LayerType::Solid { color: [0.5; 4] }, 30);
+    let mut l = Layer::new(
+        "l1".into(),
+        "Solid".into(),
+        LayerType::Solid { color: [0.5; 4] },
+        30,
+    );
     l.transform.position = Animatable::new_animated(vec![
-        aftereffects_oss::core::keyframe::Keyframe::new(0, [16.0, 16.0], aftereffects_oss::core::keyframe::InterpolationType::Linear),
-        aftereffects_oss::core::keyframe::Keyframe::new(29, [20.0, 20.0], aftereffects_oss::core::keyframe::InterpolationType::Bezier {
-            outgoing: aftereffects_oss::core::keyframe::BezierControlPoint::default(),
-            incoming: aftereffects_oss::core::keyframe::BezierControlPoint::default(),
-            custom_bezier: Some([0.33; 4]),
-        }),
+        aftereffects_oss::core::keyframe::Keyframe::new(
+            0,
+            [16.0, 16.0],
+            aftereffects_oss::core::keyframe::InterpolationType::Linear,
+        ),
+        aftereffects_oss::core::keyframe::Keyframe::new(
+            29,
+            [20.0, 20.0],
+            aftereffects_oss::core::keyframe::InterpolationType::Bezier {
+                outgoing: aftereffects_oss::core::keyframe::BezierControlPoint::default(),
+                incoming: aftereffects_oss::core::keyframe::BezierControlPoint::default(),
+                custom_bezier: Some([0.33; 4]),
+            },
+        ),
     ]);
     comp.layers.push(l);
     serde_json::to_string(&Project {
-            use_gpu_compute: false,
+        use_gpu_compute: false,
         compositions: vec![comp],
         active_composition_idx: 0,
         assets: Vec::new(),
@@ -79,14 +92,8 @@ fn fuzz_mutated_project_json_never_panics() {
         if let Ok(project) = serde_json::from_str::<Project>(&payload) {
             // If it parses, rendering must never panic either
             for frame in [0u32, 15] {
-                let pixels = render_frame_to_pixels(
-                    &project.compositions[0],
-                    frame,
-                    32,
-                    32,
-                    0.0,
-                    0,
-                );
+                let pixels =
+                    render_frame_to_pixels(&project.compositions[0], frame, 32, 32, 0.0, 0);
                 assert_eq!(pixels.len(), 32 * 32 * 4);
             }
         }
@@ -98,16 +105,41 @@ fn fuzz_expression_scripts_never_crash_or_hang() {
     let engine = build_engine();
     // Token soup: operators, functions, nesting, huge numbers, deep parens
     let tokens: Vec<String> = vec![
-        "1".into(), "0".into(), "-1".into(), "1e308".into(), "value".into(),
-        "time".into(), "frame".into(), "fps".into(),
-        "+".into(), "-".into(), "*".into(), "/".into(), "%".into(),
-        "(".into(), ")".into(), "[".into(), "]".into(), ",".into(),
-        "sin(".into(), "cos(".into(), "abs(".into(), "clamp(".into(),
-        "wiggle(".into(), "linear(".into(),
-        "ease(".into(), "loopOut()".into(), "__loop_out_cycle".into(),
+        "1".into(),
+        "0".into(),
+        "-1".into(),
+        "1e308".into(),
+        "value".into(),
+        "time".into(),
+        "frame".into(),
+        "fps".into(),
+        "+".into(),
+        "-".into(),
+        "*".into(),
+        "/".into(),
+        "%".into(),
+        "(".into(),
+        ")".into(),
+        "[".into(),
+        "]".into(),
+        ",".into(),
+        "sin(".into(),
+        "cos(".into(),
+        "abs(".into(),
+        "clamp(".into(),
+        "wiggle(".into(),
+        "linear(".into(),
+        "ease(".into(),
+        "loopOut()".into(),
+        "__loop_out_cycle".into(),
         "thisComp.layer(\"x\").transform.position[0]".into(),
-        ";".into(), "let x =".into(), "if true { 1 } else { 0 }".into(),
-        "true".into(), "false".into(), "\"str\"".into(), "9".repeat(40),
+        ";".into(),
+        "let x =".into(),
+        "if true { 1 } else { 0 }".into(),
+        "true".into(),
+        "false".into(),
+        "\"str\"".into(),
+        "9".repeat(40),
     ];
 
     let mut rng = Rng(0xCAFEBABE);
@@ -148,18 +180,33 @@ fn rendering_is_deterministic_same_input_same_bytes() {
     // Determinism is a hard requirement: caching, undo, and export all assume
     // that the same project + frame always produces byte-identical output.
     let mut comp = Composition::new("c".into(), "Determinism".into(), 64, 64, 30, 30);
-    let mut l = Layer::new("s".into(), "Solid".into(), LayerType::Solid { color: [0.7, 0.2, 0.4, 1.0] }, 30);
+    let mut l = Layer::new(
+        "s".into(),
+        "Solid".into(),
+        LayerType::Solid {
+            color: [0.7, 0.2, 0.4, 1.0],
+        },
+        30,
+    );
     l.transform.position = Animatable::new_animated(vec![
-        aftereffects_oss::core::keyframe::Keyframe::new(0, [20.0, 32.0], aftereffects_oss::core::keyframe::InterpolationType::Bezier {
-            outgoing: aftereffects_oss::core::keyframe::BezierControlPoint::default(),
-            incoming: aftereffects_oss::core::keyframe::BezierControlPoint::default(),
-            custom_bezier: Some([0.25, 0.1, 0.25, 1.0]),
-        }),
-        aftereffects_oss::core::keyframe::Keyframe::new(29, [44.0, 32.0], aftereffects_oss::core::keyframe::InterpolationType::Bezier {
-            outgoing: aftereffects_oss::core::keyframe::BezierControlPoint::default(),
-            incoming: aftereffects_oss::core::keyframe::BezierControlPoint::default(),
-            custom_bezier: Some([0.25, 0.1, 0.25, 1.0]),
-        }),
+        aftereffects_oss::core::keyframe::Keyframe::new(
+            0,
+            [20.0, 32.0],
+            aftereffects_oss::core::keyframe::InterpolationType::Bezier {
+                outgoing: aftereffects_oss::core::keyframe::BezierControlPoint::default(),
+                incoming: aftereffects_oss::core::keyframe::BezierControlPoint::default(),
+                custom_bezier: Some([0.25, 0.1, 0.25, 1.0]),
+            },
+        ),
+        aftereffects_oss::core::keyframe::Keyframe::new(
+            29,
+            [44.0, 32.0],
+            aftereffects_oss::core::keyframe::InterpolationType::Bezier {
+                outgoing: aftereffects_oss::core::keyframe::BezierControlPoint::default(),
+                incoming: aftereffects_oss::core::keyframe::BezierControlPoint::default(),
+                custom_bezier: Some([0.25, 0.1, 0.25, 1.0]),
+            },
+        ),
     ]);
     comp.layers.push(l);
 
@@ -175,13 +222,27 @@ fn rendering_is_deterministic_same_input_same_bytes() {
 #[test]
 fn roundtrip_project_json_preserves_render() {
     // Save → load → render must produce identical pixels (serialization fidelity)
-    use aftereffects_oss::core::project_migration::{save_project_versioned, load_project_migrated};
+    use aftereffects_oss::core::project_migration::{
+        load_project_migrated, save_project_versioned,
+    };
     let mut comp = Composition::new("c".into(), "Roundtrip".into(), 48, 48, 30, 30);
-    let mut l = Layer::new("s".into(), "Shape".into(), LayerType::Solid { color: [0.3, 0.9, 0.5, 1.0] }, 30);
+    let mut l = Layer::new(
+        "s".into(),
+        "Shape".into(),
+        LayerType::Solid {
+            color: [0.3, 0.9, 0.5, 1.0],
+        },
+        30,
+    );
     l.transform.rotation = Animatable::new_constant(33.0);
     l.transform.position = Animatable::new_constant([24.0, 24.0]);
     comp.layers.push(l);
-    let project = Project { compositions: vec![comp], active_composition_idx: 0, assets: Vec::new(), use_gpu_compute: false };
+    let project = Project {
+        compositions: vec![comp],
+        active_composition_idx: 0,
+        assets: Vec::new(),
+        use_gpu_compute: false,
+    };
 
     let before = render_frame_to_pixels(&project.compositions[0], 0, 48, 48, 0.0, 0);
 
@@ -189,5 +250,8 @@ fn roundtrip_project_json_preserves_render() {
     let loaded = load_project_migrated(&json).expect("deserialize");
     let after = render_frame_to_pixels(&loaded.compositions[0], 0, 48, 48, 0.0, 0);
 
-    assert_eq!(before, after, "render must survive a save/load roundtrip byte-for-byte");
+    assert_eq!(
+        before, after,
+        "render must survive a save/load roundtrip byte-for-byte"
+    );
 }

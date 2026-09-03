@@ -123,8 +123,17 @@ impl Default for DirectionalSmearParams {
 }
 
 /// Smear trailing blur along an arbitrary angle.
-pub fn apply_directional_smear(pixels: &mut [u8], width: u32, height: u32, p: &DirectionalSmearParams) {
-    if width == 0 || height == 0 || p.length <= 0.001 || pixels.len() < (width as usize) * (height as usize) * 4 {
+pub fn apply_directional_smear(
+    pixels: &mut [u8],
+    width: u32,
+    height: u32,
+    p: &DirectionalSmearParams,
+) {
+    if width == 0
+        || height == 0
+        || p.length <= 0.001
+        || pixels.len() < (width as usize) * (height as usize) * 4
+    {
         return;
     }
     let src = pixels.to_vec();
@@ -188,7 +197,11 @@ impl Default for CardWipeParams {
 
 /// Grid-based rotating 3D card wipe transition.
 pub fn apply_card_wipe(pixels: &mut [u8], width: u32, height: u32, p: &CardWipeParams) {
-    if width == 0 || height == 0 || p.progress <= 0.0 || pixels.len() < (width as usize) * (height as usize) * 4 {
+    if width == 0
+        || height == 0
+        || p.progress <= 0.0
+        || pixels.len() < (width as usize) * (height as usize) * 4
+    {
         return;
     }
     let src = pixels.to_vec();
@@ -251,27 +264,49 @@ const GLYPH_HEIGHT: usize = 7;
 
 static GLYPHS: [[u8; 7]; 11] = [
     // '0'
-    [0b01110, 0b10001, 0b10011, 0b10101, 0b11001, 0b10001, 0b01110],
+    [
+        0b01110, 0b10001, 0b10011, 0b10101, 0b11001, 0b10001, 0b01110,
+    ],
     // '1'
-    [0b00100, 0b01100, 0b00100, 0b00100, 0b00100, 0b00100, 0b01110],
+    [
+        0b00100, 0b01100, 0b00100, 0b00100, 0b00100, 0b00100, 0b01110,
+    ],
     // '2'
-    [0b01110, 0b10001, 0b00001, 0b00110, 0b01000, 0b10000, 0b11111],
+    [
+        0b01110, 0b10001, 0b00001, 0b00110, 0b01000, 0b10000, 0b11111,
+    ],
     // '3'
-    [0b01110, 0b10001, 0b00001, 0b00110, 0b00001, 0b10001, 0b01110],
+    [
+        0b01110, 0b10001, 0b00001, 0b00110, 0b00001, 0b10001, 0b01110,
+    ],
     // '4'
-    [0b00010, 0b00110, 0b01010, 0b10010, 0b11111, 0b00010, 0b00010],
+    [
+        0b00010, 0b00110, 0b01010, 0b10010, 0b11111, 0b00010, 0b00010,
+    ],
     // '5'
-    [0b11111, 0b10000, 0b11110, 0b00001, 0b00001, 0b10001, 0b01110],
+    [
+        0b11111, 0b10000, 0b11110, 0b00001, 0b00001, 0b10001, 0b01110,
+    ],
     // '6'
-    [0b01110, 0b10000, 0b11110, 0b10001, 0b10001, 0b10001, 0b01110],
+    [
+        0b01110, 0b10000, 0b11110, 0b10001, 0b10001, 0b10001, 0b01110,
+    ],
     // '7'
-    [0b11111, 0b00001, 0b00010, 0b00100, 0b01000, 0b01000, 0b01000],
+    [
+        0b11111, 0b00001, 0b00010, 0b00100, 0b01000, 0b01000, 0b01000,
+    ],
     // '8'
-    [0b01110, 0b10001, 0b10001, 0b01110, 0b10001, 0b10001, 0b01110],
+    [
+        0b01110, 0b10001, 0b10001, 0b01110, 0b10001, 0b10001, 0b01110,
+    ],
     // '9'
-    [0b01110, 0b10001, 0b10001, 0b01111, 0b00001, 0b00001, 0b01110],
+    [
+        0b01110, 0b10001, 0b10001, 0b01111, 0b00001, 0b00001, 0b01110,
+    ],
     // ':'
-    [0b00000, 0b00100, 0b00100, 0b00000, 0b00100, 0b00100, 0b00000],
+    [
+        0b00000, 0b00100, 0b00100, 0b00000, 0b00100, 0b00100, 0b00000,
+    ],
 ];
 
 fn get_glyph_row(ch: char, row: usize) -> u8 {
@@ -395,9 +430,9 @@ pub fn apply_timecode_burn_in(pixels: &mut [u8], width: u32, height: u32, p: &Ti
 #[derive(Debug, Clone, Copy)]
 pub struct VignetteParams {
     pub center: [f32; 2],
-    pub amount: f32,       // 0..1 darkness intensity
-    pub radius: f32,       // 0..1 normalized size of clear center
-    pub feather: f32,      // 0..1 smoothness of edge transition
+    pub amount: f32,  // 0..1 darkness intensity
+    pub radius: f32,  // 0..1 normalized size of clear center
+    pub feather: f32, // 0..1 smoothness of edge transition
     pub tint_color: [f32; 4],
 }
 
@@ -415,7 +450,11 @@ impl Default for VignetteParams {
 
 /// Oval vignette with tint and smooth feather falloff.
 pub fn apply_advanced_vignette(pixels: &mut [u8], width: u32, height: u32, p: &VignetteParams) {
-    if width == 0 || height == 0 || p.amount <= 0.001 || pixels.len() < (width as usize) * (height as usize) * 4 {
+    if width == 0
+        || height == 0
+        || p.amount <= 0.001
+        || pixels.len() < (width as usize) * (height as usize) * 4
+    {
         return;
     }
     let cx = p.center[0] * width as f32;
@@ -439,7 +478,8 @@ pub fn apply_advanced_vignette(pixels: &mut [u8], width: u32, height: u32, p: &V
 
                 let idx = ((y * width + x) * 4) as usize;
                 for c in 0..3 {
-                    let tinted = pixels[idx + c] as f32 * dark_fac + p.tint_color[c] * 255.0 * (1.0 - dark_fac);
+                    let tinted = pixels[idx + c] as f32 * dark_fac
+                        + p.tint_color[c] * 255.0 * (1.0 - dark_fac);
                     pixels[idx + c] = tinted.clamp(0.0, 255.0) as u8;
                 }
             }
@@ -476,7 +516,11 @@ mod tests {
         let (w, h) = (16, 16);
         let orig = vec![200u8; (w * h * 4) as usize];
         let mut pixels = orig.clone();
-        let p = CardWipeParams { progress: 0.0, cols: 4, rows: 4 };
+        let p = CardWipeParams {
+            progress: 0.0,
+            cols: 4,
+            rows: 4,
+        };
         apply_card_wipe(&mut pixels, w, h, &p);
         assert_eq!(pixels, orig);
     }

@@ -40,10 +40,17 @@ pub fn apply_bend_warp(
     dst_pixels: &mut [u8],
     config: &BendWarpConfig,
 ) {
-    let Some(expected_len) = (width as usize).checked_mul(height as usize).and_then(|s| s.checked_mul(4)) else {
+    let Some(expected_len) = (width as usize)
+        .checked_mul(height as usize)
+        .and_then(|s| s.checked_mul(4))
+    else {
         return;
     };
-    if src_pixels.len() != expected_len || dst_pixels.len() != expected_len || width == 0 || height == 0 {
+    if src_pixels.len() != expected_len
+        || dst_pixels.len() != expected_len
+        || width == 0
+        || height == 0
+    {
         return;
     }
 
@@ -75,7 +82,7 @@ pub fn apply_bend_warp(
             // Project onto start-end local coordinate system
             let vx = px - p0[0];
             let vy = py - p0[1];
-            let u = vx * dir[0] + vy * dir[1];     // Along axis distance
+            let u = vx * dir[0] + vy * dir[1]; // Along axis distance
 
             let norm_u = (u / axis_len).clamp(0.0, 1.0);
 
@@ -89,9 +96,7 @@ pub fn apply_bend_warp(
                     let factor = (1.0 - (norm_u - 0.5).abs() * 2.0).max(0.0);
                     factor * bend * 100.0
                 }
-                BendWarpType::Twist => {
-                    (norm_u * std::f32::consts::PI).sin() * (bend * 80.0)
-                }
+                BendWarpType::Twist => (norm_u * std::f32::consts::PI).sin() * (bend * 80.0),
             };
 
             // Inverse sample coordinate
@@ -100,7 +105,11 @@ pub fn apply_bend_warp(
 
             let dst_idx = (y as usize * w + x as usize) * 4;
 
-            if src_x >= 0.0 && src_x <= (width - 1) as f32 && src_y >= 0.0 && src_y <= (height - 1) as f32 {
+            if src_x >= 0.0
+                && src_x <= (width - 1) as f32
+                && src_y >= 0.0
+                && src_y <= (height - 1) as f32
+            {
                 let x0 = (src_x.floor() as usize).min(width as usize - 1);
                 let y0 = (src_y.floor() as usize).min(height as usize - 1);
                 let x1 = (x0 + 1).min(width as usize - 1);

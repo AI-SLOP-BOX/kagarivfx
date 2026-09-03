@@ -2,10 +2,10 @@
 //! These verify the renderer stays bounded in time/memory and never panics
 //! under pathological-but-plausible project sizes.
 
-use aftereffects_oss::core::timeline::{Composition, Layer, LayerType};
+use aftereffects_oss::core::keyframe::{InterpolationType, Keyframe};
 use aftereffects_oss::core::property::Animatable;
-use aftereffects_oss::core::keyframe::{Keyframe, InterpolationType};
 use aftereffects_oss::core::software_renderer::render_frame_to_pixels;
+use aftereffects_oss::core::timeline::{Composition, Layer, LayerType};
 
 #[test]
 fn stress_many_layers_render_bounded() {
@@ -15,13 +15,13 @@ fn stress_many_layers_render_bounded() {
         let mut l = Layer::new(
             format!("l{}", i),
             format!("Layer {}", i),
-            LayerType::Solid { color: [0.5, 0.3, (i % 10) as f32 / 10.0, 1.0] },
+            LayerType::Solid {
+                color: [0.5, 0.3, (i % 10) as f32 / 10.0, 1.0],
+            },
             30,
         );
-        l.transform.position = Animatable::new_constant([
-            (i * 7 % 128) as f32,
-            (i * 13 % 128) as f32,
-        ]);
+        l.transform.position =
+            Animatable::new_constant([(i * 7 % 128) as f32, (i * 13 % 128) as f32]);
         comp.layers.push(l);
     }
 
@@ -33,11 +33,20 @@ fn stress_many_layers_render_bounded() {
 fn stress_long_timeline_with_keyframes() {
     // 1-minute timeline at 60fps with animated layers
     let mut comp = Composition::new("c".into(), "LongTimeline".into(), 64, 64, 60, 3600);
-    let mut l = Layer::new("m".into(), "Mover".into(), LayerType::Solid { color: [1.0; 4] }, 60);
+    let mut l = Layer::new(
+        "m".into(),
+        "Mover".into(),
+        LayerType::Solid { color: [1.0; 4] },
+        60,
+    );
     let kfs: Vec<Keyframe<[f32; 2]>> = (0..=600)
         .step_by(10)
         .map(|f| {
-            Keyframe::new(f, [(f % 64) as f32, ((f / 10) % 64) as f32], InterpolationType::Linear)
+            Keyframe::new(
+                f,
+                [(f % 64) as f32, ((f / 10) % 64) as f32],
+                InterpolationType::Linear,
+            )
         })
         .collect();
     l.transform.position = Animatable::new_animated(kfs);
@@ -57,7 +66,12 @@ fn stress_deep_precomp_nesting_terminates() {
     for depth in 0..20 {
         let id = format!("L{:02}", depth);
         let next = format!("L{:02}", depth + 1);
-        let pc = Layer::new(next.clone(), next.clone(), LayerType::PreComp { comp_id: next }, 30);
+        let pc = Layer::new(
+            next.clone(),
+            next.clone(),
+            LayerType::PreComp { comp_id: next },
+            30,
+        );
         root.sub_compositions.push({
             let mut sub = Composition::new(id.clone(), id.clone(), 32, 32, 30, 30);
             sub.layers.push(pc.clone());
@@ -85,5 +99,8 @@ fn stress_wide_expressions_evaluate() {
         comp.layers.push(l);
     }
     let (pos, _, _, _) = comp.resolve_world_transform(comp.layers.last().unwrap(), 0);
-    assert!(pos[0].is_finite(), "chained expressions must produce finite values");
+    assert!(
+        pos[0].is_finite(),
+        "chained expressions must produce finite values"
+    );
 }

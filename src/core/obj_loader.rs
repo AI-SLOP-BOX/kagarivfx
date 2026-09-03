@@ -168,20 +168,61 @@ pub fn parse_obj_str(content: &str) -> Result<Mesh3D, String> {
 
         match tag {
             "v" => {
-                let x: f32 = parts.next().ok_or_else(|| "missing vertex x".to_string())?.parse().map_err(|_| "invalid vertex coordinate".to_string())?;
-                let y: f32 = parts.next().ok_or_else(|| "missing vertex y".to_string())?.parse().map_err(|_| "invalid vertex coordinate".to_string())?;
-                let z: f32 = parts.next().ok_or_else(|| "missing vertex z".to_string())?.parse().map_err(|_| "invalid vertex coordinate".to_string())?;
+                let x: f32 = parts
+                    .next()
+                    .ok_or_else(|| "missing vertex x".to_string())?
+                    .parse()
+                    .map_err(|_| "invalid vertex coordinate".to_string())?;
+                let y: f32 = parts
+                    .next()
+                    .ok_or_else(|| "missing vertex y".to_string())?
+                    .parse()
+                    .map_err(|_| "invalid vertex coordinate".to_string())?;
+                let z: f32 = parts
+                    .next()
+                    .ok_or_else(|| "missing vertex z".to_string())?
+                    .parse()
+                    .map_err(|_| "invalid vertex coordinate".to_string())?;
+                if !x.is_finite() || !y.is_finite() || !z.is_finite() {
+                    return Err("non-finite vertex coordinate".to_string());
+                }
                 raw_positions.push([x, y, z]);
             }
             "vt" => {
-                let u: f32 = parts.next().and_then(|s| s.parse().ok()).unwrap_or(0.0);
-                let v: f32 = parts.next().and_then(|s| s.parse().ok()).unwrap_or(0.0);
+                let u: f32 = parts
+                    .next()
+                    .ok_or_else(|| "missing texture u".to_string())?
+                    .parse()
+                    .map_err(|_| "invalid texture coordinate".to_string())?;
+                let v: f32 = parts
+                    .next()
+                    .ok_or_else(|| "missing texture v".to_string())?
+                    .parse()
+                    .map_err(|_| "invalid texture coordinate".to_string())?;
+                if !u.is_finite() || !v.is_finite() {
+                    return Err("non-finite texture coordinate".to_string());
+                }
                 raw_uvs.push([u, v]);
             }
             "vn" => {
-                let nx: f32 = parts.next().and_then(|s| s.parse().ok()).unwrap_or(0.0);
-                let ny: f32 = parts.next().and_then(|s| s.parse().ok()).unwrap_or(0.0);
-                let nz: f32 = parts.next().and_then(|s| s.parse().ok()).unwrap_or(0.0);
+                let nx: f32 = parts
+                    .next()
+                    .ok_or_else(|| "missing normal x".to_string())?
+                    .parse()
+                    .map_err(|_| "invalid normal coordinate".to_string())?;
+                let ny: f32 = parts
+                    .next()
+                    .ok_or_else(|| "missing normal y".to_string())?
+                    .parse()
+                    .map_err(|_| "invalid normal coordinate".to_string())?;
+                let nz: f32 = parts
+                    .next()
+                    .ok_or_else(|| "missing normal z".to_string())?
+                    .parse()
+                    .map_err(|_| "invalid normal coordinate".to_string())?;
+                if !nx.is_finite() || !ny.is_finite() || !nz.is_finite() {
+                    return Err("non-finite normal coordinate".to_string());
+                }
                 raw_normals.push([nx, ny, nz]);
             }
             "f" => {

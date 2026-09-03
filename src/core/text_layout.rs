@@ -16,7 +16,6 @@ pub enum TextAlign {
     Justify = 3,
 }
 
-
 /// A single laid-out line of text.
 #[derive(Debug, Clone)]
 pub struct TextLine {
@@ -91,9 +90,14 @@ pub fn layout_text(
 
             for word in &words {
                 let word_width = measure_text_width(word, font_size, tracking);
-                let space_width = if current_line.is_empty() { 0.0 } else { font_size * 0.25 + tracking * 0.1 };
+                let space_width = if current_line.is_empty() {
+                    0.0
+                } else {
+                    font_size * 0.25 + tracking * 0.1
+                };
 
-                if current_width + space_width + word_width > box_width && !current_line.is_empty() {
+                if current_width + space_width + word_width > box_width && !current_line.is_empty()
+                {
                     // Flush current line
                     all_lines.push(TextLine {
                         text: current_line.clone(),
@@ -123,9 +127,7 @@ pub fn layout_text(
     }
 
     let total_width = all_lines.iter().map(|l| l.width).fold(0.0f32, f32::max);
-    let total_height = all_lines
-        .last()
-        .map_or(0.0, |l| l.y_offset + line_height);
+    let total_height = all_lines.last().map_or(0.0, |l| l.y_offset + line_height);
 
     TextLayout {
         lines: all_lines,
@@ -167,7 +169,14 @@ mod tests {
 
     #[test]
     fn test_layout_with_wrapping() {
-        let layout = layout_text("Hello World Foo Bar", 20.0, 0.0, 1.2, 100.0, TextAlign::Left);
+        let layout = layout_text(
+            "Hello World Foo Bar",
+            20.0,
+            0.0,
+            1.2,
+            100.0,
+            TextAlign::Left,
+        );
         assert!(layout.lines.len() > 1);
     }
 

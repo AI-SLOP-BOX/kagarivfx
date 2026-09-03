@@ -290,10 +290,26 @@ pub fn apply_tracked_planar_to_layer_corner_pin(
     let mut kf_br = Vec::new();
 
     for (f, surf) in tracked_surfaces {
-        kf_tl.push(Keyframe::new(*f, surf.corners[0], InterpolationType::Linear));
-        kf_tr.push(Keyframe::new(*f, surf.corners[1], InterpolationType::Linear));
-        kf_bl.push(Keyframe::new(*f, surf.corners[2], InterpolationType::Linear));
-        kf_br.push(Keyframe::new(*f, surf.corners[3], InterpolationType::Linear));
+        kf_tl.push(Keyframe::new(
+            *f,
+            surf.corners[0],
+            InterpolationType::Linear,
+        ));
+        kf_tr.push(Keyframe::new(
+            *f,
+            surf.corners[1],
+            InterpolationType::Linear,
+        ));
+        kf_bl.push(Keyframe::new(
+            *f,
+            surf.corners[2],
+            InterpolationType::Linear,
+        ));
+        kf_br.push(Keyframe::new(
+            *f,
+            surf.corners[3],
+            InterpolationType::Linear,
+        ));
     }
 
     let effect = Effect {
@@ -395,7 +411,8 @@ mod tests {
     fn test_apply_tracked_planar_to_layer_corner_pin() {
         let mut layer = crate::core::timeline::Layer::new_null("test_l".into(), "Test".into(), 60);
         let surf0 = PlanarSurface::new([[0.0, 0.0], [100.0, 0.0], [0.0, 100.0], [100.0, 100.0]]);
-        let surf1 = PlanarSurface::new([[10.0, 10.0], [110.0, 10.0], [10.0, 110.0], [110.0, 110.0]]);
+        let surf1 =
+            PlanarSurface::new([[10.0, 10.0], [110.0, 10.0], [10.0, 110.0], [110.0, 110.0]]);
         apply_tracked_planar_to_layer_corner_pin(&mut layer, &[(0, surf0), (1, surf1)]);
 
         assert_eq!(layer.effects.len(), 1);

@@ -5,8 +5,8 @@ const SHADER: &str = include_str!("../src/core/shader.wgsl");
 
 #[test]
 fn shader_wgsl_parses_and_validates() {
-    let module = naga::front::wgsl::parse_str(SHADER)
-        .expect("shader.wgsl must parse as valid WGSL");
+    let module =
+        naga::front::wgsl::parse_str(SHADER).expect("shader.wgsl must parse as valid WGSL");
 
     // Full type validation (entry point signatures, uniform layouts, etc.)
     let mut validator = naga::valid::Validator::new(

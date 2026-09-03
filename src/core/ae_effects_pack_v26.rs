@@ -1,7 +1,12 @@
 #![allow(dead_code)]
 /// After Effects VFX Kernels Part 26 — Keying & Compositing Utilities
 // 1. Spill Suppressor (Chroma Spill Removal on Subject)
-pub fn apply_spill_suppressor(pixels: &mut [u8], spill_channel: usize, neighbor_a: usize, neighbor_b: usize) {
+pub fn apply_spill_suppressor(
+    pixels: &mut [u8],
+    spill_channel: usize,
+    neighbor_a: usize,
+    neighbor_b: usize,
+) {
     let spill = spill_channel.min(2);
     let na = neighbor_a.min(2);
     let nb = neighbor_b.min(2);
@@ -15,8 +20,17 @@ pub fn apply_spill_suppressor(pixels: &mut [u8], spill_channel: usize, neighbor_
 }
 
 // 2. Inner / Outer Glow (Alpha-Aware Glow Synthesis)
-pub fn apply_glow_alpha(pixels: &mut [u8], width: u32, height: u32, radius: u32, color: [u8; 3], inner: bool) {
-    if radius == 0 { return; }
+pub fn apply_glow_alpha(
+    pixels: &mut [u8],
+    width: u32,
+    height: u32,
+    radius: u32,
+    color: [u8; 3],
+    inner: bool,
+) {
+    if radius == 0 {
+        return;
+    }
     let temp = pixels.to_vec();
     let r = radius as i32;
 
@@ -26,7 +40,9 @@ pub fn apply_glow_alpha(pixels: &mut [u8], width: u32, height: u32, radius: u32,
             let a = temp[idx + 3];
 
             // Skip: inner glow only on opaque, outer glow only on transparent
-            if (inner && a == 0) || (!inner && a == 255) { continue; }
+            if (inner && a == 0) || (!inner && a == 255) {
+                continue;
+            }
 
             let mut max_a = 0u8;
             let mut min_a = 255u8;
@@ -46,7 +62,8 @@ pub fn apply_glow_alpha(pixels: &mut [u8], width: u32, height: u32, radius: u32,
             let blend = (1.0 - dist_factor) * glow_alpha;
 
             for c in 0..3 {
-                pixels[idx + c] = (pixels[idx + c] as f32 * (1.0 - blend) + color[c] as f32 * blend).clamp(0.0, 255.0) as u8;
+                pixels[idx + c] = (pixels[idx + c] as f32 * (1.0 - blend) + color[c] as f32 * blend)
+                    .clamp(0.0, 255.0) as u8;
             }
         }
     }
@@ -59,7 +76,9 @@ pub fn apply_inpainting_simple(pixels: &mut [u8], width: u32, height: u32) {
     for y in 0..height {
         for x in 0..width {
             let idx = (y as usize * width as usize + x as usize) * 4;
-            if temp[idx + 3] > 0 { continue; } // Skip opaque pixels
+            if temp[idx + 3] > 0 {
+                continue;
+            } // Skip opaque pixels
 
             // Sample from nearest opaque neighbor (simplified flood from border)
             let mut sum = [0.0f32; 3];
@@ -71,14 +90,18 @@ pub fn apply_inpainting_simple(pixels: &mut [u8], width: u32, height: u32) {
                     let px = (x as i32 + kx).clamp(0, width as i32 - 1) as usize;
                     let nb_idx = (py * width as usize + px) * 4;
                     if temp[nb_idx + 3] > 0 {
-                        for c in 0..3 { sum[c] += temp[nb_idx + c] as f32; }
+                        for c in 0..3 {
+                            sum[c] += temp[nb_idx + c] as f32;
+                        }
                         count += 1;
                     }
                 }
             }
 
             if count > 0 {
-                for c in 0..3 { pixels[idx + c] = (sum[c] / count as f32) as u8; }
+                for c in 0..3 {
+                    pixels[idx + c] = (sum[c] / count as f32) as u8;
+                }
                 pixels[idx + 3] = 255;
             }
         }
@@ -86,9 +109,17 @@ pub fn apply_inpainting_simple(pixels: &mut [u8], width: u32, height: u32) {
 }
 
 // 4. Luminance Gain Map (Zone System Adaptive Brightness)
-pub fn apply_luminance_gain_map(pixels: &mut [u8], shadows_gain: f32, midtones_gain: f32, highlights_gain: f32) {
+pub fn apply_luminance_gain_map(
+    pixels: &mut [u8],
+    shadows_gain: f32,
+    midtones_gain: f32,
+    highlights_gain: f32,
+) {
     for i in (0..pixels.len()).step_by(4) {
-        let luma = (pixels[i] as f32 * 0.299 + pixels[i + 1] as f32 * 0.587 + pixels[i + 2] as f32 * 0.114) / 255.0;
+        let luma = (pixels[i] as f32 * 0.299
+            + pixels[i + 1] as f32 * 0.587
+            + pixels[i + 2] as f32 * 0.114)
+            / 255.0;
 
         let gain = if luma < 0.33 {
             shadows_gain

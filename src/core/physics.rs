@@ -3,8 +3,7 @@
 /// particle dynamics, spring constraints, and keyframe baking.
 /// Ported & adapted from NextVFX Sovereign Engine with full 2D rigid body collisions,
 /// revolute/distance joints, and keyframe bake generation.
-
-use crate::core::keyframe::{Keyframe, InterpolationType};
+use crate::core::keyframe::{InterpolationType, Keyframe};
 use std::collections::HashMap;
 
 #[derive(Debug, Clone, Copy, PartialEq, serde::Serialize, serde::Deserialize)]
@@ -20,7 +19,11 @@ impl Vector3D {
     }
 
     pub fn zero() -> Self {
-        Self { x: 0.0, y: 0.0, z: 0.0 }
+        Self {
+            x: 0.0,
+            y: 0.0,
+            z: 0.0,
+        }
     }
 }
 
@@ -135,7 +138,8 @@ impl RigidBody {
         body_type: RigidBodyType,
     ) -> Self {
         let half_extents = [width * 0.5, height * 0.5];
-        let (inv_mass, inertia, inv_inertia) = if body_type == RigidBodyType::Dynamic && mass > 0.0 {
+        let (inv_mass, inertia, inv_inertia) = if body_type == RigidBodyType::Dynamic && mass > 0.0
+        {
             let i = (mass * (width * width + height * height)) / 12.0;
             (1.0 / mass, i, 1.0 / i)
         } else {
@@ -167,7 +171,8 @@ impl RigidBody {
         mass: f32,
         body_type: RigidBodyType,
     ) -> Self {
-        let (inv_mass, inertia, inv_inertia) = if body_type == RigidBodyType::Dynamic && mass > 0.0 {
+        let (inv_mass, inertia, inv_inertia) = if body_type == RigidBodyType::Dynamic && mass > 0.0
+        {
             let i = 0.5 * mass * radius * radius;
             (1.0 / mass, i, 1.0 / i)
         } else {
@@ -201,12 +206,7 @@ impl RigidBody {
                 let hx = half_extents[0];
                 let hy = half_extents[1];
 
-                let offsets = [
-                    [-hx, -hy],
-                    [hx, -hy],
-                    [hx, hy],
-                    [-hx, hy],
-                ];
+                let offsets = [[-hx, -hy], [hx, -hy], [hx, hy], [-hx, hy]];
 
                 offsets
                     .iter()
@@ -369,7 +369,8 @@ impl PhysicsWorld {
 
         // 4. Collision Resolution (Impulse-based)
         for contact in contacts {
-            let inv_mass_sum = self.bodies[contact.body_a].inv_mass + self.bodies[contact.body_b].inv_mass;
+            let inv_mass_sum =
+                self.bodies[contact.body_a].inv_mass + self.bodies[contact.body_b].inv_mass;
             if inv_mass_sum <= 1e-6 {
                 continue;
             }
@@ -404,7 +405,9 @@ impl PhysicsWorld {
                 continue; // Moving away
             }
 
-            let e = self.bodies[contact.body_a].restitution.min(self.bodies[contact.body_b].restitution);
+            let e = self.bodies[contact.body_a]
+                .restitution
+                .min(self.bodies[contact.body_b].restitution);
             let j = -(1.0 + e) * vel_along_normal / inv_mass_sum;
 
             let impulse_x = contact.normal[0] * j;
@@ -425,7 +428,8 @@ impl PhysicsWorld {
             // Friction impulse
             let tangent = [-contact.normal[1], contact.normal[0]];
             let vt = rvx * tangent[0] + rvy * tangent[1];
-            let mu = (self.bodies[contact.body_a].friction + self.bodies[contact.body_b].friction) * 0.5;
+            let mu =
+                (self.bodies[contact.body_a].friction + self.bodies[contact.body_b].friction) * 0.5;
             let jt = -vt / inv_mass_sum;
             let friction_impulse = jt.clamp(-j * mu, j * mu);
 
@@ -457,7 +461,12 @@ impl PhysicsWorld {
 // Collision Detection Functions (Circle-Circle, Circle-Box, Box-Box)
 // -------------------------------------------------------------------------------------------------
 
-fn detect_collision(a: &RigidBody, b: &RigidBody, idx_a: usize, idx_b: usize) -> Option<ContactManifold> {
+fn detect_collision(
+    a: &RigidBody,
+    b: &RigidBody,
+    idx_a: usize,
+    idx_b: usize,
+) -> Option<ContactManifold> {
     match (&a.shape, &b.shape) {
         (ColliderShape::Circle { radius: ra }, ColliderShape::Circle { radius: rb }) => {
             let dx = b.position[0] - a.position[0];
@@ -469,7 +478,10 @@ fn detect_collision(a: &RigidBody, b: &RigidBody, idx_a: usize, idx_b: usize) ->
                 let dist = dist_sq.sqrt();
                 let normal = [dx / dist, dy / dist];
                 let penetration = radius_sum - dist;
-                let contact_point = [a.position[0] + normal[0] * ra, a.position[1] + normal[1] * ra];
+                let contact_point = [
+                    a.position[0] + normal[0] * ra,
+                    a.position[1] + normal[1] * ra,
+                ];
 
                 Some(ContactManifold {
                     body_a: idx_a,
@@ -531,7 +543,11 @@ fn detect_circle_box(
         let world_nx = local_nx * w_cos - local_ny * w_sin;
         let world_ny = local_nx * w_sin + local_ny * w_cos;
 
-        let normal = if flip_normal { [-world_nx, -world_ny] } else { [world_nx, world_ny] };
+        let normal = if flip_normal {
+            [-world_nx, -world_ny]
+        } else {
+            [world_nx, world_ny]
+        };
         let penetration = radius - dist;
 
         Some(ContactManifold {
@@ -603,10 +619,20 @@ pub fn bake_physics_simulation_to_keyframes(
     for frame in start_frame..=end_frame {
         for body in &world.bodies {
             if let Some(layer_id) = body.layer_id {
-                let entry = results.entry(layer_id).or_insert_with(|| (Vec::new(), Vec::new()));
+                let entry = results
+                    .entry(layer_id)
+                    .or_insert_with(|| (Vec::new(), Vec::new()));
 
-                entry.0.push(Keyframe::new(frame, body.position, InterpolationType::Linear));
-                entry.1.push(Keyframe::new(frame, body.rotation_deg, InterpolationType::Linear));
+                entry.0.push(Keyframe::new(
+                    frame,
+                    body.position,
+                    InterpolationType::Linear,
+                ));
+                entry.1.push(Keyframe::new(
+                    frame,
+                    body.rotation_deg,
+                    InterpolationType::Linear,
+                ));
             }
         }
 
@@ -654,7 +680,10 @@ mod tests {
         let mut state = KinematicState::default();
 
         solver.update_state(&mut state, 1.0 / 30.0);
-        assert!(state.position.y > 0.0, "Gravity should accelerate layer downward in AE coordinate space");
+        assert!(
+            state.position.y > 0.0,
+            "Gravity should accelerate layer downward in AE coordinate space"
+        );
     }
 
     #[test]
@@ -662,11 +691,19 @@ mod tests {
         let mut world = PhysicsWorld::new();
 
         // Dynamic falling box
-        let body_box = RigidBody::new_box(None, [100.0, 0.0], 50.0, 50.0, 1.0, RigidBodyType::Dynamic);
+        let body_box =
+            RigidBody::new_box(None, [100.0, 0.0], 50.0, 50.0, 1.0, RigidBodyType::Dynamic);
         let box_idx = world.add_body(body_box);
 
         // Static floor
-        let body_floor = RigidBody::new_box(None, [100.0, 200.0], 500.0, 40.0, 0.0, RigidBodyType::Static);
+        let body_floor = RigidBody::new_box(
+            None,
+            [100.0, 200.0],
+            500.0,
+            40.0,
+            0.0,
+            RigidBodyType::Static,
+        );
         world.add_body(body_floor);
 
         // Run simulation for 1 second (30 fps)
@@ -684,8 +721,20 @@ mod tests {
         let mut world = PhysicsWorld::new();
         world.gravity = [0.0, 0.0]; // Zero gravity to isolate spring force
 
-        let b1 = world.add_body(RigidBody::new_circle(None, [0.0, 0.0], 10.0, 1.0, RigidBodyType::Dynamic));
-        let b2 = world.add_body(RigidBody::new_circle(None, [100.0, 0.0], 10.0, 1.0, RigidBodyType::Dynamic));
+        let b1 = world.add_body(RigidBody::new_circle(
+            None,
+            [0.0, 0.0],
+            10.0,
+            1.0,
+            RigidBodyType::Dynamic,
+        ));
+        let b2 = world.add_body(RigidBody::new_circle(
+            None,
+            [100.0, 0.0],
+            10.0,
+            1.0,
+            RigidBodyType::Dynamic,
+        ));
 
         world.add_spring(DistanceSpring {
             body_a: b1,
@@ -710,7 +759,14 @@ mod tests {
         let mut world = PhysicsWorld::new();
         let layer_id = 42;
 
-        let b = RigidBody::new_box(Some(layer_id), [50.0, 50.0], 20.0, 20.0, 1.0, RigidBodyType::Dynamic);
+        let b = RigidBody::new_box(
+            Some(layer_id),
+            [50.0, 50.0],
+            20.0,
+            20.0,
+            1.0,
+            RigidBodyType::Dynamic,
+        );
         world.add_body(b);
 
         let baked = bake_physics_simulation_to_keyframes(&mut world, 0, 10, 30.0);

@@ -325,8 +325,20 @@ fn apply_one_ctx(
                 } else {
                     0.625
                 };
-                sr *= coc * blade_scale;
-                sb *= coc * blade_scale;
+                let mut lens_scale = coc * blade_scale;
+                let amp = crate::core::expression_engine::get_audio_amplitude();
+                let bass = crate::core::expression_engine::get_audio_band(0);
+                let treble = crate::core::expression_engine::get_audio_band(4);
+                let audio_scale = (1.0 + amp * 0.6 + bass * 0.4).clamp(0.2, 3.0);
+                lens_scale *= audio_scale;
+                let blade_jitter = if treble > 0.3 {
+                    1.0 + (treble - 0.3) * 0.5
+                } else {
+                    1.0
+                };
+                lens_scale *= blade_jitter;
+                sr *= lens_scale;
+                sb *= lens_scale;
             }
             let avg_amount = (sr.abs() + sb.abs()) * 0.5;
             if !crate::core::compute_pipeline::try_gpu_chromatic_aberration(

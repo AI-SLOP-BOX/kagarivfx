@@ -17,8 +17,7 @@ impl Default for BezierControlPoint {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
-#[derive(Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, Default)]
 pub enum InterpolationType {
     #[default]
     Linear,
@@ -37,27 +36,27 @@ pub enum InterpolationType {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum EasePreset {
-    Standard,           // Easy Ease [0.25, 0.1, 0.25, 1.0]
-    FastIn,           // Acceleration [0.42, 0.0, 1.0, 1.0]
-    SmoothOut,        // Deceleration [0.0, 0.0, 0.58, 1.0]
-    Overshoot,        // Bounce Spring [0.68, -0.55, 0.265, 1.55]
-    Sine,             // Ultra Smooth Sine [0.37, 0.0, 0.63, 1.0]
-    FastOut,          // Fast Deceleration [0.0, 0.0, 0.35, 1.0]
-    SlowIn,           // Slow Acceleration [0.43, 0.0, 0.9, 1.0]
-    CustomEase,       // Custom bezier defined via custom_bezier
-    MirrorEase,       // Mirror the first half [0.5, 0, 1, 1]
+    Standard,   // Easy Ease [0.25, 0.1, 0.25, 1.0]
+    FastIn,     // Acceleration [0.42, 0.0, 1.0, 1.0]
+    SmoothOut,  // Deceleration [0.0, 0.0, 0.58, 1.0]
+    Overshoot,  // Bounce Spring [0.68, -0.55, 0.265, 1.55]
+    Sine,       // Ultra Smooth Sine [0.37, 0.0, 0.63, 1.0]
+    FastOut,    // Fast Deceleration [0.0, 0.0, 0.35, 1.0]
+    SlowIn,     // Slow Acceleration [0.43, 0.0, 0.9, 1.0]
+    CustomEase, // Custom bezier defined via custom_bezier
+    MirrorEase, // Mirror the first half [0.5, 0, 1, 1]
     // Legacy AE presets (backward compat)
-    EaseIn,           // Quadratic ease-in [0.5, 0, 1, 1]
-    EaseOut,        // Quadratic ease-out [0, 0, 0.58, 1]
+    EaseIn,  // Quadratic ease-in [0.5, 0, 1, 1]
+    EaseOut, // Quadratic ease-out [0, 0, 0.58, 1]
     // New presets
-    Elastic,          // Elastic bounce [0.5, 0, 0.8, 0.3]
-    Bounce,           // Single bounce [0.5, 0.3, 0.7, 0.1]
-    Cycle,            // Cycling [0.5, 0.5, 0.5, 0.5]
-    MirrorEase2,      // Mirror back and forth [0.5, 0, 1, 1]
-    Custom0,          // [0.0, 0, 1, 1] - default
-    Custom1,          // [0.25, 0.1, 0.25, 1] - slightly eased
-    Custom2,          // [0.42, 0, 1, 1] - fast start
-    Custom3,          // [0, 0, 0.58, 1] - slow start
+    Elastic,     // Elastic bounce [0.5, 0, 0.8, 0.3]
+    Bounce,      // Single bounce [0.5, 0.3, 0.7, 0.1]
+    Cycle,       // Cycling [0.5, 0.5, 0.5, 0.5]
+    MirrorEase2, // Mirror back and forth [0.5, 0, 1, 1]
+    Custom0,     // [0.0, 0, 1, 1] - default
+    Custom1,     // [0.25, 0.1, 0.25, 1] - slightly eased
+    Custom2,     // [0.42, 0, 1, 1] - fast start
+    Custom3,     // [0, 0, 0.58, 1] - slow start
 }
 
 impl EasePreset {
@@ -86,7 +85,6 @@ impl EasePreset {
         }
     }
 }
-
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Keyframe<T> {
@@ -230,17 +228,19 @@ pub fn ae_bezier_control_points_to_speed_influence(
     };
 
     (
-        BezierControlPoint { influence: inf_out, speed: speed_out },
-        BezierControlPoint { influence: inf_in, speed: speed_in },
+        BezierControlPoint {
+            influence: inf_out,
+            speed: speed_out,
+        },
+        BezierControlPoint {
+            influence: inf_in,
+            speed: speed_in,
+        },
     )
 }
 
 /// Evaluate instantaneous velocity (dv/dt in units per second) for a scalar keyframe sequence.
-pub fn evaluate_scalar_speed_at_frame(
-    keyframes: &[Keyframe<f32>],
-    frame: f32,
-    fps: u32,
-) -> f32 {
+pub fn evaluate_scalar_speed_at_frame(keyframes: &[Keyframe<f32>], frame: f32, fps: u32) -> f32 {
     if keyframes.len() < 2 {
         return 0.0;
     }
@@ -261,11 +261,7 @@ pub fn evaluate_scalar_speed_at_frame(
 }
 
 /// Evaluate a scalar keyframe sequence at a fractional frame.
-pub fn evaluate_scalar_keyframes(
-    keyframes: &[Keyframe<f32>],
-    frame: f32,
-    _fps: u32,
-) -> f32 {
+pub fn evaluate_scalar_keyframes(keyframes: &[Keyframe<f32>], frame: f32, _fps: u32) -> f32 {
     if keyframes.is_empty() {
         return 0.0;
     }
@@ -290,9 +286,19 @@ pub fn evaluate_scalar_keyframes(
             return match &k0.interpolation {
                 InterpolationType::Hold => k0.value,
                 InterpolationType::Linear => k0.value + linear_t * (k1.value - k0.value),
-                InterpolationType::Bezier { outgoing, incoming, custom_bezier } => {
+                InterpolationType::Bezier {
+                    outgoing,
+                    incoming,
+                    custom_bezier,
+                } => {
                     let pts = custom_bezier.unwrap_or_else(|| {
-                        compute_ae_bezier_control_points(outgoing, incoming, span, k1.value - k0.value, _fps as f32)
+                        compute_ae_bezier_control_points(
+                            outgoing,
+                            incoming,
+                            span,
+                            k1.value - k0.value,
+                            _fps as f32,
+                        )
                     });
                     let eased_t = solve_bezier_eased_time(linear_t, pts[0], pts[1], pts[2], pts[3]);
                     k0.value + eased_t * (k1.value - k0.value)
@@ -321,8 +327,14 @@ mod tests {
 
     #[test]
     fn test_compute_ae_bezier_control_points() {
-        let outgoing = BezierControlPoint { influence: 0.33, speed: 100.0 };
-        let incoming = BezierControlPoint { influence: 0.33, speed: 0.0 };
+        let outgoing = BezierControlPoint {
+            influence: 0.33,
+            speed: 100.0,
+        };
+        let incoming = BezierControlPoint {
+            influence: 0.33,
+            speed: 0.0,
+        };
         let pts = compute_ae_bezier_control_points(&outgoing, &incoming, 30.0, 100.0, 30.0);
         assert!(pts[0] >= 0.0 && pts[0] <= 1.0);
         assert!(pts[2] >= 0.0 && pts[2] <= 1.0);
@@ -341,7 +353,11 @@ mod tests {
             Keyframe::new(30, 300.0, InterpolationType::Linear), // 300 units in 1 sec (30 frames at 30fps) => velocity = 300 units/sec
         ];
         let speed_at_15 = evaluate_scalar_speed_at_frame(&kfs, 15.0, 30);
-        assert!((speed_at_15 - 300.0).abs() < 1.0, "linear speed should be 300 units/sec, got {}", speed_at_15);
+        assert!(
+            (speed_at_15 - 300.0).abs() < 1.0,
+            "linear speed should be 300 units/sec, got {}",
+            speed_at_15
+        );
     }
 
     #[test]
@@ -354,27 +370,37 @@ mod tests {
 
         // Evaluate solve_bezier_eased_time for Overshoot preset
         let over_pts = EasePreset::Overshoot.control_points();
-        let eased = solve_bezier_eased_time(0.5, over_pts[0], over_pts[1], over_pts[2], over_pts[3]);
+        let eased =
+            solve_bezier_eased_time(0.5, over_pts[0], over_pts[1], over_pts[2], over_pts[3]);
         assert!(!eased.is_nan());
     }
 
     #[test]
     fn test_bezier_mirror_math() {
         let original: [f32; 4] = [0.25, 0.1, 0.75, 0.9];
-        let mirrored = [1.0 - original[2], 1.0 - original[3], 1.0 - original[0], 1.0 - original[1]];
+        let mirrored = [
+            1.0 - original[2],
+            1.0 - original[3],
+            1.0 - original[0],
+            1.0 - original[1],
+        ];
         assert!((mirrored[0] - 0.25).abs() < 1e-5);
         assert!((mirrored[1] - 0.1).abs() < 1e-5);
         assert!((mirrored[2] - 0.75).abs() < 1e-5);
         assert!((mirrored[3] - 0.9).abs() < 1e-5);
 
         let fast_in: [f32; 4] = [0.42, 0.0, 1.0, 1.0];
-        let mirrored_fast_in = [1.0 - fast_in[2], 1.0 - fast_in[3], 1.0 - fast_in[0], 1.0 - fast_in[1]];
+        let mirrored_fast_in = [
+            1.0 - fast_in[2],
+            1.0 - fast_in[3],
+            1.0 - fast_in[0],
+            1.0 - fast_in[1],
+        ];
         assert!((mirrored_fast_in[0] - 0.0).abs() < 1e-5);
         assert!((mirrored_fast_in[1] - 0.0).abs() < 1e-5);
         assert!((mirrored_fast_in[2] - 0.58).abs() < 1e-5);
         assert!((mirrored_fast_in[3] - 1.0).abs() < 1e-5);
     }
-
 }
 
 // ── Bezier Keyframe Interpolation ──────────────────────────────────────
@@ -526,7 +552,12 @@ mod tests_bezier_handle {
 
     #[test]
     fn test_interpolate_bezier_ease_in() {
-        let ease_in = BezierHandle { in_x: 0.42, in_y: 0.0, out_x: 1.0, out_y: 0.8 };
+        let ease_in = BezierHandle {
+            in_x: 0.42,
+            in_y: 0.0,
+            out_x: 1.0,
+            out_y: 0.8,
+        };
         let lin = BezierHandle::linear();
         let v_mid = interpolate_bezier(0.0, 100.0, 0.0, 10.0, 5.0, &ease_in, &lin);
         // With out_y=0.8 the curve is below linear at midpoint → value < 50
@@ -544,7 +575,12 @@ mod tests_ease_presets {
     use super::*;
 
     fn handle(x: f32, y: f32) -> BezierHandle {
-        BezierHandle { in_x: x, in_y: y, out_x: x, out_y: y }
+        BezierHandle {
+            in_x: x,
+            in_y: y,
+            out_x: x,
+            out_y: y,
+        }
     }
 
     #[test]
@@ -575,7 +611,12 @@ mod tests_ease_presets {
 
     #[test]
     fn test_new_presets_interpolate_monotonically() {
-        for preset in [EasePreset::FastOut, EasePreset::SlowIn, EasePreset::Sine, EasePreset::Cycle] {
+        for preset in [
+            EasePreset::FastOut,
+            EasePreset::SlowIn,
+            EasePreset::Sine,
+            EasePreset::Cycle,
+        ] {
             let [x1, y1, x2, y2] = preset.control_points();
             let out_h = handle(x1, y1);
             let in_h = handle(x2, y2);
@@ -591,14 +632,29 @@ mod tests_ease_presets {
 
     #[test]
     fn test_ease_in_out_endpoints() {
-        for preset in [EasePreset::EaseIn, EasePreset::EaseOut, EasePreset::FastOut, EasePreset::SlowIn] {
+        for preset in [
+            EasePreset::EaseIn,
+            EasePreset::EaseOut,
+            EasePreset::FastOut,
+            EasePreset::SlowIn,
+        ] {
             let [x1, y1, x2, y2] = preset.control_points();
             let out_h = handle(x1, y1);
             let in_h = handle(x2, y2);
             let v_start = interpolate_bezier(0.0, 100.0, 0.0, 10.0, 0.0, &out_h, &in_h);
             let v_end = interpolate_bezier(0.0, 100.0, 0.0, 10.0, 10.0, &out_h, &in_h);
-            assert!(v_start.abs() < 1e-3, "{:?} start != 0, got {}", preset, v_start);
-            assert!((v_end - 100.0).abs() < 1e-3, "{:?} end != 100, got {}", preset, v_end);
+            assert!(
+                v_start.abs() < 1e-3,
+                "{:?} start != 0, got {}",
+                preset,
+                v_start
+            );
+            assert!(
+                (v_end - 100.0).abs() < 1e-3,
+                "{:?} end != 100, got {}",
+                preset,
+                v_end
+            );
         }
     }
 }

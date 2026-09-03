@@ -1,16 +1,28 @@
 #![allow(dead_code)]
 use crate::core::continuous_rasterizer::multiply_matrix_3x3;
+use crate::core::property::Animatable;
 
 /// Shape Repeater configuration options matching After Effects Shape Repeater contents.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct ShapeRepeaterOptions {
     pub copies: u32,
+    #[serde(default)]
+    pub copies_animation: Option<Animatable<f32>>,
     pub offset: f32,
     pub position_offset: [f32; 2],
+    #[serde(default)]
+    pub position_offset_animation: Option<Animatable<[f32; 2]>>,
     pub scale_offset: [f32; 2], // Percentage multiplier per copy (1.0 = 100%)
+    #[serde(default)]
+    pub scale_offset_animation: Option<Animatable<[f32; 2]>>,
     pub rotation_offset_deg: f32,
+    /// Optional animated rotation offset. When absent, the legacy scalar above is used.
+    #[serde(default)]
+    pub rotation_offset_animation: Option<Animatable<f32>>,
     pub start_opacity: f32,
     pub end_opacity: f32,
+    #[serde(default)]
+    pub opacity_animation: Option<Animatable<[f32; 2]>>,
     pub composite_below: bool,
 }
 
@@ -18,12 +30,17 @@ impl Default for ShapeRepeaterOptions {
     fn default() -> Self {
         Self {
             copies: 3,
+            copies_animation: None,
             offset: 0.0,
             position_offset: [100.0, 0.0],
+            position_offset_animation: None,
             scale_offset: [1.0, 1.0],
+            scale_offset_animation: None,
             rotation_offset_deg: 0.0,
+            rotation_offset_animation: None,
             start_opacity: 1.0,
             end_opacity: 1.0,
+            opacity_animation: None,
             composite_below: true,
         }
     }
@@ -39,20 +56,56 @@ pub struct RepeaterCopyInstance {
 
 /// Evaluates array of 2D 3x3 transformation matrices and opacities for all repeated shape instances.
 pub fn evaluate_shape_repeater(options: &ShapeRepeaterOptions) -> Vec<RepeaterCopyInstance> {
-    if options.copies == 0 {
+    evaluate_shape_repeater_at_frame(options, 0)
+}
+
+pub fn evaluate_shape_repeater_at_frame(
+    options: &ShapeRepeaterOptions,
+    frame: u32,
+) -> Vec<RepeaterCopyInstance> {
+    let evaluated_copies = options
+        .copies_animation
+        .as_ref()
+        .map(|value| value.evaluate(frame))
+        .unwrap_or(options.copies as f32);
+    if !evaluated_copies.is_finite() || evaluated_copies <= 0.0 {
         return Vec::new();
     }
 
-    let copies = options.copies.min(4096);
+    let copies = (evaluated_copies.floor() as u32).min(4096);
     let mut instances = Vec::with_capacity(copies as usize);
     let total = copies as f32;
     let finite = |value: f32, fallback: f32| if value.is_finite() { value } else { fallback };
     let offset = finite(options.offset, 0.0);
-    let position_offset = options.position_offset.map(|value| finite(value, 0.0));
-    let scale_offset = options.scale_offset.map(|value| finite(value, 1.0));
-    let rotation_offset = finite(options.rotation_offset_deg, 0.0);
-    let start_opacity = finite(options.start_opacity, 1.0);
-    let end_opacity = finite(options.end_opacity, 1.0);
+    let position_offset = options
+        .position_offset_animation
+        .as_ref()
+        .map(|value| value.evaluate(frame))
+        .unwrap_or(options.position_offset)
+        .map(|value| finite(value, 0.0));
+    let scale_offset = options
+        .scale_offset_animation
+        .as_ref()
+        .map(|value| value.evaluate(frame))
+        .unwrap_or(options.scale_offset)
+        .map(|value| finite(value, 1.0));
+    let rotation_offset = finite(
+        options
+            .rotation_offset_animation
+            .as_ref()
+            .map(|value| value.evaluate(frame))
+            .unwrap_or(options.rotation_offset_deg),
+        0.0,
+    );
+    let (start_opacity, end_opacity) = options
+        .opacity_animation
+        .as_ref()
+        .map(|value| value.evaluate(frame))
+        .map(|values| (finite(values[0], 1.0), finite(values[1], 1.0)))
+        .unwrap_or((
+            finite(options.start_opacity, 1.0),
+            finite(options.end_opacity, 1.0),
+        ));
 
     for i in 0..copies {
         let copy_idx = i as f32 + offset;
@@ -83,7 +136,7 @@ pub fn evaluate_shape_repeater(options: &ShapeRepeaterOptions) -> Vec<RepeaterCo
         let matrix = multiply_matrix_3x3(&t_pos, &s_rot);
 
         // Opacity interpolation across copies
-        let opacity_t = if options.copies > 1 {
+        let opacity_t = if copies > 1 {
             i as f32 / (total - 1.0)
         } else {
             0.0
@@ -107,17 +160,23 @@ pub fn evaluate_shape_repeater(options: &ShapeRepeaterOptions) -> Vec<RepeaterCo
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::core::keyframe::{InterpolationType, Keyframe};
 
     #[test]
     fn test_shape_repeater_linear_copies() {
         let options = ShapeRepeaterOptions {
             copies: 4,
+            copies_animation: None,
             offset: 0.0,
             position_offset: [50.0, 0.0],
+            position_offset_animation: None,
             scale_offset: [1.0, 1.0],
+            scale_offset_animation: None,
             rotation_offset_deg: 0.0,
+            rotation_offset_animation: None,
             start_opacity: 1.0,
             end_opacity: 1.0,
+            opacity_animation: None,
             composite_below: true,
         };
 
@@ -130,5 +189,188 @@ mod tests {
         assert_eq!(instances[1].transform_matrix[0][2], 50.0);
         // Copy 3: X = 150
         assert_eq!(instances[3].transform_matrix[0][2], 150.0);
+    }
+
+    #[test]
+    fn test_shape_repeater_applies_compound_scale_and_rotation() {
+        let options = ShapeRepeaterOptions {
+            copies: 2,
+            copies_animation: None,
+            offset: 0.0,
+            position_offset: [0.0, 0.0],
+            position_offset_animation: None,
+            scale_offset: [0.5, 0.75],
+            scale_offset_animation: None,
+            rotation_offset_deg: 90.0,
+            rotation_offset_animation: None,
+            start_opacity: 1.0,
+            end_opacity: 0.5,
+            opacity_animation: None,
+            composite_below: true,
+        };
+
+        let instances = evaluate_shape_repeater(&options);
+        assert!((instances[1].transform_matrix[0][0]).abs() < 1.0e-5);
+        assert!((instances[1].transform_matrix[1][0] - 0.5).abs() < 1.0e-5);
+        assert!((instances[1].transform_matrix[1][1]).abs() < 1.0e-5);
+        assert!((instances[1].opacity - 0.5).abs() < 1.0e-5);
+    }
+
+    #[test]
+    fn test_shape_repeater_sanitizes_non_finite_options() {
+        let options = ShapeRepeaterOptions {
+            copies: 2,
+            copies_animation: None,
+            offset: f32::NAN,
+            position_offset: [f32::INFINITY, f32::NEG_INFINITY],
+            position_offset_animation: None,
+            scale_offset: [f32::NAN, f32::INFINITY],
+            scale_offset_animation: None,
+            rotation_offset_deg: f32::NAN,
+            rotation_offset_animation: None,
+            start_opacity: f32::NAN,
+            end_opacity: f32::INFINITY,
+            opacity_animation: None,
+            composite_below: true,
+        };
+        let instances = evaluate_shape_repeater(&options);
+        assert_eq!(instances.len(), 2);
+        for instance in instances {
+            assert!(instance
+                .transform_matrix
+                .iter()
+                .flatten()
+                .all(|v| v.is_finite()));
+            assert!(instance.opacity.is_finite());
+        }
+    }
+
+    #[test]
+    fn test_shape_repeater_zero_copies_is_empty() {
+        let mut options = ShapeRepeaterOptions::default();
+        options.copies = 0;
+        assert!(evaluate_shape_repeater(&options).is_empty());
+    }
+
+    #[test]
+    fn test_shape_repeater_caps_pathological_copy_count() {
+        let mut options = ShapeRepeaterOptions::default();
+        options.copies = u32::MAX;
+        let instances = evaluate_shape_repeater(&options);
+        assert_eq!(instances.len(), 4096);
+        assert_eq!(instances[0].copy_index, 0);
+        assert_eq!(instances[4095].copy_index, 4095);
+    }
+
+    #[test]
+    fn test_shape_repeater_animated_rotation_uses_requested_frame() {
+        let mut rotation = Animatable::new_constant(0.0);
+        rotation.add_keyframe(Keyframe::new(0, 0.0, InterpolationType::Linear));
+        rotation.add_keyframe(Keyframe::new(10, 90.0, InterpolationType::Linear));
+        let options = ShapeRepeaterOptions {
+            copies: 2,
+            rotation_offset_animation: Some(rotation),
+            ..ShapeRepeaterOptions::default()
+        };
+        let frame0 = evaluate_shape_repeater_at_frame(&options, 0);
+        let frame10 = evaluate_shape_repeater_at_frame(&options, 10);
+        assert!((frame0[1].transform_matrix[1][0]).abs() < 1.0e-5);
+        assert!((frame10[1].transform_matrix[1][0] - 1.0).abs() < 1.0e-5);
+    }
+
+    #[test]
+    fn test_shape_repeater_animated_copies_uses_requested_frame() {
+        let mut copies = Animatable::new_constant(1.0);
+        copies.add_keyframe(Keyframe::new(0, 1.0, InterpolationType::Linear));
+        copies.add_keyframe(Keyframe::new(10, 4.0, InterpolationType::Linear));
+        let options = ShapeRepeaterOptions {
+            copies: 1,
+            copies_animation: Some(copies),
+            ..ShapeRepeaterOptions::default()
+        };
+        assert_eq!(evaluate_shape_repeater_at_frame(&options, 0).len(), 1);
+        assert_eq!(evaluate_shape_repeater_at_frame(&options, 10).len(), 4);
+    }
+
+    #[test]
+    fn test_shape_repeater_animated_copies_sanitize_invalid_and_fractional_values() {
+        let mut copies = Animatable::new_constant(2.0);
+        copies.add_keyframe(Keyframe::new(5, -3.0, InterpolationType::Linear));
+        copies.add_keyframe(Keyframe::new(10, f32::NAN, InterpolationType::Hold));
+        let options = ShapeRepeaterOptions {
+            copies_animation: Some(copies),
+            ..ShapeRepeaterOptions::default()
+        };
+
+        assert_eq!(evaluate_shape_repeater_at_frame(&options, 5).len(), 0);
+        assert_eq!(evaluate_shape_repeater_at_frame(&options, 10).len(), 0);
+        let mut fractional = ShapeRepeaterOptions::default();
+        let mut animation = Animatable::new_constant(1.0);
+        animation.add_keyframe(Keyframe::new(10, 3.9, InterpolationType::Hold));
+        fractional.copies_animation = Some(animation);
+        assert_eq!(evaluate_shape_repeater_at_frame(&fractional, 10).len(), 3);
+    }
+
+    #[test]
+    fn test_shape_repeater_animated_position_uses_requested_frame() {
+        let mut position = Animatable::new_constant([0.0, 0.0]);
+        position.add_keyframe(Keyframe::new(0, [0.0, 0.0], InterpolationType::Linear));
+        position.add_keyframe(Keyframe::new(10, [40.0, 20.0], InterpolationType::Linear));
+        let options = ShapeRepeaterOptions {
+            copies: 2,
+            position_offset_animation: Some(position),
+            ..ShapeRepeaterOptions::default()
+        };
+        let frame10 = evaluate_shape_repeater_at_frame(&options, 10);
+        assert!((frame10[1].transform_matrix[0][2] - 40.0).abs() < 1.0e-5);
+        assert!((frame10[1].transform_matrix[1][2] - 20.0).abs() < 1.0e-5);
+    }
+
+    #[test]
+    fn test_shape_repeater_animated_scale_and_opacity_use_requested_frame() {
+        let mut scale = Animatable::new_constant([1.0, 1.0]);
+        scale.add_keyframe(Keyframe::new(0, [1.0, 1.0], InterpolationType::Linear));
+        scale.add_keyframe(Keyframe::new(10, [0.5, 0.25], InterpolationType::Linear));
+        let mut opacity = Animatable::new_constant([1.0, 1.0]);
+        opacity.add_keyframe(Keyframe::new(0, [1.0, 1.0], InterpolationType::Linear));
+        opacity.add_keyframe(Keyframe::new(10, [0.2, 0.8], InterpolationType::Linear));
+        let options = ShapeRepeaterOptions {
+            copies: 2,
+            scale_offset_animation: Some(scale),
+            opacity_animation: Some(opacity),
+            ..ShapeRepeaterOptions::default()
+        };
+        let instances = evaluate_shape_repeater_at_frame(&options, 10);
+        assert!((instances[1].transform_matrix[0][0] - 0.5).abs() < 1.0e-5);
+        assert!((instances[1].transform_matrix[1][1] - 0.25).abs() < 1.0e-5);
+        assert!((instances[0].opacity - 0.2).abs() < 1.0e-5);
+        assert!((instances[1].opacity - 0.8).abs() < 1.0e-5);
+    }
+
+    #[test]
+    fn test_shape_repeater_animation_roundtrips_through_json() {
+        let mut rotation = Animatable::new_constant(0.0);
+        rotation.add_keyframe(Keyframe::new(12, 180.0, InterpolationType::Linear));
+        let options = ShapeRepeaterOptions {
+            rotation_offset_animation: Some(rotation),
+            ..ShapeRepeaterOptions::default()
+        };
+        let json = serde_json::to_string(&options).expect("serialize repeater");
+        let restored: ShapeRepeaterOptions =
+            serde_json::from_str(&json).expect("deserialize repeater");
+        assert_eq!(
+            restored.rotation_offset_animation.unwrap().evaluate(12),
+            180.0
+        );
+    }
+
+    #[test]
+    fn test_shape_repeater_legacy_json_defaults_animation_fields() {
+        let json = r#"{"copies":2,"offset":0,"position_offset":[10,0],"scale_offset":[1,1],"rotation_offset_deg":0,"start_opacity":1,"end_opacity":1,"composite_below":true}"#;
+        let options: ShapeRepeaterOptions = serde_json::from_str(json).expect("legacy repeater");
+        assert!(options.position_offset_animation.is_none());
+        assert!(options.scale_offset_animation.is_none());
+        assert!(options.rotation_offset_animation.is_none());
+        assert!(options.opacity_animation.is_none());
     }
 }

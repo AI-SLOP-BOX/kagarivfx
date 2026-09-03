@@ -91,8 +91,10 @@ pub fn evaluate_continuous_rasterization(
     let mut max_y = f32::MIN;
 
     for corner in &corners {
-        let tx = affine_matrix[0][0] * corner[0] + affine_matrix[0][1] * corner[1] + affine_matrix[0][2];
-        let ty = affine_matrix[1][0] * corner[0] + affine_matrix[1][1] * corner[1] + affine_matrix[1][2];
+        let tx =
+            affine_matrix[0][0] * corner[0] + affine_matrix[0][1] * corner[1] + affine_matrix[0][2];
+        let ty =
+            affine_matrix[1][0] * corner[0] + affine_matrix[1][1] * corner[1] + affine_matrix[1][2];
 
         min_x = min_x.min(tx);
         min_y = min_y.min(ty);

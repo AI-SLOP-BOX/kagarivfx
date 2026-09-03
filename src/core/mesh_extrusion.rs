@@ -38,10 +38,7 @@ pub struct ExtrudedMesh {
 }
 
 /// Extrudes a closed 2D polygon contour into a 3D volume mesh.
-pub fn extrude_2d_contour(
-    contour_points: &[[f32; 2]],
-    options: &ExtrusionOptions,
-) -> ExtrudedMesh {
+pub fn extrude_2d_contour(contour_points: &[[f32; 2]], options: &ExtrusionOptions) -> ExtrudedMesh {
     let mut mesh = ExtrudedMesh::default();
     let n = contour_points.len();
     if n < 3 {
@@ -82,8 +79,8 @@ pub fn extrude_2d_contour(
         // Quad vertices (4 per wall segment)
         mesh.vertices.push([p1[0], p1[1], z_front]); // 0: Front Top
         mesh.vertices.push([p2[0], p2[1], z_front]); // 1: Front Next
-        mesh.vertices.push([p2[0], p2[1], z_back]);  // 2: Back Next
-        mesh.vertices.push([p1[0], p1[1], z_back]);  // 3: Back Top
+        mesh.vertices.push([p2[0], p2[1], z_back]); // 2: Back Next
+        mesh.vertices.push([p1[0], p1[1], z_back]); // 3: Back Top
 
         for _ in 0..4 {
             mesh.normals.push(normal);
@@ -128,12 +125,7 @@ mod tests {
 
     #[test]
     fn test_extrude_2d_rectangle() {
-        let square = vec![
-            [0.0, 0.0],
-            [100.0, 0.0],
-            [100.0, 100.0],
-            [0.0, 100.0],
-        ];
+        let square = vec![[0.0, 0.0], [100.0, 0.0], [100.0, 100.0], [0.0, 100.0]];
 
         let opts = ExtrusionOptions {
             depth: 40.0,

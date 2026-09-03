@@ -1,9 +1,11 @@
 //! Versionable cross-domain document joining the VFX project and audio clock.
 
 use crate::core::audio_types::MixerChannel;
-use crate::core::automation_binding::{AutomationBinding, ProductionClock};
-use crate::core::timeline::{EffectType, LayerType, Project, ProjectItemType};
-use crate::core::unified_time::TempoMap;
+use crate::core::automation_binding::{AutomationBinding, AutomationCurve, ProductionClock};
+use crate::core::keyframe::{InterpolationType, Keyframe};
+use crate::core::property::Animatable;
+use crate::core::timeline::{Composition, EffectType, Layer, LayerType, Project, ProjectItemType};
+use crate::core::unified_time::{FrameRate, TempoMap};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -71,6 +73,520 @@ impl ProductionDocument {
             tempo: self.tempo.clone(),
             sample_rate: self.audio.sample_rate,
         }
+    }
+
+    /// Adds a Logic Pro-compatible absolute-sample automation lane and binds
+    /// it to a VFX target without exposing sample units to the VFX graph.
+    pub fn add_sample_automation_binding<I>(
+        &mut self,
+        source: impl Into<String>,
+        target: impl Into<String>,
+        points: I,
+        input_range: (f64, f64),
+        output_range: (f64, f64),
+    ) -> Result<(), String>
+    where
+        I: IntoIterator<Item = (i64, f64)>,
+    {
+        if self.bindings.len() >= Self::MAX_BINDINGS {
+            return Err("too many automation bindings".into());
+        }
+        let curve = AutomationCurve::from_sample_points(points, self.audio.sample_rate)
+            .map_err(str::to_owned)?;
+        let binding = AutomationBinding {
+            source: source.into(),
+            target: target.into(),
+            curve,
+            input_min: input_range.0,
+            input_max: input_range.1,
+            output_min: output_range.0,
+            output_max: output_range.1,
+        };
+        binding.validate().map_err(str::to_owned)?;
+        self.bindings.push(binding);
+        Ok(())
+    }
+
+    /// Validates every cross-domain lane before save or headless rendering.
+    pub fn validate_bindings(&self) -> Result<(), String> {
+        if self.bindings.len() > Self::MAX_BINDINGS {
+            return Err("too many automation bindings".into());
+        }
+        for (index, binding) in self.bindings.iter().enumerate() {
+            binding
+                .validate()
+                .map_err(|error| format!("binding {index}: {error}"))?;
+        }
+        Ok(())
+    }
+
+    pub fn evaluate_bindings(&self, source_values: &HashMap<String, f64>) -> HashMap<String, f64> {
+        let mut targets = HashMap::new();
+        for binding in &self.bindings {
+            if let Some(source_value) = source_values.get(&binding.source) {
+                if let Some(value) = binding.map_value(*source_value) {
+                    targets.insert(binding.target.clone(), value);
+                }
+            }
+        }
+        targets
+    }
+
+    /// Evaluate the document-owned automation curves at a shared timeline time.
+    /// Live source values should use `evaluate_bindings`; this path is for
+    /// deterministic playback, preview, and headless rendering.
+    pub fn evaluate_bindings_at_time(
+        &self,
+        time: crate::core::unified_time::Time,
+    ) -> HashMap<String, f64> {
+        self.bindings
+            .iter()
+            .filter_map(|binding| {
+                binding
+                    .evaluate(time)
+                    .filter(|value| value.is_finite())
+                    .map(|value| (binding.target.clone(), value))
+            })
+            .collect()
+    }
+
+    /// Build the render snapshot for a frame with document-owned bindings applied.
+    /// The source document is never mutated, so preview and headless rendering can
+    /// safely evaluate the same production state in parallel.
+    pub fn composition_for_frame(
+        &self,
+        composition_index: usize,
+        frame: u32,
+    ) -> Option<Composition> {
+        let composition = self.project.compositions.get(composition_index)?;
+        let rate = FrameRate::new(composition.fps.max(1), 1)?;
+        let time = crate::core::unified_time::Time::from_frame(i64::from(frame), rate);
+        let targets = self.evaluate_bindings_at_time(time);
+        let mut snapshot = self.clone();
+        snapshot.apply_binding_targets_at_frame_in_composition(&targets, frame, composition_index);
+        snapshot
+            .project
+            .compositions
+            .get(composition_index)
+            .cloned()
+    }
+
+    /// Build a frame snapshot using live Audio/MIDI source values. Sources not
+    /// present in `source_values` continue to use their saved automation curve.
+    pub fn composition_for_frame_with_sources(
+        &self,
+        composition_index: usize,
+        frame: u32,
+        source_values: &HashMap<String, f64>,
+    ) -> Option<Composition> {
+        let composition = self.project.compositions.get(composition_index)?;
+        let rate = FrameRate::new(composition.fps.max(1), 1)?;
+        let time = crate::core::unified_time::Time::from_frame(i64::from(frame), rate);
+        crate::core::expression_engine::set_audio_from_binding_sources(source_values);
+        let mut targets = self.evaluate_bindings_at_time(time);
+        targets.extend(self.evaluate_bindings(source_values));
+        let mut snapshot = self.clone();
+        snapshot.apply_binding_targets_at_frame_in_composition(&targets, frame, composition_index);
+        snapshot
+            .project
+            .compositions
+            .get(composition_index)
+            .cloned()
+    }
+
+    pub fn apply_binding_targets_at_frame(
+        &mut self,
+        targets: &HashMap<String, f64>,
+        frame: u32,
+    ) -> usize {
+        self.apply_binding_targets_at_frame_scoped(targets, frame, None)
+    }
+
+    fn apply_binding_targets_at_frame_in_composition(
+        &mut self,
+        targets: &HashMap<String, f64>,
+        frame: u32,
+        composition_index: usize,
+    ) -> usize {
+        self.apply_binding_targets_at_frame_scoped(targets, frame, Some(composition_index))
+    }
+
+    fn apply_binding_targets_at_frame_scoped(
+        &mut self,
+        targets: &HashMap<String, f64>,
+        frame: u32,
+        scoped_composition: Option<usize>,
+    ) -> usize {
+        let mut applied = 0;
+        for (target, value) in targets {
+            if target.starts_with("vfx.comp.") && target.contains(".camera.") {
+                if let Some(camera_path) = target.strip_prefix("vfx.comp.") {
+                    if value.is_finite() {
+                        for (composition_index, composition) in
+                            self.project.compositions.iter_mut().enumerate()
+                        {
+                            if scoped_composition.is_some_and(|index| index != composition_index) {
+                                continue;
+                            }
+                            let prefix = format!("{}.", composition.id);
+                            let Some(property) = camera_path
+                                .strip_prefix(&prefix)
+                                .and_then(|path| path.strip_prefix("camera."))
+                            else {
+                                continue;
+                            };
+                            let camera = composition.resolve_camera_mut();
+                            let camera_value = *value as f32;
+                            match property {
+                                "fov" | "fov_degrees" => {
+                                    let value = camera_value.clamp(1.0, 179.0);
+                                    let legacy_value = camera.fov_degrees;
+                                    camera
+                                        .fov_animation
+                                        .get_or_insert_with(|| {
+                                            Animatable::new_constant(legacy_value)
+                                        })
+                                        .set_keyframe(Keyframe::new(
+                                            frame,
+                                            value,
+                                            InterpolationType::Linear,
+                                        ));
+                                    camera.fov_degrees = value;
+                                    applied += 1;
+                                }
+                                "focus_distance" => {
+                                    let value = camera_value.max(0.0);
+                                    let legacy_value = camera.focus_distance;
+                                    camera
+                                        .focus_distance_animation
+                                        .get_or_insert_with(|| {
+                                            Animatable::new_constant(legacy_value)
+                                        })
+                                        .set_keyframe(Keyframe::new(
+                                            frame,
+                                            value,
+                                            InterpolationType::Linear,
+                                        ));
+                                    camera.focus_distance = value;
+                                    applied += 1;
+                                }
+                                "aperture" => {
+                                    let value = camera_value.max(0.0);
+                                    let legacy_value = camera.aperture;
+                                    camera
+                                        .aperture_animation
+                                        .get_or_insert_with(|| {
+                                            Animatable::new_constant(legacy_value)
+                                        })
+                                        .set_keyframe(Keyframe::new(
+                                            frame,
+                                            value,
+                                            InterpolationType::Linear,
+                                        ));
+                                    camera.aperture = value;
+                                    applied += 1;
+                                }
+                                "dof_enabled" => {
+                                    camera.set_dof_enabled_at(frame, camera_value >= 0.5);
+                                    applied += 1;
+                                }
+                                "dof_max_blur" => {
+                                    camera.set_dof_max_blur_at(frame, camera_value);
+                                    applied += 1;
+                                }
+                                "position.x" | "position.y" | "position.z" => {
+                                    let mut position = camera.transform.position.evaluate(frame);
+                                    let axis = match property.as_bytes().last().copied() {
+                                        Some(b'x') => 0,
+                                        Some(b'y') => 1,
+                                        _ => 2,
+                                    };
+                                    position[axis] = camera_value;
+                                    camera.transform.position.set_keyframe(Keyframe::new(
+                                        frame,
+                                        position,
+                                        InterpolationType::Linear,
+                                    ));
+                                    applied += 1;
+                                }
+                                "rotation.x" | "rotation.y" | "rotation.z" => {
+                                    let mut rotation = camera.transform.rotation.evaluate(frame);
+                                    let axis = match property.as_bytes().last().copied() {
+                                        Some(b'x') => 0,
+                                        Some(b'y') => 1,
+                                        _ => 2,
+                                    };
+                                    rotation[axis] = camera_value;
+                                    camera.transform.rotation.set_keyframe(Keyframe::new(
+                                        frame,
+                                        rotation,
+                                        InterpolationType::Linear,
+                                    ));
+                                    applied += 1;
+                                }
+                                "scale.x" | "scale.y" | "scale.z" => {
+                                    let mut scale = camera.transform.scale.evaluate(frame);
+                                    let axis = match property.as_bytes().last().copied() {
+                                        Some(b'x') => 0,
+                                        Some(b'y') => 1,
+                                        _ => 2,
+                                    };
+                                    scale[axis] = camera_value;
+                                    camera.transform.scale.set_keyframe(Keyframe::new(
+                                        frame,
+                                        scale,
+                                        InterpolationType::Linear,
+                                    ));
+                                    applied += 1;
+                                }
+                                _ => {}
+                            }
+                            break;
+                        }
+                    }
+                }
+                continue;
+            }
+            let legacy_layer_path = target.strip_prefix("vfx.layer.");
+            let composition_target = target.strip_prefix("vfx.comp.");
+            if legacy_layer_path.is_none() && composition_target.is_none() {
+                continue;
+            }
+            if !value.is_finite() {
+                continue;
+            }
+            for (composition_index, composition) in self.project.compositions.iter_mut().enumerate()
+            {
+                if scoped_composition.is_some_and(|index| index != composition_index) {
+                    continue;
+                }
+                let layer_path = if let Some(path) = legacy_layer_path {
+                    path
+                } else {
+                    let prefix = format!("{}.", composition.id);
+                    let Some(path) = composition_target
+                        .and_then(|path| path.strip_prefix(&prefix))
+                        .and_then(|path| path.strip_prefix("layer."))
+                    else {
+                        continue;
+                    };
+                    path
+                };
+                let Some((layer_index, property)) =
+                    composition
+                        .layers
+                        .iter()
+                        .enumerate()
+                        .find_map(|(index, layer)| {
+                            let prefix = format!("{}.", layer.id);
+                            layer_path
+                                .strip_prefix(&prefix)
+                                .map(|property| (index, property))
+                        })
+                else {
+                    continue;
+                };
+                if let Some(layer) = composition.layers.get_mut(layer_index) {
+                    let value = *value as f32;
+                    let changed = match property {
+                        "opacity" => {
+                            layer.transform.opacity.set_keyframe(Keyframe::new(
+                                frame,
+                                value.clamp(0.0, 100.0),
+                                InterpolationType::Linear,
+                            ));
+                            true
+                        }
+                        "position.x" | "position.y" => {
+                            let mut position = layer.transform.position.evaluate(frame);
+                            position[usize::from(property.ends_with('y'))] = value;
+                            layer.transform.position.set_keyframe(Keyframe::new(
+                                frame,
+                                position,
+                                InterpolationType::Linear,
+                            ));
+                            true
+                        }
+                        "scale.x" | "scale.y" => {
+                            let mut scale = layer.transform.scale.evaluate(frame);
+                            scale[usize::from(property.ends_with('y'))] = value;
+                            layer.transform.scale.set_keyframe(Keyframe::new(
+                                frame,
+                                scale,
+                                InterpolationType::Linear,
+                            ));
+                            true
+                        }
+                        "anchor_point.x" | "anchor_point.y" => {
+                            let mut anchor = layer.transform.anchor_point.evaluate(frame);
+                            anchor[usize::from(property.ends_with('y'))] = value;
+                            layer.transform.anchor_point.set_keyframe(Keyframe::new(
+                                frame,
+                                anchor,
+                                InterpolationType::Linear,
+                            ));
+                            true
+                        }
+                        "position.z" => {
+                            let mut position = layer.transform_3d.position.evaluate(frame);
+                            position[2] = value;
+                            layer.transform_3d.position.set_keyframe(Keyframe::new(
+                                frame,
+                                position,
+                                InterpolationType::Linear,
+                            ));
+                            true
+                        }
+                        "rotation.x" | "rotation.y" | "rotation.z" => {
+                            let mut rotation = layer.transform_3d.rotation.evaluate(frame);
+                            let axis = match property.as_bytes().last().copied() {
+                                Some(b'x') => 0,
+                                Some(b'y') => 1,
+                                _ => 2,
+                            };
+                            rotation[axis] = value;
+                            layer.transform_3d.rotation.set_keyframe(Keyframe::new(
+                                frame,
+                                rotation,
+                                InterpolationType::Linear,
+                            ));
+                            true
+                        }
+                        "scale.z" => {
+                            let mut scale = layer.transform_3d.scale.evaluate(frame);
+                            scale[2] = value;
+                            layer.transform_3d.scale.set_keyframe(Keyframe::new(
+                                frame,
+                                scale,
+                                InterpolationType::Linear,
+                            ));
+                            true
+                        }
+                        "rotation" => {
+                            layer.transform.rotation.set_keyframe(Keyframe::new(
+                                frame,
+                                value,
+                                InterpolationType::Linear,
+                            ));
+                            true
+                        }
+                        "visible" | "enabled" => {
+                            layer.visible = value >= 0.5;
+                            true
+                        }
+                        "motion_blur" => {
+                            layer.motion_blur = value >= 0.5;
+                            true
+                        }
+                        "solo" => {
+                            layer.solo = value >= 0.5;
+                            true
+                        }
+                        "is_3d" => {
+                            layer.is_3d = value >= 0.5;
+                            true
+                        }
+                        "effects_enabled" => {
+                            layer.effects_enabled = value >= 0.5;
+                            true
+                        }
+                        "preserve_transparency" => {
+                            layer.preserve_transparency = value >= 0.5;
+                            true
+                        }
+                        "in_frame" => {
+                            let max_frame = layer.out_frame.saturating_sub(1);
+                            layer.in_frame = value.max(0.0).round() as u32;
+                            layer.in_frame = layer.in_frame.min(max_frame);
+                            true
+                        }
+                        "out_frame" => {
+                            let min_frame = layer.in_frame.saturating_add(1);
+                            let max_frame = composition.duration_frames;
+                            layer.out_frame = value.max(0.0).round() as u32;
+                            layer.out_frame = layer.out_frame.clamp(min_frame, max_frame);
+                            true
+                        }
+                        property if property.starts_with("effect.") => {
+                            let mut parts = property.split('.');
+                            let (_, effect_id, effect_property) =
+                                (parts.next(), parts.next(), parts.next());
+                            if parts.next().is_some()
+                                || effect_id.is_none()
+                                || effect_property.is_none()
+                            {
+                                false
+                            } else if let Some(effect) = layer
+                                .effects
+                                .iter_mut()
+                                .find(|effect| Some(effect.id.as_str()) == effect_id)
+                            {
+                                match (&mut effect.effect_type, effect_property.unwrap()) {
+                                    (_, "enabled") => {
+                                        effect.enabled = value >= 0.5;
+                                        true
+                                    }
+                                    (EffectType::GaussianBlur { blur_radius }, "blur_radius")
+                                    | (
+                                        EffectType::ColorTint {
+                                            intensity: blur_radius,
+                                            ..
+                                        },
+                                        "intensity",
+                                    )
+                                    | (
+                                        EffectType::Vignette {
+                                            intensity: blur_radius,
+                                            ..
+                                        },
+                                        "intensity",
+                                    )
+                                    | (
+                                        EffectType::Glow {
+                                            intensity: blur_radius,
+                                            ..
+                                        },
+                                        "intensity",
+                                    ) => {
+                                        blur_radius.set_keyframe(Keyframe::new(
+                                            frame,
+                                            value.max(0.0),
+                                            InterpolationType::Linear,
+                                        ));
+                                        true
+                                    }
+                                    (EffectType::DropShadow { opacity, .. }, "opacity")
+                                    | (
+                                        EffectType::HueSaturation {
+                                            saturation: opacity,
+                                            ..
+                                        },
+                                        "saturation",
+                                    )
+                                    | (EffectType::Levels { gamma: opacity, .. }, "gamma") => {
+                                        opacity.set_keyframe(Keyframe::new(
+                                            frame,
+                                            value,
+                                            InterpolationType::Linear,
+                                        ));
+                                        true
+                                    }
+                                    _ => false,
+                                }
+                            } else {
+                                false
+                            }
+                        }
+                        _ => false,
+                    };
+                    if changed {
+                        applied += 1;
+                    }
+                    break;
+                }
+            }
+        }
+        applied
     }
 
     pub fn validate(&self) -> Result<(), String> {
@@ -226,12 +742,7 @@ impl ProductionDocument {
             channel.validate().map_err(str::to_owned)?;
         }
         self.tempo.validate().map_err(str::to_owned)?;
-        if self.bindings.len() > Self::MAX_BINDINGS {
-            return Err("production document contains too many automation bindings".into());
-        }
-        for binding in &self.bindings {
-            binding.validate().map_err(str::to_owned)?;
-        }
+        self.validate_bindings()?;
         Ok(())
     }
 
@@ -406,7 +917,7 @@ fn validate_composition(
     }
     let mut layer_ids = HashSet::new();
     let mut layer_parents = HashMap::new();
-    for layer in &composition.layers {
+    for (layer_index, layer) in composition.layers.iter().enumerate() {
         if !metadata_text_is_safe(&layer.id)
             || !metadata_text_is_safe(&layer.name)
             || layer.id.len() > ProductionDocument::MAX_ASSET_STRING_LENGTH
@@ -430,6 +941,9 @@ fn validate_composition(
         }
         if layer.in_frame >= layer.out_frame || layer.out_frame > composition.duration_frames {
             return Err("layer frame range must fit within the composition".into());
+        }
+        if layer_index == 0 && layer.track_matte != crate::core::timeline::TrackMatteMode::None {
+            return Err("the first layer cannot use a track matte without a source layer".into());
         }
         if !vector_animation_is_finite(&layer.transform.anchor_point)
             || !vector_animation_is_finite(&layer.transform.position)
@@ -737,6 +1251,10 @@ fn validate_camera(camera: &crate::core::timeline::Camera3D) -> Result<(), Strin
         || camera.aperture < 0.0
         || !camera.dof_max_blur.is_finite()
         || camera.dof_max_blur < 0.0
+        || camera
+            .dof_max_blur_animation
+            .as_ref()
+            .is_some_and(|track| !scalar_animation_is_finite(track))
         || (camera.dof_iris_sides != 0 && !(3..=32).contains(&camera.dof_iris_sides))
     {
         return Err("camera settings are invalid".into());
@@ -744,8 +1262,28 @@ fn validate_camera(camera: &crate::core::timeline::Camera3D) -> Result<(), Strin
     if !vector3_animation_is_finite(&camera.transform.position)
         || !vector3_animation_is_finite(&camera.transform.rotation)
         || !vector3_animation_is_finite(&camera.transform.scale)
+        || camera
+            .fov_animation
+            .as_ref()
+            .is_some_and(|track| !scalar_animation_is_finite(track))
+        || camera
+            .focus_distance_animation
+            .as_ref()
+            .is_some_and(|track| !scalar_animation_is_finite(track))
+        || camera
+            .aperture_animation
+            .as_ref()
+            .is_some_and(|track| !scalar_animation_is_finite(track))
+        || camera
+            .dof_max_blur_animation
+            .as_ref()
+            .is_some_and(|track| !scalar_animation_is_finite(track))
+        || camera
+            .dof_enabled_animation
+            .as_ref()
+            .is_some_and(|track| !scalar_animation_is_finite(track))
     {
-        return Err("camera transform animation values must be finite".into());
+        return Err("camera animation values must be finite".into());
     }
     Ok(())
 }
@@ -1638,6 +2176,25 @@ mod tests {
         invalid_project.compositions[0].active_camera.fov_degrees = f32::NAN;
         assert!(ProductionDocument::new(invalid_project).validate().is_err());
 
+        for track in 0..3 {
+            let mut invalid_project = Project::default();
+            let camera = &mut invalid_project.compositions[0].active_camera;
+            let bad = Animatable::new_animated(vec![Keyframe::new(
+                12,
+                f32::NAN,
+                InterpolationType::Linear,
+            )]);
+            match track {
+                0 => camera.fov_animation = Some(bad.clone()),
+                1 => camera.focus_distance_animation = Some(bad.clone()),
+                _ => camera.aperture_animation = Some(bad),
+            }
+            assert!(
+                ProductionDocument::new(invalid_project).validate().is_err(),
+                "camera lens track {track} must reject non-finite values"
+            );
+        }
+
         let mut invalid_project = Project::default();
         invalid_project.compositions[0]
             .lights
@@ -2024,5 +2581,350 @@ mod tests {
             2.0
         );
         assert!(document.bindings.is_empty());
+    }
+
+    #[test]
+    fn rejects_track_matte_without_source_layer() {
+        let mut project = Project::default();
+        project.compositions[0].layers[0].track_matte =
+            crate::core::timeline::TrackMatteMode::AlphaMatte;
+        assert!(ProductionDocument::new(project).validate().is_err());
+    }
+
+    #[test]
+    fn evaluates_multiple_automation_bindings_from_live_sources() {
+        let mut document = ProductionDocument::new(Project::default());
+        let curve = crate::core::automation_binding::AutomationCurve {
+            points: vec![crate::core::automation_binding::AutomationPoint {
+                time: crate::core::unified_time::Time::ZERO,
+                value: 0.0,
+            }],
+        };
+        document.bindings = vec![
+            AutomationBinding {
+                source: "audio.bass".into(),
+                target: "vfx.glow.intensity".into(),
+                curve: curve.clone(),
+                input_min: 0.0,
+                input_max: 1.0,
+                output_min: 10.0,
+                output_max: 50.0,
+            },
+            AutomationBinding {
+                source: "midi.cc1".into(),
+                target: "vfx.particles.rate".into(),
+                curve,
+                input_min: 0.0,
+                input_max: 127.0,
+                output_min: 0.0,
+                output_max: 1000.0,
+            },
+        ];
+        let sources = HashMap::from([
+            ("audio.bass".into(), 0.5),
+            ("midi.cc1".into(), 127.0),
+            ("unbound".into(), f64::NAN),
+        ]);
+        let targets = document.evaluate_bindings(&sources);
+        assert_eq!(targets.get("vfx.glow.intensity"), Some(&30.0));
+        assert_eq!(targets.get("vfx.particles.rate"), Some(&1000.0));
+        assert!(!targets.contains_key("unbound"));
+    }
+
+    #[test]
+    fn evaluates_saved_binding_curves_at_shared_time() {
+        let mut document = ProductionDocument::new(Project::default());
+        document.bindings = vec![AutomationBinding {
+            source: "audio.bass".into(),
+            target: "vfx.layer.layer_bg.opacity".into(),
+            curve: crate::core::automation_binding::AutomationCurve::from_events([
+                crate::core::automation_binding::AutomationPoint {
+                    time: crate::core::unified_time::Time::ZERO,
+                    value: 0.0,
+                },
+                crate::core::automation_binding::AutomationPoint {
+                    time: crate::core::unified_time::Time::new(1, 1),
+                    value: 1.0,
+                },
+            ])
+            .unwrap(),
+            input_min: 0.0,
+            input_max: 1.0,
+            output_min: 20.0,
+            output_max: 80.0,
+        }];
+
+        let targets =
+            document.evaluate_bindings_at_time(crate::core::unified_time::Time::new(1, 2));
+        assert_eq!(targets.get("vfx.layer.layer_bg.opacity"), Some(&50.0));
+    }
+
+    #[test]
+    fn composition_snapshot_applies_saved_bindings_without_mutating_document() {
+        let mut document = ProductionDocument::new(Project::default());
+        document.bindings = vec![AutomationBinding {
+            source: "audio.bass".into(),
+            target: "vfx.layer.layer_bg.opacity".into(),
+            curve: crate::core::automation_binding::AutomationCurve::from_events([
+                crate::core::automation_binding::AutomationPoint {
+                    time: crate::core::unified_time::Time::ZERO,
+                    value: 0.0,
+                },
+                crate::core::automation_binding::AutomationPoint {
+                    time: crate::core::unified_time::Time::new(10, 1),
+                    value: 1.0,
+                },
+            ])
+            .unwrap(),
+            input_min: 0.0,
+            input_max: 1.0,
+            output_min: 10.0,
+            output_max: 90.0,
+        }];
+
+        let snapshot = document.composition_for_frame(0, 150).unwrap();
+        assert_eq!(snapshot.layers[0].transform.opacity.evaluate(150), 50.0);
+        assert_eq!(
+            document.project.compositions[0].layers[0]
+                .transform
+                .opacity
+                .evaluate(150),
+            100.0
+        );
+    }
+
+    #[test]
+    fn composition_snapshot_scopes_duplicate_layer_ids_and_keeps_precomp_data() {
+        let mut project = Project::default();
+        let mut child = Composition::new("comp_child".into(), "Child".into(), 320, 180, 30, 30);
+        child.add_layer(Layer::new(
+            "child.layer".into(),
+            "Child layer".into(),
+            LayerType::Null,
+            30,
+        ));
+        project.compositions.push(child);
+        let mut document = ProductionDocument::new(project);
+        document.bindings = vec![AutomationBinding {
+            source: "audio.bass".into(),
+            target: "vfx.comp.comp_child.layer.child.layer.opacity".into(),
+            curve: crate::core::automation_binding::AutomationCurve::from_events([
+                crate::core::automation_binding::AutomationPoint {
+                    time: crate::core::unified_time::Time::ZERO,
+                    value: 0.0,
+                },
+            ])
+            .unwrap(),
+            input_min: 0.0,
+            input_max: 1.0,
+            output_min: 25.0,
+            output_max: 75.0,
+        }];
+
+        let child_snapshot = document.composition_for_frame(1, 0).unwrap();
+        let main_snapshot = document.composition_for_frame(0, 0).unwrap();
+        assert_eq!(child_snapshot.id, "comp_child");
+        assert_eq!(child_snapshot.layers[0].transform.opacity.evaluate(0), 25.0);
+        assert_eq!(main_snapshot.layers[0].transform.opacity.evaluate(0), 100.0);
+    }
+
+    #[test]
+    fn live_sources_override_saved_curves_in_frame_snapshot() {
+        let mut document = ProductionDocument::new(Project::default());
+        document.bindings = vec![AutomationBinding {
+            source: "audio.bass".into(),
+            target: "vfx.layer.layer_bg.opacity".into(),
+            curve: crate::core::automation_binding::AutomationCurve::from_events([
+                crate::core::automation_binding::AutomationPoint {
+                    time: crate::core::unified_time::Time::ZERO,
+                    value: 0.0,
+                },
+            ])
+            .unwrap(),
+            input_min: 0.0,
+            input_max: 1.0,
+            output_min: 10.0,
+            output_max: 90.0,
+        }];
+        let live_sources = HashMap::from([(String::from("audio.bass"), 1.0)]);
+
+        let snapshot = document
+            .composition_for_frame_with_sources(0, 0, &live_sources)
+            .unwrap();
+        assert_eq!(snapshot.layers[0].transform.opacity.evaluate(0), 90.0);
+    }
+
+    #[test]
+    fn applies_transform_and_effect_targets_as_keyframes() {
+        let mut project = Project::default();
+        let layer_id = project.compositions[0].layers[0].id.clone();
+        let layer = &mut project.compositions[0].layers[0];
+        let effect = crate::core::timeline::Effect {
+            id: "blur-1".into(),
+            name: "Blur".into(),
+            effect_type: EffectType::GaussianBlur {
+                blur_radius: crate::core::property::Animatable::new_constant(2.0),
+            },
+            enabled: true,
+        };
+        layer.effects.push(effect);
+        let mut document = ProductionDocument::new(project);
+        let targets = HashMap::from([
+            (format!("vfx.layer.{layer_id}.opacity"), 75.0),
+            (format!("vfx.layer.{layer_id}.position.x"), 320.0),
+            (
+                format!("vfx.layer.{layer_id}.effect.blur-1.blur_radius"),
+                18.0,
+            ),
+            (format!("vfx.layer.{layer_id}.effect.blur-1.enabled"), 0.0),
+            (format!("vfx.layer.{layer_id}.enabled"), 0.0),
+            (format!("vfx.layer.{layer_id}.motion_blur"), 1.0),
+            (format!("vfx.layer.{layer_id}.anchor_point.x"), 12.0),
+            (format!("vfx.layer.{layer_id}.position.z"), 48.0),
+            (format!("vfx.layer.{layer_id}.rotation.x"), 10.0),
+            (format!("vfx.layer.{layer_id}.rotation.y"), 20.0),
+            (format!("vfx.layer.{layer_id}.rotation.z"), 30.0),
+            (format!("vfx.layer.{layer_id}.scale.z"), 125.0),
+        ]);
+        assert_eq!(document.apply_binding_targets_at_frame(&targets, 12), 12);
+        let layer = &document.project.compositions[0].layers[0];
+        assert_eq!(layer.transform.opacity.evaluate(12), 75.0);
+        assert_eq!(layer.transform.position.evaluate(12)[0], 320.0);
+        assert!(!layer.visible);
+        assert!(layer.motion_blur);
+        assert_eq!(layer.transform.anchor_point.evaluate(12)[0], 12.0);
+        assert_eq!(layer.transform_3d.position.evaluate(12)[2], 48.0);
+        assert_eq!(layer.transform_3d.rotation.evaluate(12), [10.0, 20.0, 30.0]);
+        assert_eq!(layer.transform_3d.scale.evaluate(12)[2], 125.0);
+        match &layer.effects[0].effect_type {
+            EffectType::GaussianBlur { blur_radius } => {
+                assert_eq!(blur_radius.evaluate(12), 18.0)
+            }
+            _ => panic!("expected Gaussian Blur"),
+        }
+        assert!(!layer.effects[0].enabled);
+    }
+
+    #[test]
+    fn applies_targets_to_layer_ids_containing_dots() {
+        let mut project = Project::default();
+        project.compositions[0].layers[0].id = "hero.main".into();
+        let mut document = ProductionDocument::new(project);
+        let targets = HashMap::from([(String::from("vfx.layer.hero.main.opacity"), 42.0)]);
+
+        assert_eq!(document.apply_binding_targets_at_frame(&targets, 7), 1);
+        assert_eq!(
+            document.project.compositions[0].layers[0]
+                .transform
+                .opacity
+                .evaluate(7),
+            42.0
+        );
+    }
+
+    #[test]
+    fn binding_time_targets_remain_inside_valid_layer_range() {
+        let mut document = ProductionDocument::new(Project::default());
+        let layer_id = document.project.compositions[0].layers[0].id.clone();
+        let targets = HashMap::from([
+            (format!("vfx.layer.{layer_id}.in_frame"), 500.0),
+            (format!("vfx.layer.{layer_id}.out_frame"), -10.0),
+        ]);
+
+        assert_eq!(document.apply_binding_targets_at_frame(&targets, 0), 2);
+        let layer = &document.project.compositions[0].layers[0];
+        assert!(layer.in_frame < layer.out_frame);
+        assert!(layer.out_frame <= document.project.compositions[0].duration_frames);
+    }
+
+    #[test]
+    fn camera_binding_clamps_optical_parameters_per_composition() {
+        let mut document = ProductionDocument::new(Project::default());
+        let comp_id = document.project.compositions[0].id.clone();
+        let targets = HashMap::from([
+            (format!("vfx.comp.{comp_id}.camera.fov"), 500.0),
+            (format!("vfx.comp.{comp_id}.camera.focus_distance"), -2.0),
+            (format!("vfx.comp.{comp_id}.camera.aperture"), -1.0),
+            (format!("vfx.comp.{comp_id}.camera.dof_enabled"), 1.0),
+            (format!("vfx.comp.{comp_id}.camera.dof_max_blur"), 500.0),
+            (format!("vfx.comp.{comp_id}.camera.position.z"), 120.0),
+            (format!("vfx.comp.{comp_id}.camera.rotation.y"), 35.0),
+            (format!("vfx.comp.{comp_id}.camera.scale.x"), 110.0),
+        ]);
+
+        assert_eq!(document.apply_binding_targets_at_frame(&targets, 0), 8);
+        let camera = &document.project.compositions[0].active_camera;
+        assert_eq!(camera.fov_degrees, 179.0);
+        assert_eq!(camera.focus_distance, 0.0);
+        assert_eq!(camera.aperture, 0.0);
+        assert!(camera.dof_enabled);
+        assert_eq!(camera.dof_max_blur, 64.0);
+        assert_eq!(camera.transform.position.evaluate(0)[2], 120.0);
+        assert_eq!(camera.transform.rotation.evaluate(0)[1], 35.0);
+        assert_eq!(camera.transform.scale.evaluate(0)[0], 110.0);
+    }
+
+    #[test]
+    fn camera_binding_targets_selected_scene_camera_not_legacy_fallback() {
+        let mut document = ProductionDocument::new(Project::default());
+        let comp = &mut document.project.compositions[0];
+        comp.cameras.push(crate::core::timeline::Camera3D {
+            name: "Wide".into(),
+            ..crate::core::timeline::Camera3D::default()
+        });
+        comp.set_active_camera(Some(0));
+        let comp_id = comp.id.clone();
+        let targets = HashMap::from([(format!("vfx.comp.{comp_id}.camera.fov"), 92.0)]);
+
+        assert_eq!(document.apply_binding_targets_at_frame(&targets, 0), 1);
+        assert_eq!(
+            document.project.compositions[0].cameras[0].fov_degrees,
+            92.0
+        );
+        assert_eq!(
+            document.project.compositions[0].active_camera.fov_degrees,
+            50.0
+        );
+    }
+
+    #[test]
+    fn sample_automation_binding_is_available_on_video_timeline() {
+        let mut document = ProductionDocument::new(Project::default());
+        document.audio.sample_rate = 48_000;
+        document
+            .add_sample_automation_binding(
+                "audio.bass",
+                "vfx.glow.intensity",
+                [(0, 0.0), (24_000, 1.0)],
+                (0.0, 1.0),
+                (0.0, 100.0),
+            )
+            .unwrap();
+
+        let values = document.evaluate_bindings_at_time(crate::core::unified_time::Time::new(1, 4));
+        assert_eq!(values.get("vfx.glow.intensity"), Some(&50.0));
+    }
+
+    #[test]
+    fn validates_all_bindings_with_an_actionable_index() {
+        let mut document = ProductionDocument::new(Project::default());
+        document.bindings.push(AutomationBinding {
+            source: "audio.bass".into(),
+            target: "vfx.glow.intensity".into(),
+            curve: crate::core::automation_binding::AutomationCurve {
+                points: vec![crate::core::automation_binding::AutomationPoint {
+                    time: crate::core::unified_time::Time::ZERO,
+                    value: 0.0,
+                }],
+            },
+            input_min: 1.0,
+            input_max: 1.0,
+            output_min: 0.0,
+            output_max: 100.0,
+        });
+        assert_eq!(
+            document.validate_bindings().unwrap_err(),
+            "binding 0: automation input range must be increasing"
+        );
     }
 }

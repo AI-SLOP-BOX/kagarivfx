@@ -79,16 +79,20 @@ fn is_printable_ascii(s: &str) -> bool {
 }
 
 pub fn aep_to_compositions(header: &AepHeader) -> Vec<Composition> {
-    header.items.iter().map(|item| {
-        Composition::new(
-            item.name.clone(),
-            item.name.clone(),
-            item.width,
-            item.height,
-            item.fps as u32,
-            item.duration_frames.max(1),
-        )
-    }).collect()
+    header
+        .items
+        .iter()
+        .map(|item| {
+            Composition::new(
+                item.name.clone(),
+                item.name.clone(),
+                item.width,
+                item.height,
+                item.fps as u32,
+                item.duration_frames.max(1),
+            )
+        })
+        .collect()
 }
 
 #[cfg(test)]

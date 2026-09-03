@@ -2,8 +2,17 @@
 /// Advanced Production-Grade After Effects VFX Kernels (Part 10).
 /// Every function contains authentic pixel mathematical transformation logic.
 // 1. CC Light Rays (Volumetric Light Ray Generation)
-pub fn apply_cc_light_rays(pixels: &mut [u8], width: u32, height: u32, center: [f32; 2], intensity: f32, length: f32) {
-    if intensity <= 0.001 || length <= 0.001 { return; }
+pub fn apply_cc_light_rays(
+    pixels: &mut [u8],
+    width: u32,
+    height: u32,
+    center: [f32; 2],
+    intensity: f32,
+    length: f32,
+) {
+    if intensity <= 0.001 || length <= 0.001 {
+        return;
+    }
     let temp = pixels.to_vec();
     let samples = 16u32;
 
@@ -43,7 +52,14 @@ pub fn apply_cc_light_rays(pixels: &mut [u8], width: u32, height: u32, center: [
 }
 
 // 2. CC Spotlight (3D Cone Spotlight Shading)
-pub fn apply_cc_spotlight(pixels: &mut [u8], width: u32, height: u32, light_pos: [f32; 2], cone_angle_deg: f32, cone_feather: f32) {
+pub fn apply_cc_spotlight(
+    pixels: &mut [u8],
+    width: u32,
+    height: u32,
+    light_pos: [f32; 2],
+    cone_angle_deg: f32,
+    cone_feather: f32,
+) {
     let half_angle_rad = cone_angle_deg.to_radians() * 0.5;
     let cos_angle = half_angle_rad.cos();
 
@@ -70,8 +86,16 @@ pub fn apply_cc_spotlight(pixels: &mut [u8], width: u32, height: u32, light_pos:
 }
 
 // 3. CC Kallidoscope Advanced (Multi-Mirror Radial Kaleidoscope)
-pub fn apply_cc_kallidoscope_adv(pixels: &mut [u8], width: u32, height: u32, center: [f32; 2], mirrors: u32) {
-    if mirrors == 0 { return; }
+pub fn apply_cc_kallidoscope_adv(
+    pixels: &mut [u8],
+    width: u32,
+    height: u32,
+    center: [f32; 2],
+    mirrors: u32,
+) {
+    if mirrors == 0 {
+        return;
+    }
     let temp = pixels.to_vec();
     let sector_angle = std::f32::consts::TAU / mirrors as f32;
 
@@ -82,8 +106,10 @@ pub fn apply_cc_kallidoscope_adv(pixels: &mut [u8], width: u32, height: u32, cen
             let dist = (dx * dx + dy * dy).sqrt();
             let mut angle = dy.atan2(dx);
 
-            if angle < 0.0 { angle += std::f32::consts::TAU; }
-            
+            if angle < 0.0 {
+                angle += std::f32::consts::TAU;
+            }
+
             // Map angle into first mirrored sector
             let sector = (angle / sector_angle).floor();
             let mut rel_angle = angle - sector * sector_angle;
@@ -91,8 +117,10 @@ pub fn apply_cc_kallidoscope_adv(pixels: &mut [u8], width: u32, height: u32, cen
                 rel_angle = sector_angle - rel_angle;
             }
 
-            let src_x = (center[0] + dist * rel_angle.cos()).clamp(0.0, (width - 1) as f32) as usize;
-            let src_y = (center[1] + dist * rel_angle.sin()).clamp(0.0, (height - 1) as f32) as usize;
+            let src_x =
+                (center[0] + dist * rel_angle.cos()).clamp(0.0, (width - 1) as f32) as usize;
+            let src_y =
+                (center[1] + dist * rel_angle.sin()).clamp(0.0, (height - 1) as f32) as usize;
 
             let dst_idx = (y as usize * width as usize + x as usize) * 4;
             let src_idx = (src_y * width as usize + src_x) * 4;
@@ -104,7 +132,9 @@ pub fn apply_cc_kallidoscope_adv(pixels: &mut [u8], width: u32, height: u32, cen
 
 // 4. Radial Chromatic Aberration (RGB Wavelength Dispersion)
 pub fn apply_chromatic_aberration_radial(pixels: &mut [u8], width: u32, height: u32, amount: f32) {
-    if amount.abs() <= 0.001 { return; }
+    if amount.abs() <= 0.001 {
+        return;
+    }
     let temp = pixels.to_vec();
     let center_x = width as f32 * 0.5;
     let center_y = height as f32 * 0.5;
@@ -125,14 +155,20 @@ pub fn apply_chromatic_aberration_radial(pixels: &mut [u8], width: u32, height: 
             let r_idx = (ry * width as usize + rx) * 4;
             let b_idx = (by * width as usize + bx) * 4;
 
-            pixels[dst_idx] = temp[r_idx];       // Red from outward position
+            pixels[dst_idx] = temp[r_idx]; // Red from outward position
             pixels[dst_idx + 2] = temp[b_idx + 2]; // Blue from inward position
         }
     }
 }
 
 // 5. Film Grain Simulator (Emulsion Noise Grain with spatial variation)
-pub fn apply_film_grain_simulator(pixels: &mut [u8], width: u32, height: u32, grain_amount: f32, seed: u32) {
+pub fn apply_film_grain_simulator(
+    pixels: &mut [u8],
+    width: u32,
+    height: u32,
+    grain_amount: f32,
+    seed: u32,
+) {
     // Use width/height to create spatially-varying grain (emulates film grain clumping)
     for y in 0..height {
         for x in 0..width {

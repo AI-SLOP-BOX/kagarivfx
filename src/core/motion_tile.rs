@@ -56,15 +56,35 @@ pub fn apply_motion_tile(
 
     let mut dst = vec![0u8; src.len()];
 
-    let tile_width = if params.tile_width.is_finite() { params.tile_width.clamp(1.0, 10000.0) } else { 100.0 };
-    let tile_height = if params.tile_height.is_finite() { params.tile_height.clamp(1.0, 10000.0) } else { 100.0 };
+    let tile_width = if params.tile_width.is_finite() {
+        params.tile_width.clamp(1.0, 10000.0)
+    } else {
+        100.0
+    };
+    let tile_height = if params.tile_height.is_finite() {
+        params.tile_height.clamp(1.0, 10000.0)
+    } else {
+        100.0
+    };
     let tw = (width as f32 * (tile_width / 100.0)).max(1.0);
     let th = (height as f32 * (tile_height / 100.0)).max(1.0);
 
-    let cx = if params.tile_center[0].is_finite() { params.tile_center[0] } else { width as f32 * 0.5 };
-    let cy = if params.tile_center[1].is_finite() { params.tile_center[1] } else { height as f32 * 0.5 };
+    let cx = if params.tile_center[0].is_finite() {
+        params.tile_center[0]
+    } else {
+        width as f32 * 0.5
+    };
+    let cy = if params.tile_center[1].is_finite() {
+        params.tile_center[1]
+    } else {
+        height as f32 * 0.5
+    };
 
-    let phase_norm = if params.phase.is_finite() { (params.phase / 360.0).fract() } else { 0.0 };
+    let phase_norm = if params.phase.is_finite() {
+        (params.phase / 360.0).fract()
+    } else {
+        0.0
+    };
 
     for y in 0..height {
         let dy = (y as f32 - cy) / th;

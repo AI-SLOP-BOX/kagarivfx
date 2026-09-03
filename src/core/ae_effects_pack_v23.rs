@@ -1,8 +1,16 @@
 #![allow(dead_code)]
 /// After Effects VFX Kernels Part 23 — Retro Photo & Artistic Stylizers
 // 1. Ink & Paint (Cartoon Outline + Flat Color Quantization)
-pub fn apply_ink_paint(pixels: &mut [u8], width: u32, height: u32, quantize_levels: u32, edge_thickness: u32) {
-    if quantize_levels == 0 { return; }
+pub fn apply_ink_paint(
+    pixels: &mut [u8],
+    width: u32,
+    height: u32,
+    quantize_levels: u32,
+    edge_thickness: u32,
+) {
+    if quantize_levels == 0 {
+        return;
+    }
     let temp = pixels.to_vec();
     let step = 255.0 / (quantize_levels - 1) as f32;
 
@@ -22,14 +30,18 @@ pub fn apply_ink_paint(pixels: &mut [u8], width: u32, height: u32, quantize_leve
                 let mut g_total = 0i32;
 
                 for c in 0..3 {
-                    let tl = temp[(y as usize - 1) * width as usize * 4 + (x as usize - 1) * 4 + c] as i32;
-                    let tr = temp[(y as usize - 1) * width as usize * 4 + (x as usize + 1) * 4 + c] as i32;
-                    let bl = temp[(y as usize + 1) * width as usize * 4 + (x as usize - 1) * 4 + c] as i32;
-                    let br = temp[(y as usize + 1) * width as usize * 4 + (x as usize + 1) * 4 + c] as i32;
-                    let l  = temp[y as usize * width as usize * 4 + (x as usize - 1) * 4 + c] as i32;
-                    let r  = temp[y as usize * width as usize * 4 + (x as usize + 1) * 4 + c] as i32;
-                    let t  = temp[(y as usize - 1) * width as usize * 4 + x as usize * 4 + c] as i32;
-                    let b  = temp[(y as usize + 1) * width as usize * 4 + x as usize * 4 + c] as i32;
+                    let tl = temp[(y as usize - 1) * width as usize * 4 + (x as usize - 1) * 4 + c]
+                        as i32;
+                    let tr = temp[(y as usize - 1) * width as usize * 4 + (x as usize + 1) * 4 + c]
+                        as i32;
+                    let bl = temp[(y as usize + 1) * width as usize * 4 + (x as usize - 1) * 4 + c]
+                        as i32;
+                    let br = temp[(y as usize + 1) * width as usize * 4 + (x as usize + 1) * 4 + c]
+                        as i32;
+                    let l = temp[y as usize * width as usize * 4 + (x as usize - 1) * 4 + c] as i32;
+                    let r = temp[y as usize * width as usize * 4 + (x as usize + 1) * 4 + c] as i32;
+                    let t = temp[(y as usize - 1) * width as usize * 4 + x as usize * 4 + c] as i32;
+                    let b = temp[(y as usize + 1) * width as usize * 4 + x as usize * 4 + c] as i32;
 
                     let gx = -tl - 2 * l - bl + tr + 2 * r + br;
                     let gy = -tl - 2 * t - tr + bl + 2 * b + br;
@@ -48,7 +60,9 @@ pub fn apply_ink_paint(pixels: &mut [u8], width: u32, height: u32, quantize_leve
 
 // 2. Oil Painting Effect (Kuwahara Filter)
 pub fn apply_kuwahara(pixels: &mut [u8], width: u32, height: u32, radius: u32) {
-    if radius == 0 { return; }
+    if radius == 0 {
+        return;
+    }
     let temp = pixels.to_vec();
     let r = radius as i32;
 
@@ -79,7 +93,9 @@ pub fn apply_kuwahara(pixels: &mut [u8], width: u32, height: u32, radius: u32) {
                     }
                 }
 
-                let var: f32 = (0..3).map(|c| sum_sq[c] / count - (sum[c] / count).powi(2)).sum();
+                let var: f32 = (0..3)
+                    .map(|c| sum_sq[c] / count - (sum[c] / count).powi(2))
+                    .sum();
                 if var < best_var {
                     best_var = var;
                     best_mean = std::array::from_fn(|c| (sum[c] / count).clamp(0.0, 255.0) as u8);
@@ -94,7 +110,13 @@ pub fn apply_kuwahara(pixels: &mut [u8], width: u32, height: u32, radius: u32) {
 }
 
 // 3. Watercolor Effect (Bilateral + Border Feather Vignette)
-pub fn apply_watercolor_stylize(pixels: &mut [u8], width: u32, height: u32, blur_strength: f32, edge_scale: f32) {
+pub fn apply_watercolor_stylize(
+    pixels: &mut [u8],
+    width: u32,
+    height: u32,
+    blur_strength: f32,
+    edge_scale: f32,
+) {
     let cx = width as f32 * 0.5;
     let cy = height as f32 * 0.5;
     let max_r = (cx * cx + cy * cy).sqrt().max(1.0);
@@ -120,13 +142,12 @@ pub fn apply_watercolor_stylize(pixels: &mut [u8], width: u32, height: u32, blur
             let norm_r = (dx * dx + dy * dy).sqrt() / max_r;
             let edge_factor = 1.0 - (norm_r * edge_scale).clamp(0.0, 0.4);
 
-            pixels[i]     = (base_r * edge_factor).clamp(0.0, 255.0) as u8;
+            pixels[i] = (base_r * edge_factor).clamp(0.0, 255.0) as u8;
             pixels[i + 1] = (base_g * edge_factor).clamp(0.0, 255.0) as u8;
             pixels[i + 2] = (base_b * edge_factor).clamp(0.0, 255.0) as u8;
         }
     }
 }
-
 
 // 4. Cinemagraph Freeze (Selective Static Mask Region)
 pub fn apply_cinemagraph_freeze(pixels: &mut [u8], frozen: &[u8], mask: &[u8]) {
@@ -134,7 +155,8 @@ pub fn apply_cinemagraph_freeze(pixels: &mut [u8], frozen: &[u8], mask: &[u8]) {
     for i in (0..len).step_by(4) {
         let m = mask[i] as f32 / 255.0;
         for c in 0..3 {
-            pixels[i + c] = (pixels[i + c] as f32 * (1.0 - m) + frozen[i + c] as f32 * m).clamp(0.0, 255.0) as u8;
+            pixels[i + c] = (pixels[i + c] as f32 * (1.0 - m) + frozen[i + c] as f32 * m)
+                .clamp(0.0, 255.0) as u8;
         }
     }
 }

@@ -38,10 +38,19 @@ impl OtioTimeline {
         for layer in &comp.layers {
             let media_ref = match &layer.layer_type {
                 LayerType::Image { path } => Some(path.clone()),
-                LayerType::Video { source, frames_dir, frame_count, audio_wav, .. } => {
-                    Some(format!("video:{}:{}:{}:{}", source, frames_dir, frame_count,
-                        audio_wav.as_deref().unwrap_or("")))
-                }
+                LayerType::Video {
+                    source,
+                    frames_dir,
+                    frame_count,
+                    audio_wav,
+                    ..
+                } => Some(format!(
+                    "video:{}:{}:{}:{}",
+                    source,
+                    frames_dir,
+                    frame_count,
+                    audio_wav.as_deref().unwrap_or("")
+                )),
                 LayerType::Solid { .. } => Some("color_solid".to_string()),
                 LayerType::Text { text, .. } => Some(format!("text:{}", text)),
                 LayerType::Shape { .. } => Some("vector_shape".to_string()),
@@ -50,13 +59,15 @@ impl OtioTimeline {
                 LayerType::Audio { path, .. } => Some(format!("audio:{}", path)),
                 LayerType::AdjustmentLayer => Some("adjustment_layer".to_string()),
                 LayerType::Particle { .. } => Some("particle_emitter".to_string()),
-
             };
 
             video_track.items.push(OtioItem {
                 name: layer.name.clone(),
                 // Use saturating_sub to guard against u32 underflow when out_frame < in_frame
-                source_range: [layer.in_frame, layer.out_frame.saturating_sub(layer.in_frame)],
+                source_range: [
+                    layer.in_frame,
+                    layer.out_frame.saturating_sub(layer.in_frame),
+                ],
                 media_reference: media_ref,
             });
         }
@@ -85,11 +96,9 @@ impl OtioTimeline {
             if track.kind == "video" {
                 for item in &track.items {
                     let layer_type = match &item.media_reference {
-                        Some(ref_str) if ref_str.starts_with("text:") => LayerType::new_text(
-                            &ref_str["text:".len()..],
-                            48,
-                            [1.0, 1.0, 1.0, 1.0],
-                        ),
+                        Some(ref_str) if ref_str.starts_with("text:") => {
+                            LayerType::new_text(&ref_str["text:".len()..], 48, [1.0, 1.0, 1.0, 1.0])
+                        }
                         Some(ref_str) if ref_str == "color_solid" => LayerType::Solid {
                             color: [0.2, 0.5, 0.8, 1.0],
                         },

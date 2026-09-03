@@ -26,7 +26,10 @@ pub fn load_project_migrated(json_str: &str) -> Result<Project, String> {
     } else {
         let val: serde_json::Value = serde_json::from_str(json_str)
             .map_err(|e| format!("Invalid JSON project file: {}", e))?;
-        let schema_ver = val.get("schema_version").and_then(|v| v.as_u64()).unwrap_or(0) as u32;
+        let schema_ver = val
+            .get("schema_version")
+            .and_then(|v| v.as_u64())
+            .unwrap_or(0) as u32;
         let migrated = migrate_schema_json(schema_ver, val)?;
         serde_json::from_value::<Project>(migrated)
             .map_err(|e| format!("Schema migration error: {}", e))?
@@ -57,7 +60,10 @@ pub fn save_project_versioned(proj: &Project) -> Result<String, String> {
 /// Also keeps a one-generation backup (`<name>.json.bak`) of the previously saved
 /// file so the user can recover from an accidental save-over.
 #[allow(dead_code)]
-pub fn save_project_atomic<P: AsRef<std::path::Path>>(proj: &Project, path: P) -> Result<(), String> {
+pub fn save_project_atomic<P: AsRef<std::path::Path>>(
+    proj: &Project,
+    path: P,
+) -> Result<(), String> {
     let json_str = save_project_versioned(proj)?;
     let target_path = path.as_ref();
     let tmp_path = target_path.with_extension("json.tmp");
@@ -92,7 +98,9 @@ pub fn save_project_atomic<P: AsRef<std::path::Path>>(proj: &Project, path: P) -
 
 /// Loads `<path>` or, if missing/corrupt, falls back to `<path>.bak`.
 /// Returns (project, used_backup).
-pub fn load_project_with_backup<P: AsRef<std::path::Path>>(path: P) -> Result<(Project, bool), String> {
+pub fn load_project_with_backup<P: AsRef<std::path::Path>>(
+    path: P,
+) -> Result<(Project, bool), String> {
     let target = path.as_ref();
     let bak = target.with_extension("json.bak");
 
@@ -198,8 +206,18 @@ mod backup_tests {
 
     fn project_named(name: &str) -> Project {
         let mut comp = Composition::new("c1".into(), name.into(), 32, 32, 30, 30);
-        comp.layers.push(Layer::new("l".into(), "S".into(), LayerType::Solid { color: [1.0; 4] }, 30));
-        Project { compositions: vec![comp], active_composition_idx: 0, assets: Vec::new(), use_gpu_compute: false }
+        comp.layers.push(Layer::new(
+            "l".into(),
+            "S".into(),
+            LayerType::Solid { color: [1.0; 4] },
+            30,
+        ));
+        Project {
+            compositions: vec![comp],
+            active_composition_idx: 0,
+            assets: Vec::new(),
+            use_gpu_compute: false,
+        }
     }
 
     #[test]
@@ -223,7 +241,8 @@ mod backup_tests {
 
         let bak_loaded = load_project_migrated(
             &std::fs::read_to_string(path.with_extension("json.bak")).unwrap(),
-        ).unwrap();
+        )
+        .unwrap();
         assert_eq!(bak_loaded.compositions[0].name, "v1");
 
         let _ = std::fs::remove_dir_all(&dir);

@@ -94,12 +94,18 @@ impl RenderPipeline {
 
     /// Request an asynchronous render of `frame`.
     pub fn request_frame(&self, frame: u32, version: u64) {
-        let _ = self.cmd_tx.send(RenderCommand::RenderFrame { frame, version });
+        let _ = self
+            .cmd_tx
+            .send(RenderCommand::RenderFrame { frame, version });
     }
 
     /// Pre-fetch a range of frames in the background.
     pub fn prefetch_range(&self, start: u32, end: u32, version: u64) {
-        let _ = self.cmd_tx.send(RenderCommand::PrefetchRange { start, end, version });
+        let _ = self.cmd_tx.send(RenderCommand::PrefetchRange {
+            start,
+            end,
+            version,
+        });
     }
 
     /// Flush all pending commands and bump cancellation token.
@@ -146,7 +152,11 @@ impl LazyFrameEvaluator {
         }
     }
 
-    pub fn needs_render(&mut self, frame: u32, cache: &crate::core::frame_cache::FrameCache) -> bool {
+    pub fn needs_render(
+        &mut self,
+        frame: u32,
+        cache: &crate::core::frame_cache::FrameCache,
+    ) -> bool {
         if cache.is_cached(frame) {
             self.in_flight.remove(&frame);
             return false;

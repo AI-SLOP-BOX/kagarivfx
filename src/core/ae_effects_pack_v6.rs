@@ -3,12 +3,14 @@
 /// All algorithms are implemented with distinct mathematical formulas and dedicated pixel processing.
 // 161. Shatter (3D Explosive Glass/Tile Physics)
 pub fn apply_shatter(pixels: &mut [u8], width: u32, height: u32, force: f32) {
-    if force <= 0.001 { return; }
+    if force <= 0.001 {
+        return;
+    }
     let temp = pixels.to_vec();
     let piece_size = 16u32;
     let cols = width.div_ceil(piece_size);
     let rows = height.div_ceil(piece_size);
-    
+
     pixels.fill(0);
     let center_x = width as f32 * 0.5;
     let center_y = height as f32 * 0.5;
@@ -17,25 +19,33 @@ pub fn apply_shatter(pixels: &mut [u8], width: u32, height: u32, force: f32) {
         for c in 0..cols {
             let px = (c * piece_size + piece_size / 2) as f32;
             let py = (r * piece_size + piece_size / 2) as f32;
-            
+
             let dx = px - center_x;
             let dy = py - center_y;
             let dist = (dx * dx + dy * dy).sqrt().max(1.0);
-            
+
             let shift_x = (dx / dist * force * 40.0) as i32;
             let shift_y = (dy / dist * force * 40.0) as i32;
 
             for y_off in 0..piece_size {
                 let src_y = r * piece_size + y_off;
-                if src_y >= height { continue; }
+                if src_y >= height {
+                    continue;
+                }
                 let dst_y = src_y as i32 + shift_y;
-                if dst_y < 0 || dst_y >= height as i32 { continue; }
+                if dst_y < 0 || dst_y >= height as i32 {
+                    continue;
+                }
 
                 for x_off in 0..piece_size {
                     let src_x = c * piece_size + x_off;
-                    if src_x >= width { continue; }
+                    if src_x >= width {
+                        continue;
+                    }
                     let dst_x = src_x as i32 + shift_x;
-                    if dst_x < 0 || dst_x >= width as i32 { continue; }
+                    if dst_x < 0 || dst_x >= width as i32 {
+                        continue;
+                    }
 
                     let src_idx = (src_y as usize * width as usize + src_x as usize) * 4;
                     let dst_idx = (dst_y as usize * width as usize + dst_x as usize) * 4;
@@ -48,8 +58,17 @@ pub fn apply_shatter(pixels: &mut [u8], width: u32, height: u32, force: f32) {
 }
 
 // 162. Card Dance (3D Card Array Transformation)
-pub fn apply_card_dance(pixels: &mut [u8], width: u32, height: u32, rows: u32, cols: u32, rotation_deg: f32) {
-    if rows == 0 || cols == 0 || width == 0 || height == 0 { return; }
+pub fn apply_card_dance(
+    pixels: &mut [u8],
+    width: u32,
+    height: u32,
+    rows: u32,
+    cols: u32,
+    rotation_deg: f32,
+) {
+    if rows == 0 || cols == 0 || width == 0 || height == 0 {
+        return;
+    }
     let temp = pixels.to_vec();
     pixels.fill(0);
 
@@ -58,7 +77,9 @@ pub fn apply_card_dance(pixels: &mut [u8], width: u32, height: u32, rows: u32, c
     let card_h = height.div_ceil(rows);
 
     // Guard against zero division if image smaller than grid
-    if card_w == 0 || card_h == 0 { return; }
+    if card_w == 0 || card_h == 0 {
+        return;
+    }
 
     let rad = rotation_deg.to_radians();
     let cos_r = rad.cos();
@@ -70,11 +91,15 @@ pub fn apply_card_dance(pixels: &mut [u8], width: u32, height: u32, rows: u32, c
 
             for cy in 0..card_h {
                 let src_y = start_y + cy;
-                if src_y >= height { continue; }
+                if src_y >= height {
+                    continue;
+                }
 
                 for cx in 0..card_w {
                     let src_x = start_x + cx;
-                    if src_x >= width { continue; }
+                    if src_x >= width {
+                        continue;
+                    }
 
                     // Simulate 3D rotation scale squeeze along X axis
                     let rel_x = cx as f32 - (card_w as f32 * 0.5);
@@ -92,10 +117,11 @@ pub fn apply_card_dance(pixels: &mut [u8], width: u32, height: u32, rows: u32, c
     }
 }
 
-
 // 163. Caustics (Water Surface Refraction)
 pub fn apply_caustics(pixels: &mut [u8], width: u32, height: u32, wave_height: f32) {
-    if wave_height <= 0.001 { return; }
+    if wave_height <= 0.001 {
+        return;
+    }
     let temp = pixels.to_vec();
     let frequency = 0.05f32;
 
@@ -165,14 +191,27 @@ pub fn apply_foam(pixels: &mut [u8], width: u32, height: u32, frame: u32) {
 }
 
 // 166. Depth of Field Blur (Variable Depth Blur — Overflow-safe u64 accumulators)
-pub fn apply_dof_blur(pixels: &mut [u8], width: u32, height: u32, depth_map: &[u8], focus_depth: u8, max_radius: u32) {
-    if max_radius == 0 { return; }
+pub fn apply_dof_blur(
+    pixels: &mut [u8],
+    width: u32,
+    height: u32,
+    depth_map: &[u8],
+    focus_depth: u8,
+    max_radius: u32,
+) {
+    if max_radius == 0 {
+        return;
+    }
     let temp = pixels.to_vec();
 
     for y in 0..height {
         for x in 0..width {
             let idx = (y as usize * width as usize + x as usize) * 4;
-            let depth = if idx < depth_map.len() { depth_map[idx] } else { focus_depth };
+            let depth = if idx < depth_map.len() {
+                depth_map[idx]
+            } else {
+                focus_depth
+            };
             let diff = (depth as i16 - focus_depth as i16).unsigned_abs() as u32;
             let blur_r = (diff * max_radius / 255).min(max_radius).min(64);
             // Cap at 64px to stay real-time safe. Full DOF needs GPU.
@@ -199,18 +238,21 @@ pub fn apply_dof_blur(pixels: &mut [u8], width: u32, height: u32, depth_map: &[u
                 }
             }
 
-            pixels[idx]     = (r_sum / count) as u8;
+            pixels[idx] = (r_sum / count) as u8;
             pixels[idx + 1] = (g_sum / count) as u8;
             pixels[idx + 2] = (b_sum / count) as u8;
         }
     }
 }
 
-
 // 167. Depth Matte (Z-Buffer Cutout)
 pub fn apply_depth_matte(pixels: &mut [u8], depth_map: &[u8], z_near: u8, z_far: u8) {
     for i in (0..pixels.len()).step_by(4) {
-        let depth = if i < depth_map.len() { depth_map[i] } else { 128 };
+        let depth = if i < depth_map.len() {
+            depth_map[i]
+        } else {
+            128
+        };
         if depth < z_near || depth > z_far {
             pixels[i + 3] = 0; // Cutout alpha outside range
         }
@@ -229,7 +271,7 @@ pub fn apply_3d_glasses(pixels: &mut [u8], width: u32, height: u32, separation: 
             let r_idx = (y as usize * width as usize + rx) * 4;
             let l_idx = (y as usize * width as usize + lx) * 4;
 
-            pixels[idx] = temp[r_idx];       // Red from right eye
+            pixels[idx] = temp[r_idx]; // Red from right eye
             pixels[idx + 1] = temp[l_idx + 1]; // Cyan (Green) from left eye
             pixels[idx + 2] = temp[l_idx + 2]; // Cyan (Blue) from left eye
         }

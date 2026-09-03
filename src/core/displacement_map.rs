@@ -73,10 +73,14 @@ pub fn apply_displacement_map(
     let h_f32 = height as f32;
     let max_x = if options.max_horizontal_displacement.is_finite() {
         options.max_horizontal_displacement.clamp(-4096.0, 4096.0)
-    } else { 0.0 };
+    } else {
+        0.0
+    };
     let max_y = if options.max_vertical_displacement.is_finite() {
         options.max_vertical_displacement.clamp(-4096.0, 4096.0)
-    } else { 0.0 };
+    } else {
+        0.0
+    };
 
     for y in 0..height {
         for x in 0..width {

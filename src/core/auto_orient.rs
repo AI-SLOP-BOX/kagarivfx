@@ -2,8 +2,7 @@
 use crate::core::timeline::Layer;
 
 /// Auto-Orient mode matching After Effects layer orientation settings.
-#[derive(Debug, Clone, Copy, PartialEq, serde::Serialize, serde::Deserialize)]
-#[derive(Default)]
+#[derive(Debug, Clone, Copy, PartialEq, serde::Serialize, serde::Deserialize, Default)]
 pub enum AutoOrientMode {
     #[default]
     Off,
@@ -12,7 +11,6 @@ pub enum AutoOrientMode {
     /// Rotation points at a fixed composition coordinate.
     OrientTowardsPoint { target_point: [f32; 2] },
 }
-
 
 /// Evaluates automatic rotation angle (in degrees) for a layer along its motion path.
 pub fn evaluate_auto_orient_rotation(
@@ -59,7 +57,11 @@ pub fn evaluate_auto_orient_rotation(
 }
 
 /// Evaluates exponential scale interpolation: visually uniform zoom without linear acceleration perception.
-pub fn evaluate_exponential_scale(start_scale: [f32; 2], end_scale: [f32; 2], progress: f32) -> [f32; 2] {
+pub fn evaluate_exponential_scale(
+    start_scale: [f32; 2],
+    end_scale: [f32; 2],
+    progress: f32,
+) -> [f32; 2] {
     let t = progress.clamp(0.0, 1.0);
     [
         start_scale[0] * (end_scale[0] / start_scale[0].max(0.0001)).powf(t),
@@ -70,13 +72,20 @@ pub fn evaluate_exponential_scale(start_scale: [f32; 2], end_scale: [f32; 2], pr
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::core::keyframe::InterpolationType;
     use crate::core::property::Animatable;
     use crate::core::timeline::Transform2D;
-    use crate::core::keyframe::InterpolationType;
 
     #[test]
     fn test_orient_along_path_horizontal() {
-        let mut layer = Layer::new("layer_1".to_string(), "Test".to_string(), crate::core::timeline::LayerType::Solid { color: [1.0, 0.0, 0.0, 1.0] }, 100);
+        let mut layer = Layer::new(
+            "layer_1".to_string(),
+            "Test".to_string(),
+            crate::core::timeline::LayerType::Solid {
+                color: [1.0, 0.0, 0.0, 1.0],
+            },
+            100,
+        );
         layer.transform = Transform2D::default();
         // Moving right along X axis
         layer.transform.position = Animatable::new_animated(vec![

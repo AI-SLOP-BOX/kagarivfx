@@ -618,13 +618,10 @@ pub fn extract_multiband_audio_keyframes(
             (*env * multiplier).clamp(0.0, multiplier)
         };
 
-        let v_master =
-            db_to_value(update_env(&mut env_master, peak_master) / multiplier.max(1.0));
-        let v_bass =
-            db_to_value(update_env(&mut env_bass, peak_bass) / multiplier.max(1.0));
+        let v_master = db_to_value(update_env(&mut env_master, peak_master) / multiplier.max(1.0));
+        let v_bass = db_to_value(update_env(&mut env_bass, peak_bass) / multiplier.max(1.0));
         let v_mid = db_to_value(update_env(&mut env_mid, peak_mid) / multiplier.max(1.0));
-        let v_treble =
-            db_to_value(update_env(&mut env_treble, peak_treble) / multiplier.max(1.0));
+        let v_treble = db_to_value(update_env(&mut env_treble, peak_treble) / multiplier.max(1.0));
 
         let kf = |val: f32| {
             crate::core::keyframe::Keyframe::new(
@@ -824,7 +821,9 @@ mod tests {
     #[test]
     fn test_compressor_recovers_invalid_state_and_extreme_output() {
         let params = CompressorParams::default();
-        let mut state = CompressorState { envelope: f32::NAN.into() };
+        let mut state = CompressorState {
+            envelope: f32::NAN.into(),
+        };
         let mut buf = vec![f32::MAX, f32::MAX];
         apply_compressor(&mut buf, &params, &mut state, 48_000);
         assert!(state.envelope.is_finite());

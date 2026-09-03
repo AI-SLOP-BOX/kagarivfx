@@ -18,7 +18,9 @@ pub fn downsample2x(src: &[u8], w: u32, h: u32) -> Vec<u8> {
                     let sx = x * 2 + dx;
                     let sy = y * 2 + dy;
                     let idx = (sy * sw + sx) * 4;
-                    if idx + 3 >= src.len() { continue; }
+                    if idx + 3 >= src.len() {
+                        continue;
+                    }
                     let a = src[idx + 3] as f32 / 255.0;
                     acc[0] += src[idx] as f32 * a;
                     acc[1] += src[idx + 1] as f32 * a;
@@ -48,7 +50,9 @@ mod tests {
     fn test_downsample_uniform_stays_uniform() {
         // 4x4 all red opaque → 2x2 all red opaque.
         let mut src = vec![0u8; 16 * 4];
-        for px in src.chunks_exact_mut(4) { px.copy_from_slice(&[255, 0, 0, 255]); }
+        for px in src.chunks_exact_mut(4) {
+            px.copy_from_slice(&[255, 0, 0, 255]);
+        }
         let out = downsample2x(&src, 2, 2);
         assert_eq!(out.len(), 2 * 2 * 4);
         for px in out.chunks_exact(4) {
@@ -59,7 +63,9 @@ mod tests {
     #[test]
     fn test_downsample_averages_checkerboard() {
         // 2x2 checker: white/black opaque → gray.
-        let src = vec![255, 255, 255, 255, 0, 0, 0, 255, 0, 0, 0, 255, 255, 255, 255, 255];
+        let src = vec![
+            255, 255, 255, 255, 0, 0, 0, 255, 0, 0, 0, 255, 255, 255, 255, 255,
+        ];
         let out = downsample2x(&src, 1, 1);
         assert_eq!(out[0], 128); // (255+0+0+255)/4 rounded
         assert_eq!(out[3], 255);
@@ -68,10 +74,7 @@ mod tests {
     #[test]
     fn test_alpha_weighting_no_dark_fringe() {
         // Left column opaque red, right column fully transparent black.
-        let src = vec![
-            255, 0, 0, 255, 255, 0, 0, 255,
-            0, 0, 0, 0, 0, 0, 0, 0,
-        ];
+        let src = vec![255, 0, 0, 255, 255, 0, 0, 255, 0, 0, 0, 0, 0, 0, 0, 0];
         let out = downsample2x(&src, 1, 1);
         // Color must stay pure red (not blended toward black), alpha ~50%.
         assert_eq!(out[0], 255);

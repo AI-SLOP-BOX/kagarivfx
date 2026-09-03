@@ -7,8 +7,8 @@
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct SubframeMotionBlurSettings {
-    pub shutter_angle_deg: f32, // e.g. 180.0 deg (default cinema shutter)
-    pub shutter_phase_deg: f32, // e.g. -90.0 deg (centered exposure)
+    pub shutter_angle_deg: f32,   // e.g. 180.0 deg (default cinema shutter)
+    pub shutter_phase_deg: f32,   // e.g. -90.0 deg (centered exposure)
     pub samples_per_frame: usize, // 4 .. 32
 }
 
@@ -52,7 +52,11 @@ pub fn evaluate_subframe_samples(
 
     let weight = 1.0f32 / n as f32;
     for i in 0..n {
-        let frac = if n > 1 { i as f32 / (n - 1) as f32 } else { 0.5 };
+        let frac = if n > 1 {
+            i as f32 / (n - 1) as f32
+        } else {
+            0.5
+        };
         let t = (t_start + frac * shutter_dur).max(0.0);
         samples.push(SubframeSample {
             subframe_time_sec: t,
@@ -70,7 +74,10 @@ pub fn accumulate_motion_blur_buffers(
     height: u32,
     out_accum: &mut [u8],
 ) {
-    let Some(size) = (width as usize).checked_mul(height as usize).and_then(|s| s.checked_mul(4)) else {
+    let Some(size) = (width as usize)
+        .checked_mul(height as usize)
+        .and_then(|s| s.checked_mul(4))
+    else {
         out_accum.fill(0);
         return;
     };
@@ -99,6 +106,8 @@ pub fn accumulate_motion_blur_buffers(
         for i in 0..size {
             out_accum[i] = (float_acc[i] * norm).round().clamp(0.0, 255.0) as u8;
         }
+    } else {
+        out_accum[..size].fill(0);
     }
 }
 

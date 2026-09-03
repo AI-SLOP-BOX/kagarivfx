@@ -74,7 +74,10 @@ pub fn calculate_miter_join_offset(
     let len_sq = miter_vec[0] * miter_vec[0] + miter_vec[1] * miter_vec[1];
 
     if len_sq < 0.0001 {
-        return ([n0[0] * half_width, n0[1] * half_width], LineJoinStyle::Bevel);
+        return (
+            [n0[0] * half_width, n0[1] * half_width],
+            LineJoinStyle::Bevel,
+        );
     }
 
     let miter_len = len_sq.sqrt();
@@ -86,10 +89,16 @@ pub fn calculate_miter_join_offset(
 
     if miter_ratio > miter_limit * miter_limit {
         // Fall back to Bevel join if Miter Limit exceeded
-        ([n0[0] * half_width, n0[1] * half_width], LineJoinStyle::Bevel)
+        (
+            [n0[0] * half_width, n0[1] * half_width],
+            LineJoinStyle::Bevel,
+        )
     } else {
         let dist = half_width * (miter_ratio.sqrt());
-        ([miter_dir[0] * dist, miter_dir[1] * dist], LineJoinStyle::Miter)
+        (
+            [miter_dir[0] * dist, miter_dir[1] * dist],
+            LineJoinStyle::Miter,
+        )
     }
 }
 
@@ -108,7 +117,7 @@ mod tests {
             dash_offset: 0.0,
         };
 
-        assert!(is_dash_solid_at_distance(2.0, &options));  // Solid
+        assert!(is_dash_solid_at_distance(2.0, &options)); // Solid
         assert!(!is_dash_solid_at_distance(12.0, &options)); // Gap
         assert!(is_dash_solid_at_distance(17.0, &options)); // Solid (next cycle)
     }

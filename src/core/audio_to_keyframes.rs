@@ -183,8 +183,16 @@ pub fn bind_audio_amplitude_to_layer_transform(
         return;
     }
 
-    let base_value = if base_value.is_finite() { base_value } else { 0.0 };
-    let multiplier = if multiplier.is_finite() { multiplier } else { 0.0 };
+    let base_value = if base_value.is_finite() {
+        base_value
+    } else {
+        0.0
+    };
+    let multiplier = if multiplier.is_finite() {
+        multiplier
+    } else {
+        0.0
+    };
 
     match target {
         AudioTargetProperty::Scale => {
@@ -214,7 +222,11 @@ pub fn bind_audio_amplitude_to_layer_transform(
         AudioTargetProperty::PositionY => {
             let mut pos_kfs = Vec::with_capacity(keyframes.len());
             let current_pos = layer.transform.position.evaluate(0).map(|value| {
-                if value.is_finite() { value } else { 0.0 }
+                if value.is_finite() {
+                    value
+                } else {
+                    0.0
+                }
             });
             for kf in keyframes {
                 let y = current_pos[1] + modulated_value(0.0, kf.value, multiplier);

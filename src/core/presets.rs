@@ -19,8 +19,14 @@ fn ease_all<T>(kfs: &mut [Keyframe<T>]) {
     let coords = EasePreset::Standard.control_points();
     for kf in kfs.iter_mut() {
         kf.interpolation = InterpolationType::Bezier {
-            outgoing: crate::core::keyframe::BezierControlPoint { influence: 0.333, speed: 0.0 },
-            incoming: crate::core::keyframe::BezierControlPoint { influence: 0.333, speed: 0.0 },
+            outgoing: crate::core::keyframe::BezierControlPoint {
+                influence: 0.333,
+                speed: 0.0,
+            },
+            incoming: crate::core::keyframe::BezierControlPoint {
+                influence: 0.333,
+                speed: 0.0,
+            },
             custom_bezier: Some(coords),
         };
     }
@@ -39,7 +45,9 @@ pub fn fade_in(l: &mut Layer, cf: u32, dur: u32) -> bool {
 pub fn fade_out(l: &mut Layer, _cf: u32, dur: u32) -> bool {
     let out = l.out_frame;
     let start = out.saturating_sub(dur.max(2));
-    if start <= l.in_frame { return false; }
+    if start <= l.in_frame {
+        return false;
+    }
     let mut kfs = vec![kf(start, 100.0), kf(out.saturating_sub(1), 0.0)];
     ease_all(&mut kfs);
     l.transform.opacity = Animatable::Animated(kfs);
@@ -68,10 +76,7 @@ pub fn slide_in(l: &mut Layer, cf: u32, comp_w: f32, from_right: bool) -> bool {
     let base = l.transform.position.evaluate(cf);
     let dir: f32 = if from_right { 1.0 } else { -1.0 };
     let start_x = base[0] + dir * comp_w * 0.35;
-    let mut pos_kfs = vec![
-        kfv2(cf, [start_x, base[1]]),
-        kfv2(cf + 24, base),
-    ];
+    let mut pos_kfs = vec![kfv2(cf, [start_x, base[1]]), kfv2(cf + 24, base)];
     ease_all(&mut pos_kfs);
     l.transform.position = Animatable::Animated(pos_kfs);
 
@@ -121,50 +126,86 @@ pub fn category_of(name: &str) -> &'static str {
     match name {
         "Fade In" | "Fade Out" | "Pop In" | "Slide In \u{2190}" | "Slide In \u{2192}"
         | "Zoom Punch" | "Slam In" => "Basics",
-        "\u{1f39e} Film Look" | "\u{1f3ac} Handheld" | "\u{1f4a5} Quake"
-        | "\u{1f3ac} Letterbox 2.39" | "\u{26a1} Whip Out \u{2192}" | "\u{26a1} Whip In \u{2190}" => "Cinematic",
+        "\u{1f39e} Film Look"
+        | "\u{1f3ac} Handheld"
+        | "\u{1f4a5} Quake"
+        | "\u{1f3ac} Letterbox 2.39"
+        | "\u{26a1} Whip Out \u{2192}"
+        | "\u{26a1} Whip In \u{2190}" => "Cinematic",
         "\u{23f1} Speed Ramp: Slow-Mo" | "\u{23f1} Speed Ramp: Fast \u{00d7}4" => "Speed",
         "\u{1f3a5} Ken Burns In" | "\u{1f3a5} Ken Burns Out" => "Camera",
         "Fade to Black" | "Fade from Black" | "Dip to White" => "Fade to Color",
         "\u{26a1} Flash Cut" => "Flash",
-        "\u{1f39e} Film Reel Intro" | "YouTube Vlog" | "Music Video"
-        | "Cinematic Reveal" | "Documentary Opener" => "Compound",
-        "\u{1f9f2} Bounce" | "\u{1f300} Elastic" | "\u{1f30a} Sine Wave"
-        | "\u{1f4a1} Strobe" => "Live Expressions",
+        "\u{1f39e} Film Reel Intro"
+        | "YouTube Vlog"
+        | "Music Video"
+        | "Cinematic Reveal"
+        | "Documentary Opener" => "Compound",
+        "\u{1f9f2} Bounce" | "\u{1f300} Elastic" | "\u{1f30a} Sine Wave" | "\u{1f4a1} Strobe" => {
+            "Live Expressions"
+        }
         "\u{1f3ac} Slide Out \u{2192}" | "\u{1f3ac} Zoom Out" => "Transitions",
         "Typewriter" | "Bounce In Text" | "Scale Up Text" | "Fade Up Words" => "Text Animation",
-        "Freeze Frame" | "Reverse" | "Slow Motion 0.5\u{00d7}" | "Fast Forward 2\u{00d7}" => "Time Remap",
+        "Freeze Frame" | "Reverse" | "Slow Motion 0.5\u{00d7}" | "Fast Forward 2\u{00d7}" => {
+            "Time Remap"
+        }
         "Reset Layer" => "Utility",
         _ => "",
     }
 }
 
 pub const NAMES: &[&str] = &[
-    "Fade In", "Fade Out", "Pop In", "Slide In ←", "Slide In →",
-    "Zoom Punch", "Slam In",
+    "Fade In",
+    "Fade Out",
+    "Pop In",
+    "Slide In ←",
+    "Slide In →",
+    "Zoom Punch",
+    "Slam In",
     // ── Cinematic set ──
-    "🎞 Film Look", "🎬 Handheld", "💥 Quake", "🎬 Letterbox 2.39",
-    "⚡ Whip Out →", "⚡ Whip In ←",
+    "🎞 Film Look",
+    "🎬 Handheld",
+    "💥 Quake",
+    "🎬 Letterbox 2.39",
+    "⚡ Whip Out →",
+    "⚡ Whip In ←",
     // ── Speed ramps ──
-    "⏱ Speed Ramp: Slow-Mo", "⏱ Speed Ramp: Fast ×4",
+    "⏱ Speed Ramp: Slow-Mo",
+    "⏱ Speed Ramp: Fast ×4",
     // ── Ken Burns ──
-    "🎥 Ken Burns In", "🎥 Ken Burns Out",
+    "🎥 Ken Burns In",
+    "🎥 Ken Burns Out",
     // ── Fade to color ──
-    "Fade to Black", "Fade from Black", "Dip to White",
+    "Fade to Black",
+    "Fade from Black",
+    "Dip to White",
     // ── Flash ──
     "⚡ Flash Cut",
     // ── Compound cinematic ──
     "🎞 Film Reel Intro",
     // ── Live expression presets ──
-    "🧲 Bounce", "🌀 Elastic", "🌊 Sine Wave", "💡 Strobe",
+    "🧲 Bounce",
+    "🌀 Elastic",
+    "🌊 Sine Wave",
+    "💡 Strobe",
     // ── Scene transitions (at out-point) ──
-    "🎬 Slide Out →", "🎬 Zoom Out",
+    "🎬 Slide Out →",
+    "🎬 Zoom Out",
     // ── Text animation presets ──
-    "Typewriter", "Bounce In Text", "Scale Up Text", "Fade Up Words",
+    "Typewriter",
+    "Bounce In Text",
+    "Scale Up Text",
+    "Fade Up Words",
     // ── Time Remap presets ──
-    "Freeze Frame", "Reverse", "Slow Motion 0.5×", "Fast Forward 2×",
+    "Freeze Frame",
+    "Reverse",
+    "Slow Motion 0.5×",
+    "Fast Forward 2×",
     // ── Compound cinematic v2 ──
-    "YouTube Vlog", "Music Video", "Cinematic Reveal", "Documentary Opener",
+    "YouTube Vlog",
+    "Music Video",
+    "Cinematic Reveal",
+    "Documentary Opener",
     // ── Utility ──
     "Reset Layer",
 ];
@@ -217,7 +258,11 @@ pub fn apply_by_name(name: &str, l: &mut Layer, cf: u32, comp_w: f32, _comp_h: f
     }
 }
 
-fn make_effect(id_seed: &str, name: &str, et: crate::core::timeline::EffectType) -> crate::core::timeline::Effect {
+fn make_effect(
+    id_seed: &str,
+    name: &str,
+    et: crate::core::timeline::EffectType,
+) -> crate::core::timeline::Effect {
     crate::core::timeline::Effect {
         id: format!("{}_{}", id_seed, rand_suffix()),
         name: name.to_string(),
@@ -231,17 +276,32 @@ fn counter() -> u32 {
     static C: AtomicU32 = AtomicU32::new(0);
     C.fetch_add(1, Ordering::Relaxed)
 }
-fn rand_suffix() -> u32 { counter() }
+fn rand_suffix() -> u32 {
+    counter()
+}
 
 /// Teal-shadow / warm-highlight film emulation + subtle grain.
 pub fn film_look(l: &mut Layer) -> bool {
     let c = |v: f32| Animatable::new_constant(v);
-    l.effects.push(make_effect("preset_film", "Film Look", crate::core::timeline::EffectType::FilmEmulation {
-        lift: c(-0.03), gamma: c(0.96), gain: c(1.07), hue_shift_deg: c(-4.0),
-    }));
-    l.effects.push(make_effect("preset_grain", "Film Grain", crate::core::timeline::EffectType::FilmGrain {
-        intensity: c(0.12), grain_size: 1.6, color_film: true,
-    }));
+    l.effects.push(make_effect(
+        "preset_film",
+        "Film Look",
+        crate::core::timeline::EffectType::FilmEmulation {
+            lift: c(-0.03),
+            gamma: c(0.96),
+            gain: c(1.07),
+            hue_shift_deg: c(-4.0),
+        },
+    ));
+    l.effects.push(make_effect(
+        "preset_grain",
+        "Film Grain",
+        crate::core::timeline::EffectType::FilmGrain {
+            intensity: c(0.12),
+            grain_size: 1.6,
+            color_film: true,
+        },
+    ));
     true
 }
 
@@ -274,36 +334,60 @@ pub fn quake(l: &mut Layer, cf: u32) -> bool {
 pub fn letterbox_239(l: &mut Layer, cf: u32) -> bool {
     let mut kfs = vec![kf(cf, 0.0), kf(cf + 18, 0.13)];
     ease_all(&mut kfs);
-    l.effects.push(make_effect("preset_lb", "Letterbox", crate::core::timeline::EffectType::Letterbox {
-        frac: Animatable::Animated(kfs),
-    }));
+    l.effects.push(make_effect(
+        "preset_lb",
+        "Letterbox",
+        crate::core::timeline::EffectType::Letterbox {
+            frac: Animatable::Animated(kfs),
+        },
+    ));
     true
 }
 
 /// Whip pan out/in: directional blur spike + lateral slide at in/out.
 pub fn whip(l: &mut Layer, _cf: u32, is_out: bool) -> bool {
-    let anchor_f = if is_out { l.out_frame.saturating_sub(8) } else { l.in_frame };
+    let anchor_f = if is_out {
+        l.out_frame.saturating_sub(8)
+    } else {
+        l.in_frame
+    };
     let dir: f32 = if is_out { 1.0 } else { -1.0 };
 
     let base_p = l.transform.position.evaluate(anchor_f);
     let mut pkfs = vec![
         kfv2(anchor_f, base_p),
-        kfv2(if is_out { l.out_frame.saturating_sub(1) } else { anchor_f + 8 },
-             [base_p[0] + dir * 420.0, base_p[1]]),
+        kfv2(
+            if is_out {
+                l.out_frame.saturating_sub(1)
+            } else {
+                anchor_f + 8
+            },
+            [base_p[0] + dir * 420.0, base_p[1]],
+        ),
     ];
     ease_all(&mut pkfs);
     l.transform.position = Animatable::Animated(pkfs);
 
-    l.effects.push(make_effect("preset_whip", "Whip Blur", crate::core::timeline::EffectType::DirectionalBlur {
-        angle: Animatable::new_constant(0.0),
-        length: Animatable::new_animated(vec![
-            kf(if is_out { anchor_f } else { l.in_frame }, 0.0),
-            kf(if is_out { l.out_frame.saturating_sub(1) } else { anchor_f + 8 }, 260.0),
-        ]),
-    }));
+    l.effects.push(make_effect(
+        "preset_whip",
+        "Whip Blur",
+        crate::core::timeline::EffectType::DirectionalBlur {
+            angle: Animatable::new_constant(0.0),
+            length: Animatable::new_animated(vec![
+                kf(if is_out { anchor_f } else { l.in_frame }, 0.0),
+                kf(
+                    if is_out {
+                        l.out_frame.saturating_sub(1)
+                    } else {
+                        anchor_f + 8
+                    },
+                    260.0,
+                ),
+            ]),
+        },
+    ));
     true
 }
-
 
 // ── Live expression presets ──
 // These are DYNAMIC: the expression runs every frame, unlike static keyframe bakes.
@@ -386,10 +470,7 @@ pub fn text_typewriter(l: &mut Layer, cf: u32) -> bool {
     use crate::core::property::Animatable as A;
     let sel = RangeSelector {
         shape: SelectorShape::RampUp,
-        offset_anim: Some(A::new_animated(vec![
-            kf(cf, -100.0),
-            kf(cf + 30, 100.0),
-        ])),
+        offset_anim: Some(A::new_animated(vec![kf(cf, -100.0), kf(cf + 30, 100.0)])),
         ..RangeSelector::default()
     };
     l.text_animator = Some(TextAnimatorSettings {
@@ -410,10 +491,7 @@ pub fn text_bounce_in(l: &mut Layer, cf: u32) -> bool {
     use crate::core::property::Animatable as A;
     let sel = RangeSelector {
         shape: SelectorShape::RampUp,
-        offset_anim: Some(A::new_animated(vec![
-            kf(cf, -100.0),
-            kf(cf + 24, 100.0),
-        ])),
+        offset_anim: Some(A::new_animated(vec![kf(cf, -100.0), kf(cf + 24, 100.0)])),
         ..RangeSelector::default()
     };
     l.text_animator = Some(TextAnimatorSettings {
@@ -438,10 +516,7 @@ pub fn text_scale_up(l: &mut Layer, cf: u32) -> bool {
     use crate::core::property::Animatable as A;
     let sel = RangeSelector {
         shape: SelectorShape::RampUp,
-        offset_anim: Some(A::new_animated(vec![
-            kf(cf, -100.0),
-            kf(cf + 20, 100.0),
-        ])),
+        offset_anim: Some(A::new_animated(vec![kf(cf, -100.0), kf(cf + 20, 100.0)])),
         ..RangeSelector::default()
     };
     l.text_animator = Some(TextAnimatorSettings {
@@ -464,10 +539,7 @@ pub fn text_fade_up(l: &mut Layer, cf: u32) -> bool {
         shape: SelectorShape::RampUp,
         ease_high: 50.0,
         ease_low: 50.0,
-        offset_anim: Some(A::new_animated(vec![
-            kf(cf, -100.0),
-            kf(cf + 36, 100.0),
-        ])),
+        offset_anim: Some(A::new_animated(vec![kf(cf, -100.0), kf(cf + 36, 100.0)])),
         ..RangeSelector::default()
     };
     l.text_animator = Some(TextAnimatorSettings {
@@ -487,10 +559,18 @@ pub fn text_fade_up(l: &mut Layer, cf: u32) -> bool {
 
 /// Freeze the layer at the current source frame for its entire duration.
 pub fn freeze_frame(l: &mut Layer, cf: u32) -> bool {
-    let src = l.time_remap.as_ref().map(|r| r.evaluate(cf)).unwrap_or(cf as f32 - l.in_frame as f32);
+    let src = l
+        .time_remap
+        .as_ref()
+        .map(|r| r.evaluate(cf))
+        .unwrap_or(cf as f32 - l.in_frame as f32);
     l.time_remap = Some(Animatable::new_animated(vec![
         Keyframe::new(l.in_frame, src, InterpolationType::Linear),
-        Keyframe::new(l.out_frame.saturating_sub(1), src, InterpolationType::Linear),
+        Keyframe::new(
+            l.out_frame.saturating_sub(1),
+            src,
+            InterpolationType::Linear,
+        ),
     ]));
     true
 }
@@ -500,7 +580,11 @@ pub fn reverse_time(l: &mut Layer) -> bool {
     let span = l.out_frame.saturating_sub(l.in_frame).max(1);
     l.time_remap = Some(Animatable::new_animated(vec![
         Keyframe::new(l.in_frame, span as f32, InterpolationType::Linear),
-        Keyframe::new(l.out_frame.saturating_sub(1), 0.0, InterpolationType::Linear),
+        Keyframe::new(
+            l.out_frame.saturating_sub(1),
+            0.0,
+            InterpolationType::Linear,
+        ),
     ]));
     true
 }
@@ -511,7 +595,11 @@ pub fn time_scale(l: &mut Layer, factor: f32) -> bool {
     let mapped = span * factor;
     l.time_remap = Some(Animatable::new_animated(vec![
         Keyframe::new(l.in_frame, 0.0, InterpolationType::Linear),
-        Keyframe::new(l.out_frame.saturating_sub(1), mapped, InterpolationType::Linear),
+        Keyframe::new(
+            l.out_frame.saturating_sub(1),
+            mapped,
+            InterpolationType::Linear,
+        ),
     ]));
     true
 }
@@ -551,14 +639,20 @@ pub fn documentary_opener(l: &mut Layer, cf: u32) -> bool {
     let _ = fade_from_color(l, cf, [0.0; 4]);
     let _ = ken_burns(l, cf, 1920.0, true);
     let c = |v: f32| Animatable::new_constant(v);
-    l.effects.push(make_effect("preset_doc_grain", "Film Grain",
+    l.effects.push(make_effect(
+        "preset_doc_grain",
+        "Film Grain",
         crate::core::timeline::EffectType::FilmGrain {
-            intensity: c(0.18), grain_size: 2.0, color_film: false,
-        }));
-    l.effects.push(make_effect("preset_doc_lb", "Letterbox",
-        crate::core::timeline::EffectType::Letterbox {
-            frac: c(0.13),
-        }));
+            intensity: c(0.18),
+            grain_size: 2.0,
+            color_film: false,
+        },
+    ));
+    l.effects.push(make_effect(
+        "preset_doc_lb",
+        "Letterbox",
+        crate::core::timeline::EffectType::Letterbox { frac: c(0.13) },
+    ));
     let _ = handheld(l);
     true
 }
@@ -588,11 +682,19 @@ pub fn ken_burns(l: &mut Layer, cf: u32, comp_w: f32, zoom_in: bool) -> bool {
     let base_p = l.transform.position.evaluate(cf);
     let pan = comp_w * 0.08;
     let (s0, s1, p0, p1) = if zoom_in {
-        ([base_s[0] * 1.3, base_s[1] * 1.3], base_s,
-         [base_p[0] - pan, base_p[1] - pan * 0.5], base_p)
+        (
+            [base_s[0] * 1.3, base_s[1] * 1.3],
+            base_s,
+            [base_p[0] - pan, base_p[1] - pan * 0.5],
+            base_p,
+        )
     } else {
-        (base_s, [base_s[0] * 1.3, base_s[1] * 1.3],
-         base_p, [base_p[0] + pan, base_p[1] + pan * 0.5])
+        (
+            base_s,
+            [base_s[0] * 1.3, base_s[1] * 1.3],
+            base_p,
+            [base_p[0] + pan, base_p[1] + pan * 0.5],
+        )
     };
     let mut sk = vec![kfv2(cf, s0), kfv2(end, s1)];
     let mut pk = vec![kfv2(cf, p0), kfv2(end, p1)];
@@ -620,7 +722,9 @@ pub fn fade_to_color(l: &mut Layer, _cf: u32, color: [f32; 4]) -> bool {
 pub fn fade_from_color(l: &mut Layer, _cf: u32, color: [f32; 4]) -> bool {
     let in_f = l.in_frame;
     let end = (in_f + 24).min(l.out_frame.saturating_sub(1));
-    if end <= in_f { return false; }
+    if end <= in_f {
+        return false;
+    }
     let mut op = vec![kf(in_f, 0.0), kf(end, 100.0)];
     ease_all(&mut op);
     l.transform.opacity = Animatable::Animated(op);
@@ -650,7 +754,7 @@ pub fn flash_cut(l: &mut Layer, cf: u32) -> bool {
     // Camera shake burst (position jitter)
     let j = |amp: f32| -> Vec<Keyframe<[f32; 2]>> {
         vec![
-            kfv2(cf,     [base_p[0] + amp,       base_p[1] - amp * 0.6]),
+            kfv2(cf, [base_p[0] + amp, base_p[1] - amp * 0.6]),
             kfv2(cf + 1, [base_p[0] - amp * 0.8, base_p[1] + amp * 0.4]),
             kfv2(cf + 2, [base_p[0] + amp * 0.5, base_p[1] - amp * 0.3]),
             kfv2(cf + 3, base_p),
@@ -658,12 +762,22 @@ pub fn flash_cut(l: &mut Layer, cf: u32) -> bool {
     };
     l.transform.position = Animatable::Animated(j(12.0));
     // Glow flash spike via Glow effect
-    l.effects.push(make_effect("preset_flash", "Flash Glow",
+    l.effects.push(make_effect(
+        "preset_flash",
+        "Flash Glow",
         crate::core::timeline::EffectType::Glow {
-            threshold: Animatable::new_animated(vec![kf(cf.saturating_sub(1), 0.8), kf(cf, 0.0), kf(cf + 5, 0.8)]),
-            radius:    Animatable::new_constant(60.0),
-            intensity: Animatable::new_animated(vec![kf(cf.saturating_sub(1), 0.0), kf(cf, 2.5), kf(cf + 5, 0.0)]),
-            color:     Animatable::new_constant([1.0, 1.0, 1.0, 1.0]),
+            threshold: Animatable::new_animated(vec![
+                kf(cf.saturating_sub(1), 0.8),
+                kf(cf, 0.0),
+                kf(cf + 5, 0.8),
+            ]),
+            radius: Animatable::new_constant(60.0),
+            intensity: Animatable::new_animated(vec![
+                kf(cf.saturating_sub(1), 0.0),
+                kf(cf, 2.5),
+                kf(cf + 5, 0.0),
+            ]),
+            color: Animatable::new_constant([1.0, 1.0, 1.0, 1.0]),
         },
     ));
     true
@@ -674,20 +788,34 @@ pub fn flash_cut(l: &mut Layer, cf: u32) -> bool {
 pub fn film_reel_intro(l: &mut Layer, cf: u32) -> bool {
     let c = |v: f32| Animatable::new_constant(v);
     // Film emulation (teal shadows, warm highlights)
-    l.effects.push(make_effect("preset_fri_film", "Film Look",
+    l.effects.push(make_effect(
+        "preset_fri_film",
+        "Film Look",
         crate::core::timeline::EffectType::FilmEmulation {
-            lift: c(-0.03), gamma: c(0.94), gain: c(1.08), hue_shift_deg: c(-5.0),
-        }));
+            lift: c(-0.03),
+            gamma: c(0.94),
+            gain: c(1.08),
+            hue_shift_deg: c(-5.0),
+        },
+    ));
     // Film grain
-    l.effects.push(make_effect("preset_fri_grain", "Film Grain",
+    l.effects.push(make_effect(
+        "preset_fri_grain",
+        "Film Grain",
         crate::core::timeline::EffectType::FilmGrain {
-            intensity: c(0.15), grain_size: 1.8, color_film: true,
-        }));
+            intensity: c(0.15),
+            grain_size: 1.8,
+            color_film: true,
+        },
+    ));
     // Letterbox bars
-    l.effects.push(make_effect("preset_fri_lb", "Letterbox",
+    l.effects.push(make_effect(
+        "preset_fri_lb",
+        "Letterbox",
         crate::core::timeline::EffectType::Letterbox {
             frac: Animatable::new_animated(vec![kf(cf, 0.0), kf(cf + 20, 0.13)]),
-        }));
+        },
+    ));
     // Fade from black at in-point
     let _ = fade_from_color(l, cf, [0.0; 4]);
     // Subtle handheld camera
@@ -705,10 +833,14 @@ pub fn speed_ramp(l: &mut Layer, cf: u32, factor: f32) -> bool {
     const RAMP: u32 = 20;
     let in_f = l.in_frame;
     let out_f = l.out_frame;
-    if cf <= in_f || cf >= out_f { return false; }
+    if cf <= in_f || cf >= out_f {
+        return false;
+    }
     let b = cf;
     let c = (cf + RAMP).min(out_f.saturating_sub(1));
-    if c <= b { return false; }
+    if c <= b {
+        return false;
+    }
 
     // Ensure remap exists (linear 1:1 like the Cmd+Alt+T initializer).
     if l.time_remap.is_none() {
@@ -724,9 +856,9 @@ pub fn speed_ramp(l: &mut Layer, cf: u32, factor: f32) -> bool {
     let vb = v_at(b);
     let vd = v_at(out_f.saturating_sub(1));
 
-    let _seg1 = vb - va;                       // consumed before ramp
+    let _seg1 = vb - va; // consumed before ramp
     let r = (c - b) as f32;
-    let vc = vb + r * factor;                 // slowed / fastened middle
+    let vc = vb + r * factor; // slowed / fastened middle
     let tail = (out_f.saturating_sub(1) - c) as f32;
     let vd2 = vc + tail;
 
@@ -734,7 +866,11 @@ pub fn speed_ramp(l: &mut Layer, cf: u32, factor: f32) -> bool {
         Keyframe::new(in_f, va, InterpolationType::Linear),
         Keyframe::new(b, vb, InterpolationType::Linear),
         Keyframe::new(c, vc, InterpolationType::Linear),
-        Keyframe::new(out_f.saturating_sub(1), vd2.max(vc), InterpolationType::Linear),
+        Keyframe::new(
+            out_f.saturating_sub(1),
+            vd2.max(vc),
+            InterpolationType::Linear,
+        ),
     ];
     let _ = vd; // continuity reference (kept linear by construction)
     kfs.dedup_by(|a2, b2| a2.frame == b2.frame);
@@ -742,11 +878,10 @@ pub fn speed_ramp(l: &mut Layer, cf: u32, factor: f32) -> bool {
     true
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::core::timeline::{LayerType};
+    use crate::core::timeline::LayerType;
     #[cfg(test)]
     pub fn speed_ramp_init_for_test(l: &mut Layer, out_frame: u32) {
         l.out_frame = out_frame;
@@ -757,7 +892,12 @@ mod tests {
     }
 
     fn mk() -> Layer {
-        let mut l = Layer::new("p".into(), "P".into(), LayerType::Solid { color: [1.0; 4] }, 200);
+        let mut l = Layer::new(
+            "p".into(),
+            "P".into(),
+            LayerType::Solid { color: [1.0; 4] },
+            200,
+        );
         l.in_frame = 10;
         l.out_frame = 190;
         l.transform.opacity = Animatable::new_constant(100.0);
@@ -827,7 +967,12 @@ mod tests {
         assert!(speed_ramp(&mut l2, 40, 0.25));
         // At end of the 20f slow window (f=60): consumed = 30 + 20*0.25 = 35 < linear 50.
         let v = l2.time_remap.as_ref().unwrap().evaluate(60);
-        assert!((v - (lin_at_60 - 15.0)).abs() < 0.01, "v={} lin={}", v, lin_at_60);
+        assert!(
+            (v - (lin_at_60 - 15.0)).abs() < 0.01,
+            "v={} lin={}",
+            v,
+            lin_at_60
+        );
     }
 
     #[test]
@@ -843,7 +988,6 @@ mod tests {
         assert!((c.value - b.value - (100.0 - 80.0) * 4.0).abs() < 0.01);
     }
 
-
     #[test]
     fn test_ken_burns_in_zooms_down_and_pans() {
         let mut l = mk();
@@ -851,7 +995,11 @@ mod tests {
         let sk = l.transform.scale.keyframes().unwrap();
         assert_eq!(sk.len(), 2);
         // starts at 130%, ends at base 100%
-        assert!((sk[0].value[0] - 130.0).abs() < 0.01, "start 130%: {}", sk[0].value[0]);
+        assert!(
+            (sk[0].value[0] - 130.0).abs() < 0.01,
+            "start 130%: {}",
+            sk[0].value[0]
+        );
         assert_eq!(sk[1].value, [100.0, 100.0]);
         let pk = l.transform.position.keyframes().unwrap();
         // pans inward (x decreases by comp_w * 0.08 ≈ 153.6)
@@ -890,11 +1038,16 @@ mod tests {
         assert!(l.transform.position.keyframes().unwrap().len() >= 3);
     }
 
-
     #[test]
     fn test_expr_bounce_sets_position_expression() {
         let mut l = mk();
-        assert!(apply_by_name("\u{1f9f2} Bounce", &mut l, 30, 1920.0, 1080.0));
+        assert!(apply_by_name(
+            "\u{1f9f2} Bounce",
+            &mut l,
+            30,
+            1920.0,
+            1080.0
+        ));
         let expr = l.transform.position_expression.as_ref().unwrap();
         match expr {
             crate::core::timeline::Expression::Raw(s) => {
@@ -908,14 +1061,26 @@ mod tests {
     #[test]
     fn test_expr_elastic_sets_scale_expression() {
         let mut l = mk();
-        assert!(apply_by_name("\u{1f300} Elastic", &mut l, 30, 1920.0, 1080.0));
+        assert!(apply_by_name(
+            "\u{1f300} Elastic",
+            &mut l,
+            30,
+            1920.0,
+            1080.0
+        ));
         assert!(l.transform.scale_expression.is_some());
     }
 
     #[test]
     fn test_expr_sine_wave_sets_position() {
         let mut l = mk();
-        assert!(apply_by_name("\u{1f30a} Sine Wave", &mut l, 30, 1920.0, 1080.0));
+        assert!(apply_by_name(
+            "\u{1f30a} Sine Wave",
+            &mut l,
+            30,
+            1920.0,
+            1080.0
+        ));
         let expr = l.transform.position_expression.as_ref().unwrap();
         match expr {
             crate::core::timeline::Expression::Raw(s) => assert!(s.contains("sin")),
@@ -926,17 +1091,33 @@ mod tests {
     #[test]
     fn test_expr_strobe_sets_opacity_expression() {
         let mut l = mk();
-        assert!(apply_by_name("\u{1f4a1} Strobe", &mut l, 30, 1920.0, 1080.0));
+        assert!(apply_by_name(
+            "\u{1f4a1} Strobe",
+            &mut l,
+            30,
+            1920.0,
+            1080.0
+        ));
         assert!(l.transform.opacity_expression.is_some());
     }
 
     #[test]
     fn test_slide_out_moves_right_and_fades() {
         let mut l = mk();
-        assert!(apply_by_name("\u{1f3ac} Slide Out \u{2192}", &mut l, 100, 1920.0, 1080.0));
+        assert!(apply_by_name(
+            "\u{1f3ac} Slide Out \u{2192}",
+            &mut l,
+            100,
+            1920.0,
+            1080.0
+        ));
         let pk = l.transform.position.keyframes().unwrap();
         assert_eq!(pk.len(), 2);
-        assert!((pk[1].value[0] - (960.0 + 960.0)).abs() < 1.0, "slide right: {}", pk[1].value[0]);
+        assert!(
+            (pk[1].value[0] - (960.0 + 960.0)).abs() < 1.0,
+            "slide right: {}",
+            pk[1].value[0]
+        );
         let op = l.transform.opacity.keyframes().unwrap();
         assert_eq!(op[1].value, 0.0);
     }
@@ -944,13 +1125,22 @@ mod tests {
     #[test]
     fn test_zoom_out_scales_up_and_fades() {
         let mut l = mk();
-        assert!(apply_by_name("\u{1f3ac} Zoom Out", &mut l, 100, 1920.0, 1080.0));
+        assert!(apply_by_name(
+            "\u{1f3ac} Zoom Out",
+            &mut l,
+            100,
+            1920.0,
+            1080.0
+        ));
         let sk = l.transform.scale.keyframes().unwrap();
-        assert!((sk[1].value[0] - 200.0).abs() < 0.01, "zoom 200%: {}", sk[1].value[0]);
+        assert!(
+            (sk[1].value[0] - 200.0).abs() < 0.01,
+            "zoom 200%: {}",
+            sk[1].value[0]
+        );
         let op = l.transform.opacity.keyframes().unwrap();
         assert_eq!(op[1].value, 0.0);
     }
-
 
     #[test]
     fn test_text_typewriter_sets_animator_with_offset_anim() {
@@ -993,7 +1183,6 @@ mod tests {
         assert!(anim.selector.ease_high > 0.0);
     }
 
-
     #[test]
     fn test_freeze_frame_locks_to_single_source() {
         let mut l = mk();
@@ -1002,7 +1191,12 @@ mod tests {
         let kfs = rm.keyframes().unwrap();
         assert_eq!(kfs.len(), 2);
         // Both ends map to same source frame
-        assert!((kfs[0].value - kfs[1].value).abs() < 0.01, "freeze: {} vs {}", kfs[0].value, kfs[1].value);
+        assert!(
+            (kfs[0].value - kfs[1].value).abs() < 0.01,
+            "freeze: {} vs {}",
+            kfs[0].value,
+            kfs[1].value
+        );
     }
 
     #[test]
@@ -1011,14 +1205,24 @@ mod tests {
         assert!(apply_by_name("Reverse", &mut l, 50, 1920.0, 1080.0));
         let kfs = l.time_remap.as_ref().unwrap().keyframes().unwrap();
         // start maps to span (180), end maps to 0
-        assert!((kfs[0].value - 180.0).abs() < 0.01, "reverse start: {}", kfs[0].value);
+        assert!(
+            (kfs[0].value - 180.0).abs() < 0.01,
+            "reverse start: {}",
+            kfs[0].value
+        );
         assert!((kfs[1].value).abs() < 0.01, "reverse end: {}", kfs[1].value);
     }
 
     #[test]
     fn test_slow_motion_doubles_mapped_span() {
         let mut l = mk();
-        assert!(apply_by_name("Slow Motion 0.5\u{00d7}", &mut l, 50, 1920.0, 1080.0));
+        assert!(apply_by_name(
+            "Slow Motion 0.5\u{00d7}",
+            &mut l,
+            50,
+            1920.0,
+            1080.0
+        ));
         let kfs = l.time_remap.as_ref().unwrap().keyframes().unwrap();
         // span=180, factor=0.5 → mapped = 180*0.5 = 90
         assert!((kfs[1].value - 90.0).abs() < 0.01, "slow: {}", kfs[1].value);
@@ -1027,12 +1231,21 @@ mod tests {
     #[test]
     fn test_fast_forward_halves_mapped_span() {
         let mut l = mk();
-        assert!(apply_by_name("Fast Forward 2\u{00d7}", &mut l, 50, 1920.0, 1080.0));
+        assert!(apply_by_name(
+            "Fast Forward 2\u{00d7}",
+            &mut l,
+            50,
+            1920.0,
+            1080.0
+        ));
         let kfs = l.time_remap.as_ref().unwrap().keyframes().unwrap();
         // span=180, factor=2.0 → mapped = 360
-        assert!((kfs[1].value - 360.0).abs() < 0.01, "fast: {}", kfs[1].value);
+        assert!(
+            (kfs[1].value - 360.0).abs() < 0.01,
+            "fast: {}",
+            kfs[1].value
+        );
     }
-
 
     #[test]
     fn test_youtube_vlog_stacks_four_effects() {
@@ -1053,7 +1266,13 @@ mod tests {
     #[test]
     fn test_cinematic_reveal_fades_and_letterboxes() {
         let mut l = mk();
-        assert!(apply_by_name("Cinematic Reveal", &mut l, 30, 1920.0, 1080.0));
+        assert!(apply_by_name(
+            "Cinematic Reveal",
+            &mut l,
+            30,
+            1920.0,
+            1080.0
+        ));
         let op = l.transform.opacity.keyframes().unwrap();
         assert_eq!(op[0].value, 0.0, "fade from black");
         assert!(l.effects.iter().any(|e| e.name == "Letterbox"));
@@ -1063,7 +1282,13 @@ mod tests {
     #[test]
     fn test_documentary_opener_has_grain_and_letterbox() {
         let mut l = mk();
-        assert!(apply_by_name("Documentary Opener", &mut l, 30, 1920.0, 1080.0));
+        assert!(apply_by_name(
+            "Documentary Opener",
+            &mut l,
+            30,
+            1920.0,
+            1080.0
+        ));
         let names: Vec<_> = l.effects.iter().map(|e| e.name.as_str()).collect();
         assert!(names.contains(&"Film Grain"));
         assert!(names.contains(&"Letterbox"));
@@ -1087,7 +1312,13 @@ mod tests {
     #[test]
     fn test_film_reel_intro_stacks_four_effects() {
         let mut l = mk();
-        assert!(apply_by_name("🎞 Film Reel Intro", &mut l, 30, 1920.0, 1080.0));
+        assert!(apply_by_name(
+            "🎞 Film Reel Intro",
+            &mut l,
+            30,
+            1920.0,
+            1080.0
+        ));
         let names: Vec<_> = l.effects.iter().map(|e| e.name.as_str()).collect();
         assert!(names.contains(&"Film Look"));
         assert!(names.contains(&"Film Grain"));
@@ -1098,5 +1329,4 @@ mod tests {
         // handheld expression was set
         assert!(l.transform.position_expression.is_some());
     }
-
 }

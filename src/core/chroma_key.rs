@@ -92,16 +92,13 @@ pub fn apply_chroma_key(pixels: &mut [u8], width: u32, height: u32, options: &Ch
         let (cb, cr) = rgb_to_chroma(r, g, b);
         const CORE_TOLERANCE: f32 = 0.15;
         const MATTE_RAMP: f32 = 3.0;
-        let raw_matte = ((chroma_distance(cb, cr, k_cb, k_cr, balance)
-            - CORE_TOLERANCE)
-            * MATTE_RAMP
-            * gain)
-            .clamp(0.0, 1.0);
+        let raw_matte =
+            ((chroma_distance(cb, cr, k_cb, k_cr, balance) - CORE_TOLERANCE) * MATTE_RAMP * gain)
+                .clamp(0.0, 1.0);
 
         // Apply Clip Black / Clip White thresholds
         let matte = if clip_white > clip_black + 0.001 {
-            ((raw_matte - clip_black) / (clip_white - clip_black))
-                .clamp(0.0, 1.0)
+            ((raw_matte - clip_black) / (clip_white - clip_black)).clamp(0.0, 1.0)
         } else {
             raw_matte.clamp(0.0, 1.0)
         };

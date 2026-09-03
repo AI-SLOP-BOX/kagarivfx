@@ -14,8 +14,7 @@ pub fn save_project(comp: &Composition, path: &Path) -> io::Result<()> {
 /// Load a composition from a JSON file (.aeproj).
 pub fn load_project(path: &Path) -> io::Result<Composition> {
     let data = fs::read_to_string(path)?;
-    serde_json::from_str(&data)
-        .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))
+    serde_json::from_str(&data).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))
 }
 
 /// Project metadata saved alongside the composition.
@@ -29,7 +28,14 @@ impl Default for ProjectFile {
     fn default() -> Self {
         Self {
             version: 1,
-            composition: Composition::new("untitled".into(), "Untitled".into(), 1920, 1080, 30, 300),
+            composition: Composition::new(
+                "untitled".into(),
+                "Untitled".into(),
+                1920,
+                1080,
+                30,
+                300,
+            ),
         }
     }
 }
@@ -44,8 +50,8 @@ pub fn save_project_file(proj: &ProjectFile, path: &Path) -> io::Result<()> {
 /// Load a full project file, handling version migration if needed.
 pub fn load_project_file(path: &Path) -> io::Result<ProjectFile> {
     let data = fs::read_to_string(path)?;
-    let mut proj: ProjectFile = serde_json::from_str(&data)
-        .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+    let mut proj: ProjectFile =
+        serde_json::from_str(&data).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
 
     // Future: migrate old versions here
     if proj.version == 0 {

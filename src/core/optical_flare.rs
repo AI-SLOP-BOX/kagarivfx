@@ -97,11 +97,21 @@ pub fn render_optical_flare(
         return;
     }
 
-    let cx = if config.position[0].is_finite() { config.position[0] } else { width as f32 * 0.5 };
-    let cy = if config.position[1].is_finite() { config.position[1] } else { height as f32 * 0.5 };
+    let cx = if config.position[0].is_finite() {
+        config.position[0]
+    } else {
+        width as f32 * 0.5
+    };
+    let cy = if config.position[1].is_finite() {
+        config.position[1]
+    } else {
+        height as f32 * 0.5
+    };
     let global_scale = if config.overall_scale.is_finite() {
         config.overall_scale.clamp(0.01, 100.0)
-    } else { 1.0 };
+    } else {
+        1.0
+    };
     let global_bright = config.overall_brightness.clamp(0.0, 100.0);
 
     let w = width as usize;
@@ -110,11 +120,21 @@ pub fn render_optical_flare(
     for elem in &config.elements {
         let e_scale = if elem.scale.is_finite() {
             (elem.scale * global_scale).clamp(1.0, 4096.0)
-        } else { 1.0 };
+        } else {
+            1.0
+        };
         let e_bright = if elem.brightness.is_finite() {
             (elem.brightness * global_bright).clamp(0.0, 100.0)
-        } else { 0.0 };
-        let col = elem.color.map(|value| if value.is_finite() { value.clamp(0.0, 1.0) } else { 0.0 });
+        } else {
+            0.0
+        };
+        let col = elem.color.map(|value| {
+            if value.is_finite() {
+                value.clamp(0.0, 1.0)
+            } else {
+                0.0
+            }
+        });
 
         let r_box = e_scale.ceil() as i32;
         let min_x = ((cx - e_scale) as i32).clamp(0, width as i32 - 1);

@@ -1,6 +1,6 @@
+use rayon::prelude::*;
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::Arc;
-use rayon::prelude::*;
 
 /// Render queue item representing a composition to be rendered.
 #[derive(Debug, Clone)]
@@ -72,22 +72,29 @@ impl ParallelRenderQueue {
     {
         let items_done = AtomicU32::new(0);
 
-        self.items.par_iter().enumerate().for_each(|(item_idx, item)| {
-            if self.is_cancelled() { return; }
-
-            for frame in item.start_frame..=item.end_frame {
-                if self.is_cancelled() { return; }
-
-                let _pixels = render_frame(&item.comp_name, frame);
-                self.total_frames_rendered.fetch_add(1, Ordering::Relaxed);
-
-                if let Some(cb) = &self.progress {
-                    let done = self.total_frames_rendered.load(Ordering::Relaxed);
-                    cb(item_idx, done, self.total_frames);
+        self.items
+            .par_iter()
+            .enumerate()
+            .for_each(|(item_idx, item)| {
+                if self.is_cancelled() {
+                    return;
                 }
-            }
-            items_done.fetch_add(1, Ordering::Relaxed);
-        });
+
+                for frame in item.start_frame..=item.end_frame {
+                    if self.is_cancelled() {
+                        return;
+                    }
+
+                    let _pixels = render_frame(&item.comp_name, frame);
+                    self.total_frames_rendered.fetch_add(1, Ordering::Relaxed);
+
+                    if let Some(cb) = &self.progress {
+                        let done = self.total_frames_rendered.load(Ordering::Relaxed);
+                        cb(item_idx, done, self.total_frames);
+                    }
+                }
+                items_done.fetch_add(1, Ordering::Relaxed);
+            });
     }
 
     /// Multi-frame rendering (MFR): render all frames of all items in parallel
@@ -97,22 +104,29 @@ impl ParallelRenderQueue {
     where
         F: Fn(&str, u32) -> Vec<u8> + Sync,
     {
-        self.items.par_iter().enumerate().for_each(|(item_idx, item)| {
-            if self.is_cancelled() { return; }
-
-            let frames: Vec<u32> = (item.start_frame..=item.end_frame).collect();
-            frames.par_iter().for_each(|&frame| {
-                if self.is_cancelled() { return; }
-
-                let _pixels = render_frame(&item.comp_name, frame);
-                self.total_frames_rendered.fetch_add(1, Ordering::Relaxed);
-
-                if let Some(cb) = &self.progress {
-                    let done = self.total_frames_rendered.load(Ordering::Relaxed);
-                    cb(item_idx, done, self.total_frames);
+        self.items
+            .par_iter()
+            .enumerate()
+            .for_each(|(item_idx, item)| {
+                if self.is_cancelled() {
+                    return;
                 }
+
+                let frames: Vec<u32> = (item.start_frame..=item.end_frame).collect();
+                frames.par_iter().for_each(|&frame| {
+                    if self.is_cancelled() {
+                        return;
+                    }
+
+                    let _pixels = render_frame(&item.comp_name, frame);
+                    self.total_frames_rendered.fetch_add(1, Ordering::Relaxed);
+
+                    if let Some(cb) = &self.progress {
+                        let done = self.total_frames_rendered.load(Ordering::Relaxed);
+                        cb(item_idx, done, self.total_frames);
+                    }
+                });
             });
-        });
     }
 }
 
@@ -134,11 +148,19 @@ pub struct RenderStats {
 
 impl RenderStats {
     pub fn progress_pct(&self) -> f32 {
-        if self.total_frames == 0 { 0.0 } else { self.frames_rendered as f32 / self.total_frames as f32 * 100.0 }
+        if self.total_frames == 0 {
+            0.0
+        } else {
+            self.frames_rendered as f32 / self.total_frames as f32 * 100.0
+        }
     }
 
     pub fn fps(&self) -> f32 {
-        if self.elapsed_ms <= 0.0 { 0.0 } else { self.frames_rendered as f32 / (self.elapsed_ms as f32 / 1000.0) }
+        if self.elapsed_ms <= 0.0 {
+            0.0
+        } else {
+            self.frames_rendered as f32 / (self.elapsed_ms as f32 / 1000.0)
+        }
     }
 }
 

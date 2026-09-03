@@ -102,7 +102,8 @@ pub fn apply_rove_across_time(keyframes: &mut [SpatialKeyframe2D]) {
                 if accumulated_dist > 0.001 {
                     for (seg_idx, kf) in keyframes[start_idx + 1..end_idx].iter_mut().enumerate() {
                         let dist_ratio = segment_distances[seg_idx] / accumulated_dist;
-                        let new_frame = start_frame + (total_frame_delta * dist_ratio).round() as u32;
+                        let new_frame =
+                            start_frame + (total_frame_delta * dist_ratio).round() as u32;
                         kf.frame = new_frame;
                     }
                 }
@@ -147,9 +148,27 @@ mod tests {
     #[test]
     fn test_rove_across_time_equal_spacing() {
         let mut kfs = vec![
-            SpatialKeyframe2D { frame: 0, position: [0.0, 0.0], handle_in: [0.0, 0.0], handle_out: [0.0, 0.0], rove_across_time: false },
-            SpatialKeyframe2D { frame: 10, position: [50.0, 0.0], handle_in: [0.0, 0.0], handle_out: [0.0, 0.0], rove_across_time: true },
-            SpatialKeyframe2D { frame: 100, position: [100.0, 0.0], handle_in: [0.0, 0.0], handle_out: [0.0, 0.0], rove_across_time: false },
+            SpatialKeyframe2D {
+                frame: 0,
+                position: [0.0, 0.0],
+                handle_in: [0.0, 0.0],
+                handle_out: [0.0, 0.0],
+                rove_across_time: false,
+            },
+            SpatialKeyframe2D {
+                frame: 10,
+                position: [50.0, 0.0],
+                handle_in: [0.0, 0.0],
+                handle_out: [0.0, 0.0],
+                rove_across_time: true,
+            },
+            SpatialKeyframe2D {
+                frame: 100,
+                position: [100.0, 0.0],
+                handle_in: [0.0, 0.0],
+                handle_out: [0.0, 0.0],
+                rove_across_time: false,
+            },
         ];
 
         apply_rove_across_time(&mut kfs);

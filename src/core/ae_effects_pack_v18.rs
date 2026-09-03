@@ -1,7 +1,14 @@
 #![allow(dead_code)]
 /// After Effects VFX Kernels Part 18 — Particle & Simulation Renderers
 // 1. Particle Gravity Simulation (Point Emission with Gravity Field)
-pub fn apply_particle_gravity_sim(pixels: &mut [u8], width: u32, height: u32, frame: u32, gravity: f32, spread: f32) {
+pub fn apply_particle_gravity_sim(
+    pixels: &mut [u8],
+    width: u32,
+    height: u32,
+    frame: u32,
+    gravity: f32,
+    spread: f32,
+) {
     let t = frame as f32 * 0.016;
     let emitter_x = width as f32 * 0.5;
     let emitter_y = height as f32 * 0.2;
@@ -14,7 +21,8 @@ pub fn apply_particle_gravity_sim(pixels: &mut [u8], width: u32, height: u32, fr
         let life = ((p % 30) as f32 / 30.0 + t).fract();
 
         let px = emitter_x + angle.cos() * speed * life * 60.0;
-        let py = emitter_y + angle.sin() * speed * life * 60.0 + 0.5 * gravity * (life * 3.0).powi(2);
+        let py =
+            emitter_y + angle.sin() * speed * life * 60.0 + 0.5 * gravity * (life * 3.0).powi(2);
 
         let ix = px as i32;
         let iy = py as i32;
@@ -29,7 +37,14 @@ pub fn apply_particle_gravity_sim(pixels: &mut [u8], width: u32, height: u32, fr
 }
 
 // 2. Star Field Generator (3D Depth Star Parallax)
-pub fn apply_star_field(pixels: &mut [u8], width: u32, height: u32, num_stars: u32, depth_speed: f32, time: f32) {
+pub fn apply_star_field(
+    pixels: &mut [u8],
+    width: u32,
+    height: u32,
+    num_stars: u32,
+    depth_speed: f32,
+    time: f32,
+) {
     for s in 0..num_stars {
         let seed = s as f32 * 127.1;
         let sx = (seed.sin().abs() * width as f32) as i32;
@@ -50,8 +65,17 @@ pub fn apply_star_field(pixels: &mut [u8], width: u32, height: u32, num_stars: u
 }
 
 // 3. Turbulence Displacement Map (Fractal Brownian Motion 2D)
-pub fn apply_fbm_turbulence(pixels: &mut [u8], width: u32, height: u32, octaves: u32, amplitude: f32, time: f32) {
-    if amplitude <= 0.001 || octaves == 0 { return; }
+pub fn apply_fbm_turbulence(
+    pixels: &mut [u8],
+    width: u32,
+    height: u32,
+    octaves: u32,
+    amplitude: f32,
+    time: f32,
+) {
+    if amplitude <= 0.001 || octaves == 0 {
+        return;
+    }
     let temp = pixels.to_vec();
 
     for y in 0..height {
@@ -81,7 +105,15 @@ pub fn apply_fbm_turbulence(pixels: &mut [u8], width: u32, height: u32, octaves:
 }
 
 // 4. Lightning Arc Generator
-pub fn apply_lightning_arc(pixels: &mut [u8], width: u32, height: u32, start: [f32; 2], end: [f32; 2], seed: u32, glow: f32) {
+pub fn apply_lightning_arc(
+    pixels: &mut [u8],
+    width: u32,
+    height: u32,
+    start: [f32; 2],
+    end: [f32; 2],
+    seed: u32,
+    glow: f32,
+) {
     let steps = 64u32;
     let mut rng = seed;
 
@@ -118,7 +150,9 @@ pub fn apply_lightning_arc(pixels: &mut [u8], width: u32, height: u32, start: [f
 
 // 5. Flame / Fire Cellular Automaton Upward Combustion
 pub fn apply_fire_automaton(pixels: &mut [u8], width: u32, height: u32, intensity: f32) {
-    if intensity <= 0.001 { return; }
+    if intensity <= 0.001 {
+        return;
+    }
     let temp = pixels.to_vec();
 
     // Bottom row as heat source
@@ -134,9 +168,17 @@ pub fn apply_fire_automaton(pixels: &mut [u8], width: u32, height: u32, intensit
         for x in 0..width as usize {
             let src_y = (height as usize - 1) - y;
 
-            let left  = if x > 0 { temp[((src_y + 1) * width as usize + (x - 1)) * 4] as u32 } else { 0 };
-            let right = if x < width as usize - 1 { temp[((src_y + 1) * width as usize + (x + 1)) * 4] as u32 } else { 0 };
-            let mid   = temp[((src_y + 1) * width as usize + x) * 4] as u32;
+            let left = if x > 0 {
+                temp[((src_y + 1) * width as usize + (x - 1)) * 4] as u32
+            } else {
+                0
+            };
+            let right = if x < width as usize - 1 {
+                temp[((src_y + 1) * width as usize + (x + 1)) * 4] as u32
+            } else {
+                0
+            };
+            let mid = temp[((src_y + 1) * width as usize + x) * 4] as u32;
             let above = temp[(src_y * width as usize + x) * 4] as u32;
 
             let avg = (left + mid + right + above) / 4;

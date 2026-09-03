@@ -119,7 +119,9 @@ pub fn apply_corner_pin_warp(
     dst_h: u32,
     quad: &CornerPinQuad,
 ) {
-    if src_pixels.len() != (src_w * src_h * 4) as usize || dst_pixels.len() != (dst_w * dst_h * 4) as usize {
+    if src_pixels.len() != (src_w * src_h * 4) as usize
+        || dst_pixels.len() != (dst_w * dst_h * 4) as usize
+    {
         return;
     }
 
@@ -195,7 +197,8 @@ mod tests {
         for y in 10..20 {
             for x in 10..20 {
                 let idx = (y * 32 + x) * 4;
-                src[idx + 1] = 255; src[idx + 3] = 255;
+                src[idx + 1] = 255;
+                src[idx + 3] = 255;
             }
         }
 

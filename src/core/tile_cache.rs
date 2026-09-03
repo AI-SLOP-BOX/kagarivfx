@@ -86,7 +86,11 @@ impl TileCache {
     pub fn get(&mut self, frame: u32, coord: TileCoord) -> Option<&[u8]> {
         let version = current_tile_version();
         let key = (frame, 0, coord);
-        if self.tiles.get(&key).is_some_and(|entry| entry.version != version) {
+        if self
+            .tiles
+            .get(&key)
+            .is_some_and(|entry| entry.version != version)
+        {
             if let Some(entry) = self.tiles.remove(&key) {
                 self.current_memory = self.current_memory.saturating_sub(entry.pixels.len());
             }

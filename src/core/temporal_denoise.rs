@@ -52,7 +52,8 @@ impl TemporalDenoiser {
                 for (cur, &prev_px) in frame.iter_mut().zip(prev.iter()) {
                     let diff = (*cur as f32 - prev_px as f32).abs();
                     let mix_factor = if diff > threshold { 0.0 } else { temporal_mix };
-                    let mixed = *cur as f32 + (prev_px as f32 - *cur as f32) * mix_factor * strength;
+                    let mixed =
+                        *cur as f32 + (prev_px as f32 - *cur as f32) * mix_factor * strength;
                     *cur = mixed.round().clamp(0.0, 255.0) as u8;
                 }
                 self.previous_frame = Some(frame.to_vec());

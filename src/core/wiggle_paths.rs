@@ -5,11 +5,11 @@ use crate::core::mask::MaskVertex;
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 #[serde(default)]
 pub struct WigglePathsOptions {
-    pub size: f32,             // Max pixel displacement radius
-    pub detail: f32,           // Number of wiggles per segment
-    pub wiggles_per_sec: f32,  // Frequency in Hz
-    pub correlation: f32,       // Spatial smoothness between neighboring vertices (0.0 .. 1.0)
-    pub smooth: bool,          // True for smooth curves, false for sharp/corner wiggles
+    pub size: f32,            // Max pixel displacement radius
+    pub detail: f32,          // Number of wiggles per segment
+    pub wiggles_per_sec: f32, // Frequency in Hz
+    pub correlation: f32,     // Spatial smoothness between neighboring vertices (0.0 .. 1.0)
+    pub smooth: bool,         // True for smooth curves, false for sharp/corner wiggles
 }
 
 impl Default for WigglePathsOptions {
@@ -74,10 +74,7 @@ mod tests {
 
     #[test]
     fn test_wiggle_paths_displacement() {
-        let vertices = vec![
-            MaskVertex::new(0.0, 0.0),
-            MaskVertex::new(100.0, 0.0),
-        ];
+        let vertices = vec![MaskVertex::new(0.0, 0.0), MaskVertex::new(100.0, 0.0)];
 
         let options = WigglePathsOptions {
             size: 20.0,
@@ -89,6 +86,9 @@ mod tests {
 
         let wiggled = apply_wiggle_paths(&vertices, 1.0, &options);
         assert_eq!(wiggled.len(), 2);
-        assert!((wiggled[0].position[0] - 0.0).abs() > 0.001 || (wiggled[0].position[1] - 0.0).abs() > 0.001);
+        assert!(
+            (wiggled[0].position[0] - 0.0).abs() > 0.001
+                || (wiggled[0].position[1] - 0.0).abs() > 0.001
+        );
     }
 }

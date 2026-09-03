@@ -289,7 +289,13 @@ mod tests {
     #[test]
     fn tempo_queries_fail_closed_for_invalid_time() {
         let map = TempoMap::default();
-        assert_eq!(map.beat_at(Time { numerator: 1, denominator: 0 }), 0.0);
+        assert_eq!(
+            map.beat_at(Time {
+                numerator: 1,
+                denominator: 0
+            }),
+            0.0
+        );
     }
 
     #[test]

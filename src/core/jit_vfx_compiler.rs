@@ -27,7 +27,9 @@ impl JitCompiledProgram {
             match op {
                 JitOpCode::PushConst(val) => stack.push(*val),
                 JitOpCode::LoadTime => stack.push(time_sec),
-                JitOpCode::LoadVar(idx) => stack.push(vars.get(*idx as usize).copied().unwrap_or(0.0)),
+                JitOpCode::LoadVar(idx) => {
+                    stack.push(vars.get(*idx as usize).copied().unwrap_or(0.0))
+                }
                 JitOpCode::Add => {
                     let b = stack.pop().unwrap_or(0.0);
                     let a = stack.pop().unwrap_or(0.0);

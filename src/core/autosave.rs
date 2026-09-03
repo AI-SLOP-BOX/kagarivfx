@@ -9,8 +9,8 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, Instant};
 
-use crate::core::timeline::Project;
 use crate::core::production_document::ProductionDocument;
+use crate::core::timeline::Project;
 
 #[derive(serde::Serialize, serde::Deserialize)]
 struct AutosaveSnapshot {
@@ -136,7 +136,7 @@ impl AutosaveManager {
             project: project.clone(),
             production_document: production_document.cloned(),
         })
-            .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
+        .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
         let result = (|| {
             std::fs::write(&tmp, json)?;
             std::fs::rename(&tmp, &path)?;
@@ -167,13 +167,19 @@ impl AutosaveManager {
                     if is_recoverable_project(&snapshot.project) {
                         return Some(snapshot.project);
                     }
-                    log::warn!("[Autosave] Skipping invalid project recovery file {:?}", path);
+                    log::warn!(
+                        "[Autosave] Skipping invalid project recovery file {:?}",
+                        path
+                    );
                 }
                 if let Ok(project) = serde_json::from_str::<Project>(&json) {
                     if is_recoverable_project(&project) {
                         return Some(project);
                     }
-                    log::warn!("[Autosave] Skipping invalid project recovery file {:?}", path);
+                    log::warn!(
+                        "[Autosave] Skipping invalid project recovery file {:?}",
+                        path
+                    );
                 }
                 log::warn!("[Autosave] Skipping corrupt recovery file {:?}", path);
             }
@@ -191,7 +197,8 @@ impl AutosaveManager {
             if let Ok(json) = std::fs::read_to_string(&path) {
                 if let Ok(snapshot) = serde_json::from_str::<AutosaveSnapshot>(&json) {
                     if let Some(document) = snapshot.production_document {
-                        if document.validate().is_ok() && is_recoverable_project(&document.project) {
+                        if document.validate().is_ok() && is_recoverable_project(&document.project)
+                        {
                             return Some(document);
                         }
                         log::warn!("[Autosave] Skipping invalid production document {:?}", path);
@@ -216,8 +223,7 @@ impl AutosaveManager {
 }
 
 fn is_recoverable_project(project: &Project) -> bool {
-    !project.compositions.is_empty()
-        && project.active_composition_idx < project.compositions.len()
+    !project.compositions.is_empty() && project.active_composition_idx < project.compositions.len()
 }
 
 /// Returns true if the path looks like a valid project JSON (cheap sanity check
@@ -284,7 +290,8 @@ mod tests {
 
     #[test]
     fn production_autosave_uses_latest_project_with_metadata() {
-        let dir = std::env::temp_dir().join(format!("aevfx_autosave_production_{}", std::process::id()));
+        let dir =
+            std::env::temp_dir().join(format!("aevfx_autosave_production_{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         let mut manager = AutosaveManager::new(&dir).with_interval(Duration::from_secs(0));
         let mut document = ProductionDocument::new(sample_project());
@@ -292,23 +299,36 @@ mod tests {
         let mut latest = sample_project();
         latest.active_composition_mut().name = "Latest".into();
         manager.mark_dirty();
-        manager.tick_production(&latest, &document).expect("writes production snapshot");
+        manager
+            .tick_production(&latest, &document)
+            .expect("writes production snapshot");
 
         let recovered = manager.load_latest_recovery().expect("recovers project");
         assert_eq!(recovered.active_composition().name, "Latest");
-        assert_eq!(manager.load_latest_production().unwrap().audio.sample_rate, 44_100);
+        assert_eq!(
+            manager.load_latest_production().unwrap().audio.sample_rate,
+            44_100
+        );
         let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
     fn legacy_project_snapshot_remains_recoverable() {
-        let dir = std::env::temp_dir().join(format!("aevfx_autosave_legacy_{}", std::process::id()));
+        let dir =
+            std::env::temp_dir().join(format!("aevfx_autosave_legacy_{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         let json = serde_json::to_string(&sample_project()).unwrap();
         std::fs::write(dir.join("recovery_0.json"), json).unwrap();
         let manager = AutosaveManager::new(&dir);
-        assert_eq!(manager.load_latest_recovery().unwrap().active_composition().name, "AutoSaveComp");
+        assert_eq!(
+            manager
+                .load_latest_recovery()
+                .unwrap()
+                .active_composition()
+                .name,
+            "AutoSaveComp"
+        );
         assert!(manager.load_latest_production().is_none());
         let _ = std::fs::remove_dir_all(&dir);
     }
@@ -349,7 +369,11 @@ mod tests {
         let legacy_path = dir.join("legacy.json");
         let production_path = dir.join("production.aura");
         let invalid_path = dir.join("invalid.json");
-        std::fs::write(&legacy_path, serde_json::to_string(&sample_project()).unwrap()).unwrap();
+        std::fs::write(
+            &legacy_path,
+            serde_json::to_string(&sample_project()).unwrap(),
+        )
+        .unwrap();
         std::fs::write(
             &production_path,
             ProductionDocument::new(sample_project()).to_json().unwrap(),
@@ -404,13 +428,16 @@ mod tests {
         )
         .unwrap();
 
-        assert!(AutosaveManager::new(&dir).load_latest_production().is_none());
+        assert!(AutosaveManager::new(&dir)
+            .load_latest_production()
+            .is_none());
         let _ = std::fs::remove_dir_all(dir);
     }
 
     #[test]
     fn failed_tick_keeps_dirty_state_for_retry() {
-        let path = std::env::temp_dir().join(format!("aevfx_autosave_blocked_{}", std::process::id()));
+        let path =
+            std::env::temp_dir().join(format!("aevfx_autosave_blocked_{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&path);
         std::fs::write(&path, "not a directory").unwrap();
         let mut manager = AutosaveManager::new(&path).with_interval(Duration::from_secs(0));
@@ -441,7 +468,10 @@ mod tests {
             .map(|entry| entry.file_name())
             .filter(|name| name.to_string_lossy().contains(".json."))
             .collect::<Vec<_>>();
-        assert!(temporary_files.is_empty(), "temporary files: {temporary_files:?}");
+        assert!(
+            temporary_files.is_empty(),
+            "temporary files: {temporary_files:?}"
+        );
 
         let _ = std::fs::remove_dir_all(dir);
     }

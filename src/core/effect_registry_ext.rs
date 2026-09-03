@@ -8,9 +8,8 @@
 use serde::{Deserialize, Serialize};
 
 use crate::core::ae_effects_pack_v27::{
-    apply_cc_lens_pro, apply_optics_compensation, apply_polar_coordinates_pro,
-    apply_wave_warp_pro, CcLensParams, OpticsCompensationParams, PinKind, PolarMode,
-    WaveType, WaveWarpParams,
+    apply_cc_lens_pro, apply_optics_compensation, apply_polar_coordinates_pro, apply_wave_warp_pro,
+    CcLensParams, OpticsCompensationParams, PinKind, PolarMode, WaveType, WaveWarpParams,
 };
 use crate::core::ae_effects_pack_v28::{
     apply_cc_bend_it_pro, apply_cc_tiler_pro, apply_glow_pro, apply_light_sweep,
@@ -18,7 +17,7 @@ use crate::core::ae_effects_pack_v28::{
 };
 use crate::core::color_correction::{
     apply_channel_mixer, apply_color_balance, apply_curves, apply_hsl_adjust, apply_vibrance,
-    apply_white_balance, ChannelCurves, ColorBalance, ChannelMixer, ToneCurve,
+    apply_white_balance, ChannelCurves, ChannelMixer, ColorBalance, ToneCurve,
 };
 
 /// Serializable extended effect. All parameters are plain values; animation
@@ -160,19 +159,45 @@ pub enum ExtEffect {
     },
 }
 
-fn d50() -> f32 { 50.0 }
-fn d100() -> f32 { 100.0 }
-fn d90() -> f32 { 90.0 }
-fn d1() -> f32 { 1.0 }
-fn dhalf() -> f32 { 0.5 }
-fn dqtr() -> f32 { 0.25 }
-fn dsixty() -> f32 { 0.6 }
-fn dthirty() -> f32 { 0.3 }
-fn dsamples() -> u32 { 12 }
-fn d200() -> f32 { 200.0 }
-fn dseventy() -> f32 { 0.7 }
-fn dfour() -> u32 { 4 }
-fn dtrue() -> bool { true }
+fn d50() -> f32 {
+    50.0
+}
+fn d100() -> f32 {
+    100.0
+}
+fn d90() -> f32 {
+    90.0
+}
+fn d1() -> f32 {
+    1.0
+}
+fn dhalf() -> f32 {
+    0.5
+}
+fn dqtr() -> f32 {
+    0.25
+}
+fn dsixty() -> f32 {
+    0.6
+}
+fn dthirty() -> f32 {
+    0.3
+}
+fn dsamples() -> u32 {
+    12
+}
+fn d200() -> f32 {
+    200.0
+}
+fn dseventy() -> f32 {
+    0.7
+}
+fn dfour() -> u32 {
+    4
+}
+fn dtrue() -> bool {
+    true
+}
 fn identity_matrix() -> [[f32; 3]; 3] {
     [[100.0, 0.0, 0.0], [0.0, 100.0, 0.0], [0.0, 0.0, 100.0]]
 }
@@ -244,7 +269,14 @@ impl ExtEffect {
     /// parameters (currently Wave Warp travel phase).
     pub fn apply(&self, pixels: &mut [u8], width: u32, height: u32, time: f32) {
         match self {
-            ExtEffect::WaveWarp { wave_height, wave_width, speed, direction_deg, wave_type, pinning } => {
+            ExtEffect::WaveWarp {
+                wave_height,
+                wave_width,
+                speed,
+                direction_deg,
+                wave_type,
+                pinning,
+            } => {
                 let params = WaveWarpParams {
                     wave_height: *wave_height,
                     wave_width: *wave_width,
@@ -268,22 +300,55 @@ impl ExtEffect {
                 apply_wave_warp_pro(pixels, width, height, &params);
             }
             ExtEffect::CcLens { convergence, zoom } => {
-                apply_cc_lens_pro(pixels, width, height, &CcLensParams {
-                    convergence: *convergence, zoom: *zoom,
-                });
+                apply_cc_lens_pro(
+                    pixels,
+                    width,
+                    height,
+                    &CcLensParams {
+                        convergence: *convergence,
+                        zoom: *zoom,
+                    },
+                );
             }
-            ExtEffect::PolarCoordinates { to_polar, interpolation } => {
-                let mode = if *to_polar { PolarMode::RectToPolar } else { PolarMode::PolarToRect };
+            ExtEffect::PolarCoordinates {
+                to_polar,
+                interpolation,
+            } => {
+                let mode = if *to_polar {
+                    PolarMode::RectToPolar
+                } else {
+                    PolarMode::PolarToRect
+                };
                 apply_polar_coordinates_pro(pixels, width, height, mode, *interpolation);
             }
-            ExtEffect::OpticsCompensation { field_of_view_deg, reverse, zoom } => {
-                apply_optics_compensation(pixels, width, height, &OpticsCompensationParams {
-                    field_of_view_deg: *field_of_view_deg, reverse: *reverse, zoom: *zoom,
-                });
+            ExtEffect::OpticsCompensation {
+                field_of_view_deg,
+                reverse,
+                zoom,
+            } => {
+                apply_optics_compensation(
+                    pixels,
+                    width,
+                    height,
+                    &OpticsCompensationParams {
+                        field_of_view_deg: *field_of_view_deg,
+                        reverse: *reverse,
+                        zoom: *zoom,
+                    },
+                );
             }
-            ExtEffect::Curves { master, red, green, blue } => {
+            ExtEffect::Curves {
+                master,
+                red,
+                green,
+                blue,
+            } => {
                 let curve = |pts: &Vec<[f32; 2]>| -> Option<ToneCurve> {
-                    if pts.len() < 2 { None } else { Some(ToneCurve::new(pts.clone())) }
+                    if pts.len() < 2 {
+                        None
+                    } else {
+                        Some(ToneCurve::new(pts.clone()))
+                    }
                 };
                 let cc = ChannelCurves {
                     master: curve(master),
@@ -293,41 +358,78 @@ impl ExtEffect {
                 };
                 apply_curves(pixels, &cc);
             }
-            ExtEffect::ColorBalance { shadows, midtones, highlights, preserve_luminosity } => {
-                apply_color_balance(pixels, &ColorBalance {
-                    shadows: *shadows,
-                    midtones: *midtones,
-                    highlights: *highlights,
-                    preserve_luminosity: *preserve_luminosity,
-                });
+            ExtEffect::ColorBalance {
+                shadows,
+                midtones,
+                highlights,
+                preserve_luminosity,
+            } => {
+                apply_color_balance(
+                    pixels,
+                    &ColorBalance {
+                        shadows: *shadows,
+                        midtones: *midtones,
+                        highlights: *highlights,
+                        preserve_luminosity: *preserve_luminosity,
+                    },
+                );
             }
             ExtEffect::ChannelMixer { matrix, monochrome } => {
-                apply_channel_mixer(pixels, &ChannelMixer {
-                    matrix: *matrix, monochrome: *monochrome,
-                });
+                apply_channel_mixer(
+                    pixels,
+                    &ChannelMixer {
+                        matrix: *matrix,
+                        monochrome: *monochrome,
+                    },
+                );
             }
-            ExtEffect::LightSweep { direction_deg, center, width: sweep_width, sweep_intensity, edge_intensity } => {
-                apply_light_sweep(pixels, width, height, &LightSweepParams {
-                    direction_deg: *direction_deg,
-                    center: *center,
-                    width: *sweep_width,
-                    sweep_intensity: *sweep_intensity,
-                    edge_intensity: *edge_intensity,
-                });
+            ExtEffect::LightSweep {
+                direction_deg,
+                center,
+                width: sweep_width,
+                sweep_intensity,
+                edge_intensity,
+            } => {
+                apply_light_sweep(
+                    pixels,
+                    width,
+                    height,
+                    &LightSweepParams {
+                        direction_deg: *direction_deg,
+                        center: *center,
+                        width: *sweep_width,
+                        sweep_intensity: *sweep_intensity,
+                        edge_intensity: *edge_intensity,
+                    },
+                );
             }
             ExtEffect::RadialFastBlur { amount, samples } => {
                 let cx = width as f32 * 0.5;
                 let cy = height as f32 * 0.5;
                 apply_radial_fast_blur(pixels, width, height, [cx, cy], *amount, *samples);
             }
-            ExtEffect::BendIt { top_offset, bottom_offset } => {
+            ExtEffect::BendIt {
+                top_offset,
+                bottom_offset,
+            } => {
                 apply_cc_bend_it_pro(pixels, width, height, *top_offset, *bottom_offset);
             }
-            ExtEffect::Tiler { scale_percent, mirror } => {
-                let mode = if *mirror { TileEdgeMode::Mirror } else { TileEdgeMode::Repeat };
+            ExtEffect::Tiler {
+                scale_percent,
+                mirror,
+            } => {
+                let mode = if *mirror {
+                    TileEdgeMode::Mirror
+                } else {
+                    TileEdgeMode::Repeat
+                };
                 apply_cc_tiler_pro(pixels, width, height, *scale_percent, mode);
             }
-            ExtEffect::GlowPro { threshold, radius, intensity } => {
+            ExtEffect::GlowPro {
+                threshold,
+                radius,
+                intensity,
+            } => {
                 apply_glow_pro(pixels, width, height, *threshold, *radius, *intensity);
             }
             ExtEffect::Vibrance { amount } => {
@@ -342,7 +444,11 @@ impl ExtEffect {
                     },
                 );
             }
-            ExtEffect::HslAdjust { hue_deg, saturation, lightness } => {
+            ExtEffect::HslAdjust {
+                hue_deg,
+                saturation,
+                lightness,
+            } => {
                 apply_hsl_adjust(
                     pixels,
                     &crate::core::color_correction::HslAdjust {
@@ -375,21 +481,77 @@ mod tests {
 
     fn sample_effects() -> Vec<ExtEffect> {
         vec![
-            ExtEffect::WaveWarp { wave_height: 5.0, wave_width: 10.0, speed: 1.0, direction_deg: 90.0, wave_type: 0, pinning: 0 },
-            ExtEffect::CcLens { convergence: 40.0, zoom: 1.0 },
-            ExtEffect::PolarCoordinates { to_polar: true, interpolation: 100.0 },
-            ExtEffect::OpticsCompensation { field_of_view_deg: 60.0, reverse: false, zoom: 1.0 },
-            ExtEffect::Curves { master: vec![[0.0, 0.0], [0.5, 0.45], [1.0, 1.0]], red: vec![], green: vec![], blue: vec![] },
-            ExtEffect::ColorBalance { shadows: [-20.0, 0.0, 20.0], midtones: [0.0; 3], highlights: [10.0, 0.0, -10.0], preserve_luminosity: true },
-            ExtEffect::ChannelMixer { matrix: identity_matrix(), monochrome: false },
-            ExtEffect::LightSweep { direction_deg: 0.0, center: 0.5, width: 0.25, sweep_intensity: 0.6, edge_intensity: 0.3 },
-            ExtEffect::RadialFastBlur { amount: 0.3, samples: 8 },
-            ExtEffect::BendIt { top_offset: 4.0, bottom_offset: -4.0 },
-            ExtEffect::Tiler { scale_percent: 250.0, mirror: true },
-            ExtEffect::GlowPro { threshold: 0.5, radius: 3, intensity: 0.9 },
+            ExtEffect::WaveWarp {
+                wave_height: 5.0,
+                wave_width: 10.0,
+                speed: 1.0,
+                direction_deg: 90.0,
+                wave_type: 0,
+                pinning: 0,
+            },
+            ExtEffect::CcLens {
+                convergence: 40.0,
+                zoom: 1.0,
+            },
+            ExtEffect::PolarCoordinates {
+                to_polar: true,
+                interpolation: 100.0,
+            },
+            ExtEffect::OpticsCompensation {
+                field_of_view_deg: 60.0,
+                reverse: false,
+                zoom: 1.0,
+            },
+            ExtEffect::Curves {
+                master: vec![[0.0, 0.0], [0.5, 0.45], [1.0, 1.0]],
+                red: vec![],
+                green: vec![],
+                blue: vec![],
+            },
+            ExtEffect::ColorBalance {
+                shadows: [-20.0, 0.0, 20.0],
+                midtones: [0.0; 3],
+                highlights: [10.0, 0.0, -10.0],
+                preserve_luminosity: true,
+            },
+            ExtEffect::ChannelMixer {
+                matrix: identity_matrix(),
+                monochrome: false,
+            },
+            ExtEffect::LightSweep {
+                direction_deg: 0.0,
+                center: 0.5,
+                width: 0.25,
+                sweep_intensity: 0.6,
+                edge_intensity: 0.3,
+            },
+            ExtEffect::RadialFastBlur {
+                amount: 0.3,
+                samples: 8,
+            },
+            ExtEffect::BendIt {
+                top_offset: 4.0,
+                bottom_offset: -4.0,
+            },
+            ExtEffect::Tiler {
+                scale_percent: 250.0,
+                mirror: true,
+            },
+            ExtEffect::GlowPro {
+                threshold: 0.5,
+                radius: 3,
+                intensity: 0.9,
+            },
             ExtEffect::Vibrance { amount: 40.0 },
-            ExtEffect::WhiteBalance { temperature: 30.0, tint: -10.0 },
-            ExtEffect::HslAdjust { hue_deg: 45.0, saturation: 25.0, lightness: -8.0 },
+            ExtEffect::WhiteBalance {
+                temperature: 30.0,
+                tint: -10.0,
+            },
+            ExtEffect::HslAdjust {
+                hue_deg: 45.0,
+                saturation: 25.0,
+                lightness: -8.0,
+            },
         ]
     }
 
@@ -414,7 +576,8 @@ mod tests {
             assert!(!e.type_id().is_empty());
             assert!(!e.display_name().is_empty());
             assert!(
-                ["Distort", "Stylize", "Blur & Sharpen", "Color Correction"].contains(&e.category()),
+                ["Distort", "Stylize", "Blur & Sharpen", "Color Correction"]
+                    .contains(&e.category()),
                 "unknown category {}",
                 e.category()
             );
@@ -437,9 +600,17 @@ mod tests {
     fn test_serde_backward_compat_minimal_json() {
         // Old/lean JSON relying on serde defaults must deserialize.
         let json = r#"{"WaveWarp":{}}"#;
-        let e: ExtEffect = serde_json::from_str(json).unwrap_or(ExtEffect::BendIt { top_offset: 0.0, bottom_offset: 0.0 });
+        let e: ExtEffect = serde_json::from_str(json).unwrap_or(ExtEffect::BendIt {
+            top_offset: 0.0,
+            bottom_offset: 0.0,
+        });
         match e {
-            ExtEffect::WaveWarp { wave_height, wave_width, direction_deg, .. } => {
+            ExtEffect::WaveWarp {
+                wave_height,
+                wave_width,
+                direction_deg,
+                ..
+            } => {
                 assert_eq!(wave_height, 50.0);
                 assert_eq!(wave_width, 100.0);
                 assert_eq!(direction_deg, 90.0);
@@ -448,7 +619,10 @@ mod tests {
         }
 
         let json2 = r#"{"ChannelMixer":{"monochrome":true}}"#;
-        let e2: ExtEffect = serde_json::from_str(json2).unwrap_or(ExtEffect::BendIt { top_offset: 0.0, bottom_offset: 0.0 });
+        let e2: ExtEffect = serde_json::from_str(json2).unwrap_or(ExtEffect::BendIt {
+            top_offset: 0.0,
+            bottom_offset: 0.0,
+        });
         match e2 {
             ExtEffect::ChannelMixer { matrix, monochrome } => {
                 assert!(monochrome);
@@ -463,22 +637,38 @@ mod tests {
         let src = gradient(16, 16);
 
         let mut out = src.clone();
-        ExtEffect::CcLens { convergence: 0.0, zoom: 1.0 }.apply(&mut out, 16, 16, 0.0);
+        ExtEffect::CcLens {
+            convergence: 0.0,
+            zoom: 1.0,
+        }
+        .apply(&mut out, 16, 16, 0.0);
         assert_eq!(out, src);
 
         let mut out = src.clone();
-        ExtEffect::OpticsCompensation { field_of_view_deg: 0.0, reverse: false, zoom: 1.0 }
-            .apply(&mut out, 16, 16, 0.0);
+        ExtEffect::OpticsCompensation {
+            field_of_view_deg: 0.0,
+            reverse: false,
+            zoom: 1.0,
+        }
+        .apply(&mut out, 16, 16, 0.0);
         assert_eq!(out, src);
 
         let mut out = src.clone();
-        ExtEffect::ChannelMixer { matrix: identity_matrix(), monochrome: false }
-            .apply(&mut out, 16, 16, 0.0);
+        ExtEffect::ChannelMixer {
+            matrix: identity_matrix(),
+            monochrome: false,
+        }
+        .apply(&mut out, 16, 16, 0.0);
         assert_eq!(out, src);
 
         let mut out = src.clone();
-        ExtEffect::ColorBalance { shadows: [0.0; 3], midtones: [0.0; 3], highlights: [0.0; 3], preserve_luminosity: true }
-            .apply(&mut out, 16, 16, 0.0);
+        ExtEffect::ColorBalance {
+            shadows: [0.0; 3],
+            midtones: [0.0; 3],
+            highlights: [0.0; 3],
+            preserve_luminosity: true,
+        }
+        .apply(&mut out, 16, 16, 0.0);
         assert_eq!(out, src);
     }
 
@@ -486,8 +676,15 @@ mod tests {
     fn test_wave_warp_time_drives_animation() {
         let mk = |t: f32| {
             let mut img = gradient(32, 32);
-            ExtEffect::WaveWarp { wave_height: 8.0, wave_width: 12.0, speed: 1.0, direction_deg: 90.0, wave_type: 0, pinning: 3 }
-                .apply(&mut img, 32, 32, t);
+            ExtEffect::WaveWarp {
+                wave_height: 8.0,
+                wave_width: 12.0,
+                speed: 1.0,
+                direction_deg: 90.0,
+                wave_type: 0,
+                pinning: 3,
+            }
+            .apply(&mut img, 32, 32, t);
             img
         };
         let t0 = mk(0.0);

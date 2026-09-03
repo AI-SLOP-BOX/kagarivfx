@@ -102,7 +102,13 @@ mod tests {
     fn test_colorama_rejects_overflow_and_nonfinite_phase() {
         let original = vec![128u8; 16];
         let mut pixels = original.clone();
-        apply_colorama(&mut pixels, u32::MAX, u32::MAX, ColoramaPreset::Rainbow, f32::NAN);
+        apply_colorama(
+            &mut pixels,
+            u32::MAX,
+            u32::MAX,
+            ColoramaPreset::Rainbow,
+            f32::NAN,
+        );
         assert_eq!(pixels, original);
 
         apply_colorama(&mut pixels, 2, 2, ColoramaPreset::Rainbow, f32::INFINITY);

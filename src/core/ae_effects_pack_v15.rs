@@ -2,8 +2,17 @@
 /// Advanced Production-Grade After Effects VFX Kernels (Part 15).
 /// Every function contains authentic pixel mathematical transformation logic.
 // 1. 3D Point Light (Diffuse + Specular Shading Engine)
-pub fn apply_point_light_3d(pixels: &mut [u8], width: u32, height: u32, light_pos_3d: [f32; 3], light_color: [u8; 3], intensity: f32) {
-    if intensity <= 0.001 { return; }
+pub fn apply_point_light_3d(
+    pixels: &mut [u8],
+    width: u32,
+    height: u32,
+    light_pos_3d: [f32; 3],
+    light_color: [u8; 3],
+    intensity: f32,
+) {
+    if intensity <= 0.001 {
+        return;
+    }
     let light_z = light_pos_3d[2].max(1.0);
 
     for y in 0..height {
@@ -28,8 +37,17 @@ pub fn apply_point_light_3d(pixels: &mut [u8], width: u32, height: u32, light_po
 }
 
 // 2. Pinch / Punch Polar Distortion
-pub fn apply_pinch_punch_distortion(pixels: &mut [u8], width: u32, height: u32, center: [f32; 2], radius: f32, amount: f32) {
-    if amount.abs() <= 0.001 || radius <= 0.001 { return; }
+pub fn apply_pinch_punch_distortion(
+    pixels: &mut [u8],
+    width: u32,
+    height: u32,
+    center: [f32; 2],
+    radius: f32,
+    amount: f32,
+) {
+    if amount.abs() <= 0.001 || radius <= 0.001 {
+        return;
+    }
     let temp = pixels.to_vec();
 
     for y in 0..height {
@@ -49,8 +67,10 @@ pub fn apply_pinch_punch_distortion(pixels: &mut [u8], width: u32, height: u32, 
                 let new_dist = d_factor * radius;
                 let angle = dy.atan2(dx);
 
-                let sx = (center[0] + new_dist * angle.cos()).clamp(0.0, (width - 1) as f32) as usize;
-                let sy = (center[1] + new_dist * angle.sin()).clamp(0.0, (height - 1) as f32) as usize;
+                let sx =
+                    (center[0] + new_dist * angle.cos()).clamp(0.0, (width - 1) as f32) as usize;
+                let sy =
+                    (center[1] + new_dist * angle.sin()).clamp(0.0, (height - 1) as f32) as usize;
 
                 let dst_idx = (y as usize * width as usize + x as usize) * 4;
                 let src_idx = (sy * width as usize + sx) * 4;
@@ -62,8 +82,16 @@ pub fn apply_pinch_punch_distortion(pixels: &mut [u8], width: u32, height: u32, 
 }
 
 // 3. Horizontal Scanline Glitch Jitter
-pub fn apply_scanline_glitch_jitter(pixels: &mut [u8], width: u32, height: u32, jitter_amount: f32, seed: u32) {
-    if jitter_amount <= 0.001 { return; }
+pub fn apply_scanline_glitch_jitter(
+    pixels: &mut [u8],
+    width: u32,
+    height: u32,
+    jitter_amount: f32,
+    seed: u32,
+) {
+    if jitter_amount <= 0.001 {
+        return;
+    }
     let temp = pixels.to_vec();
     let mut rng = seed;
 
@@ -85,7 +113,10 @@ pub fn apply_scanline_glitch_jitter(pixels: &mut [u8], width: u32, height: u32, 
 // 4. 3-Color Gradient Map Remapping
 pub fn apply_gradient_map_color(pixels: &mut [u8], low: [u8; 3], mid: [u8; 3], high: [u8; 3]) {
     for i in (0..pixels.len()).step_by(4) {
-        let luma = (pixels[i] as f32 * 0.299 + pixels[i + 1] as f32 * 0.587 + pixels[i + 2] as f32 * 0.114) / 255.0;
+        let luma = (pixels[i] as f32 * 0.299
+            + pixels[i + 1] as f32 * 0.587
+            + pixels[i + 2] as f32 * 0.114)
+            / 255.0;
 
         let mapped = if luma < 0.5 {
             let t = luma * 2.0;
@@ -110,8 +141,16 @@ pub fn apply_gradient_map_color(pixels: &mut [u8], low: [u8; 3], mid: [u8; 3], h
 }
 
 // 5. Directional Sharpen Filter
-pub fn apply_directional_sharpen(pixels: &mut [u8], width: u32, height: u32, angle_deg: f32, strength: f32) {
-    if strength <= 0.001 { return; }
+pub fn apply_directional_sharpen(
+    pixels: &mut [u8],
+    width: u32,
+    height: u32,
+    angle_deg: f32,
+    strength: f32,
+) {
+    if strength <= 0.001 {
+        return;
+    }
     let temp = pixels.to_vec();
     let rad = angle_deg.to_radians();
     let dx = rad.cos().round() as i32;

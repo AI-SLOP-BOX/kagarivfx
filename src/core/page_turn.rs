@@ -56,8 +56,16 @@ pub fn apply_page_turn(src: &[u8], width: u32, height: u32, params: &PageTurnPar
     let nx = -sin_a;
     let ny = cos_a;
 
-    let fx = if params.fold_position[0].is_finite() { params.fold_position[0] } else { 0.0 };
-    let fy = if params.fold_position[1].is_finite() { params.fold_position[1] } else { 0.0 };
+    let fx = if params.fold_position[0].is_finite() {
+        params.fold_position[0]
+    } else {
+        0.0
+    };
+    let fy = if params.fold_position[1].is_finite() {
+        params.fold_position[1]
+    } else {
+        0.0
+    };
 
     let r = if params.fold_radius.is_finite() {
         params.fold_radius.clamp(5.0, 4096.0)
@@ -70,7 +78,11 @@ pub fn apply_page_turn(src: &[u8], width: u32, height: u32, params: &PageTurnPar
         0.0
     };
     let back_color = params.back_color.map(|value| {
-        if value.is_finite() { value.clamp(0.0, 1.0) } else { 0.0 }
+        if value.is_finite() {
+            value.clamp(0.0, 1.0)
+        } else {
+            0.0
+        }
     });
     let pi_r = std::f32::consts::PI * r;
 

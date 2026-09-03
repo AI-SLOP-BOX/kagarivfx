@@ -1,8 +1,17 @@
 #![allow(dead_code)]
 /// After Effects VFX Kernels Part 17 — Edge-Aware Filters & Motion Rendering
 // 1. Bilateral Filter (Edge-Preserving Smoothing)
-pub fn apply_bilateral_filter(pixels: &mut [u8], width: u32, height: u32, radius: u32, sigma_space: f32, sigma_color: f32) {
-    if radius == 0 { return; }
+pub fn apply_bilateral_filter(
+    pixels: &mut [u8],
+    width: u32,
+    height: u32,
+    radius: u32,
+    sigma_space: f32,
+    sigma_color: f32,
+) {
+    if radius == 0 {
+        return;
+    }
     let temp = pixels.to_vec();
     let r = radius as i32;
 
@@ -44,13 +53,24 @@ pub fn apply_bilateral_filter(pixels: &mut [u8], width: u32, height: u32, radius
 }
 
 // 2. Motion Blur (Velocity Vector Based)
-pub fn apply_motion_blur_vector(pixels: &mut [u8], width: u32, height: u32, vel_x: f32, vel_y: f32, samples: u32) {
-    if vel_x.abs() < 0.001 && vel_y.abs() < 0.001 || samples == 0 { return; }
+pub fn apply_motion_blur_vector(
+    pixels: &mut [u8],
+    width: u32,
+    height: u32,
+    vel_x: f32,
+    vel_y: f32,
+    samples: u32,
+) {
+    if vel_x.abs() < 0.001 && vel_y.abs() < 0.001 || samples == 0 {
+        return;
+    }
     let temp = pixels.to_vec();
 
     for y in 0..height {
         for x in 0..width {
-            let mut r = 0.0f32; let mut g = 0.0f32; let mut b = 0.0f32;
+            let mut r = 0.0f32;
+            let mut g = 0.0f32;
+            let mut b = 0.0f32;
 
             for s in 0..samples {
                 let t = (s as f32 / (samples - 1) as f32) - 0.5;
@@ -92,7 +112,8 @@ pub fn apply_emboss(pixels: &mut [u8], width: u32, height: u32, angle_deg: f32, 
                 gy[c] = bot - top;
             }
 
-            let luma = (gx[0] * lx + gy[0] * ly + gx[1] * lx + gy[1] * ly + gx[2] * lx + gy[2] * ly) / 3.0;
+            let luma =
+                (gx[0] * lx + gy[0] * ly + gx[1] * lx + gy[1] * ly + gx[2] * lx + gy[2] * ly) / 3.0;
             let val = (128.0 + luma * depth).clamp(0.0, 255.0) as u8;
             pixels[idx] = val;
             pixels[idx + 1] = val;
@@ -102,7 +123,14 @@ pub fn apply_emboss(pixels: &mut [u8], width: u32, height: u32, angle_deg: f32, 
 }
 
 // 4. Anisotropic Diffusion (Perona-Malik Edge-Stopping Diffusion)
-pub fn apply_anisotropic_diffusion(pixels: &mut [u8], width: u32, height: u32, iterations: u32, kappa: f32, delta_t: f32) {
+pub fn apply_anisotropic_diffusion(
+    pixels: &mut [u8],
+    width: u32,
+    height: u32,
+    iterations: u32,
+    kappa: f32,
+    delta_t: f32,
+) {
     let mut buf: Vec<f32> = pixels.iter().map(|&v| v as f32).collect();
 
     for _ in 0..iterations {
@@ -141,18 +169,26 @@ pub fn apply_anisotropic_diffusion(pixels: &mut [u8], width: u32, height: u32, i
 
 // 5. Cross Hatch Stylize (Ink Sketch Rendering)
 pub fn apply_cross_hatch(pixels: &mut [u8], width: u32, height: u32, line_gap: u32, threshold: u8) {
-    if line_gap == 0 { return; }
+    if line_gap == 0 {
+        return;
+    }
     let temp = pixels.to_vec();
     pixels.fill(255); // White background
 
     for y in 0..height {
         for x in 0..width {
             let idx = (y as usize * width as usize + x as usize) * 4;
-            let luma = (temp[idx] as u32 * 299 + temp[idx + 1] as u32 * 587 + temp[idx + 2] as u32 * 114) / 1000;
+            let luma =
+                (temp[idx] as u32 * 299 + temp[idx + 1] as u32 * 587 + temp[idx + 2] as u32 * 114)
+                    / 1000;
 
             if luma < threshold as u32 {
                 // Draw hatching lines (diagonal)
-                if (x + y) % line_gap == 0 || (x as i32 - y as i32).unsigned_abs().is_multiple_of(line_gap) {
+                if (x + y) % line_gap == 0
+                    || (x as i32 - y as i32)
+                        .unsigned_abs()
+                        .is_multiple_of(line_gap)
+                {
                     pixels[idx] = 0;
                     pixels[idx + 1] = 0;
                     pixels[idx + 2] = 0;

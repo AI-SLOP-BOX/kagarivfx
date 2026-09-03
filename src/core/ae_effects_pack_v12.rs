@@ -2,8 +2,17 @@
 /// Advanced Production-Grade After Effects VFX Kernels (Part 12).
 /// Advanced Physical Wave and Edge Refraction Kernels.
 // 1. Water Drop / Rain Ripple Distortion Physics
-pub fn apply_rain_ripples(pixels: &mut [u8], width: u32, height: u32, frame: u32, drop_count: u32, wave_strength: f32) {
-    if wave_strength <= 0.001 || drop_count == 0 { return; }
+pub fn apply_rain_ripples(
+    pixels: &mut [u8],
+    width: u32,
+    height: u32,
+    frame: u32,
+    drop_count: u32,
+    wave_strength: f32,
+) {
+    if wave_strength <= 0.001 || drop_count == 0 {
+        return;
+    }
     let temp = pixels.to_vec();
     let time = frame as f32 * 0.1;
 
@@ -41,8 +50,16 @@ pub fn apply_rain_ripples(pixels: &mut [u8], width: u32, height: u32, frame: u32
 }
 
 // 2. Glass Edge Bevel & Refraction (CC Glass Edges Pro)
-pub fn apply_glass_edge_bevel(pixels: &mut [u8], width: u32, height: u32, bevel_size: u32, refraction: f32) {
-    if bevel_size == 0 { return; }
+pub fn apply_glass_edge_bevel(
+    pixels: &mut [u8],
+    width: u32,
+    height: u32,
+    bevel_size: u32,
+    refraction: f32,
+) {
+    if bevel_size == 0 {
+        return;
+    }
     let temp = pixels.to_vec();
 
     for y in 0..height {
@@ -51,16 +68,26 @@ pub fn apply_glass_edge_bevel(pixels: &mut [u8], width: u32, height: u32, bevel_
             let is_edge_y = y < bevel_size || y >= height - bevel_size;
 
             if is_edge_x || is_edge_y {
-                let norm_x = if x < bevel_size { -(1.0 - x as f32 / bevel_size as f32) }
-                             else if x >= width - bevel_size { (x as f32 - (width - bevel_size) as f32) / bevel_size as f32 }
-                             else { 0.0 };
+                let norm_x = if x < bevel_size {
+                    -(1.0 - x as f32 / bevel_size as f32)
+                } else if x >= width - bevel_size {
+                    (x as f32 - (width - bevel_size) as f32) / bevel_size as f32
+                } else {
+                    0.0
+                };
 
-                let norm_y = if y < bevel_size { -(1.0 - y as f32 / bevel_size as f32) }
-                             else if y >= height - bevel_size { (y as f32 - (height - bevel_size) as f32) / bevel_size as f32 }
-                             else { 0.0 };
+                let norm_y = if y < bevel_size {
+                    -(1.0 - y as f32 / bevel_size as f32)
+                } else if y >= height - bevel_size {
+                    (y as f32 - (height - bevel_size) as f32) / bevel_size as f32
+                } else {
+                    0.0
+                };
 
-                let sx = (x as f32 + norm_x * refraction * 10.0).clamp(0.0, (width - 1) as f32) as usize;
-                let sy = (y as f32 + norm_y * refraction * 10.0).clamp(0.0, (height - 1) as f32) as usize;
+                let sx =
+                    (x as f32 + norm_x * refraction * 10.0).clamp(0.0, (width - 1) as f32) as usize;
+                let sy = (y as f32 + norm_y * refraction * 10.0).clamp(0.0, (height - 1) as f32)
+                    as usize;
 
                 let dst_idx = (y as usize * width as usize + x as usize) * 4;
                 let src_idx = (sy * width as usize + sx) * 4;
@@ -78,8 +105,16 @@ pub fn apply_glass_edge_bevel(pixels: &mut [u8], width: u32, height: u32, bevel_
 }
 
 // 3. Scanline CRT TV Distortion
-pub fn apply_crt_scanlines(pixels: &mut [u8], width: u32, height: u32, line_spacing: u32, intensity: f32) {
-    if line_spacing == 0 { return; }
+pub fn apply_crt_scanlines(
+    pixels: &mut [u8],
+    width: u32,
+    height: u32,
+    line_spacing: u32,
+    intensity: f32,
+) {
+    if line_spacing == 0 {
+        return;
+    }
     let factor = 1.0 - intensity.clamp(0.0, 1.0);
 
     for y in 0..height {

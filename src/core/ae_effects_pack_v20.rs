@@ -7,15 +7,19 @@ pub fn apply_lut_1d(pixels: &mut [u8], lut_r: &[u8; 256], lut_g: &[u8; 256], lut
         let r = pixels[i];
         let g = pixels[i + 1];
         let b = pixels[i + 2];
-        pixels[i]     = lut_r[r as usize];
+        pixels[i] = lut_r[r as usize];
         pixels[i + 1] = lut_g[g as usize];
         pixels[i + 2] = lut_b[b as usize];
     }
 }
 
-
 // 2. Color Balance (Shadow / Midtone / Highlight CMY-RGB Shift)
-pub fn apply_color_balance(pixels: &mut [u8], shadow: [f32; 3], midtone: [f32; 3], highlight: [f32; 3]) {
+pub fn apply_color_balance(
+    pixels: &mut [u8],
+    shadow: [f32; 3],
+    midtone: [f32; 3],
+    highlight: [f32; 3],
+) {
     for i in (0..pixels.len()).step_by(4) {
         let r = pixels[i] as f32 / 255.0;
         let g = pixels[i + 1] as f32 / 255.0;
@@ -41,7 +45,13 @@ pub fn apply_color_balance(pixels: &mut [u8], shadow: [f32; 3], midtone: [f32; 3
 }
 
 // 3. Kodak/Fuji Film Emulation via S-Curve + Hue Shift
-pub fn apply_film_emulation(pixels: &mut [u8], lift: f32, gamma: f32, gain: f32, hue_shift_deg: f32) {
+pub fn apply_film_emulation(
+    pixels: &mut [u8],
+    lift: f32,
+    gamma: f32,
+    gain: f32,
+    hue_shift_deg: f32,
+) {
     let inv_gamma = 1.0 / gamma.max(0.01);
     let hue_rad = hue_shift_deg.to_radians();
     let cos_h = hue_rad.cos();
@@ -58,9 +68,9 @@ pub fn apply_film_emulation(pixels: &mut [u8], lift: f32, gamma: f32, gain: f32,
         let b2 = ((b * gain + lift).max(0.0)).powf(inv_gamma);
 
         // Hue rotation in YCbCr space
-        let y  =  0.299 * r2 + 0.587 * g2 + 0.114 * b2;
+        let y = 0.299 * r2 + 0.587 * g2 + 0.114 * b2;
         let cb = -0.169 * r2 - 0.331 * g2 + 0.500 * b2;
-        let cr =  0.500 * r2 - 0.419 * g2 - 0.081 * b2;
+        let cr = 0.500 * r2 - 0.419 * g2 - 0.081 * b2;
 
         let cb2 = cb * cos_h - cr * sin_h;
         let cr2 = cb * sin_h + cr * cos_h;
@@ -76,7 +86,14 @@ pub fn apply_film_emulation(pixels: &mut [u8], lift: f32, gamma: f32, gain: f32,
 }
 
 // 4. Vignette (Cinematic Lens Falloff)
-pub fn apply_vignette(pixels: &mut [u8], width: u32, height: u32, radius: f32, feather: f32, strength: f32) {
+pub fn apply_vignette(
+    pixels: &mut [u8],
+    width: u32,
+    height: u32,
+    radius: f32,
+    feather: f32,
+    strength: f32,
+) {
     let cx = width as f32 * 0.5;
     let cy = height as f32 * 0.5;
     let max_dist = (cx * cx + cy * cy).sqrt();
@@ -107,7 +124,8 @@ pub fn apply_night_vision(pixels: &mut [u8], amplification: f32, noise_seed: u32
     let mut rng = noise_seed;
 
     for i in (0..pixels.len()).step_by(4) {
-        let luma = pixels[i] as f32 * 0.299 + pixels[i + 1] as f32 * 0.587 + pixels[i + 2] as f32 * 0.114;
+        let luma =
+            pixels[i] as f32 * 0.299 + pixels[i + 1] as f32 * 0.587 + pixels[i + 2] as f32 * 0.114;
         let amplified = (luma * amplification).clamp(0.0, 255.0);
 
         rng = rng.wrapping_mul(1664525).wrapping_add(1013904223);

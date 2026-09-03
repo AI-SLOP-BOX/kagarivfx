@@ -1,21 +1,23 @@
 #![allow(dead_code)]
-use serde_json::{json, Value};
-use crate::core::timeline::{
-    Composition, Layer, LayerType, BlendMode, ShapeType, TrackMatteMode, Project,
-};
-use crate::core::mask::{Mask, MaskMode};
+use crate::core::keyframe::{InterpolationType, Keyframe};
 use crate::core::mask::MaskPath;
-use crate::core::keyframe::{Keyframe, InterpolationType};
+use crate::core::mask::{Mask, MaskMode};
+use crate::core::timeline::{
+    BlendMode, Composition, Layer, LayerType, Project, ShapeType, TrackMatteMode,
+};
+use serde_json::{json, Value};
 
 fn color_to_lottie(c: &[f32; 4]) -> Value {
     json!([c[0], c[1], c[2], 1.0])
 }
 
 fn hex_color(c: &[f32; 4]) -> String {
-    format!("#{:02x}{:02x}{:02x}",
+    format!(
+        "#{:02x}{:02x}{:02x}",
         (c[0].clamp(0.0, 1.0) * 255.0).round() as u8,
         (c[1].clamp(0.0, 1.0) * 255.0).round() as u8,
-        (c[2].clamp(0.0, 1.0) * 255.0).round() as u8)
+        (c[2].clamp(0.0, 1.0) * 255.0).round() as u8
+    )
 }
 use crate::core::property::Animatable;
 
@@ -28,12 +30,17 @@ fn anim_property_f32(prop: &Animatable<f32>, scale: f32) -> Value {
     match prop {
         Animatable::Constant(v) => json!({ "a": 0, "k": *v * scale }),
         Animatable::Animated(kfs) => {
-            let keys: Vec<Value> = kfs.iter().map(|kf| json!({
-                "t": kf.frame,
-                "s": [kf.value * scale],
-                "i": { "x": [0.667], "y": [1.0] },
-                "o": { "x": [0.333], "y": [0.0] },
-            })).collect();
+            let keys: Vec<Value> = kfs
+                .iter()
+                .map(|kf| {
+                    json!({
+                        "t": kf.frame,
+                        "s": [kf.value * scale],
+                        "i": { "x": [0.667], "y": [1.0] },
+                        "o": { "x": [0.333], "y": [0.0] },
+                    })
+                })
+                .collect();
             json!({ "a": 1, "k": keys })
         }
     }
@@ -43,12 +50,17 @@ fn anim_property_v2(prop: &Animatable<[f32; 2]>, scale: f32) -> Value {
     match prop {
         Animatable::Constant(v) => json!({ "a": 0, "k": [v[0] * scale, v[1] * scale] }),
         Animatable::Animated(kfs) => {
-            let keys: Vec<Value> = kfs.iter().map(|kf| json!({
-                "t": kf.frame,
-                "s": [kf.value[0] * scale, kf.value[1] * scale],
-                "i": { "x": [0.667, 0.667], "y": [1.0, 1.0] },
-                "o": { "x": [0.333, 0.333], "y": [0.0, 0.0] },
-            })).collect();
+            let keys: Vec<Value> = kfs
+                .iter()
+                .map(|kf| {
+                    json!({
+                        "t": kf.frame,
+                        "s": [kf.value[0] * scale, kf.value[1] * scale],
+                        "i": { "x": [0.667, 0.667], "y": [1.0, 1.0] },
+                        "o": { "x": [0.333, 0.333], "y": [0.0, 0.0] },
+                    })
+                })
+                .collect();
             json!({ "a": 1, "k": keys })
         }
     }
@@ -61,21 +73,39 @@ fn blend_mode_code(bm: &BlendMode) -> i32 {
         BlendMode::Screen => 2,
         BlendMode::Overlay | BlendMode::SoftLight | BlendMode::HardLight => 3,
         BlendMode::Add => 4,
-        BlendMode::Darken | BlendMode::Lighten | BlendMode::Difference
-        | BlendMode::Exclusion | BlendMode::Divide | BlendMode::Subtract
-        | BlendMode::ColorBurn | BlendMode::LinearBurn | BlendMode::VividLight
-        | BlendMode::ColorDodge | BlendMode::LinearDodge
-        | BlendMode::Color | BlendMode::Hue | BlendMode::Saturation | BlendMode::Luminosity
-        | BlendMode::StencilAlpha | BlendMode::StencilLuma
-        | BlendMode::SilhouetteAlpha | BlendMode::SilhouetteLuma
-        | BlendMode::Behind | BlendMode::AlphaAdd | BlendMode::LinearLight => 4,
+        BlendMode::Darken
+        | BlendMode::Lighten
+        | BlendMode::Difference
+        | BlendMode::Exclusion
+        | BlendMode::Divide
+        | BlendMode::Subtract
+        | BlendMode::ColorBurn
+        | BlendMode::LinearBurn
+        | BlendMode::VividLight
+        | BlendMode::ColorDodge
+        | BlendMode::LinearDodge
+        | BlendMode::Color
+        | BlendMode::Hue
+        | BlendMode::Saturation
+        | BlendMode::Luminosity
+        | BlendMode::StencilAlpha
+        | BlendMode::StencilLuma
+        | BlendMode::SilhouetteAlpha
+        | BlendMode::SilhouetteLuma
+        | BlendMode::Behind
+        | BlendMode::AlphaAdd
+        | BlendMode::LinearLight => 4,
     }
 }
 
 /// Serializes a ShapeType into the Lottie shape item ("el"/"rc"/"sr"/"sr").
 fn shape_geometry(st: &ShapeType) -> Value {
     match st {
-        ShapeType::Rectangle { width, height, corner_radius } => json!({
+        ShapeType::Rectangle {
+            width,
+            height,
+            corner_radius,
+        } => json!({
             "ty": "rc",
             "d": 1,
             "s": anim_property_v2(&merge_dims(width, height), 1.0),
@@ -88,7 +118,11 @@ fn shape_geometry(st: &ShapeType) -> Value {
             "s": anim_property_v2(&merge_dims(width, height), 1.0),
             "p": { "a": 0, "k": [0.0, 0.0] },
         }),
-        ShapeType::Star { points, inner_radius, outer_radius } => json!({
+        ShapeType::Star {
+            points,
+            inner_radius,
+            outer_radius,
+        } => json!({
             "ty": "sr",
             "sy": 2,
             "d": 1,
@@ -112,9 +146,7 @@ fn shape_geometry(st: &ShapeType) -> Value {
         }),
         ShapeType::FreeformBezier { points, .. } => {
             // Convert points to Lottie shape vertices
-            let verts: Vec<Value> = points.iter()
-                .map(|p| json!([p[0], p[1]]))
-                .collect();
+            let verts: Vec<Value> = points.iter().map(|p| json!([p[0], p[1]])).collect();
             json!({
                 "ty": "sh",
                 "d": 1,
@@ -127,14 +159,18 @@ fn shape_geometry(st: &ShapeType) -> Value {
 /// Combines separately-animated width/height into a single animated [w,h] property.
 fn merge_dims(w: &Animatable<f32>, h: &Animatable<f32>) -> Animatable<[f32; 2]> {
     match (w, h) {
-        (Animatable::Constant(wv), Animatable::Constant(hv)) =>
-            Animatable::Constant([*wv, *hv]),
+        (Animatable::Constant(wv), Animatable::Constant(hv)) => Animatable::Constant([*wv, *hv]),
         _ => Animatable::Animated(Vec::new()),
     }
 }
 
 /// Builds the Lottie shapes array (a group with geometry + fill + stroke) for shape layers.
-fn serialize_shapes(shape_type: &ShapeType, color: &[f32; 4], stroke_color: &[f32; 4], stroke_width: f32) -> Vec<Value> {
+fn serialize_shapes(
+    shape_type: &ShapeType,
+    color: &[f32; 4],
+    stroke_color: &[f32; 4],
+    stroke_width: f32,
+) -> Vec<Value> {
     let mut items = vec![shape_geometry(shape_type)];
     items.push(json!({
         "ty": "fl",
@@ -194,7 +230,17 @@ fn track_matte_code(mode: &TrackMatteMode) -> i32 {
 /// "tr" carries tracking — a duplicate "t" key would silently overwrite the
 /// text with the tracking value.
 fn text_document(layer_type: &LayerType) -> Option<Value> {
-    if let LayerType::Text { text, font_size, color, font_family, tracking, leading, align, .. } = layer_type {
+    if let LayerType::Text {
+        text,
+        font_size,
+        color,
+        font_family,
+        tracking,
+        leading,
+        align,
+        ..
+    } = layer_type
+    {
         // Alignment mapping: app 0=Left 1=Center 2=Right → Lottie j 0=Left 2=Center 1=Right.
         let justify = match align {
             1 => 2,
@@ -309,10 +355,17 @@ fn masks_properties(masks: &[Mask]) -> Option<(Value, Value)> {
     Some((json!(true), json!(props)))
 }
 
-fn serialize_layer(layer: &Layer, comp: &Composition, index: usize, is_matte_source: bool) -> Value {
+fn serialize_layer(
+    layer: &Layer,
+    comp: &Composition,
+    index: usize,
+    is_matte_source: bool,
+) -> Value {
     let (ty, extra) = layer_type_code(&layer.layer_type);
     let in_frame = layer.in_frame;
-    let out_frame = layer.out_frame.max(comp.duration_frames.min(layer.out_frame));
+    let out_frame = layer
+        .out_frame
+        .max(comp.duration_frames.min(layer.out_frame));
 
     let mut l = json!({
         "ddd": 0,
@@ -353,8 +406,23 @@ fn serialize_layer(layer: &Layer, comp: &Composition, index: usize, is_matte_sou
         if layer.motion_blur {
             obj.insert("mb".into(), json!(1));
         }
-        if let LayerType::Shape { shape_type, color, stroke_color, stroke_width, .. } = &layer.layer_type {
-            obj.insert("shapes".into(), json!(serialize_shapes(shape_type, color, stroke_color, *stroke_width)));
+        if let LayerType::Shape {
+            shape_type,
+            color,
+            stroke_color,
+            stroke_width,
+            ..
+        } = &layer.layer_type
+        {
+            obj.insert(
+                "shapes".into(),
+                json!(serialize_shapes(
+                    shape_type,
+                    color,
+                    stroke_color,
+                    *stroke_width
+                )),
+            );
         }
         if let Some(doc) = text_document(&layer.layer_type) {
             obj.insert("t".into(), doc);
@@ -378,10 +446,15 @@ fn serialize_layer(layer: &Layer, comp: &Composition, index: usize, is_matte_sou
 impl LottieExporter {
     /// Serializes a Composition into a valid Lottie JSON string with animated transforms.
     pub fn export_to_json(comp: &Composition) -> String {
-        let layers: Vec<Value> = comp.layers.iter().enumerate()
+        let layers: Vec<Value> = comp
+            .layers
+            .iter()
+            .enumerate()
             .map(|(i, layer)| {
                 // A layer is a matte source when the NEXT layer consumes it.
-                let is_source = comp.layers.get(i + 1)
+                let is_source = comp
+                    .layers
+                    .get(i + 1)
                     .is_some_and(|next| !matches!(next.track_matte, TrackMatteMode::None));
                 serialize_layer(layer, comp, i, is_source)
             })
@@ -522,9 +595,13 @@ fn hex_to_rgba(s: &str) -> [f32; 4] {
 
 /// Reads a static 2-component value: `{"a":0,"k":[x,y]}` or bare `[x,y]`.
 fn k_arr2(v: Option<&Value>) -> [f32; 2] {
-    let Some(val) = v else { return [0.0; 2]; };
+    let Some(val) = v else {
+        return [0.0; 2];
+    };
     let k = val.get("k").unwrap_or(val);
-    let Some(arr) = k.as_array() else { return [0.0; 2]; };
+    let Some(arr) = k.as_array() else {
+        return [0.0; 2];
+    };
     if arr.len() < 2 {
         return [0.0; 2];
     }
@@ -536,24 +613,37 @@ fn k_arr2(v: Option<&Value>) -> [f32; 2] {
 
 /// Reads a static scalar value: `{"a":0,"k":v}`, `"k":v` or bare `v`.
 fn k_f32(v: Option<&Value>, default: f32) -> f32 {
-    let Some(val) = v else { return default; };
+    let Some(val) = v else {
+        return default;
+    };
     let k = val.get("k").unwrap_or(val);
     k.as_f64().map(|f| f as f32).unwrap_or(default)
 }
 
 /// Reads fill/stroke color `[r,g,b]` or `[r,g,b,a]` (0..1 floats).
 fn rgb_from_k(v: Option<&Value>) -> [f32; 4] {
-    let Some(val) = v else { return [0.0; 4]; };
+    let Some(val) = v else {
+        return [0.0; 4];
+    };
     let k = val.get("k").unwrap_or(val);
-    let Some(arr) = k.as_array() else { return [0.0; 4]; };
+    let Some(arr) = k.as_array() else {
+        return [0.0; 4];
+    };
     let comp = |i: usize| arr.get(i).and_then(Value::as_f64).unwrap_or(0.0) as f32;
-    [comp(0), comp(1), comp(2), if arr.len() > 3 { comp(3) } else { 1.0 }]
+    [
+        comp(0),
+        comp(1),
+        comp(2),
+        if arr.len() > 3 { comp(3) } else { 1.0 },
+    ]
 }
 
 /// Inverse of the exporter's anim_property_* writers: `{"a","k"}` → Animatable.
 /// Terminal bodymovin keyframes lacking "s" hold the previous value.
 fn parse_anim_value_f32(v: Option<&Value>) -> Animatable<f32> {
-    let Some(val) = v else { return Animatable::new_constant(0.0); };
+    let Some(val) = v else {
+        return Animatable::new_constant(0.0);
+    };
     if val.get("a").and_then(Value::as_i64) == Some(1) {
         if let Some(list) = val.get("k").and_then(Value::as_array) {
             let mut kfs: Vec<Keyframe<f32>> = Vec::new();
@@ -579,7 +669,9 @@ fn parse_anim_value_f32(v: Option<&Value>) -> Animatable<f32> {
 }
 
 fn parse_anim_value_v2(v: Option<&Value>) -> Animatable<[f32; 2]> {
-    let Some(val) = v else { return Animatable::new_constant([0.0, 0.0]); };
+    let Some(val) = v else {
+        return Animatable::new_constant([0.0, 0.0]);
+    };
     if val.get("a").and_then(Value::as_i64) == Some(1) {
         if let Some(list) = val.get("k").and_then(Value::as_array) {
             let mut kfs: Vec<Keyframe<[f32; 2]>> = Vec::new();
@@ -595,14 +687,20 @@ fn parse_anim_value_v2(v: Option<&Value>) -> Animatable<[f32; 2]> {
                             if let Some(arr) = first.as_array() {
                                 // Nested: s: [[x, y]]
                                 [
-                                    arr.first().and_then(Value::as_f64).unwrap_or(prev[0] as f64) as f32,
-                                    arr.get(1).and_then(Value::as_f64).unwrap_or(prev[1] as f64) as f32,
+                                    arr.first()
+                                        .and_then(Value::as_f64)
+                                        .unwrap_or(prev[0] as f64)
+                                        as f32,
+                                    arr.get(1).and_then(Value::as_f64).unwrap_or(prev[1] as f64)
+                                        as f32,
                                 ]
                             } else {
                                 // Flat: s: [x, y]
                                 [
-                                    s.first().and_then(Value::as_f64).unwrap_or(prev[0] as f64) as f32,
-                                    s.get(1).and_then(Value::as_f64).unwrap_or(prev[1] as f64) as f32,
+                                    s.first().and_then(Value::as_f64).unwrap_or(prev[0] as f64)
+                                        as f32,
+                                    s.get(1).and_then(Value::as_f64).unwrap_or(prev[1] as f64)
+                                        as f32,
                                 ]
                             }
                         } else {
@@ -656,7 +754,10 @@ fn matte_from_code(code: i64) -> TrackMatteMode {
 fn text_layer_type(doc: &Value) -> LayerType {
     let s = doc.get("s").cloned().unwrap_or(Value::Null);
     let size = s.get("s").and_then(Value::as_f64).unwrap_or(24.0).max(1.0) as u32;
-    let lh = s.get("lh").and_then(Value::as_f64).unwrap_or(size as f64 * 1.2);
+    let lh = s
+        .get("lh")
+        .and_then(Value::as_f64)
+        .unwrap_or(size as f64 * 1.2);
     // Lottie j 0=Left 2=Center 1=Right → app align 0=Left 1=Center 2=Right.
     let align = match s.get("j").and_then(Value::as_i64).unwrap_or(0) {
         2 => 1u32,
@@ -667,7 +768,11 @@ fn text_layer_type(doc: &Value) -> LayerType {
         text: s.get("t").and_then(Value::as_str).unwrap_or("").to_string(),
         font_size: size,
         color: rgb_from_k(s.get("fc")),
-        font_family: s.get("f").and_then(Value::as_str).unwrap_or("Inter").to_string(),
+        font_family: s
+            .get("f")
+            .and_then(Value::as_str)
+            .unwrap_or("Inter")
+            .to_string(),
         tracking: s.get("tr").and_then(Value::as_f64).unwrap_or(0.0) as f32,
         leading: (lh / (size as f64).max(1.0)) as f32,
         align: align as usize,
@@ -681,7 +786,9 @@ fn text_layer_type(doc: &Value) -> LayerType {
 /// Animated shape sizes degrade to their first keyframe value.
 fn parse_shape_group(shapes: &Value) -> Option<(ShapeType, [f32; 4], [f32; 4], f32)> {
     for g in shapes.as_array()? {
-        let Some(it) = g.get("it").and_then(Value::as_array) else { continue; };
+        let Some(it) = g.get("it").and_then(Value::as_array) else {
+            continue;
+        };
         let mut geo: Option<ShapeType> = None;
         let mut fill = [0.0f32; 4];
         let mut stroke = [0.0f32; 4];
@@ -737,7 +844,9 @@ fn parse_shape_group(shapes: &Value) -> Option<(ShapeType, [f32; 4], [f32; 4], f
 }
 
 fn pt2(v: Option<&Value>) -> [f32; 2] {
-    let Some(a) = v.and_then(Value::as_array) else { return [0.0; 2]; };
+    let Some(a) = v.and_then(Value::as_array) else {
+        return [0.0; 2];
+    };
     [
         a.first().and_then(Value::as_f64).unwrap_or(0.0) as f32,
         a.get(1).and_then(Value::as_f64).unwrap_or(0.0) as f32,
@@ -850,7 +959,11 @@ fn import_mask(m: &Value, idx: usize) -> Mask {
 
     Mask {
         id: format!("mask_{idx}"),
-        name: m.get("nm").and_then(Value::as_str).unwrap_or("Mask").to_string(),
+        name: m
+            .get("nm")
+            .and_then(Value::as_str)
+            .unwrap_or("Mask")
+            .to_string(),
         enabled,
         mode,
         path: MaskPath {
@@ -889,13 +1002,29 @@ impl LottieImporter {
     /// `id_override` lets asset entries keep their published bodymovin id.
     fn parse_comp(v: &Value, id_override: Option<&str>) -> Option<Composition> {
         let layers_src = v.get("layers")?.as_array()?;
-        let fps = v.get("fr").and_then(Value::as_f64).unwrap_or(30.0).round().max(1.0) as u32;
+        let fps = v
+            .get("fr")
+            .and_then(Value::as_f64)
+            .unwrap_or(30.0)
+            .round()
+            .max(1.0) as u32;
         let ip = v.get("ip").and_then(Value::as_f64).unwrap_or(0.0).max(0.0);
         let op = v.get("op").and_then(Value::as_f64).unwrap_or(ip + 1.0);
         let duration = ((op - ip).round() as u32).max(1);
-        let width = v.get("w").and_then(Value::as_u64).unwrap_or(1920).clamp(1, 16384) as u32;
-        let height = v.get("h").and_then(Value::as_u64).unwrap_or(1080).clamp(1, 16384) as u32;
-        let name = v.get("nm").and_then(Value::as_str).unwrap_or("Lottie Import");
+        let width = v
+            .get("w")
+            .and_then(Value::as_u64)
+            .unwrap_or(1920)
+            .clamp(1, 16384) as u32;
+        let height = v
+            .get("h")
+            .and_then(Value::as_u64)
+            .unwrap_or(1080)
+            .clamp(1, 16384) as u32;
+        let name = v
+            .get("nm")
+            .and_then(Value::as_str)
+            .unwrap_or("Lottie Import");
         let comp_id = id_override
             .map(str::to_string)
             .unwrap_or_else(|| format!("lottie_{}", name.replace(' ', "_")));
@@ -907,33 +1036,65 @@ impl LottieImporter {
         let mut inds: Vec<i64> = Vec::with_capacity(layers_src.len());
         for (i, lj) in layers_src.iter().enumerate() {
             let ty = lj.get("ty").and_then(Value::as_i64).unwrap_or(3);
-            let lname = lj.get("nm").and_then(Value::as_str).unwrap_or("Layer").to_string();
+            let lname = lj
+                .get("nm")
+                .and_then(Value::as_str)
+                .unwrap_or("Layer")
+                .to_string();
             let id = format!("imp_l{i}");
 
             let mut layer = match ty {
-                1 => Layer::new(id, lname, LayerType::Solid {
-                    color: hex_to_rgba(lj.get("sc").and_then(Value::as_str).unwrap_or("#ffffff")),
-                }, duration),
-                2 => Layer::new(id, lname, LayerType::Image {
-                    path: lj.get("refId").and_then(Value::as_str).unwrap_or("missing_asset").to_string(),
-                }, duration),
+                1 => Layer::new(
+                    id,
+                    lname,
+                    LayerType::Solid {
+                        color: hex_to_rgba(
+                            lj.get("sc").and_then(Value::as_str).unwrap_or("#ffffff"),
+                        ),
+                    },
+                    duration,
+                ),
+                2 => Layer::new(
+                    id,
+                    lname,
+                    LayerType::Image {
+                        path: lj
+                            .get("refId")
+                            .and_then(Value::as_str)
+                            .unwrap_or("missing_asset")
+                            .to_string(),
+                    },
+                    duration,
+                ),
                 5 => {
-                    let doc = lj.get("t")
+                    let doc = lj
+                        .get("t")
                         .and_then(|t| t.get("d"))
                         .and_then(|d| d.get("k"))
                         .and_then(Value::as_array)
                         .and_then(|k| k.first());
                     match doc {
-                        Some(d) if d.get("s").is_some() => Layer::new(id, lname, text_layer_type(d), duration),
+                        Some(d) if d.get("s").is_some() => {
+                            Layer::new(id, lname, text_layer_type(d), duration)
+                        }
                         _ => Layer::new(id, lname, LayerType::Null, duration),
                     }
                 }
                 4 => match lj.get("shapes").and_then(parse_shape_group) {
-                    Some((shape_type, color, stroke_color, stroke_width)) => Layer::new(id, lname, LayerType::Shape {
-                        shape_type, color, stroke_color, stroke_width, fill_type: Default::default(),
-                        extrusion_depth: 0.0,
-                        bevel_depth: 0.0,
-                    }, duration),
+                    Some((shape_type, color, stroke_color, stroke_width)) => Layer::new(
+                        id,
+                        lname,
+                        LayerType::Shape {
+                            shape_type,
+                            color,
+                            stroke_color,
+                            stroke_width,
+                            fill_type: Default::default(),
+                            extrusion_depth: 0.0,
+                            bevel_depth: 0.0,
+                        },
+                        duration,
+                    ),
                     None => Layer::new(id, lname, LayerType::Null, duration),
                 },
                 0 => {
@@ -951,7 +1112,10 @@ impl LottieImporter {
                 layer.transform = parse_transform(ks);
             }
             let ipf = lj.get("ip").and_then(Value::as_f64).unwrap_or(0.0).max(0.0) as u32;
-            let opf = lj.get("op").and_then(Value::as_f64).unwrap_or(ipf as f64 + 1.0);
+            let opf = lj
+                .get("op")
+                .and_then(Value::as_f64)
+                .unwrap_or(ipf as f64 + 1.0);
             layer.in_frame = ipf;
             layer.out_frame = (opf as u32).max(ipf + 1);
             layer.blend_mode = blend_from_code(lj.get("bm").and_then(Value::as_i64).unwrap_or(0));
@@ -962,10 +1126,18 @@ impl LottieImporter {
                 layer.track_matte = matte_from_code(tt);
             }
             if let Some(mps) = lj.get("masksProperties").and_then(Value::as_array) {
-                layer.masks = mps.iter().enumerate().map(|(mi, m)| import_mask(m, mi)).collect();
+                layer.masks = mps
+                    .iter()
+                    .enumerate()
+                    .map(|(mi, m)| import_mask(m, mi))
+                    .collect();
             }
 
-            inds.push(lj.get("ind").and_then(Value::as_i64).unwrap_or(i as i64 + 1));
+            inds.push(
+                lj.get("ind")
+                    .and_then(Value::as_i64)
+                    .unwrap_or(i as i64 + 1),
+            );
             comp.layers.push(layer);
         }
 
@@ -1010,7 +1182,7 @@ impl LottieImporter {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::core::keyframe::{Keyframe, InterpolationType};
+    use crate::core::keyframe::{InterpolationType, Keyframe};
 
     #[test]
     fn test_lottie_export() {
@@ -1024,7 +1196,14 @@ mod tests {
     #[test]
     fn test_lottie_exports_animated_keyframes() {
         let mut comp = Composition::new("c".into(), "Anim".into(), 640, 360, 30, 60);
-        let mut l = Layer::new("l1".into(), "Mover".into(), LayerType::Solid { color: [1.0, 0.0, 0.0, 1.0] }, 30);
+        let mut l = Layer::new(
+            "l1".into(),
+            "Mover".into(),
+            LayerType::Solid {
+                color: [1.0, 0.0, 0.0, 1.0],
+            },
+            30,
+        );
         l.transform.position = Animatable::new_animated(vec![
             Keyframe::new(0, [0.0, 0.0], InterpolationType::Linear),
             Keyframe::new(30, [640.0, 360.0], InterpolationType::Linear),
@@ -1046,11 +1225,23 @@ mod tests {
     fn test_lottie_layer_types_and_parent() {
         let mut comp = Composition::new("c".into(), "Types".into(), 100, 100, 30, 30);
         let parent = Layer::new("p".into(), "ParentNull".into(), LayerType::Null, 30);
-        let mut child = Layer::new("ch".into(), "Child".into(), LayerType::Text {
-            text: "Hi".into(), font_size: 24, color: [1.0; 4],
-            font_family: "Arial".into(), tracking: 0.0, leading: 1.0, align: 0,
-            stroke_color: [0.0; 4], stroke_width: 0.0, text_on_path: false,
-        }, 30);
+        let mut child = Layer::new(
+            "ch".into(),
+            "Child".into(),
+            LayerType::Text {
+                text: "Hi".into(),
+                font_size: 24,
+                color: [1.0; 4],
+                font_family: "Arial".into(),
+                tracking: 0.0,
+                leading: 1.0,
+                align: 0,
+                stroke_color: [0.0; 4],
+                stroke_width: 0.0,
+                text_on_path: false,
+            },
+            30,
+        );
         child.parent_id = Some("p".into());
         comp.layers.push(parent);
         comp.layers.push(child);
@@ -1065,45 +1256,76 @@ mod tests {
     fn test_lottie_shape_layer_geometry() {
         use crate::core::timeline::ShapeType;
         let mut comp = Composition::new("c".into(), "Shapes".into(), 100, 100, 30, 30);
-        comp.layers.push(Layer::new("s1".into(), "Circle".into(), LayerType::Shape {
-            shape_type: ShapeType::Ellipse { width: Animatable::new_constant(50.0), height: Animatable::new_constant(80.0) },
-            color: [1.0, 0.0, 0.0, 1.0],
-            stroke_color: [0.0, 0.0, 1.0, 1.0],
-            stroke_width: 4.0,
-            fill_type: Default::default(),
-            extrusion_depth: 0.0,
-            bevel_depth: 0.0,
-        }, 30));
-        comp.layers.push(Layer::new("s2".into(), "Rect".into(), LayerType::Shape {
-            shape_type: ShapeType::Rectangle {
-                width: Animatable::new_constant(20.0), height: Animatable::new_constant(10.0),
-                corner_radius: Animatable::new_constant(5.0),
+        comp.layers.push(Layer::new(
+            "s1".into(),
+            "Circle".into(),
+            LayerType::Shape {
+                shape_type: ShapeType::Ellipse {
+                    width: Animatable::new_constant(50.0),
+                    height: Animatable::new_constant(80.0),
+                },
+                color: [1.0, 0.0, 0.0, 1.0],
+                stroke_color: [0.0, 0.0, 1.0, 1.0],
+                stroke_width: 4.0,
+                fill_type: Default::default(),
+                extrusion_depth: 0.0,
+                bevel_depth: 0.0,
             },
-            color: [0.0, 1.0, 0.0, 1.0],
-            stroke_color: [0.0, 0.0, 0.0, 1.0],
-            stroke_width: 0.0,
-            fill_type: Default::default(),
-            extrusion_depth: 0.0,
-            bevel_depth: 0.0,
-        }, 30));
-        comp.layers.push(Layer::new("s3".into(), "Poly".into(), LayerType::Shape {
-            shape_type: ShapeType::Polygon { sides: Animatable::new_constant(6.0), radius: Animatable::new_constant(30.0) },
-            color: [1.0, 1.0, 1.0, 1.0],
-            stroke_color: [0.0, 0.0, 0.0, 1.0],
-            stroke_width: 2.0,
-            fill_type: Default::default(),
-            extrusion_depth: 0.0,
-            bevel_depth: 0.0,
-        }, 30));
-        comp.layers.push(Layer::new("s4".into(), "Star".into(), LayerType::Shape {
-            shape_type: ShapeType::Star { points: Animatable::new_constant(5.0), inner_radius: Animatable::new_constant(15.0), outer_radius: Animatable::new_constant(40.0) },
-            color: [0.5, 0.5, 0.0, 1.0],
-            stroke_color: [0.0, 0.0, 0.0, 1.0],
-            stroke_width: 0.0,
-            fill_type: Default::default(),
-            extrusion_depth: 0.0,
-            bevel_depth: 0.0,
-        }, 30));
+            30,
+        ));
+        comp.layers.push(Layer::new(
+            "s2".into(),
+            "Rect".into(),
+            LayerType::Shape {
+                shape_type: ShapeType::Rectangle {
+                    width: Animatable::new_constant(20.0),
+                    height: Animatable::new_constant(10.0),
+                    corner_radius: Animatable::new_constant(5.0),
+                },
+                color: [0.0, 1.0, 0.0, 1.0],
+                stroke_color: [0.0, 0.0, 0.0, 1.0],
+                stroke_width: 0.0,
+                fill_type: Default::default(),
+                extrusion_depth: 0.0,
+                bevel_depth: 0.0,
+            },
+            30,
+        ));
+        comp.layers.push(Layer::new(
+            "s3".into(),
+            "Poly".into(),
+            LayerType::Shape {
+                shape_type: ShapeType::Polygon {
+                    sides: Animatable::new_constant(6.0),
+                    radius: Animatable::new_constant(30.0),
+                },
+                color: [1.0, 1.0, 1.0, 1.0],
+                stroke_color: [0.0, 0.0, 0.0, 1.0],
+                stroke_width: 2.0,
+                fill_type: Default::default(),
+                extrusion_depth: 0.0,
+                bevel_depth: 0.0,
+            },
+            30,
+        ));
+        comp.layers.push(Layer::new(
+            "s4".into(),
+            "Star".into(),
+            LayerType::Shape {
+                shape_type: ShapeType::Star {
+                    points: Animatable::new_constant(5.0),
+                    inner_radius: Animatable::new_constant(15.0),
+                    outer_radius: Animatable::new_constant(40.0),
+                },
+                color: [0.5, 0.5, 0.0, 1.0],
+                stroke_color: [0.0, 0.0, 0.0, 1.0],
+                stroke_width: 0.0,
+                fill_type: Default::default(),
+                extrusion_depth: 0.0,
+                bevel_depth: 0.0,
+            },
+            30,
+        ));
 
         let v: Value = serde_json::from_str(&LottieExporter::export_to_json(&comp)).unwrap();
 
@@ -1147,28 +1369,39 @@ mod tests {
     #[test]
     fn test_lottie_text_document_is_exported() {
         let mut comp = Composition::new("c".into(), "Txt".into(), 640, 360, 30, 60);
-        comp.layers.push(Layer::new("t1".into(), "Title".into(), LayerType::Text {
-            text: "Hello Lottie".into(),
-            font_size: 48,
-            color: [1.0, 0.5, 0.0, 1.0],
-            font_family: "Inter".into(),
-            tracking: 12.0,
-            leading: 1.4,
-            align: 1, // Center
-            stroke_color: [0.0; 4],
-            stroke_width: 0.0,
-            text_on_path: false,
-        }, 60));
+        comp.layers.push(Layer::new(
+            "t1".into(),
+            "Title".into(),
+            LayerType::Text {
+                text: "Hello Lottie".into(),
+                font_size: 48,
+                color: [1.0, 0.5, 0.0, 1.0],
+                font_family: "Inter".into(),
+                tracking: 12.0,
+                leading: 1.4,
+                align: 1, // Center
+                stroke_color: [0.0; 4],
+                stroke_width: 0.0,
+                text_on_path: false,
+            },
+            60,
+        ));
 
         let v: Value = serde_json::from_str(&LottieExporter::export_to_json(&comp)).unwrap();
         let doc = &v["layers"][0]["t"];
-        assert_eq!(doc["d"]["k"][0]["s"]["t"], "Hello Lottie", "text string preserved");
+        assert_eq!(
+            doc["d"]["k"][0]["s"]["t"], "Hello Lottie",
+            "text string preserved"
+        );
         assert_eq!(doc["d"]["k"][0]["s"]["f"], "Inter");
         assert_eq!(doc["d"]["k"][0]["s"]["s"], 48);
         assert_eq!(doc["d"]["k"][0]["s"]["fc"], json!([1.0, 0.5, 0.0]));
         // lh crosses f32→f64 JSON serialization, so compare with tolerance.
         let lh = doc["d"]["k"][0]["s"]["lh"].as_f64().expect("numeric lh");
-        assert!((lh - (1.4f32 * 48.0) as f64).abs() < 1e-3, "line height = leading × size, got {lh}");
+        assert!(
+            (lh - (1.4f32 * 48.0) as f64).abs() < 1e-3,
+            "line height = leading × size, got {lh}"
+        );
         // Tracking rides under its own "tr" key so it cannot clobber the text.
         assert_eq!(doc["d"]["k"][0]["s"]["tr"], 12.0);
         // App Center(1) maps to Lottie j=2.
@@ -1176,7 +1409,12 @@ mod tests {
 
         // Non-text layers must NOT carry a text document.
         let mut plain = Composition::new("c".into(), "NoTxt".into(), 10, 10, 30, 10);
-        plain.layers.push(Layer::new("s".into(), "Solid".into(), LayerType::Solid { color: [1.0; 4] }, 10));
+        plain.layers.push(Layer::new(
+            "s".into(),
+            "Solid".into(),
+            LayerType::Solid { color: [1.0; 4] },
+            10,
+        ));
         let v2: Value = serde_json::from_str(&LottieExporter::export_to_json(&plain)).unwrap();
         assert!(v2["layers"][0].get("t").is_none());
     }
@@ -1185,8 +1423,18 @@ mod tests {
     fn test_lottie_track_matte_flags() {
         let mut comp = Composition::new("c".into(), "Matte".into(), 100, 100, 30, 30);
         // Layer 0 = matte source (above), layer 1 consumes it via alpha matte.
-        comp.layers.push(Layer::new("src".into(), "MatteSource".into(), LayerType::Null, 30));
-        let mut consumer = Layer::new("dst".into(), "Consumer".into(), LayerType::Solid { color: [1.0; 4] }, 30);
+        comp.layers.push(Layer::new(
+            "src".into(),
+            "MatteSource".into(),
+            LayerType::Null,
+            30,
+        ));
+        let mut consumer = Layer::new(
+            "dst".into(),
+            "Consumer".into(),
+            LayerType::Solid { color: [1.0; 4] },
+            30,
+        );
         consumer.track_matte = TrackMatteMode::AlphaMatte;
         comp.layers.push(consumer);
 
@@ -1196,7 +1444,9 @@ mod tests {
 
         // Luma inverted maps to 4.
         let mut comp2 = Composition::new("c".into(), "Matte2".into(), 100, 100, 30, 30);
-        comp2.layers.push(Layer::new("src".into(), "S".into(), LayerType::Null, 30));
+        comp2
+            .layers
+            .push(Layer::new("src".into(), "S".into(), LayerType::Null, 30));
         let mut c2 = Layer::new("dst".into(), "C".into(), LayerType::Null, 30);
         c2.track_matte = TrackMatteMode::LumaMatteInverted;
         comp2.layers.push(c2);
@@ -1206,8 +1456,12 @@ mod tests {
 
         // No matte anywhere → no flags at all.
         let mut comp3 = Composition::new("c".into(), "NoMatte".into(), 100, 100, 30, 30);
-        comp3.layers.push(Layer::new("a".into(), "A".into(), LayerType::Null, 30));
-        comp3.layers.push(Layer::new("b".into(), "B".into(), LayerType::Null, 30));
+        comp3
+            .layers
+            .push(Layer::new("a".into(), "A".into(), LayerType::Null, 30));
+        comp3
+            .layers
+            .push(Layer::new("b".into(), "B".into(), LayerType::Null, 30));
         let v3: Value = serde_json::from_str(&LottieExporter::export_to_json(&comp3)).unwrap();
         assert!(v3["layers"][0].get("td").is_none());
         assert!(v3["layers"][1].get("tt").is_none());
@@ -1217,7 +1471,12 @@ mod tests {
     fn test_lottie_masks_are_exported() {
         use crate::core::mask::MaskPath;
         let mut comp = Composition::new("c".into(), "Masked".into(), 200, 200, 30, 30);
-        let mut layer = Layer::new("l".into(), "M".into(), LayerType::Solid { color: [1.0; 4] }, 30);
+        let mut layer = Layer::new(
+            "l".into(),
+            "M".into(),
+            LayerType::Solid { color: [1.0; 4] },
+            30,
+        );
         layer.masks.push(crate::core::mask::Mask {
             id: "m1".into(),
             name: "Window".into(),
@@ -1285,14 +1544,22 @@ mod tests {
 
     #[test]
     fn test_lottie_animated_mask_path_becomes_shape_keyframes() {
-        use crate::core::keyframe::{Keyframe, InterpolationType};
+        use crate::core::keyframe::{InterpolationType, Keyframe};
         use crate::core::mask::MaskPath;
         let mut comp = Composition::new("c".into(), "AnimMask".into(), 100, 100, 30, 30);
         let mut layer = Layer::new("l".into(), "L".into(), LayerType::Null, 30);
         let mut path = MaskPath::new_rect(0.0, 0.0, 40.0, 40.0);
         path.vertices = Animatable::new_animated(vec![
-            Keyframe::new(0, vec![[0.0, 0.0], [40.0, 0.0], [40.0, 40.0], [0.0, 40.0]], InterpolationType::Linear),
-            Keyframe::new(15, vec![[10.0, 5.0], [60.0, 5.0], [60.0, 55.0], [10.0, 55.0]], InterpolationType::Linear),
+            Keyframe::new(
+                0,
+                vec![[0.0, 0.0], [40.0, 0.0], [40.0, 40.0], [0.0, 40.0]],
+                InterpolationType::Linear,
+            ),
+            Keyframe::new(
+                15,
+                vec![[10.0, 5.0], [60.0, 5.0], [60.0, 55.0], [10.0, 55.0]],
+                InterpolationType::Linear,
+            ),
         ]);
         layer.masks.push(crate::core::mask::Mask {
             id: "ma".into(),
@@ -1326,7 +1593,10 @@ mod tests {
     fn test_importer_invalid_inputs_return_none() {
         assert!(LottieImporter::import_from_str("").is_none());
         assert!(LottieImporter::import_from_str("{not json").is_none());
-        assert!(LottieImporter::import_from_str("{}").is_none(), "no layers key");
+        assert!(
+            LottieImporter::import_from_str("{}").is_none(),
+            "no layers key"
+        );
         assert!(LottieImporter::import_from_str("{\"fr\":30}").is_none());
     }
 
@@ -1375,32 +1645,42 @@ mod tests {
         let mut comp = Composition::new("c".into(), "RT".into(), 200, 200, 24, 30);
         let mut src = Layer::new("src".into(), "Src".into(), LayerType::Null, 30);
         src.transform.position = Animatable::new_constant([5.0, 6.0]);
-        let mut txt = Layer::new("txt".into(), "T".into(), LayerType::Text {
-            text: "RoundTrip".into(),
-            font_size: 20,
-            color: [0.2, 0.4, 0.8, 1.0],
-            font_family: "Inter".into(),
-            tracking: 3.0,
-            leading: 1.2,
-            align: 1,
-            stroke_color: [0.0; 4],
-            stroke_width: 0.0,
-            text_on_path: false,
-        }, 30);
+        let mut txt = Layer::new(
+            "txt".into(),
+            "T".into(),
+            LayerType::Text {
+                text: "RoundTrip".into(),
+                font_size: 20,
+                color: [0.2, 0.4, 0.8, 1.0],
+                font_family: "Inter".into(),
+                tracking: 3.0,
+                leading: 1.2,
+                align: 1,
+                stroke_color: [0.0; 4],
+                stroke_width: 0.0,
+                text_on_path: false,
+            },
+            30,
+        );
         txt.parent_id = Some("src".into());
         txt.track_matte = TrackMatteMode::AlphaMatte;
-        let mut shape = Layer::new("shp".into(), "Sh".into(), LayerType::Shape {
-            shape_type: ShapeType::Ellipse {
-                width: Animatable::new_constant(60.0),
-                height: Animatable::new_constant(40.0),
+        let mut shape = Layer::new(
+            "shp".into(),
+            "Sh".into(),
+            LayerType::Shape {
+                shape_type: ShapeType::Ellipse {
+                    width: Animatable::new_constant(60.0),
+                    height: Animatable::new_constant(40.0),
+                },
+                color: [1.0, 0.0, 0.0, 1.0],
+                stroke_color: [0.0, 1.0, 0.0, 1.0],
+                stroke_width: 2.0,
+                fill_type: Default::default(),
+                extrusion_depth: 0.0,
+                bevel_depth: 0.0,
             },
-            color: [1.0, 0.0, 0.0, 1.0],
-            stroke_color: [0.0, 1.0, 0.0, 1.0],
-            stroke_width: 2.0,
-            fill_type: Default::default(),
-            extrusion_depth: 0.0,
-            bevel_depth: 0.0,
-        }, 30);
+            30,
+        );
         shape.transform.position = Animatable::new_animated(vec![
             Keyframe::new(0, [10.0, 10.0], InterpolationType::Linear),
             Keyframe::new(12, [80.0, 40.0], InterpolationType::Linear),
@@ -1427,12 +1707,17 @@ mod tests {
         assert_eq!(back.fps, 24);
 
         // Parenting survives (text → source layer id).
-        assert_eq!(back.layers[1].parent_id.as_deref(), Some(back.layers[0].id.as_str()));
+        assert_eq!(
+            back.layers[1].parent_id.as_deref(),
+            Some(back.layers[0].id.as_str())
+        );
         // Track matte survives.
         assert_eq!(back.layers[1].track_matte, TrackMatteMode::AlphaMatte);
         // Text content survives.
         match &back.layers[1].layer_type {
-            LayerType::Text { text, font_size, .. } => {
+            LayerType::Text {
+                text, font_size, ..
+            } => {
                 assert_eq!(text, "RoundTrip");
                 assert_eq!(*font_size, 20);
             }
@@ -1456,26 +1741,51 @@ mod tests {
         use crate::core::timeline::Project;
         // B: nested comp with one shape; C: deeper comp referenced from B.
         let mut b = Composition::new("B".into(), "NestedB".into(), 100, 100, 24, 30);
-        b.layers.push(Layer::new("bs".into(), "BShape".into(), LayerType::Shape {
-            shape_type: ShapeType::Ellipse {
-                width: Animatable::new_constant(20.0),
-                height: Animatable::new_constant(20.0),
+        b.layers.push(Layer::new(
+            "bs".into(),
+            "BShape".into(),
+            LayerType::Shape {
+                shape_type: ShapeType::Ellipse {
+                    width: Animatable::new_constant(20.0),
+                    height: Animatable::new_constant(20.0),
+                },
+                color: [1.0, 0.0, 0.0, 1.0],
+                stroke_color: [0.0; 4],
+                stroke_width: 0.0,
+                fill_type: Default::default(),
+                extrusion_depth: 0.0,
+                bevel_depth: 0.0,
             },
-            color: [1.0, 0.0, 0.0, 1.0],
-            stroke_color: [0.0; 4],
-            stroke_width: 0.0,
-            fill_type: Default::default(),
-            extrusion_depth: 0.0,
-            bevel_depth: 0.0,
-        }, 30));
+            30,
+        ));
         let mut c = Composition::new("C".into(), "DeepC".into(), 80, 80, 24, 30);
-        c.layers.push(Layer::new("cl".into(), "CNull".into(), LayerType::Null, 30));
+        c.layers
+            .push(Layer::new("cl".into(), "CNull".into(), LayerType::Null, 30));
         b.sub_compositions.push(c);
-        b.layers.push(Layer::new("bpc".into(), "ToC".into(), LayerType::PreComp { comp_id: "C".into() }, 30));
+        b.layers.push(Layer::new(
+            "bpc".into(),
+            "ToC".into(),
+            LayerType::PreComp {
+                comp_id: "C".into(),
+            },
+            30,
+        ));
 
         let mut a = Composition::new("A".into(), "Root".into(), 400, 300, 24, 60);
-        a.layers.push(Layer::new("apc".into(), "ToB".into(), LayerType::PreComp { comp_id: "B".into() }, 60));
-        a.layers.push(Layer::new("as".into(), "ASolid".into(), LayerType::Solid { color: [1.0; 4] }, 60));
+        a.layers.push(Layer::new(
+            "apc".into(),
+            "ToB".into(),
+            LayerType::PreComp {
+                comp_id: "B".into(),
+            },
+            60,
+        ));
+        a.layers.push(Layer::new(
+            "as".into(),
+            "ASolid".into(),
+            LayerType::Solid { color: [1.0; 4] },
+            60,
+        ));
 
         let project = Project {
             compositions: vec![a, b],
@@ -1498,22 +1808,43 @@ mod tests {
         let b_asset = assets.iter().find(|a| a["id"] == "B").unwrap();
         assert_eq!(b_asset["layers"][0]["ty"], 4, "shape inside asset");
         assert_eq!(
-            b_asset["layers"].as_array().unwrap().iter()
-                .find(|l| l["refId"] == "C").map(|l| l["ty"].clone()),
+            b_asset["layers"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .find(|l| l["refId"] == "C")
+                .map(|l| l["ty"].clone()),
             Some(json!(0)),
             "nested precomp slot inside asset B"
         );
 
         // Missing reference degrades gracefully: no crash, no phantom asset.
         let mut a2 = Composition::new("A2".into(), "R2".into(), 10, 10, 24, 5);
-        a2.layers.push(Layer::new("x".into(), "Ghost".into(), LayerType::PreComp { comp_id: "NOPE".into() }, 5));
-        let p2 = Project { compositions: vec![a2], active_composition_idx: 0, assets: Vec::new(), use_gpu_compute: false };
+        a2.layers.push(Layer::new(
+            "x".into(),
+            "Ghost".into(),
+            LayerType::PreComp {
+                comp_id: "NOPE".into(),
+            },
+            5,
+        ));
+        let p2 = Project {
+            compositions: vec![a2],
+            active_composition_idx: 0,
+            assets: Vec::new(),
+            use_gpu_compute: false,
+        };
         let v2: Value = serde_json::from_str(&export_project_to_json(&p2)).unwrap();
         assert_eq!(v2["layers"][0]["ty"], 0);
         assert_eq!(v2["assets"].as_array().unwrap().len(), 0);
 
         // Empty project → error payload, no panic.
-        let empty = Project { compositions: vec![], active_composition_idx: 0, assets: Vec::new(), use_gpu_compute: false };
+        let empty = Project {
+            compositions: vec![],
+            active_composition_idx: 0,
+            assets: Vec::new(),
+            use_gpu_compute: false,
+        };
         assert!(export_project_to_json(&empty).contains("error"));
     }
 
@@ -1521,25 +1852,45 @@ mod tests {
     fn test_project_roundtrip_through_precomp_export() {
         use crate::core::timeline::Project;
         let mut b = Composition::new("B".into(), "NestedB".into(), 100, 100, 24, 30);
-        b.layers.push(Layer::new("bs".into(), "BShape".into(), LayerType::Shape {
-            shape_type: ShapeType::Ellipse {
-                width: Animatable::new_constant(20.0),
-                height: Animatable::new_constant(20.0),
+        b.layers.push(Layer::new(
+            "bs".into(),
+            "BShape".into(),
+            LayerType::Shape {
+                shape_type: ShapeType::Ellipse {
+                    width: Animatable::new_constant(20.0),
+                    height: Animatable::new_constant(20.0),
+                },
+                color: [1.0, 0.0, 0.0, 1.0],
+                stroke_color: [0.0; 4],
+                stroke_width: 0.0,
+                fill_type: Default::default(),
+                extrusion_depth: 0.0,
+                bevel_depth: 0.0,
             },
-            color: [1.0, 0.0, 0.0, 1.0],
-            stroke_color: [0.0; 4],
-            stroke_width: 0.0,
-            fill_type: Default::default(),
-            extrusion_depth: 0.0,
-            bevel_depth: 0.0,
-        }, 30));
+            30,
+        ));
         let mut c = Composition::new("C".into(), "DeepC".into(), 80, 80, 24, 30);
-        c.layers.push(Layer::new("cl".into(), "CNull".into(), LayerType::Null, 30));
+        c.layers
+            .push(Layer::new("cl".into(), "CNull".into(), LayerType::Null, 30));
         b.sub_compositions.push(c);
-        b.layers.push(Layer::new("bpc".into(), "ToC".into(), LayerType::PreComp { comp_id: "C".into() }, 30));
+        b.layers.push(Layer::new(
+            "bpc".into(),
+            "ToC".into(),
+            LayerType::PreComp {
+                comp_id: "C".into(),
+            },
+            30,
+        ));
 
         let mut a = Composition::new("A".into(), "Root".into(), 400, 300, 24, 60);
-        a.layers.push(Layer::new("apc".into(), "ToB".into(), LayerType::PreComp { comp_id: "B".into() }, 60));
+        a.layers.push(Layer::new(
+            "apc".into(),
+            "ToB".into(),
+            LayerType::PreComp {
+                comp_id: "B".into(),
+            },
+            60,
+        ));
         let project = Project {
             compositions: vec![a, b],
             active_composition_idx: 0,
@@ -1548,25 +1899,32 @@ mod tests {
         };
 
         let exported = export_project_to_json(&project);
-        let back = LottieImporter::import_project_from_str(&exported)
-            .expect("project roundtrip parses");
+        let back =
+            LottieImporter::import_project_from_str(&exported).expect("project roundtrip parses");
         // Root + B + C all present; root is active.
         assert_eq!(back.compositions.len(), 3);
         assert_eq!(back.active_composition_idx, 0);
         let root = &back.compositions[0];
         assert_eq!(root.name, "Root"); // bodymovin roots carry a name, not an id
-        // Root's precomp slot points at imported asset B.
+                                       // Root's precomp slot points at imported asset B.
         match &root.layers[0].layer_type {
             LayerType::PreComp { comp_id } => assert_eq!(comp_id, "B"),
             other => panic!("expected precomp, got {other:?}"),
         }
         // Asset B kept its bodymovin id and nested precomp reference to C.
-        let b_back = back.compositions.iter().find(|c| c.id == "B").expect("asset B");
+        let b_back = back
+            .compositions
+            .iter()
+            .find(|c| c.id == "B")
+            .expect("asset B");
         match &b_back.layers[1].layer_type {
             LayerType::PreComp { comp_id } => assert_eq!(comp_id, "C"),
             other => panic!("expected nested precomp in B, got {other:?}"),
         }
-        assert!(back.compositions.iter().any(|c| c.id == "C"), "deep asset C imported");
+        assert!(
+            back.compositions.iter().any(|c| c.id == "C"),
+            "deep asset C imported"
+        );
 
         // Single-comp importer still ignores assets gracefully.
         let single = LottieImporter::import_from_str(&exported).expect("single-comp import");

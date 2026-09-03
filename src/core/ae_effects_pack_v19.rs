@@ -1,8 +1,17 @@
 #![allow(dead_code)]
 /// After Effects VFX Kernels Part 19 — Frequency Domain & Compositing Ops
 // 1. Unsharp Mask (Gaussian Difference Sharpening)
-pub fn apply_unsharp_mask(pixels: &mut [u8], width: u32, height: u32, radius: u32, amount: f32, threshold: u8) {
-    if radius == 0 || amount <= 0.0 { return; }
+pub fn apply_unsharp_mask(
+    pixels: &mut [u8],
+    width: u32,
+    height: u32,
+    radius: u32,
+    amount: f32,
+    threshold: u8,
+) {
+    if radius == 0 || amount <= 0.0 {
+        return;
+    }
     let temp = pixels.to_vec();
     let mut blurred = temp.clone();
     let r = radius as i32;
@@ -49,7 +58,9 @@ pub fn apply_unsharp_mask(pixels: &mut [u8], width: u32, height: u32, radius: u3
 
 // 2. Median Filter (Salt-and-Pepper Noise Removal)
 pub fn apply_median_filter(pixels: &mut [u8], width: u32, height: u32, radius: u32) {
-    if radius == 0 { return; }
+    if radius == 0 {
+        return;
+    }
     let temp = pixels.to_vec();
     let r = radius as i32;
 
@@ -93,13 +104,16 @@ pub fn apply_sobel_edges(pixels: &mut [u8], width: u32, height: u32, invert: boo
                     let py = y as usize + ky_off - 1;
                     let px = x as usize + kx_off - 1;
                     let k_idx = (py * width as usize + px) * 4;
-                    let luma = (temp[k_idx] as i16 + temp[k_idx + 1] as i16 + temp[k_idx + 2] as i16) / 3;
+                    let luma =
+                        (temp[k_idx] as i16 + temp[k_idx + 1] as i16 + temp[k_idx + 2] as i16) / 3;
                     gx_sum += luma * kx[ky_off][kx_off];
                     gy_sum += luma * ky[ky_off][kx_off];
                 }
             }
 
-            let magnitude = ((gx_sum * gx_sum + gy_sum * gy_sum) as f32).sqrt().clamp(0.0, 255.0) as u8;
+            let magnitude = ((gx_sum * gx_sum + gy_sum * gy_sum) as f32)
+                .sqrt()
+                .clamp(0.0, 255.0) as u8;
             let val = if invert { 255 - magnitude } else { magnitude };
             pixels[idx] = val;
             pixels[idx + 1] = val;
@@ -110,13 +124,18 @@ pub fn apply_sobel_edges(pixels: &mut [u8], width: u32, height: u32, invert: boo
 
 // 4. Mosaic (Pixelate) Effect
 pub fn apply_mosaic(pixels: &mut [u8], width: u32, height: u32, block_w: u32, block_h: u32) {
-    if block_w == 0 || block_h == 0 { return; }
+    if block_w == 0 || block_h == 0 {
+        return;
+    }
 
     let mut y = 0u32;
     while y < height {
         let mut x = 0u32;
         while x < width {
-            let mut r = 0u32; let mut g = 0u32; let mut b = 0u32; let mut count = 0u32;
+            let mut r = 0u32;
+            let mut g = 0u32;
+            let mut b = 0u32;
+            let mut count = 0u32;
 
             for by in 0..block_h {
                 let py = (y + by).min(height - 1) as usize;
@@ -152,8 +171,17 @@ pub fn apply_mosaic(pixels: &mut [u8], width: u32, height: u32, block_w: u32, bl
 }
 
 // 5. Tilt Shift Lens Simulation (Graduated Focus Falloff)
-pub fn apply_tilt_shift(pixels: &mut [u8], width: u32, height: u32, focus_y: f32, focus_height: f32, max_blur: u32) {
-    if max_blur == 0 { return; }
+pub fn apply_tilt_shift(
+    pixels: &mut [u8],
+    width: u32,
+    height: u32,
+    focus_y: f32,
+    focus_height: f32,
+    max_blur: u32,
+) {
+    if max_blur == 0 {
+        return;
+    }
     let temp = pixels.to_vec();
 
     for y in 0..height {
@@ -163,13 +191,19 @@ pub fn apply_tilt_shift(pixels: &mut [u8], width: u32, height: u32, focus_y: f32
             0u32
         } else {
             ((dist_from_focus / (height as f32 * 0.5)) * max_blur as f32) as u32
-        }.min(max_blur);
+        }
+        .min(max_blur);
 
         for x in 0..width {
             let idx = (y as usize * width as usize + x as usize) * 4;
-            if blur_r == 0 { continue; }
+            if blur_r == 0 {
+                continue;
+            }
 
-            let mut r = 0.0f32; let mut g = 0.0f32; let mut b = 0.0f32; let mut count = 0u32;
+            let mut r = 0.0f32;
+            let mut g = 0.0f32;
+            let mut b = 0.0f32;
+            let mut count = 0u32;
 
             for kx in -(blur_r as i32)..=(blur_r as i32) {
                 let px = (x as i32 + kx).clamp(0, width as i32 - 1) as usize;

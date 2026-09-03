@@ -46,14 +46,27 @@ impl OpenFxPluginBridge {
     }
 
     /// Invokes the OpenFX plugin's `kOfxImageEffectActionRender` action.
-    pub fn render_frame(&self, in_pixels: &[u8], out_pixels: &mut [u8], width: u32, height: u32, frame: f64) -> OfxStatus {
+    pub fn render_frame(
+        &self,
+        in_pixels: &[u8],
+        out_pixels: &mut [u8],
+        width: u32,
+        height: u32,
+        frame: f64,
+    ) -> OfxStatus {
         if in_pixels.len() != out_pixels.len() {
             return OfxStatus::ErrMemory;
         }
 
         // Pass-through execution simulating an OFX plugin render call
         out_pixels.copy_from_slice(in_pixels);
-        log::info!("OpenFX Plugin [{}] rendered frame {:.1} at {}x{}", self.plugin_name, frame, width, height);
+        log::info!(
+            "OpenFX Plugin [{}] rendered frame {:.1} at {}x{}",
+            self.plugin_name,
+            frame,
+            width,
+            height
+        );
 
         OfxStatus::OK
     }
@@ -78,7 +91,12 @@ pub fn ofx_search_paths() -> Vec<PathBuf> {
     #[cfg(windows)]
     {
         if let Some(pf) = std::env::var("ProgramFiles").ok() {
-            paths.push(PathBuf::from(pf).join("Common Files").join("OFX").join("Plugins"));
+            paths.push(
+                PathBuf::from(pf)
+                    .join("Common Files")
+                    .join("OFX")
+                    .join("Plugins"),
+            );
         }
     }
     paths.into_iter().filter(|p| p.is_dir()).collect()
@@ -88,7 +106,9 @@ pub fn ofx_search_paths() -> Vec<PathBuf> {
 /// a binary under `Contents/<platform>/` or directly under `Contents/`.
 pub fn discover_ofx_plugins(root: &Path) -> Vec<OfxPluginDescriptor> {
     let mut found = Vec::new();
-    let Ok(rd) = std::fs::read_dir(root) else { return found };
+    let Ok(rd) = std::fs::read_dir(root) else {
+        return found;
+    };
     let platform_dir = if cfg!(target_os = "macos") {
         "MacOS"
     } else if cfg!(windows) {
@@ -101,7 +121,11 @@ pub fn discover_ofx_plugins(root: &Path) -> Vec<OfxPluginDescriptor> {
         if !path.is_dir() || !path.to_string_lossy().ends_with(".bundle") {
             continue;
         }
-        let name = path.file_stem().unwrap_or_default().to_string_lossy().to_string();
+        let name = path
+            .file_stem()
+            .unwrap_or_default()
+            .to_string_lossy()
+            .to_string();
         let contents = path.join("Contents");
         // Preferred: Contents/<Platform>/<name>.ofx
         for candidate in [contents.join(platform_dir), contents.clone()] {
@@ -109,7 +133,11 @@ pub fn discover_ofx_plugins(root: &Path) -> Vec<OfxPluginDescriptor> {
                 for b in bin_rd.flatten() {
                     let bp = b.path();
                     if bp.extension().is_some_and(|e| e == "ofx") {
-                        found.push(OfxPluginDescriptor { name, binary_path: bp, bundle_root: path.clone() });
+                        found.push(OfxPluginDescriptor {
+                            name,
+                            binary_path: bp,
+                            bundle_root: path.clone(),
+                        });
                         continue 'bundle;
                     }
                 }
@@ -268,7 +296,8 @@ unsafe extern "C" fn prop_set_string(
     index: i32,
     value: *const std::os::raw::c_char,
 ) -> i32 {
-    let (Some(set), Some(name), Some(val)) = (handle_as_set(handle), cstr(prop), cstr(value)) else {
+    let (Some(set), Some(name), Some(val)) = (handle_as_set(handle), cstr(prop), cstr(value))
+    else {
         return 1;
     };
     if set.set_string(name, index.max(0) as usize, val) {
@@ -282,10 +311,30 @@ unsafe extern "C" fn prop_set_string(
 /// slots are null so well-behaved plugins can detect unsupported members.
 #[repr(C)]
 pub struct OfxPropertySuiteV1 {
-    prop_set_pointer: unsafe extern "C" fn(*mut std::os::raw::c_void, *const std::os::raw::c_char, i32, *mut std::os::raw::c_void) -> i32,
-    prop_set_int: unsafe extern "C" fn(*mut std::os::raw::c_void, *const std::os::raw::c_char, i32, i32) -> i32,
-    prop_set_double: unsafe extern "C" fn(*mut std::os::raw::c_void, *const std::os::raw::c_char, i32, f64) -> i32,
-    prop_set_string: unsafe extern "C" fn(*mut std::os::raw::c_void, *const std::os::raw::c_char, i32, *const std::os::raw::c_char) -> i32,
+    prop_set_pointer: unsafe extern "C" fn(
+        *mut std::os::raw::c_void,
+        *const std::os::raw::c_char,
+        i32,
+        *mut std::os::raw::c_void,
+    ) -> i32,
+    prop_set_int: unsafe extern "C" fn(
+        *mut std::os::raw::c_void,
+        *const std::os::raw::c_char,
+        i32,
+        i32,
+    ) -> i32,
+    prop_set_double: unsafe extern "C" fn(
+        *mut std::os::raw::c_void,
+        *const std::os::raw::c_char,
+        i32,
+        f64,
+    ) -> i32,
+    prop_set_string: unsafe extern "C" fn(
+        *mut std::os::raw::c_void,
+        *const std::os::raw::c_char,
+        i32,
+        *const std::os::raw::c_char,
+    ) -> i32,
     prop_get_pointer: usize,
     prop_get_int: usize,
     prop_get_double: usize,
@@ -358,10 +407,13 @@ pub struct LoadedOfxPlugin {
 impl LoadedOfxPlugin {
     /// dlopen + setHost + kOfxActionLoad handshake.
     pub fn attach(path: &Path, name: &str) -> Result<Self, String> {
-        let library = unsafe { libloading::Library::new(path) }.map_err(|e| format!("dlopen failed: {e}"))?;
+        let library =
+            unsafe { libloading::Library::new(path) }.map_err(|e| format!("dlopen failed: {e}"))?;
         unsafe {
             let get_plugin: libloading::Symbol<'_, unsafe extern "C" fn(i32) -> *mut OfxPluginRaw> =
-                library.get(b"OfxGetPlugin").map_err(|e| format!("missing OfxGetPlugin: {e}"))?;
+                library
+                    .get(b"OfxGetPlugin")
+                    .map_err(|e| format!("missing OfxGetPlugin: {e}"))?;
             let raw = (get_plugin)(0);
             let raw = raw.as_ref().ok_or("OfxGetPlugin(0) returned null")?;
 
@@ -374,17 +426,33 @@ impl LoadedOfxPlugin {
 
             // Handshake step 2: kOfxActionLoad with empty in/out args
             if raw.main_entry != 0 {
-                let main_fn: unsafe extern "C" fn(*const std::os::raw::c_char, *mut std::os::raw::c_void, *mut std::os::raw::c_void, *mut std::os::raw::c_void) -> i32 =
-                    std::mem::transmute(raw.main_entry);
+                let main_fn: unsafe extern "C" fn(
+                    *const std::os::raw::c_char,
+                    *mut std::os::raw::c_void,
+                    *mut std::os::raw::c_void,
+                    *mut std::os::raw::c_void,
+                ) -> i32 = std::mem::transmute(raw.main_entry);
                 let action = b"kOfxActionLoad\0";
-                let status = main_fn(action.as_ptr() as *const _, std::ptr::null_mut(), std::ptr::null_mut(), std::ptr::null_mut());
+                let status = main_fn(
+                    action.as_ptr() as *const _,
+                    std::ptr::null_mut(),
+                    std::ptr::null_mut(),
+                    std::ptr::null_mut(),
+                );
                 match status {
-                    s if s == K_OFX_STAT_OK || s == K_OFX_STAT_REPLY_DEFAULT || s == K_OFX_STAT_REPLY_YES || s == K_OFX_STAT_ERR_UNSET => {}
+                    s if s == K_OFX_STAT_OK
+                        || s == K_OFX_STAT_REPLY_DEFAULT
+                        || s == K_OFX_STAT_REPLY_YES
+                        || s == K_OFX_STAT_ERR_UNSET => {}
                     other => return Err(format!("kOfxActionLoad rejected: status {other}")),
                 }
             }
         }
-        Ok(Self { name: name.to_string(), library, instance_props: Vec::new() })
+        Ok(Self {
+            name: name.to_string(),
+            library,
+            instance_props: Vec::new(),
+        })
     }
 
     /// Allocate an instance property set owned by this plugin session.
@@ -439,13 +507,19 @@ impl LoadedOfxPlugin {
         }
         unsafe {
             let get_plugin: libloading::Symbol<'_, unsafe extern "C" fn(i32) -> *mut OfxPluginRaw> =
-                self.library.get(b"OfxGetPlugin").map_err(|e| format!("missing OfxGetPlugin: {e}"))?;
+                self.library
+                    .get(b"OfxGetPlugin")
+                    .map_err(|e| format!("missing OfxGetPlugin: {e}"))?;
             let raw = (get_plugin)(0).as_ref().ok_or("null plugin")?;
             if raw.main_entry == 0 {
                 return Err("plugin exposes no main entry".into());
             }
-            let main_fn: unsafe extern "C" fn(*const std::os::raw::c_char, *mut std::os::raw::c_void, *mut std::os::raw::c_void, *mut std::os::raw::c_void) -> i32 =
-                std::mem::transmute(raw.main_entry);
+            let main_fn: unsafe extern "C" fn(
+                *const std::os::raw::c_char,
+                *mut std::os::raw::c_void,
+                *mut std::os::raw::c_void,
+                *mut std::os::raw::c_void,
+            ) -> i32 = std::mem::transmute(raw.main_entry);
 
             // Instance args property set (dimensions + frame), owned here.
             let mut args = OfxPropertySet::new();
@@ -483,7 +557,7 @@ struct OfxPluginRaw {
     plugin_api: *const std::os::raw::c_char,
     plugin_version_major: i32,
     plugin_version_minor: i32,
-    set_host: usize, // function pointer, unused during probing
+    set_host: usize,   // function pointer, unused during probing
     main_entry: usize, // function pointer, unused during probing
 }
 
@@ -528,10 +602,11 @@ pub fn probe_ofx_plugin(path: &Path) -> OfxProbeResult {
 }
 
 unsafe fn probe_loaded(lib: &libloading::Library) -> OfxProbeResult {
-    let get_num: libloading::Symbol<'_, unsafe extern "C" fn() -> i32> = match lib.get(b"OfxGetNumberOfPlugins") {
-        Ok(s) => s,
-        Err(e) => return OfxProbeResult::NotOfx(format!("missing OfxGetNumberOfPlugins: {e}")),
-    };
+    let get_num: libloading::Symbol<'_, unsafe extern "C" fn() -> i32> =
+        match lib.get(b"OfxGetNumberOfPlugins") {
+            Ok(s) => s,
+            Err(e) => return OfxProbeResult::NotOfx(format!("missing OfxGetNumberOfPlugins: {e}")),
+        };
     let get_plugin: libloading::Symbol<'_, unsafe extern "C" fn(i32) -> *mut OfxPluginRaw> =
         match lib.get(b"OfxGetPlugin") {
             Ok(s) => s,
@@ -621,7 +696,10 @@ mod tests {
         let res = probe_ofx_plugin(&tmp);
         let _ = std::fs::remove_file(&tmp);
         assert!(
-            matches!(res, OfxProbeResult::LoadError(_) | OfxProbeResult::NotOfx(_)),
+            matches!(
+                res,
+                OfxProbeResult::LoadError(_) | OfxProbeResult::NotOfx(_)
+            ),
             "garbage must not crash: {res:?}"
         );
     }
@@ -639,7 +717,11 @@ mod tests {
         assert_eq!(set.get_double("scale", 0), Some(0.5));
         assert_eq!(set.get_string("name", 0), Some("blur"));
         assert_eq!(set.get_int("missing", 0), None);
-        assert_eq!(set.get_double("width", 0), None, "type mismatch returns none");
+        assert_eq!(
+            set.get_double("width", 0),
+            None,
+            "type mismatch returns none"
+        );
     }
 
     #[test]
@@ -657,7 +739,12 @@ mod tests {
             assert_eq!(rc_dbl, K_OFX_STAT_OK);
             let name_s = b"OfxPropName\0";
             let val = b"test\0";
-            let rc_str = ((*suite).prop_set_string)(handle, name_s.as_ptr() as *const _, 0, val.as_ptr() as *const _);
+            let rc_str = ((*suite).prop_set_string)(
+                handle,
+                name_s.as_ptr() as *const _,
+                0,
+                val.as_ptr() as *const _,
+            );
             assert_eq!(rc_str, K_OFX_STAT_OK);
         }
         assert_eq!(set.get_int("OfxPropWidth", 0), Some(640));

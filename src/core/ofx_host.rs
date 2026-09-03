@@ -7,13 +7,32 @@
 
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub enum OfxParamType {
-    Double { min: f64, max: f64, default_value: f64 },
-    Integer { min: i32, max: i32, default_value: i32 },
-    Boolean { default_value: bool },
-    RGB { default_value: [f32; 3] },
-    RGBA { default_value: [f32; 4] },
-    Choice { options: Vec<String>, default_index: usize },
-    StringParam { default_value: String },
+    Double {
+        min: f64,
+        max: f64,
+        default_value: f64,
+    },
+    Integer {
+        min: i32,
+        max: i32,
+        default_value: i32,
+    },
+    Boolean {
+        default_value: bool,
+    },
+    RGB {
+        default_value: [f32; 3],
+    },
+    RGBA {
+        default_value: [f32; 4],
+    },
+    Choice {
+        options: Vec<String>,
+        default_index: usize,
+    },
+    StringParam {
+        default_value: String,
+    },
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -65,7 +84,8 @@ impl OfxPluginInstance {
     }
 
     pub fn set_double(&mut self, param_name: &str, val: f64) {
-        self.param_values.insert(param_name.to_string(), serde_json::json!(val));
+        self.param_values
+            .insert(param_name.to_string(), serde_json::json!(val));
     }
 
     pub fn get_double(&self, param_name: &str) -> Option<f64> {
@@ -81,29 +101,33 @@ pub struct OfxHostRegistry {
 impl Default for OfxHostRegistry {
     fn default() -> Self {
         Self {
-            plugins: vec![
-                OfxPluginDescriptor {
-                    plugin_id: "com.genarts.sapphire.glow".into(),
-                    major_version: 2024,
-                    minor_version: 1,
-                    name: "S_Glow".into(),
-                    category: "Sapphire Lighting".into(),
-                    parameters: vec![
-                        OfxParamDescriptor {
-                            name: "brightness".into(),
-                            label: "Brightness".into(),
-                            hint: Some("Overall glow intensity".into()),
-                            param_type: OfxParamType::Double { min: 0.0, max: 10.0, default_value: 1.0 },
+            plugins: vec![OfxPluginDescriptor {
+                plugin_id: "com.genarts.sapphire.glow".into(),
+                major_version: 2024,
+                minor_version: 1,
+                name: "S_Glow".into(),
+                category: "Sapphire Lighting".into(),
+                parameters: vec![
+                    OfxParamDescriptor {
+                        name: "brightness".into(),
+                        label: "Brightness".into(),
+                        hint: Some("Overall glow intensity".into()),
+                        param_type: OfxParamType::Double {
+                            min: 0.0,
+                            max: 10.0,
+                            default_value: 1.0,
                         },
-                        OfxParamDescriptor {
-                            name: "color".into(),
-                            label: "Glow Color".into(),
-                            hint: None,
-                            param_type: OfxParamType::RGB { default_value: [1.0, 1.0, 1.0] },
+                    },
+                    OfxParamDescriptor {
+                        name: "color".into(),
+                        label: "Glow Color".into(),
+                        hint: None,
+                        param_type: OfxParamType::RGB {
+                            default_value: [1.0, 1.0, 1.0],
                         },
-                    ],
-                },
-            ],
+                    },
+                ],
+            }],
         }
     }
 }

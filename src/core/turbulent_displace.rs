@@ -89,9 +89,17 @@ pub fn perlin_noise_2d(x: f64, y: f64) -> f64 {
 
 /// Raw multi-octave Perlin fractal components (pre-displacement-mode).
 fn fractal_noise(x: f32, y: f32, options: &TurbulentDisplaceOptions) -> (f64, f64) {
-    let size = if options.size.is_finite() { options.size.max(1.0) } else { 1.0 };
+    let size = if options.size.is_finite() {
+        options.size.max(1.0)
+    } else {
+        1.0
+    };
     let scale = f64::from(size) * 0.005;
-    let evolution = if options.evolution_deg.is_finite() { options.evolution_deg } else { 0.0 };
+    let evolution = if options.evolution_deg.is_finite() {
+        options.evolution_deg
+    } else {
+        0.0
+    };
     let evol_rad = f64::from(evolution).to_radians();
 
     let mut dx = 0.0f64;
@@ -142,7 +150,11 @@ fn compute_turbulent_offset(
     options: &TurbulentDisplaceOptions,
 ) -> (f32, f32) {
     let (ndx, ndy) = fractal_noise(x, y, options);
-    let amount = if options.amount.is_finite() { f64::from(options.amount) } else { 0.0 };
+    let amount = if options.amount.is_finite() {
+        f64::from(options.amount)
+    } else {
+        0.0
+    };
 
     match options.displace_type {
         TurbulentDisplaceType::Turbulent => ((ndx * amount) as f32, (ndy * amount) as f32),
@@ -184,8 +196,11 @@ pub fn apply_turbulent_displace(
     else {
         return pixels.to_vec();
     };
-    if width == 0 || height == 0 || pixels.len() != num_pixels * 4
-        || !options.amount.is_finite() || options.amount.abs() < 0.001
+    if width == 0
+        || height == 0
+        || pixels.len() != num_pixels * 4
+        || !options.amount.is_finite()
+        || options.amount.abs() < 0.001
     {
         return pixels.to_vec();
     }

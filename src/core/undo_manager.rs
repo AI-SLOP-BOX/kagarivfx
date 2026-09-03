@@ -42,7 +42,23 @@ impl UndoManager {
 
     /// Push a new state snapshot. Clears any redo history.
     pub fn push(&mut self, comp: &Composition, frame: u32, description: &str) {
-        let json = serde_json::to_string(comp).unwrap_or_default();
+        let json = match serde_json::to_string(comp) {
+            Ok(json) => json,
+            Err(error) => {
+                log::warn!(
+                    "Undo snapshot skipped because composition serialization failed: {error}"
+                );
+                return;
+            }
+        };
+
+        if self
+            .history
+            .get(self.cursor.saturating_sub(1))
+            .is_some_and(|snapshot| snapshot.frame == frame && snapshot.composition_json == json)
+        {
+            return;
+        }
 
         // Discard any redo states (anything after cursor)
         self.history.truncate(self.cursor);
@@ -94,7 +110,9 @@ impl UndoManager {
     /// Get the current state description.
     pub fn current_description(&self) -> Option<&str> {
         if self.cursor > 0 && self.cursor <= self.history.len() {
-            self.history.get(self.cursor - 1).map(|s| s.description.as_str())
+            self.history
+                .get(self.cursor - 1)
+                .map(|s| s.description.as_str())
         } else {
             None
         }
@@ -169,9 +187,11 @@ mod tests {
     #[test]
     fn test_undo_clears_redo() {
         let mut mgr = UndoManager::new(10);
-        let comp = test_comp();
+        let mut comp = test_comp();
         mgr.push(&comp, 0, "A");
+        comp.name = "B".into();
         mgr.push(&comp, 0, "B");
+        comp.name = "C".into();
         mgr.push(&comp, 0, "C");
 
         mgr.undo(); // back to B
@@ -223,18 +243,68 @@ mod tests {
     #[test]
     fn test_depth_tracking() {
         let mut mgr = UndoManager::new(10);
-        let comp = test_comp();
+        let mut comp = test_comp();
         assert_eq!(mgr.undo_depth(), 0);
         assert_eq!(mgr.redo_depth(), 0);
 
         mgr.push(&comp, 0, "A");
         assert_eq!(mgr.undo_depth(), 1);
 
+        comp.name = "B".into();
         mgr.push(&comp, 0, "B");
         assert_eq!(mgr.undo_depth(), 2);
 
         mgr.undo();
         assert_eq!(mgr.undo_depth(), 1);
         assert_eq!(mgr.redo_depth(), 1);
+    }
+
+    #[test]
+    fn serialization_failure_does_not_store_empty_snapshot() {
+        let mut comp = test_comp();
+        let mut layer = crate::core::timeline::Layer::new(
+            "nan".into(),
+            "NaN Layer".into(),
+            crate::core::timeline::LayerType::Solid { color: [1.0; 4] },
+            100,
+        );
+        layer.transform.opacity = crate::core::property::Animatable::new_constant(f32::NAN);
+        comp.layers.push(layer);
+        let mut mgr = UndoManager::new(10);
+        mgr.push(&comp, 0, "invalid");
+        assert_eq!(mgr.len(), 1);
+        assert!(mgr
+            .get_snapshot(0)
+            .unwrap()
+            .composition_json
+            .contains("null"));
+        assert!(mgr.can_undo());
+    }
+
+    #[test]
+    fn identical_push_does_not_clear_redo_or_duplicate_history() {
+        let mut mgr = UndoManager::new(10);
+        let comp = test_comp();
+        mgr.push(&comp, 0, "Initial");
+        let mut edited = comp.clone();
+        edited.name = "Edited".into();
+        mgr.push(&edited, 1, "Edit");
+        assert!(mgr.undo().is_some());
+        mgr.push(&comp, 0, "Duplicate");
+        assert_eq!(mgr.len(), 2);
+        assert_eq!(mgr.current_description(), Some("Initial"));
+        assert!(mgr.can_redo());
+        assert_eq!(mgr.redo().unwrap().description, "Edit");
+    }
+
+    #[test]
+    fn different_current_frame_is_a_distinct_undo_state() {
+        let mut mgr = UndoManager::new(10);
+        let comp = test_comp();
+        mgr.push(&comp, 0, "Frame 0");
+        mgr.push(&comp, 1, "Frame 1");
+        assert_eq!(mgr.len(), 2);
+        assert_eq!(mgr.undo().unwrap().description, "Frame 0");
+        assert_eq!(mgr.redo().unwrap().frame, 1);
     }
 }

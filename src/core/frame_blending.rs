@@ -25,7 +25,9 @@ pub fn evaluate_frame_blend_weights(
 ) -> ((u32, f32), (u32, f32)) {
     let exact_frame = if time_sec.is_finite() && fps > 0 {
         (time_sec.max(0.0) * fps as f32).min(u32::MAX as f32)
-    } else { 0.0 };
+    } else {
+        0.0
+    };
     let f0 = exact_frame.floor() as u32;
     let f1 = f0.saturating_add(1);
     let frac = exact_frame - f0 as f32;
@@ -49,7 +51,9 @@ pub fn evaluate_time_remap_seconds(
 ) -> ((u32, f32), (u32, f32)) {
     let exact_frame = if remap_sec.is_finite() && source_fps > 0 {
         (remap_sec.max(0.0) * source_fps as f32).min(u32::MAX as f32)
-    } else { 0.0 };
+    } else {
+        0.0
+    };
     let max_frame = source_total_frames.saturating_sub(1);
 
     let f0 = (exact_frame.floor() as u32).min(max_frame);
@@ -129,11 +133,17 @@ pub fn blend_pixel_motion(
     let Some(n_bytes) = (width as usize)
         .checked_mul(height as usize)
         .and_then(|count| count.checked_mul(4))
-    else { return buf0.to_vec(); };
+    else {
+        return buf0.to_vec();
+    };
     if width == 0 || height == 0 || buf0.len() != n_bytes || buf1.len() != n_bytes || n_bytes == 0 {
         return buf0.to_vec();
     }
-    let t = if t.is_finite() { t.clamp(0.0, 1.0) } else { 0.0 };
+    let t = if t.is_finite() {
+        t.clamp(0.0, 1.0)
+    } else {
+        0.0
+    };
 
     let bs = options.block_size.clamp(4, 128).max(1) as usize;
     let rad = options.search_radius.min(32) as i32;

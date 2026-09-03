@@ -26,7 +26,10 @@ pub struct LayerConstraints {
 
 impl LayerConstraints {
     pub fn new(horizontal: HorizontalPin, vertical: VerticalPin) -> Self {
-        Self { horizontal, vertical }
+        Self {
+            horizontal,
+            vertical,
+        }
     }
 
     /// Calculate the repositioned [x, y] coordinates when the composition is resized

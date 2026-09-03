@@ -101,9 +101,8 @@ pub fn apply_lut_batch_f32(
 ) {
     let size = lut.size;
     for pixel in pixels.iter_mut() {
-        let input = [pixel[0], pixel[1], pixel[2]].map(|value| {
-            if value.is_finite() { value } else { 0.0 }
-        });
+        let input =
+            [pixel[0], pixel[1], pixel[2]].map(|value| if value.is_finite() { value } else { 0.0 });
         let (lr, lg, lb) = cache.get_or_insert(input[0], input[1], input[2], size, |r, g, b| {
             lut.apply(r, g, b)
         });

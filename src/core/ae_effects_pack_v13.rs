@@ -2,8 +2,17 @@
 /// Advanced Production-Grade After Effects VFX Kernels (Part 13).
 /// Authentic mathematical distortion and visual effect kernels.
 // 1. Vortex Center Distortion (Attenuated Spiral Vortex)
-pub fn apply_vortex_distortion(pixels: &mut [u8], width: u32, height: u32, center: [f32; 2], max_radius: f32, angle_deg: f32) {
-    if angle_deg.abs() <= 0.001 || max_radius <= 0.001 { return; }
+pub fn apply_vortex_distortion(
+    pixels: &mut [u8],
+    width: u32,
+    height: u32,
+    center: [f32; 2],
+    max_radius: f32,
+    angle_deg: f32,
+) {
+    if angle_deg.abs() <= 0.001 || max_radius <= 0.001 {
+        return;
+    }
     let temp = pixels.to_vec();
     let max_rad = angle_deg.to_radians();
 
@@ -20,8 +29,10 @@ pub fn apply_vortex_distortion(pixels: &mut [u8], width: u32, height: u32, cente
                 let current_angle = dy.atan2(dx);
                 let new_angle = current_angle + rotation;
 
-                let sx = (center[0] + dist * new_angle.cos()).clamp(0.0, (width - 1) as f32) as usize;
-                let sy = (center[1] + dist * new_angle.sin()).clamp(0.0, (height - 1) as f32) as usize;
+                let sx =
+                    (center[0] + dist * new_angle.cos()).clamp(0.0, (width - 1) as f32) as usize;
+                let sy =
+                    (center[1] + dist * new_angle.sin()).clamp(0.0, (height - 1) as f32) as usize;
 
                 let dst_idx = (y as usize * width as usize + x as usize) * 4;
                 let src_idx = (sy * width as usize + sx) * 4;
@@ -34,7 +45,9 @@ pub fn apply_vortex_distortion(pixels: &mut [u8], width: u32, height: u32, cente
 
 // 2. Heat Distortion Simulation (Rising Thermal Air Turbulence)
 pub fn apply_heat_distortion(pixels: &mut [u8], width: u32, height: u32, time: f32, strength: f32) {
-    if strength <= 0.001 { return; }
+    if strength <= 0.001 {
+        return;
+    }
     let temp = pixels.to_vec();
 
     for y in 0..height {
@@ -58,8 +71,16 @@ pub fn apply_heat_distortion(pixels: &mut [u8], width: u32, height: u32, time: f
 }
 
 // 3. Digital Block Glitch Displacement
-pub fn apply_glitch_displacement(pixels: &mut [u8], width: u32, height: u32, seed: u32, amount: f32) {
-    if amount <= 0.001 { return; }
+pub fn apply_glitch_displacement(
+    pixels: &mut [u8],
+    width: u32,
+    height: u32,
+    seed: u32,
+    amount: f32,
+) {
+    if amount <= 0.001 {
+        return;
+    }
     let temp = pixels.to_vec();
     let block_height = 8u32;
     let num_blocks = height / block_height;
@@ -74,7 +95,9 @@ pub fn apply_glitch_displacement(pixels: &mut [u8], width: u32, height: u32, see
 
             for y_off in 0..block_height {
                 let y = b * block_height + y_off;
-                if y >= height { break; }
+                if y >= height {
+                    break;
+                }
 
                 for x in 0..width {
                     let sx = (x as i32 + offset_x).clamp(0, width as i32 - 1) as usize;
@@ -89,10 +112,21 @@ pub fn apply_glitch_displacement(pixels: &mut [u8], width: u32, height: u32, see
 }
 
 // 4. Duotone Threshold Mapping
-pub fn apply_threshold_duotone(pixels: &mut [u8], threshold: u8, color_dark: [u8; 3], color_light: [u8; 3]) {
+pub fn apply_threshold_duotone(
+    pixels: &mut [u8],
+    threshold: u8,
+    color_dark: [u8; 3],
+    color_light: [u8; 3],
+) {
     for i in (0..pixels.len()).step_by(4) {
-        let luma = (pixels[i] as u32 * 299 + pixels[i + 1] as u32 * 587 + pixels[i + 2] as u32 * 114) / 1000;
-        let target = if luma < threshold as u32 { color_dark } else { color_light };
+        let luma =
+            (pixels[i] as u32 * 299 + pixels[i + 1] as u32 * 587 + pixels[i + 2] as u32 * 114)
+                / 1000;
+        let target = if luma < threshold as u32 {
+            color_dark
+        } else {
+            color_light
+        };
 
         pixels[i] = target[0];
         pixels[i + 1] = target[1];
@@ -102,7 +136,9 @@ pub fn apply_threshold_duotone(pixels: &mut [u8], threshold: u8, color_dark: [u8
 
 // 5. Chromatic Zoom Aberration (Wavelength-Dependent Scale)
 pub fn apply_chromatic_zoom(pixels: &mut [u8], width: u32, height: u32, zoom_amount: f32) {
-    if zoom_amount.abs() <= 0.001 { return; }
+    if zoom_amount.abs() <= 0.001 {
+        return;
+    }
     let temp = pixels.to_vec();
     let cx = width as f32 * 0.5;
     let cy = height as f32 * 0.5;
@@ -125,7 +161,7 @@ pub fn apply_chromatic_zoom(pixels: &mut [u8], width: u32, height: u32, zoom_amo
             let r_idx = (ry * width as usize + rx) * 4;
             let b_idx = (by * width as usize + bx) * 4;
 
-            pixels[dst_idx] = temp[r_idx];       // Red shifted by scale
+            pixels[dst_idx] = temp[r_idx]; // Red shifted by scale
             pixels[dst_idx + 2] = temp[b_idx + 2]; // Blue shifted by scale
         }
     }

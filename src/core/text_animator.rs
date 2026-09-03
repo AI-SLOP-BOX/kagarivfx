@@ -153,15 +153,23 @@ impl TextAnimatorEngine {
     }
 
     /// Evaluate a per-character Rhai expression for the expression selector.
-    fn eval_expression_amount(expr_src: &str, char_idx: usize, total_chars: usize, time: f32) -> f32 {
-        let v = crate::core::expression_engine::eval_expression_f64(expr_src, &[
-            ("index", char_idx as f64),
-            ("textIndex", (char_idx + 1) as f64), // AE standard: 1-based character index
-            ("textTotal", total_chars as f64),    // AE standard: total character count
-            ("total", total_chars as f64),
-            ("time", time as f64),
-            ("value", 1.0),
-        ]);
+    fn eval_expression_amount(
+        expr_src: &str,
+        char_idx: usize,
+        total_chars: usize,
+        time: f32,
+    ) -> f32 {
+        let v = crate::core::expression_engine::eval_expression_f64(
+            expr_src,
+            &[
+                ("index", char_idx as f64),
+                ("textIndex", (char_idx + 1) as f64), // AE standard: 1-based character index
+                ("textTotal", total_chars as f64),    // AE standard: total character count
+                ("total", total_chars as f64),
+                ("time", time as f64),
+                ("value", 1.0),
+            ],
+        );
         (v as f32).clamp(0.0, 1.0)
     }
 
@@ -232,12 +240,8 @@ impl TextAnimatorEngine {
                     (1.0 - norm_t) * 2.0
                 }
             }
-            SelectorShape::Round => {
-                (norm_t * std::f32::consts::PI).sin()
-            }
-            SelectorShape::Smooth => {
-                norm_t * norm_t * (3.0 - 2.0 * norm_t)
-            }
+            SelectorShape::Round => (norm_t * std::f32::consts::PI).sin(),
+            SelectorShape::Smooth => norm_t * norm_t * (3.0 - 2.0 * norm_t),
             SelectorShape::Expression => unreachable!("handled above"),
             SelectorShape::Wobble | SelectorShape::Random => 1.0,
         }
@@ -325,7 +329,12 @@ impl TextAnimatorEngine {
             let scale_x = 1.0 + (target_scale[0] - 1.0) * amount;
             let scale_y = 1.0 + (target_scale[1] - 1.0) * amount;
             let opa = 1.0 - (1.0 - target_opacity) * amount;
-            let track = target_tracking * amount + if cumulative_tracking { tracking_accum } else { 0.0 };
+            let track = target_tracking * amount
+                + if cumulative_tracking {
+                    tracking_accum
+                } else {
+                    0.0
+                };
             tracking_accum += target_tracking * amount;
             let rot = target_rotation * amount;
             let blur = target_blur.max(0.0) * amount;
@@ -389,23 +398,35 @@ mod tests {
 
         // char_start only (open-ended end)
         selector.char_end = -1;
-        assert_eq!(TextAnimatorEngine::compute_amount(5, 6, &selector, 0.0), 1.0);
+        assert_eq!(
+            TextAnimatorEngine::compute_amount(5, 6, &selector, 0.0),
+            1.0
+        );
     }
 
     #[test]
     fn test_wobble_shape_bounded_and_deterministic() {
-        let selector = RangeSelector { shape: SelectorShape::Wobble, ..Default::default() };
+        let selector = RangeSelector {
+            shape: SelectorShape::Wobble,
+            ..Default::default()
+        };
 
         for i in 0..20 {
             let a = TextAnimatorEngine::compute_amount(i, 20, &selector, 0.0);
-            assert!((0.0..=1.0).contains(&a), "amount {a} out of range at idx {i}");
+            assert!(
+                (0.0..=1.0).contains(&a),
+                "amount {a} out of range at idx {i}"
+            );
             assert_eq!(a, TextAnimatorEngine::compute_amount(i, 20, &selector, 0.0));
         }
     }
 
     #[test]
     fn test_random_shape_deterministic() {
-        let selector = RangeSelector { shape: SelectorShape::Random, ..Default::default() };
+        let selector = RangeSelector {
+            shape: SelectorShape::Random,
+            ..Default::default()
+        };
 
         for i in 0..20 {
             let a = TextAnimatorEngine::compute_amount(i, 20, &selector, 0.0);
@@ -569,5 +590,4 @@ mod tests {
         assert!((a - 0.1).abs() < 0.01, "a={}", a);
         assert!((b - 1.0).abs() < 0.01, "b={}", b);
     }
-
 }

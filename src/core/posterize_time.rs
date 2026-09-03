@@ -44,7 +44,10 @@ mod tests {
 
     #[test]
     fn test_posterize_time_12fps_in_60fps_comp() {
-        let settings = PosterizeTimeSettings { target_fps: 12.0, enabled: true };
+        let settings = PosterizeTimeSettings {
+            target_fps: 12.0,
+            enabled: true,
+        };
         let comp_fps = 60;
 
         // Frames 0..4 should all quantize to frame 0

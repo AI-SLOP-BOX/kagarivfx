@@ -1,5 +1,5 @@
 use crate::core::effect_plugin::evaluate_effects;
-use crate::core::timeline::{Composition, LayerType, ShapeFillType, ShapeType};
+use crate::core::timeline::{Composition, LayerType, ShapeFillType, ShapeType, TrackMatteMode};
 use half::f16;
 
 use std::sync::Arc;
@@ -1996,13 +1996,15 @@ impl WgpuRenderer {
 
             // Step 1: Pre-evaluate active layer transform matrices and effect properties
             let mut active_layers = Vec::new();
+            let mut comp_indices: Vec<usize> = Vec::new();
             let mut uniforms = Vec::new();
             let mut layer_mask_plans: Vec<Option<std::sync::Arc<MaskRaster>>> = Vec::new();
 
-            for layer in &comp.layers {
+            for (comp_idx, layer) in comp.layers.iter().enumerate() {
                 if !layer.is_active(frame) {
                     continue;
                 }
+                comp_indices.push(comp_idx);
 
                 // Retrieve transform values at the current frame.
                 // Parented layers and expression-driven layers resolve through the full
@@ -2636,17 +2638,20 @@ impl WgpuRenderer {
                 .any(|layer| layer.shape_repeater.is_some())
             {
                 let old_layers = std::mem::take(&mut active_layers);
+                let old_comp_indices = std::mem::take(&mut comp_indices);
                 let old_uniforms = std::mem::take(&mut uniforms);
                 let old_masks = std::mem::take(&mut layer_mask_plans);
                 let old_textures = std::mem::take(&mut layer_textures);
-                for (((layer, uniform), mask), texture) in old_layers
+                for ((((layer, comp_idx), uniform), mask), texture) in old_layers
                     .into_iter()
+                    .zip(old_comp_indices)
                     .zip(old_uniforms)
                     .zip(old_masks)
                     .zip(old_textures)
                 {
                     let Some(repeater) = &layer.shape_repeater else {
                         active_layers.push(layer);
+                        comp_indices.push(comp_idx);
                         uniforms.push(uniform);
                         layer_mask_plans.push(mask);
                         layer_textures.push(texture);
@@ -2667,11 +2672,91 @@ impl WgpuRenderer {
                             mat4_mul(uniform.transform_matrix, copy_transform);
                         copy_uniform.opacity *= instance.opacity;
                         active_layers.push(layer);
+                        comp_indices.push(comp_idx);
                         uniforms.push(copy_uniform);
                         layer_mask_plans.push(mask.clone());
                         layer_textures.push(texture.clone());
                     }
                 }
+            }
+
+            // Step 1b: Prepare track matte textures. For each layer with a track
+            // matte, render the matte source layer (the one below) to a CPU buffer,
+            // extract alpha or luminance, and upload as a GPU texture.
+            let mut matte_bind_groups: Vec<Option<wgpu::BindGroup>> = Vec::with_capacity(active_layers.len());
+            let mut matte_textures_owned: Vec<Option<(wgpu::Texture, wgpu::TextureView)>> = Vec::new();
+            for (i, (layer, &comp_idx)) in active_layers.iter().zip(comp_indices.iter()).enumerate() {
+                if matches!(layer.track_matte, TrackMatteMode::None) {
+                    matte_bind_groups.push(None);
+                    matte_textures_owned.push(None);
+                    continue;
+                }
+                // Matte source is the layer directly below in comp.layers
+                if comp_idx == 0 {
+                    matte_bind_groups.push(None);
+                    matte_textures_owned.push(None);
+                    continue;
+                }
+                let matte_source_idx = comp_idx - 1;
+                let matte_source = &comp.layers[matte_source_idx];
+                if !matte_source.is_active(frame) || !matte_source.visible {
+                    matte_bind_groups.push(None);
+                    matte_textures_owned.push(None);
+                    continue;
+                }
+                let m_pixels = crate::core::software_renderer::render_single_layer_pixels(
+                    comp, matte_source_idx, frame, width, height,
+                );
+                let matte_rgba = match layer.track_matte {
+                    TrackMatteMode::AlphaMatte | TrackMatteMode::AlphaMatteInverted => {
+                        m_pixels // use alpha channel directly
+                    }
+                    TrackMatteMode::LumaMatte | TrackMatteMode::LumaMatteInverted => {
+                        let mut lum = Vec::with_capacity(m_pixels.len());
+                        for chunk in m_pixels.chunks_exact(4) {
+                            let l = (0.2126 * chunk[0] as f32 + 0.7152 * chunk[1] as f32 + 0.0722 * chunk[2] as f32) as u8;
+                            lum.extend_from_slice(&[l, l, l, chunk[3]]);
+                        }
+                        lum
+                    }
+                    _ => unreachable!(),
+                };
+                let tex = self.device.create_texture(&wgpu::TextureDescriptor {
+                    label: Some("Track Matte Texture"),
+                    size: wgpu::Extent3d { width, height, depth_or_array_layers: 1 },
+                    mip_level_count: 1,
+                    sample_count: 1,
+                    dimension: wgpu::TextureDimension::D2,
+                    format: wgpu::TextureFormat::Rgba16Float,
+                    usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+                    view_formats: &[],
+                });
+                self.queue.write_texture(
+                    wgpu::ImageCopyTexture {
+                        texture: &tex,
+                        mip_level: 0,
+                        origin: wgpu::Origin3d::ZERO,
+                        aspect: wgpu::TextureAspect::All,
+                    },
+                    &rgba8_to_rgba16f_bytes(&matte_rgba),
+                    wgpu::ImageDataLayout {
+                        offset: 0,
+                        bytes_per_row: Some(width * 8),
+                        rows_per_image: Some(height),
+                    },
+                    wgpu::Extent3d { width, height, depth_or_array_layers: 1 },
+                );
+                let view = tex.create_view(&wgpu::TextureViewDescriptor::default());
+                let bg = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
+                    layout: &self.matte_bind_group_layout,
+                    entries: &[
+                        wgpu::BindGroupEntry { binding: 0, resource: wgpu::BindingResource::TextureView(&view) },
+                        wgpu::BindGroupEntry { binding: 1, resource: wgpu::BindingResource::Sampler(&self.sampler) },
+                    ],
+                    label: Some("Track Matte Bind Group"),
+                });
+                matte_textures_owned.push(Some((tex, view)));
+                matte_bind_groups.push(Some(bg));
             }
 
             // Per-layer mask rasters were computed in Step 1. Every masked
@@ -2836,8 +2921,12 @@ impl WgpuRenderer {
                         render_pass.set_bind_group(2, tex_bg, &[]);
                         render_pass.set_bind_group(3, &self.mask_bind_group, &[]);
                         render_pass.set_bind_group(4, &self.shadow_bind_group, &[]);
-                        // Track matte: use dummy unless the layer has a matte source
-                        render_pass.set_bind_group(5, &self.matte_bind_group, &[]);
+                        // Track matte: bind the pre-rendered matte texture or fallback to dummy
+                        let matte_bg: &wgpu::BindGroup = match matte_bind_groups.get(i) {
+                            Some(Some(bg)) => bg,
+                            _ => &self.matte_bind_group,
+                        };
+                        render_pass.set_bind_group(5, matte_bg, &[]);
 
                         // Draw!
                         render_pass.draw_indexed(0..(INDICES.len() as u32), 0, 0..1);

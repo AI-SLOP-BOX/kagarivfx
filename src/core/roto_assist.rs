@@ -58,7 +58,9 @@ pub fn segment_roto_brush(
         return Vec::new();
     };
     let mut mask = vec![0u8; len];
-    let Some(image_len) = len.checked_mul(4) else { return mask; };
+    let Some(image_len) = len.checked_mul(4) else {
+        return mask;
+    };
     if width == 0 || height == 0 || strokes.is_empty() || image.len() != image_len {
         return mask;
     }
@@ -73,7 +75,9 @@ pub fn segment_roto_brush(
     for stroke in strokes {
         let r = if stroke.radius.is_finite() {
             stroke.radius.clamp(1.0, 512.0) as i32
-        } else { 1 };
+        } else {
+            1
+        };
         for &pt in &stroke.points {
             let cx = pt[0].round() as i32;
             let cy = pt[1].round() as i32;
@@ -276,7 +280,9 @@ pub fn refine_edge_guided_filter(
         return Vec::new();
     };
     let mut refined = vec![0u8; len];
-    let Some(image_len) = len.checked_mul(4) else { return refined; };
+    let Some(image_len) = len.checked_mul(4) else {
+        return refined;
+    };
     if width == 0 || height == 0 || guide_image.len() != image_len || rough_mask.len() != len {
         return refined;
     }

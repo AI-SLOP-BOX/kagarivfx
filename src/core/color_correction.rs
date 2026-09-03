@@ -536,7 +536,9 @@ mod tests {
 pub fn apply_vibrance(pixels: &mut [u8], amount: f32) {
     let amt = if amount.is_finite() {
         (amount / 100.0).clamp(-1.0, 1.0)
-    } else { 0.0 };
+    } else {
+        0.0
+    };
     if amt == 0.0 || pixels.is_empty() {
         return;
     }
@@ -587,7 +589,11 @@ impl Default for WhiteBalance {
 }
 
 pub fn apply_white_balance(pixels: &mut [u8], wb: &WhiteBalance) {
-    let temperature = if wb.temperature.is_finite() { wb.temperature } else { 0.0 };
+    let temperature = if wb.temperature.is_finite() {
+        wb.temperature
+    } else {
+        0.0
+    };
     let tint = if wb.tint.is_finite() { wb.tint } else { 0.0 };
     let t = (temperature / 100.0).clamp(-1.0, 1.0) * 0.25;
     let gshift = -(tint / 100.0).clamp(-1.0, 1.0) * 0.20;
@@ -674,9 +680,21 @@ fn hsl_to_rgb(h: f32, s: f32, l: f32, out: &mut [f32; 3]) {
 }
 
 pub fn apply_hsl_adjust(pixels: &mut [u8], adj: &HslAdjust) {
-    let hue = if adj.hue_deg.is_finite() { adj.hue_deg } else { 0.0 };
-    let saturation = if adj.saturation.is_finite() { adj.saturation } else { 0.0 };
-    let lightness = if adj.lightness.is_finite() { adj.lightness } else { 0.0 };
+    let hue = if adj.hue_deg.is_finite() {
+        adj.hue_deg
+    } else {
+        0.0
+    };
+    let saturation = if adj.saturation.is_finite() {
+        adj.saturation
+    } else {
+        0.0
+    };
+    let lightness = if adj.lightness.is_finite() {
+        adj.lightness
+    } else {
+        0.0
+    };
     let sat_mul = 1.0 + (saturation / 100.0).clamp(-1.0, 1.0);
     let l_shift = (lightness / 100.0).clamp(-1.0, 1.0) * 0.5;
     if hue.abs() < 1e-3 && (sat_mul - 1.0).abs() < 1e-6 && l_shift.abs() < 1e-6 {

@@ -21,22 +21,46 @@ pub fn apply_perlin_flow_noise(pixels: &mut [u8], width: u32, height: u32, time:
 }
 
 // 2. Luma Key Range (Selective Luminance Matte Extraction)
-pub fn apply_luma_key_range(pixels: &mut [u8], low_threshold: u8, high_threshold: u8, invert: bool) {
+pub fn apply_luma_key_range(
+    pixels: &mut [u8],
+    low_threshold: u8,
+    high_threshold: u8,
+    invert: bool,
+) {
     for i in (0..pixels.len()).step_by(4) {
-        let luma = (pixels[i] as u32 * 299 + pixels[i + 1] as u32 * 587 + pixels[i + 2] as u32 * 114) / 1000;
+        let luma =
+            (pixels[i] as u32 * 299 + pixels[i + 1] as u32 * 587 + pixels[i + 2] as u32 * 114)
+                / 1000;
         let is_key = luma >= low_threshold as u32 && luma <= high_threshold as u32;
 
         let alpha_mult = if invert {
-            if is_key { 1.0 } else { 0.0 }
-        } else if is_key { 0.0 } else { 1.0 };
+            if is_key {
+                1.0
+            } else {
+                0.0
+            }
+        } else if is_key {
+            0.0
+        } else {
+            1.0
+        };
 
         pixels[i + 3] = (pixels[i + 3] as f32 * alpha_mult) as u8;
     }
 }
 
 // 3. Spherical Refraction Lens with Index of Refraction (IOR)
-pub fn apply_spherical_refraction_lens(pixels: &mut [u8], width: u32, height: u32, center: [f32; 2], radius: f32, ior: f32) {
-    if radius <= 0.001 { return; }
+pub fn apply_spherical_refraction_lens(
+    pixels: &mut [u8],
+    width: u32,
+    height: u32,
+    center: [f32; 2],
+    radius: f32,
+    ior: f32,
+) {
+    if radius <= 0.001 {
+        return;
+    }
     let temp = pixels.to_vec();
 
     for y in 0..height {
@@ -69,8 +93,16 @@ pub fn apply_spherical_refraction_lens(pixels: &mut [u8], width: u32, height: u3
 }
 
 // 4. Cinematic Film Bloom HDR
-pub fn apply_film_bloom_hdr(pixels: &mut [u8], width: u32, height: u32, threshold: u8, intensity: f32) {
-    if intensity <= 0.001 { return; }
+pub fn apply_film_bloom_hdr(
+    pixels: &mut [u8],
+    width: u32,
+    height: u32,
+    threshold: u8,
+    intensity: f32,
+) {
+    if intensity <= 0.001 {
+        return;
+    }
     let temp = pixels.to_vec();
     let blur_r = 4i32;
 
@@ -112,7 +144,9 @@ pub fn apply_film_bloom_hdr(pixels: &mut [u8], width: u32, height: u32, threshol
 
 // 5. CMYK 4-Color Separation Halftone
 pub fn apply_color_halftone_cmyk(pixels: &mut [u8], width: u32, height: u32, dot_size: u32) {
-    if dot_size == 0 { return; }
+    if dot_size == 0 {
+        return;
+    }
     for y in (0..height).step_by(dot_size as usize) {
         for x in (0..width).step_by(dot_size as usize) {
             let idx = (y as usize * width as usize + x as usize) * 4;
@@ -136,10 +170,14 @@ pub fn apply_color_halftone_cmyk(pixels: &mut [u8], width: u32, height: u32, dot
 
             for dy in 0..dot_size {
                 let py = y + dy;
-                if py >= height { break; }
+                if py >= height {
+                    break;
+                }
                 for dx in 0..dot_size {
                     let px = x + dx;
-                    if px >= width { break; }
+                    if px >= width {
+                        break;
+                    }
                     let p_idx = (py as usize * width as usize + px as usize) * 4;
                     pixels[p_idx] = new_r;
                     pixels[p_idx + 1] = new_g;

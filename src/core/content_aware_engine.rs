@@ -32,7 +32,12 @@ pub fn generate_content_aware_fill_frame(
         vec![0u8; size]
     };
 
-    if mask_polygon.is_empty() || width == 0 || height == 0 || width > i32::MAX as u32 || height > i32::MAX as u32 {
+    if mask_polygon.is_empty()
+        || width == 0
+        || height == 0
+        || width > i32::MAX as u32
+        || height > i32::MAX as u32
+    {
         return out_buffer;
     }
 
@@ -187,10 +192,21 @@ mod tests {
         let pixels = vec![4u8; 4];
         let polygon = [[0.0, 0.0], [1.0, 0.0], [1.0, 1.0]];
         assert!(generate_content_aware_fill_frame(
-            &pixels, u32::MAX, u32::MAX, &polygon, f32::INFINITY, FillMethod::Object
-        ).is_empty());
+            &pixels,
+            u32::MAX,
+            u32::MAX,
+            &polygon,
+            f32::INFINITY,
+            FillMethod::Object
+        )
+        .is_empty());
         let filled = generate_content_aware_fill_frame(
-            &pixels, 1, 1, &polygon, f32::NAN, FillMethod::Object
+            &pixels,
+            1,
+            1,
+            &polygon,
+            f32::NAN,
+            FillMethod::Object,
         );
         assert_eq!(filled.len(), pixels.len());
     }
