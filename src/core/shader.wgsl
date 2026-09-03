@@ -8,19 +8,30 @@ struct Globals {
 
 struct Layer {
     transform_matrix: mat4x4<f32>,
-    color: vec4<f32>,
+
+    color_r: f32,
+    color_g: f32,
+    color_b: f32,
+    color_a: f32,
+
     opacity: f32,
     layer_type: u32,
     shape_type: u32,
-    
+
     effect_tint_enabled: u32,
-    effect_tint_color: vec4<f32>,
+    effect_tint_color_r: f32,
+    effect_tint_color_g: f32,
+    effect_tint_color_b: f32,
+    effect_tint_color_a: f32,
     effect_tint_intensity: f32,
     effect_blur_enabled: u32,
     effect_blur_radius: f32,
 
     effect_shadow_enabled: u32,
-    effect_shadow_color: vec4<f32>,
+    effect_shadow_color_r: f32,
+    effect_shadow_color_g: f32,
+    effect_shadow_color_b: f32,
+    effect_shadow_color_a: f32,
     effect_shadow_opacity: f32,
     effect_shadow_direction: f32,
     effect_shadow_distance: f32,
@@ -35,12 +46,12 @@ struct Layer {
     effect_vignette_intensity: f32,
     effect_vignette_roundness: f32,
     effect_vignette_feather: f32,
-    effect_vignette_color: vec4<f32>,
-
-    // AE Blend Mode: 0=Normal, 1=Multiply, 2=Screen, 3=Overlay, 4=Add, 5=Darken, 6=Lighten
+    effect_vignette_color_r: f32,
+    effect_vignette_color_g: f32,
+    effect_vignette_color_b: f32,
+    effect_vignette_color_a: f32,
     blend_mode: u32,
 
-    // Levels Adjustment
     levels_enabled: u32,
     levels_in_black: f32,
     levels_in_white: f32,
@@ -48,65 +59,67 @@ struct Layer {
     levels_out_black: f32,
     levels_out_white: f32,
 
-    // Hue / Saturation
     huesat_enabled: u32,
     huesat_hue: f32,
     huesat_sat: f32,
     huesat_light: f32,
 
-    // Glow / Bloom
     glow_enabled: u32,
     glow_threshold: f32,
     glow_radius: f32,
     glow_intensity: f32,
-    glow_color: vec4<f32>,
+    glow_color_r: f32,
+    glow_color_g: f32,
+    glow_color_b: f32,
+    glow_color_a: f32,
 
-    // Film Grain
     grain_enabled: u32,
     grain_intensity: f32,
     grain_size: f32,
 
-    // Track Matte System
     track_matte_mode: u32,
 
-    // Per-layer GPU mask (coverage rasterized on CPU, uploaded once per frame)
-    mask_enabled: u32,
-    mask_mode: u32,
-    mask_inverted: u32,
-    mask_feather: f32,
+    shape_params_x: f32,
+    shape_params_y: f32,
+    shape_params_z: f32,
+    shape_params_w: f32,
 
-    // Lens Flare (screen-space, from light source)
-    flare_enabled: u32,
-    flare_pos_x: f32,
-    flare_pos_y: f32,
-    flare_intensity: f32,
-    flare_threshold: f32,
-    flare_color: vec4<f32>,
-
-    // Shape params: x = polygon sides, y = rectangle corner radius (normalized 0..1 of half-size)
-    shape_params: vec4<f32>,
-
-    // Mesh Warp / Corner Pin
     meshwarp_enabled: u32,
-    corner_top_left: vec2<f32>,
-    corner_top_right: vec2<f32>,
-    corner_bottom_left: vec2<f32>,
-    corner_bottom_right: vec2<f32>,
+    corner_top_left_x: f32,
+    corner_top_left_y: f32,
+    corner_top_right_x: f32,
+    corner_top_right_y: f32,
+    corner_bottom_left_x: f32,
+    corner_bottom_left_y: f32,
+    corner_bottom_right_x: f32,
+    corner_bottom_right_y: f32,
 
-    // Motion Blur (per-pixel velocity-based)
     motionblur_enabled: u32,
     motionblur_shutter: f32,
     motionblur_velocity_x: f32,
     motionblur_velocity_y: f32,
     motionblur_samples: u32,
 
-    // TrimPaths (angular trim on shape SDF)
+    flare_enabled: u32,
+    flare_pos_x: f32,
+    flare_pos_y: f32,
+    flare_intensity: f32,
+    flare_threshold: f32,
+    flare_color_r: f32,
+    flare_color_g: f32,
+    flare_color_b: f32,
+    flare_color_a: f32,
+
+    mask_enabled: u32,
+    mask_mode: u32,
+    mask_inverted: u32,
+    mask_feather: f32,
+
     trim_start: f32,
     trim_end: f32,
     trim_offset: f32,
     _pad_trim: f32,
 
-    // Shape fill gradient (0=solid, 1=linear, 2=radial)
     fill_type: u32,
     grad_start_x: f32,
     grad_start_y: f32,
@@ -125,7 +138,6 @@ struct Layer {
     grad_radius: f32,
     _grad_pad: f32,
 
-    // Layer Styles (applied after effects, before compositing)
     ls_stroke_width: f32,
     ls_stroke_r: f32,
     ls_stroke_g: f32,
@@ -164,44 +176,42 @@ struct Layer {
     _ls_pad2: f32,
     _ls_pad3: f32,
 
-    // 3D Extrusion (pseudo-3D depth shading for shape layers)
     extrusion_depth: f32,
     bevel_depth: f32,
 
-    // ── GPU Real-time VFX Shader Extensions ──
-    // Chromatic Aberration
     chromatic_enabled: u32,
     chromatic_amount: f32,
     chromatic_angle: f32,
     _pad_chromatic: f32,
 
-    // Vignette
     vignette_enabled: u32,
     vignette_amount: f32,
     vignette_midpoint: f32,
     vignette_feather: f32,
 
-    // Invert & Posterize
     invert_enabled: u32,
     posterize_enabled: u32,
     posterize_levels: f32,
     threshold_level: f32,
 
-    // Tint
     tint_enabled: u32,
     tint_amount: f32,
     _pad_tint1: f32,
     _pad_tint2: f32,
-    tint_black: vec4<f32>,
-    tint_white: vec4<f32>,
+    tint_black_r: f32,
+    tint_black_g: f32,
+    tint_black_b: f32,
+    tint_black_a: f32,
+    tint_white_r: f32,
+    tint_white_g: f32,
+    tint_white_b: f32,
+    tint_white_a: f32,
 
-    // CRT Scanlines
     crt_enabled: u32,
     crt_scanline_count: f32,
     crt_scanline_intensity: f32,
     crt_curvature: f32,
 
-    // ── GPU Simulation Effects ──
     sim_enabled: u32,
     sim_type: u32,
     sim_p1: f32,
@@ -211,7 +221,10 @@ struct Layer {
     sim_p5: f32,
     sim_p6: f32,
 
-    _padding_align: vec4<f32>,
+    _padding_align_0: f32,
+    _padding_align_1: f32,
+    _padding_align_2: f32,
+    _padding_align_3: f32,
     _ls_pad4: f32,
     _ls_pad5: f32,
 };
@@ -287,7 +300,7 @@ fn shape_sdf_alpha(local_pos_in: vec2<f32>, blur_extend: f32) -> f32 {
         let p = local_pos_in * 2.0;
         let r = length(p);
         let angle = atan2(p.y, p.x);
-        let n = max(layer.shape_params.x, 3.0);
+        let n = max(layer.shape_params_x, 3.0);
         let angle_mod = abs(fract((angle / 6.2831853) * n + 0.5) - 0.5) * (6.2831853 / n);
         let d_star = r * cos(angle_mod - 0.314159) - 0.45;
         alpha = 1.0 - smoothstep(-0.04 - blur_extend, 0.04 + blur_extend, d_star);
@@ -296,7 +309,7 @@ fn shape_sdf_alpha(local_pos_in: vec2<f32>, blur_extend: f32) -> f32 {
         let p = local_pos_in * 2.0;
         let r = length(p);
         let angle = atan2(p.y, p.x);
-        let n = max(layer.shape_params.x, 3.0);
+        let n = max(layer.shape_params_x, 3.0);
         let angle_mod = abs(fract((angle / 6.2831853) * n + 0.5) - 0.5) * (6.2831853 / n);
         let d_poly = r * cos(angle_mod) - 0.45;
         alpha = 1.0 - smoothstep(-0.04 - blur_extend, 0.04 + blur_extend, d_poly);
@@ -403,10 +416,10 @@ fn sample_layer_color(local_pos_in: vec2<f32>, tc_in: vec2<f32>, blur_extend: f3
 
     if (layer.meshwarp_enabled == 1u) {
         let vp = max(globals.viewport_size, vec2<f32>(1.0, 1.0));
-        let d_tl = layer.corner_top_left / vp;
-        let d_tr = layer.corner_top_right / vp;
-        let d_bl = layer.corner_bottom_left / vp;
-        let d_br = layer.corner_bottom_right / vp;
+        let d_tl = vec2<f32>(layer.corner_top_left_x, layer.corner_top_left_y) / vp;
+        let d_tr = vec2<f32>(layer.corner_top_right_x, layer.corner_top_right_y) / vp;
+        let d_bl = vec2<f32>(layer.corner_bottom_left_x, layer.corner_bottom_left_y) / vp;
+        let d_br = vec2<f32>(layer.corner_bottom_right_x, layer.corner_bottom_right_y) / vp;
         let u = tc.x;
         let v = tc.y;
         let top = mix(d_tl, d_tr, u);
@@ -418,53 +431,42 @@ fn sample_layer_color(local_pos_in: vec2<f32>, tc_in: vec2<f32>, blur_extend: f3
     }
     var c = vec4<f32>(1.0, 1.0, 1.0, 1.0);
     if (layer.layer_type == 0u) {
+        let layer_color = vec4<f32>(layer.color_r, layer.color_g, layer.color_b, layer.color_a);
         if (layer.effect_blur_enabled == 1u) {
             let d_x = abs(local_pos.x) - 0.5;
             let d_y = abs(local_pos.y) - 0.5;
             let d = max(d_x, d_y);
             let alpha = 1.0 - smoothstep(-0.02 - blur_extend, 0.0 + blur_extend, d);
-            c = vec4<f32>(layer.color.rgb, layer.color.a * alpha);
-        } else if (layer.shape_params.y > 0.001) {
+            c = vec4<f32>(layer_color.rgb, layer_color.a * alpha);
+        } else if (layer.shape_params_y > 0.001) {
             // Rounded-corner solid via SDF
             let half_sz = vec2<f32>(0.5, 0.5);
-            let q = abs(local_pos) - (half_sz - layer.shape_params.y);
-            let d = length(max(q, vec2<f32>(0.0, 0.0))) + min(max(q.x, q.y), 0.0) - layer.shape_params.y;
+            let q = abs(local_pos) - (half_sz - layer.shape_params_y);
+            let d = length(max(q, vec2<f32>(0.0, 0.0))) + min(max(q.x, q.y), 0.0) - layer.shape_params_y;
             let alpha = 1.0 - smoothstep(-0.02 - blur_extend, 0.02 + blur_extend, d);
-            c = vec4<f32>(layer.color.rgb, layer.color.a * alpha);
+            c = vec4<f32>(layer_color.rgb, layer_color.a * alpha);
         } else {
-            c = layer.color;
+            c = layer_color;
         }
     } else if (layer.layer_type == 1u) {
         if (layer.effect_blur_enabled == 1u) {
             // --- Gaussian Blur (13-tap single-pass separable approximation) ---
-            // Uses pre-computed Gaussian weights for sigma = radius/2.
-            // 13 samples: center + 6 symmetric pairs, weighted by Gaussian curve.
-            // Quality: equivalent to ~26-tap bilinear-optimized separable blur.
             let texel_size = 1.0 / globals.viewport_size;
             let offset = layer.effect_blur_radius * texel_size;
 
-            // Gaussian weights for sigma=2.0 (13-tap): [0.111, 0.105, 0.088, 0.066, 0.044, 0.025, 0.013]
-            // Normalized to sum to 1.0 with bilateral symmetry
             var color_sum = textureSample(t_diffuse, s_diffuse, tc) * 0.1111;
-            // Tap pair 1 (offset 1.0)
             color_sum += textureSample(t_diffuse, s_diffuse, tc + vec2<f32>(offset.x, 0.0)) * 0.1053;
             color_sum += textureSample(t_diffuse, s_diffuse, tc - vec2<f32>(offset.x, 0.0)) * 0.1053;
-            // Tap pair 2 (offset 2.0)
             color_sum += textureSample(t_diffuse, s_diffuse, tc + vec2<f32>(offset.x * 2.0, 0.0)) * 0.0877;
             color_sum += textureSample(t_diffuse, s_diffuse, tc - vec2<f32>(offset.x * 2.0, 0.0)) * 0.0877;
-            // Tap pair 3 (offset 3.0)
             color_sum += textureSample(t_diffuse, s_diffuse, tc + vec2<f32>(offset.x * 3.0, 0.0)) * 0.0660;
             color_sum += textureSample(t_diffuse, s_diffuse, tc - vec2<f32>(offset.x * 3.0, 0.0)) * 0.0660;
-            // Tap pair 4 (offset 4.0)
             color_sum += textureSample(t_diffuse, s_diffuse, tc + vec2<f32>(offset.x * 4.0, 0.0)) * 0.0440;
             color_sum += textureSample(t_diffuse, s_diffuse, tc - vec2<f32>(offset.x * 4.0, 0.0)) * 0.0440;
-            // Tap pair 5 (offset 5.0)
             color_sum += textureSample(t_diffuse, s_diffuse, tc + vec2<f32>(offset.x * 5.0, 0.0)) * 0.0252;
             color_sum += textureSample(t_diffuse, s_diffuse, tc - vec2<f32>(offset.x * 5.0, 0.0)) * 0.0252;
-            // Tap pair 6 (offset 6.0)
             color_sum += textureSample(t_diffuse, s_diffuse, tc + vec2<f32>(offset.x * 6.0, 0.0)) * 0.0128;
             color_sum += textureSample(t_diffuse, s_diffuse, tc - vec2<f32>(offset.x * 6.0, 0.0)) * 0.0128;
-            // Vertical pass (same kernel, y-axis)
             color_sum += textureSample(t_diffuse, s_diffuse, tc + vec2<f32>(0.0, offset.y)) * 0.1053;
             color_sum += textureSample(t_diffuse, s_diffuse, tc - vec2<f32>(0.0, offset.y)) * 0.1053;
             color_sum += textureSample(t_diffuse, s_diffuse, tc + vec2<f32>(0.0, offset.y * 2.0)) * 0.0877;
@@ -483,7 +485,8 @@ fn sample_layer_color(local_pos_in: vec2<f32>, tc_in: vec2<f32>, blur_extend: f3
         }
     } else if (layer.layer_type == 2u) {
         let alpha = shape_sdf_alpha(local_pos, blur_extend);
-        var shape_color = layer.color;
+        let layer_color = vec4<f32>(layer.color_r, layer.color_g, layer.color_b, layer.color_a);
+        var shape_color = layer_color;
         if (layer.fill_type == 1u) {
             let d = vec2<f32>(layer.grad_end_x - layer.grad_start_x, layer.grad_end_y - layer.grad_start_y);
             let len_sq = dot(d, d);
@@ -501,34 +504,29 @@ fn sample_layer_color(local_pos_in: vec2<f32>, tc_in: vec2<f32>, blur_extend: f3
 
         // 3D Extrusion: pseudo-3D depth shading based on distance from shape edge
         if (layer.extrusion_depth > 0.01 && alpha > 0.01) {
-            // Compute distance from edge (0 at edge, 1 at center) using SDF
             var edge_dist = 0.0;
             if (layer.shape_type == 0u) {
                 let d_x = abs(local_pos.x) - 0.5;
                 let d_y = abs(local_pos.y) - 0.5;
-                edge_dist = -max(d_x, d_y); // positive inside, negative outside
+                edge_dist = -max(d_x, d_y);
             } else if (layer.shape_type == 1u) {
                 edge_dist = 0.5 - length(local_pos);
             } else {
-                edge_dist = 0.1; // fallback for star/polygon
+                edge_dist = 0.1;
             }
-            edge_dist = clamp(edge_dist * 2.0, 0.0, 1.0); // normalize to 0..1
+            edge_dist = clamp(edge_dist * 2.0, 0.0, 1.0);
 
-            // Extrusion depth: front cap brightest, back cap darkest
             let depth_factor = 1.0 - layer.extrusion_depth * 0.003;
             let extrusion_shade = mix(depth_factor, 1.0, edge_dist);
 
-            // Bevel: brighten near edges for a rounded edge effect
             let bevel_factor = 1.0 + layer.bevel_depth * 0.02 * (1.0 - smoothstep(0.0, 0.3, edge_dist));
 
             let final_shade = clamp(extrusion_shade * bevel_factor, 0.2, 1.0);
             c = vec4<f32>(c.rgb * final_shade, c.a);
         }
     } else if (layer.layer_type == 3u) {
-        c = layer.color;
+        c = vec4<f32>(layer.color_r, layer.color_g, layer.color_b, layer.color_a);
     } else if (layer.layer_type == 8u) {
-        // Particle layers are simulated and rasterized on the CPU;
-        // return fully transparent so fs_main's alpha check discards this quad.
         c = vec4<f32>(0.0, 0.0, 0.0, 0.0);
     }
 
@@ -549,12 +547,10 @@ fn sample_layer_color(local_pos_in: vec2<f32>, tc_in: vec2<f32>, blur_extend: f3
         var r = (c.r - layer.levels_in_black) / range;
         var g = (c.g - layer.levels_in_black) / range;
         var b = (c.b - layer.levels_in_black) / range;
-        // Gamma
         let inv_gamma = 1.0 / max(layer.levels_gamma, 0.01);
         r = pow(max(r, 0.0), inv_gamma);
         g = pow(max(g, 0.0), inv_gamma);
         b = pow(max(b, 0.0), inv_gamma);
-        // Out black/white mapping
         let out_range = layer.levels_out_white - layer.levels_out_black;
         c.r = clamp(layer.levels_out_black + r * out_range, 0.0, 1.0);
         c.g = clamp(layer.levels_out_black + g * out_range, 0.0, 1.0);
@@ -571,8 +567,10 @@ fn sample_layer_color(local_pos_in: vec2<f32>, tc_in: vec2<f32>, blur_extend: f3
             d * (1.0 - layer.effect_vignette_roundness * 0.3)
         );
         let vig_amount = layer.effect_vignette_intensity;
+        let vig_color = vec3<f32>(layer.effect_vignette_color_r, layer.effect_vignette_color_g, layer.effect_vignette_color_b);
+        let vig_alpha = layer.effect_vignette_color_a;
         c = vec4<f32>(
-            mix(c.rgb, layer.effect_vignette_color.rgb * c.rgb, (1.0 - vig) * vig_amount),
+            mix(c.rgb, vig_color * c.rgb, (1.0 - vig) * vig_amount),
             c.a
         );
     }
@@ -599,14 +597,12 @@ fn sample_layer_color(local_pos_in: vec2<f32>, tc_in: vec2<f32>, blur_extend: f3
             let samples = max(layer.motionblur_samples, 1u);
             var blur_color = c;
             var blur_weight = 1.0;
-            // Forward samples
             for (var s = 1u; s <= samples; s = s + 1u) {
                 let t = f32(s) / f32(samples);
                 let offset = dir * max_offset * t;
                 blur_color += textureSample(t_diffuse, s_diffuse, tc + offset);
                 blur_weight += 1.0;
             }
-            // Backward samples
             for (var s = 1u; s <= samples; s = s + 1u) {
                 let t = f32(s) / f32(samples);
                 let offset = dir * max_offset * t;
@@ -617,7 +613,7 @@ fn sample_layer_color(local_pos_in: vec2<f32>, tc_in: vec2<f32>, blur_extend: f3
         }
     }
 
-    // ── Glow: screen-space bloom from bright areas (improved: 16 samples + dual ring) ──
+    // ── Glow: screen-space bloom from bright areas ──
     if (layer.glow_enabled == 1u && c.a > 0.01) {
         let vp = max(globals.viewport_size, vec2<f32>(1.0, 1.0));
         let texel = vec2<f32>(1.0) / vp;
@@ -627,9 +623,8 @@ fn sample_layer_color(local_pos_in: vec2<f32>, tc_in: vec2<f32>, blur_extend: f3
         var bloom = vec3<f32>(0.0);
         var bloom_weight = 0.0;
 
-        // Inner ring: 8 samples at radius 1.0
         for (var s = 0; s < 8; s = s + 1) {
-            let angle = f32(s) * 0.785398; // PI/4
+            let angle = f32(s) * 0.785398;
             let offset = vec2<f32>(cos(angle), sin(angle)) * gr;
             let sc = textureSample(t_diffuse, s_diffuse, tc + offset);
             let luma = dot(sc.rgb, vec3<f32>(0.299, 0.587, 0.114));
@@ -640,59 +635,51 @@ fn sample_layer_color(local_pos_in: vec2<f32>, tc_in: vec2<f32>, blur_extend: f3
             }
         }
 
-        // Outer ring: 8 samples at radius 2.0 (wider spread)
         for (var s = 0; s < 8; s = s + 1) {
-            let angle = f32(s) * 0.785398 + 0.392699; // offset by PI/8
+            let angle = f32(s) * 0.785398 + 0.392699;
             let offset = vec2<f32>(cos(angle), sin(angle)) * gr * 2.0;
             let sc = textureSample(t_diffuse, s_diffuse, tc + offset);
             let luma = dot(sc.rgb, vec3<f32>(0.299, 0.587, 0.114));
             if (luma > thresh) {
-                let contribution = (luma - thresh) / max(luma, 0.001) * 0.5; // weight outer ring less
+                let contribution = (luma - thresh) / max(luma, 0.001) * 0.5;
                 bloom += sc.rgb * contribution;
                 bloom_weight += contribution;
             }
         }
 
-        // Normalize and apply intensity
         if (bloom_weight > 0.01) {
             bloom = bloom / max(bloom_weight, 1.0) * layer.glow_intensity;
         }
 
-        // Tint the bloom
-        let gc = layer.glow_color.rgb;
+        let gc = vec3<f32>(layer.glow_color_r, layer.glow_color_g, layer.glow_color_b);
         let gc_lum = max(dot(gc, vec3<f32>(0.333)), 0.001);
         c = vec4<f32>(c.r + bloom.r * gc.r / gc_lum, c.g + bloom.g * gc.g / gc_lum, c.b + bloom.b * gc.b / gc_lum, c.a);
     }
 
-    // ── Lens Flare: screen-space optical flare from light source ──
+    // ── Lens Flare ──
     if (layer.flare_enabled == 1u) {
         let flare_center = vec2<f32>(layer.flare_pos_x, layer.flare_pos_y);
         let vp = max(globals.viewport_size, vec2<f32>(1.0, 1.0));
         let texel = vec2<f32>(1.0) / vp;
 
-        // Distance from this pixel to the flare center
         let d = distance(tc_in, flare_center);
-        let d_norm = d * 2.0; // normalize to 0..1 range
+        let d_norm = d * 2.0;
 
-        // Core glow: bright center
         let core_radius = 0.02;
         let core = exp(-d_norm * d_norm / (core_radius * core_radius)) * layer.flare_intensity;
 
-        // Ring artifacts: concentric rings along the axis from center to pixel
-        let ring_phase = d_norm * 12.0; // ring frequency
-        let ring = sin(ring_phase) * 0.3 + 0.5; // oscillate 0.2..0.8
-        let ring_mask = exp(-d_norm * 3.0); // fade with distance
+        let ring_phase = d_norm * 12.0;
+        let ring = sin(ring_phase) * 0.3 + 0.5;
+        let ring_mask = exp(-d_norm * 3.0);
         let ring_contribution = ring * ring_mask * layer.flare_intensity * 0.3;
 
-        // Streaks: 4-pointed star along horizontal and vertical axes
         let to_center = tc_in - flare_center;
         let streak_h = exp(-abs(to_center.y) * 80.0) * exp(-abs(to_center.x) * 8.0);
         let streak_v = exp(-abs(to_center.x) * 80.0) * exp(-abs(to_center.y) * 8.0);
         let streaks = (streak_h + streak_v) * layer.flare_intensity * 0.4;
 
-        // Combine all flare elements
         let flare_total = (core + ring_contribution + streaks) * layer.flare_threshold;
-        let fc = layer.flare_color.rgb;
+        let fc = vec3<f32>(layer.flare_color_r, layer.flare_color_g, layer.flare_color_b);
         c = vec4<f32>(
             clamp(c.r + fc.r * flare_total, 0.0, 1.0),
             clamp(c.g + fc.g * flare_total, 0.0, 1.0),
@@ -778,17 +765,13 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
         blur_extend = layer.effect_blur_radius * 0.01;
     }
 
-    // --- Chromatic Aberration ---
-    // Offsets the R and B channels slightly relative to the center.
     var final_color: vec4<f32>;
     if (layer.effect_ca_enabled == 1u) {
-        // Compute edge distance (0 at center, 1 at corner)
-        let edge_dist = length(in.local_pos) * 2.0; // 0 to ~1.414
+        let edge_dist = length(in.local_pos) * 2.0;
         let falloff = pow(clamp(edge_dist, 0.0, 1.0), max(layer.effect_ca_edge_falloff * 4.0, 0.1));
 
         let texel_size = 1.0 / globals.viewport_size;
 
-        // Red channel: shift outward from center
         let dir = normalize(in.local_pos + vec2<f32>(0.0001, 0.0001));
         let r_offset_local = dir * layer.effect_ca_shift_r * falloff * 0.01;
         let b_offset_local = dir * (-layer.effect_ca_shift_b) * falloff * 0.01;
@@ -810,7 +793,8 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
 
     // --- Color Tint ---
     if (layer.effect_tint_enabled == 1u) {
-        let tinted_rgb = mix(final_color.rgb, layer.effect_tint_color.rgb, layer.effect_tint_intensity);
+        let tint_color = vec3<f32>(layer.effect_tint_color_r, layer.effect_tint_color_g, layer.effect_tint_color_b);
+        let tinted_rgb = mix(final_color.rgb, tint_color, layer.effect_tint_intensity);
         final_color = vec4<f32>(tinted_rgb, final_color.a);
     }
 
@@ -864,7 +848,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
         }
         
         let shadow_intensity = layer.effect_shadow_opacity / 100.0;
-        let shadow_color = vec4<f32>(layer.effect_shadow_color.rgb, shadow_alpha * shadow_intensity);
+        let shadow_color = vec4<f32>(layer.effect_shadow_color_r, layer.effect_shadow_color_g, layer.effect_shadow_color_b, shadow_alpha * shadow_intensity);
         
         let blended_rgb = final_color.rgb * final_color.a + shadow_color.rgb * shadow_color.a * (1.0 - final_color.a);
         let blended_alpha = final_color.a + shadow_color.a * (1.0 - final_color.a);
@@ -873,9 +857,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
 
     // --- Vignette ---
     if (layer.effect_vignette_enabled == 1u) {
-        // local_pos is in [-0.5, 0.5]; normalize to [-1, 1] with aspect-corrected roundness
         let uv = in.local_pos * 2.0;
-        // Mix between square (aspect ratio) and circle based on roundness
         let r = layer.effect_vignette_roundness;
         let dist_sq = uv.x * uv.x * (1.0 - r * 0.5) + uv.y * uv.y * (1.0 - r * 0.5);
         let dist_circ = sqrt(uv.x * uv.x + uv.y * uv.y);
@@ -886,8 +868,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
         let vignette_factor = smoothstep(inner, inner + feather, dist);
         let vignette_strength = (layer.effect_vignette_intensity / 100.0) * vignette_factor;
 
-        // Blend the vignette color over the final color
-        let vcolor = layer.effect_vignette_color;
+        let vcolor = vec4<f32>(layer.effect_vignette_color_r, layer.effect_vignette_color_g, layer.effect_vignette_color_b, layer.effect_vignette_color_a);
         final_color = vec4<f32>(
             mix(final_color.rgb, vcolor.rgb, vignette_strength * vcolor.a),
             final_color.a
@@ -908,7 +889,6 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
 
     // --- Hue / Saturation ---
     if (layer.huesat_enabled == 1u) {
-        // Hue / Saturation adjustment using relative luminance weights
         let luma = dot(final_color.rgb, vec3<f32>(0.2126, 0.7152, 0.0722));
         let desat = mix(vec3<f32>(luma), final_color.rgb, layer.huesat_sat);
         final_color = vec4<f32>(
@@ -922,12 +902,12 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
         let luma = dot(final_color.rgb, vec3<f32>(0.2126, 0.7152, 0.0722));
         if (luma >= layer.glow_threshold) {
             let highlight = (luma - layer.glow_threshold) / max(1.0 - layer.glow_threshold, 0.001);
-            let bloom_rgb = layer.glow_color.rgb * highlight * layer.glow_intensity;
+            let bloom_rgb = vec3<f32>(layer.glow_color_r, layer.glow_color_g, layer.glow_color_b) * highlight * layer.glow_intensity;
             final_color = vec4<f32>(final_color.rgb + bloom_rgb, final_color.a);
         }
     }
 
-    // --- Physical Film Grain Noise (improved: temporal variation + color noise) ---
+    // --- Physical Film Grain Noise ---
     if (layer.grain_enabled == 1u) {
         let grain_uv = in.tex_coords * globals.viewport_size / max(layer.grain_size, 0.1);
         let grain_frame = fract(globals.exposure_ev * 0.1);
@@ -950,7 +930,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
         );
     }
 
-    // --- Invert / Color Inversion ---
+    // --- Invert ---
     if (layer.invert_enabled == 1u) {
         final_color = vec4<f32>(
             1.0 - final_color.r,
@@ -960,7 +940,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
         );
     }
 
-    // --- Posterize / Color Quantization ---
+    // --- Posterize ---
     if (layer.posterize_enabled == 1u && layer.posterize_levels >= 2.0) {
         let steps = max(layer.posterize_levels - 1.0, 1.0);
         final_color = vec4<f32>(
@@ -969,10 +949,12 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
         );
     }
 
-    // --- Tint / Dual Color Map ---
+    // --- Tint ---
     if (layer.tint_enabled == 1u && layer.tint_amount > 0.0) {
         let luma = dot(final_color.rgb, vec3<f32>(0.2126, 0.7152, 0.0722));
-        let mapped = mix(layer.tint_black.rgb, layer.tint_white.rgb, luma);
+        let tb = vec3<f32>(layer.tint_black_r, layer.tint_black_g, layer.tint_black_b);
+        let tw = vec3<f32>(layer.tint_white_r, layer.tint_white_g, layer.tint_white_b);
+        let mapped = mix(tb, tw, luma);
         let tinted = mix(final_color.rgb, mapped, layer.tint_amount);
         final_color = vec4<f32>(tinted, final_color.a);
     }
@@ -986,7 +968,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
         final_color = vec4<f32>(final_color.rgb * clamp(vig_factor, 0.0, 1.0), final_color.a);
     }
 
-    // --- CRT Scanlines / TV Glitch ---
+    // --- CRT Scanlines ---
     if (layer.crt_enabled == 1u) {
         let scan_count = max(layer.crt_scanline_count, 100.0);
         let scan_phase = in.tex_coords.y * scan_count * 3.14159265;
@@ -995,19 +977,16 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
         final_color = vec4<f32>(final_color.rgb * clamp(scan_mult, 0.0, 1.0), final_color.a);
     }
 
-    // ── Layer Styles: applied after effects, before compositing ──
+    // ── Layer Styles ──
     if (layer.ls_style_flags != 0u && final_color.a > 0.001) {
-        // Stroke (bit 0)
         if (layer.ls_style_flags & 1u) != 0u {
             let stroke_col = vec3<f32>(layer.ls_stroke_r, layer.ls_stroke_g, layer.ls_stroke_b);
             final_color = ls_apply_stroke(final_color, final_color.a, stroke_col, layer.ls_stroke_width);
         }
-        // Color Overlay (bit 1)
         if (layer.ls_style_flags & 2u) != 0u {
             let overlay = vec4<f32>(layer.ls_color_overlay_r, layer.ls_color_overlay_g, layer.ls_color_overlay_b, layer.ls_color_overlay_a);
             final_color = ls_apply_color_overlay(final_color, overlay);
         }
-        // Gradient Overlay (bit 2)
         if (layer.ls_style_flags & 4u) != 0u {
             let start = vec2<f32>(layer.ls_gradient_start_x, layer.ls_gradient_start_y);
             let end = vec2<f32>(layer.ls_gradient_end_x, layer.ls_gradient_end_y);
@@ -1015,13 +994,11 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
             let c2 = vec4<f32>(layer.ls_gradient_color2_r, layer.ls_gradient_color2_g, layer.ls_gradient_color2_b, layer.ls_gradient_color2_a);
             final_color = ls_apply_gradient_overlay(final_color, in.local_pos, start, end, c1, c2);
         }
-        // Inner Shadow (bit 3)
         if (layer.ls_style_flags & 8u) != 0u {
             let is_offset = vec2<f32>(layer.ls_inner_shadow_offset_x, layer.ls_inner_shadow_offset_y);
             let is_color = vec3<f32>(layer.ls_inner_shadow_r, layer.ls_inner_shadow_g, layer.ls_inner_shadow_b);
             final_color = ls_apply_inner_shadow(final_color, final_color.a, is_offset, layer.ls_inner_shadow_size, is_color, layer.ls_inner_shadow_opacity);
         }
-        // Bevel/Emboss (bit 4)
         if (layer.ls_style_flags & 16u) != 0u {
             let light_col = vec3<f32>(layer.ls_bevel_light_r, layer.ls_bevel_light_g, layer.ls_bevel_light_b);
             let dark_col = vec3<f32>(0.0, 0.0, 0.0);
@@ -1030,7 +1007,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     }
 
 
-    // ── Shadow map: darken by CPU-projected density at this screen position ──
+    // ── Shadow map ──
     if (globals.shadow_enabled == 1u && final_color.a > 0.01) {
         let occ = textureSample(t_shadow, s_shadow, in.tex_coords).r;
         let dark = 1.0 - min(occ, 1.0);
@@ -1042,7 +1019,6 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
 
     // --- GPU Layer Mask Compositing ---
     if (layer.mask_enabled == 1u) {
-        // Mask mode: 0=none, 1=alpha, 2=inverted alpha, 3=luma, 4=inverted luma
         var mask_alpha: f32 = 1.0;
         if (layer.mask_mode == 1u) {
             mask_alpha = textureSample(t_mask, s_mask, in.tex_coords).a;
@@ -1055,12 +1031,10 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
             let tex = textureSample(t_mask, s_mask, in.tex_coords);
             mask_alpha = 1.0 - dot(tex.rgb, vec3<f32>(0.2126, 0.7152, 0.0722));
         }
-        // Apply mask inversion and feather
         if (layer.mask_inverted == 1u) {
             mask_alpha = 1.0 - mask_alpha;
         }
         if (layer.mask_feather > 0.01) {
-            // Simple feather blur approximation using smoothstep
             mask_alpha = smoothstep(0.0, layer.mask_feather, mask_alpha * layer.mask_feather);
         }
         final_color.a = final_color.a * mask_alpha;
@@ -1083,19 +1057,12 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     }
 
     // --- AE Blend Mode Compositing ---
-    // The GPU blend equation handles Normal (alpha-over) automatically.
-    // For other modes we bake the result into the RGB output by treating
-    // the underlying buffer color as black (standard single-pass approximation).
-    // A full multi-pass solution requires ping-pong offscreen textures.
     if (layer.blend_mode == 1u) {
-        // Multiply: src * backdrop. Approximated as src * src (self-multiply darkens transparencies).
         final_color = vec4<f32>(final_color.rgb * final_color.rgb, final_color.a);
     } else if (layer.blend_mode == 2u) {
-        // Screen: 1 - (1-src)*(1-src)
         let inv = 1.0 - final_color.rgb;
         final_color = vec4<f32>(1.0 - inv * inv, final_color.a);
     } else if (layer.blend_mode == 3u) {
-        // Overlay: 2*src^2 if src<0.5, else 1-2*(1-src)^2
         let s = final_color.rgb;
         let overlay = select(
             1.0 - 2.0 * (1.0 - s) * (1.0 - s),
@@ -1104,26 +1071,20 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
         );
         final_color = vec4<f32>(overlay, final_color.a);
     } else if (layer.blend_mode == 4u) {
-        // Add (Linear Dodge): clamp(src * 2, 0, 1) — brightens compositing
         final_color = vec4<f32>(clamp(final_color.rgb * 1.5, vec3<f32>(0.0), vec3<f32>(1.0)), final_color.a);
     } else if (layer.blend_mode == 5u) {
-        // Darken: min(src, backdrop). Approximate via pow darkening.
         final_color = vec4<f32>(pow(final_color.rgb, vec3<f32>(1.5)), final_color.a);
     } else if (layer.blend_mode == 6u) {
-        // Lighten: max(src, backdrop). Approximate via pow brightening.
         final_color = vec4<f32>(pow(final_color.rgb, vec3<f32>(0.67)), final_color.a);
     }
-    // blend_mode == 0u: Normal — no modification needed, GPU alpha blend handles it.
 
     // --- Viewport Exposure Adjustment ---
     final_color = vec4<f32>(final_color.rgb * pow(2.0, globals.exposure_ev), final_color.a);
 
     // --- Viewport LUT Color Management ---
     if (globals.lut_mode == 1u) {
-        // Linear sRGB conversion (Approximated 2.2 Gamma linearize)
         final_color = vec4<f32>(pow(final_color.rgb, vec3<f32>(2.2)), final_color.a);
     } else if (globals.lut_mode == 2u) {
-        // ACEScg Approximated filmic tone map curve
         let a = 2.51;
         let b = 0.03;
         let c = 2.43;

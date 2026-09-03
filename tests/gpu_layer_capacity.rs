@@ -15,7 +15,7 @@ fn request_gpu() -> Option<(Arc<wgpu::Device>, Arc<wgpu::Queue>)> {
             label: Some("gpu-layer-capacity-test"),
             required_features: wgpu::Features::empty(),
             required_limits: wgpu::Limits {
-                max_bind_groups: 5,
+                max_bind_groups: 6,
                 ..wgpu::Limits::default()
             },
             memory_hints: wgpu::MemoryHints::default(),
