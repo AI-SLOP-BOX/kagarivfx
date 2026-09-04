@@ -66,6 +66,11 @@ impl PixelBufferPool {
             pool.push(buf);
         }
     }
+
+    /// Number of recycled buffers currently in the pool.
+    pub fn len(&self) -> usize {
+        self.pool.lock().unwrap_or_else(|e| e.into_inner()).len()
+    }
 }
 
 /// A single cached frame entry: raw RGBA pixel bytes for one frame at one version.
@@ -106,6 +111,10 @@ pub struct FrameCache {
     /// Used for partial invalidation: allows reusing previous-version frames when
     /// only some layers have changed.
     frame_layers: std::collections::HashMap<(u32, u64), std::collections::HashSet<usize>>,
+    /// When set, this cache ignores the global version counter and uses this
+    /// fixed version instead. This prevents parallel tests from polluting each
+    /// other's version state.
+    version_override: Option<u64>,
 }
 
 impl FrameCache {
@@ -118,7 +127,29 @@ impl FrameCache {
             dirty_layers: std::collections::HashSet::new(),
             dirty_comps: std::collections::HashSet::new(),
             frame_layers: std::collections::HashMap::new(),
+            version_override: None,
         }
+    }
+
+    /// Create a cache with a fixed version for isolated testing.
+    /// This bypasses the global version counter entirely, preventing
+    /// parallel test pollution.
+    pub fn with_version(max_entries: usize, version: u64) -> Self {
+        Self {
+            entries: HashMap::new(),
+            max_entries,
+            max_memory_bytes: 512 * 1024 * 1024,
+            current_memory_bytes: 0,
+            dirty_layers: std::collections::HashSet::new(),
+            dirty_comps: std::collections::HashSet::new(),
+            frame_layers: std::collections::HashMap::new(),
+            version_override: Some(version),
+        }
+    }
+
+    /// Return the effective version: either the override or the global counter.
+    fn effective_version(&self) -> u64 {
+        self.version_override.unwrap_or_else(current_version)
     }
 
     /// Mark a layer as dirty (modified). Only frames containing this layer need re-rendering.
@@ -176,7 +207,7 @@ impl FrameCache {
     /// `frame_layers` is retained as provenance for future content-addressed
     /// invalidation, but never authorizes cross-version reuse by itself.
     pub fn get_with_layers(&mut self, frame: u32, frame_layers: &[usize]) -> Option<&CacheEntry> {
-        let ver = current_version();
+        let ver = self.effective_version();
         let key = (frame, ver);
 
         // Check if we have a cached entry for this frame in current version
@@ -218,7 +249,7 @@ impl FrameCache {
 
     /// Immutable check if frame is cached without updating LRU timestamp.
     pub fn is_cached(&self, frame: u32) -> bool {
-        let ver = current_version();
+        let ver = self.effective_version();
         self.entries.contains_key(&(frame, ver))
     }
 
@@ -243,7 +274,7 @@ impl FrameCache {
         pixels: Vec<u8>,
         layer_indices: &[usize],
     ) {
-        let ver = current_version();
+        let ver = self.effective_version();
         let key = (frame, ver);
         let bytes_size = pixels.len();
 
@@ -283,7 +314,7 @@ impl FrameCache {
     /// Use this after `insert()` when layer information becomes available
     /// separately from the pixel data.
     pub fn set_frame_layers(&mut self, frame: u32, layer_indices: &[usize]) {
-        let key = (frame, current_version());
+        let key = (frame, self.effective_version());
         if !layer_indices.is_empty() {
             self.frame_layers
                 .insert(key, layer_indices.iter().copied().collect());
@@ -292,7 +323,7 @@ impl FrameCache {
 
     /// Discard stale version entries and LRU evict unaccessed frames when memory budget is exceeded.
     pub fn collect_garbage(&mut self) {
-        let current = current_version();
+        let current = self.effective_version();
         self.collect_garbage_below(current);
 
         // Hysteresis LRU Eviction: Purge least-recently used entries down to 75% max_memory_bytes
@@ -370,21 +401,29 @@ impl FrameCache {
 
     /// How many entries exist for the current version.
     pub fn current_version_len(&self) -> usize {
-        let ver = current_version();
+        let ver = self.effective_version();
         self.entries.keys().filter(|(_, v)| *v == ver).count()
     }
 }
 
 /// Simple disk-backed frame cache: writes evicted frames to temp files
 /// and reloads them on cache miss. Frames are stored as raw RGBA bytes.
-mod disk_cache {
+pub mod disk_cache {
     use std::path::PathBuf;
+    use std::sync::atomic::{AtomicU64, Ordering};
     use std::sync::OnceLock;
+
+    static MAX_DISK_BYTES: AtomicU64 = AtomicU64::new(50 * 1024 * 1024 * 1024); // 50 GB default
+
+    /// Set the maximum disk cache size in bytes. Called from Preferences.
+    pub fn set_max_disk_bytes(bytes: u64) {
+        MAX_DISK_BYTES.store(bytes, Ordering::Relaxed);
+    }
 
     fn cache_dir() -> PathBuf {
         static DIR: OnceLock<PathBuf> = OnceLock::new();
         DIR.get_or_init(|| {
-            let dir = std::env::temp_dir().join("aevfx_frame_cache");
+            let dir = std::env::temp_dir().join("kagari_frame_cache");
             let _ = std::fs::create_dir_all(&dir);
             dir
         })
@@ -395,8 +434,70 @@ mod disk_cache {
         cache_dir().join(format!("frame_{}_{}.rgba", key.0, key.1))
     }
 
+    /// Current total bytes on disk across all cached frames.
+    pub fn current_disk_usage() -> u64 {
+        let dir = cache_dir();
+        let mut total: u64 = 0;
+        if let Ok(entries) = std::fs::read_dir(&dir) {
+            for entry in entries.flatten() {
+                if let Ok(meta) = entry.metadata() {
+                    total += meta.len();
+                }
+            }
+        }
+        total
+    }
+
+    /// Evict oldest files (by mtime) until disk usage fits within the budget.
+    fn evict_if_over_budget(new_frame_bytes: u64) {
+        let budget = MAX_DISK_BYTES.load(Ordering::Relaxed);
+        let current = current_disk_usage();
+        if current.saturating_add(new_frame_bytes) <= budget {
+            return;
+        }
+        // Collect all .rgba files with their mtimes
+        let dir = cache_dir();
+        let mut files: Vec<(PathBuf, u64)> = Vec::new();
+        if let Ok(entries) = std::fs::read_dir(&dir) {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if path.extension().is_some_and(|e| e == "rgba") {
+                    if let Ok(meta) = entry.metadata() {
+                        let mtime = meta
+                            .modified()
+                            .ok()
+                            .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+                            .map(|d| d.as_secs())
+                            .unwrap_or(0);
+                        files.push((path, mtime));
+                    }
+                }
+            }
+        }
+        // Sort oldest first
+        files.sort_by_key(|(_, mtime)| *mtime);
+        // Evict oldest until we fit
+        let mut freed: u64 = 0;
+        let needed = current.saturating_add(new_frame_bytes).saturating_sub(budget);
+        for (path, _) in &files {
+            if freed >= needed {
+                break;
+            }
+            if let Ok(meta) = std::fs::metadata(path) {
+                freed += meta.len();
+                let _ = std::fs::remove_file(path);
+            }
+        }
+    }
+
     /// Write frame pixels to disk. Returns true on success.
     pub fn write_frame(key: &(u32, u64), pixels: &[u8], width: u32, height: u32) -> bool {
+        let frame_bytes = (width as usize)
+            .checked_mul(height as usize)
+            .and_then(|p| p.checked_mul(4))
+            .and_then(|p| p.checked_add(8))
+            .unwrap_or(0) as u64;
+        evict_if_over_budget(frame_bytes);
         let path = frame_path(key);
         let header = width
             .to_le_bytes()
@@ -648,7 +749,7 @@ mod disk_cache_tests {
     fn malformed_dimensions_do_not_overflow_or_panic() {
         let key = (u32::MAX, u64::MAX);
         let path = {
-            let dir = std::env::temp_dir().join("aevfx_frame_cache");
+            let dir = std::env::temp_dir().join("kagari_frame_cache");
             std::fs::create_dir_all(&dir).unwrap();
             dir.join(format!("frame_{}_{}.rgba", key.0, key.1))
         };
@@ -661,7 +762,7 @@ mod disk_cache_tests {
     fn trailing_disk_data_is_rejected() {
         let key = (u32::MAX - 1, u64::MAX - 1);
         let path = {
-            let dir = std::env::temp_dir().join("aevfx_frame_cache");
+            let dir = std::env::temp_dir().join("kagari_frame_cache");
             std::fs::create_dir_all(&dir).unwrap();
             dir.join(format!("frame_{}_{}.rgba", key.0, key.1))
         };
@@ -676,7 +777,7 @@ mod disk_cache_tests {
     #[test]
     fn zero_dimension_disk_frame_is_rejected_and_removed() {
         let key = (u32::MAX - 2, u64::MAX - 2);
-        let dir = std::env::temp_dir().join("aevfx_frame_cache");
+        let dir = std::env::temp_dir().join("kagari_frame_cache");
         std::fs::create_dir_all(&dir).unwrap();
         let path = dir.join(format!("frame_{}_{}.rgba", key.0, key.1));
         std::fs::write(&path, [0, 0, 0, 0, 0, 0, 0, 0]).unwrap();

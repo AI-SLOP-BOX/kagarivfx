@@ -1,5 +1,5 @@
 //! Interactive first-run tutorial: comprehensive multi-chapter walkthrough
-//! covering the full AEVFX Studio workflow from basics to advanced.
+//! covering the full Kagari VFX workflow from basics to advanced.
 //!
 //! Architecture:
 //!  - TutorialStep: static step data (title, chapter, body paragraphs, key hint, shortcut, advanced_tip)
@@ -8,7 +8,7 @@
 //!  - chapter_select_draw(): chapter overview modal (jump to any chapter)
 
 use crate::ui::theme::colors;
-use crate::AfterEffectsApp;
+use crate::KagariApp;
 use eframe::egui;
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -35,7 +35,7 @@ pub fn steps() -> &'static [TutorialStep] {
             chapter: "Chapter 1: インターフェース",
             title: "1/12 — 画面の読み方",
             body: &[
-                "AEVFX Studio の画面は4つのゾーンに分かれています。",
+                "Kagari VFX の画面は4つのゾーンに分かれています。",
                 "┌──────────────────────────────────────┐",
                 "│  メニューバー (上)                    │",
                 "│  ビューポート(中央左) │ インスペクター  │",
@@ -99,7 +99,7 @@ pub fn steps() -> &'static [TutorialStep] {
                 "  📷 Camera    — 3Dカメラ",
                 "タイムライン上でドラッグして順番を入れ替えられます。",
             ],
-            hint: "試してみよう: Layer > New > Text で「AEVFX」と入力してみよう",
+            hint: "試してみよう: Layer > New > Text で「Kagari」と入力してみよう",
             shortcut: "Ctrl+T (テキスト)",
             advanced_tip: "レイヤーを複数選択 (Shift+クリック) して Cmd+Shift+C でプリコンポーズ。複雑なアニメをグループ化できます。",
         },
@@ -246,7 +246,7 @@ pub fn steps() -> &'static [TutorialStep] {
                 "  🎬 MP4 (H.264)    — Web/SNS 向け汎用フォーマット",
                 "  🎞 ProRes 422     — 編集用高品質マスター",
                 "  🎞 ProRes 4444    — アルファ付き合成素材",
-                "  🎨 Lottie JSON    — Web アニメーション (After Effects 互換)",
+                "  🎨 Lottie JSON    — Web アニメーション (互換)",
                 "  📽 GIF            — ループアニメーション",
                 "  🎞 MLT XML        — Kdenlive / Shotcut との連携",
                 "",
@@ -255,7 +255,7 @@ pub fn steps() -> &'static [TutorialStep] {
             ],
             hint: "試してみよう: File > Export > MP4 でアニメを書き出す",
             shortcut: "Cmd+M",
-            advanced_tip: "CLIツール (aevfx コマンド) を使えばスクリプトやCI/CDからヘッドレスレンダリングが可能。例: aevfx frame --project p.json --frame 30 --output out.png",
+            advanced_tip: "CLIツール (kagari コマンド) を使えばスクリプトやCI/CDからヘッドレスレンダリングが可能。例: kagari frame --project p.json --frame 30 --output out.png",
         },
         TutorialStep {
             chapter: "Chapter 6: 書き出しと公開",
@@ -274,7 +274,7 @@ pub fn steps() -> &'static [TutorialStep] {
                 "  🤖 Window > AI Features (オプション)",
                 "     → RTX 等ハイエンド環境でAIロトブラシ・深度推定",
                 "",
-                "  📦 GitHub: github.com/aevfx-studio/aevfx",
+                "  📦 GitHub: github.com/AI-SLOP-BOX/kagarivfx",
                 "     → Issues / Discussions / Pull Requests 大歓迎!",
                 "",
                 "「⚡ Mode: Pro Studio」に切り替えてフル機能を楽しんでください！",
@@ -304,7 +304,7 @@ pub struct TutorialState {
 // ─────────────────────────────────────────────────────────────────────────────
 
 /// Draw the floating tutorial card. Call every frame; no-ops when not active.
-pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context) {
+pub fn draw(app: &mut KagariApp, ctx: &egui::Context) {
     let Some(state) = app.tutorial.as_mut() else {
         return;
     };
@@ -497,7 +497,7 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context) {
 }
 
 /// Chapter-select modal: shows all chapters as clickable tiles.
-fn draw_chapter_select(app: &mut AfterEffectsApp, ctx: &egui::Context) {
+fn draw_chapter_select(app: &mut KagariApp, ctx: &egui::Context) {
     let all = steps();
     let mut close = false;
     let mut jump_to: Option<usize> = None;
@@ -602,7 +602,7 @@ enum StepAction {
     ShowChapterSelect,
 }
 
-fn apply_action(app: &mut AfterEffectsApp, action: Option<StepAction>) {
+fn apply_action(app: &mut KagariApp, action: Option<StepAction>) {
     let all = steps();
     match action {
         Some(StepAction::Next) => {
@@ -631,7 +631,7 @@ fn apply_action(app: &mut AfterEffectsApp, action: Option<StepAction>) {
 }
 
 /// Reopen the walkthrough from the beginning (Help menu entry).
-pub fn restart(app: &mut AfterEffectsApp) {
+pub fn restart(app: &mut KagariApp) {
     app.tutorial = Some(TutorialState {
         current_step: 0,
         completed: false,

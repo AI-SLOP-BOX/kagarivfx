@@ -133,7 +133,7 @@ impl GpuComputeContext {
         }))?;
         let (device, queue) = block_on(adapter.request_device(
             &wgpu::DeviceDescriptor {
-                label: Some("aevfx-compute"),
+                label: Some("kagari-compute"),
                 required_features: wgpu::Features::empty(),
                 required_limits: wgpu::Limits::default(),
                 memory_hints: wgpu::MemoryHints::default(),

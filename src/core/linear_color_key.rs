@@ -127,7 +127,7 @@ pub fn apply_linear_color_key(
                 let y2 = ps * (ph * std::f32::consts::TAU).sin();
                 let dx = x2 - x1;
                 let dy = y2 - y1;
-                (dx * dx + dy * dy).sqrt() / 1.4142
+                (dx * dx + dy * dy).sqrt() / std::f32::consts::SQRT_2
             }
         };
 

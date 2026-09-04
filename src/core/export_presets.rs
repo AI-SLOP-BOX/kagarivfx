@@ -124,7 +124,7 @@ pub fn builtin_presets() -> Vec<ExportPreset> {
 
 fn presets_path() -> PathBuf {
     let mut p = std::env::home_dir().unwrap_or_else(|| PathBuf::from("."));
-    p.push(".aevfx");
+    p.push(".kagari");
     p.push("export_presets.json");
     p
 }

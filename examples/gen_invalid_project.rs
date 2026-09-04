@@ -1,6 +1,6 @@
-use aftereffects_oss::core::property::Animatable;
+use kagari_vfx::core::property::Animatable;
 /// Generates a deliberately broken project for validator robustness testing.
-use aftereffects_oss::core::timeline::{Composition, Layer, LayerType, Project};
+use kagari_vfx::core::timeline::{Composition, Layer, LayerType, Project};
 
 fn main() {
     let mut comp = Composition::new("comp1".into(), "CycleTest".into(), 64, 64, 30, 30);

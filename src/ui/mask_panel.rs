@@ -1,8 +1,8 @@
 use crate::core::mask::{Mask, MaskMode};
-use crate::AfterEffectsApp;
+use crate::KagariApp;
 use eframe::egui;
 
-pub fn draw_mask_panel(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
+pub fn draw_mask_panel(app: &mut KagariApp, ui: &mut egui::Ui) {
     ui.heading("Vector Masks & Shape Paths");
     ui.separator();
 

@@ -47,7 +47,7 @@ pub fn quantize_hdr_slice_dithered(
                         DitherMethod::TriangularPdf => {
                             let r1 = hash_noise(x, y, c as u32);
                             let r2 = hash_noise(x.wrapping_add(1), y.wrapping_add(1), c as u32);
-                            (r1 - r2) * 0.7071 // TPDF noise between [-1.0, 1.0] LSB
+                            (r1 - r2) * std::f32::consts::FRAC_1_SQRT_2 // TPDF noise between [-1.0, 1.0] LSB
                         }
                         DitherMethod::OrderedBayer => {
                             const BAYER: [[f32; 4]; 4] = [

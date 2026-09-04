@@ -1,6 +1,6 @@
 //! Render Queue & Background Batch Export Manager.
 //!
-//! Provides After Effects-style batch render management for multiple compositions,
+//! Provides Professional batch render management for multiple compositions,
 //! output presets (ProRes, H.264, PNG Sequence, GIF, Lottie), frame ranges,
 //! multi-threaded rendering queues, and progress tracking.
 

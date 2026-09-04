@@ -1,9 +1,9 @@
 use crate::ui::custom_widgets;
 use crate::ui::theme::colors;
-use crate::AfterEffectsApp;
+use crate::KagariApp;
 use eframe::egui;
 
-pub fn draw_comp_settings_dialog(app: &mut AfterEffectsApp, ctx: &egui::Context) {
+pub fn draw_comp_settings_dialog(app: &mut KagariApp, ctx: &egui::Context) {
     if !app.show_comp_settings {
         return;
     }

@@ -2,7 +2,7 @@ use crate::core::property::Animatable;
 use crate::core::timeline::{ColorConversionMode, Effect, EffectType};
 use crate::ui::inspector_property::draw_property_ui;
 use crate::ui::theme::colors;
-use crate::AfterEffectsApp;
+use crate::KagariApp;
 use eframe::egui;
 
 #[allow(dead_code)]
@@ -5468,7 +5468,7 @@ fn draw_prop(
 // `modify_project`, so changes are undoable and render immediately.
 
 /// Draws emitter controls when the selected layer is a Particle layer.
-pub fn draw_particle_emitter_controls(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
+pub fn draw_particle_emitter_controls(app: &mut KagariApp, ui: &mut egui::Ui) {
     use crate::core::particle_system::{EmitterShape, ParticleEmitter};
     use crate::core::timeline::LayerType;
 

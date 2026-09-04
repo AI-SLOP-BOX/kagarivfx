@@ -4,7 +4,7 @@ use std::time::Instant;
 
 use crate::ui::custom_widgets;
 use crate::ui::theme::colors;
-use crate::AfterEffectsApp;
+use crate::KagariApp;
 
 const START_TIME_ID: &str = "render_queue_export_start";
 const CANCEL_CONFIRM_ID: &str = "render_queue_cancel_confirm";
@@ -25,7 +25,7 @@ fn format_duration(secs: f64) -> String {
     format!("{:02}:{:02}", total / 60, total % 60)
 }
 
-pub fn draw_render_queue_panel(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
+pub fn draw_render_queue_panel(app: &mut KagariApp, ui: &mut egui::Ui) {
     ui.heading("Render Queue");
     ui.separator();
 

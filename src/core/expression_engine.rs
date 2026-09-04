@@ -1,5 +1,5 @@
 use rhai::{export_module, exported_module};
-/// Rhai-powered After Effects-style expression evaluation engine.
+/// Rhai-powered AE-compatible expression evaluation engine.
 ///
 /// Supports AE-compatible expression APIs:
 ///   - `time` (current time in seconds)

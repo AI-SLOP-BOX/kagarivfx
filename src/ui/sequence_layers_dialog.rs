@@ -1,10 +1,10 @@
-use crate::AfterEffectsApp;
+use crate::KagariApp;
 use eframe::egui;
 
 /// AE Keyframe Assistant → Sequence Layers:
 /// rearranges the selected layers so they play one after another,
 /// optionally overlapping by a fixed number of frames.
-pub fn draw_sequence_layers_dialog(app: &mut AfterEffectsApp, ctx: &egui::Context) {
+pub fn draw_sequence_layers_dialog(app: &mut KagariApp, ctx: &egui::Context) {
     if !app.show_sequence_layers {
         return;
     }

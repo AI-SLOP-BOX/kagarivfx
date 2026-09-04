@@ -2,10 +2,10 @@ use crate::core::keyframe::{InterpolationType, Keyframe};
 use crate::core::property::Animatable;
 use crate::core::timeline::LightType;
 use crate::ui::theme::colors;
-use crate::AfterEffectsApp;
+use crate::KagariApp;
 use eframe::egui;
 
-pub fn draw_camera_light_options(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
+pub fn draw_camera_light_options(app: &mut KagariApp, ui: &mut egui::Ui) {
     let current_frame = app.playback.current_frame;
     let comp = app.history.current_mut().active_composition_mut();
     let mut changed = false;

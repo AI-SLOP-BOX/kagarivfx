@@ -1,7 +1,7 @@
 //! Preferences dialog: performance / history / autosave / audio settings
-//! with JSON persistence in $HOME/.aevfx_prefs.json.
+//! with JSON persistence in $HOME/.kagari_prefs.json.
 use crate::ui::theme::colors;
-use crate::AfterEffectsApp;
+use crate::KagariApp;
 use eframe::egui;
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -36,7 +36,7 @@ fn prefs_path() -> std::path::PathBuf {
     std::env::var("HOME")
         .map(std::path::PathBuf::from)
         .unwrap_or_else(|_| std::env::temp_dir())
-        .join(".aevfx_prefs.json")
+        .join(".kagari_prefs.json")
 }
 
 fn load() -> Prefs {
@@ -53,13 +53,14 @@ fn save(p: &Prefs) {
 }
 
 /// Apply stored prefs to live app state. Called once at startup.
-pub fn apply_loaded(app: &mut AfterEffectsApp) {
+pub fn apply_loaded(app: &mut KagariApp) {
     let p = load();
     apply(app, &p);
 }
 
-fn apply(app: &mut AfterEffectsApp, p: &Prefs) {
+fn apply(app: &mut KagariApp, p: &Prefs) {
     app.frame_cache.max_memory_bytes = p.cache_mb * 1024 * 1024;
+    crate::core::frame_cache::disk_cache::set_max_disk_bytes(p.disk_cache_gb as u64 * 1024 * 1024 * 1024);
     app.history.set_max_history_entries(p.undo_steps);
     app.autosave.set_interval_secs(p.autosave_secs);
     app.audio_preview_enabled = p.audio_preview;
@@ -68,7 +69,7 @@ fn apply(app: &mut AfterEffectsApp, p: &Prefs) {
     }
 }
 
-pub fn draw_preferences_dialog(app: &mut AfterEffectsApp, ctx: &egui::Context) {
+pub fn draw_preferences_dialog(app: &mut KagariApp, ctx: &egui::Context) {
     if !app.show_preferences {
         return;
     }
@@ -181,6 +182,7 @@ pub fn draw_preferences_dialog(app: &mut AfterEffectsApp, ctx: &egui::Context) {
                     .on_hover_text("Purge all rendered cache files from disk")
                     .clicked()
                 {
+                    crate::core::frame_cache::disk_cache::clear_all();
                     crate::core::frame_cache::bump_version();
                     app.toasts.info("Disk Cache emptied (0 bytes)");
                 }

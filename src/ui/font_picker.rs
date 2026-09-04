@@ -1,8 +1,8 @@
 use crate::ui::theme::colors;
-use crate::AfterEffectsApp;
+use crate::KagariApp;
 use eframe::egui;
 
-pub fn draw_font_picker(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
+pub fn draw_font_picker(app: &mut KagariApp, ui: &mut egui::Ui) {
     ui.heading("Typography & Faux Font Switches");
     ui.separator();
 
@@ -88,9 +88,9 @@ pub fn draw_font_picker(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
     ui.label("Preview:");
     let base = families.get(selected).cloned().unwrap_or_default();
     let sample = if app.faux_font_switches.2 {
-        "AFTER EFFECTS STUDIO"
+        "KAGARI VFX STUDIO"
     } else {
-        "After Effects Studio"
+        "Kagari VFX Studio"
     };
     ui.add(egui::Label::new(
         egui::RichText::new(sample)

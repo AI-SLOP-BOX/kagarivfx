@@ -1,8 +1,8 @@
 use crate::ui::theme::colors;
-use crate::AfterEffectsApp;
+use crate::KagariApp;
 use eframe::egui;
 
-pub fn draw_content(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
+pub fn draw_content(app: &mut KagariApp, ui: &mut egui::Ui) {
     ui.vertical_centered(|ui| {
         ui.heading("MASTER VU");
         ui.separator();
@@ -91,7 +91,7 @@ pub fn draw_content(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
 }
 
 #[allow(dead_code)]
-pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context) {
+pub fn draw(app: &mut KagariApp, ctx: &egui::Context) {
     egui::SidePanel::right("audio_meter_panel")
         .default_width(85.0)
         .resizable(false)

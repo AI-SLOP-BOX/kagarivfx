@@ -12,7 +12,7 @@ fn axis_3d(prop: &str) -> usize {
     }
 }
 
-/// A reusable module for rendering the After Effects keyframe Graph Editor.
+/// A reusable module for rendering the keyframe Graph Editor.
 ///
 /// Visualizes animatable property value curves over time, drawing interactive control
 /// points and Bezier tangent handles.

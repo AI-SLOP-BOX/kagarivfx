@@ -6,20 +6,20 @@ fn main() -> eframe::Result<()> {
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
             .with_inner_size([1200.0, 800.0])
-            .with_title("AEVFX Studio — Motion Graphics & Compositing (Experimental)"),
+            .with_title("Kagari VFX — Motion Graphics & Compositing (Experimental)"),
         ..Default::default()
     };
 
     eframe::run_native(
-        "AEVFX Studio",
+        "Kagari VFX",
         options,
         Box::new(|cc| {
-            let mut app = aftereffects_oss::AfterEffectsApp::default();
+            let mut app = kagari_vfx::KagariApp::default();
 
             let (frame_tx, frame_rx) = std::sync::mpsc::channel();
             let (conn_tx, conn_rx) = std::sync::mpsc::channel();
             if let Err(e) =
-                aftereffects_oss::core::integration::start_sync_server(9000, frame_tx, conn_tx)
+                kagari_vfx::core::integration::start_sync_server(9000, frame_tx, conn_tx)
             {
                 log::warn!("Dynamic Link sync server unavailable on port 9000: {}", e);
             }
@@ -29,7 +29,7 @@ fn main() -> eframe::Result<()> {
 
             #[cfg(feature = "wgpu")]
             if let Some(wgpu_state) = &cc.wgpu_render_state {
-                let renderer = aftereffects_oss::core::renderer::WgpuRenderer::new(
+                let renderer = kagari_vfx::core::renderer::WgpuRenderer::new(
                     wgpu_state.device.clone(),
                     wgpu_state.queue.clone(),
                 );
@@ -37,8 +37,8 @@ fn main() -> eframe::Result<()> {
                 app.wgpu_state = Some(wgpu_state.clone());
             }
 
-            aftereffects_oss::ui::theme::configure_ae_theme(&cc.egui_ctx);
-            aftereffects_oss::ui::icons::init_image_loaders(&cc.egui_ctx);
+            kagari_vfx::ui::theme::configure_ae_theme(&cc.egui_ctx);
+            kagari_vfx::ui::icons::init_image_loaders(&cc.egui_ctx);
 
             Ok(Box::new(app) as Box<dyn eframe::App>)
         }),

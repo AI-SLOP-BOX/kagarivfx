@@ -1,10 +1,10 @@
 use crate::ui::custom_widgets;
 use crate::ui::theme::colors;
-use crate::AfterEffectsApp;
+use crate::KagariApp;
 use eframe::egui;
 
 /// Startup crash-recovery prompt: offers to restore the latest autosave snapshot.
-pub fn draw_recovery_dialog(app: &mut AfterEffectsApp, ctx: &egui::Context) {
+pub fn draw_recovery_dialog(app: &mut KagariApp, ctx: &egui::Context) {
     if !app.show_recovery_dialog {
         return;
     }

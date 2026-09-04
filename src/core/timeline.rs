@@ -2975,7 +2975,7 @@ impl Default for Project {
         let mut text_layer = Layer::new(
             "layer_text".to_string(),
             "Main Title".to_string(),
-            LayerType::new_text("After Effects OSS", 64, [1.0, 1.0, 1.0, 1.0]),
+            LayerType::new_text("Kagari VFX", 64, [1.0, 1.0, 1.0, 1.0]),
             300,
         );
         text_layer.transform.position = Animatable::new_constant([960.0, 500.0]);

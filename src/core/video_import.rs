@@ -223,7 +223,7 @@ mod tests {
     fn test_import_rejects_missing_source() {
         let result = import_video(
             "/nonexistent/video.mp4",
-            Path::new("/tmp/aevfx_vid_test"),
+            Path::new("/tmp/kagari_vid_test"),
             30.0,
         );
         // Missing source must be rejected whether or not ffmpeg exists
@@ -236,7 +236,7 @@ mod tests {
     #[test]
     fn test_import_rejects_without_ffmpeg_gracefully() {
         // If ffmpeg is absent we get a clean error, never a panic
-        let result = import_video("/dev/null", Path::new("/tmp/aevfx_vid_test2"), 30.0);
+        let result = import_video("/dev/null", Path::new("/tmp/kagari_vid_test2"), 30.0);
         let _ = result; // Ok or Err both fine — just must not panic
     }
 }

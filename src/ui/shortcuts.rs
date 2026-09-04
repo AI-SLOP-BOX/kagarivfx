@@ -1,4 +1,4 @@
-use crate::AfterEffectsApp;
+use crate::KagariApp;
 use eframe::egui::{self, Key};
 
 /// Return platform-native command modifier label ("Cmd" on macOS, "Ctrl" on Windows/Linux)
@@ -35,12 +35,12 @@ pub fn format_shortcut(key: &str, cmd: bool, shift: bool, alt: bool) -> String {
     parts.join("+")
 }
 
-/// Centralized Keyboard Shortcut Manager for After Effects OSS.
+/// Centralized Keyboard Shortcut Manager for Kagari VFX.
 /// Encapsulates global keybindings: Spacebar playback, frame stepping, keyframe navigation (J/K),
 /// Easy Ease (F9), Undo/Redo, Pre-compose (Cmd+Shift+C), Duplicate/Split (Cmd+D / Cmd+Shift+D),
 /// Layer Deletion, property selection (P, S, T, R), and dialog triggers.
 pub fn handle_global_shortcuts(
-    app: &mut AfterEffectsApp,
+    app: &mut KagariApp,
     ctx: &egui::Context,
     current_frame: &mut u32,
     total_frames: u32,
@@ -68,7 +68,11 @@ pub fn handle_global_shortcuts(
 
         // Space → Play / Pause RAM Preview (single-key: suppressed while typing)
         if allow_single_key && i.key_pressed(Key::Space) {
-            app.playback.is_playing = !app.playback.is_playing;
+            if app.playback.is_playing {
+                app.playback.stop_playing();
+            } else {
+                app.playback.start_playing();
+            }
             if !app.playback.is_playing && app.motion_sketch_active {
                 app.motion_sketch_active = false;
                 app.toasts.info("Motion Sketch OFF");
@@ -170,7 +174,7 @@ pub fn handle_global_shortcuts(
                     // Already playing forward: increase speed (max 3x)
                     app.playback_speed = (app.playback_speed + 1).min(3);
                 } else {
-                    app.playback.is_playing = true;
+                    app.playback.start_playing();
                     app.playback_speed = 1;
                 }
                 app.toasts.info(format!("▶ Forward {}x", app.playback_speed));
@@ -989,7 +993,7 @@ pub fn handle_global_shortcuts(
 
         // ── Numpad 0 → RAM Preview (force work-area pre-render + play) ──
         if allow_single_key && i.key_pressed(Key::Num0) && !app.playback.is_playing {
-            app.playback.is_playing = true;
+            app.playback.start_playing();
         }
 
         // ── Cmd+Alt+F → Fit to Comp (uniform scale + center, AE Layer menu parity) ──
@@ -1029,7 +1033,7 @@ pub fn handle_global_shortcuts(
         if cmd && shift && i.key_pressed(Key::K) {
             app.motion_sketch_active = !app.motion_sketch_active;
             if app.motion_sketch_active {
-                app.playback.is_playing = true;
+                app.playback.start_playing();
                 app.toasts.info("Motion Sketch ON — drag layer to record position");
             } else {
                 app.toasts.info("Motion Sketch OFF");

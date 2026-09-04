@@ -1,9 +1,9 @@
 use crate::core::text_layout::TextAlign;
 use crate::ui::theme::colors;
-use crate::AfterEffectsApp;
+use crate::KagariApp;
 use eframe::egui;
 
-pub fn draw_paragraph_panel(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
+pub fn draw_paragraph_panel(app: &mut KagariApp, ui: &mut egui::Ui) {
     let comp = app.history.current_mut().active_composition_mut();
 
     let layer_idx = match app.selection.selected_layer_idx {

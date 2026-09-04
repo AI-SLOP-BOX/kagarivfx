@@ -1,6 +1,6 @@
 use eframe::egui;
 
-pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
+pub fn draw(app: &mut crate::KagariApp, ctx: &egui::Context) {
     egui::TopBottomPanel::top("menu_bar").show(ctx, |ui| {
         egui::menu::bar(ui, |ui| {
             ui.menu_button("File", |ui| {
@@ -31,8 +31,8 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
                 }
                 if ui.button("Save Project As...").clicked() {
                     if let Some(path) = rfd::FileDialog::new()
-                        .add_filter("After Effects OSS Project", &["json", "aevfx"])
-                        .set_file_name("project.aevfx.json")
+                        .add_filter("Kagari VFX Project", &["json"])
+                        .set_file_name("project.json")
                         .save_file()
                     {
                         if let Err(e) = crate::ui::project_io::save_project_to_path(app, &path) {
@@ -44,7 +44,7 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
                 if ui.button("📦 Collect Files...").on_hover_text("Collect all source footage, audio, and asset dependencies into an archive folder").clicked() {
                     if let Some(folder) = rfd::FileDialog::new().pick_folder() {
                         let project = app.history.current();
-                        let target_json = folder.join("collected_project.aevfx.json");
+                        let target_json = folder.join("collected_project.json");
                         match crate::core::project_migration::save_project_atomic(project, target_json.to_str().unwrap_or("")) {
                             Ok(_) => {
                                 crate::ui::project_io::reveal_in_file_manager(&folder);
@@ -154,7 +154,7 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
                 ui.separator();
                 if ui.button("Open Project...").clicked() {
                     if let Some(path) = rfd::FileDialog::new()
-                        .add_filter("After Effects OSS Project", &["json", "aevfx"])
+                        .add_filter("Kagari VFX Project", &["json"])
                         .pick_file()
                     {
                         if let Err(e) = crate::ui::project_io::open_project_from_path(app, &path) {
@@ -192,7 +192,7 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
                         let fps = comp.fps as f32;
                         let name = path.file_stem().map(|s| s.to_string_lossy().to_string())
                             .unwrap_or_else(|| "video".to_string());
-                        let dest = std::env::temp_dir().join("aevfx_media").join(&name);
+                        let dest = std::env::temp_dir().join("kagari_media").join(&name);
                         let src = path.to_string_lossy().to_string();
                         app.toasts.info(format!("Extracting video frames for '{}' via FFmpeg...", name));
                         ui.ctx().request_repaint();
@@ -1485,11 +1485,11 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
     let mut show_tutorial = app.show_guided_tutorial;
     if show_tutorial {
         let mut finish_tutorial = false;
-        egui::Window::new("🎓 AEVFX Studio — Quickstart Guided Tour")
+        egui::Window::new("🎓 Kagari VFX — Quickstart Guided Tour")
             .open(&mut show_tutorial)
             .resizable(false)
             .show(ctx, |ui| {
-                ui.heading("Welcome to AEVFX Motion Graphics!");
+                ui.heading("Welcome to Kagari VFX Motion Graphics!");
                 ui.add_space(4.0);
                 match app.tutorial_step {
                     0 => {
@@ -1561,7 +1561,7 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
             .open(&mut show_help)
             .resizable(false)
             .show(ctx, |ui| {
-                ui.heading("AEVFX Studio — Shortcuts Reference");
+                ui.heading("Kagari VFX — Shortcuts Reference");
                 ui.separator();
                 egui::Grid::new("shortcuts_grid")
                     .striped(true)
@@ -1694,7 +1694,7 @@ pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
     }
 }
 
-fn apply_effect_by_name(app: &mut crate::AfterEffectsApp, effect_name: &str) {
+fn apply_effect_by_name(app: &mut crate::KagariApp, effect_name: &str) {
     if let Some(idx) = app.selection.selected_layer_idx {
         let comp = app.history.current_mut().active_composition_mut();
         if idx < comp.layers.len() {

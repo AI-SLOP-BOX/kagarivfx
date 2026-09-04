@@ -6,10 +6,10 @@
 
 use crate::ui::custom_widgets;
 use crate::ui::theme::colors;
-use crate::AfterEffectsApp;
+use crate::KagariApp;
 use eframe::egui;
 
-pub fn draw_motion_sketch_panel(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
+pub fn draw_motion_sketch_panel(app: &mut KagariApp, ui: &mut egui::Ui) {
     ui.heading("✏️ Motion Sketch");
     ui.label(
         egui::RichText::new("Draw motion paths in real-time by dragging in the viewport")

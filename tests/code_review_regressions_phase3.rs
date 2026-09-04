@@ -3,8 +3,8 @@
 //! Guards against: FFmpeg argument injection, WAV path traversal,
 //! smooth() correctness, and CLI script sandbox.
 
-use aftereffects_oss::core::audio_engine::validate_wav_path;
-use aftereffects_oss::core::expression_engine;
+use kagari_vfx::core::audio_engine::validate_wav_path;
+use kagari_vfx::core::expression_engine;
 use rhai::Scope;
 
 // ─── WAV Path Traversal Validation ─────────────────────────────────────────
@@ -131,7 +131,7 @@ fn ffmpeg_audio_wav_dash_rejected() {
     // The validation happens inside start_export_cancelable, but we can verify
     // that the path validation logic exists by checking the function compiles
     // and the ExportConfig can be created. The actual spawn test requires FFmpeg.
-    let config = aftereffects_oss::core::ffmpeg_export::ExportConfig {
+    let config = kagari_vfx::core::ffmpeg_export::ExportConfig {
         output_path: "output.mp4".into(),
         width: 1920,
         height: 1080,
@@ -147,7 +147,7 @@ fn ffmpeg_audio_wav_dash_rejected() {
 /// Regression: ExportConfig with output_path starting with '-' should be rejected.
 #[test]
 fn ffmpeg_output_path_dash_rejected() {
-    let config = aftereffects_oss::core::ffmpeg_export::ExportConfig {
+    let config = kagari_vfx::core::ffmpeg_export::ExportConfig {
         output_path: "-y".into(),
         width: 1920,
         height: 1080,

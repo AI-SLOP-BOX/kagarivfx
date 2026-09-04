@@ -30,6 +30,7 @@ pub struct TileCache {
     lru_clock: u64,
     current_memory: usize,
     max_memory: usize,
+    version_override: Option<u64>,
 }
 
 impl Default for TileCache {
@@ -40,6 +41,7 @@ impl Default for TileCache {
             lru_clock: 0,
             current_memory: 0,
             max_memory: 256 * 1024 * 1024, // 256 MB
+            version_override: None,
         }
     }
 }
@@ -51,6 +53,19 @@ impl TileCache {
             max_memory: max_memory_bytes,
             ..Default::default()
         }
+    }
+
+    pub fn with_version(tile_size: u32, max_memory_bytes: usize, version: u64) -> Self {
+        Self {
+            tile_size: tile_size.max(1),
+            max_memory: max_memory_bytes,
+            version_override: Some(version),
+            ..Default::default()
+        }
+    }
+
+    fn effective_version(&self) -> u64 {
+        self.version_override.unwrap_or_else(current_tile_version)
     }
 
     pub fn tile_size(&self) -> u32 {
@@ -84,7 +99,7 @@ impl TileCache {
     }
 
     pub fn get(&mut self, frame: u32, coord: TileCoord) -> Option<&[u8]> {
-        let version = current_tile_version();
+        let version = self.effective_version();
         let key = (frame, 0, coord);
         if self
             .tiles
@@ -103,7 +118,7 @@ impl TileCache {
     }
 
     pub fn insert(&mut self, frame: u32, coord: TileCoord, pixels: Vec<u8>) {
-        let version = current_tile_version();
+        let version = self.effective_version();
         let tile_bytes = pixels.len();
         if tile_bytes > self.max_memory {
             return;

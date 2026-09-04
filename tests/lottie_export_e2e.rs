@@ -2,13 +2,13 @@
 //!
 //! The exporter was historically dead code (never called from the app or
 //! CLI); these tests pin down its output contract now that it is wired to
-//! both the GUI export dialog and the `aevfx lottie` CLI subcommand.
+//! both the GUI export dialog and the `kagari lottie` CLI subcommand.
 
-use aftereffects_oss::core::lottie_exporter::export_project_to_json;
-use aftereffects_oss::core::timeline::{Layer, LayerType, Project};
+use kagari_vfx::core::lottie_exporter::export_project_to_json;
+use kagari_vfx::core::timeline::{Layer, LayerType, Project};
 
 fn project_with_layers(layer_count: usize, bg: [f32; 4]) -> Project {
-    let mut comp = aftereffects_oss::core::timeline::Composition::new(
+    let mut comp = kagari_vfx::core::timeline::Composition::new(
         "c1".into(),
         "Main".into(),
         100,

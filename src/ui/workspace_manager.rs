@@ -1,8 +1,8 @@
 use crate::ui::theme::colors;
-use crate::AfterEffectsApp;
+use crate::KagariApp;
 use eframe::egui;
 
-pub fn draw_workspace_manager(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
+pub fn draw_workspace_manager(app: &mut KagariApp, ui: &mut egui::Ui) {
     crate::ui::custom_widgets::ae_section_header(ui, "Workspaces", "📐");
 
     // Built-in workspace presets

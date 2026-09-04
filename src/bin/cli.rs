@@ -1,14 +1,21 @@
-use aftereffects_oss::core::software_renderer::render_frame_to_pixels;
-use aftereffects_oss::core::timeline::{Composition, Project};
-use clap::{Parser, Subcommand};
+use kagari_vfx::core::software_renderer::render_frame_to_pixels;
+use kagari_vfx::core::timeline::{Composition, Project};
+use clap::{Parser, Subcommand, ValueEnum};
 
 #[derive(Parser)]
-#[command(name = "aevfx")]
-#[command(about = "AE VFX - Headless VFX rendering engine CLI", long_about = None)]
+#[command(name = "kagari")]
+#[command(about = "Kagari VFX — Headless compositing & motion-graphics engine", long_about = None)]
 #[command(version)]
 struct Cli {
     #[command(subcommand)]
     command: Commands,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
+enum OutputFormat {
+    Png,
+    Mp4,
+    Gif,
 }
 
 #[derive(Subcommand)]
@@ -28,8 +35,8 @@ enum Commands {
         output: String,
 
         /// Output format: png, mp4, gif
-        #[arg(short, long, default_value = "png")]
-        format: String,
+        #[arg(short, long, default_value = "png", value_enum)]
+        format: OutputFormat,
 
         /// Start frame (inclusive)
         #[arg(long, default_value = "0")]
@@ -55,17 +62,17 @@ enum Commands {
         #[arg(long, default_value = "0")]
         lut: u32,
 
-        /// Number of parallel render threads
-        #[arg(short, long, default_value = "4")]
-        threads: usize,
-
         /// Live binding values such as audio.bass=0.75; may be repeated
         #[arg(long = "binding", value_parser = parse_binding_value)]
         bindings: Vec<(String, f64)>,
     },
 
     /// List available effects and their parameters
-    Effects,
+    Effects {
+        /// Emit machine-readable JSON
+        #[arg(long)]
+        json: bool,
+    },
 
     /// Show project composition info
     Info {
@@ -179,6 +186,7 @@ enum Commands {
         #[arg(short, long)]
         file: String,
     },
+    /// Render a single frame to PNG (convenience shorthand)
     Frame {
         /// Path to project JSON file
         #[arg(short, long)]
@@ -263,7 +271,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             height,
             exposure,
             lut,
-            threads: _,
             bindings,
         } => {
             cmd_render(RenderArgs {
@@ -280,8 +287,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 bindings,
             })?;
         }
-        Commands::Effects => {
-            cmd_effects();
+        Commands::Effects { json } => {
+            cmd_effects(json);
         }
         Commands::Info { project } => {
             cmd_info(&project)?;
@@ -356,7 +363,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
             let json = std::fs::read_to_string(&project)?;
             let mut production =
-                aftereffects_oss::core::production_document::ProductionDocument::from_json(&json)
+                kagari_vfx::core::production_document::ProductionDocument::from_json(&json)
                     .ok();
             let mut proj = if let Some(document) = production.as_mut() {
                 document.project().clone()
@@ -376,7 +383,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 ).into());
             }
             let source = std::fs::read_to_string(&file)?;
-            let logs = aftereffects_oss::automation::run_script(&mut proj, &source)?;
+            let logs = kagari_vfx::automation::run_script(&mut proj, &source)?;
             for l in logs {
                 println!("{l}");
             }
@@ -387,7 +394,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     .map_err(std::io::Error::other)?;
             } else {
                 let out = serde_json::to_string_pretty(&proj)?;
-                std::fs::write(&project, out)?;
+                let parent = std::path::Path::new(&project)
+                    .parent()
+                    .unwrap_or(std::path::Path::new("."));
+                let tmp = parent.join(format!(
+                    ".kagari_save_{}",
+                    std::process::id()
+                ));
+                std::fs::write(&tmp, &out)?;
+                std::fs::rename(&tmp, &project)?;
             }
             println!("project saved → {}", project);
         }
@@ -493,7 +508,7 @@ fn cmd_add_sample_binding(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let json = std::fs::read_to_string(project_path)?;
     let mut document =
-        aftereffects_oss::core::production_document::ProductionDocument::from_json(&json)
+        kagari_vfx::core::production_document::ProductionDocument::from_json(&json)
             .map_err(|error| format!("Not a valid production document: {error}"))?;
     document
         .add_sample_automation_binding(source, target, points, input_range, output_range)
@@ -515,7 +530,7 @@ fn cmd_bindings(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let json = std::fs::read_to_string(project_path)?;
     let mut document =
-        aftereffects_oss::core::production_document::ProductionDocument::from_json(&json)
+        kagari_vfx::core::production_document::ProductionDocument::from_json(&json)
             .map_err(|error| format!("Not a valid production document: {error}"))?;
     let sources = values
         .iter()
@@ -537,9 +552,9 @@ fn cmd_bindings(
             document.project().compositions.first()
         }
         .ok_or("production document has no matching composition")?;
-        let rate = aftereffects_oss::core::unified_time::FrameRate::new(composition.fps.max(1), 1)
+        let rate = kagari_vfx::core::unified_time::FrameRate::new(composition.fps.max(1), 1)
             .ok_or("composition has an invalid frame rate")?;
-        let time = aftereffects_oss::core::unified_time::Time::from_frame(frame as i64, rate);
+        let time = kagari_vfx::core::unified_time::Time::from_frame(frame as i64, rate);
         targets.extend(document.evaluate_bindings_at_time(time));
     }
     if let Some(frame) = apply_frame {
@@ -572,7 +587,7 @@ fn cmd_mocap(
     max_features: usize,
     feature_spacing: u32,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    use aftereffects_oss::core::optical_flow_timewarp::{
+    use kagari_vfx::core::optical_flow_timewarp::{
         estimate_markerless_pose, filter_pose_frames_by_quality, markerless_pose_to_bvh,
         markerless_pose_to_csv, markerless_pose_to_json, name_and_connect_markerless_pose_track,
         track_markerless_motion,
@@ -593,7 +608,29 @@ fn cmd_mocap(
     }
     let mut decoded = Vec::with_capacity(paths.len());
     let mut dimensions = None;
-    for path in paths {
+    for path in &paths {
+        // Peek at the PNG header for dimensions before full decode
+        let (w, h) = if path.extension().and_then(|e| e.to_str()) == Some("png") {
+            let file = std::fs::File::open(path)?;
+            let mut buf = std::io::BufReader::new(file);
+            let mut decoder = png::Decoder::new(&mut buf);
+            let info = decoder
+                .read_header_info()
+                .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
+            (info.width, info.height)
+        } else {
+            // For non-PNG files we must decode to learn dimensions
+            let img = image::open(path)?;
+            (img.width(), img.height())
+        };
+        const MAX_DIM: u32 = 16384;
+        if w > MAX_DIM || h > MAX_DIM {
+            return Err(format!(
+                "Frame {:?} dimensions {}x{} exceed {}x{} limit",
+                path, w, h, MAX_DIM, MAX_DIM
+            )
+            .into());
+        }
         let image = image::open(path)?.to_rgba8();
         let current = (image.width(), image.height());
         if dimensions.is_some_and(|expected| expected != current) {
@@ -691,9 +728,9 @@ fn load_project(path: &str) -> Result<Project, Box<dyn std::error::Error>> {
     }
     let json = std::fs::read_to_string(path)
         .map_err(|e| format!("Failed to read project file '{}': {}", path, e))?;
-    let project = aftereffects_oss::core::production_document::ProductionDocument::from_json(&json)
+    let project = kagari_vfx::core::production_document::ProductionDocument::from_json(&json)
         .map(|document| document.project().clone())
-        .or_else(|_| aftereffects_oss::core::project_migration::load_project_migrated(&json))
+        .or_else(|_| kagari_vfx::core::project_migration::load_project_migrated(&json))
         .map_err(|e| format!("Failed to parse project JSON: {}", e))?;
     Ok(project)
 }
@@ -746,7 +783,7 @@ struct RenderArgs {
     project_path: String,
     comp_ref: Option<String>,
     output: String,
-    format: String,
+    format: OutputFormat,
     from: u32,
     to: Option<u32>,
     width: Option<u32>,
@@ -760,7 +797,7 @@ fn cmd_render(args: RenderArgs) -> Result<(), Box<dyn std::error::Error>> {
     let production = std::fs::read_to_string(&args.project_path)
         .ok()
         .and_then(|json| {
-            aftereffects_oss::core::production_document::ProductionDocument::from_json(&json).ok()
+            kagari_vfx::core::production_document::ProductionDocument::from_json(&json).ok()
         });
     let project = if let Some(document) = production.as_ref() {
         document.project.clone()
@@ -789,7 +826,7 @@ fn cmd_render(args: RenderArgs) -> Result<(), Box<dyn std::error::Error>> {
         lut: args.lut,
         bindings: &binding_values,
     };
-    let format = args.format.as_str();
+    let format = args.format;
 
     eprintln!("Rendering composition: {}", comp.name);
     eprintln!("  Size: {}x{}", spec.w, spec.h);
@@ -799,23 +836,25 @@ fn cmd_render(args: RenderArgs) -> Result<(), Box<dyn std::error::Error>> {
         spec.to,
         spec.to.saturating_sub(spec.from) + 1
     );
-    eprintln!("  Format: {}", format);
+    eprintln!("  Format: {:?}", format);
 
-    if format == "mp4" {
-        render_to_mp4(comp, &spec, production.as_ref(), comp_index)?;
-    } else if format == "gif" {
-        render_to_gif(comp, &spec, production.as_ref(), comp_index)?;
-    } else if let Some(document) = production.as_ref() {
-        render_to_png_sequence_with_bindings(document, comp_index, &spec)?;
-    } else {
-        render_to_png_sequence(comp, &spec)?;
+    match format {
+        OutputFormat::Mp4 => render_to_mp4(comp, &spec, production.as_ref(), comp_index)?,
+        OutputFormat::Gif => render_to_gif(comp, &spec, production.as_ref(), comp_index)?,
+        OutputFormat::Png => {
+            if let Some(document) = production.as_ref() {
+                render_to_png_sequence_with_bindings(document, comp_index, &spec)?;
+            } else {
+                render_to_png_sequence(comp, &spec)?;
+            }
+        }
     }
 
     Ok(())
 }
 
 fn render_to_png_sequence_with_bindings(
-    document: &aftereffects_oss::core::production_document::ProductionDocument,
+    document: &kagari_vfx::core::production_document::ProductionDocument,
     composition_index: usize,
     spec: &RenderSpec,
 ) -> Result<(), Box<dyn std::error::Error>> {
@@ -880,10 +919,10 @@ fn write_jpeg(
 fn render_to_mp4(
     comp: &Composition,
     spec: &RenderSpec,
-    production: Option<&aftereffects_oss::core::production_document::ProductionDocument>,
+    production: Option<&kagari_vfx::core::production_document::ProductionDocument>,
     composition_index: usize,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    use aftereffects_oss::core::ffmpeg_export::{
+    use kagari_vfx::core::ffmpeg_export::{
         is_ffmpeg_available, start_export_cancelable, ExportConfig,
     };
     use std::sync::{atomic::AtomicBool, Arc};
@@ -897,7 +936,7 @@ fn render_to_mp4(
     let (tx, rx) = std::sync::mpsc::channel();
 
     let audio_wav = comp.layers.iter().find_map(|l| match &l.layer_type {
-        aftereffects_oss::core::timeline::LayerType::Video { audio_wav, .. } => audio_wav.clone(),
+        kagari_vfx::core::timeline::LayerType::Video { audio_wav, .. } => audio_wav.clone(),
         _ => None,
     });
     let config = ExportConfig {
@@ -907,7 +946,7 @@ fn render_to_mp4(
         fps: comp.fps,
         total_frames: spec.to.saturating_sub(spec.from) + 1,
         audio_wav,
-        codec: aftereffects_oss::core::ffmpeg_export::VideoCodec::H264,
+        codec: kagari_vfx::core::ffmpeg_export::VideoCodec::H264,
     };
 
     let (from, _to, w, h, exposure, lut) =
@@ -940,14 +979,14 @@ fn render_to_mp4(
 
     while let Ok(event) = rx.recv() {
         match event {
-            aftereffects_oss::ExportEvent::Progress(frac, msg) => {
+            kagari_vfx::ExportEvent::Progress(frac, msg) => {
                 let pct = (frac * 100.0) as u32;
                 eprint!("\r  Encoding: {}% {}", pct, msg);
             }
-            aftereffects_oss::ExportEvent::Finished(msg) => {
+            kagari_vfx::ExportEvent::Finished(msg) => {
                 eprintln!("\n  {}", msg);
             }
-            aftereffects_oss::ExportEvent::Error(msg) => {
+            kagari_vfx::ExportEvent::Error(msg) => {
                 eprintln!("\n  Error: {}", msg);
                 return Err(msg.into());
             }
@@ -960,10 +999,10 @@ fn render_to_mp4(
 fn render_to_gif(
     comp: &Composition,
     spec: &RenderSpec,
-    production: Option<&aftereffects_oss::core::production_document::ProductionDocument>,
+    production: Option<&kagari_vfx::core::production_document::ProductionDocument>,
     composition_index: usize,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    use aftereffects_oss::core::ffmpeg_export::{
+    use kagari_vfx::core::ffmpeg_export::{
         is_ffmpeg_available, start_gif_export, ExportConfig,
     };
     use std::sync::{atomic::AtomicBool, Arc};
@@ -977,7 +1016,7 @@ fn render_to_gif(
     let (tx, rx) = std::sync::mpsc::channel();
 
     let audio_wav = comp.layers.iter().find_map(|l| match &l.layer_type {
-        aftereffects_oss::core::timeline::LayerType::Video { audio_wav, .. } => audio_wav.clone(),
+        kagari_vfx::core::timeline::LayerType::Video { audio_wav, .. } => audio_wav.clone(),
         _ => None,
     });
     let config = ExportConfig {
@@ -987,7 +1026,7 @@ fn render_to_gif(
         fps: comp.fps,
         total_frames: spec.to.saturating_sub(spec.from) + 1,
         audio_wav,
-        codec: aftereffects_oss::core::ffmpeg_export::VideoCodec::H264,
+        codec: kagari_vfx::core::ffmpeg_export::VideoCodec::H264,
     };
 
     let (from, w, h, exposure, lut) = (spec.from, spec.w, spec.h, spec.exposure, spec.lut);
@@ -1019,14 +1058,14 @@ fn render_to_gif(
 
     while let Ok(event) = rx.recv() {
         match event {
-            aftereffects_oss::ExportEvent::Progress(frac, msg) => {
+            kagari_vfx::ExportEvent::Progress(frac, msg) => {
                 let pct = (frac * 100.0) as u32;
                 eprint!("\r  GIF Encoding: {}% {}", pct, msg);
             }
-            aftereffects_oss::ExportEvent::Finished(msg) => {
+            kagari_vfx::ExportEvent::Finished(msg) => {
                 eprintln!("\n  {}", msg);
             }
-            aftereffects_oss::ExportEvent::Error(msg) => {
+            kagari_vfx::ExportEvent::Error(msg) => {
                 eprintln!("\n  Error: {}", msg);
                 return Err(msg.into());
             }
@@ -1036,49 +1075,63 @@ fn render_to_gif(
     Ok(())
 }
 
-fn cmd_effects() {
-    println!("Available Effects:");
-    println!("==================");
+fn cmd_effects(json_output: bool) {
     let effects = vec![
-        ("GaussianBlur", "Fast box blur (CPU)"),
-        ("ColorTint", "Color tint overlay"),
-        ("DropShadow", "Drop shadow with blur"),
-        ("ChromaticAberration", "RGB channel split (CPU)"),
-        ("Vignette", "Darkened edges (CPU)"),
-        ("Levels", "Input/output levels + gamma (CPU)"),
-        ("HueSaturation", "HSL adjustment (CPU)"),
-        ("Glow", "Bloom / glow effect"),
-        ("MotionBlur", "Shutter-based motion blur (CPU)"),
-        ("MeshWarp", "4-corner mesh warp (CPU)"),
-        ("ColorGradeLUT", "LUT color grading (CPU)"),
-        ("ColorSpaceConvert", "Color space transform (CPU)"),
-        ("FilmGrain", "Film grain noise (CPU)"),
-        ("FractalNoise", "Procedural noise (fBm/turb/ridge) (CPU)"),
-        ("Curves", "Per-channel bezier tone curve (CPU)"),
-        ("DisplacementMap", "Layer-based displacement warp (CPU)"),
-        ("CompoundBlur", "Variable blur with intensity map (CPU)"),
-        ("Minimax", "Dilate/erode matte (CPU)"),
-        ("ShiftChannels", "RGBA channel swap/remap (CPU)"),
-        ("Twirl", "Twirl distortion (CPU)"),
-        ("Bulge", "Bulge distortion (CPU)"),
-        ("Posterize", "Reduce color levels (CPU)"),
-        ("Invert", "Invert colors (CPU)"),
-        ("Offset", "Pixel offset with wrap (CPU)"),
-        ("DirectionalBlur", "Directional blur (CPU)"),
-        ("RadialBlur", "Radial blur (CPU)"),
-        ("Sharpen", "Unsharp mask (CPU)"),
-        ("Threshold", "Binary threshold (CPU)"),
-        ("LinearWipe", "Linear wipe transition (CPU)"),
-        ("SimpleChoker", "Matte choker (CPU)"),
-        ("ChromaKey", "Green screen key (CPU)"),
-        ("Spherize", "Sphere distortion (CPU)"),
-        ("TurbulentDisplace", "Turbulence displacement (CPU)"),
-        ("Colorama", "Color cycle (CPU)"),
+        ("GaussianBlur", "blur", "Fast box blur (CPU)"),
+        ("ColorTint", "color", "Color tint overlay"),
+        ("DropShadow", "stylize", "Drop shadow with blur"),
+        ("ChromaticAberration", "lens", "RGB channel split (CPU)"),
+        ("Vignette", "lens", "Darkened edges (CPU)"),
+        ("Levels", "color", "Input/output levels + gamma (CPU)"),
+        ("HueSaturation", "color", "HSL adjustment (CPU)"),
+        ("Glow", "stylize", "Bloom / glow effect"),
+        ("MotionBlur", "blur", "Shutter-based motion blur (CPU)"),
+        ("MeshWarp", "distort", "4-corner mesh warp (CPU)"),
+        ("ColorGradeLUT", "color", "LUT color grading (CPU)"),
+        ("ColorSpaceConvert", "color", "Color space transform (CPU)"),
+        ("FilmGrain", "noise", "Film grain noise (CPU)"),
+        ("FractalNoise", "noise", "Procedural noise (fBm/turb/ridge) (CPU)"),
+        ("Curves", "color", "Per-channel bezier tone curve (CPU)"),
+        ("DisplacementMap", "distort", "Layer-based displacement warp (CPU)"),
+        ("CompoundBlur", "blur", "Variable blur with intensity map (CPU)"),
+        ("Minimax", "matte", "Dilate/erode matte (CPU)"),
+        ("ShiftChannels", "color", "RGBA channel swap/remap (CPU)"),
+        ("Twirl", "distort", "Twirl distortion (CPU)"),
+        ("Bulge", "distort", "Bulge distortion (CPU)"),
+        ("Posterize", "color", "Reduce color levels (CPU)"),
+        ("Invert", "color", "Invert colors (CPU)"),
+        ("Offset", "distort", "Pixel offset with wrap (CPU)"),
+        ("DirectionalBlur", "blur", "Directional blur (CPU)"),
+        ("RadialBlur", "blur", "Radial blur (CPU)"),
+        ("Sharpen", "blur", "Unsharp mask (CPU)"),
+        ("Threshold", "color", "Binary threshold (CPU)"),
+        ("LinearWipe", "transition", "Linear wipe transition (CPU)"),
+        ("SimpleChoker", "matte", "Matte choker (CPU)"),
+        ("ChromaKey", "keying", "Green screen key (CPU)"),
+        ("Spherize", "distort", "Sphere distortion (CPU)"),
+        ("TurbulentDisplace", "distort", "Turbulence displacement (CPU)"),
+        ("Colorama", "color", "Color cycle (CPU)"),
     ];
-    for (name, desc) in &effects {
-        println!("  {:<24} {}", name, desc);
+    if json_output {
+        let arr: Vec<serde_json::Value> = effects
+            .iter()
+            .map(|(name, cat, desc)| {
+                serde_json::json!({
+                    "name": name,
+                    "category": cat,
+                    "description": desc,
+                })
+            })
+            .collect();
+        println!("{}", serde_json::to_string_pretty(&arr).unwrap());
+    } else {
+        println!("Available Effects:");
+        println!("==================");
+        for (name, _cat, desc) in &effects {
+            println!("  {:<24} {}", name, desc);
+        }
+        println!("\nTotal: {} effects", effects.len());
     }
-    println!("\nTotal: {} effects", effects.len());
 }
 
 fn cmd_info(project_path: &str) -> Result<(), Box<dyn std::error::Error>> {
@@ -1101,16 +1154,16 @@ fn cmd_info(project_path: &str) -> Result<(), Box<dyn std::error::Error>> {
 
         for layer in comp.layers.iter() {
             let type_name = match &layer.layer_type {
-                aftereffects_oss::core::timeline::LayerType::Solid { .. } => "Solid",
-                aftereffects_oss::core::timeline::LayerType::Text { .. } => "Text",
-                aftereffects_oss::core::timeline::LayerType::Image { .. } => "Image",
-                aftereffects_oss::core::timeline::LayerType::Video { .. } => "Video",
-                aftereffects_oss::core::timeline::LayerType::Shape { .. } => "Shape",
-                aftereffects_oss::core::timeline::LayerType::Null => "Null",
-                aftereffects_oss::core::timeline::LayerType::PreComp { .. } => "PreComp",
-                aftereffects_oss::core::timeline::LayerType::Audio { .. } => "Audio",
-                aftereffects_oss::core::timeline::LayerType::AdjustmentLayer => "Adjustment",
-                aftereffects_oss::core::timeline::LayerType::Particle { .. } => "Particle",
+                kagari_vfx::core::timeline::LayerType::Solid { .. } => "Solid",
+                kagari_vfx::core::timeline::LayerType::Text { .. } => "Text",
+                kagari_vfx::core::timeline::LayerType::Image { .. } => "Image",
+                kagari_vfx::core::timeline::LayerType::Video { .. } => "Video",
+                kagari_vfx::core::timeline::LayerType::Shape { .. } => "Shape",
+                kagari_vfx::core::timeline::LayerType::Null => "Null",
+                kagari_vfx::core::timeline::LayerType::PreComp { .. } => "PreComp",
+                kagari_vfx::core::timeline::LayerType::Audio { .. } => "Audio",
+                kagari_vfx::core::timeline::LayerType::AdjustmentLayer => "Adjustment",
+                kagari_vfx::core::timeline::LayerType::Particle { .. } => "Particle",
             };
             let vis = if layer.visible { "●" } else { "○" };
             println!(
@@ -1133,7 +1186,7 @@ fn cmd_production_info(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let json = std::fs::read_to_string(project_path)?;
     let document =
-        aftereffects_oss::core::production_document::ProductionDocument::from_json(&json)
+        kagari_vfx::core::production_document::ProductionDocument::from_json(&json)
             .map_err(|error| format!("Not a valid production document: {error}"))?;
     let clock = document.clock();
     if json_output {
@@ -1149,7 +1202,7 @@ fn cmd_production_info(
     println!("Automation bindings: {}", document.bindings.len());
     println!(
         "Beat at 1 second: {:.3}",
-        clock.beat(aftereffects_oss::core::unified_time::Time::new(1, 1))
+        clock.beat(kagari_vfx::core::unified_time::Time::new(1, 1))
     );
     for binding in &document.bindings {
         println!(
@@ -1163,7 +1216,7 @@ fn cmd_production_info(
 }
 
 fn production_info_value(
-    document: &aftereffects_oss::core::production_document::ProductionDocument,
+    document: &kagari_vfx::core::production_document::ProductionDocument,
 ) -> serde_json::Value {
     serde_json::json!({
         "schema_version": document.schema_version,
@@ -1195,15 +1248,15 @@ fn cmd_validate(project_path: &str) -> Result<(), Box<dyn std::error::Error>> {
                 comp.name, comp.width, comp.height
             ));
         }
-        if comp.width > aftereffects_oss::core::software_renderer::MAX_RENDER_DIMENSION
-            || comp.height > aftereffects_oss::core::software_renderer::MAX_RENDER_DIMENSION
+        if comp.width > kagari_vfx::core::software_renderer::MAX_RENDER_DIMENSION
+            || comp.height > kagari_vfx::core::software_renderer::MAX_RENDER_DIMENSION
         {
             errors.push(format!(
                 "Composition '{}': dimensions {}x{} exceed render limit {}",
                 comp.name,
                 comp.width,
                 comp.height,
-                aftereffects_oss::core::software_renderer::MAX_RENDER_DIMENSION
+                kagari_vfx::core::software_renderer::MAX_RENDER_DIMENSION
             ));
         }
         if comp.layers.len() > 10_000 {
@@ -1252,11 +1305,11 @@ fn cmd_validate(project_path: &str) -> Result<(), Box<dyn std::error::Error>> {
     {
         use std::collections::{HashMap, HashSet};
         // Collect every composition in the project (top-level + nested sub-comps)
-        let mut all_comps: HashMap<&str, &aftereffects_oss::core::timeline::Composition> =
+        let mut all_comps: HashMap<&str, &kagari_vfx::core::timeline::Composition> =
             HashMap::new();
         fn collect<'a>(
-            comp: &'a aftereffects_oss::core::timeline::Composition,
-            all: &mut HashMap<&'a str, &'a aftereffects_oss::core::timeline::Composition>,
+            comp: &'a kagari_vfx::core::timeline::Composition,
+            all: &mut HashMap<&'a str, &'a kagari_vfx::core::timeline::Composition>,
         ) {
             if all.insert(comp.id.as_str(), comp).is_some() {
                 return;
@@ -1274,7 +1327,7 @@ fn cmd_validate(project_path: &str) -> Result<(), Box<dyn std::error::Error>> {
         for (id, comp) in &all_comps {
             let mut refs = Vec::new();
             for layer in &comp.layers {
-                if let aftereffects_oss::core::timeline::LayerType::PreComp { comp_id } =
+                if let kagari_vfx::core::timeline::LayerType::PreComp { comp_id } =
                     &layer.layer_type
                 {
                     if !all_comps.contains_key(comp_id.as_str()) {
@@ -1350,7 +1403,7 @@ fn cmd_validate(project_path: &str) -> Result<(), Box<dyn std::error::Error>> {
                 ("opacity", &layer.transform.opacity_expression),
             ];
             for (prop, expr) in exprs {
-                if let Some(aftereffects_oss::core::timeline::Expression::Raw(script)) = expr {
+                if let Some(kagari_vfx::core::timeline::Expression::Raw(script)) = expr {
                     if script.len() > 10_000 {
                         errors.push(format!(
                             "Composition '{}' layer '{}': {} expression too long ({} bytes)",
@@ -1564,7 +1617,7 @@ fn build_qc_report(
     frame: u32,
     pixels: &[u8],
 ) -> Result<QcReport, Box<dyn std::error::Error>> {
-    use aftereffects_oss::core::editor_assist::{analyze_exposure_clipping, sharpness_score};
+    use kagari_vfx::core::editor_assist::{analyze_exposure_clipping, sharpness_score};
 
     let exposure = analyze_exposure_clipping(pixels, comp.width, comp.height, 4, 250)
         .ok_or("Rendered frame has an invalid pixel buffer")?;
@@ -1643,7 +1696,7 @@ fn format_qc_batch_report(batch: &QcBatchReport) -> String {
 
 fn cmd_lottie(project_path: &str, output: &str) -> Result<(), Box<dyn std::error::Error>> {
     let project = load_project(project_path)?;
-    let json = aftereffects_oss::core::lottie_exporter::export_project_to_json(&project);
+    let json = kagari_vfx::core::lottie_exporter::export_project_to_json(&project);
 
     let effect_count: usize = project
         .compositions
@@ -1728,7 +1781,7 @@ mod tests {
 
     #[test]
     fn production_info_json_schema_exposes_cross_domain_contract() {
-        let mut document = aftereffects_oss::core::production_document::ProductionDocument::new(
+        let mut document = kagari_vfx::core::production_document::ProductionDocument::new(
             Project::default(),
         );
         document.audio.sample_rate = 44_100;

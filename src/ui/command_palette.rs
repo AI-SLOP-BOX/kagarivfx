@@ -1,12 +1,12 @@
 use crate::ui::theme::colors;
-use crate::AfterEffectsApp;
+use crate::KagariApp;
 use eframe::egui;
 
 pub struct PaletteCommand {
     pub name: &'static str,
     pub category: &'static str,
     pub shortcut_hint: &'static str,
-    pub action: Box<dyn Fn(&mut AfterEffectsApp) + Send + Sync>,
+    pub action: Box<dyn Fn(&mut KagariApp) + Send + Sync>,
 }
 
 pub fn get_all_commands() -> Vec<PaletteCommand> {
@@ -579,7 +579,7 @@ pub fn get_all_commands() -> Vec<PaletteCommand> {
             category: "Export",
             shortcut_hint: "",
             action: Box::new(|app| {
-                let dir = std::env::temp_dir().join("aevfx_frames");
+                let dir = std::env::temp_dir().join("kagari_frames");
                 let _ = std::fs::create_dir_all(&dir);
                 let comp = app.history.current().active_composition().clone();
                 let frame = app.playback.current_frame;
@@ -985,7 +985,7 @@ pub fn get_all_commands() -> Vec<PaletteCommand> {
     ]
 }
 
-pub fn draw_command_palette(app: &mut AfterEffectsApp, ctx: &egui::Context) {
+pub fn draw_command_palette(app: &mut KagariApp, ctx: &egui::Context) {
     if !app.show_command_palette {
         return;
     }

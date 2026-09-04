@@ -1,15 +1,15 @@
 //! Stress and consistency tests for cache modules and effect parameter safety.
 //! Catches data races, memory accounting errors, and cross-module parameter drift.
 
-use aftereffects_oss::core::frame_cache::{self, FrameCache, PixelBufferPool};
-use aftereffects_oss::core::merkle_frame_cache::MerkleFrameCache;
-use aftereffects_oss::core::parallel_render::{ParallelRenderQueue, RenderQueueItem, RenderStats};
-use aftereffects_oss::core::tile_cache::{self, TileCache};
-use aftereffects_oss::core::timeline::{
+use kagari_vfx::core::frame_cache::{self, FrameCache, PixelBufferPool};
+use kagari_vfx::core::merkle_frame_cache::MerkleFrameCache;
+use kagari_vfx::core::parallel_render::{ParallelRenderQueue, RenderQueueItem, RenderStats};
+use kagari_vfx::core::tile_cache::{self, TileCache};
+use kagari_vfx::core::timeline::{
     Composition, Effect, EffectType, Layer, LayerType,
 };
-use aftereffects_oss::core::property::Animatable;
-use aftereffects_oss::core::software_renderer;
+use kagari_vfx::core::property::Animatable;
+use kagari_vfx::core::software_renderer;
 use std::sync::atomic::{AtomicU32, AtomicBool, Ordering};
 use std::sync::Arc;
 
@@ -88,11 +88,15 @@ fn frame_cache_stale_entries_invisible_after_version_bump() {
     let mut cache = FrameCache::new(100);
     let pixels = vec![200u8; 32 * 32 * 4];
 
-    let _ = frame_cache::bump_version();
+    let v_before = frame_cache::bump_version();
     cache.insert(0, 32, 32, pixels.clone());
     assert!(cache.is_cached(0), "Should be cached at current version");
 
-    let _ = frame_cache::bump_version();
+    // Bump to a version strictly greater than v_before + 1
+    let target = v_before + 2;
+    while frame_cache::current_version() < target {
+        frame_cache::bump_version();
+    }
     // After version bump, old entries should be stale
     assert!(
         !cache.is_cached(0),
@@ -133,14 +137,20 @@ fn frame_cache_invalidate_specific_layers() {
     let pixels = vec![50u8; 8 * 8 * 4];
     cache.insert_with_layers(0, 8, 8, pixels.clone(), &[0, 1, 2]);
     cache.insert_with_layers(1, 8, 8, pixels.clone(), &[3, 4, 5]);
-    let count_before = cache.cached_count();
+    assert_eq!(cache.cached_count(), 2, "Both frames should be cached");
+    assert!(!cache.is_layer_dirty(0), "Layer 0 should not be dirty yet");
 
     cache.invalidate_layers(&[0]);
-    // At least some entries should be invalidated
-    let count_after = cache.cached_count();
+    // invalidate_layers marks the layer dirty, not the frame
+    assert!(cache.is_layer_dirty(0), "Layer 0 should be dirty");
+    assert!(!cache.is_layer_dirty(1), "Layer 1 should not be dirty");
     assert!(
-        count_after <= count_before,
-        "Invalidation should not增加 entries ({count_before} -> {count_after})"
+        cache.is_frame_dirty(0, &[0, 1, 2]),
+        "Frame 0 (layers 0,1,2) should be dirty"
+    );
+    assert!(
+        !cache.is_frame_dirty(1, &[3, 4, 5]),
+        "Frame 1 (layers 3,4,5) should not be dirty"
     );
 }
 
@@ -156,7 +166,8 @@ fn pixel_buffer_pool_recycling_bounds() {
     for buf in bufs {
         pool.recycle(buf);
     }
-    // Pool should cap at 64 — no panic or OOM
+    // Pool should cap at 64
+    assert!(pool.len() <= 64, "Pool exceeded cap: {}", pool.len());
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -165,7 +176,7 @@ fn pixel_buffer_pool_recycling_bounds() {
 
 #[test]
 fn tile_cache_eviction_under_pressure() {
-    let mut cache = TileCache::new(64, 4096); // 4 KB budget, tiny
+    let mut cache = TileCache::with_version(64, 4096, 10); // 4 KB budget, tiny
     let tile_data = vec![0u8; 64 * 64 * 4]; // 16 KB per tile — oversized
 
     // Oversized tiles should be rejected silently
@@ -180,10 +191,16 @@ fn tile_cache_version_invalidation() {
     let small_tile = vec![42u8; 8 * 8 * 4];
 
     let coord = tile_cache::TileCoord { tx: 0, ty: 0 };
+    // Capture version at insert time so we can reliably bump past it
+    let v_before = tile_cache::current_tile_version();
     cache.insert(0, coord, small_tile);
-    assert!(cache.get(0, coord).is_some());
+    assert!(cache.get(0, coord).is_some(), "Should be found at insert version");
 
-    tile_cache::bump_tile_version();
+    // Bump to a version strictly greater than what was captured
+    let target = v_before + 1;
+    while tile_cache::current_tile_version() < target {
+        tile_cache::bump_tile_version();
+    }
     assert!(cache.get(0, coord).is_none(), "Stale tile should be unreachable");
 }
 
@@ -198,7 +215,7 @@ fn tile_cache_tiles_for_frame_grid_accuracy() {
 
 #[test]
 fn tile_cache_invalidate_frame_only() {
-    let mut cache = TileCache::new(64, 1024 * 1024);
+    let mut cache = TileCache::with_version(64, 1024 * 1024, 42);
     let tile = vec![1u8; 8 * 8 * 4];
     let coord = tile_cache::TileCoord { tx: 0, ty: 0 };
     cache.insert(0, coord, tile.clone());
@@ -270,7 +287,7 @@ fn parallel_render_cancel_immediate() {
             start_frame: 0,
             end_frame: 10,
             output_path: format!("/tmp/test_{i}.png"),
-            status: aftereffects_oss::core::parallel_render::RenderStatus::Pending,
+            status: kagari_vfx::core::parallel_render::RenderStatus::Pending,
         });
     }
     queue.cancel();
@@ -295,7 +312,7 @@ fn parallel_render_mfr_cancel() {
             start_frame: 0,
             end_frame: 100,
             output_path: format!("/tmp/test_{i}.png"),
-            status: aftereffects_oss::core::parallel_render::RenderStatus::Pending,
+            status: kagari_vfx::core::parallel_render::RenderStatus::Pending,
         });
     }
     queue.cancel();
@@ -324,7 +341,7 @@ fn parallel_render_progress_callback_accuracy() {
         start_frame: 0,
         end_frame: 4,
         output_path: "/tmp/test.png".into(),
-        status: aftereffects_oss::core::parallel_render::RenderStatus::Pending,
+        status: kagari_vfx::core::parallel_render::RenderStatus::Pending,
     });
 
     queue.render_all(|_, _| vec![0u8; 4]);
@@ -417,7 +434,7 @@ fn all_effect_variants_render_constant_params() {
 
     for (name, effects) in &effects {
         let mut pixels = make_pixels(w, h);
-        aftereffects_oss::core::cpu_effects::apply_layer_effects(
+        kagari_vfx::core::cpu_effects::apply_layer_effects(
             None, None, &mut pixels, w, h, effects, 0, 30,
         );
         // Verify all output pixels are in valid range
@@ -438,7 +455,7 @@ fn all_effects_with_zero_size_buffer_no_panic() {
         fx(EffectType::Sharpen { amount: c32(50.0) }),
     ];
     let mut empty = vec![0u8; 0];
-    aftereffects_oss::core::cpu_effects::apply_layer_effects(
+    kagari_vfx::core::cpu_effects::apply_layer_effects(
         None, None, &mut empty, 0, 0, &effects, 0, 30,
     );
 }
@@ -453,7 +470,7 @@ fn all_effects_on_1x1_buffer_no_panic() {
         fx(EffectType::Sharpen { amount: c32(9999.0) }),
     ];
     let mut tiny = vec![128u8; 4];
-    aftereffects_oss::core::cpu_effects::apply_layer_effects(
+    kagari_vfx::core::cpu_effects::apply_layer_effects(
         None, None, &mut tiny, 1, 1, &effects, 0, 30,
     );
 }
@@ -472,10 +489,10 @@ fn all_effects_idempotent() {
     let mut pixels1 = make_pixels(w, h);
     let mut pixels2 = pixels1.clone();
 
-    aftereffects_oss::core::cpu_effects::apply_layer_effects(
+    kagari_vfx::core::cpu_effects::apply_layer_effects(
         None, None, &mut pixels1, w, h, &effects, 0, 30,
     );
-    aftereffects_oss::core::cpu_effects::apply_layer_effects(
+    kagari_vfx::core::cpu_effects::apply_layer_effects(
         None, None, &mut pixels2, w, h, &effects, 0, 30,
     );
     assert_eq!(pixels1, pixels2, "Same effects on same input must produce identical output");
@@ -498,10 +515,10 @@ fn effect_order_matters() {
     let mut px_a = make_pixels(w, h);
     let mut px_b = px_a.clone();
 
-    aftereffects_oss::core::cpu_effects::apply_layer_effects(
+    kagari_vfx::core::cpu_effects::apply_layer_effects(
         None, None, &mut px_a, w, h, &effects_a, 0, 30,
     );
-    aftereffects_oss::core::cpu_effects::apply_layer_effects(
+    kagari_vfx::core::cpu_effects::apply_layer_effects(
         None, None, &mut px_b, w, h, &effects_b, 0, 30,
     );
 
@@ -590,7 +607,7 @@ fn blend_mode_composite_render() {
         LayerType::Solid { color: [0.5, 0.2, 0.2, 1.0] },
         1,
     );
-    top.blend_mode = aftereffects_oss::core::timeline::BlendMode::Add;
+    top.blend_mode = kagari_vfx::core::timeline::BlendMode::Add;
     comp.layers.push(top);
 
     let pixels = software_renderer::render_frame_to_pixels(&comp, 0, 16, 16, 0.0, 0);

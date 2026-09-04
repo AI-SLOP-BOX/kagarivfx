@@ -4,17 +4,17 @@
 //! NaN dedup, keyframe interpolation, shape boolean, particle forces,
 //! expression edge cases, and serialization invariants.
 
-use aftereffects_oss::core::echo_effect::{blend_echo_frame, EchoOperator};
-use aftereffects_oss::core::expression_engine;
-use aftereffects_oss::core::keyframe::{InterpolationType, Keyframe};
-use aftereffects_oss::core::particle_forces::LifeCurve;
-use aftereffects_oss::core::particle_system::*;
-use aftereffects_oss::core::property::Animatable;
-use aftereffects_oss::core::set_matte::{
+use kagari_vfx::core::echo_effect::{blend_echo_frame, EchoOperator};
+use kagari_vfx::core::expression_engine;
+use kagari_vfx::core::keyframe::{InterpolationType, Keyframe};
+use kagari_vfx::core::particle_forces::LifeCurve;
+use kagari_vfx::core::particle_system::*;
+use kagari_vfx::core::property::Animatable;
+use kagari_vfx::core::set_matte::{
     apply_set_matte, MatteCompositeMode, MatteSourceChannel, SetMatteParams,
 };
-use aftereffects_oss::core::shape_boolean::{apply_polygon_boolean, BooleanOp};
-use aftereffects_oss::core::timeline::*;
+use kagari_vfx::core::shape_boolean::{apply_polygon_boolean, BooleanOp};
+use kagari_vfx::core::timeline::*;
 use rhai::Scope;
 
 // ─── Echo Effect: All Operators ─────────────────────────────────────────────
@@ -196,7 +196,7 @@ fn set_matte_params_roundtrip() {
 /// The history should still function correctly (not corrupt state).
 #[test]
 fn history_nan_dedup_does_not_corrupt_state() {
-    use aftereffects_oss::core::history::ProjectHistory;
+    use kagari_vfx::core::history::ProjectHistory;
 
     let initial = Project::default();
     let mut history = ProjectHistory::new(initial);
@@ -235,7 +235,7 @@ fn history_nan_dedup_does_not_corrupt_state() {
 /// Regression: History byte budget should not underflow.
 #[test]
 fn history_byte_budget_no_underflow() {
-    use aftereffects_oss::core::history::ProjectHistory;
+    use kagari_vfx::core::history::ProjectHistory;
 
     let initial = Project::default();
     let mut history = ProjectHistory::new(initial);
@@ -271,7 +271,7 @@ fn history_byte_budget_no_underflow() {
 /// Regression: Bezier solver with extreme control points must not produce NaN.
 #[test]
 fn bezier_solver_extreme_values_no_nan() {
-    use aftereffects_oss::core::keyframe::solve_bezier_eased_time;
+    use kagari_vfx::core::keyframe::solve_bezier_eased_time;
 
     let extreme_cases = [
         (0.0, 0.0, 0.0, 1.0, 1.0),       // linear
@@ -347,7 +347,7 @@ fn animated_single_keyframe() {
 /// Regression: EasePreset control points must all be finite.
 #[test]
 fn ease_preset_control_points_finite() {
-    use aftereffects_oss::core::keyframe::EasePreset;
+    use kagari_vfx::core::keyframe::EasePreset;
     let presets = [
         EasePreset::Standard,
         EasePreset::FastIn,

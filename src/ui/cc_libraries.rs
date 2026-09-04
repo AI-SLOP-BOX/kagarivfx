@@ -1,11 +1,11 @@
 use crate::core::timeline::{Layer, LayerType, ProjectItemType};
-use crate::AfterEffectsApp;
+use crate::KagariApp;
 use eframe::egui;
 
 /// Local asset library: quick-create solids/text from swatches & styles, and
 /// browse the project's imported assets. (Replaces the fake "Creative Cloud"
 /// panel — everything here works offline against the real project.)
-pub fn draw_cc_libraries(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
+pub fn draw_cc_libraries(app: &mut KagariApp, ui: &mut egui::Ui) {
     ui.heading("Asset Library (Local)");
     ui.separator();
 

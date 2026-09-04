@@ -4,23 +4,23 @@
 //! Focus: cross-module pipelines stay deterministic, panic-free under
 //! parameter sweeps, and compose correctly end-to-end.
 
-use aftereffects_oss::core::ae_effects_pack_v27::{
+use kagari_vfx::core::ae_effects_pack_v27::{
     apply_cc_lens_pro, apply_optics_compensation, apply_polar_coordinates_pro, apply_wave_warp_pro,
     CcLensParams, OpticsCompensationParams, PinKind, PolarMode, WaveType, WaveWarpParams,
 };
-use aftereffects_oss::core::ae_effects_pack_v28::{
+use kagari_vfx::core::ae_effects_pack_v28::{
     apply_cc_bend_it_pro, apply_glow_pro, apply_light_sweep, LightSweepParams,
 };
-use aftereffects_oss::core::audio_spectrum::{
+use kagari_vfx::core::audio_spectrum::{
     extract_waveform, render_spectrum, AudioSpectrumOptions, AudioSpectrumType, SpectrumAnalyzer,
 };
-use aftereffects_oss::core::color_correction::{
+use kagari_vfx::core::color_correction::{
     apply_channel_mixer, apply_color_balance, apply_curves, ChannelCurves, ChannelMixer,
     ColorBalance, ToneCurve,
 };
-use aftereffects_oss::core::effect_registry_ext::ExtEffect;
-use aftereffects_oss::core::particle_forces::{apply_drag, resolve_bounds_collision, LifeCurve};
-use aftereffects_oss::core::particle_system::{ParticleEmitter, ParticleSystem};
+use kagari_vfx::core::effect_registry_ext::ExtEffect;
+use kagari_vfx::core::particle_forces::{apply_drag, resolve_bounds_collision, LifeCurve};
+use kagari_vfx::core::particle_system::{ParticleEmitter, ParticleSystem};
 
 fn gradient(w: u32, h: u32) -> Vec<u8> {
     let mut v = Vec::with_capacity((w * h * 4) as usize);
@@ -324,8 +324,8 @@ fn test_audio_pipeline_end_to_end() {
 
 #[test]
 fn test_text_animator_stack_with_color_channels() {
-    use aftereffects_oss::core::text_animator::{RangeSelector, SelectorShape};
-    use aftereffects_oss::core::text_animator_advanced::{
+    use kagari_vfx::core::text_animator::{RangeSelector, SelectorShape};
+    use kagari_vfx::core::text_animator_advanced::{
         AnimatorStack, SelectorUnit, TextAnimatorAdvanced,
     };
 
@@ -387,10 +387,10 @@ fn test_text_animator_stack_with_color_channels() {
 #[test]
 fn test_histogram_feeds_scope_rendering_contract() {
     let img = gradient(64, 64);
-    let luma = aftereffects_oss::core::color_correction::compute_luma_histogram(&img);
+    let luma = kagari_vfx::core::color_correction::compute_luma_histogram(&img);
     let total: u64 = luma.iter().map(|&v| v as u64).sum();
     assert_eq!(total, (64 * 64) as u64, "every pixel counted exactly once");
-    let rgb = aftereffects_oss::core::color_correction::compute_rgb_histograms(&img);
+    let rgb = kagari_vfx::core::color_correction::compute_rgb_histograms(&img);
     for ch in &rgb {
         let t: u64 = ch.iter().map(|&v| v as u64).sum();
         assert_eq!(t, (64 * 64) as u64);

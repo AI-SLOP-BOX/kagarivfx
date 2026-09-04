@@ -1,7 +1,7 @@
-use crate::AfterEffectsApp;
+use crate::KagariApp;
 use eframe::egui;
 
-pub fn draw_align_panel(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
+pub fn draw_align_panel(app: &mut KagariApp, ui: &mut egui::Ui) {
     ui.heading("Align & Distribute");
     ui.separator();
 

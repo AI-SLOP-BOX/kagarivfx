@@ -29,6 +29,14 @@ pub struct PlaybackDomainState {
     pub master_volume: f32,
     pub work_area_in: Option<u32>,
     pub work_area_out: Option<u32>,
+    /// Wall-clock instant when playback last started (for AV-sync).
+    pub play_start_time: Option<std::time::Instant>,
+    /// Frame at which playback last started.
+    pub play_start_frame: u32,
+    /// Cached mixed audio WAV path to avoid re-mixing every UI update.
+    pub cached_audio_path: Option<std::path::PathBuf>,
+    /// Hash of (comp_id, work_area, mixer_channels, DSP params) to detect when re-mix is needed.
+    pub cached_audio_key: u64,
 }
 
 impl Default for PlaybackDomainState {
@@ -42,6 +50,10 @@ impl Default for PlaybackDomainState {
             master_volume: 1.0,
             work_area_in: None,
             work_area_out: None,
+            play_start_time: None,
+            play_start_frame: 0,
+            cached_audio_path: None,
+            cached_audio_key: 0,
         }
     }
 }
@@ -76,6 +88,35 @@ impl SelectionDomainState {
     pub fn clear(&mut self) {
         self.selected_layers.clear();
         self.selected_layer_idx = None;
+    }
+}
+
+impl PlaybackDomainState {
+    /// Start playback from the current frame, recording wall-clock time for AV sync.
+    pub fn start_playing(&mut self) {
+        if !self.is_playing {
+            self.play_start_time = Some(std::time::Instant::now());
+            self.play_start_frame = self.current_frame;
+        }
+        self.is_playing = true;
+    }
+
+    /// Stop playback.
+    pub fn stop_playing(&mut self) {
+        self.is_playing = false;
+        self.play_start_time = None;
+    }
+
+    /// Detect and record wall-clock start if playback just transitioned to playing.
+    /// Call this at the top of every update() to cover all toggle paths.
+    pub fn sync_play_start(&mut self) {
+        if self.is_playing && self.play_start_time.is_none() {
+            self.play_start_time = Some(std::time::Instant::now());
+            self.play_start_frame = self.current_frame;
+        }
+        if !self.is_playing {
+            self.play_start_time = None;
+        }
     }
 }
 
@@ -145,7 +186,7 @@ impl DragTransaction {
 }
 
 #[cfg(feature = "gui")]
-pub struct AfterEffectsApp {
+pub struct KagariApp {
     pub history: crate::core::history::ProjectHistory,
     /// Crash-recovery autosave manager
     pub autosave: crate::core::autosave::AutosaveManager,
@@ -364,12 +405,12 @@ pub struct AfterEffectsApp {
 }
 
 #[cfg(feature = "gui")]
-impl Default for AfterEffectsApp {
+impl Default for KagariApp {
     fn default() -> Self {
         Self {
             history: crate::core::history::ProjectHistory::new(Project::default()),
             autosave: crate::core::autosave::AutosaveManager::new(
-                std::env::temp_dir().join("aevfx_recovery"),
+                std::env::temp_dir().join("kagari_recovery"),
             ),
             show_recovery_dialog: false,
             recovery_checked: false,
@@ -402,7 +443,7 @@ impl Default for AfterEffectsApp {
             rx_frame: None,
             rx_connection: None,
             connected_app: None,
-            project_path: "project.aevfx.json".to_string(),
+            project_path: "project.json".to_string(),
             production_document: None,
             automation_undo: Vec::new(),
             automation_redo: Vec::new(),
@@ -475,6 +516,10 @@ impl Default for AfterEffectsApp {
                 master_volume: 0.8,
                 work_area_in: None,
                 work_area_out: None,
+                play_start_time: None,
+                play_start_frame: 0,
+                cached_audio_path: None,
+                cached_audio_key: 0,
             },
             master_eq_highpass: 30.0,
             master_eq_lowpass: 18000.0,
@@ -543,7 +588,7 @@ impl Default for AfterEffectsApp {
 }
 
 #[cfg(feature = "gui")]
-impl AfterEffectsApp {
+impl KagariApp {
     pub fn modify_project(&mut self, f: impl FnOnce(&mut Project)) {
         let mut next_project = self.history.current().clone();
         f(&mut next_project);
@@ -652,7 +697,7 @@ impl AfterEffectsApp {
 }
 
 #[cfg(feature = "gui")]
-impl eframe::App for AfterEffectsApp {
+impl eframe::App for KagariApp {
     fn update(&mut self, ctx: &eframe::egui::Context, _frame: &mut eframe::Frame) {
         use eframe::egui;
 
@@ -673,14 +718,14 @@ impl eframe::App for AfterEffectsApp {
         // user simply closed the app normally with autosave files still present.
         if !self.recovery_checked {
             self.recovery_checked = true;
-            let dirty_exit_marker = std::env::temp_dir().join("aevfx_dirty_exit");
+            let dirty_exit_marker = std::env::temp_dir().join("kagari_dirty_exit");
             let had_crash = dirty_exit_marker.exists();
             // Write the marker for THIS session
             let _ = std::fs::write(&dirty_exit_marker, std::process::id().to_string());
             if had_crash && self.autosave.has_recovery() {
                 self.recovery_snapshot_time = std::fs::metadata(
                     std::env::temp_dir()
-                        .join("aevfx_recovery")
+                        .join("kagari_recovery")
                         .join("recovery_0.json"),
                 )
                 .ok()
@@ -707,9 +752,11 @@ impl eframe::App for AfterEffectsApp {
             log::info!("[Autosave] Recovery snapshot written: {:?}", path);
         }
 
+        // ── Detect play-start transition for wall-clock AV sync ──
+        self.playback.sync_play_start();
+
         // ── Synced audio playback: follow the playhead while playing ──
         {
-            // Mix all audio sources and play the result
             let audio_enabled = self.audio_preview_enabled;
             let fps = self.history.current().active_composition().fps.max(1);
             let playhead_sec = self.playback.current_frame as f32 / fps as f32;
@@ -744,39 +791,67 @@ impl eframe::App for AfterEffectsApp {
                 );
             }
 
-            // Mix the entire work area to a temp WAV and play it
-            let wav = if audio_enabled && self.playback.is_playing {
+            // Mix only when audio graph or work area changes (not every frame)
+            if audio_enabled && self.playback.is_playing {
+                use std::hash::{Hash, Hasher};
                 let project = self.history.current();
                 let comp = project.active_composition();
                 let wa_start = self.playback.work_area_in.unwrap_or(0);
                 let wa_end = self.playback.work_area_out.unwrap_or(comp.duration_frames);
-                let dsp = crate::core::audio_engine::MasterDspParams {
-                    eq_highpass: self.master_eq_highpass,
-                    eq_lowpass: self.master_eq_lowpass,
-                    eq_mid_gain: self.master_eq_mid_gain,
-                    eq_mid_freq: self.master_eq_mid_freq,
-                    comp_threshold: self.master_comp_threshold,
-                    comp_ratio: self.master_comp_ratio,
-                    comp_attack: self.master_comp_attack,
-                    comp_release: self.master_comp_release,
-                    comp_makeup: self.master_comp_makeup,
-                };
-                crate::core::audio_engine::mix_composition_to_wav(
-                    comp,
-                    wa_start,
-                    wa_end,
-                    48000,
-                    Some(&self.audio_mixer_channels),
-                    &dsp,
-                )
-            } else {
-                None
-            };
+                let mut hasher = std::collections::hash_map::DefaultHasher::new();
+                comp.id.hash(&mut hasher);
+                wa_start.hash(&mut hasher);
+                wa_end.hash(&mut hasher);
+                (self.master_eq_highpass.to_bits()).hash(&mut hasher);
+                (self.master_eq_lowpass.to_bits()).hash(&mut hasher);
+                (self.master_eq_mid_gain.to_bits()).hash(&mut hasher);
+                (self.master_eq_mid_freq.to_bits()).hash(&mut hasher);
+                (self.master_comp_threshold.to_bits()).hash(&mut hasher);
+                (self.master_comp_ratio.to_bits()).hash(&mut hasher);
+                (self.master_comp_attack.to_bits()).hash(&mut hasher);
+                (self.master_comp_release.to_bits()).hash(&mut hasher);
+                (self.master_comp_makeup.to_bits()).hash(&mut hasher);
+                for ch in &self.audio_mixer_channels {
+                    (ch.gain_db.to_bits()).hash(&mut hasher);
+                    (ch.pan.to_bits()).hash(&mut hasher);
+                    ch.mute.hash(&mut hasher);
+                    ch.solo.hash(&mut hasher);
+                }
+                let key = hasher.finish();
+
+                let needs_mix = self.playback.cached_audio_key != key
+                    || self.playback.cached_audio_path.is_none();
+
+                if needs_mix {
+                    let dsp = crate::core::audio_engine::MasterDspParams {
+                        eq_highpass: self.master_eq_highpass,
+                        eq_lowpass: self.master_eq_lowpass,
+                        eq_mid_gain: self.master_eq_mid_gain,
+                        eq_mid_freq: self.master_eq_mid_freq,
+                        comp_threshold: self.master_comp_threshold,
+                        comp_ratio: self.master_comp_ratio,
+                        comp_attack: self.master_comp_attack,
+                        comp_release: self.master_comp_release,
+                        comp_makeup: self.master_comp_makeup,
+                    };
+                    if let Some(wav) = crate::core::audio_engine::mix_composition_to_wav(
+                        comp,
+                        wa_start,
+                        wa_end,
+                        48000,
+                        Some(&self.audio_mixer_channels),
+                        &dsp,
+                    ) {
+                        self.playback.cached_audio_path = Some(wav);
+                        self.playback.cached_audio_key = key;
+                    }
+                }
+            }
 
             match (
                 self.playback.is_playing,
                 audio_enabled,
-                wav.as_ref(),
+                self.playback.cached_audio_path.as_ref(),
                 &mut self.audio_playback,
             ) {
                 (true, true, Some(wav), Some(playback)) => {
@@ -820,39 +895,76 @@ impl eframe::App for AfterEffectsApp {
 
         if self.playback.is_playing {
             let speed = self.playback_speed.abs().max(1) as u32;
-            if self.playback_speed >= 0 {
-                let next = current_frame.saturating_add(speed);
-                current_frame = if next >= wa_end {
-                    if self.loop_playback {
-                        // Wrap to work-area start (or comp start)
-                        if self.playback.work_area_in.is_some() || self.playback.work_area_out.is_some() {
-                            wa_start
+            let fps = self.history.current().active_composition().fps.max(1);
+
+            // Wall-clock based frame calculation
+            if let Some(start_time) = self.playback.play_start_time {
+                let elapsed = start_time.elapsed().as_secs_f64();
+                let frames_per_sec = fps as f64;
+                let direction = if self.playback_speed >= 0 { 1.0 } else { -1.0 };
+                let raw = self.playback.play_start_frame as f64
+                    + elapsed * frames_per_sec * direction * speed as f64;
+
+                if self.playback_speed >= 0 {
+                    let frame_range = wa_start..=wa_end;
+                    if raw >= wa_end as f64 {
+                        if self.loop_playback {
+                            let span = (wa_end - wa_start) as f64;
+                            let wrapped = if span > 0.0 {
+                                wa_start as f64 + ((raw - wa_start as f64) % span)
+                            } else {
+                                wa_start as f64
+                            };
+                            current_frame = wrapped as u32;
                         } else {
-                            0
+                            self.playback.stop_playing();
+                            self.motion_sketch_active = false;
+                            current_frame = wa_end;
                         }
                     } else {
-                        // Stop at the end when looping is off
-                        self.playback.is_playing = false;
-                        self.motion_sketch_active = false;
-                        wa_end
+                        current_frame = raw.max(wa_start as f64) as u32;
                     }
                 } else {
-                    next
-                };
-            } else {
-                current_frame = if current_frame == wa_start {
-                    if self.loop_playback {
-                        wa_end.saturating_sub(1)
+                    if raw <= wa_start as f64 {
+                        if self.loop_playback {
+                            let span = (wa_end - wa_start) as f64;
+                            let wrapped = if span > 0.0 {
+                                wa_end as f64 - ((wa_start as f64 - raw) % span)
+                            } else {
+                                wa_end as f64
+                            };
+                            current_frame = wrapped as u32;
+                        } else {
+                            self.playback.stop_playing();
+                            self.motion_sketch_active = false;
+                            current_frame = wa_start;
+                        }
                     } else {
-                        self.playback.is_playing = false;
-                        self.motion_sketch_active = false;
-                        wa_start
+                        current_frame = raw.min(wa_end as f64) as u32;
                     }
+                }
+            } else {
+                // Fallback: no start time recorded yet, use simple increment
+                if self.playback_speed >= 0 {
+                    let next = current_frame.saturating_add(speed);
+                    current_frame = if next >= wa_end {
+                        if self.loop_playback { wa_start } else {
+                            self.playback.stop_playing();
+                            self.motion_sketch_active = false;
+                            wa_end
+                        }
+                    } else { next };
                 } else {
-                    current_frame.saturating_sub(speed)
-                };
+                    current_frame = if current_frame == wa_start {
+                        if self.loop_playback { wa_end.saturating_sub(1) } else {
+                            self.playback.stop_playing();
+                            self.motion_sketch_active = false;
+                            wa_start
+                        }
+                    } else { current_frame.saturating_sub(speed) };
+                }
             }
-            let fps = self.history.current().active_composition().fps.max(1);
+
             let effective_fps = (fps as f32 / speed.max(1) as f32).max(1.0);
             ctx.request_repaint_after(std::time::Duration::from_secs_f32(1.0 / effective_fps));
         }
@@ -936,9 +1048,7 @@ impl eframe::App for AfterEffectsApp {
                             .color(crate::ui::theme::colors::TEXT_MUTED),
                     );
                     ui.separator();
-                    let cached_cnt = (0..total_frames)
-                        .filter(|&f| self.frame_cache.is_cached(f))
-                        .count();
+                    let cached_cnt = self.frame_cache.cached_count();
                     ui.label(
                         egui::RichText::new(format!(
                             "RAM Preview: {}/{} frames cached",
@@ -1035,7 +1145,7 @@ impl eframe::App for AfterEffectsApp {
                     }
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         ui.label(
-                            egui::RichText::new("AE OSS v0.1.0-parity")
+                            egui::RichText::new("Kagari VFX v0.1.0")
                                 .small()
                                 .color(egui::Color32::from_gray(120)),
                         );
@@ -1054,11 +1164,14 @@ impl eframe::App for AfterEffectsApp {
                         );
                         ui.separator();
                         let mem_usage = {
-                            let mut total: u64 = 0;
-                            for layer in self.history.current().active_composition().layers.iter() {
-                                total += layer.name.len() as u64;
-                            }
-                            format!("{:.1} GB / 32 GB", (total as f64 / 1_000_000_000.0).min(32.0))
+                            let comp = self.history.current().active_composition();
+                            let layer_count = comp.layers.len();
+                            let total_frames = comp.duration_frames;
+                            let cached = self.frame_cache.cached_count();
+                            format!(
+                                "{} layers | {} frames cached",
+                                layer_count, cached
+                            )
                         };
                         ui.label(
                             egui::RichText::new(format!("RAM: {}", mem_usage))
@@ -1105,7 +1218,7 @@ impl eframe::App for AfterEffectsApp {
     fn on_exit(&mut self) {
         // Clean exit — remove the dirty-exit marker so next launch doesn't
         // show the recovery dialog
-        let _ = std::fs::remove_file(std::env::temp_dir().join("aevfx_dirty_exit"));
+        let _ = std::fs::remove_file(std::env::temp_dir().join("kagari_dirty_exit"));
         if let Some(ref flag) = self.export_cancel_flag {
             flag.store(true, std::sync::atomic::Ordering::SeqCst);
         }

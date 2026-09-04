@@ -222,7 +222,7 @@ mod backup_tests {
 
     #[test]
     fn test_atomic_save_creates_backup_of_previous_generation() {
-        let dir = std::env::temp_dir().join(format!("aevfx_bak_{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("kagari_bak_{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         let path = dir.join("proj.json");
@@ -250,7 +250,7 @@ mod backup_tests {
 
     #[test]
     fn test_corrupt_primary_falls_back_to_backup() {
-        let dir = std::env::temp_dir().join(format!("aevfx_bak2_{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("kagari_bak2_{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         let path = dir.join("proj.json");
@@ -271,7 +271,7 @@ mod backup_tests {
 
     #[test]
     fn test_both_missing_is_an_error() {
-        let dir = std::env::temp_dir().join(format!("aevfx_bak3_{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("kagari_bak3_{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         let result = load_project_with_backup(dir.join("nonexistent.json"));
         assert!(result.is_err());

@@ -35,9 +35,9 @@ pub fn menu_visible(mode: UiMode, title: &str) -> bool {
     !BEGINNER_HIDDEN_MENUS.contains(&title)
 }
 
-/// Settings file path (~/.aevfx/ui_settings.json).
+/// Settings file path (~/.kagari/ui_settings.json).
 fn settings_path() -> Option<std::path::PathBuf> {
-    dirs_home().map(|h| h.join(".aevfx").join("ui_settings.json"))
+    dirs_home().map(|h| h.join(".kagari").join("ui_settings.json"))
 }
 
 fn dirs_home() -> Option<std::path::PathBuf> {

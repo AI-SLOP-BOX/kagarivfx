@@ -1,7 +1,7 @@
-use aftereffects_oss::core::particle_system::ParticleEmitter;
-use aftereffects_oss::core::property::Animatable;
+use kagari_vfx::core::particle_system::ParticleEmitter;
+use kagari_vfx::core::property::Animatable;
 /// Generates a test project JSON for CLI smoke testing.
-use aftereffects_oss::core::timeline::{Composition, Layer, LayerType, Project};
+use kagari_vfx::core::timeline::{Composition, Layer, LayerType, Project};
 
 fn main() {
     let mut comp = Composition::new("comp1".into(), "SmokeTest".into(), 320, 180, 30, 30);
@@ -29,14 +29,14 @@ fn main() {
         30,
     );
     parts.transform.position = Animatable::new_constant([160.0, 140.0]);
-    parts.blend_mode = aftereffects_oss::core::timeline::BlendMode::Add;
+    parts.blend_mode = kagari_vfx::core::timeline::BlendMode::Add;
     comp.layers.push(parts);
 
     let mut moving = Layer::new(
         "moving".into(),
         "Moving Shape".into(),
         LayerType::Shape {
-            shape_type: aftereffects_oss::core::timeline::ShapeType::Ellipse {
+            shape_type: kagari_vfx::core::timeline::ShapeType::Ellipse {
                 width: Animatable::new_constant(60.0),
                 height: Animatable::new_constant(60.0),
             },
@@ -52,15 +52,15 @@ fn main() {
     // Horizontal motion for motion blur testing
     moving.motion_blur = true;
     moving.transform.position = Animatable::new_animated(vec![
-        aftereffects_oss::core::keyframe::Keyframe::new(
+        kagari_vfx::core::keyframe::Keyframe::new(
             5,
             [80.0, 60.0],
-            aftereffects_oss::core::keyframe::InterpolationType::Linear,
+            kagari_vfx::core::keyframe::InterpolationType::Linear,
         ),
-        aftereffects_oss::core::keyframe::Keyframe::new(
+        kagari_vfx::core::keyframe::Keyframe::new(
             25,
             [240.0, 60.0],
-            aftereffects_oss::core::keyframe::InterpolationType::Linear,
+            kagari_vfx::core::keyframe::InterpolationType::Linear,
         ),
     ]);
     comp.layers.push(moving);
@@ -84,37 +84,37 @@ fn main() {
         30,
     );
     text.transform.position = Animatable::new_animated(vec![
-        aftereffects_oss::core::keyframe::Keyframe::new(
+        kagari_vfx::core::keyframe::Keyframe::new(
             0,
             [160.0, 40.0],
-            aftereffects_oss::core::keyframe::InterpolationType::Bezier {
-                outgoing: aftereffects_oss::core::keyframe::BezierControlPoint {
+            kagari_vfx::core::keyframe::InterpolationType::Bezier {
+                outgoing: kagari_vfx::core::keyframe::BezierControlPoint {
                     influence: 0.333,
                     speed: 0.0,
                 },
-                incoming: aftereffects_oss::core::keyframe::BezierControlPoint {
+                incoming: kagari_vfx::core::keyframe::BezierControlPoint {
                     influence: 0.333,
                     speed: 0.0,
                 },
                 custom_bezier: Some(
-                    aftereffects_oss::core::keyframe::EasePreset::Overshoot.control_points(),
+                    kagari_vfx::core::keyframe::EasePreset::Overshoot.control_points(),
                 ),
             },
         ),
-        aftereffects_oss::core::keyframe::Keyframe::new(
+        kagari_vfx::core::keyframe::Keyframe::new(
             20,
             [160.0, 90.0],
-            aftereffects_oss::core::keyframe::InterpolationType::Bezier {
-                outgoing: aftereffects_oss::core::keyframe::BezierControlPoint {
+            kagari_vfx::core::keyframe::InterpolationType::Bezier {
+                outgoing: kagari_vfx::core::keyframe::BezierControlPoint {
                     influence: 0.333,
                     speed: 0.0,
                 },
-                incoming: aftereffects_oss::core::keyframe::BezierControlPoint {
+                incoming: kagari_vfx::core::keyframe::BezierControlPoint {
                     influence: 0.333,
                     speed: 0.0,
                 },
                 custom_bezier: Some(
-                    aftereffects_oss::core::keyframe::EasePreset::Overshoot.control_points(),
+                    kagari_vfx::core::keyframe::EasePreset::Overshoot.control_points(),
                 ),
             },
         ),

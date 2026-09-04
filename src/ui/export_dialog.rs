@@ -4,7 +4,7 @@ use eframe::egui;
 
 /// Spawn the async FFmpeg (or fallback) render worker for one composition.
 /// Shared by the export dialog button and the Render Queue batch runner.
-pub fn start_comp_export(app: &mut crate::AfterEffectsApp, ctx: &egui::Context, comp_name: &str) {
+pub fn start_comp_export(app: &mut crate::KagariApp, ctx: &egui::Context, comp_name: &str) {
     let Some(comp) = app
         .history
         .current()
@@ -214,7 +214,7 @@ pub fn start_comp_export(app: &mut crate::AfterEffectsApp, ctx: &egui::Context, 
     );
 }
 
-pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
+pub fn draw(app: &mut crate::KagariApp, ctx: &egui::Context) {
     // ── Non-blocking Channel Event Receiver ──
     let mut finished_export = false;
     let mut next_batch_comp: Option<String> = None;

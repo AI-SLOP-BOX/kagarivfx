@@ -1,10 +1,10 @@
 //! First-run welcome overlay: kills the "empty void" first impression by
 //! offering a demo scene, a new composition, and a shortcut cheat-sheet.
 use crate::ui::theme::colors;
-use crate::AfterEffectsApp;
+use crate::KagariApp;
 use eframe::egui;
 
-pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context) {
+pub fn draw(app: &mut KagariApp, ctx: &egui::Context) {
     let project_empty = app.history.current().compositions.is_empty();
     if !project_empty && !app.show_welcome {
         return;
@@ -18,7 +18,7 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context) {
         .default_width(460.0)
         .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
         .show(ctx, |ui| {
-            ui.heading("After Effects OSS Alternative");
+            ui.heading("Kagari VFX");
             ui.label(
                 egui::RichText::new("GPU-accelerated motion graphics in Rust")
                     .color(colors::TEXT_SECONDARY),

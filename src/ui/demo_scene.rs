@@ -11,7 +11,7 @@ fn kfv2(frame: u32, v: [f32; 2]) -> Keyframe<[f32; 2]> {
     Keyframe::new(frame, v, InterpolationType::Linear)
 }
 
-pub fn build(app: &mut crate::AfterEffectsApp) {
+pub fn build(app: &mut crate::KagariApp) {
     let count = app.history.current().compositions.len();
     let mut comp = Composition::new(
         format!("comp_demo_{}", count),
@@ -68,7 +68,7 @@ pub fn build(app: &mut crate::AfterEffectsApp) {
     let mut title = Layer::new(
         "demo_title".into(),
         "Title".into(),
-        LayerType::new_text("AFTER EFFECTS OSS", 88, [0.95, 0.96, 1.0, 1.0]),
+        LayerType::new_text("KAGARI VFX", 88, [0.95, 0.96, 1.0, 1.0]),
         comp.duration_frames,
     );
     title.transform.position =

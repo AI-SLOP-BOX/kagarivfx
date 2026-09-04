@@ -1,13 +1,13 @@
 //! Hardened regression tests — catch structural bugs, layout mismatches,
 //! boundary-value errors, and cross-module inconsistencies.
 
-use aftereffects_oss::core::timeline::{
+use kagari_vfx::core::timeline::{
     BlendMode, Composition, Effect, EffectType, Layer, LayerType, TrackMatteMode,
 };
-use aftereffects_oss::core::expression_engine;
-use aftereffects_oss::core::keyframe::InterpolationType;
-use aftereffects_oss::core::property::Animatable;
-use aftereffects_oss::core::software_renderer;
+use kagari_vfx::core::expression_engine;
+use kagari_vfx::core::keyframe::InterpolationType;
+use kagari_vfx::core::property::Animatable;
+use kagari_vfx::core::software_renderer;
 
 fn fx(effect_type: EffectType) -> Effect {
     Effect {
@@ -55,7 +55,7 @@ fn effects_boundary_sweep(params: Vec<(&str, Vec<Effect>)>) {
     let h = 32u32;
     for (name, effects) in &params {
         let mut pixels = make_gradient(w, h);
-        aftereffects_oss::core::cpu_effects::apply_layer_effects(
+        kagari_vfx::core::cpu_effects::apply_layer_effects(
             None, None, &mut pixels, w, h, effects, 0, 30,
         );
         for (i, &p) in pixels.iter().enumerate() {
@@ -334,7 +334,7 @@ fn effects_nan_safety() {
         }),
     ];
     let mut pixels = vec![128u8; (w * h * 4) as usize];
-    aftereffects_oss::core::cpu_effects::apply_layer_effects(
+    kagari_vfx::core::cpu_effects::apply_layer_effects(
         None, None, &mut pixels, w, h, &effects, 0, 30,
     );
     assert_eq!(pixels.len(), (w * h * 4) as usize);
@@ -358,7 +358,7 @@ fn effects_inf_safety() {
         }),
     ];
     let mut pixels = vec![128u8; (w * h * 4) as usize];
-    aftereffects_oss::core::cpu_effects::apply_layer_effects(
+    kagari_vfx::core::cpu_effects::apply_layer_effects(
         None, None, &mut pixels, w, h, &effects, 0, 30,
     );
     assert_eq!(pixels.len(), (w * h * 4) as usize);
@@ -370,19 +370,19 @@ fn effects_tiny_buffer_boundary() {
         blur_radius: c32(5.0),
     })];
     let mut pixels_1x1 = vec![200u8; 4];
-    aftereffects_oss::core::cpu_effects::apply_layer_effects(
+    kagari_vfx::core::cpu_effects::apply_layer_effects(
         None, None, &mut pixels_1x1, 1, 1, &effects, 0, 30,
     );
     assert_eq!(pixels_1x1.len(), 4);
 
     let mut pixels_2x2 = vec![200u8; 16];
-    aftereffects_oss::core::cpu_effects::apply_layer_effects(
+    kagari_vfx::core::cpu_effects::apply_layer_effects(
         None, None, &mut pixels_2x2, 2, 2, &effects, 0, 30,
     );
     assert_eq!(pixels_2x2.len(), 16);
 
     let mut empty = vec![0u8; 0];
-    aftereffects_oss::core::cpu_effects::apply_layer_effects(
+    kagari_vfx::core::cpu_effects::apply_layer_effects(
         None, None, &mut empty, 0, 0, &effects, 0, 30,
     );
 }
@@ -407,7 +407,7 @@ fn effects_disabled_are_noops() {
             invert_alpha: true,
         }),
     ];
-    aftereffects_oss::core::cpu_effects::apply_layer_effects(
+    kagari_vfx::core::cpu_effects::apply_layer_effects(
         None, None, &mut pixels, w, h, &effects, 0, 30,
     );
     assert_eq!(pixels, original);
@@ -534,8 +534,8 @@ fn serialization_keyframe_density_roundtrip() {
         },
         600,
     );
-    let kfs: Vec<aftereffects_oss::core::keyframe::Keyframe<[f32; 2]>> = (0..600u32)
-        .map(|f| aftereffects_oss::core::keyframe::Keyframe {
+    let kfs: Vec<kagari_vfx::core::keyframe::Keyframe<[f32; 2]>> = (0..600u32)
+        .map(|f| kagari_vfx::core::keyframe::Keyframe {
             frame: f,
             value: [f as f32 * 0.1, f as f32 * 0.2],
             interpolation: InterpolationType::Linear,
@@ -1008,12 +1008,12 @@ fn all_track_matte_modes_render_safely() {
 #[test]
 fn keyframe_linear_interpolation_exact() {
     let kfs = vec![
-        aftereffects_oss::core::keyframe::Keyframe {
+        kagari_vfx::core::keyframe::Keyframe {
             frame: 0,
             value: 0.0,
             interpolation: InterpolationType::Linear,
         },
-        aftereffects_oss::core::keyframe::Keyframe {
+        kagari_vfx::core::keyframe::Keyframe {
             frame: 10,
             value: 100.0,
             interpolation: InterpolationType::Linear,
@@ -1033,12 +1033,12 @@ fn keyframe_linear_interpolation_exact() {
 #[test]
 fn keyframe_hold_interpolation_exact() {
     let kfs = vec![
-        aftereffects_oss::core::keyframe::Keyframe {
+        kagari_vfx::core::keyframe::Keyframe {
             frame: 0,
             value: 10.0,
             interpolation: InterpolationType::Hold,
         },
-        aftereffects_oss::core::keyframe::Keyframe {
+        kagari_vfx::core::keyframe::Keyframe {
             frame: 10,
             value: 20.0,
             interpolation: InterpolationType::Hold,

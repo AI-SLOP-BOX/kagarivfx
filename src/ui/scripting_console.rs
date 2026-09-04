@@ -1,5 +1,5 @@
 use crate::ui::theme::colors;
-use crate::AfterEffectsApp;
+use crate::KagariApp;
 use eframe::egui;
 use rhai::Dynamic;
 
@@ -15,7 +15,7 @@ struct ConsoleCtx {
     num_layers: i64,
 }
 
-pub fn draw_scripting_console(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
+pub fn draw_scripting_console(app: &mut KagariApp, ui: &mut egui::Ui) {
     // Console state
     if app.script_console_output.is_none() {
         app.script_console_output = Some(vec![
@@ -277,7 +277,7 @@ fn evaluate_script(script: &str, c: &ConsoleCtx) -> Result<String, String> {
 }
 
 /// Execute an automation snippet against the live project.
-fn run_automation(app: &mut AfterEffectsApp, source: &str) -> Result<Vec<String>, String> {
+fn run_automation(app: &mut KagariApp, source: &str) -> Result<Vec<String>, String> {
     let project = app.history.current_mut();
     crate::core::automation::run_script(project, source)
 }

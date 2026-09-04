@@ -6,11 +6,11 @@ use crate::core::physics::{
 use crate::core::property::Animatable;
 use crate::ui::custom_widgets;
 use crate::ui::theme::colors;
-use crate::AfterEffectsApp;
+use crate::KagariApp;
 use eframe::egui;
 
 /// 2D Rigid Body Physics & Spring Dynamics Panel for AE Motion Graphics.
-pub fn draw_physics_panel(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
+pub fn draw_physics_panel(app: &mut KagariApp, ui: &mut egui::Ui) {
     ui.heading("⚛ Physics & Dynamics");
     ui.label(
         egui::RichText::new("2D Rigid Body Collision Simulation & Keyframe Baker")

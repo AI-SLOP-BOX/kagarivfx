@@ -1,12 +1,12 @@
 #![allow(clippy::too_many_arguments)]
 
 use crate::ui::theme::colors;
-use crate::AfterEffectsApp;
+use crate::KagariApp;
 use eframe::egui;
 
 pub fn draw_viewport_overlays(
     ui: &mut egui::Ui,
-    app: &AfterEffectsApp,
+    app: &KagariApp,
     ctx: &egui::Context,
     current_frame: u32,
     origin_x: f32,

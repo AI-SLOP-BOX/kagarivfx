@@ -1,6 +1,6 @@
 use crate::core::timeline::{Effect, EffectType};
 use crate::ui::theme::colors;
-use crate::AfterEffectsApp;
+use crate::KagariApp;
 use eframe::egui;
 
 const CB_EFFECT: &str = "Lumetri Color Balance";
@@ -18,7 +18,7 @@ type WbPair = (f32, f32);
 type HslTriple = (f32, f32, f32);
 
 fn read_single_f32(
-    app: &AfterEffectsApp,
+    app: &KagariApp,
     effect_name: &str,
     field: fn(&EffectType) -> Option<f32>,
 ) -> Option<f32> {
@@ -29,7 +29,7 @@ fn read_single_f32(
     field(&e.effect_type)
 }
 
-fn read_wb(app: &AfterEffectsApp) -> Option<WbPair> {
+fn read_wb(app: &KagariApp) -> Option<WbPair> {
     let idx = app.selection.selected_layer_idx?;
     let comp = app.history.current().active_composition();
     let layer = comp.layers.get(idx)?;
@@ -47,7 +47,7 @@ fn read_wb(app: &AfterEffectsApp) -> Option<WbPair> {
     }
 }
 
-fn read_hsl(app: &AfterEffectsApp) -> Option<HslTriple> {
+fn read_hsl(app: &KagariApp) -> Option<HslTriple> {
     let idx = app.selection.selected_layer_idx?;
     let comp = app.history.current().active_composition();
     let layer = comp.layers.get(idx)?;
@@ -73,7 +73,7 @@ fn read_hsl(app: &AfterEffectsApp) -> Option<HslTriple> {
 
 /// Inserts or updates a single-`Animatable<f32>` Lumetri effect on the selected layer.
 fn write_single_f32(
-    app: &mut AfterEffectsApp,
+    app: &mut KagariApp,
     effect_name: &'static str,
     id_prefix: &'static str,
     value: f32,
@@ -104,7 +104,7 @@ fn write_single_f32(
     });
 }
 
-fn write_wb(app: &mut AfterEffectsApp, new_temperature: f32, new_tint: f32) {
+fn write_wb(app: &mut KagariApp, new_temperature: f32, new_tint: f32) {
     let Some(idx) = app.selection.selected_layer_idx else {
         return;
     };
@@ -135,7 +135,7 @@ fn write_wb(app: &mut AfterEffectsApp, new_temperature: f32, new_tint: f32) {
     });
 }
 
-fn write_hsl(app: &mut AfterEffectsApp, new_hue: f32, new_sat: f32, new_light: f32) {
+fn write_hsl(app: &mut KagariApp, new_hue: f32, new_sat: f32, new_light: f32) {
     let Some(idx) = app.selection.selected_layer_idx else {
         return;
     };
@@ -169,7 +169,7 @@ fn write_hsl(app: &mut AfterEffectsApp, new_hue: f32, new_sat: f32, new_light: f
 }
 
 /// Reads the live three-way values from the selected layer, if present.
-fn read_cb(app: &AfterEffectsApp) -> Option<ThreeWay> {
+fn read_cb(app: &KagariApp) -> Option<ThreeWay> {
     let idx = app.selection.selected_layer_idx?;
     let comp = app.history.current().active_composition();
     let layer = comp.layers.get(idx)?;
@@ -190,7 +190,7 @@ fn read_cb(app: &AfterEffectsApp) -> Option<ThreeWay> {
 }
 
 /// Inserts or updates the Lumetri Color Balance effect on the selected layer.
-fn write_cb(app: &mut AfterEffectsApp, s: [f32; 3], m: [f32; 3], h: [f32; 3], pl: bool) {
+fn write_cb(app: &mut KagariApp, s: [f32; 3], m: [f32; 3], h: [f32; 3], pl: bool) {
     let Some(idx) = app.selection.selected_layer_idx else {
         return;
     };
@@ -229,7 +229,7 @@ fn write_cb(app: &mut AfterEffectsApp, s: [f32; 3], m: [f32; 3], h: [f32; 3], pl
     });
 }
 
-fn remove_effect(app: &mut AfterEffectsApp, layer_idx: usize, effect_name: &str) {
+fn remove_effect(app: &mut KagariApp, layer_idx: usize, effect_name: &str) {
     app.modify_project(move |p| {
         let comp = p.active_composition_mut();
         if let Some(layer) = comp.layers.get_mut(layer_idx) {
@@ -239,7 +239,7 @@ fn remove_effect(app: &mut AfterEffectsApp, layer_idx: usize, effect_name: &str)
 }
 
 /// Reads the live vignette parameters from the selected layer.
-fn read_vignette(app: &AfterEffectsApp) -> Option<(f32, f32, f32, [f32; 4])> {
+fn read_vignette(app: &KagariApp) -> Option<(f32, f32, f32, [f32; 4])> {
     let idx = app.selection.selected_layer_idx?;
     let comp = app.history.current().active_composition();
     let layer = comp.layers.get(idx)?;
@@ -266,7 +266,7 @@ fn read_vignette(app: &AfterEffectsApp) -> Option<(f32, f32, f32, [f32; 4])> {
 
 /// Inserts or updates the Lumetri Vignette effect on the selected layer.
 fn write_vignette(
-    app: &mut AfterEffectsApp,
+    app: &mut KagariApp,
     intensity: f32,
     roundness: f32,
     feather: f32,
@@ -348,7 +348,7 @@ fn wheel_widget(ui: &mut egui::Ui, label: &str, arr: &mut [f32; 3]) -> bool {
     changed
 }
 
-pub fn draw_lumetri_color(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
+pub fn draw_lumetri_color(app: &mut KagariApp, ui: &mut egui::Ui) {
     // ── 📊 Live 256-Bin Luma & RGB Histogram Analyzer HUD ──
     ui.group(|ui| {
         ui.horizontal(|ui| {

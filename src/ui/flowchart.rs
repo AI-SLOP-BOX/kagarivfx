@@ -1,7 +1,7 @@
 use crate::core::timeline::{Composition, LayerType, TrackMatteMode};
 use crate::core::vfx_graph_compiler::{LayerOpType, VfxGraphCompiler};
 use crate::ui::theme::colors;
-use crate::AfterEffectsApp;
+use crate::KagariApp;
 use eframe::egui;
 
 /// Maps layer_idx → 1-based execution order from a compiled schedule
@@ -19,7 +19,7 @@ fn execution_order_map(
 }
 
 #[allow(dead_code)]
-pub fn draw_flowchart_view(app: &mut AfterEffectsApp, ui: &mut egui::Ui, comp: &Composition) {
+pub fn draw_flowchart_view(app: &mut KagariApp, ui: &mut egui::Ui, comp: &Composition) {
     // Compile the dependency graph once per frame: gives topological
     // execution order + parenting/matte/cycle analysis for the overlays.
     let mut graph = VfxGraphCompiler::new();

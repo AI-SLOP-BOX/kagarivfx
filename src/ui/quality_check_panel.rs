@@ -1,6 +1,6 @@
 use crate::core::editor_assist::{analyze_exposure_clipping, sharpness_score};
 use crate::ui::theme::colors;
-use crate::AfterEffectsApp;
+use crate::KagariApp;
 use eframe::egui;
 
 #[derive(Debug, Clone)]
@@ -13,7 +13,7 @@ pub struct QualityCheckResult {
     pub height: u32,
 }
 
-pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context) {
+pub fn draw(app: &mut KagariApp, ctx: &egui::Context) {
     if !app.show_quality_check_panel {
         return;
     }
@@ -75,7 +75,7 @@ fn draw_header(ui: &mut egui::Ui) {
     );
 }
 
-fn analyze_current_frame(app: &mut AfterEffectsApp) {
+fn analyze_current_frame(app: &mut KagariApp) {
     let frame = app.playback.current_frame;
     let layer_indices = {
         let comp = app.history.current().active_composition();
@@ -110,7 +110,7 @@ fn analyze_current_frame(app: &mut AfterEffectsApp) {
         .info(format!("Frame {frame} quality check complete"));
 }
 
-fn draw_result(app: &mut AfterEffectsApp, ui: &mut egui::Ui, result: &QualityCheckResult) {
+fn draw_result(app: &mut KagariApp, ui: &mut egui::Ui, result: &QualityCheckResult) {
     ui.horizontal(|ui| {
         ui.label(
             egui::RichText::new(format!("FRAME {}", result.frame))

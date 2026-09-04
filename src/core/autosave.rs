@@ -264,7 +264,7 @@ mod tests {
 
     #[test]
     fn test_tick_writes_only_when_dirty_and_due() {
-        let dir = std::env::temp_dir().join(format!("aevfx_autosave_test_{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("kagari_autosave_test_{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         let mut mgr = AutosaveManager::new(&dir).with_interval(Duration::from_secs(0));
 
@@ -291,7 +291,7 @@ mod tests {
     #[test]
     fn production_autosave_uses_latest_project_with_metadata() {
         let dir =
-            std::env::temp_dir().join(format!("aevfx_autosave_production_{}", std::process::id()));
+            std::env::temp_dir().join(format!("kagari_autosave_production_{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         let mut manager = AutosaveManager::new(&dir).with_interval(Duration::from_secs(0));
         let mut document = ProductionDocument::new(sample_project());
@@ -315,7 +315,7 @@ mod tests {
     #[test]
     fn legacy_project_snapshot_remains_recoverable() {
         let dir =
-            std::env::temp_dir().join(format!("aevfx_autosave_legacy_{}", std::process::id()));
+            std::env::temp_dir().join(format!("kagari_autosave_legacy_{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         let json = serde_json::to_string(&sample_project()).unwrap();
@@ -336,7 +336,7 @@ mod tests {
     #[test]
     fn invalid_production_snapshot_is_not_returned_as_recovery() {
         let dir = std::env::temp_dir().join(format!(
-            "aevfx_autosave_invalid_production_{}",
+            "kagari_autosave_invalid_production_{}",
             std::process::id()
         ));
         let _ = std::fs::remove_dir_all(&dir);
@@ -361,7 +361,7 @@ mod tests {
     #[test]
     fn project_file_validation_accepts_legacy_and_production_documents() {
         let dir = std::env::temp_dir().join(format!(
-            "aevfx_project_file_validation_{}",
+            "kagari_project_file_validation_{}",
             std::process::id()
         ));
         let _ = std::fs::remove_dir_all(&dir);
@@ -390,7 +390,7 @@ mod tests {
     #[test]
     fn recovery_skips_project_with_invalid_active_composition() {
         let dir = std::env::temp_dir().join(format!(
-            "aevfx_autosave_invalid_project_{}",
+            "kagari_autosave_invalid_project_{}",
             std::process::id()
         ));
         let _ = std::fs::remove_dir_all(&dir);
@@ -410,7 +410,7 @@ mod tests {
     #[test]
     fn production_recovery_skips_document_with_invalid_project() {
         let dir = std::env::temp_dir().join(format!(
-            "aevfx_autosave_invalid_production_project_{}",
+            "kagari_autosave_invalid_production_project_{}",
             std::process::id()
         ));
         let _ = std::fs::remove_dir_all(&dir);
@@ -437,7 +437,7 @@ mod tests {
     #[test]
     fn failed_tick_keeps_dirty_state_for_retry() {
         let path =
-            std::env::temp_dir().join(format!("aevfx_autosave_blocked_{}", std::process::id()));
+            std::env::temp_dir().join(format!("kagari_autosave_blocked_{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&path);
         std::fs::write(&path, "not a directory").unwrap();
         let mut manager = AutosaveManager::new(&path).with_interval(Duration::from_secs(0));
@@ -451,7 +451,7 @@ mod tests {
     #[test]
     fn failed_snapshot_replace_removes_unique_temp_file() {
         let dir = std::env::temp_dir().join(format!(
-            "aevfx_autosave_replace_failure_{}",
+            "kagari_autosave_replace_failure_{}",
             std::process::id()
         ));
         let _ = std::fs::remove_dir_all(&dir);
@@ -478,7 +478,7 @@ mod tests {
 
     #[test]
     fn test_rotating_slots_never_exceed_limit() {
-        let dir = std::env::temp_dir().join(format!("aevfx_autosave_rot_{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("kagari_autosave_rot_{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         let mut mgr = AutosaveManager::new(&dir).with_interval(Duration::from_secs(0));
 
@@ -501,7 +501,7 @@ mod tests {
     #[test]
     fn test_corrupt_recovery_files_are_skipped() {
         let dir =
-            std::env::temp_dir().join(format!("aevfx_autosave_corrupt_{}", std::process::id()));
+            std::env::temp_dir().join(format!("kagari_autosave_corrupt_{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
 
@@ -521,7 +521,7 @@ mod tests {
 
     #[test]
     fn test_atomic_write_leaves_no_tmp_files() {
-        let dir = std::env::temp_dir().join(format!("aevfx_autosave_tmp_{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("kagari_autosave_tmp_{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         let mut mgr = AutosaveManager::new(&dir).with_interval(Duration::from_secs(0));
         mgr.mark_dirty();

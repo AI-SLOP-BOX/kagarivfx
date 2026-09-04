@@ -1,8 +1,8 @@
 use crate::ui::theme::colors;
-use crate::AfterEffectsApp;
+use crate::KagariApp;
 use eframe::egui;
 
-pub fn draw_marker_panel(app: &mut AfterEffectsApp, ui: &mut egui::Ui, current_frame: u32) {
+pub fn draw_marker_panel(app: &mut KagariApp, ui: &mut egui::Ui, current_frame: u32) {
     ui.heading("Composition Markers");
     ui.separator();
 

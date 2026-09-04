@@ -1,12 +1,12 @@
 //! Composition breadcrumb bar: shows the trail of nested-composition
 //! navigation (double-click PreComp) and lets the user jump back.
 use crate::ui::theme::colors;
-use crate::AfterEffectsApp;
+use crate::KagariApp;
 use eframe::egui;
 
 /// Draw the breadcrumb strip. No-op when the nav stack is empty
 /// (i.e. user is at a top-level composition).
-pub fn draw_comp_breadcrumb(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
+pub fn draw_comp_breadcrumb(app: &mut KagariApp, ui: &mut egui::Ui) {
     if app.comp_nav_stack.is_empty() {
         return;
     }

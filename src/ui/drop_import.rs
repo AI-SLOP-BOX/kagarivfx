@@ -2,7 +2,7 @@
 //! ffmpeg frame-extraction pipeline on a worker thread, WAVs become Audio
 //! layers. Results stream back through a channel and are inserted above the
 //! current selection.
-use crate::AfterEffectsApp;
+use crate::KagariApp;
 use eframe::egui;
 
 pub enum ImportResult {
@@ -10,7 +10,7 @@ pub enum ImportResult {
     Err(String),
 }
 
-fn insert_layer(app: &mut AfterEffectsApp, layer: crate::core::timeline::Layer, label: &str) {
+fn insert_layer(app: &mut KagariApp, layer: crate::core::timeline::Layer, label: &str) {
     let comp_dur = app.history.current().active_composition().duration_frames;
     let insert_at = app.selection.selected_layer_idx.map(|i| i + 1).unwrap_or(0);
     let mut l = layer;
@@ -24,7 +24,7 @@ fn insert_layer(app: &mut AfterEffectsApp, layer: crate::core::timeline::Layer, 
     app.toasts.info(format!("Imported {}", label));
 }
 
-pub fn handle_dropped_files(app: &mut AfterEffectsApp, ctx: &egui::Context) {
+pub fn handle_dropped_files(app: &mut KagariApp, ctx: &egui::Context) {
     // 1) Drain finished video imports first.
     if let Some(rx) = app.import_rx.take() {
         while let Ok(res) = rx.try_recv() {

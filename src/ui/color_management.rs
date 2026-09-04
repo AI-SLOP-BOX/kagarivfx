@@ -1,8 +1,8 @@
 use crate::ui::theme::colors;
-use crate::AfterEffectsApp;
+use crate::KagariApp;
 use eframe::egui;
 
-pub fn draw_color_management(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
+pub fn draw_color_management(app: &mut KagariApp, ui: &mut egui::Ui) {
     let comp = app.history.current_mut().active_composition_mut();
     let mut changed = false;
 
@@ -283,7 +283,7 @@ pub fn draw_color_management(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
                 let path = std::env::temp_dir().join(format!("{}_grade.cube", comp.name));
                 let size = 33usize;
                 let mut content = format!(
-                    "# Created by AfterEffects OSS Alternative\n# Standard 3D LUT\nTITLE \"{}\"\nLUT_3D_SIZE {}\nDOMAIN_MIN 0.0 0.0 0.0\nDOMAIN_MAX 1.0 1.0 1.0\n",
+                    "# Created by Kagari VFX\n# Standard 3D LUT\nTITLE \"{}\"\nLUT_3D_SIZE {}\nDOMAIN_MIN 0.0 0.0 0.0\nDOMAIN_MAX 1.0 1.0 1.0\n",
                     comp.name, size
                 );
                 // Generate identity + grade 3D LUT grid (r varies fastest, then g, then b)

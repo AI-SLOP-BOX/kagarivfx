@@ -2,7 +2,7 @@
 //!
 //! Exposes a mutating API over the active project so scripts can batch-create
 //! comps, layers, keyframes and save results. Runs identically from the CLI
-//! (`aevfx script file.rhai`) and from in-app tooling.
+//! (`kagari script file.rhai`) and from in-app tooling.
 //!
 //! Implementation note: Rhai evaluation is strictly single-threaded within
 //! `run_script`, so a thread-local project pointer + log sink is the simplest

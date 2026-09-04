@@ -2,11 +2,11 @@ use crate::core::property::Animatable;
 use crate::core::roto_assist::{segment_roto_brush, trace_contour_to_polygon, RotoStroke};
 use crate::core::timeline::Layer;
 use crate::ui::theme::colors;
-use crate::AfterEffectsApp;
+use crate::KagariApp;
 use crate::ViewportMode;
 use eframe::egui;
 
-pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: u32) {
+pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: u32) {
     // History is the editable GUI state; keep the production wrapper current so
     // preview bindings never evaluate a stale project snapshot.
     if let Some(document) = app.production_document.as_mut() {
@@ -1930,7 +1930,7 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: u32) 
 /// Inline source-text editor opened by double-clicking a text layer in the viewport.
 /// Renders as an `egui::Area` positioned exactly over the text layer on the composition canvas.
 fn draw_inline_text_editor(
-    app: &mut AfterEffectsApp,
+    app: &mut KagariApp,
     ctx: &egui::Context,
     current_frame: u32,
     origin_x: f32,

@@ -1,7 +1,7 @@
 //! New Composition dialog: name + resolution/fps/duration presets +
 //! editable fields. Replaces the old instant-create Cmd+N behavior.
 use crate::ui::theme::colors;
-use crate::AfterEffectsApp;
+use crate::KagariApp;
 use eframe::egui;
 
 const PRESETS: &[(&str, u32, u32, u32, u32)] = &[
@@ -13,7 +13,7 @@ const PRESETS: &[(&str, u32, u32, u32, u32)] = &[
     ("Custom…", 1920, 1080, 30, 300),
 ];
 
-pub fn draw_new_comp_dialog(app: &mut AfterEffectsApp, ctx: &egui::Context) {
+pub fn draw_new_comp_dialog(app: &mut KagariApp, ctx: &egui::Context) {
     if !app.show_new_comp_dialog {
         return;
     }

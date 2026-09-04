@@ -3,12 +3,12 @@
 use crate::core::text_animator::TextAnimatorEngine;
 use crate::core::timeline::{Layer, LayerType};
 use crate::ui::theme::colors;
-use crate::AfterEffectsApp;
+use crate::KagariApp;
 use eframe::egui;
 
 pub fn draw_software_canvas(
     ui: &mut egui::Ui,
-    app: &AfterEffectsApp,
+    app: &KagariApp,
     current_frame: u32,
     draw_rect: egui::Rect,
     origin_x: f32,

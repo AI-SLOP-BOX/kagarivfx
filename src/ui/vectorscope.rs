@@ -6,7 +6,7 @@
 
 use crate::core::software_renderer;
 use crate::ui::theme::colors;
-use crate::AfterEffectsApp;
+use crate::KagariApp;
 use eframe::egui;
 
 /// BT.709 RGB(0..1) → (Cb, Cr), each normalized to ±0.5.
@@ -62,7 +62,7 @@ pub fn parade_buckets(pixels: &[u8], counts: &mut ParadeCounts) {
 
 const MODE_ID: &str = "vectorscope_mode";
 
-pub fn draw_vectorscope_window(app: &mut AfterEffectsApp, ctx: &egui::Context) {
+pub fn draw_vectorscope_window(app: &mut KagariApp, ctx: &egui::Context) {
     if !app.show_vectorscope {
         return;
     }

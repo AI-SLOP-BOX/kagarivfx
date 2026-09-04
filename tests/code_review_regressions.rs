@@ -3,12 +3,12 @@
 //! These tests guard against specific bugs and anti-patterns identified during
 //! the review. Each test is named after the issue it prevents from recurring.
 
-use aftereffects_oss::core::ae_effects_pack::*;
-use aftereffects_oss::core::echo_effect::{blend_echo_frame, EchoOperator};
-use aftereffects_oss::core::expression_engine;
-use aftereffects_oss::core::particle_system::*;
-use aftereffects_oss::core::property::Animatable;
-use aftereffects_oss::core::timeline::*;
+use kagari_vfx::core::ae_effects_pack::*;
+use kagari_vfx::core::echo_effect::{blend_echo_frame, EchoOperator};
+use kagari_vfx::core::expression_engine;
+use kagari_vfx::core::particle_system::*;
+use kagari_vfx::core::property::Animatable;
+use kagari_vfx::core::timeline::*;
 use rhai::Scope;
 
 // ─── Particle System ────────────────────────────────────────────────────────

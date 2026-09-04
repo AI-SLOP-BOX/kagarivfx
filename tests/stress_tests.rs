@@ -2,10 +2,10 @@
 //! These verify the renderer stays bounded in time/memory and never panics
 //! under pathological-but-plausible project sizes.
 
-use aftereffects_oss::core::keyframe::{InterpolationType, Keyframe};
-use aftereffects_oss::core::property::Animatable;
-use aftereffects_oss::core::software_renderer::render_frame_to_pixels;
-use aftereffects_oss::core::timeline::{Composition, Layer, LayerType};
+use kagari_vfx::core::keyframe::{InterpolationType, Keyframe};
+use kagari_vfx::core::property::Animatable;
+use kagari_vfx::core::software_renderer::render_frame_to_pixels;
+use kagari_vfx::core::timeline::{Composition, Layer, LayerType};
 
 #[test]
 fn stress_many_layers_render_bounded() {
@@ -86,7 +86,7 @@ fn stress_deep_precomp_nesting_terminates() {
 #[test]
 fn stress_wide_expressions_evaluate() {
     // Every layer driven by expressions referencing others — O(n²) snapshot builds must stay sane
-    use aftereffects_oss::core::timeline::Expression;
+    use kagari_vfx::core::timeline::Expression;
     let mut comp = Composition::new("c".into(), "ExprStress".into(), 64, 64, 30, 30);
     for i in 0..50 {
         let mut l = Layer::new(format!("e{}", i), format!("E{}", i), LayerType::Null, 30);

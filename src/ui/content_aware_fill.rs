@@ -1,7 +1,7 @@
-use crate::AfterEffectsApp;
+use crate::KagariApp;
 use eframe::egui;
 
-pub fn draw_content_aware_fill(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
+pub fn draw_content_aware_fill(app: &mut KagariApp, ui: &mut egui::Ui) {
     ui.heading("Content-Aware Fill");
     ui.separator();
 

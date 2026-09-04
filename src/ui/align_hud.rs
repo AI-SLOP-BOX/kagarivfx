@@ -1,8 +1,8 @@
 use crate::core::property::Animatable;
-use crate::AfterEffectsApp;
+use crate::KagariApp;
 use eframe::egui;
 
-pub fn draw_alignment_hud(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
+pub fn draw_alignment_hud(app: &mut KagariApp, ui: &mut egui::Ui) {
     ui.horizontal(|ui| {
         ui.style_mut().spacing.item_spacing.x = 2.0;
 

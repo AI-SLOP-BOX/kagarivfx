@@ -1,10 +1,10 @@
 use crate::core::timeline::{Layer, LayerType, ProjectItem, ProjectItemType};
 use crate::ui::custom_widgets;
 use crate::ui::theme::colors;
-use crate::AfterEffectsApp;
+use crate::KagariApp;
 use eframe::egui;
 
-pub fn draw(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
+pub fn draw(app: &mut KagariApp, ui: &mut egui::Ui) {
     ui.heading("Project");
     ui.separator();
 
@@ -390,7 +390,7 @@ pub fn draw(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
                     duration_sec: _,
                 } => {
                     // Import the video (frame extraction) and add a Video layer
-                    let media_dir = std::env::temp_dir().join("aevfx_media").join(
+                    let media_dir = std::env::temp_dir().join("kagari_media").join(
                         std::path::Path::new(&path)
                             .file_stem()
                             .map(|s| s.to_string_lossy().to_string())

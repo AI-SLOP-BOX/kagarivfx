@@ -1,6 +1,6 @@
 use crate::core::keyframe::InterpolationType;
 use crate::core::property::Animatable;
-use crate::AfterEffectsApp;
+use crate::KagariApp;
 use eframe::egui;
 
 /// Applies a custom bezier derived from AE velocity/influence sliders to every
@@ -36,7 +36,7 @@ fn apply_velocity_bezier<T: Clone + crate::core::property::Interpolate>(
     }
 }
 
-pub fn draw_speed_graph_options(app: &mut AfterEffectsApp, ui: &mut egui::Ui, current_frame: u32) {
+pub fn draw_speed_graph_options(app: &mut KagariApp, ui: &mut egui::Ui, current_frame: u32) {
     ui.heading("Graph Editor Options & Keyframe Velocity");
     ui.separator();
 
@@ -179,7 +179,7 @@ pub fn draw_speed_graph_options(app: &mut AfterEffectsApp, ui: &mut egui::Ui, cu
 
 /// Applies an ease preset to the selected layer's graph property keyframes.
 fn apply_preset_ease(
-    app: &mut AfterEffectsApp,
+    app: &mut KagariApp,
     in_inf: f32,
     _in_spd: f32,
     out_inf: f32,

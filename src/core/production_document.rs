@@ -2499,7 +2499,7 @@ mod tests {
     #[test]
     fn atomic_save_and_load_preserve_contract() {
         let directory =
-            std::env::temp_dir().join(format!("aevfx_production_document_{}", std::process::id()));
+            std::env::temp_dir().join(format!("kagari_production_document_{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&directory);
         std::fs::create_dir_all(&directory).unwrap();
         let path = directory.join("session.aura");
@@ -2517,7 +2517,7 @@ mod tests {
     #[test]
     fn failed_atomic_replace_removes_temporary_document() {
         let directory = std::env::temp_dir().join(format!(
-            "aevfx_production_document_failure_{}",
+            "kagari_production_document_failure_{}",
             std::process::id()
         ));
         let _ = std::fs::remove_dir_all(&directory);

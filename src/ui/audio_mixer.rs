@@ -1,8 +1,8 @@
 use crate::ui::theme::colors;
-use crate::AfterEffectsApp;
+use crate::KagariApp;
 use eframe::egui;
 
-pub fn draw_audio_mixer(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
+pub fn draw_audio_mixer(app: &mut KagariApp, ui: &mut egui::Ui) {
     ui.heading("Multi-Track Audio Mixer");
     ui.separator();
 

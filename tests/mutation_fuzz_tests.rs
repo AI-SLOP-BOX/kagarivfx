@@ -4,10 +4,10 @@
 //! that parsing never panics, rendering never panics, and the expression engine
 //! always returns (fallback or value — never a crash or hang).
 
-use aftereffects_oss::core::expression_engine::{build_engine, eval_f32};
-use aftereffects_oss::core::property::Animatable;
-use aftereffects_oss::core::software_renderer::render_frame_to_pixels;
-use aftereffects_oss::core::timeline::{Composition, Layer, LayerType, Project};
+use kagari_vfx::core::expression_engine::{build_engine, eval_f32};
+use kagari_vfx::core::property::Animatable;
+use kagari_vfx::core::software_renderer::render_frame_to_pixels;
+use kagari_vfx::core::timeline::{Composition, Layer, LayerType, Project};
 
 fn seed_project_json() -> String {
     let mut comp = Composition::new("c1".into(), "Seed".into(), 32, 32, 30, 30);
@@ -18,17 +18,17 @@ fn seed_project_json() -> String {
         30,
     );
     l.transform.position = Animatable::new_animated(vec![
-        aftereffects_oss::core::keyframe::Keyframe::new(
+        kagari_vfx::core::keyframe::Keyframe::new(
             0,
             [16.0, 16.0],
-            aftereffects_oss::core::keyframe::InterpolationType::Linear,
+            kagari_vfx::core::keyframe::InterpolationType::Linear,
         ),
-        aftereffects_oss::core::keyframe::Keyframe::new(
+        kagari_vfx::core::keyframe::Keyframe::new(
             29,
             [20.0, 20.0],
-            aftereffects_oss::core::keyframe::InterpolationType::Bezier {
-                outgoing: aftereffects_oss::core::keyframe::BezierControlPoint::default(),
-                incoming: aftereffects_oss::core::keyframe::BezierControlPoint::default(),
+            kagari_vfx::core::keyframe::InterpolationType::Bezier {
+                outgoing: kagari_vfx::core::keyframe::BezierControlPoint::default(),
+                incoming: kagari_vfx::core::keyframe::BezierControlPoint::default(),
                 custom_bezier: Some([0.33; 4]),
             },
         ),
@@ -189,21 +189,21 @@ fn rendering_is_deterministic_same_input_same_bytes() {
         30,
     );
     l.transform.position = Animatable::new_animated(vec![
-        aftereffects_oss::core::keyframe::Keyframe::new(
+        kagari_vfx::core::keyframe::Keyframe::new(
             0,
             [20.0, 32.0],
-            aftereffects_oss::core::keyframe::InterpolationType::Bezier {
-                outgoing: aftereffects_oss::core::keyframe::BezierControlPoint::default(),
-                incoming: aftereffects_oss::core::keyframe::BezierControlPoint::default(),
+            kagari_vfx::core::keyframe::InterpolationType::Bezier {
+                outgoing: kagari_vfx::core::keyframe::BezierControlPoint::default(),
+                incoming: kagari_vfx::core::keyframe::BezierControlPoint::default(),
                 custom_bezier: Some([0.25, 0.1, 0.25, 1.0]),
             },
         ),
-        aftereffects_oss::core::keyframe::Keyframe::new(
+        kagari_vfx::core::keyframe::Keyframe::new(
             29,
             [44.0, 32.0],
-            aftereffects_oss::core::keyframe::InterpolationType::Bezier {
-                outgoing: aftereffects_oss::core::keyframe::BezierControlPoint::default(),
-                incoming: aftereffects_oss::core::keyframe::BezierControlPoint::default(),
+            kagari_vfx::core::keyframe::InterpolationType::Bezier {
+                outgoing: kagari_vfx::core::keyframe::BezierControlPoint::default(),
+                incoming: kagari_vfx::core::keyframe::BezierControlPoint::default(),
                 custom_bezier: Some([0.25, 0.1, 0.25, 1.0]),
             },
         ),
@@ -222,7 +222,7 @@ fn rendering_is_deterministic_same_input_same_bytes() {
 #[test]
 fn roundtrip_project_json_preserves_render() {
     // Save → load → render must produce identical pixels (serialization fidelity)
-    use aftereffects_oss::core::project_migration::{
+    use kagari_vfx::core::project_migration::{
         load_project_migrated, save_project_versioned,
     };
     let mut comp = Composition::new("c".into(), "Roundtrip".into(), 48, 48, 30, 30);

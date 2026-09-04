@@ -1,8 +1,8 @@
 use crate::ui::theme::colors;
-use crate::AfterEffectsApp;
+use crate::KagariApp;
 use eframe::egui;
 
-pub fn draw_metadata_panel(app: &AfterEffectsApp, ui: &mut egui::Ui) {
+pub fn draw_metadata_panel(app: &KagariApp, ui: &mut egui::Ui) {
     let comp = app.history.current().active_composition();
 
     crate::ui::custom_widgets::ae_section_header(ui, "Composition Info", "📋");

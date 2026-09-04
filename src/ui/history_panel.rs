@@ -1,10 +1,10 @@
 //! Undo History panel: lists named history steps newest-first, highlights
 //! the active entry, and jumps to any step on click.
 use crate::ui::theme::colors;
-use crate::AfterEffectsApp;
+use crate::KagariApp;
 use eframe::egui;
 
-pub fn draw_history_panel(app: &mut AfterEffectsApp, ctx: &egui::Context) {
+pub fn draw_history_panel(app: &mut KagariApp, ctx: &egui::Context) {
     if !app.show_history_panel {
         return;
     }

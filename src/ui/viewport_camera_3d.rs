@@ -2,12 +2,12 @@
 
 use crate::core::timeline::LayerType;
 use crate::ui::theme::colors;
-use crate::AfterEffectsApp;
+use crate::KagariApp;
 use eframe::egui;
 
 pub fn draw_camera_3d_viewport(
     ui: &mut egui::Ui,
-    app: &mut AfterEffectsApp,
+    app: &mut KagariApp,
     ctx: &egui::Context,
     current_frame: u32,
     viewport_response: &egui::Response,

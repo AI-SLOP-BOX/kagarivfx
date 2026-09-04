@@ -15,8 +15,49 @@
 use std::io::Write;
 
 type RenderFrameFn = Arc<dyn Fn(&str, u32) -> Vec<u8> + Send + Sync>;
-use std::process::{Command, Stdio};
+use std::process::{Child, Command, Stdio};
 use std::sync::mpsc::Sender;
+
+/// RAII guard that ensures a child process is killed and waited on drop.
+/// Prevents zombie processes on all exit paths (error, cancel, early return).
+struct ChildGuard {
+    child: Option<Child>,
+}
+
+impl ChildGuard {
+    fn new(child: Child) -> Self {
+        Self { child: Some(child) }
+    }
+
+    /// Take ownership and prevent auto-kill (e.g., on successful wait).
+    fn take(&mut self) -> Option<Child> {
+        self.child.take()
+    }
+}
+
+impl Drop for ChildGuard {
+    fn drop(&mut self) {
+        if let Some(mut child) = self.child.take() {
+            let _ = child.kill();
+            let _ = child.wait();
+        }
+    }
+}
+
+/// Drain stderr from a child process in a background thread, returning the output.
+/// This prevents the pipe buffer from filling up and causing a deadlock when the
+/// parent calls `child.wait()` before reading stderr.
+fn drain_stderr(mut child: Child) -> (Child, std::thread::JoinHandle<String>) {
+    let stderr = child.stderr.take();
+    let handle = std::thread::spawn(move || {
+        let mut output = String::new();
+        if let Some(mut s) = stderr {
+            let _ = std::io::Read::read_to_string(&mut s, &mut output);
+        }
+        output
+    });
+    (child, handle)
+}
 
 /// Events sent from the export thread to the UI thread.
 #[derive(Debug, Clone)]
@@ -235,7 +276,12 @@ where
                 }
             };
 
-            let mut stdin = match child.stdin.take() {
+            // Drain stderr in a background thread to prevent pipe buffer deadlock
+            let (child_with_stderr, stderr_handle) = drain_stderr(child);
+            child = child_with_stderr;
+            let mut guard = ChildGuard::new(child);
+
+            let mut stdin = match guard.child.as_mut().and_then(|c| c.stdin.take()) {
                 Some(s) => s,
                 None => {
                     let _ = tx.send(ExportEvent::Error(
@@ -266,9 +312,8 @@ where
             for frame_idx in 0..config.total_frames {
                 if cancel_flag.load(Ordering::SeqCst) {
                     log::info!("[FFmpegExport] export canceled by user — terminating process");
-                    let _ = child.kill();
                     let _ = tx.send(ExportEvent::Error("Export canceled by user".to_string()));
-                    return;
+                    return; // guard.drop() kills and waits
                 }
 
                 // Render the frame to raw RGBA pixels (cancellable mid-frame)
@@ -304,7 +349,11 @@ where
             // Close stdin to signal EOF to FFmpeg
             drop(stdin);
 
+            // Take child from guard before manual wait (guard won't double-kill)
+            let mut child = guard.take().expect("child must still be in guard");
+
             // Wait for FFmpeg to finish
+            let stderr_output = stderr_handle.join().unwrap_or_default();
             match child.wait() {
                 Ok(status) if status.success() => {
                     let _ = tx.send(ExportEvent::Finished(format!(
@@ -313,16 +362,6 @@ where
                     )));
                 }
                 Ok(status) => {
-                    // Collect stderr for diagnostics
-                    let stderr_output = child
-                        .stderr
-                        .take()
-                        .map(|mut s| {
-                            let mut buf = String::new();
-                            std::io::Read::read_to_string(&mut s, &mut buf).ok();
-                            buf
-                        })
-                        .unwrap_or_default();
                     let _ = tx.send(ExportEvent::Error(format!(
                         "FFmpeg exited with code {:?}\n{}",
                         status.code(),
@@ -433,7 +472,11 @@ where
                 }
             };
 
-            let mut palette_stdin = match palette_child.stdin.take() {
+            // Drain stderr to prevent pipe buffer deadlock
+            let (palette_child, palette_stderr_handle) = drain_stderr(palette_child);
+            let mut palette_guard = ChildGuard::new(palette_child);
+
+            let mut palette_stdin = match palette_guard.child.as_mut().and_then(|c| c.stdin.take()) {
                 Some(s) => s,
                 None => {
                     let _ = tx.send(ExportEvent::Error(
@@ -445,9 +488,8 @@ where
 
             for frame_idx in 0..config.total_frames {
                 if cancel_flag.load(Ordering::SeqCst) {
-                    let _ = palette_child.kill();
                     let _ = tx.send(ExportEvent::Error("Export canceled by user".to_string()));
-                    return;
+                    return; // guard drops, kills child
                 }
 
                 let pixels = render_with_cancel(&cancel_flag, &render_frame_fn, frame_idx);
@@ -481,18 +523,11 @@ where
 
             drop(palette_stdin);
 
+            let mut palette_child = palette_guard.take().expect("palette child must be in guard");
+            let stderr_output = palette_stderr_handle.join().unwrap_or_default();
             match palette_child.wait() {
                 Ok(status) if status.success() => { /* ok */ }
                 Ok(status) => {
-                    let stderr_output = palette_child
-                        .stderr
-                        .take()
-                        .map(|mut s| {
-                            let mut buf = String::new();
-                            std::io::Read::read_to_string(&mut s, &mut buf).ok();
-                            buf
-                        })
-                        .unwrap_or_default();
                     let _ = tx.send(ExportEvent::Error(format!(
                         "FFmpeg palette pass exited with code {:?}\n{}",
                         status.code(),
@@ -552,7 +587,11 @@ where
                 }
             };
 
-            let mut gif_stdin = match gif_child.stdin.take() {
+            // Drain stderr to prevent pipe buffer deadlock
+            let (gif_child, gif_stderr_handle) = drain_stderr(gif_child);
+            let mut gif_guard = ChildGuard::new(gif_child);
+
+            let mut gif_stdin = match gif_guard.child.as_mut().and_then(|c| c.stdin.take()) {
                 Some(s) => s,
                 None => {
                     let _ = tx.send(ExportEvent::Error(
@@ -565,10 +604,9 @@ where
 
             for frame_idx in 0..config.total_frames {
                 if cancel_flag.load(Ordering::SeqCst) {
-                    let _ = gif_child.kill();
                     let _ = tx.send(ExportEvent::Error("Export canceled by user".to_string()));
                     let _ = std::fs::remove_file(&palette_path);
-                    return;
+                    return; // guard drops, kills child
                 }
 
                 let pixels = render_with_cancel(&cancel_flag, &render_frame_fn, frame_idx);
@@ -599,7 +637,8 @@ where
             }
 
             drop(gif_stdin);
-
+            let mut gif_child = gif_guard.take().expect("gif child must be in guard");
+            let stderr_output = gif_stderr_handle.join().unwrap_or_default();
             match gif_child.wait() {
                 Ok(status) if status.success() => {
                     let _ = std::fs::remove_file(&palette_path);
@@ -609,17 +648,8 @@ where
                     )));
                 }
                 Ok(status) => {
-                    let stderr_output = gif_child
-                        .stderr
-                        .take()
-                        .map(|mut s| {
-                            let mut buf = String::new();
-                            std::io::Read::read_to_string(&mut s, &mut buf).ok();
-                            buf
-                        })
-                        .unwrap_or_default();
                     let _ = tx.send(ExportEvent::Error(format!(
-                        "FFmpeg GIF pass exited with code {:?}\n{}",
+                        "FFmpeg gif pass exited with code {:?}\n{}",
                         status.code(),
                         &stderr_output[..stderr_output.len().min(500)]
                     )));
@@ -627,7 +657,7 @@ where
                 }
                 Err(e) => {
                     let _ = tx.send(ExportEvent::Error(format!(
-                        "FFmpeg GIF pass wait() error: {}",
+                        "FFmpeg gif pass wait() error: {}",
                         e
                     )));
                     let _ = std::fs::remove_file(&palette_path);

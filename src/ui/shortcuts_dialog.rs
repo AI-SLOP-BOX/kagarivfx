@@ -1,19 +1,19 @@
 use crate::ui::theme::colors;
-use crate::AfterEffectsApp;
+use crate::KagariApp;
 use eframe::egui;
 
-pub fn draw_shortcuts_dialog(app: &mut AfterEffectsApp, ctx: &egui::Context) {
+pub fn draw_shortcuts_dialog(app: &mut KagariApp, ctx: &egui::Context) {
     let mut show = app.show_shortcuts_dialog;
     if !show {
         return;
     }
 
-    egui::Window::new("⌨ After Effects Keyboard Shortcuts")
+    egui::Window::new("⌨ Keyboard Shortcuts")
         .open(&mut show)
         .resizable(true)
         .default_size(egui::vec2(520.0, 420.0))
         .show(ctx, |ui| {
-            ui.heading("Standard After Effects Keybindings");
+            ui.heading("Keybindings");
             ui.separator();
 
             egui::ScrollArea::vertical().show(ui, |ui| {

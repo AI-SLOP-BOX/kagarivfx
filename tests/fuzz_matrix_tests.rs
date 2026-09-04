@@ -4,9 +4,9 @@
 //! panicking, and deterministically-generated garbage projects must be handled
 //! gracefully by both the renderer and the validator.
 
-use aftereffects_oss::core::property::Animatable;
-use aftereffects_oss::core::software_renderer::render_frame_to_pixels;
-use aftereffects_oss::core::timeline::{
+use kagari_vfx::core::property::Animatable;
+use kagari_vfx::core::software_renderer::render_frame_to_pixels;
+use kagari_vfx::core::timeline::{
     BlendMode, Composition, Layer, LayerType, ShapeType, TrackMatteMode,
 };
 

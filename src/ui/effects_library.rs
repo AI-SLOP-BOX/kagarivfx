@@ -1,8 +1,8 @@
 use crate::ui::theme::colors;
-use crate::AfterEffectsApp;
+use crate::KagariApp;
 use eframe::egui;
 
-pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut u32) {
+pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: &mut u32) {
     // Update panel animation
     let dt = ctx.input(|i| i.stable_dt);
     app.effects_animation.update(dt);
@@ -167,7 +167,7 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                                         );
                                         let preset_dir = crate::core::effect_presets::default_preset_dir();
                                         let _ = std::fs::create_dir_all(&preset_dir);
-                                        let filename = format!("{}.aevfx-preset.json",
+                                        let filename = format!("{}.kagari-preset.json",
                                             fx.name.replace(' ', "_").to_lowercase());
                                         let path = preset_dir.join(&filename);
                                         match preset.save_to_file(&path) {
@@ -205,7 +205,7 @@ pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut 
                             ui.separator();
                             if ui.button("📂 Load Preset from File...").clicked() {
                                 if let Some(path) = rfd::FileDialog::new()
-                                    .add_filter("Effect Preset", &["json", "aevfx-preset"])
+                                    .add_filter("Effect Preset", &["json", "kagari-preset"])
                                     .pick_file()
                                 {
                                     match crate::core::effect_presets::EffectPreset::load_from_file(&path) {

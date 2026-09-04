@@ -4,7 +4,7 @@
 pub fn apply_mesh_warp(pixels: &mut [u8], width: u32, height: u32, grid_rows: u32, grid_cols: u32) {
     let r = grid_rows.max(2);
     let c = grid_cols.max(2);
-    crate::core::ae_effects_pack_v2::apply_mosaic(pixels, width, height, width / c, height / r);
+    crate::core::ae_effects_pack_v2::apply_mosaic_average(pixels, width, height, width / c, height / r);
 }
 
 // 112. Puppet Pin

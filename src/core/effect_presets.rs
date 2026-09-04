@@ -78,7 +78,7 @@ pub fn discover_presets_in_dir(dir: &std::path::Path) -> Vec<(String, std::path:
             let path = entry.path();
             if path
                 .extension()
-                .is_some_and(|e| e == "json" || e == "aevfx-preset")
+                .is_some_and(|e| e == "json" || e == "kagari-preset")
             {
                 if let Ok(preset) = EffectPreset::load_from_file(&path) {
                     presets.push((preset.name.clone(), path));
@@ -90,9 +90,9 @@ pub fn discover_presets_in_dir(dir: &std::path::Path) -> Vec<(String, std::path:
     presets
 }
 
-/// Get the default presets directory (~/.aevfx/presets/ or platform equivalent)
+/// Get the default presets directory (~/.kagari/presets/ or platform equivalent)
 pub fn default_preset_dir() -> std::path::PathBuf {
-    dirs_or_temp().join("aevfx").join("presets")
+    dirs_or_temp().join("kagari").join("presets")
 }
 
 fn dirs_or_temp() -> std::path::PathBuf {

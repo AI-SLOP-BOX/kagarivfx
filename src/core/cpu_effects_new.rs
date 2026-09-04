@@ -1,33 +1,13 @@
 #![allow(dead_code)]
 
+use crate::core::effect_utils;
 use crate::core::software_renderer::rgba_buffer_size;
 use rayon::prelude::*;
 
-/// Bilinear interpolation sample from an RGBA8 buffer.
-/// Clamps coordinates to image bounds (returns nearest-edge pixel for out-of-bounds).
+/// Bilinear interpolation sample — delegates to shared `effect_utils`.
+#[inline]
 pub fn sample_bilinear(pixels: &[u8], width: u32, height: u32, x: f32, y: f32) -> [u8; 4] {
-    if pixels.len() < (width as usize) * (height as usize) * 4 || width == 0 || height == 0 {
-        return [0, 0, 0, 0];
-    }
-    let x = x.clamp(0.0, width as f32 - 1.0);
-    let y = y.clamp(0.0, height as f32 - 1.0);
-    let x0 = x.floor() as usize;
-    let y0 = y.floor() as usize;
-    let x1 = (x0 + 1).min(width as usize - 1);
-    let y1 = (y0 + 1).min(height as usize - 1);
-    let tx = x - x0 as f32;
-    let ty = y - y0 as f32;
-    let idx = |xx: usize, yy: usize| (yy * width as usize + xx) * 4;
-
-    let mut out = [0u8; 4];
-    for ch in 0..4 {
-        let top = pixels[idx(x0, y0) + ch] as f32
-            + (pixels[idx(x1, y0) + ch] as f32 - pixels[idx(x0, y0) + ch] as f32) * tx;
-        let bot = pixels[idx(x0, y1) + ch] as f32
-            + (pixels[idx(x1, y1) + ch] as f32 - pixels[idx(x0, y1) + ch] as f32) * tx;
-        out[ch] = (top + (bot - top) * ty).round().clamp(0.0, 255.0) as u8;
-    }
-    out
+    effect_utils::sample_bilinear(pixels, width, height, x, y)
 }
 
 /// Apply chromatic aberration by shifting R and B channels.
@@ -186,61 +166,14 @@ pub fn apply_levels(
     });
 }
 
+/// RGB to HSL — delegates to shared `effect_utils`.
 fn rgb_to_hsl(r: f32, g: f32, b: f32) -> (f32, f32, f32) {
-    let max = r.max(g).max(b);
-    let min = r.min(g).min(b);
-    let l = (max + min) * 0.5;
-    if (max - min).abs() < 0.0001 {
-        return (0.0, 0.0, l);
-    }
-    let d = max - min;
-    let s = if l > 0.5 {
-        d / (2.0 - max - min)
-    } else {
-        d / (max + min)
-    };
-    let h = if max == r {
-        ((g - b) / d + if g < b { 6.0 } else { 0.0 }) / 6.0
-    } else if max == g {
-        ((b - r) / d + 2.0) / 6.0
-    } else {
-        ((r - g) / d + 4.0) / 6.0
-    };
-    (h, s, l)
+    effect_utils::rgb_to_hsl(r, g, b)
 }
 
+/// HSL to RGB — delegates to shared `effect_utils`.
 fn hsl_to_rgb(h: f32, s: f32, l: f32) -> (f32, f32, f32) {
-    if s.abs() < 0.0001 {
-        return (l, l, l);
-    }
-    let q = if l < 0.5 {
-        l * (1.0 + s)
-    } else {
-        l + s - l * s
-    };
-    let p = 2.0 * l - q;
-    let hue_to_rgb = |p: f32, q: f32, t: f32| -> f32 {
-        let t = if t < 0.0 {
-            t + 1.0
-        } else if t > 1.0 {
-            t - 1.0
-        } else {
-            t
-        };
-        if t < 1.0 / 6.0 {
-            p + (q - p) * 6.0 * t
-        } else if t < 0.5 {
-            q
-        } else if t < 2.0 / 3.0 {
-            p + (q - p) * (2.0 / 3.0 - t) * 6.0
-        } else {
-            p
-        }
-    };
-    let r = hue_to_rgb(p, q, h + 1.0 / 3.0);
-    let g = hue_to_rgb(p, q, h);
-    let b = hue_to_rgb(p, q, h - 1.0 / 3.0);
-    (r, g, b)
+    effect_utils::hsl_to_rgb(h, s, l)
 }
 
 /// Apply HSL (Hue/Saturation/Lightness) adjustment.

@@ -119,7 +119,7 @@ pub fn apply_find_edges(pixels: &mut [u8], width: u32, height: u32) {
 }
 
 // 25. Emboss
-pub fn apply_emboss(pixels: &mut [u8], width: u32, height: u32, angle_deg: f32, depth: f32) {
+pub fn apply_emboss_color(pixels: &mut [u8], width: u32, height: u32, angle_deg: f32, depth: f32) {
     let rad = angle_deg.to_radians();
     let dx = rad.cos().round() as i32;
     let dy = rad.sin().round() as i32;
@@ -140,7 +140,7 @@ pub fn apply_emboss(pixels: &mut [u8], width: u32, height: u32, angle_deg: f32, 
 }
 
 // 26. Mosaic
-pub fn apply_mosaic(pixels: &mut [u8], width: u32, height: u32, block_w: u32, block_h: u32) {
+pub fn apply_mosaic_average(pixels: &mut [u8], width: u32, height: u32, block_w: u32, block_h: u32) {
     if block_w == 0 || block_h == 0 {
         return;
     }
@@ -168,7 +168,7 @@ pub fn apply_mosaic(pixels: &mut [u8], width: u32, height: u32, block_w: u32, bl
 
 // 27. CC Glass
 pub fn apply_cc_glass(pixels: &mut [u8], width: u32, height: u32, bump_height: f32) {
-    apply_emboss(pixels, width, height, 45.0, bump_height * 0.05);
+    apply_emboss_color(pixels, width, height, 45.0, bump_height * 0.05);
 }
 
 // 28. CC Lens

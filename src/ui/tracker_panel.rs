@@ -1,9 +1,9 @@
 use crate::ui::custom_widgets;
 use crate::ui::theme::colors;
-use crate::AfterEffectsApp;
+use crate::KagariApp;
 use eframe::egui;
 
-pub fn draw_tracker_panel(app: &mut AfterEffectsApp, ui: &mut egui::Ui, current_frame: u32) {
+pub fn draw_tracker_panel(app: &mut KagariApp, ui: &mut egui::Ui, current_frame: u32) {
     ui.heading("Tracker");
     ui.separator();
 
@@ -394,7 +394,7 @@ pub fn draw_tracker_panel(app: &mut AfterEffectsApp, ui: &mut egui::Ui, current_
                     .color(colors::ACCENT_CYAN),
             );
             ui.label("Corners = Tracker 1..4 in order: TL, TR, BR, BL.");
-            let quad_conf_id = egui::Id::new("aevfx_quad_conf");
+            let quad_conf_id = egui::Id::new("kagari_quad_conf");
             if let Some(prev) = ui.memory(|m| m.data.get_temp::<String>(quad_conf_id)) {
                 ui.label(
                     egui::RichText::new(format!("Last run lock quality: {prev}"))

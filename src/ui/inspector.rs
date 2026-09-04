@@ -4,10 +4,10 @@ use crate::core::timeline::{BlendMode, LabelColor, LayerType, TrackMatteMode, Tr
 use crate::core::tracker_engine::TrackerEngine;
 use crate::ui::inspector_property::draw_property_ui;
 use crate::ui::theme::colors;
-use crate::AfterEffectsApp;
+use crate::KagariApp;
 use eframe::egui;
 
-pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context, current_frame: &mut u32) {
+pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: &mut u32) {
     // ── Non-blocking Async Motion Tracker Event Receiver ──
     let mut tracker_completed = false;
     if let Some(ref rx) = app.export.tracker_rx {

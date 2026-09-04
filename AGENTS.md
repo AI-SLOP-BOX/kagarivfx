@@ -1,7 +1,7 @@
-# After Effects OSS Alternative — Agent Instructions
+# Kagari VFX — Agent Instructions
 
 ## Project Overview
-An open-source After Effects alternative written in Rust with GPU rendering (wgpu/Metal), a professional dark UI (egui), and a comprehensive motion graphics pipeline.
+Kagari VFX is an open-source motion graphics & compositing application written in Rust with GPU rendering (wgpu/Metal), a professional dark UI (egui), and a comprehensive effects pipeline.
 
 ## Build & Test Commands
 ```bash
@@ -54,7 +54,7 @@ cargo run --features cli --bin kagari -- frame --project test_project.json --fra
 - `tracker_panel.rs` — Motion tracker UI
 
 ### State Management
-- `src/app_state.rs` — AfterEffectsApp (all app state)
+- `src/app_state.rs` — KagariApp (all app state)
 - `src/core/history.rs` — ProjectHistory with 128MB byte budget
 - `src/core/autosave.rs` — Crash recovery with 5 rotating slots
 

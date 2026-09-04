@@ -41,10 +41,10 @@ pub fn apply_effect_273(pixels: &mut [u8], w: u32, h: u32) {
     crate::core::ae_effects_pack_v2::apply_find_edges(pixels, w, h);
 }
 pub fn apply_effect_274(pixels: &mut [u8], w: u32, h: u32) {
-    crate::core::ae_effects_pack_v2::apply_emboss(pixels, w, h, 225.0, 4.0);
+    crate::core::ae_effects_pack_v2::apply_emboss_color(pixels, w, h, 225.0, 4.0);
 }
 pub fn apply_effect_275(pixels: &mut [u8], w: u32, h: u32) {
-    crate::core::ae_effects_pack_v2::apply_mosaic(pixels, w, h, 20, 20);
+    crate::core::ae_effects_pack_v2::apply_mosaic_average(pixels, w, h, 20, 20);
 }
 pub fn apply_effect_276(pixels: &mut [u8], w: u32, h: u32) {
     crate::core::ae_effects_pack_v2::apply_cc_glass(pixels, w, h, 35.0);

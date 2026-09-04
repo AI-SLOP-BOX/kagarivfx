@@ -1,11 +1,11 @@
 //! RAM Preview cache bar + comp markers + beat-detection transients.
 use crate::core::timeline::LayerType;
 use crate::ui::theme::colors;
-use crate::AfterEffectsApp;
+use crate::KagariApp;
 use eframe::egui;
 
 pub fn draw_ram_ruler(
-    app: &mut AfterEffectsApp,
+    app: &mut KagariApp,
     ui: &mut egui::Ui,
     current_frame: &mut u32,
     total_frames: u32,

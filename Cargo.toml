@@ -1,5 +1,5 @@
 [package]
-name = "aftereffects-oss"
+name = "kagari-vfx"
 version = "0.1.0"
 edition = "2021"
 
@@ -50,7 +50,7 @@ pollster = "0.3"
 
 [features]
 default = ["gui"]
-gui = ["dep:eframe", "dep:egui_extras", "dep:rfd", "dep:rodio", "dep:egui-phosphor"]
+gui = ["dep:eframe", "dep:egui_extras", "dep:rfd", "dep:rodio", "dep:egui-phosphor", "wgpu"]
 cli = ["dep:clap", "dep:png"]
 wgpu = []
 

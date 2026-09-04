@@ -2,12 +2,12 @@
 //! duration/trim changes, pre-comp navigation, ripple edits, markers,
 //! duplicate/split/precompose, and keyboard trims. All mutations are queued
 //! during the borrow-conflicting layer loop and applied here afterwards.
-use crate::AfterEffectsApp;
+use crate::KagariApp;
 use eframe::egui;
 
 #[allow(clippy::too_many_arguments)]
 pub fn apply(
-    app: &mut AfterEffectsApp,
+    app: &mut KagariApp,
     ui: &egui::Ui,
     current_frame: u32,
     project_changed: &mut bool,
@@ -61,7 +61,7 @@ pub fn apply(
     trim_in_out_shortcuts(app, ui, current_frame, project_changed);
 }
 
-fn apply_swap(app: &mut AfterEffectsApp, a: usize, b: usize, project_changed: &mut bool) {
+fn apply_swap(app: &mut KagariApp, a: usize, b: usize, project_changed: &mut bool) {
     let temp_project = app.history.current_mut();
     if a < temp_project.active_composition().layers.len()
         && b < temp_project.active_composition().layers.len()
@@ -88,7 +88,7 @@ fn apply_swap(app: &mut AfterEffectsApp, a: usize, b: usize, project_changed: &m
 }
 
 fn trim_layers_to_work_area(
-    app: &mut AfterEffectsApp,
+    app: &mut KagariApp,
     w_in: u32,
     w_out: u32,
     project_changed: &mut bool,
@@ -104,7 +104,7 @@ fn trim_layers_to_work_area(
     *project_changed = true;
 }
 
-fn open_nested_comp(app: &mut AfterEffectsApp, comp_id: &str) {
+fn open_nested_comp(app: &mut KagariApp, comp_id: &str) {
     let temp_project = app.history.current_mut();
     // First search top-level compositions
     if let Some(c_idx) = temp_project
@@ -130,7 +130,7 @@ fn open_nested_comp(app: &mut AfterEffectsApp, comp_id: &str) {
     }
 }
 
-fn ripple_edit(app: &mut AfterEffectsApp, idx: usize, old_out: u32, shift: i64) {
+fn ripple_edit(app: &mut KagariApp, idx: usize, old_out: u32, shift: i64) {
     let temp_project = app.history.current_mut();
     for l2 in temp_project
         .active_composition_mut()
@@ -147,7 +147,7 @@ fn ripple_edit(app: &mut AfterEffectsApp, idx: usize, old_out: u32, shift: i64) 
 }
 
 fn add_layer_marker(
-    app: &mut AfterEffectsApp,
+    app: &mut KagariApp,
     idx: usize,
     current_frame: u32,
     project_changed: &mut bool,
@@ -165,7 +165,7 @@ fn add_layer_marker(
     }
 }
 
-fn clear_layer_markers(app: &mut AfterEffectsApp, idx: usize, project_changed: &mut bool) {
+fn clear_layer_markers(app: &mut KagariApp, idx: usize, project_changed: &mut bool) {
     let temp_project = app.history.current_mut();
     if let Some(layer) = temp_project.active_composition_mut().layers.get_mut(idx) {
         layer.markers.clear();
@@ -174,7 +174,7 @@ fn clear_layer_markers(app: &mut AfterEffectsApp, idx: usize, project_changed: &
 }
 
 fn toggle_marker_alt_m(
-    app: &mut AfterEffectsApp,
+    app: &mut KagariApp,
     ui: &egui::Ui,
     current_frame: u32,
     project_changed: &mut bool,
@@ -209,7 +209,7 @@ fn toggle_marker_alt_m(
 /// Insert a clone of `idx`'s layer directly below it. `suffix_extra`
 /// disambiguates ids when invoked from both menu ("_copy_N") and shortcut ("_copy").
 fn duplicate_layer_at(
-    app: &mut AfterEffectsApp,
+    app: &mut KagariApp,
     idx: usize,
     project_changed: &mut bool,
     id_suffix: &str,
@@ -232,7 +232,7 @@ fn duplicate_layer_at(
 }
 
 fn split_layer_at(
-    app: &mut AfterEffectsApp,
+    app: &mut KagariApp,
     idx: usize,
     current_frame: u32,
     project_changed: &mut bool,
@@ -271,7 +271,7 @@ fn split_layer_at(
 }
 
 fn precompose_selected(
-    app: &mut AfterEffectsApp,
+    app: &mut KagariApp,
     selected_indices: Vec<usize>,
     project_changed: &mut bool,
 ) {
@@ -330,7 +330,7 @@ fn precompose_selected(
 }
 
 fn duplicate_shortcut_cmd_d(
-    app: &mut AfterEffectsApp,
+    app: &mut KagariApp,
     ui: &egui::Ui,
     current_frame: u32,
     project_changed: &mut bool,
@@ -353,7 +353,7 @@ fn duplicate_shortcut_cmd_d(
 }
 
 fn trim_in_out_shortcuts(
-    app: &mut AfterEffectsApp,
+    app: &mut KagariApp,
     ui: &egui::Ui,
     current_frame: u32,
     project_changed: &mut bool,
@@ -387,7 +387,7 @@ fn trim_in_out_shortcuts(
 
 /// Apply queued effect drag-drops from the effects library onto layer rows.
 pub fn apply_effect_drops(
-    app: &mut AfterEffectsApp,
+    app: &mut KagariApp,
     drops: Vec<(usize, String, usize)>,
     project_changed: &mut bool,
 ) {

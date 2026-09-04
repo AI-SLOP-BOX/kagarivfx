@@ -1,9 +1,9 @@
 use crate::ui::theme::colors;
-use crate::AfterEffectsApp;
+use crate::KagariApp;
 use eframe::egui;
 
 /// Draw the Essential Properties panel for the selected precomp layer.
-pub fn draw_essential_properties(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
+pub fn draw_essential_properties(app: &mut KagariApp, ui: &mut egui::Ui) {
     crate::ui::custom_widgets::ae_section_header(ui, "Essential Properties", "🎬");
 
     let Some(sel_idx) = app.selection.selected_layer_idx else {

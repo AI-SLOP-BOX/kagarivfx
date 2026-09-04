@@ -1,8 +1,8 @@
 use crate::core::property::Animatable;
-use crate::AfterEffectsApp;
+use crate::KagariApp;
 use eframe::egui;
 
-pub fn draw_camera_dof_hud(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
+pub fn draw_camera_dof_hud(app: &mut KagariApp, ui: &mut egui::Ui) {
     let mut project_changed = false;
     let current_f = app.playback.current_frame;
 

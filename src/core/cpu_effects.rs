@@ -578,7 +578,7 @@ fn apply_one_ctx(
             let time = frame as f32 / fps.max(1) as f32;
             let dir = direction_deg.evaluate(frame).to_radians();
             if !crate::core::compute_pipeline::try_gpu_wave_warp(
-                pixels, width, height, wh, 6.2831853 / ww.max(1.0), sp * time, dir,
+                pixels, width, height, wh, std::f32::consts::TAU / ww.max(1.0), sp * time, dir,
             ) {
                 use crate::core::ae_effects_pack_v27::{
                     apply_wave_warp_pro, PinKind, WaveType, WaveWarpParams,

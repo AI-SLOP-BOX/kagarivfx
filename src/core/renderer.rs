@@ -2974,16 +2974,17 @@ impl WgpuRenderer {
             .min(crate::core::software_renderer::MAX_RENDER_DIMENSION);
         let (w, h) = (width.min(max_dim), height.min(max_dim));
 
-        // Pack f32 density into Rgba16Float (f32 per channel)
-        let mut bytes = Vec::with_capacity((w * h * 16) as usize);
+        // Pack f32 density into Rgba16Float (f16 per channel, 8 bytes/pixel).
+        let mut bytes = Vec::with_capacity((w * h * 8) as usize);
         for y in 0..h {
             for x in 0..w {
                 let d = density[(y as usize) * width as usize + x as usize];
                 let v = d.clamp(0.0, 1.0);
-                bytes.extend_from_slice(&v.to_le_bytes());
-                bytes.extend_from_slice(&0.0f32.to_le_bytes());
-                bytes.extend_from_slice(&0.0f32.to_le_bytes());
-                bytes.extend_from_slice(&1.0f32.to_le_bytes());
+                let f = f16::from_f32(v);
+                bytes.extend_from_slice(&f.to_le_bytes());
+                bytes.extend_from_slice(&f16::from_f32(0.0).to_le_bytes());
+                bytes.extend_from_slice(&f16::from_f32(0.0).to_le_bytes());
+                bytes.extend_from_slice(&f16::from_f32(1.0).to_le_bytes());
             }
         }
 
@@ -3400,7 +3401,6 @@ mod video_cache_tests {
 // 3. Apply effects as fragment shader passes between blends
 // 4. Output directly to the display texture without CPU roundtrip
 //
-// Current status: layers are composited on CPU by software_renderer.rs,
-// then the result is uploaded as a single texture via WgpuRenderer.
-// The GPU path handles UI rendering, video frame textures, text textures,
-// and RAM preview ring buffers.
+// Current status: active layers are composited via per-layer GPU draws
+// with matte bind groups on the GPU. The CPU path (software_renderer)
+// remains the reference implementation for export/fallback.

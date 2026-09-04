@@ -2,10 +2,10 @@ use crate::core::property::Animatable;
 use crate::core::the_wiggler::{WiggleDimension, WiggleNoiseType};
 use crate::ui::custom_widgets;
 use crate::ui::theme::colors;
-use crate::AfterEffectsApp;
+use crate::KagariApp;
 use eframe::egui;
 
-pub fn draw_the_wiggler_panel(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
+pub fn draw_the_wiggler_panel(app: &mut KagariApp, ui: &mut egui::Ui) {
     ui.heading("🎲 The Wiggler");
     ui.label(
         egui::RichText::new("Inject procedural noise keyframes into layer transforms")

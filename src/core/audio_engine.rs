@@ -378,7 +378,7 @@ mod wav_tests {
 
     #[test]
     fn test_load_wav_roundtrip_and_peaks() {
-        let path = std::env::temp_dir().join("aevfx_test_tone.wav");
+        let path = std::env::temp_dir().join("kagari_test_tone.wav");
         let rate = 48000u32;
         // 1-second sine at 440 Hz with amplitude 0.5
         let samples: Vec<f32> = (0..rate as usize)
@@ -405,7 +405,7 @@ mod wav_tests {
 
     #[test]
     fn test_invalid_wav_files_error_cleanly() {
-        let dir = std::env::temp_dir().join(format!("aevfx_wav_{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("kagari_wav_{}", std::process::id()));
         let _ = std::fs::create_dir_all(&dir);
 
         // Missing file
@@ -988,7 +988,7 @@ mod multitrack_tests {
 
     #[test]
     fn test_multitrack_mix_sums_two_wavs() {
-        let dir = std::env::temp_dir().join(format!("aevfx_mix_{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("kagari_mix_{}", std::process::id()));
         let _ = std::fs::create_dir_all(&dir);
         let rate = 48000u32;
         let wav_a = dir.join("a.wav");
@@ -1093,7 +1093,7 @@ mod beat_tests {
 
     #[test]
     fn test_detect_beat_frames_finds_clicks() {
-        let dir = std::env::temp_dir().join("aevfx_beat_test");
+        let dir = std::env::temp_dir().join("kagari_beat_test");
         std::fs::create_dir_all(&dir).unwrap();
         let path = dir.join("clicks.wav");
         write_test_wav(&path, 44100, &[0.2, 0.8, 1.4]);
@@ -1118,7 +1118,7 @@ mod beat_tests {
 
     #[test]
     fn test_detect_beat_frames_silence_is_empty() {
-        let dir = std::env::temp_dir().join("aevfx_beat_test");
+        let dir = std::env::temp_dir().join("kagari_beat_test");
         std::fs::create_dir_all(&dir).unwrap();
         let path = dir.join("silence.wav");
         write_test_wav(&path, 22050, &[]);

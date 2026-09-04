@@ -9,13 +9,13 @@ pub mod utils;
 
 use crate::core::timeline::{BlendMode, LabelColor, LayerType, TrackMatteMode};
 use crate::ui::theme::colors;
-use crate::AfterEffectsApp;
+use crate::KagariApp;
 use eframe::egui;
 use header::draw_timeline_header;
 use utils::maybe_snap_frame;
 
 pub fn draw(
-    app: &mut AfterEffectsApp,
+    app: &mut KagariApp,
     ctx: &egui::Context,
     current_frame: &mut u32,
     total_frames: u32,

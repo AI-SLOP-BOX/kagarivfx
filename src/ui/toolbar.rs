@@ -21,7 +21,7 @@ pub enum ActiveTool {
 }
 
 #[allow(dead_code)]
-pub fn draw(app: &mut crate::AfterEffectsApp, ctx: &egui::Context) {
+pub fn draw(app: &mut crate::KagariApp, ctx: &egui::Context) {
     use crate::ui::theme::colors;
     let frame = egui::Frame::none()
         .fill(colors::BG_DARK)

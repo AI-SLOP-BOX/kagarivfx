@@ -23,11 +23,16 @@ struct FileRevision {
 struct CachedFile {
     revision: FileRevision,
     image: CachedImage,
+    lru_stamp: u64,
+    byte_size: usize,
 }
 
 /// Thread-safe image cache.
 pub struct ImageCache {
     cache: HashMap<String, CachedFile>,
+    current_bytes: usize,
+    max_bytes: usize,
+    lru_clock: u64,
 }
 
 impl Default for ImageCache {
@@ -40,6 +45,32 @@ impl ImageCache {
     pub fn new() -> Self {
         Self {
             cache: HashMap::new(),
+            current_bytes: 0,
+            max_bytes: 256 * 1024 * 1024, // 256 MB default
+            lru_clock: 0,
+        }
+    }
+
+    /// Set the maximum cache size in bytes.
+    pub fn set_max_bytes(&mut self, max: usize) {
+        self.max_bytes = max;
+        self.evict_if_over_budget();
+    }
+
+    fn evict_if_over_budget(&mut self) {
+        while self.current_bytes > self.max_bytes && !self.cache.is_empty() {
+            // Find the entry with the lowest LRU stamp
+            if let Some((worst_key, worst_entry)) = self
+                .cache
+                .iter()
+                .min_by_key(|(_, e)| e.lru_stamp)
+                .map(|(k, e)| (k.clone(), e.byte_size))
+            {
+                self.current_bytes = self.current_bytes.saturating_sub(worst_entry);
+                self.cache.remove(&worst_key);
+            } else {
+                break;
+            }
         }
     }
 
@@ -48,7 +79,9 @@ impl ImageCache {
         let revision = match Self::file_revision(path) {
             Some(revision) => revision,
             None => {
-                self.cache.remove(path);
+                if let Some(removed) = self.cache.remove(path) {
+                    self.current_bytes = self.current_bytes.saturating_sub(removed.byte_size);
+                }
                 return None;
             }
         };
@@ -57,23 +90,39 @@ impl ImageCache {
             .get(path)
             .is_some_and(|cached| cached.revision == revision)
         {
+            self.lru_clock += 1;
+            if let Some(entry) = self.cache.get_mut(path) {
+                entry.lru_stamp = self.lru_clock;
+            }
             return self.cache.get(path).map(|cached| &cached.image);
         }
 
         let img = match Self::decode_image_file(path) {
             Some(image) => image,
             None => {
-                self.cache.remove(path);
+                if let Some(removed) = self.cache.remove(path) {
+                    self.current_bytes = self.current_bytes.saturating_sub(removed.byte_size);
+                }
                 return None;
             }
         };
+        // Remove old entry if replacing
+        if let Some(removed) = self.cache.remove(path) {
+            self.current_bytes = self.current_bytes.saturating_sub(removed.byte_size);
+        }
+        let byte_size = img.pixels.len();
+        self.lru_clock += 1;
         self.cache.insert(
             path.to_string(),
             CachedFile {
                 revision,
                 image: img,
+                lru_stamp: self.lru_clock,
+                byte_size,
             },
         );
+        self.current_bytes += byte_size;
+        self.evict_if_over_budget();
         self.cache.get(path).map(|cached| &cached.image)
     }
 
@@ -168,7 +217,7 @@ mod tests {
     #[test]
     fn test_reloads_image_when_file_changes() {
         let dir = std::env::temp_dir().join(format!(
-            "aevfx_image_cache_revision_{}_{}",
+            "kagari_image_cache_revision_{}_{}",
             std::process::id(),
             std::thread::current().name().unwrap_or("test")
         ));
@@ -198,7 +247,7 @@ mod tests {
     #[test]
     fn failed_reload_and_deleted_source_do_not_expose_stale_pixels() {
         let dir =
-            std::env::temp_dir().join(format!("aevfx_image_cache_stale_{}", std::process::id()));
+            std::env::temp_dir().join(format!("kagari_image_cache_stale_{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         let path = dir.join("stale.png");
@@ -229,7 +278,7 @@ mod robustness_tests {
         // Directory instead of file
         assert!(cache.load_image("/tmp").is_none());
         // Corrupted image payload with valid extension
-        let bad = std::env::temp_dir().join("aevfx_bad_image.png");
+        let bad = std::env::temp_dir().join("kagari_bad_image.png");
         std::fs::write(&bad, b"not a real png at all").unwrap();
         assert!(cache.load_image(bad.to_str().unwrap()).is_none());
         let _ = std::fs::remove_file(&bad);

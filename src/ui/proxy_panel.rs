@@ -1,10 +1,10 @@
 use crate::core::proxy::ProxyResolution;
 use crate::ui::theme::colors;
-use crate::AfterEffectsApp;
+use crate::KagariApp;
 use eframe::egui;
 
 /// Draw proxy controls in the timeline header or viewport overlay.
-pub fn draw_proxy_controls(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
+pub fn draw_proxy_controls(app: &mut KagariApp, ui: &mut egui::Ui) {
     let (current, active_in_preview) = {
         let comp = app.history.current().active_composition();
         (
@@ -114,7 +114,7 @@ pub fn draw_proxy_controls(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
 }
 
 /// Draw per-layer proxy toggle in the layer controls area.
-pub fn draw_layer_proxy(app: &mut AfterEffectsApp, ui: &mut egui::Ui, layer_idx: usize) {
+pub fn draw_layer_proxy(app: &mut KagariApp, ui: &mut egui::Ui, layer_idx: usize) {
     let (enabled, res) = {
         let comp = app.history.current().active_composition();
         if layer_idx >= comp.layers.len() {

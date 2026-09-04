@@ -1,10 +1,10 @@
 #![allow(clippy::too_many_arguments)]
 
-use crate::AfterEffectsApp;
+use crate::KagariApp;
 use eframe::egui;
 
 pub fn draw_inline_numeric_editor(
-    app: &mut AfterEffectsApp,
+    app: &mut KagariApp,
     ctx: &egui::Context,
     current_frame: u32,
     origin_x: f32,

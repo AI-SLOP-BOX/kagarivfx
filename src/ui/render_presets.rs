@@ -1,10 +1,10 @@
 use crate::ui::theme::colors;
-use crate::AfterEffectsApp;
+use crate::KagariApp;
 use eframe::egui;
 
 /// Output-module presets bound to the real export pipeline
 /// (`app.export_format_preset` + the shared codec selector).
-pub fn draw_render_presets(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
+pub fn draw_render_presets(app: &mut KagariApp, ui: &mut egui::Ui) {
     ui.heading("Render Queue Output Presets");
     ui.separator();
 

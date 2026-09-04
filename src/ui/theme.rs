@@ -362,7 +362,7 @@ pub fn draw_section_header(ui: &mut egui::Ui, title: &str, icon: &str) {
     ui.add_space(2.0);
 }
 
-/// Helper: Draw a pro After Effects tab with dynamic bottom cyan border when selected.
+/// Helper: Draw a pro tab with dynamic bottom cyan border when selected.
 pub fn draw_custom_tab(ui: &mut egui::Ui, selected: bool, title: &str) -> egui::Response {
     let text = egui::RichText::new(title)
         .small()

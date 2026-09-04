@@ -3,11 +3,11 @@
 use crate::core::timeline::{Composition, LayerType};
 use crate::ui::custom_widgets;
 use crate::ui::theme::colors;
-use crate::AfterEffectsApp;
+use crate::KagariApp;
 use eframe::egui;
 
 pub fn draw_character_panel(
-    app: &mut AfterEffectsApp,
+    app: &mut KagariApp,
     ui: &mut egui::Ui,
     comp: &mut Composition,
     _current_frame: u32,
@@ -441,7 +441,7 @@ pub fn draw_character_panel(
 
 /// Applies a text animation preset to the selected layer's position/opacity.
 pub fn apply_text_preset(
-    app: &mut AfterEffectsApp,
+    app: &mut KagariApp,
     preset: &str,
     layer_idx: usize,
     current_frame: u32,
@@ -530,7 +530,7 @@ pub fn apply_text_preset(
 
 /// Text animation presets section — adds to the bottom of the panel.
 pub fn draw_animation_presets(
-    app: &mut AfterEffectsApp,
+    app: &mut KagariApp,
     ui: &mut egui::Ui,
     current_frame: u32,
     duration_frames: u32,

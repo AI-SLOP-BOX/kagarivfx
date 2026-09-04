@@ -28,11 +28,11 @@ pub fn apply_effect_319(pixels: &mut [u8], w: u32, h: u32) {
     crate::core::ae_effects_pack_v2::apply_ripple(pixels, w, h, 25.0, 50.0, 2.0);
 }
 pub fn apply_effect_320(pixels: &mut [u8], w: u32, h: u32) {
-    crate::core::ae_effects_pack_v2::apply_emboss(pixels, w, h, 315.0, 5.0);
+    crate::core::ae_effects_pack_v2::apply_emboss_color(pixels, w, h, 315.0, 5.0);
 }
 
 pub fn apply_effect_321(pixels: &mut [u8], w: u32, h: u32) {
-    crate::core::ae_effects_pack_v2::apply_mosaic(pixels, w, h, 32, 32);
+    crate::core::ae_effects_pack_v2::apply_mosaic_average(pixels, w, h, 32, 32);
 }
 pub fn apply_effect_322(pixels: &mut [u8], w: u32, h: u32) {
     crate::core::ae_effects_pack_v2::apply_cc_glass(pixels, w, h, 50.0);

@@ -1,7 +1,7 @@
-use crate::AfterEffectsApp;
+use crate::KagariApp;
 use eframe::egui;
 
-pub fn draw_paint_panel(_app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
+pub fn draw_paint_panel(_app: &mut KagariApp, ui: &mut egui::Ui) {
     ui.heading("Paint & Paint Brushes");
     ui.separator();
 

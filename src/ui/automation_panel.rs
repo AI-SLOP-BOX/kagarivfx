@@ -1,8 +1,8 @@
 use crate::ui::theme::colors;
-use crate::AfterEffectsApp;
+use crate::KagariApp;
 use eframe::egui;
 
-pub fn draw(app: &mut AfterEffectsApp, ctx: &egui::Context) {
+pub fn draw(app: &mut KagariApp, ctx: &egui::Context) {
     if !app.show_automation_panel {
         return;
     }

@@ -16,7 +16,7 @@ impl MltExporter {
         let mut xml = String::with_capacity(4096);
         xml.push_str("<?xml version=\"1.0\" standalone=\"no\"?>\n");
         xml.push_str(
-            "<mlt LC_NUMERIC=\"C\" version=\"7.0.0\" title=\"Exported from AfterEffects OSS\">\n",
+            "<mlt LC_NUMERIC=\"C\" version=\"7.0.0\" title=\"Exported from Kagari VFX\">\n",
         );
         xml.push_str("  <profile description=\"automatic\" ");
         xml.push_str(&format!(

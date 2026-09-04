@@ -1,10 +1,10 @@
-use aftereffects_oss::core::keyframe::{InterpolationType, Keyframe};
-use aftereffects_oss::core::project_migration::{load_project_migrated, save_project_versioned};
-use aftereffects_oss::core::property::Animatable;
-use aftereffects_oss::core::shape_repeater::ShapeRepeaterOptions;
-use aftereffects_oss::core::software_renderer::render_frame_to_pixels;
-use aftereffects_oss::core::timeline::Project;
-use aftereffects_oss::core::timeline::{
+use kagari_vfx::core::keyframe::{InterpolationType, Keyframe};
+use kagari_vfx::core::project_migration::{load_project_migrated, save_project_versioned};
+use kagari_vfx::core::property::Animatable;
+use kagari_vfx::core::shape_repeater::ShapeRepeaterOptions;
+use kagari_vfx::core::software_renderer::render_frame_to_pixels;
+use kagari_vfx::core::timeline::Project;
+use kagari_vfx::core::timeline::{
     BlendMode, Composition, Layer, LayerType, ShapeFillType, ShapeType, TrackMatteMode,
 };
 

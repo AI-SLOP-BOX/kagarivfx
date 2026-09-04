@@ -1,9 +1,9 @@
 use crate::ui::theme::colors;
-use crate::AfterEffectsApp;
+use crate::KagariApp;
 use eframe::egui;
 
 pub fn draw_minimap(
-    app: &mut AfterEffectsApp,
+    app: &mut KagariApp,
     ui: &mut egui::Ui,
     current_frame: u32,
     comp_w: f32,

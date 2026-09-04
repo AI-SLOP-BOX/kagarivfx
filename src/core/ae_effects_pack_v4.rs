@@ -478,7 +478,7 @@ pub fn apply_rain(pixels: &mut [u8], width: u32, height: u32, frame: u32) {
 
 // 101. Block Dissolve
 pub fn apply_block_dissolve(pixels: &mut [u8], width: u32, height: u32, completion: f32) {
-    crate::core::ae_effects_pack_v2::apply_mosaic(
+    crate::core::ae_effects_pack_v2::apply_mosaic_average(
         pixels,
         width,
         height,

@@ -1,8 +1,8 @@
 use crate::core::timeline::{Composition, Layer, LayerType};
-use crate::AfterEffectsApp;
+use crate::KagariApp;
 use eframe::egui;
 
-pub fn draw_precompose_dialog(app: &mut AfterEffectsApp, ctx: &egui::Context) {
+pub fn draw_precompose_dialog(app: &mut KagariApp, ctx: &egui::Context) {
     if !app.show_precompose_dialog {
         return;
     }

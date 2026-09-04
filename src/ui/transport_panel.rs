@@ -1,10 +1,10 @@
 use crate::ui::custom_widgets;
 use crate::ui::theme::colors;
-use crate::AfterEffectsApp;
+use crate::KagariApp;
 use eframe::egui;
 
 pub fn draw_transport_panel(
-    app: &mut AfterEffectsApp,
+    app: &mut KagariApp,
     ui: &mut egui::Ui,
     current_frame: &mut u32,
     total_frames: u32,
@@ -69,7 +69,11 @@ pub fn draw_transport_panel(
         };
         let play_label = if app.playback.is_playing { "⏸ Pause" } else { "▶ Play (Space)" };
         if custom_widgets::ae_button_accent(ui, play_label).on_hover_text(label).clicked() {
-            app.playback.is_playing = !app.playback.is_playing;
+            if app.playback.is_playing {
+                app.playback.stop_playing();
+            } else {
+                app.playback.start_playing();
+            }
         }
 
         if render_svg_bytes(ui, "t_next", STEP_FWD, size, colors::TEXT_PRIMARY)

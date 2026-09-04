@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
-use aftereffects_oss::core::renderer::WgpuRenderer;
-use aftereffects_oss::core::timeline::{Composition, Layer, LayerType, TrackMatteMode};
+use kagari_vfx::core::renderer::WgpuRenderer;
+use kagari_vfx::core::timeline::{Composition, Layer, LayerType, TrackMatteMode};
 
 fn request_gpu() -> Option<(Arc<wgpu::Device>, Arc<wgpu::Queue>)> {
     let instance = wgpu::Instance::new(wgpu::InstanceDescriptor::default());

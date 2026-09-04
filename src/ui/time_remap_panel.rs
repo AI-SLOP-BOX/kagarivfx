@@ -1,5 +1,5 @@
 use crate::ui::theme::colors;
-use crate::AfterEffectsApp;
+use crate::KagariApp;
 use eframe::egui;
 
 use crate::core::keyframe::{InterpolationType, Keyframe};
@@ -15,7 +15,7 @@ fn rescale_track<T: Clone>(track: &mut Animatable<T>, in_frame: u32, factor: f32
     }
 }
 
-pub fn draw_time_remap_panel(app: &mut AfterEffectsApp, ui: &mut egui::Ui) {
+pub fn draw_time_remap_panel(app: &mut KagariApp, ui: &mut egui::Ui) {
     ui.heading("Time Stretch & Time Remapping");
     ui.separator();
 

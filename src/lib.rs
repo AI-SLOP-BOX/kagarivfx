@@ -1,5 +1,11 @@
 #![allow(warnings)]
-#![allow(clippy::all)]
+
+// ── CRITICAL: re-enable these lint categories as the codebase stabilizes ──
+// Once the codebase is clean enough, replace the blanket allow above with:
+//   #![warn(clippy::correctness)]
+//   #![warn(clippy::panic)]
+//   #![warn(clippy::suspicious)]
+// and fix the resulting warnings. Then remove #![allow(warnings)] entirely.
 
 pub mod core;
 
@@ -10,7 +16,7 @@ pub mod ui;
 pub mod app_state;
 
 #[cfg(feature = "gui")]
-pub use app_state::AfterEffectsApp;
+pub use app_state::KagariApp;
 #[cfg(feature = "gui")]
 pub use app_state::DragTransaction;
 
