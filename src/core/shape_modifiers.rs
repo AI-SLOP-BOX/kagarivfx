@@ -828,8 +828,14 @@ pub fn apply_offset_paths(
         let curr = &vertices[i];
         let next = &vertices[(i + 1) % n];
 
-        let d1 = [curr.position[0] - prev.position[0], curr.position[1] - prev.position[1]];
-        let d2 = [next.position[0] - curr.position[0], next.position[1] - curr.position[1]];
+        let d1 = [
+            curr.position[0] - prev.position[0],
+            curr.position[1] - prev.position[1],
+        ];
+        let d2 = [
+            next.position[0] - curr.position[0],
+            next.position[1] - curr.position[1],
+        ];
 
         let len1 = (d1[0] * d1[0] + d1[1] * d1[1]).sqrt().max(1e-4);
         let len2 = (d2[0] * d2[0] + d2[1] * d2[1]).sqrt().max(1e-4);
@@ -844,7 +850,10 @@ pub fn apply_offset_paths(
 
         let cos_half = n1[0] * bisector[0] + n1[1] * bisector[1];
         let miter_len = if cos_half.abs() > 1e-3 {
-            (eff_amount / cos_half).clamp(-miter_limit * eff_amount.abs(), miter_limit * eff_amount.abs())
+            (eff_amount / cos_half).clamp(
+                -miter_limit * eff_amount.abs(),
+                miter_limit * eff_amount.abs(),
+            )
         } else {
             eff_amount
         };
@@ -858,8 +867,14 @@ pub fn apply_offset_paths(
                 result.push(MaskVertex::new(offset_pos[0], offset_pos[1]));
             }
             OffsetPathsJoin::Bevel | OffsetPathsJoin::Round => {
-                let p1 = [curr.position[0] + n1[0] * amount, curr.position[1] + n1[1] * amount];
-                let p2 = [curr.position[0] + n2[0] * amount, curr.position[1] + n2[1] * amount];
+                let p1 = [
+                    curr.position[0] + n1[0] * amount,
+                    curr.position[1] + n1[1] * amount,
+                ];
+                let p2 = [
+                    curr.position[0] + n2[0] * amount,
+                    curr.position[1] + n2[1] * amount,
+                ];
                 result.push(MaskVertex::new(p1[0], p1[1]));
                 result.push(MaskVertex::new(p2[0], p2[1]));
             }

@@ -25,9 +25,9 @@ pub enum PF_Cmd {
 #[repr(C)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PF_PixelFormat {
-    PF_PixelFormat_ARGB32 = 0,   // 8bpc ARGB
-    PF_PixelFormat_ARGB64 = 1,   // 16bpc ARGB
-    PF_PixelFormat_ARGB128 = 2,  // 32bpc Float ARGB
+    PF_PixelFormat_ARGB32 = 0,  // 8bpc ARGB
+    PF_PixelFormat_ARGB64 = 1,  // 16bpc ARGB
+    PF_PixelFormat_ARGB128 = 2, // 32bpc Float ARGB
 }
 
 /// Buffer representation passed to AE C++ plugins for input and output rendering.

@@ -71,10 +71,22 @@ impl AiRuntimeHub {
     pub fn new() -> Self {
         Self {
             slots: vec![
-                AiModelSlot::new(AiVisionTask::SegmentationMatte, "Neural Roto (SAM / BiRefNet)"),
-                AiModelSlot::new(AiVisionTask::FrameInterpolation, "AI Frame Interpolation (RIFE)"),
-                AiModelSlot::new(AiVisionTask::DepthEstimation, "Monocular Depth (Depth Anything)"),
-                AiModelSlot::new(AiVisionTask::NeuralInpaint, "Generative Inpaint (ProPainter)"),
+                AiModelSlot::new(
+                    AiVisionTask::SegmentationMatte,
+                    "Neural Roto (SAM / BiRefNet)",
+                ),
+                AiModelSlot::new(
+                    AiVisionTask::FrameInterpolation,
+                    "AI Frame Interpolation (RIFE)",
+                ),
+                AiModelSlot::new(
+                    AiVisionTask::DepthEstimation,
+                    "Monocular Depth (Depth Anything)",
+                ),
+                AiModelSlot::new(
+                    AiVisionTask::NeuralInpaint,
+                    "Generative Inpaint (ProPainter)",
+                ),
             ],
         }
     }
@@ -142,13 +154,16 @@ mod tests {
         assert!(!hub.is_task_accelerated(AiVisionTask::SegmentationMatte));
 
         // Opt-in attach a custom model (e.g. on RTX 6000 / CUDA)
-        hub.slots[0].attach_model(PathBuf::from("/models/sam_vit_h.onnx"), AiExecutionBackend::Cuda);
+        hub.slots[0].attach_model(
+            PathBuf::from("/models/sam_vit_h.onnx"),
+            AiExecutionBackend::Cuda,
+        );
         assert!(hub.is_task_accelerated(AiVisionTask::SegmentationMatte));
 
         let rgb = vec![128u8; 10 * 10 * 4];
         let matte = hub.run_segmentation_matting(&rgb, 10, 10, Some([2.0, 2.0, 8.0, 8.0]));
         assert_eq!(matte.len(), 100);
         assert_eq!(matte[5 * 10 + 5], 255); // Inside bounding box
-        assert_eq!(matte[0], 0);             // Outside bounding box
+        assert_eq!(matte[0], 0); // Outside bounding box
     }
 }

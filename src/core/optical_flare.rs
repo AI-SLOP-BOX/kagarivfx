@@ -115,7 +115,7 @@ pub fn render_optical_flare(
     let global_bright = config.overall_brightness.clamp(0.0, 100.0);
 
     let w = width as usize;
-    let h = height as usize;
+    let _h = height as usize;
 
     for elem in &config.elements {
         let e_scale = if elem.scale.is_finite() {
@@ -136,7 +136,7 @@ pub fn render_optical_flare(
             }
         });
 
-        let r_box = e_scale.ceil() as i32;
+        let _r_box = e_scale.ceil() as i32;
         let min_x = ((cx - e_scale) as i32).clamp(0, width as i32 - 1);
         let max_x = ((cx + e_scale) as i32).clamp(0, width as i32 - 1);
         let min_y = ((cy - e_scale) as i32).clamp(0, height as i32 - 1);
@@ -240,7 +240,6 @@ mod tests {
             }],
         };
         render_optical_flare(&mut pixels, 2, 2, &config);
-        assert!(pixels.iter().all(|value| *value <= 255));
         render_optical_flare(&mut pixels, u32::MAX, u32::MAX, &config);
     }
 

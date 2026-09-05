@@ -107,7 +107,7 @@ pub fn draw_prop_row_ext(
             ui.allocate_exact_size(egui::vec2(avail_w, 18.0), egui::Sense::click_and_drag());
         ui.painter().line_segment(
             [rect.left_top(), rect.right_top()],
-            egui::Stroke::new(0.5, crate::ui::theme::colors::BORDER_SUBTLE),
+            egui::Stroke::new(0.5_f32, crate::ui::theme::colors::BORDER_SUBTLE),
         );
 
         if response.hovered() {
@@ -155,7 +155,7 @@ pub fn draw_prop_row_ext(
             ui.painter().rect_stroke(
                 r,
                 2.0,
-                egui::Stroke::new(1.0, crate::ui::theme::colors::BORDER_ACTIVE),
+                egui::Stroke::new(1.0_f32, crate::ui::theme::colors::BORDER_ACTIVE),
             );
 
             let mut boxed: Vec<u32> = Vec::new();

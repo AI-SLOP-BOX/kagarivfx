@@ -112,6 +112,5 @@ mod tests {
         assert_eq!(pixels, original);
 
         apply_colorama(&mut pixels, 2, 2, ColoramaPreset::Rainbow, f32::INFINITY);
-        assert!(pixels.iter().all(|value| *value <= 255));
     }
 }

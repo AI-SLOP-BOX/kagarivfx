@@ -280,11 +280,7 @@ pub fn delaunay_triangulate_2d(points: &[[f32; 2]]) -> Vec<[usize; 3]> {
 
             if in_circumcircle(p, a, b, c) {
                 bad_triangles.push(t_idx);
-                let edges = [
-                    [tri[0], tri[1]],
-                    [tri[1], tri[2]],
-                    [tri[2], tri[0]],
-                ];
+                let edges = [[tri[0], tri[1]], [tri[1], tri[2]], [tri[2], tri[0]]];
                 for edge in edges {
                     polygon_edges.push(edge);
                 }
@@ -296,7 +292,9 @@ pub fn delaunay_triangulate_2d(points: &[[f32; 2]]) -> Vec<[usize; 3]> {
         for (i, &e1) in polygon_edges.iter().enumerate() {
             let mut is_shared = false;
             for (j, &e2) in polygon_edges.iter().enumerate() {
-                if i != j && ((e1[0] == e2[0] && e1[1] == e2[1]) || (e1[0] == e2[1] && e1[1] == e2[0])) {
+                if i != j
+                    && ((e1[0] == e2[0] && e1[1] == e2[1]) || (e1[0] == e2[1] && e1[1] == e2[0]))
+                {
                     is_shared = true;
                     break;
                 }
@@ -318,9 +316,7 @@ pub fn delaunay_triangulate_2d(points: &[[f32; 2]]) -> Vec<[usize; 3]> {
     }
 
     // Remove any triangles containing super-triangle vertices
-    triangles.retain(|tri| {
-        tri[0] < n && tri[1] < n && tri[2] < n
-    });
+    triangles.retain(|tri| tri[0] < n && tri[1] < n && tri[2] < n);
 
     triangles
 }
@@ -401,7 +397,7 @@ mod tests {
             stiffness_or_depth: 0.0,
         };
 
-        let moved = deform_point_mls([100.0, 100.0], &[pin1.clone()]);
+        let moved = deform_point_mls([100.0, 100.0], std::slice::from_ref(&pin1));
         assert!((moved[0] - 120.0).abs() < 1e-4);
         assert!((moved[1] - 110.0).abs() < 1e-4);
     }
@@ -439,12 +435,7 @@ mod tests {
 
     #[test]
     fn test_delaunay_triangulation_four_corners() {
-        let pts = vec![
-            [0.0, 0.0],
-            [100.0, 0.0],
-            [100.0, 100.0],
-            [0.0, 100.0],
-        ];
+        let pts = vec![[0.0, 0.0], [100.0, 0.0], [100.0, 100.0], [0.0, 100.0]];
         let tris = delaunay_triangulate_2d(&pts);
         // A rectangle should triangulate into exactly 2 triangles
         assert_eq!(tris.len(), 2);
@@ -458,4 +449,3 @@ mod tests {
         assert!(!mesh.triangles.is_empty());
     }
 }
-

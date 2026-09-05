@@ -22,7 +22,7 @@ pub fn draw_minimap(
     // Dark Map Background & Border
     ui.painter().rect_filled(rect, 4.0, colors::HUD_BG);
     ui.painter()
-        .rect_stroke(rect, 4.0, egui::Stroke::new(1.0, colors::ACCENT_BLUE));
+        .rect_stroke(rect, 4.0, egui::Stroke::new(1.0_f32, colors::ACCENT_BLUE));
 
     let scale_x = map_w / comp_w;
     let scale_y = map_h / comp_h;
@@ -58,8 +58,11 @@ pub fn draw_minimap(
     let view_h = (map_h * 0.75).clamp(15.0, map_h);
     let view_rect = egui::Rect::from_center_size(focus_center, egui::vec2(view_w, view_h));
 
-    ui.painter()
-        .rect_stroke(view_rect, 2.0, egui::Stroke::new(1.5, colors::ACCENT_CYAN));
+    ui.painter().rect_stroke(
+        view_rect,
+        2.0,
+        egui::Stroke::new(1.5_f32, colors::ACCENT_CYAN),
+    );
 
     // Handle Minimap Click / Layer Selection Interaction
     if response.clicked() {

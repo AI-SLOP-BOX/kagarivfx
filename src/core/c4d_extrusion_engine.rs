@@ -121,13 +121,33 @@ pub fn extrude_polygon_3d(polygon_2d: &[[f32; 2]], options: &ExtrusionOptions) -
         let len = (edge[0] * edge[0] + edge[1] * edge[1]).sqrt().max(1e-4);
         let side_normal = [-edge[1] / len, edge[0] / len, 0.0];
 
-        let w0_f = Mesh3DVertex { position: [p0[0], p0[1], z_front], normal: side_normal, uv: [0.0, 1.0] };
-        let w1_f = Mesh3DVertex { position: [p1[0], p1[1], z_front], normal: side_normal, uv: [1.0, 1.0] };
-        let w0_b = Mesh3DVertex { position: [p0[0], p0[1], z_back], normal: side_normal, uv: [0.0, 0.0] };
-        let w1_b = Mesh3DVertex { position: [p1[0], p1[1], z_back], normal: side_normal, uv: [1.0, 0.0] };
+        let w0_f = Mesh3DVertex {
+            position: [p0[0], p0[1], z_front],
+            normal: side_normal,
+            uv: [0.0, 1.0],
+        };
+        let w1_f = Mesh3DVertex {
+            position: [p1[0], p1[1], z_front],
+            normal: side_normal,
+            uv: [1.0, 1.0],
+        };
+        let w0_b = Mesh3DVertex {
+            position: [p0[0], p0[1], z_back],
+            normal: side_normal,
+            uv: [0.0, 0.0],
+        };
+        let w1_b = Mesh3DVertex {
+            position: [p1[0], p1[1], z_back],
+            normal: side_normal,
+            uv: [1.0, 0.0],
+        };
 
-        triangles.push(Mesh3DTriangle { vertices: [w0_f.clone(), w1_f.clone(), w1_b.clone()] });
-        triangles.push(Mesh3DTriangle { vertices: [w0_f, w1_b, w0_b] });
+        triangles.push(Mesh3DTriangle {
+            vertices: [w0_f.clone(), w1_f.clone(), w1_b.clone()],
+        });
+        triangles.push(Mesh3DTriangle {
+            vertices: [w0_f, w1_b, w0_b],
+        });
     }
 
     Mesh3DModel {
@@ -144,12 +164,7 @@ mod tests {
 
     #[test]
     fn test_extrude_square_generates_watertight_mesh() {
-        let square = vec![
-            [-50.0, -50.0],
-            [50.0, -50.0],
-            [50.0, 50.0],
-            [-50.0, 50.0],
-        ];
+        let square = vec![[-50.0, -50.0], [50.0, -50.0], [50.0, 50.0], [-50.0, 50.0]];
         let options = ExtrusionOptions {
             depth: 20.0,
             bevel_depth: 1.0,

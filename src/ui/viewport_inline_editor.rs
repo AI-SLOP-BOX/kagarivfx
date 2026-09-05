@@ -60,14 +60,20 @@ pub fn draw_inline_numeric_editor(
                 let mut px = pos_now[0];
                 if ui.add(egui::DragValue::new(&mut px).speed(1.0)).changed() {
                     let new_p = [px, pos_now[1]];
-                    layer.transform.position.set_value_at_frame(current_frame, new_p);
+                    layer
+                        .transform
+                        .position
+                        .set_value_at_frame(current_frame, new_p);
                     project_changed = true;
                 }
                 ui.label("Y:");
                 let mut py = pos_now[1];
                 if ui.add(egui::DragValue::new(&mut py).speed(1.0)).changed() {
                     let new_p = [pos_now[0], py];
-                    layer.transform.position.set_value_at_frame(current_frame, new_p);
+                    layer
+                        .transform
+                        .position
+                        .set_value_at_frame(current_frame, new_p);
                     project_changed = true;
                 }
             });
@@ -81,7 +87,10 @@ pub fn draw_inline_numeric_editor(
                     .changed()
                 {
                     let new_s = [sx, scale_now[1]];
-                    layer.transform.scale.set_value_at_frame(current_frame, new_s);
+                    layer
+                        .transform
+                        .scale
+                        .set_value_at_frame(current_frame, new_s);
                     project_changed = true;
                 }
                 ui.label("Y:");
@@ -91,7 +100,10 @@ pub fn draw_inline_numeric_editor(
                     .changed()
                 {
                     let new_s = [scale_now[0], sy];
-                    layer.transform.scale.set_value_at_frame(current_frame, new_s);
+                    layer
+                        .transform
+                        .scale
+                        .set_value_at_frame(current_frame, new_s);
                     project_changed = true;
                 }
             });
@@ -104,7 +116,10 @@ pub fn draw_inline_numeric_editor(
                     .add(egui::DragValue::new(&mut rot).speed(0.5).suffix("°"))
                     .changed()
                 {
-                    layer.transform.rotation.set_value_at_frame(current_frame, rot);
+                    layer
+                        .transform
+                        .rotation
+                        .set_value_at_frame(current_frame, rot);
                     project_changed = true;
                 }
             });
@@ -117,7 +132,10 @@ pub fn draw_inline_numeric_editor(
                     .add(egui::Slider::new(&mut op, 0.0..=100.0).suffix("%"))
                     .changed()
                 {
-                    layer.transform.opacity.set_value_at_frame(current_frame, op);
+                    layer
+                        .transform
+                        .opacity
+                        .set_value_at_frame(current_frame, op);
                     project_changed = true;
                 }
             });

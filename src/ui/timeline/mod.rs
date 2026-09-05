@@ -14,12 +14,7 @@ use eframe::egui;
 use header::draw_timeline_header;
 use utils::maybe_snap_frame;
 
-pub fn draw(
-    app: &mut KagariApp,
-    ctx: &egui::Context,
-    current_frame: &mut u32,
-    total_frames: u32,
-) {
+pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: &mut u32, total_frames: u32) {
     egui::TopBottomPanel::bottom("timeline_panel")
         .resizable(true)
         .default_height(280.0)
@@ -244,7 +239,7 @@ pub fn draw(
                         egui::pos2(ruler_rect.left() + norm_out * ruler_rect.width(), ruler_rect.bottom() - 2.0),
                     );
                     ui.painter().rect_filled(wa_rect, 2.0, colors::TIMELINE_SELECTION);
-                    ui.painter().rect_stroke(wa_rect, 2.0, egui::Stroke::new(1.0, colors::BORDER_ACTIVE));
+                    ui.painter().rect_stroke(wa_rect, 2.0, egui::Stroke::new(1.0_f32, colors::BORDER_ACTIVE));
 
                     // ── Work-area edge handles: drag to set In/Out points ──
                     const WA_HW: f32 = 5.0;
@@ -294,7 +289,7 @@ pub fn draw(
                     let tick_x = ruler_rect.left() + norm * ruler_rect.width();
                     ui.painter().line_segment(
                         [egui::pos2(tick_x, ruler_rect.bottom() - 6.0), egui::pos2(tick_x, ruler_rect.bottom())],
-                        egui::Stroke::new(1.0, colors::BORDER_STRONG),
+                        egui::Stroke::new(1.0_f32, colors::BORDER_STRONG),
                     );
                     if tick_px < 70.0 && tick_i % label_every != 0 {
                         continue;
@@ -319,7 +314,7 @@ pub fn draw(
                 if (0.0..=1.0).contains(&playhead_norm) {
                     ui.painter().line_segment(
                         [egui::pos2(playhead_x, ruler_rect.top() + 4.0), egui::pos2(playhead_x, ruler_rect.bottom() + 300.0)],
-                        egui::Stroke::new(1.5, colors::TIMELINE_PLAYHEAD),
+                        egui::Stroke::new(1.5_f32, colors::TIMELINE_PLAYHEAD),
                     );
                     // Inverted triangle handle (AE-style grab point)
                     let tri = vec![
@@ -558,7 +553,7 @@ let type_icon = crate::ui::icons::layer_icon(&layer.layer_type);
                                         ui.painter().rect_filled(chip_rect, 2.0, chip_color);
                                         let row_selected = app.selection.selected_layers.contains(&i) || app.selection.selected_layer_idx == Some(i);
                                         if row_selected {
-                                            ui.painter().rect_stroke(chip_rect, 2.0, egui::Stroke::new(1.0, egui::Color32::WHITE));
+                                            ui.painter().rect_stroke(chip_rect, 2.0, egui::Stroke::new(1.0_f32, egui::Color32::WHITE));
                                         }
                                         if chip_resp.clicked() {
                                             let next = match layer.label {
@@ -870,7 +865,7 @@ let type_icon = crate::ui::icons::layer_icon(&layer.layer_type);
                                             let row_rect = click_resp.rect;
                                              ui.painter().rect_stroke(
                                                  row_rect, 4.0,
-                                                 egui::Stroke::new(2.0, colors::ACCENT_BLUE)
+                                                 egui::Stroke::new(2.0_f32, colors::ACCENT_BLUE)
                                              );
                                              ui.painter().rect_filled(
                                                  row_rect, 4.0,
@@ -1248,7 +1243,7 @@ let type_icon = crate::ui::icons::layer_icon(&layer.layer_type);
                             };
 
                             ui.painter().rect_filled(layer_rect, 2.0, fill_c);
-                            ui.painter().rect_stroke(layer_rect, 2.0, egui::Stroke::new(1.0, colors::TEXT_SECONDARY));
+                            ui.painter().rect_stroke(layer_rect, 2.0, egui::Stroke::new(1.0_f32, colors::TEXT_SECONDARY));
 
                             // ── Audio waveform overlay inside the bar ──
                             let audio_path: Option<String> = match &layer.layer_type {
@@ -1289,7 +1284,7 @@ let type_icon = crate::ui::icons::layer_icon(&layer.layer_type);
                                             let h = (pk * amp).clamp(1.0, amp);
                                             ui.painter().line_segment(
                                                 [egui::pos2(x, mid_y - h), egui::pos2(x, mid_y + h)],
-                                                egui::Stroke::new(1.0, wf_color),
+                                                egui::Stroke::new(1.0_f32, wf_color),
                                             );
                                         }
                                         x += 2.0;
@@ -1527,7 +1522,7 @@ let type_icon = crate::ui::icons::layer_icon(&layer.layer_type);
                                         let sy = layer_rect.center().y;
                                         ui.painter().line_segment(
                                             [egui::pos2(sx, sy - h), egui::pos2(sx, sy + h)],
-                                            egui::Stroke::new(1.0, colors::ACCENT_CYAN),
+                                            egui::Stroke::new(1.0_f32, colors::ACCENT_CYAN),
                                         );
                                     }
                                 }
@@ -1553,7 +1548,7 @@ let type_icon = crate::ui::icons::layer_icon(&layer.layer_type);
                                     ui.painter().line_segment(
                                         [egui::pos2(layer_rect.left() + 2.0, layer_rect.center().y),
                                          egui::pos2(layer_rect.right() - 2.0, layer_rect.center().y)],
-                                        egui::Stroke::new(1.0, colors::ACCENT_CYAN.linear_multiply(0.5)),
+                                        egui::Stroke::new(1.0_f32, colors::ACCENT_CYAN.linear_multiply(0.5)),
                                     );
                                 } else {
                                     let bin_span = (total_frames.max(1) as f32) / peaks.len() as f32;
@@ -1568,7 +1563,7 @@ let type_icon = crate::ui::icons::layer_icon(&layer.layer_type);
                                         let sy = layer_rect.center().y;
                                         ui.painter().line_segment(
                                             [egui::pos2(sx, sy - h), egui::pos2(sx, sy + h)],
-                                            egui::Stroke::new(1.0, colors::ACCENT_CYAN),
+                                            egui::Stroke::new(1.0_f32, colors::ACCENT_CYAN),
                                         );
                                     }
                                 }
@@ -1615,7 +1610,7 @@ let type_icon = crate::ui::icons::layer_icon(&layer.layer_type);
                                         let bar_h = (peak * amp).max(1.0);
                                         painter.line_segment(
                                             [egui::pos2(x, mid_y - bar_h), egui::pos2(x, mid_y + bar_h)],
-                                            egui::Stroke::new(1.0, wf_color),
+                                            egui::Stroke::new(1.0_f32, wf_color),
                                         );
                                         x += 2.0;
                                     }

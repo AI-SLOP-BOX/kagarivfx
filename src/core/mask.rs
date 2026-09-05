@@ -313,7 +313,12 @@ impl MaskPath {
 
     /// Subdivides segment `segment_idx` at parameter `t` in [0, 1] using de Casteljau split,
     /// inserting a new anchor point and updating tangent handles smoothly.
-    pub fn insert_vertex_at_frame(&mut self, frame: u32, segment_idx: usize, t: f32) -> Option<usize> {
+    pub fn insert_vertex_at_frame(
+        &mut self,
+        frame: u32,
+        segment_idx: usize,
+        t: f32,
+    ) -> Option<usize> {
         let t_clamped = t.clamp(0.01, 0.99);
         let verts = self.vertices_at_frame(frame);
         let n = verts.len();
@@ -328,20 +333,41 @@ impl MaskPath {
         let (c0, c1) = if let Some(tangents) = &self.tangents {
             let out_h = tangents.get(segment_idx).map(|t| t.1).unwrap_or([0.0, 0.0]);
             let in_h = tangents.get(next_idx).map(|t| t.0).unwrap_or([0.0, 0.0]);
-            ([p0[0] + out_h[0], p0[1] + out_h[1]], [p3[0] + in_h[0], p3[1] + in_h[1]])
+            (
+                [p0[0] + out_h[0], p0[1] + out_h[1]],
+                [p3[0] + in_h[0], p3[1] + in_h[1]],
+            )
         } else {
             (p0, p3)
         };
 
         // de Casteljau subdivision at parameter t
-        let q0 = [p0[0] + (c0[0] - p0[0]) * t_clamped, p0[1] + (c0[1] - p0[1]) * t_clamped];
-        let q1 = [c0[0] + (c1[0] - c0[0]) * t_clamped, c0[1] + (c1[1] - c0[1]) * t_clamped];
-        let q2 = [c1[0] + (p3[0] - c1[0]) * t_clamped, c1[1] + (p3[1] - c1[1]) * t_clamped];
+        let q0 = [
+            p0[0] + (c0[0] - p0[0]) * t_clamped,
+            p0[1] + (c0[1] - p0[1]) * t_clamped,
+        ];
+        let q1 = [
+            c0[0] + (c1[0] - c0[0]) * t_clamped,
+            c0[1] + (c1[1] - c0[1]) * t_clamped,
+        ];
+        let q2 = [
+            c1[0] + (p3[0] - c1[0]) * t_clamped,
+            c1[1] + (p3[1] - c1[1]) * t_clamped,
+        ];
 
-        let r0 = [q0[0] + (q1[0] - q0[0]) * t_clamped, q0[1] + (q1[1] - q0[1]) * t_clamped];
-        let r1 = [q1[0] + (q2[0] - q1[0]) * t_clamped, q1[1] + (q2[1] - q1[1]) * t_clamped];
+        let r0 = [
+            q0[0] + (q1[0] - q0[0]) * t_clamped,
+            q0[1] + (q1[1] - q0[1]) * t_clamped,
+        ];
+        let r1 = [
+            q1[0] + (q2[0] - q1[0]) * t_clamped,
+            q1[1] + (q2[1] - q1[1]) * t_clamped,
+        ];
 
-        let mid = [r0[0] + (r1[0] - r0[0]) * t_clamped, r0[1] + (r1[1] - r0[1]) * t_clamped];
+        let mid = [
+            r0[0] + (r1[0] - r0[0]) * t_clamped,
+            r0[1] + (r1[1] - r0[1]) * t_clamped,
+        ];
         let new_idx = segment_idx + 1;
 
         match &mut self.vertices {
@@ -363,7 +389,13 @@ impl MaskPath {
                 tangents[segment_idx].1 = [q0[0] - p0[0], q0[1] - p0[1]];
             }
             // Insert new vertex tangents: in=(r0 - mid), out=(r1 - mid)
-            tangents.insert(new_idx, ([r0[0] - mid[0], r0[1] - mid[1]], [r1[0] - mid[0], r1[1] - mid[1]]));
+            tangents.insert(
+                new_idx,
+                (
+                    [r0[0] - mid[0], r0[1] - mid[1]],
+                    [r1[0] - mid[0], r1[1] - mid[1]],
+                ),
+            );
             // Update next vertex in tangent to (p3 - q2)
             let updated_next = (new_idx + 1) % tangents.len();
             if updated_next < tangents.len() {
@@ -421,7 +453,7 @@ impl MaskPath {
             return;
         }
 
-        let mut t_in = tangent_in;
+        let t_in = tangent_in;
         let mut t_out = tangent_out;
 
         if link_collinear {
@@ -491,7 +523,10 @@ impl MaskPath {
             let dy = (p[1] - pivot[1]) * scale[1];
             let rx = dx * cos_r - dy * sin_r;
             let ry = dx * sin_r + dy * cos_r;
-            [pivot[0] + rx + translation[0], pivot[1] + ry + translation[1]]
+            [
+                pivot[0] + rx + translation[0],
+                pivot[1] + ry + translation[1],
+            ]
         };
 
         let transform_vector = |v: [f32; 2]| -> [f32; 2] {
@@ -712,7 +747,9 @@ mod tests {
         assert_eq!(path.vertices_at_frame(0).len(), 4);
 
         // Insert point in segment 0 (top edge) at t = 0.5
-        let new_idx = path.insert_vertex_at_frame(0, 0, 0.5).expect("insert succeeds");
+        let new_idx = path
+            .insert_vertex_at_frame(0, 0, 0.5)
+            .expect("insert succeeds");
         assert_eq!(new_idx, 1);
         let verts = path.vertices_at_frame(0);
         assert_eq!(verts.len(), 5);

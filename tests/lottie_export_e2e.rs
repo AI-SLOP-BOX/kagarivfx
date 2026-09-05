@@ -8,14 +8,8 @@ use kagari_vfx::core::lottie_exporter::export_project_to_json;
 use kagari_vfx::core::timeline::{Layer, LayerType, Project};
 
 fn project_with_layers(layer_count: usize, bg: [f32; 4]) -> Project {
-    let mut comp = kagari_vfx::core::timeline::Composition::new(
-        "c1".into(),
-        "Main".into(),
-        100,
-        100,
-        30,
-        30,
-    );
+    let mut comp =
+        kagari_vfx::core::timeline::Composition::new("c1".into(), "Main".into(), 100, 100, 30, 30);
     comp.background_color = bg;
     for i in 0..layer_count {
         comp.layers.push(Layer::new(

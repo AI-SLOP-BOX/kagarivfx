@@ -175,7 +175,10 @@ pub fn draw_color_management(app: &mut KagariApp, ui: &mut egui::Ui) {
     ui.add_space(4.0);
     crate::ui::custom_widgets::ae_section_header(ui, "ACES & OCIO Pipeline", "🎬");
     ui.group(|ui| {
-        let mut idt_idx = ui.ctx().data(|d| d.get_temp::<usize>(egui::Id::new("aces_idt_idx")).unwrap_or(0));
+        let mut idt_idx = ui.ctx().data(|d| {
+            d.get_temp::<usize>(egui::Id::new("aces_idt_idx"))
+                .unwrap_or(0)
+        });
         ui.horizontal(|ui| {
             ui.label(
                 egui::RichText::new("Input (IDT):")
@@ -192,30 +195,53 @@ pub fn draw_color_management(app: &mut KagariApp, ui: &mut egui::Ui) {
                     _ => "Camera Native",
                 })
                 .show_ui(ui, |ui| {
-                    if ui.selectable_value(&mut idt_idx, 0, "Camera Native / sRGB").clicked() {
-                        ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("aces_idt_idx"), 0));
+                    if ui
+                        .selectable_value(&mut idt_idx, 0, "Camera Native / sRGB")
+                        .clicked()
+                    {
+                        ui.ctx()
+                            .data_mut(|d| d.insert_temp(egui::Id::new("aces_idt_idx"), 0));
                         changed = true;
                     }
-                    if ui.selectable_value(&mut idt_idx, 1, "ARRI LogC3 / Alexa Wide Gamut").clicked() {
-                        ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("aces_idt_idx"), 1));
+                    if ui
+                        .selectable_value(&mut idt_idx, 1, "ARRI LogC3 / Alexa Wide Gamut")
+                        .clicked()
+                    {
+                        ui.ctx()
+                            .data_mut(|d| d.insert_temp(egui::Id::new("aces_idt_idx"), 1));
                         changed = true;
                     }
-                    if ui.selectable_value(&mut idt_idx, 2, "Sony S-Log3 / S-Gamut3.Cine").clicked() {
-                        ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("aces_idt_idx"), 2));
+                    if ui
+                        .selectable_value(&mut idt_idx, 2, "Sony S-Log3 / S-Gamut3.Cine")
+                        .clicked()
+                    {
+                        ui.ctx()
+                            .data_mut(|d| d.insert_temp(egui::Id::new("aces_idt_idx"), 2));
                         changed = true;
                     }
-                    if ui.selectable_value(&mut idt_idx, 3, "RED Log3G10 / REDWideGamutRGB").clicked() {
-                        ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("aces_idt_idx"), 3));
+                    if ui
+                        .selectable_value(&mut idt_idx, 3, "RED Log3G10 / REDWideGamutRGB")
+                        .clicked()
+                    {
+                        ui.ctx()
+                            .data_mut(|d| d.insert_temp(egui::Id::new("aces_idt_idx"), 3));
                         changed = true;
                     }
-                    if ui.selectable_value(&mut idt_idx, 4, "Panasonic V-Log / V-Gamut").clicked() {
-                        ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("aces_idt_idx"), 4));
+                    if ui
+                        .selectable_value(&mut idt_idx, 4, "Panasonic V-Log / V-Gamut")
+                        .clicked()
+                    {
+                        ui.ctx()
+                            .data_mut(|d| d.insert_temp(egui::Id::new("aces_idt_idx"), 4));
                         changed = true;
                     }
                 });
         });
 
-        let mut odt_idx = ui.ctx().data(|d| d.get_temp::<usize>(egui::Id::new("aces_odt_idx")).unwrap_or(0));
+        let mut odt_idx = ui.ctx().data(|d| {
+            d.get_temp::<usize>(egui::Id::new("aces_odt_idx"))
+                .unwrap_or(0)
+        });
         ui.horizontal(|ui| {
             ui.label(
                 egui::RichText::new("Output (ODT):")
@@ -231,20 +257,36 @@ pub fn draw_color_management(app: &mut KagariApp, ui: &mut egui::Ui) {
                     _ => "ACES 1.3 Rec.709 ODT",
                 })
                 .show_ui(ui, |ui| {
-                    if ui.selectable_value(&mut odt_idx, 0, "ACES 1.3 Rec.709 ODT").clicked() {
-                        ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("aces_odt_idx"), 0));
+                    if ui
+                        .selectable_value(&mut odt_idx, 0, "ACES 1.3 Rec.709 ODT")
+                        .clicked()
+                    {
+                        ui.ctx()
+                            .data_mut(|d| d.insert_temp(egui::Id::new("aces_odt_idx"), 0));
                         changed = true;
                     }
-                    if ui.selectable_value(&mut odt_idx, 1, "ACES 1.3 DCI-P3 ODT").clicked() {
-                        ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("aces_odt_idx"), 1));
+                    if ui
+                        .selectable_value(&mut odt_idx, 1, "ACES 1.3 DCI-P3 ODT")
+                        .clicked()
+                    {
+                        ui.ctx()
+                            .data_mut(|d| d.insert_temp(egui::Id::new("aces_odt_idx"), 1));
                         changed = true;
                     }
-                    if ui.selectable_value(&mut odt_idx, 2, "ACES HDR Rec.2100 PQ (1000 nits)").clicked() {
-                        ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("aces_odt_idx"), 2));
+                    if ui
+                        .selectable_value(&mut odt_idx, 2, "ACES HDR Rec.2100 PQ (1000 nits)")
+                        .clicked()
+                    {
+                        ui.ctx()
+                            .data_mut(|d| d.insert_temp(egui::Id::new("aces_odt_idx"), 2));
                         changed = true;
                     }
-                    if ui.selectable_value(&mut odt_idx, 3, "ACES HDR Rec.2100 HLG").clicked() {
-                        ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("aces_odt_idx"), 3));
+                    if ui
+                        .selectable_value(&mut odt_idx, 3, "ACES HDR Rec.2100 HLG")
+                        .clicked()
+                    {
+                        ui.ctx()
+                            .data_mut(|d| d.insert_temp(egui::Id::new("aces_odt_idx"), 3));
                         changed = true;
                     }
                 });

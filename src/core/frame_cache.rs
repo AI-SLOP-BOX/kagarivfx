@@ -71,6 +71,10 @@ impl PixelBufferPool {
     pub fn len(&self) -> usize {
         self.pool.lock().unwrap_or_else(|e| e.into_inner()).len()
     }
+
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
 }
 
 /// A single cached frame entry: raw RGBA pixel bytes for one frame at one version.
@@ -478,7 +482,9 @@ pub mod disk_cache {
         files.sort_by_key(|(_, mtime)| *mtime);
         // Evict oldest until we fit
         let mut freed: u64 = 0;
-        let needed = current.saturating_add(new_frame_bytes).saturating_sub(budget);
+        let needed = current
+            .saturating_add(new_frame_bytes)
+            .saturating_sub(budget);
         for (path, _) in &files {
             if freed >= needed {
                 break;

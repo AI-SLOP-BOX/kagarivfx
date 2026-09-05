@@ -21,9 +21,7 @@ pub struct SvgVectorPath {
 impl SvgVectorPath {
     /// Converts imported vector path into an animatable AE MaskPath.
     pub fn to_mask_path(&self) -> MaskPath {
-        let mut path = MaskPath::new_closed(
-            self.vertices.iter().map(|v| v.position).collect(),
-        );
+        let mut path = MaskPath::new_closed(self.vertices.iter().map(|v| v.position).collect());
         let tangents = self
             .vertices
             .iter()
@@ -73,7 +71,11 @@ pub fn parse_svg_path_data(d: &str) -> Result<Vec<MaskVertex>, String> {
                 if i + 2 < tokens.len() {
                     let x: f32 = tokens[i + 1].parse().map_err(|e| format!("M.x: {e}"))?;
                     let y: f32 = tokens[i + 2].parse().map_err(|e| format!("M.y: {e}"))?;
-                    curr_pos = if is_rel { [curr_pos[0] + x, curr_pos[1] + y] } else { [x, y] };
+                    curr_pos = if is_rel {
+                        [curr_pos[0] + x, curr_pos[1] + y]
+                    } else {
+                        [x, y]
+                    };
                     vertices.push(MaskVertex::new(curr_pos[0], curr_pos[1]));
                     i += 3;
                 } else {
@@ -85,7 +87,11 @@ pub fn parse_svg_path_data(d: &str) -> Result<Vec<MaskVertex>, String> {
                 if i + 2 < tokens.len() {
                     let x: f32 = tokens[i + 1].parse().map_err(|e| format!("L.x: {e}"))?;
                     let y: f32 = tokens[i + 2].parse().map_err(|e| format!("L.y: {e}"))?;
-                    curr_pos = if is_rel { [curr_pos[0] + x, curr_pos[1] + y] } else { [x, y] };
+                    curr_pos = if is_rel {
+                        [curr_pos[0] + x, curr_pos[1] + y]
+                    } else {
+                        [x, y]
+                    };
                     vertices.push(MaskVertex::new(curr_pos[0], curr_pos[1]));
                     i += 3;
                 } else {
@@ -102,9 +108,21 @@ pub fn parse_svg_path_data(d: &str) -> Result<Vec<MaskVertex>, String> {
                     let x: f32 = tokens[i + 5].parse().map_err(|e| format!("C.x: {e}"))?;
                     let y: f32 = tokens[i + 6].parse().map_err(|e| format!("C.y: {e}"))?;
 
-                    let c0 = if is_rel { [curr_pos[0] + x1, curr_pos[1] + y1] } else { [x1, y1] };
-                    let c1 = if is_rel { [curr_pos[0] + x2, curr_pos[1] + y2] } else { [x2, y2] };
-                    let dest = if is_rel { [curr_pos[0] + x, curr_pos[1] + y] } else { [x, y] };
+                    let c0 = if is_rel {
+                        [curr_pos[0] + x1, curr_pos[1] + y1]
+                    } else {
+                        [x1, y1]
+                    };
+                    let c1 = if is_rel {
+                        [curr_pos[0] + x2, curr_pos[1] + y2]
+                    } else {
+                        [x2, y2]
+                    };
+                    let dest = if is_rel {
+                        [curr_pos[0] + x, curr_pos[1] + y]
+                    } else {
+                        [x, y]
+                    };
 
                     // Update tangent_out of previous vertex
                     if let Some(prev) = vertices.last_mut() {

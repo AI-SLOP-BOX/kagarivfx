@@ -324,7 +324,6 @@ mod tests {
             [255, 0, 0],
             [0, 0, 255],
         );
-        assert!(buffer.iter().all(|value| *value <= 255));
     }
 
     #[test]
@@ -623,4 +622,3 @@ pub fn analyze_audio_multiband_keyframes(
 
     keyframes
 }
-

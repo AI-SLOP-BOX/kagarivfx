@@ -83,7 +83,7 @@ impl ToastManager {
 
                         egui::Frame::window(ui.style())
                             .fill(colors::BG_DEEPEST)
-                            .stroke(egui::Stroke::new(1.0, accent))
+                            .stroke(egui::Stroke::new(1.0_f32, accent))
                             .rounding(egui::Rounding::same(4.0))
                             .inner_margin(egui::Margin::symmetric(12.0, 8.0))
                             .show(ui, |ui| {

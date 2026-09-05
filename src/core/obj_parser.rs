@@ -82,39 +82,54 @@ impl Mesh3DModel {
                     if parts.len() >= 4 {
                         let parse_vertex = |spec: &str| -> Result<Mesh3DVertex, String> {
                             let tokens: Vec<&str> = spec.split('/').collect();
-                            let pos_idx: usize = tokens[0].parse().map_err(|e| format!("Face idx: {e}"))?;
-                            let pos = *positions.get(pos_idx.checked_sub(1).ok_or("0-index")?)
+                            let pos_idx: usize =
+                                tokens[0].parse().map_err(|e| format!("Face idx: {e}"))?;
+                            let pos = *positions
+                                .get(pos_idx.checked_sub(1).ok_or("0-index")?)
                                 .ok_or("Vertex position index out of range")?;
 
                             let uv = if tokens.len() > 1 && !tokens[1].is_empty() {
-                                let uv_idx: usize = tokens[1].parse().map_err(|e| format!("UV idx: {e}"))?;
-                                *uvs.get(uv_idx.checked_sub(1).ok_or("0-index")?).unwrap_or(&[0.0, 0.0])
+                                let uv_idx: usize =
+                                    tokens[1].parse().map_err(|e| format!("UV idx: {e}"))?;
+                                *uvs.get(uv_idx.checked_sub(1).ok_or("0-index")?)
+                                    .unwrap_or(&[0.0, 0.0])
                             } else {
                                 [0.0, 0.0]
                             };
 
                             let normal = if tokens.len() > 2 && !tokens[2].is_empty() {
-                                let norm_idx: usize = tokens[2].parse().map_err(|e| format!("Norm idx: {e}"))?;
-                                *normals.get(norm_idx.checked_sub(1).ok_or("0-index")?).unwrap_or(&[0.0, 0.0, 1.0])
+                                let norm_idx: usize =
+                                    tokens[2].parse().map_err(|e| format!("Norm idx: {e}"))?;
+                                *normals
+                                    .get(norm_idx.checked_sub(1).ok_or("0-index")?)
+                                    .unwrap_or(&[0.0, 0.0, 1.0])
                             } else {
                                 [0.0, 0.0, 1.0]
                             };
 
-                            Ok(Mesh3DVertex { position: pos, normal, uv })
+                            Ok(Mesh3DVertex {
+                                position: pos,
+                                normal,
+                                uv,
+                            })
                         };
 
                         let v0 = parse_vertex(parts[1])?;
                         let v1 = parse_vertex(parts[2])?;
                         let v2 = parse_vertex(parts[3])?;
 
-                        triangles.push(Mesh3DTriangle { vertices: [v0, v1, v2] });
+                        triangles.push(Mesh3DTriangle {
+                            vertices: [v0, v1, v2],
+                        });
 
                         // Quad fan polygon triangulation
                         if parts.len() >= 5 {
                             let v3 = parse_vertex(parts[4])?;
                             let v0_clone = parse_vertex(parts[1])?;
                             let v2_clone = parse_vertex(parts[3])?;
-                            triangles.push(Mesh3DTriangle { vertices: [v0_clone, v2_clone, v3] });
+                            triangles.push(Mesh3DTriangle {
+                                vertices: [v0_clone, v2_clone, v3],
+                            });
                         }
                     }
                 }

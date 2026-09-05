@@ -79,10 +79,13 @@ pub fn draw_render_queue_panel(app: &mut KagariApp, ui: &mut egui::Ui) {
     // Queue Items List Display
     if !app.render_queue_items.is_empty() {
         ui.label(
-            egui::RichText::new(format!("QUEUED COMPOSITIONS ({})", app.render_queue_items.len()))
-                .small()
-                .strong()
-                .color(colors::ACCENT_CYAN),
+            egui::RichText::new(format!(
+                "QUEUED COMPOSITIONS ({})",
+                app.render_queue_items.len()
+            ))
+            .small()
+            .strong()
+            .color(colors::ACCENT_CYAN),
         );
         let mut remove_idx: Option<usize> = None;
         let mut switch_comp: Option<String> = None;
@@ -95,7 +98,9 @@ pub fn draw_render_queue_panel(app: &mut KagariApp, ui: &mut egui::Ui) {
                     ui.horizontal(|ui| {
                         let text = format!("{}. {}", idx + 1, q_name);
                         let label = if is_active {
-                            egui::RichText::new(text).strong().color(colors::ACCENT_GREEN)
+                            egui::RichText::new(text)
+                                .strong()
+                                .color(colors::ACCENT_GREEN)
                         } else {
                             egui::RichText::new(text).color(colors::TEXT_PRIMARY)
                         };
@@ -128,7 +133,8 @@ pub fn draw_render_queue_panel(app: &mut KagariApp, ui: &mut egui::Ui) {
     let comp_duration = app.history.current().active_composition().duration_frames;
     let wa_in = app.playback.work_area_in.unwrap_or(0);
     let wa_out = app
-        .playback.work_area_out
+        .playback
+        .work_area_out
         .unwrap_or(comp_duration.saturating_sub(1))
         .min(comp_duration.saturating_sub(1));
     let range_frames = wa_out.saturating_sub(wa_in).saturating_add(1);
@@ -139,7 +145,7 @@ pub fn draw_render_queue_panel(app: &mut KagariApp, ui: &mut egui::Ui) {
     let frame = egui::Frame::none()
         .fill(colors::BG_DARK)
         .inner_margin(egui::Margin::same(8.0))
-        .stroke(egui::Stroke::new(1.0, colors::BORDER_SUBTLE));
+        .stroke(egui::Stroke::new(1.0_f32, colors::BORDER_SUBTLE));
 
     frame.show(ui, |ui| {
         let (status_text, status_color) = if app.export.is_exporting {
@@ -224,20 +230,26 @@ pub fn draw_render_queue_panel(app: &mut KagariApp, ui: &mut egui::Ui) {
                     let mut out_v = wa_out as i32;
                     let comp_fps = app.history.current().active_composition().fps.max(1);
                     let mut changed = false;
-                    if ui.add(
-                        egui::DragValue::new(&mut in_v)
-                            .prefix("In: ")
-                            .speed(0.5)
-                            .range(0..=(comp_duration.saturating_sub(1) as i32)),
-                    ).changed() {
+                    if ui
+                        .add(
+                            egui::DragValue::new(&mut in_v)
+                                .prefix("In: ")
+                                .speed(0.5)
+                                .range(0..=(comp_duration.saturating_sub(1) as i32)),
+                        )
+                        .changed()
+                    {
                         changed = true;
                     }
-                    if ui.add(
-                        egui::DragValue::new(&mut out_v)
-                            .prefix("Out: ")
-                            .speed(0.5)
-                            .range(in_v..=(comp_duration.saturating_sub(1) as i32)),
-                    ).changed() {
+                    if ui
+                        .add(
+                            egui::DragValue::new(&mut out_v)
+                                .prefix("Out: ")
+                                .speed(0.5)
+                                .range(in_v..=(comp_duration.saturating_sub(1) as i32)),
+                        )
+                        .changed()
+                    {
                         changed = true;
                     }
                     ui.label(

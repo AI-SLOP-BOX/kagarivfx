@@ -34,8 +34,14 @@ impl RenderExportFormat {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum RenderStatus {
     Queued,
-    Rendering { progress: f32, current_frame: u32, total_frames: u32 },
-    Completed { elapsed_sec: f64 },
+    Rendering {
+        progress: f32,
+        current_frame: u32,
+        total_frames: u32,
+    },
+    Completed {
+        elapsed_sec: f64,
+    },
     Failed(String),
     Paused,
 }
@@ -64,7 +70,14 @@ impl RenderQueueItem {
         start_frame: u32,
         end_frame: u32,
     ) -> Self {
-        let id = format!("job_{}_{}", comp_id, std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_millis()).unwrap_or(0));
+        let id = format!(
+            "job_{}_{}",
+            comp_id,
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_millis())
+                .unwrap_or(0)
+        );
         Self {
             id,
             comp_id,
@@ -75,7 +88,10 @@ impl RenderQueueItem {
             end_frame,
             resolution_scale: 1.0,
             status: RenderStatus::Queued,
-            time_created: std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0),
+            time_created: std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_secs())
+                .unwrap_or(0),
         }
     }
 
@@ -117,7 +133,12 @@ impl RenderQueue {
 
     /// Clear all completed or failed items.
     pub fn clean_completed(&mut self) {
-        self.items.retain(|i| matches!(i.status, RenderStatus::Queued | RenderStatus::Rendering { .. } | RenderStatus::Paused));
+        self.items.retain(|i| {
+            matches!(
+                i.status,
+                RenderStatus::Queued | RenderStatus::Rendering { .. } | RenderStatus::Paused
+            )
+        });
     }
 
     /// Reset failed items back to Queued state for retry.
@@ -139,7 +160,7 @@ impl RenderQueue {
             match &item.status {
                 RenderStatus::Completed { .. } => total_prog += 1.0,
                 RenderStatus::Rendering { progress, .. } => total_prog += progress.clamp(0.0, 1.0),
-                _ => {},
+                _ => {}
             }
         }
         (total_prog / self.items.len() as f32).clamp(0.0, 1.0)
@@ -147,7 +168,10 @@ impl RenderQueue {
 
     /// Count items in Queued state.
     pub fn pending_count(&self) -> usize {
-        self.items.iter().filter(|i| matches!(i.status, RenderStatus::Queued)).count()
+        self.items
+            .iter()
+            .filter(|i| matches!(i.status, RenderStatus::Queued))
+            .count()
     }
 }
 
@@ -188,7 +212,11 @@ mod tests {
             50,
         );
         queue.add_item(item2);
-        queue.items[1].status = RenderStatus::Rendering { progress: 0.5, current_frame: 25, total_frames: 50 };
+        queue.items[1].status = RenderStatus::Rendering {
+            progress: 0.5,
+            current_frame: 25,
+            total_frames: 50,
+        };
 
         // Average progress of 100% and 50% across 2 items is 75%
         assert!((queue.aggregate_progress() - 0.75).abs() < 1e-4);

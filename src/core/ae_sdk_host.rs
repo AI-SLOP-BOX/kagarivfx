@@ -5,8 +5,6 @@
 
 #![allow(dead_code, non_camel_case_types)]
 
-use std::ptr;
-
 #[repr(C)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PF_Cmd {
@@ -224,7 +222,7 @@ mod tests {
 
     #[test]
     fn test_pf_effect_world_c_abi_layout() {
-        let mut world = SafeEffectWorld::new_rgba8(64, 64);
+        let world = SafeEffectWorld::new_rgba8(64, 64);
         assert_eq!(world.raw.width, 64);
         assert_eq!(world.raw.height, 64);
         assert_eq!(world.raw.rowbytes, 256);

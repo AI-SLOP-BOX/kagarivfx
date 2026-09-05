@@ -54,7 +54,7 @@ pub fn draw_motion_sketch_panel(app: &mut KagariApp, ui: &mut egui::Ui) {
     ui.separator();
 
     let is_sketching_id = egui::Id::new("ae_motion_sketch_armed");
-    let mut is_armed: bool = ui
+    let is_armed: bool = ui
         .ctx()
         .data_mut(|d| *d.get_temp_mut_or_insert_with(is_sketching_id, || false));
 
@@ -64,7 +64,6 @@ pub fn draw_motion_sketch_panel(app: &mut KagariApp, ui: &mut egui::Ui) {
             "🔴 ARMED: Click and drag in Viewport to record motion path...",
         );
         if custom_widgets::ae_button(ui, "⏹ Stop / Disarm").clicked() {
-            is_armed = false;
             ui.ctx().data_mut(|d| d.insert_temp(is_sketching_id, false));
             app.toasts.info("Motion Sketch disarmed");
         }
@@ -74,7 +73,6 @@ pub fn draw_motion_sketch_panel(app: &mut KagariApp, ui: &mut egui::Ui) {
             .clicked()
         {
             if app.selection.selected_layer_idx.is_some() {
-                is_armed = true;
                 ui.ctx().data_mut(|d| d.insert_temp(is_sketching_id, true));
                 app.toasts
                     .info("Motion Sketch armed: Drag in Viewport to record!");

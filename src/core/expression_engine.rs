@@ -477,10 +477,10 @@ pub fn build_engine() -> Engine {
         sum
     });
     engine.register_fn("cross", |a1: Array, a2: Array| -> Array {
-        let v1_0 = a1.get(0).and_then(dynamic_to_f64).unwrap_or(0.0);
+        let v1_0 = a1.first().and_then(dynamic_to_f64).unwrap_or(0.0);
         let v1_1 = a1.get(1).and_then(dynamic_to_f64).unwrap_or(0.0);
         let v1_2 = a1.get(2).and_then(dynamic_to_f64).unwrap_or(0.0);
-        let v2_0 = a2.get(0).and_then(dynamic_to_f64).unwrap_or(0.0);
+        let v2_0 = a2.first().and_then(dynamic_to_f64).unwrap_or(0.0);
         let v2_1 = a2.get(1).and_then(dynamic_to_f64).unwrap_or(0.0);
         let v2_2 = a2.get(2).and_then(dynamic_to_f64).unwrap_or(0.0);
         vec![
@@ -490,10 +490,10 @@ pub fn build_engine() -> Engine {
         ]
     });
     engine.register_fn("lookAt", |from_p: Array, target_p: Array| -> Array {
-        let fx = from_p.get(0).and_then(dynamic_to_f64).unwrap_or(0.0);
+        let fx = from_p.first().and_then(dynamic_to_f64).unwrap_or(0.0);
         let fy = from_p.get(1).and_then(dynamic_to_f64).unwrap_or(0.0);
         let fz = from_p.get(2).and_then(dynamic_to_f64).unwrap_or(0.0);
-        let tx = target_p.get(0).and_then(dynamic_to_f64).unwrap_or(0.0);
+        let tx = target_p.first().and_then(dynamic_to_f64).unwrap_or(0.0);
         let ty = target_p.get(1).and_then(dynamic_to_f64).unwrap_or(0.0);
         let tz = target_p.get(2).and_then(dynamic_to_f64).unwrap_or(0.0);
         let dx = tx - fx;
@@ -954,17 +954,17 @@ pub fn build_engine() -> Engine {
         let x = point.first().and_then(dynamic_to_f64).unwrap_or(0.0);
         let y = point.get(1).and_then(dynamic_to_f64).unwrap_or(0.0);
         let z = point.get(2).and_then(dynamic_to_f64).unwrap_or(0.0);
-        vec![Dynamic::from_float(x), Dynamic::from_float(y), Dynamic::from_float(z)]
+        vec![
+            Dynamic::from_float(x),
+            Dynamic::from_float(y),
+            Dynamic::from_float(z),
+        ]
     });
 
     // --- AE vector math and angle conversion helpers ---
-    engine.register_fn("radiansToDegrees", |rad: f64| -> f64 {
-        rad.to_degrees()
-    });
+    engine.register_fn("radiansToDegrees", |rad: f64| -> f64 { rad.to_degrees() });
 
-    engine.register_fn("degreesToRadians", |deg: f64| -> f64 {
-        deg.to_radians()
-    });
+    engine.register_fn("degreesToRadians", |deg: f64| -> f64 { deg.to_radians() });
 
     engine.register_fn("length", |vec: Array| -> f64 {
         let sum_sq: f64 = vec.iter().filter_map(dynamic_to_f64).map(|v| v * v).sum();

@@ -67,7 +67,7 @@ pub fn apply_cylinder_projection(
     }
     let r = config.radius.abs().clamp(1.0, 16384.0);
     let cx = config.center[0];
-    let cy = config.center[1];
+    let _cy = config.center[1];
     let yaw_rad = config.rotation_deg[1].to_radians();
 
     let light_len = (config.light_direction[0].powi(2)
@@ -272,7 +272,7 @@ mod tests {
     fn test_cylinder_projection_renders_within_radius() {
         let width = 32u32;
         let height = 32u32;
-        let mut src = vec![255u8; (width * height * 4) as usize];
+        let src = vec![255u8; (width * height * 4) as usize];
         let mut dst = vec![0u8; (width * height * 4) as usize];
 
         let config = CylinderProjectionConfig {

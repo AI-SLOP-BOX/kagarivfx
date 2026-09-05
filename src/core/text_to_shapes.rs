@@ -10,7 +10,6 @@
 //! - Compound path handling (handles inner holes for 'A', 'B', 'O', 'P', 'R', 'D', '0', '8', etc.)
 //! - Preserves layer transforms, fills, strokes, leading, tracking, and alignment
 
-use crate::core::mask::MaskVertex;
 use crate::core::property::Animatable;
 use crate::core::timeline::{Layer, LayerType, ShapeType, TrimPaths};
 
@@ -127,8 +126,8 @@ pub fn generate_text_contours(
         let line_w = line_widths[row];
         let start_x = match align {
             1 => (max_w - line_w) * 0.5 - max_w * 0.5, // Center
-            2 => (max_w - line_w) - max_w * 0.5,        // Right
-            _ => -max_w * 0.5,                          // Left
+            2 => (max_w - line_w) - max_w * 0.5,       // Right
+            _ => -max_w * 0.5,                         // Left
         };
         let start_y = (row as f32 * line_height) - (total_h * 0.5) + (font_size * 0.8);
 

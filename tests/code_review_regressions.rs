@@ -291,7 +291,7 @@ fn simple_choker_output_valid() {
 #[test]
 fn glow_extreme_values_safe() {
     let mut pixels = vec![0u8; 100 * 4]; // 100 pixels
-    // Set some bright pixels
+                                         // Set some bright pixels
     for i in (0..400).step_by(4) {
         pixels[i] = 255;
         pixels[i + 1] = 255;
@@ -743,7 +743,12 @@ fn fade_curve_output_in_unit_range() {
         let ease_in = FadeCurve::EaseIn.apply(t);
         let ease_out = FadeCurve::EaseOut.apply(t);
         assert!((0.0..=1.0).contains(&linear), "Linear({}) = {}", t, linear);
-        assert!((0.0..=1.0).contains(&ease_in), "EaseIn({}) = {}", t, ease_in);
+        assert!(
+            (0.0..=1.0).contains(&ease_in),
+            "EaseIn({}) = {}",
+            t,
+            ease_in
+        );
         assert!(
             (0.0..=1.0).contains(&ease_out),
             "EaseOut({}) = {}",

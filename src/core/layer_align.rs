@@ -121,7 +121,7 @@ pub fn distribute_layers(layers: &mut [&mut Layer], frame: u32, mode: Distribute
 /// Fits a layer's scale and position to the composition dimensions.
 pub fn fit_layer_to_comp(
     layer: &mut Layer,
-    frame: u32,
+    _frame: u32,
     layer_w: f32,
     layer_h: f32,
     comp_w: f32,
@@ -143,7 +143,8 @@ pub fn fit_layer_to_comp(
     };
 
     // Center position in composition
-    layer.transform.position = crate::core::property::Animatable::new_constant([comp_w * 0.5, comp_h * 0.5]);
+    layer.transform.position =
+        crate::core::property::Animatable::new_constant([comp_w * 0.5, comp_h * 0.5]);
     layer.transform.scale = crate::core::property::Animatable::new_constant(final_scale);
 }
 
@@ -191,7 +192,9 @@ mod tests {
         let mut l = Layer::new(
             "1".into(),
             "L1".into(),
-            LayerType::Solid { color: [1.0, 1.0, 1.0, 1.0] },
+            LayerType::Solid {
+                color: [1.0, 1.0, 1.0, 1.0],
+            },
             10,
         );
         fit_layer_to_comp(&mut l, 0, 500.0, 500.0, 1920.0, 1080.0, true);

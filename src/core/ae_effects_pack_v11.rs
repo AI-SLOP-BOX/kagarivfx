@@ -235,7 +235,7 @@ mod tests {
     #[test]
     fn test_matte_choker_reduces_alpha_boundary() {
         let mut pixels = vec![255; 16 * 4]; // 4x4 image
-        // Make corners transparent
+                                            // Make corners transparent
         pixels[3] = 0;
         pixels[15] = 0;
         apply_matte_choker(&mut pixels, 4, 4, 1);
@@ -243,4 +243,3 @@ mod tests {
         assert!(pixels[7] < 255 || pixels[11] < 255);
     }
 }
-

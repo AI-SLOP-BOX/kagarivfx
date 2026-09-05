@@ -142,13 +142,13 @@ pub fn draw_logo(ui: &mut egui::Ui, size: f32) -> egui::Response {
     let purple = egui::Color32::from_rgb(150, 80, 220);
 
     // Rounded frame
-    p.rect_stroke(rect.shrink(1.0), 3.0, egui::Stroke::new(1.6, accent));
+    p.rect_stroke(rect.shrink(1.0), 3.0, egui::Stroke::new(1.6_f32, accent));
     // Diagonal split suggesting motion
     let tl = rect.left_top();
     let br = rect.right_bottom();
     let mid = egui::pos2(rect.center().x, rect.center().y);
-    p.line_segment([tl, mid], egui::Stroke::new(1.2, purple));
-    p.line_segment([mid, br], egui::Stroke::new(1.2, purple));
+    p.line_segment([tl, mid], egui::Stroke::new(1.2_f32, purple));
+    p.line_segment([mid, br], egui::Stroke::new(1.2_f32, purple));
     // Playhead diamond at center
     let c = rect.center();
     let s = size * 0.14;

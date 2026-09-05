@@ -136,7 +136,7 @@ pub fn draw_software_canvas(
                             for window in pts.windows(2) {
                                 ui.painter().line_segment(
                                     [window[0], window[1]],
-                                    egui::Stroke::new(3.0, layer_color),
+                                    egui::Stroke::new(3.0_f32, layer_color),
                                 );
                             }
                         } else {
@@ -157,7 +157,7 @@ pub fn draw_software_canvas(
                     ui.painter().rect_stroke(
                         img_rect,
                         6.0,
-                        egui::Stroke::new(1.5, egui::Color32::WHITE),
+                        egui::Stroke::new(1.5_f32, egui::Color32::WHITE),
                     );
                     let filename = path.split('/').next_back().unwrap_or(path);
                     ui.painter().text(
@@ -177,7 +177,7 @@ pub fn draw_software_canvas(
                     ui.painter().rect_stroke(
                         comp_rect,
                         6.0,
-                        egui::Stroke::new(2.0, colors::ACCENT_PURPLE),
+                        egui::Stroke::new(2.0_f32, colors::ACCENT_PURPLE),
                     );
                     ui.painter().text(
                         comp_rect.center(),
@@ -313,12 +313,12 @@ pub fn draw_software_canvas(
 
                     for w in draw_points.windows(2) {
                         ui.painter()
-                            .line_segment([w[0], w[1]], egui::Stroke::new(1.2, line_color));
+                            .line_segment([w[0], w[1]], egui::Stroke::new(1.2_f32, line_color));
                     }
                     if mask.path.is_closed {
                         ui.painter().line_segment(
                             [draw_points[draw_points.len() - 1], draw_points[0]],
-                            egui::Stroke::new(1.2, line_color),
+                            egui::Stroke::new(1.2_f32, line_color),
                         );
                     }
 
@@ -340,7 +340,7 @@ pub fn draw_software_canvas(
                             ui.painter().rect_stroke(
                                 v_rect,
                                 1.0,
-                                egui::Stroke::new(1.2, colors::HANDLE_HOVER_STROKE),
+                                egui::Stroke::new(1.2_f32, colors::HANDLE_HOVER_STROKE),
                             );
                             ui.painter().text(
                                 egui::pos2(screen_pt.x + 8.0, screen_pt.y - 8.0),

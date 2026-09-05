@@ -15,7 +15,8 @@ pub fn draw_font_picker(app: &mut KagariApp, ui: &mut egui::Ui) {
 
     // Current family = selected text layer's formatting, else first available
     let current_family = app
-        .selection.selected_layer_idx
+        .selection
+        .selected_layer_idx
         .and_then(|idx| {
             let comp = app.history.current().active_composition();
             comp.layers

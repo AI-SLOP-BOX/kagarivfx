@@ -366,9 +366,7 @@ mod tests {
         ])
         .unwrap();
 
-        assert!(curve
-            .move_point(Time::new(1, 2), Time::new(1, 1))
-            .unwrap());
+        assert!(curve.move_point(Time::new(1, 2), Time::new(1, 1)).unwrap());
         assert_eq!(curve.points.len(), 2);
         assert_eq!(curve.sample(Time::new(1, 1)), Some(0.5));
         assert!(curve.validate().is_ok());

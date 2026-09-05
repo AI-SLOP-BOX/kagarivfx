@@ -65,14 +65,14 @@ pub fn draw_camera_3d_viewport(
         let p0 = project_3d(x, comp_h, 0.0);
         let p1 = project_3d(x, 0.0, 0.0);
         ui.painter()
-            .line_segment([p0, p1], egui::Stroke::new(0.8, grid_color));
+            .line_segment([p0, p1], egui::Stroke::new(0.8_f32, grid_color));
     }
     for gy in 0..=grid_n {
         let y = gy as f32 * (comp_h / grid_n as f32);
         let p0 = project_3d(0.0, y, 0.0);
         let p1 = project_3d(comp_w, y, 0.0);
         ui.painter()
-            .line_segment([p0, p1], egui::Stroke::new(0.8, grid_color));
+            .line_segment([p0, p1], egui::Stroke::new(0.8_f32, grid_color));
     }
 
     // Draw comp canvas border in 3D
@@ -85,7 +85,7 @@ pub fn draw_camera_3d_viewport(
     for i in 0..4 {
         ui.painter().line_segment(
             [corners[i], corners[(i + 1) % 4]],
-            egui::Stroke::new(1.5, colors::ACCENT_BLUE),
+            egui::Stroke::new(1.5_f32, colors::ACCENT_BLUE),
         );
     }
 
@@ -128,7 +128,7 @@ pub fn draw_camera_3d_viewport(
             bbox,
             3.0,
             egui::Stroke::new(
-                1.0,
+                1.0_f32,
                 if Some(li) == app.selection.selected_layer_idx {
                     colors::ACCENT_CYAN
                 } else {
@@ -152,7 +152,7 @@ pub fn draw_camera_3d_viewport(
     );
     ui.painter().rect_filled(hud, 4.0, colors::HUD_BG);
     ui.painter()
-        .rect_stroke(hud, 4.0, egui::Stroke::new(1.0, colors::HUD_STROKE));
+        .rect_stroke(hud, 4.0, egui::Stroke::new(1.0_f32, colors::HUD_STROKE));
     ui.painter().text(
         hud.center(),
         egui::Align2::CENTER_CENTER,

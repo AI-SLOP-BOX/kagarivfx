@@ -312,6 +312,9 @@ mod tests {
         let out_of_gamut = [2.5, -0.8, 0.1]; // Highly saturated with negative component
         let compressed_out = aces_gamut_compress(out_of_gamut, 0.8, 1.2);
         assert!(compressed_out[0].is_finite());
-        assert!(compressed_out[1] > out_of_gamut[1], "Negative channel pulled towards achromatic");
+        assert!(
+            compressed_out[1] > out_of_gamut[1],
+            "Negative channel pulled towards achromatic"
+        );
     }
 }

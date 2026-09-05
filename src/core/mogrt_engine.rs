@@ -5,7 +5,7 @@
 
 #![allow(dead_code)]
 
-use crate::core::timeline::{Composition, Layer};
+use crate::core::timeline::Composition;
 
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub enum EssentialPropertyType {
@@ -162,7 +162,7 @@ pub fn create_mogrt_manifest(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::core::timeline::LayerType;
+    use crate::core::timeline::{Layer, LayerType};
 
     #[test]
     fn test_essential_property_override_text_and_position() {

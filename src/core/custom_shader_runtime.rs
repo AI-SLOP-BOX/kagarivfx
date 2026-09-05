@@ -5,7 +5,7 @@
 //! pipelines for real-time GPU rendering.
 
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex, OnceLock};
+use std::sync::{Mutex, OnceLock};
 
 /// Compilation result for a custom WGSL shader.
 #[derive(Debug, Clone)]
@@ -142,7 +142,11 @@ mod tests {
         let registry = CustomShaderRegistry::global();
         let valid_code = "return vec4<f32>(src.r, src.g * u.p0, src.b, src.a);";
         let status = registry.validate_wgsl(valid_code);
-        assert!(status.is_valid, "Valid WGSL failed: {:?}", status.error_message);
+        assert!(
+            status.is_valid,
+            "Valid WGSL failed: {:?}",
+            status.error_message
+        );
     }
 
     #[test]

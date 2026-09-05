@@ -163,7 +163,8 @@ pub fn draw_mask_panel(app: &mut KagariApp, ui: &mut egui::Ui) {
                                 });
 
                                 // 🪶 Mask Feather & Expansion & Opacity controls
-                                let mut feather_val = mask.feather.evaluate(app.playback.current_frame);
+                                let mut feather_val =
+                                    mask.feather.evaluate(app.playback.current_frame);
                                 ui.horizontal(|ui| {
                                     ui.label("🪶 Feather:");
                                     if ui
@@ -181,7 +182,8 @@ pub fn draw_mask_panel(app: &mut KagariApp, ui: &mut egui::Ui) {
                                     }
                                 });
 
-                                let mut expansion_val = mask.expansion.evaluate(app.playback.current_frame);
+                                let mut expansion_val =
+                                    mask.expansion.evaluate(app.playback.current_frame);
                                 ui.horizontal(|ui| {
                                     ui.label("↔ Expansion:");
                                     if ui
@@ -199,7 +201,8 @@ pub fn draw_mask_panel(app: &mut KagariApp, ui: &mut egui::Ui) {
                                     }
                                 });
 
-                                let mut opacity_val = mask.opacity.evaluate(app.playback.current_frame);
+                                let mut opacity_val =
+                                    mask.opacity.evaluate(app.playback.current_frame);
                                 ui.horizontal(|ui| {
                                     ui.label("🌓 Opacity:");
                                     if ui
@@ -219,7 +222,8 @@ pub fn draw_mask_panel(app: &mut KagariApp, ui: &mut egui::Ui) {
 
                                 // ── Mask Path & Bezier Vertices ──
                                 ui.collapsing("📐 Mask Path & Vertices", |ui| {
-                                    let mut verts = mask.path.get_vertices(app.playback.current_frame);
+                                    let mut verts =
+                                        mask.path.get_vertices(app.playback.current_frame);
                                     ui.horizontal(|ui| {
                                         ui.label(format!("Vertices: {}", verts.len()));
                                         if ui.small_button("+ Add Vertex").clicked() {

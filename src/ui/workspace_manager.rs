@@ -27,7 +27,8 @@ pub fn draw_workspace_manager(app: &mut KagariApp, ui: &mut egui::Ui) {
         .max_height(300.0)
         .show(ui, |ui| {
             for (name, desc, l_idx, r_idx) in workspaces.iter() {
-                let is_active = app.ui_tabs.left_tab_idx == *l_idx && app.ui_tabs.right_tab_idx == *r_idx;
+                let is_active =
+                    app.ui_tabs.left_tab_idx == *l_idx && app.ui_tabs.right_tab_idx == *r_idx;
                 let response = ui.selectable_label(
                     is_active,
                     egui::RichText::new(*name).small().color(if is_active {
@@ -84,7 +85,8 @@ pub fn draw_workspace_manager(app: &mut KagariApp, ui: &mut egui::Ui) {
         ui.add_space(4.0);
         let mut delete_idx = None;
         for (i, ws) in app.custom_workspaces.iter().enumerate() {
-            let is_active = app.ui_tabs.left_tab_idx == ws.left_tab && app.ui_tabs.right_tab_idx == ws.right_tab;
+            let is_active = app.ui_tabs.left_tab_idx == ws.left_tab
+                && app.ui_tabs.right_tab_idx == ws.right_tab;
             ui.horizontal(|ui| {
                 if ui
                     .selectable_label(

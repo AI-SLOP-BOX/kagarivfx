@@ -120,10 +120,10 @@ fn draw_vu_channel(ui: &mut egui::Ui, label: &str, peak: f32, width: f32, height
         painter.rect_stroke(
             clip_rect,
             1.0,
-            egui::Stroke::new(1.0, colors::BORDER_MEDIUM),
+            egui::Stroke::new(1.0_f32, colors::BORDER_MEDIUM),
         );
 
-        painter.rect_stroke(rect, 2.0, egui::Stroke::new(1.0, colors::BORDER_MEDIUM));
+        painter.rect_stroke(rect, 2.0, egui::Stroke::new(1.0_f32, colors::BORDER_MEDIUM));
 
         let segments = 24;
         let seg_gap = 1.5;

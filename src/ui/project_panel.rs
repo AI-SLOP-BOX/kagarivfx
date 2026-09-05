@@ -35,7 +35,7 @@ pub fn draw(app: &mut KagariApp, ui: &mut egui::Ui) {
                     ui.painter().rect_stroke(
                         thumb_rect,
                         2.0,
-                        egui::Stroke::new(1.0, colors::BORDER_STRONG),
+                        egui::Stroke::new(1.0_f32, colors::BORDER_STRONG),
                     );
                     let center = thumb_rect.center();
                     ui.painter().text(
@@ -524,7 +524,8 @@ pub fn draw(app: &mut KagariApp, ui: &mut egui::Ui) {
                         }
                     }
                 }
-                app.toasts.info(format!("Replaced footage: '{}' → '{}'", old_name, new_name));
+                app.toasts
+                    .info(format!("Replaced footage: '{}' → '{}'", old_name, new_name));
                 changed = true;
             }
         }
@@ -582,7 +583,10 @@ fn draw_asset_row(
             }
             if ui.button("🔄 Replace Footage...").clicked() {
                 if let Some(path) = rfd::FileDialog::new()
-                    .add_filter("Media Footage", &["png", "jpg", "jpeg", "webp", "wav", "mp3", "mp4"])
+                    .add_filter(
+                        "Media Footage",
+                        &["png", "jpg", "jpeg", "webp", "wav", "mp3", "mp4"],
+                    )
                     .pick_file()
                 {
                     replace_footage_req = Some((i, path));

@@ -246,7 +246,11 @@ pub fn ray_intersect_quad(
         return None; // Parallel
     }
 
-    let p0_ro = [p0[0] - ray_origin[0], p0[1] - ray_origin[1], p0[2] - ray_origin[2]];
+    let p0_ro = [
+        p0[0] - ray_origin[0],
+        p0[1] - ray_origin[1],
+        p0[2] - ray_origin[2],
+    ];
     let t = (p0_ro[0] * n[0] + p0_ro[1] * n[1] + p0_ro[2] * n[2]) / denom;
     if t <= 1e-3 {
         return None; // Behind ray
@@ -361,7 +365,9 @@ pub fn sample_equirectangular_env_map(
         return [0.0, 0.0, 0.0];
     }
 
-    let len = (dir[0] * dir[0] + dir[1] * dir[1] + dir[2] * dir[2]).sqrt().max(1e-6);
+    let len = (dir[0] * dir[0] + dir[1] * dir[1] + dir[2] * dir[2])
+        .sqrt()
+        .max(1e-6);
     let dx = dir[0] / len;
     let dy = dir[1] / len;
     let dz = dir[2] / len;
@@ -481,8 +487,8 @@ mod tests {
         assert!(miss.is_none());
 
         // Shadow occlusion test: point behind quad at Z=0 looking at light at Z=100
-        let shadow = calculate_raytraced_shadow([0.0, 0.0, 0.0], [0.0, 0.0, 100.0], 5.0, 8, &[quad]);
+        let shadow =
+            calculate_raytraced_shadow([0.0, 0.0, 0.0], [0.0, 0.0, 100.0], 5.0, 8, &[quad]);
         assert_eq!(shadow, 0.0, "Quad fully occludes point");
     }
 }
-

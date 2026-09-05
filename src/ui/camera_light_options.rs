@@ -1,5 +1,3 @@
-use crate::core::keyframe::{InterpolationType, Keyframe};
-use crate::core::property::Animatable;
 use crate::core::timeline::LightType;
 use crate::ui::theme::colors;
 use crate::KagariApp;

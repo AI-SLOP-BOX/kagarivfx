@@ -72,6 +72,12 @@ pub struct ParticleSimulation3D {
     pub rng_state: u64,
 }
 
+impl Default for ParticleSimulation3D {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ParticleSimulation3D {
     pub fn new() -> Self {
         Self {
@@ -260,6 +266,118 @@ impl ParticleSimulation3D {
     }
 }
 
+/// Renders 3D particles onto a 2D RGBA pixel buffer using perspective camera projection and soft billboards.
+pub fn render_particles_to_buffer(
+    pixels: &mut [u8],
+    width: u32,
+    height: u32,
+    particles: &[Particle3D],
+    camera_fov: f32, // e.g. 1000.0
+    additive_blend: bool,
+) {
+    let Some(expected_len) = (width as usize)
+        .checked_mul(height as usize)
+        .and_then(|s| s.checked_mul(4))
+    else {
+        return;
+    };
+    if pixels.len() != expected_len || width == 0 || height == 0 || particles.is_empty() {
+        return;
+    }
+
+    let fov = if camera_fov.is_finite() && camera_fov > 10.0 {
+        camera_fov
+    } else {
+        1000.0
+    };
+    let half_w = width as f32 * 0.5;
+    let half_h = height as f32 * 0.5;
+
+    for p in particles {
+        if p.dead || p.lifespan_sec <= 0.0 {
+            continue;
+        }
+
+        // Perspective depth factor
+        let z_dist = p.position[2] + fov;
+        if z_dist <= 1.0 {
+            continue; // Behind camera
+        }
+        let scale = fov / z_dist;
+
+        // Screen-space projected coordinates
+        let screen_x = half_w + (p.position[0] - half_w) * scale;
+        let screen_y = half_h + (p.position[1] - half_h) * scale;
+
+        // Normalized life progress (0.0 .. 1.0)
+        let life = (p.age_sec / p.lifespan_sec).clamp(0.0, 1.0);
+
+        // Interpolate size over life
+        let current_size = (p.start_size + (p.end_size - p.start_size) * life) * scale;
+        let radius = (current_size * 0.5).max(0.5);
+        if radius > 500.0 {
+            continue; // Outlandishly large
+        }
+
+        // Interpolate color and alpha over life
+        let r = p.start_color[0] + (p.end_color[0] - p.start_color[0]) * life;
+        let g = p.start_color[1] + (p.end_color[1] - p.start_color[1]) * life;
+        let b = p.start_color[2] + (p.end_color[2] - p.start_color[2]) * life;
+        let a = p.start_color[3] + (p.end_color[3] - p.start_color[3]) * life;
+
+        let col_r = (r * 255.0).clamp(0.0, 255.0);
+        let col_g = (g * 255.0).clamp(0.0, 255.0);
+        let col_b = (b * 255.0).clamp(0.0, 255.0);
+        let col_a = (a * 255.0).clamp(0.0, 255.0);
+
+        let min_x = ((screen_x - radius).floor() as i32).clamp(0, width as i32 - 1) as u32;
+        let max_x = ((screen_x + radius).ceil() as i32).clamp(0, width as i32 - 1) as u32;
+        let min_y = ((screen_y - radius).floor() as i32).clamp(0, height as i32 - 1) as u32;
+        let max_y = ((screen_y + radius).ceil() as i32).clamp(0, height as i32 - 1) as u32;
+
+        for y in min_y..=max_y {
+            for x in min_x..=max_x {
+                let px = x as f32 + 0.5;
+                let py = y as f32 + 0.5;
+                let dist_sq = (px - screen_x).powi(2) + (py - screen_y).powi(2);
+                let rad_sq = radius * radius;
+
+                if dist_sq < rad_sq {
+                    let norm_dist = (dist_sq / rad_sq).sqrt();
+                    // Soft quadratic falloff
+                    let falloff = (1.0 - norm_dist * norm_dist).powi(2) * (col_a / 255.0);
+
+                    let idx = ((y * width + x) * 4) as usize;
+                    if additive_blend {
+                        pixels[idx] =
+                            (pixels[idx] as f32 + col_r * falloff).clamp(0.0, 255.0) as u8;
+                        pixels[idx + 1] =
+                            (pixels[idx + 1] as f32 + col_g * falloff).clamp(0.0, 255.0) as u8;
+                        pixels[idx + 2] =
+                            (pixels[idx + 2] as f32 + col_b * falloff).clamp(0.0, 255.0) as u8;
+                        pixels[idx + 3] =
+                            (pixels[idx + 3] as f32 + col_a * falloff).clamp(0.0, 255.0) as u8;
+                    } else {
+                        // Standard alpha over composite
+                        let src_a = falloff;
+                        let inv_a = 1.0 - src_a;
+                        pixels[idx] =
+                            (col_r * src_a + pixels[idx] as f32 * inv_a).clamp(0.0, 255.0) as u8;
+                        pixels[idx + 1] = (col_g * src_a + pixels[idx + 1] as f32 * inv_a)
+                            .clamp(0.0, 255.0) as u8;
+                        pixels[idx + 2] = (col_b * src_a + pixels[idx + 2] as f32 * inv_a)
+                            .clamp(0.0, 255.0) as u8;
+                        pixels[idx + 3] = ((pixels[idx + 3] as f32 / 255.0
+                            + src_a * (1.0 - pixels[idx + 3] as f32 / 255.0))
+                            * 255.0)
+                            .clamp(0.0, 255.0) as u8;
+                    }
+                }
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -379,117 +497,5 @@ mod tests {
             pixels[center_idx] > 200,
             "Center pixel should have bright red color"
         );
-    }
-}
-
-/// Renders 3D particles onto a 2D RGBA pixel buffer using perspective camera projection and soft billboards.
-pub fn render_particles_to_buffer(
-    pixels: &mut [u8],
-    width: u32,
-    height: u32,
-    particles: &[Particle3D],
-    camera_fov: f32, // e.g. 1000.0
-    additive_blend: bool,
-) {
-    let Some(expected_len) = (width as usize)
-        .checked_mul(height as usize)
-        .and_then(|s| s.checked_mul(4))
-    else {
-        return;
-    };
-    if pixels.len() != expected_len || width == 0 || height == 0 || particles.is_empty() {
-        return;
-    }
-
-    let fov = if camera_fov.is_finite() && camera_fov > 10.0 {
-        camera_fov
-    } else {
-        1000.0
-    };
-    let half_w = width as f32 * 0.5;
-    let half_h = height as f32 * 0.5;
-
-    for p in particles {
-        if p.dead || p.lifespan_sec <= 0.0 {
-            continue;
-        }
-
-        // Perspective depth factor
-        let z_dist = p.position[2] + fov;
-        if z_dist <= 1.0 {
-            continue; // Behind camera
-        }
-        let scale = fov / z_dist;
-
-        // Screen-space projected coordinates
-        let screen_x = half_w + (p.position[0] - half_w) * scale;
-        let screen_y = half_h + (p.position[1] - half_h) * scale;
-
-        // Normalized life progress (0.0 .. 1.0)
-        let life = (p.age_sec / p.lifespan_sec).clamp(0.0, 1.0);
-
-        // Interpolate size over life
-        let current_size = (p.start_size + (p.end_size - p.start_size) * life) * scale;
-        let radius = (current_size * 0.5).max(0.5);
-        if radius > 500.0 {
-            continue; // Outlandishly large
-        }
-
-        // Interpolate color and alpha over life
-        let r = p.start_color[0] + (p.end_color[0] - p.start_color[0]) * life;
-        let g = p.start_color[1] + (p.end_color[1] - p.start_color[1]) * life;
-        let b = p.start_color[2] + (p.end_color[2] - p.start_color[2]) * life;
-        let a = p.start_color[3] + (p.end_color[3] - p.start_color[3]) * life;
-
-        let col_r = (r * 255.0).clamp(0.0, 255.0);
-        let col_g = (g * 255.0).clamp(0.0, 255.0);
-        let col_b = (b * 255.0).clamp(0.0, 255.0);
-        let col_a = (a * 255.0).clamp(0.0, 255.0);
-
-        let min_x = ((screen_x - radius).floor() as i32).clamp(0, width as i32 - 1) as u32;
-        let max_x = ((screen_x + radius).ceil() as i32).clamp(0, width as i32 - 1) as u32;
-        let min_y = ((screen_y - radius).floor() as i32).clamp(0, height as i32 - 1) as u32;
-        let max_y = ((screen_y + radius).ceil() as i32).clamp(0, height as i32 - 1) as u32;
-
-        for y in min_y..=max_y {
-            for x in min_x..=max_x {
-                let px = x as f32 + 0.5;
-                let py = y as f32 + 0.5;
-                let dist_sq = (px - screen_x).powi(2) + (py - screen_y).powi(2);
-                let rad_sq = radius * radius;
-
-                if dist_sq < rad_sq {
-                    let norm_dist = (dist_sq / rad_sq).sqrt();
-                    // Soft quadratic falloff
-                    let falloff = (1.0 - norm_dist * norm_dist).powi(2) * (col_a / 255.0);
-
-                    let idx = ((y * width + x) * 4) as usize;
-                    if additive_blend {
-                        pixels[idx] =
-                            (pixels[idx] as f32 + col_r * falloff).clamp(0.0, 255.0) as u8;
-                        pixels[idx + 1] =
-                            (pixels[idx + 1] as f32 + col_g * falloff).clamp(0.0, 255.0) as u8;
-                        pixels[idx + 2] =
-                            (pixels[idx + 2] as f32 + col_b * falloff).clamp(0.0, 255.0) as u8;
-                        pixels[idx + 3] =
-                            (pixels[idx + 3] as f32 + col_a * falloff).clamp(0.0, 255.0) as u8;
-                    } else {
-                        // Standard alpha over composite
-                        let src_a = falloff;
-                        let inv_a = 1.0 - src_a;
-                        pixels[idx] =
-                            (col_r * src_a + pixels[idx] as f32 * inv_a).clamp(0.0, 255.0) as u8;
-                        pixels[idx + 1] = (col_g * src_a + pixels[idx + 1] as f32 * inv_a)
-                            .clamp(0.0, 255.0) as u8;
-                        pixels[idx + 2] = (col_b * src_a + pixels[idx + 2] as f32 * inv_a)
-                            .clamp(0.0, 255.0) as u8;
-                        pixels[idx + 3] = ((pixels[idx + 3] as f32 / 255.0
-                            + src_a * (1.0 - pixels[idx + 3] as f32 / 255.0))
-                            * 255.0)
-                            .clamp(0.0, 255.0) as u8;
-                    }
-                }
-            }
-        }
     }
 }

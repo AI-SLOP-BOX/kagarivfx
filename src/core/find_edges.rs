@@ -6,15 +6,9 @@
 
 #![allow(dead_code)]
 
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, Default)]
 pub struct FindEdgesParams {
     pub invert: bool,
-}
-
-impl Default for FindEdgesParams {
-    fn default() -> Self {
-        Self { invert: false }
-    }
 }
 
 /// Applies Find Edges filter across an RGBA image buffer.

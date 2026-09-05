@@ -115,7 +115,8 @@ pub fn draw_physics_panel(app: &mut KagariApp, ui: &mut egui::Ui) {
     let comp_h = comp.height as f32;
     let dur = comp.duration_frames;
     let fps = comp.fps as f32;
-    let selected_layer_indices: Vec<usize> = app.selection.selected_layers.iter().copied().collect();
+    let selected_layer_indices: Vec<usize> =
+        app.selection.selected_layers.iter().copied().collect();
 
     if selected_layer_indices.is_empty() {
         ui.colored_label(

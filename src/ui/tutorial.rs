@@ -364,7 +364,11 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context) {
             if line.is_empty() {
                 ui.add_space(4.0);
             } else {
-                ui.label(egui::RichText::new(line).size(13.0).color(colors::TEXT_PRIMARY));
+                ui.label(
+                    egui::RichText::new(line)
+                        .size(13.0)
+                        .color(colors::TEXT_PRIMARY),
+                );
             }
         }
 
@@ -434,7 +438,9 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context) {
                     if ui
                         .add(
                             egui::Button::new(
-                                egui::RichText::new("完了 🎉").strong().color(egui::Color32::from_rgb(90, 200, 140)),
+                                egui::RichText::new("完了 🎉")
+                                    .strong()
+                                    .color(egui::Color32::from_rgb(90, 200, 140)),
                             )
                             .fill(egui::Color32::from_rgb(30, 80, 50)),
                         )
@@ -539,26 +545,43 @@ fn draw_chapter_select(app: &mut KagariApp, ctx: &egui::Context) {
                 };
 
                 egui::Frame::default()
-                    .fill(egui::Color32::from_rgb(if active { 28 } else { 20 }, if active { 35 } else { 22 }, if active { 55 } else { 30 }))
+                    .fill(egui::Color32::from_rgb(
+                        if active { 28 } else { 20 },
+                        if active { 35 } else { 22 },
+                        if active { 55 } else { 30 },
+                    ))
                     .rounding(6.0)
                     .inner_margin(egui::Margin::symmetric(10.0, 6.0))
                     .show(ui, |ui| {
                         ui.horizontal(|ui| {
-                            let badge = if done { "✅" } else if active { "▶" } else { "○" };
+                            let badge = if done {
+                                "✅"
+                            } else if active {
+                                "▶"
+                            } else {
+                                "○"
+                            };
                             ui.label(egui::RichText::new(badge).color(chapter_color));
-                            ui.label(egui::RichText::new(chapter_name).strong().color(chapter_color));
-                            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                                for step_i in start..end {
-                                    let s = &all[step_i];
-                                    if ui
-                                        .small_button(format!("{}→", step_i + 1))
-                                        .on_hover_text(s.title)
-                                        .clicked()
-                                    {
-                                        jump_to = Some(step_i);
+                            ui.label(
+                                egui::RichText::new(chapter_name)
+                                    .strong()
+                                    .color(chapter_color),
+                            );
+                            ui.with_layout(
+                                egui::Layout::right_to_left(egui::Align::Center),
+                                |ui| {
+                                    for step_i in start..end {
+                                        let s = &all[step_i];
+                                        if ui
+                                            .small_button(format!("{}→", step_i + 1))
+                                            .on_hover_text(s.title)
+                                            .clicked()
+                                        {
+                                            jump_to = Some(step_i);
+                                        }
                                     }
-                                }
-                            });
+                                },
+                            );
                         });
                     });
 

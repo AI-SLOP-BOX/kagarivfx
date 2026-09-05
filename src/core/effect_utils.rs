@@ -28,10 +28,8 @@ pub fn sample_bilinear(pixels: &[u8], w: u32, h: u32, fx: f32, fy: f32) -> [u8; 
 
     let mut out = [0u8; 4];
     for c in 0..4 {
-        let top = pixels[idx(x0, y0) + c] as f32 * (1.0 - tx)
-            + pixels[idx(x1, y0) + c] as f32 * tx;
-        let bot = pixels[idx(x0, y1) + c] as f32 * (1.0 - tx)
-            + pixels[idx(x1, y1) + c] as f32 * tx;
+        let top = pixels[idx(x0, y0) + c] as f32 * (1.0 - tx) + pixels[idx(x1, y0) + c] as f32 * tx;
+        let bot = pixels[idx(x0, y1) + c] as f32 * (1.0 - tx) + pixels[idx(x1, y1) + c] as f32 * tx;
         out[c] = (top * (1.0 - ty) + bot * ty).round().clamp(0.0, 255.0) as u8;
     }
     out
@@ -169,7 +167,7 @@ pub fn hsl_to_rgb(h: f32, s: f32, l: f32) -> (f32, f32, f32) {
         } else {
             p
         }
-    };
+    }
 
     (
         hue_to_rgb(p, q, h + 1.0 / 3.0),
@@ -252,11 +250,7 @@ mod tests {
         for r in 0..=10u8 {
             for g in 0..=10u8 {
                 for b in 0..=10u8 {
-                    let (h, s, l) = rgb_to_hsl(
-                        r as f32 / 10.0,
-                        g as f32 / 10.0,
-                        b as f32 / 10.0,
-                    );
+                    let (h, s, l) = rgb_to_hsl(r as f32 / 10.0, g as f32 / 10.0, b as f32 / 10.0);
                     let (r2, g2, b2) = hsl_to_rgb(h, s, l);
                     assert!(
                         (r2 - r as f32 / 10.0).abs() < 0.01,

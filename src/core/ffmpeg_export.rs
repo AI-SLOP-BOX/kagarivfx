@@ -161,7 +161,10 @@ where
         }
     }
     if config.output_path.starts_with('-') {
-        let msg = format!("output_path must not start with '-': {}", config.output_path);
+        let msg = format!(
+            "output_path must not start with '-': {}",
+            config.output_path
+        );
         let _ = tx.send(ExportEvent::Error(msg.clone()));
         return Err(msg);
     }
@@ -399,7 +402,10 @@ where
 
     // Validate paths: reject anything starting with '-' (FFmpeg arg injection)
     if config.output_path.starts_with('-') {
-        let msg = format!("output_path must not start with '-': {}", config.output_path);
+        let msg = format!(
+            "output_path must not start with '-': {}",
+            config.output_path
+        );
         let _ = tx.send(ExportEvent::Error(msg.clone()));
         return Err(msg);
     }
@@ -461,7 +467,7 @@ where
                 .stderr(Stdio::piped())
                 .spawn();
 
-            let mut palette_child = match palette_result {
+            let palette_child = match palette_result {
                 Ok(c) => c,
                 Err(e) => {
                     let _ = tx.send(ExportEvent::Error(format!(
@@ -476,7 +482,8 @@ where
             let (palette_child, palette_stderr_handle) = drain_stderr(palette_child);
             let mut palette_guard = ChildGuard::new(palette_child);
 
-            let mut palette_stdin = match palette_guard.child.as_mut().and_then(|c| c.stdin.take()) {
+            let mut palette_stdin = match palette_guard.child.as_mut().and_then(|c| c.stdin.take())
+            {
                 Some(s) => s,
                 None => {
                     let _ = tx.send(ExportEvent::Error(
@@ -523,7 +530,9 @@ where
 
             drop(palette_stdin);
 
-            let mut palette_child = palette_guard.take().expect("palette child must be in guard");
+            let mut palette_child = palette_guard
+                .take()
+                .expect("palette child must be in guard");
             let stderr_output = palette_stderr_handle.join().unwrap_or_default();
             match palette_child.wait() {
                 Ok(status) if status.success() => { /* ok */ }
@@ -575,7 +584,7 @@ where
                 .stderr(Stdio::piped())
                 .spawn();
 
-            let mut gif_child = match gif_result {
+            let gif_child = match gif_result {
                 Ok(c) => c,
                 Err(e) => {
                     let _ = tx.send(ExportEvent::Error(format!(

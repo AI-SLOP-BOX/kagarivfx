@@ -39,10 +39,7 @@ pub fn push_recent(path: &std::path::Path) {
 }
 
 /// Load a project file into app state. Returns Ok(()) or an error message.
-pub fn open_project_from_path(
-    app: &mut KagariApp,
-    path: &std::path::Path,
-) -> Result<(), String> {
+pub fn open_project_from_path(app: &mut KagariApp, path: &std::path::Path) -> Result<(), String> {
     let json = std::fs::read_to_string(path).map_err(|e| format!("Could not read file: {}", e))?;
     let production_document =
         crate::core::production_document::ProductionDocument::from_json(&json).ok();
@@ -80,10 +77,7 @@ pub fn open_project_from_path(
 }
 
 /// Atomically save the current project. Returns Ok(()) or an error message.
-pub fn save_project_to_path(
-    app: &mut KagariApp,
-    path: &std::path::Path,
-) -> Result<(), String> {
+pub fn save_project_to_path(app: &mut KagariApp, path: &std::path::Path) -> Result<(), String> {
     let project_snapshot = app.history.current().clone();
     if let Some(existing) = app.production_document.as_mut() {
         *existing.project_mut() = project_snapshot.clone();

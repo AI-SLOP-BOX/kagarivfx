@@ -140,7 +140,13 @@ pub fn apply_emboss_color(pixels: &mut [u8], width: u32, height: u32, angle_deg:
 }
 
 // 26. Mosaic
-pub fn apply_mosaic_average(pixels: &mut [u8], width: u32, height: u32, block_w: u32, block_h: u32) {
+pub fn apply_mosaic_average(
+    pixels: &mut [u8],
+    width: u32,
+    height: u32,
+    block_w: u32,
+    block_h: u32,
+) {
     if block_w == 0 || block_h == 0 {
         return;
     }

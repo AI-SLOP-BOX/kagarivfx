@@ -143,7 +143,7 @@ pub fn draw_easy_ease_button<T: Clone>(
                         for window in curve_pts.windows(2) {
                             ui.painter().line_segment(
                                 [window[0], window[1]],
-                                egui::Stroke::new(1.5, colors::ACCENT_CYAN),
+                                egui::Stroke::new(1.5_f32, colors::ACCENT_CYAN),
                             );
                         }
 
@@ -383,7 +383,7 @@ pub fn draw_expression_selector(
                     });
 
                 // Expression Language Menu (AE Flyout Triangle)
-                let lang_menu_id = ui.make_persistent_id(format!("expr_lang_menu_{}", label));
+                let _lang_menu_id = ui.make_persistent_id(format!("expr_lang_menu_{}", label));
                 ui.menu_button("▶ Language ▾", |ui| {
                     ui.label(egui::RichText::new("📖 Expression Language Library").strong().color(colors::ACCENT_CYAN));
                     ui.separator();

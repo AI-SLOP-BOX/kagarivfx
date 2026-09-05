@@ -901,7 +901,7 @@ pub fn mix_composition_to_wav(
 ) -> Option<std::path::PathBuf> {
     use std::io::Write;
 
-    let fps = comp.fps.max(1);
+    let _fps = comp.fps.max(1);
     let total_frames = end_frame.saturating_sub(start_frame);
     if total_frames == 0 {
         return None;
@@ -910,14 +910,8 @@ pub fn mix_composition_to_wav(
     let mut all_samples: Vec<f32> = Vec::new();
 
     for frame in start_frame..end_frame {
-        let (stereo_buf, _) = mix_audio_sources_for_frame(
-            comp,
-            frame,
-            sample_rate,
-            buffer_size,
-            mixer,
-            dsp,
-        );
+        let (stereo_buf, _) =
+            mix_audio_sources_for_frame(comp, frame, sample_rate, buffer_size, mixer, dsp);
         all_samples.extend_from_slice(&stereo_buf);
     }
 

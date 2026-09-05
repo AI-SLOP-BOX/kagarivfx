@@ -36,7 +36,8 @@ fn point_to_segment_dist_3d(p: [f32; 3], a: [f32; 3], b: [f32; 3]) -> f32 {
         let ez = p[2] - a[2];
         return (ex * ex + ey * ey + ez * ez).sqrt();
     }
-    let t = (((p[0] - a[0]) * dx + (p[1] - a[1]) * dy + (p[2] - a[2]) * dz) / len_sq).clamp(0.0, 1.0);
+    let t =
+        (((p[0] - a[0]) * dx + (p[1] - a[1]) * dy + (p[2] - a[2]) * dz) / len_sq).clamp(0.0, 1.0);
     let proj_x = a[0] + t * dx;
     let proj_y = a[1] + t * dy;
     let proj_z = a[2] + t * dz;
@@ -108,7 +109,14 @@ pub fn simplify_rdp_vec2(
         }
     }
 
-    rdp_step(keyframes, 0, keyframes.len() - 1, tolerance, time_scale, &mut keep);
+    rdp_step(
+        keyframes,
+        0,
+        keyframes.len() - 1,
+        tolerance,
+        time_scale,
+        &mut keep,
+    );
 
     let mut result = Vec::new();
     for (i, &should_keep) in keep.iter().enumerate() {
@@ -252,18 +260,10 @@ mod tests {
         let mut kfs = Vec::new();
         // Stationary for 30 frames, then jump
         for f in 0..=30 {
-            kfs.push(Keyframe::new(
-                f,
-                [100.0, 100.0],
-                InterpolationType::Linear,
-            ));
+            kfs.push(Keyframe::new(f, [100.0, 100.0], InterpolationType::Linear));
         }
         for f in 31..=60 {
-            kfs.push(Keyframe::new(
-                f,
-                [200.0, 200.0],
-                InterpolationType::Linear,
-            ));
+            kfs.push(Keyframe::new(f, [200.0, 200.0], InterpolationType::Linear));
         }
 
         let simplified = simplify_rdp_vec2(&kfs, 2.0);

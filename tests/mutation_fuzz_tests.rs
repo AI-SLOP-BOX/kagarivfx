@@ -222,9 +222,7 @@ fn rendering_is_deterministic_same_input_same_bytes() {
 #[test]
 fn roundtrip_project_json_preserves_render() {
     // Save → load → render must produce identical pixels (serialization fidelity)
-    use kagari_vfx::core::project_migration::{
-        load_project_migrated, save_project_versioned,
-    };
+    use kagari_vfx::core::project_migration::{load_project_migrated, save_project_versioned};
     let mut comp = Composition::new("c".into(), "Roundtrip".into(), 48, 48, 30, 30);
     let mut l = Layer::new(
         "s".into(),

@@ -33,7 +33,9 @@ pub fn parse_chan_data(chan_text: &str) -> Result<Vec<ChanCameraFrame>, String> 
 
         let parts: Vec<&str> = line.split_whitespace().collect();
         if parts.len() >= 7 {
-            let frame: f32 = parts[0].parse().map_err(|e| format!("Invalid frame: {e}"))?;
+            let frame: f32 = parts[0]
+                .parse()
+                .map_err(|e| format!("Invalid frame: {e}"))?;
             let tx: f32 = parts[1].parse().map_err(|e| format!("Invalid tx: {e}"))?;
             let ty: f32 = parts[2].parse().map_err(|e| format!("Invalid ty: {e}"))?;
             let tz: f32 = parts[3].parse().map_err(|e| format!("Invalid tz: {e}"))?;
@@ -78,11 +80,7 @@ pub fn bake_chan_to_camera(frames: &[ChanCameraFrame], camera: &mut Camera3D) {
             [f.tx, f.ty, f.tz],
             InterpolationType::Linear,
         ));
-        fov_kfs.push(Keyframe::new(
-            f.frame,
-            f.fov_deg,
-            InterpolationType::Linear,
-        ));
+        fov_kfs.push(Keyframe::new(f.frame, f.fov_deg, InterpolationType::Linear));
     }
 
     camera.transform.position = crate::core::property::Animatable::new_animated(pos_kfs);

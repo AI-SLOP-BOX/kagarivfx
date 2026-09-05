@@ -16,9 +16,8 @@ pub enum DitherMethod {
 
 /// Simple deterministic pseudo-random hash generator for reproducible noise.
 fn hash_noise(x: u32, y: u32, channel: u32) -> f32 {
-    let mut h = x.wrapping_mul(374761393)
-        ^ y.wrapping_mul(668265263)
-        ^ channel.wrapping_mul(314159265);
+    let mut h =
+        x.wrapping_mul(374761393) ^ y.wrapping_mul(668265263) ^ channel.wrapping_mul(314159265);
     h = (h ^ (h >> 13)).wrapping_mul(1274126177);
     (h as f32) / (u32::MAX as f32)
 }

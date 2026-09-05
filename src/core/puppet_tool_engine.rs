@@ -163,8 +163,13 @@ pub fn warp_image_puppet_cpu(
                 if let Some([u, v, w]) = barycentric(p, da, db, dc) {
                     if u >= -0.01 && v >= -0.01 && w >= -0.01 {
                         // Interpolate rest source coordinate
-                        let sx = (u * ra[0] + v * rb[0] + w * rc[0]).round().clamp(0.0, width as f32 - 1.0) as u32;
-                        let sy = (u * ra[1] + v * rb[1] + w * rc[1]).round().clamp(0.0, height as f32 - 1.0) as u32;
+                        let sx = (u * ra[0] + v * rb[0] + w * rc[0])
+                            .round()
+                            .clamp(0.0, width as f32 - 1.0) as u32;
+                        let sy = (u * ra[1] + v * rb[1] + w * rc[1])
+                            .round()
+                            .clamp(0.0, height as f32 - 1.0)
+                            as u32;
 
                         let src_idx = (sy * width + sx) as usize * 4;
                         let dst_idx = (y * width + x) as usize * 4;
@@ -189,7 +194,7 @@ mod tests {
     fn test_puppet_grid_creation_and_identity_mls() {
         let mesh = PuppetMesh::new_grid(100.0, 100.0, 2, 2);
         assert_eq!(mesh.rest_vertices.len(), 9); // (2+1)*(2+1)
-        assert_eq!(mesh.triangles.len(), 8);    // 2*2*2
+        assert_eq!(mesh.triangles.len(), 8); // 2*2*2
 
         let pin = PuppetPin::new("p1", [50.0, 50.0]);
         let deformed = mesh.deform_mls(&[pin], 1.0);

@@ -77,8 +77,14 @@ pub fn draw_vectorscope_window(app: &mut KagariApp, ctx: &egui::Context) {
             let w = 192u32;
             let h = ((w * comp.height.max(1)) / comp.width.max(1)).clamp(16, 240);
             // Scopes conventionally show the unmanaged signal: exposure/LUT 0.
-            let pixels =
-                software_renderer::render_frame_to_pixels(comp, app.playback.current_frame, w, h, 0.0, 0);
+            let pixels = software_renderer::render_frame_to_pixels(
+                comp,
+                app.playback.current_frame,
+                w,
+                h,
+                0.0,
+                0,
+            );
 
             ui.horizontal(|ui| {
                 ui.radio_value(&mut mode, 0u8, "Vectorscope");
@@ -93,7 +99,7 @@ pub fn draw_vectorscope_window(app: &mut KagariApp, ctx: &egui::Context) {
                 ui.allocate_exact_size(egui::vec2(side, side * 0.75), egui::Sense::hover());
             let painter = ui.painter_at(rect);
             painter.rect_filled(rect, 4.0, egui::Color32::from_rgb(10, 10, 12));
-            painter.rect_stroke(rect, 4.0, egui::Stroke::new(1.0, colors::BORDER_MEDIUM));
+            painter.rect_stroke(rect, 4.0, egui::Stroke::new(1.0_f32, colors::BORDER_MEDIUM));
 
             if pixels.is_empty() {
                 return;
@@ -113,25 +119,29 @@ fn draw_scope(painter: egui::Painter, rect: egui::Rect, pixels: &[u8]) {
     let radius = rect.width().min(rect.height()) * 0.47;
 
     // Graticule: outer ring (100%), inner ring (75%), cross axes, skin line.
-    painter.circle_stroke(center, radius, egui::Stroke::new(1.0, colors::GRID_LINE));
+    painter.circle_stroke(
+        center,
+        radius,
+        egui::Stroke::new(1.0_f32, colors::GRID_LINE),
+    );
     painter.circle_stroke(
         center,
         radius * 0.75,
-        egui::Stroke::new(0.7, colors::GRID_LINE),
+        egui::Stroke::new(0.7_f32, colors::GRID_LINE),
     );
     painter.line_segment(
         [
             egui::pos2(center.x - radius, center.y),
             egui::pos2(center.x + radius, center.y),
         ],
-        egui::Stroke::new(0.7, colors::GRID_LINE),
+        egui::Stroke::new(0.7_f32, colors::GRID_LINE),
     );
     painter.line_segment(
         [
             egui::pos2(center.x, center.y - radius),
             egui::pos2(center.x, center.y + radius),
         ],
-        egui::Stroke::new(0.7, colors::GRID_LINE),
+        egui::Stroke::new(0.7_f32, colors::GRID_LINE),
     );
     let skin_dir = {
         let c = rgb_to_cbcr(1.0, 0.80, 0.60);
@@ -149,7 +159,7 @@ fn draw_scope(painter: egui::Painter, rect: egui::Rect, pixels: &[u8]) {
                 center.y + skin_dir[1] * radius,
             ),
         ],
-        egui::Stroke::new(0.8, egui::Color32::from_rgb(120, 90, 60)),
+        egui::Stroke::new(0.8_f32, egui::Color32::from_rgb(120, 90, 60)),
     );
 
     let mut samples = Vec::with_capacity(4096);
@@ -180,7 +190,7 @@ fn draw_parade(painter: egui::Painter, rect: egui::Rect, pixels: &[u8]) {
             egui::pos2(x0, rect.top()),
             egui::vec2(band_w, rect.height()),
         );
-        painter.rect_stroke(band, 0.0, egui::Stroke::new(0.6, colors::GRID_LINE));
+        painter.rect_stroke(band, 0.0, egui::Stroke::new(0.6_f32, colors::GRID_LINE));
         let max = counts[ch].iter().copied().max().unwrap_or(1).max(1);
         for &cnt in counts[ch].iter() {
             if cnt == 0 {

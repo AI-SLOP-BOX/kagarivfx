@@ -413,7 +413,8 @@ impl OpenShotExporter {
 
             if let Some(resource_path) = path {
                 let file_id = format!("file_{}", idx);
-                let duration_sec = (layer.out_frame as f64 - layer.in_frame as f64) / comp.fps.max(1) as f64;
+                let duration_sec =
+                    (layer.out_frame as f64 - layer.in_frame as f64) / comp.fps.max(1) as f64;
                 let position_sec = layer.in_frame as f64 / comp.fps.max(1) as f64;
 
                 files.push(serde_json::json!({
@@ -449,7 +450,8 @@ impl OpenShotExporter {
             "layers": [{"number": 1, "y": 0, "label": "Track 1"}],
         });
 
-        serde_json::to_string_pretty(&osp).map_err(|e| format!("Failed to serialize OpenShot JSON: {}", e))
+        serde_json::to_string_pretty(&osp)
+            .map_err(|e| format!("Failed to serialize OpenShot JSON: {}", e))
     }
 }
 

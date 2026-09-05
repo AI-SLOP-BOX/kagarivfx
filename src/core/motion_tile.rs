@@ -88,7 +88,7 @@ pub fn apply_motion_tile(
 
     for y in 0..height {
         let dy = (y as f32 - cy) / th;
-        let mut row_idx = dy.floor() as i32;
+        let row_idx = dy.floor() as i32;
         let mut v = dy - row_idx as f32; // 0.0..1.0 within the tile
 
         if params.mirror_edges && (row_idx % 2 != 0) {
@@ -104,7 +104,7 @@ pub fn apply_motion_tile(
 
         for x in 0..width {
             let dx = (x as f32 - cx) / tw + row_phase;
-            let mut col_idx = dx.floor() as i32;
+            let col_idx = dx.floor() as i32;
             let mut u = dx - col_idx as f32; // 0.0..1.0 within the tile
 
             if params.mirror_edges && (col_idx % 2 != 0) {

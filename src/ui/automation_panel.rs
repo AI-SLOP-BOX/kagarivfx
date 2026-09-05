@@ -203,7 +203,7 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context) {
                                 ui.add(
                                     egui::DragValue::new(&mut point.time.denominator)
                                         .speed(1)
-                                        .clamp_range(1..=u32::MAX),
+                                        .range(1..=u32::MAX),
                                 );
                                 ui.add(egui::DragValue::new(&mut point.value).speed(0.01));
                                 if ui.small_button("▶").clicked() {
@@ -222,7 +222,7 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context) {
                 painter.rect_stroke(
                     plot_rect,
                     3.0,
-                    egui::Stroke::new(1.0, colors::BORDER_MEDIUM),
+                    egui::Stroke::new(1.0_f32, colors::BORDER_MEDIUM),
                 );
                 if !binding.curve.points.is_empty() {
                     let min_time = binding
@@ -254,12 +254,10 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context) {
                     let to_screen = |time: f32, value: f32| {
                         egui::pos2(
                             plot_rect.left()
-                                + ((time - min_time) / (max_time - min_time))
-                                    .clamp(0.0, 1.0)
+                                + ((time - min_time) / (max_time - min_time)).clamp(0.0, 1.0)
                                     * plot_rect.width(),
                             plot_rect.bottom()
-                                - ((value - min_value) / (max_value - min_value))
-                                    .clamp(0.0, 1.0)
+                                - ((value - min_value) / (max_value - min_value)).clamp(0.0, 1.0)
                                     * plot_rect.height(),
                         )
                     };
@@ -271,15 +269,16 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context) {
                                 (time * 1_000_000.0).round() as i64,
                                 1_000_000,
                             );
-                            binding.curve.sample(rational_time).map(|value| {
-                                to_screen(time, value as f32)
-                            })
+                            binding
+                                .curve
+                                .sample(rational_time)
+                                .map(|value| to_screen(time, value as f32))
                         })
                         .collect();
                     for segment in sampled.windows(2) {
                         painter.line_segment(
                             [segment[0], segment[1]],
-                            egui::Stroke::new(2.0, colors::ACCENT_BLUE),
+                            egui::Stroke::new(2.0_f32, colors::ACCENT_BLUE),
                         );
                     }
                     let key_points: Vec<_> = binding
@@ -301,21 +300,26 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context) {
                         if let Some(pointer) = plot_response.interact_pointer_pos() {
                             let normalized_time = ((pointer.x - plot_rect.left())
                                 / plot_rect.width().max(1.0))
-                                .clamp(0.0, 1.0);
+                            .clamp(0.0, 1.0);
                             let normalized_value = ((plot_rect.bottom() - pointer.y)
                                 / plot_rect.height().max(1.0))
-                                .clamp(0.0, 1.0);
-                            let target_time = min_time
-                                + normalized_time * (max_time - min_time);
-                            let nearest = binding.curve.points.iter().enumerate().min_by(|(_, left), (_, right)| {
-                                let left_time = left.time.numerator as f32
-                                    / left.time.denominator as f32;
-                                let right_time = right.time.numerator as f32
-                                    / right.time.denominator as f32;
-                                (left_time - target_time)
-                                    .abs()
-                                    .total_cmp(&(right_time - target_time).abs())
-                            }).map(|(index, point)| (index, point.time));
+                            .clamp(0.0, 1.0);
+                            let target_time = min_time + normalized_time * (max_time - min_time);
+                            let nearest = binding
+                                .curve
+                                .points
+                                .iter()
+                                .enumerate()
+                                .min_by(|(_, left), (_, right)| {
+                                    let left_time =
+                                        left.time.numerator as f32 / left.time.denominator as f32;
+                                    let right_time =
+                                        right.time.numerator as f32 / right.time.denominator as f32;
+                                    (left_time - target_time)
+                                        .abs()
+                                        .total_cmp(&(right_time - target_time).abs())
+                                })
+                                .map(|(index, point)| (index, point.time));
                             if let Some((index, from)) = nearest {
                                 if ui.input(|input| input.modifiers.shift) {
                                     let new_time = crate::core::unified_time::Time::new(
@@ -337,10 +341,10 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context) {
                         if let Some(pointer) = plot_response.interact_pointer_pos() {
                             let normalized_time = ((pointer.x - plot_rect.left())
                                 / plot_rect.width().max(1.0))
-                                .clamp(0.0, 1.0);
+                            .clamp(0.0, 1.0);
                             let normalized_value = ((plot_rect.bottom() - pointer.y)
                                 / plot_rect.height().max(1.0))
-                                .clamp(0.0, 1.0);
+                            .clamp(0.0, 1.0);
                             let time = min_time + normalized_time * (max_time - min_time);
                             let value = min_value + normalized_value * (max_value - min_value);
                             let _ = binding.curve.upsert_point(

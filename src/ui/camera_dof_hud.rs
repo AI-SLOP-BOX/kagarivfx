@@ -1,4 +1,3 @@
-use crate::core::property::Animatable;
 use crate::KagariApp;
 use eframe::egui;
 
@@ -21,10 +20,7 @@ pub fn draw_camera_dof_hud(app: &mut KagariApp, ui: &mut egui::Ui) {
             let target_info = if let Some(idx) = selected_idx {
                 let comp = app.history.current().active_composition();
                 if idx < comp.layers.len() {
-                    let target_pos = comp.layers[idx]
-                        .transform
-                        .position
-                        .evaluate(current_f);
+                    let target_pos = comp.layers[idx].transform.position.evaluate(current_f);
                     let distance = (target_pos[0].powi(2) + target_pos[1].powi(2))
                         .sqrt()
                         .max(10.0);
@@ -80,16 +76,28 @@ pub fn draw_camera_dof_hud(app: &mut KagariApp, ui: &mut egui::Ui) {
                     _ => "Round (Circular)",
                 })
                 .show_ui(ui, |ui| {
-                    if ui.selectable_value(&mut cam.dof_iris_sides, 0, "Round (Circular)").clicked() {
+                    if ui
+                        .selectable_value(&mut cam.dof_iris_sides, 0, "Round (Circular)")
+                        .clicked()
+                    {
                         project_changed = true;
                     }
-                    if ui.selectable_value(&mut cam.dof_iris_sides, 5, "5-Blade (Pentagon)").clicked() {
+                    if ui
+                        .selectable_value(&mut cam.dof_iris_sides, 5, "5-Blade (Pentagon)")
+                        .clicked()
+                    {
                         project_changed = true;
                     }
-                    if ui.selectable_value(&mut cam.dof_iris_sides, 6, "6-Blade (Hexagon)").clicked() {
+                    if ui
+                        .selectable_value(&mut cam.dof_iris_sides, 6, "6-Blade (Hexagon)")
+                        .clicked()
+                    {
                         project_changed = true;
                     }
-                    if ui.selectable_value(&mut cam.dof_iris_sides, 8, "8-Blade (Octagon)").clicked() {
+                    if ui
+                        .selectable_value(&mut cam.dof_iris_sides, 8, "8-Blade (Octagon)")
+                        .clicked()
+                    {
                         project_changed = true;
                     }
                 });

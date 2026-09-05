@@ -452,7 +452,7 @@ pub fn extract_multiband_audio_keyframes(
         return MultiBandAudioKeyframes::default();
     }
 
-    let total_stereo_samples = pcm_stereo.len() / 2;
+    let _total_stereo_samples = pcm_stereo.len() / 2;
 
     // Filter banks for frequency crossover:
     // Bass: LowPass 250Hz

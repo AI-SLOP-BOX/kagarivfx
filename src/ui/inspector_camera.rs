@@ -1,5 +1,3 @@
-use crate::core::keyframe::{InterpolationType, Keyframe};
-use crate::core::property::Animatable;
 use crate::core::timeline::Composition;
 use crate::ui::inspector_property::draw_property_ui;
 use crate::ui::theme::colors;
@@ -140,7 +138,7 @@ pub fn draw_camera_settings(
                         for pair in points.windows(2) {
                             ui.painter().line_segment(
                                 [pair[0], pair[1]],
-                                egui::Stroke::new(1.0, colors::ACCENT_CYAN),
+                                egui::Stroke::new(1.0_f32, colors::ACCENT_CYAN),
                             );
                         }
                     }
@@ -160,7 +158,7 @@ pub fn draw_camera_settings(
             let x = rect.left() + (current_frame as f32 / end_frame as f32) * rect.width();
             ui.painter().line_segment(
                 [egui::pos2(x, rect.top()), egui::pos2(x, rect.bottom())],
-                egui::Stroke::new(1.0, colors::HANDLE_HOVER_FILL),
+                egui::Stroke::new(1.0_f32, colors::HANDLE_HOVER_FILL),
             );
         }
 

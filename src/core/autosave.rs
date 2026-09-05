@@ -159,7 +159,7 @@ impl AutosaveManager {
                 Some((modified, p))
             })
             .collect();
-        slots.sort_by(|a, b| b.0.cmp(&a.0)); // newest first
+        slots.sort_by_key(|&(time, _)| std::cmp::Reverse(time)); // newest first
 
         for (_, path) in slots {
             if let Ok(json) = std::fs::read_to_string(&path) {
@@ -192,7 +192,7 @@ impl AutosaveManager {
             .map(|i| self.slot_path(i))
             .filter_map(|p| Some((std::fs::metadata(&p).ok()?.modified().ok()?, p)))
             .collect();
-        slots.sort_by(|a, b| b.0.cmp(&a.0));
+        slots.sort_by_key(|&(time, _)| std::cmp::Reverse(time));
         for (_, path) in slots {
             if let Ok(json) = std::fs::read_to_string(&path) {
                 if let Ok(snapshot) = serde_json::from_str::<AutosaveSnapshot>(&json) {

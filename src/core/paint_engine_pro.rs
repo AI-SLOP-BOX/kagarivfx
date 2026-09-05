@@ -20,7 +20,7 @@ pub struct PaintStrokePro {
     pub mode: BrushMode,
     pub color_hdr: [f32; 4], // 32-bit float RGBA
     pub radius: f32,
-    pub hardness: f32,       // 0.0 (soft Gaussian) to 1.0 (hard edge)
+    pub hardness: f32, // 0.0 (soft Gaussian) to 1.0 (hard edge)
     pub opacity: f32,
     pub clone_offset: [f32; 2], // Source offset (dx, dy) for Clone Stamp
     pub points: Vec<[f32; 2]>,
@@ -57,12 +57,7 @@ impl PaintStrokePro {
     }
 
     /// Renders this stroke into a 32-bit float RGBA HDR buffer.
-    pub fn apply_to_hdr_buffer(
-        &self,
-        buffer: &mut [f32],
-        width: u32,
-        height: u32,
-    ) {
+    pub fn apply_to_hdr_buffer(&self, buffer: &mut [f32], width: u32, height: u32) {
         if self.points.is_empty() || width == 0 || height == 0 {
             return;
         }
@@ -104,25 +99,38 @@ impl PaintStrokePro {
                                 BrushMode::Paint => {
                                     let inv_a = 1.0 - final_a;
                                     buffer[idx] = buffer[idx] * inv_a + self.color_hdr[0] * final_a;
-                                    buffer[idx + 1] = buffer[idx + 1] * inv_a + self.color_hdr[1] * final_a;
-                                    buffer[idx + 2] = buffer[idx + 2] * inv_a + self.color_hdr[2] * final_a;
-                                    buffer[idx + 3] = buffer[idx + 3] * inv_a + self.color_hdr[3] * final_a;
+                                    buffer[idx + 1] =
+                                        buffer[idx + 1] * inv_a + self.color_hdr[1] * final_a;
+                                    buffer[idx + 2] =
+                                        buffer[idx + 2] * inv_a + self.color_hdr[2] * final_a;
+                                    buffer[idx + 3] =
+                                        buffer[idx + 3] * inv_a + self.color_hdr[3] * final_a;
                                 }
                                 BrushMode::Eraser => {
                                     buffer[idx + 3] *= 1.0 - final_a;
                                 }
                                 BrushMode::CloneStamp => {
                                     if let Some(src) = &src_snapshot {
-                                        let sx = (x as f32 + self.clone_offset[0]).round().clamp(0.0, width as f32 - 1.0) as u32;
-                                        let sy = (y as f32 + self.clone_offset[1]).round().clamp(0.0, height as f32 - 1.0) as u32;
+                                        let sx = (x as f32 + self.clone_offset[0])
+                                            .round()
+                                            .clamp(0.0, width as f32 - 1.0)
+                                            as u32;
+                                        let sy = (y as f32 + self.clone_offset[1])
+                                            .round()
+                                            .clamp(0.0, height as f32 - 1.0)
+                                            as u32;
                                         let s_idx = (sy * width + sx) as usize * 4;
 
                                         if s_idx + 3 < src.len() {
                                             let inv_a = 1.0 - final_a;
-                                            buffer[idx] = buffer[idx] * inv_a + src[s_idx] * final_a;
-                                            buffer[idx + 1] = buffer[idx + 1] * inv_a + src[s_idx + 1] * final_a;
-                                            buffer[idx + 2] = buffer[idx + 2] * inv_a + src[s_idx + 2] * final_a;
-                                            buffer[idx + 3] = buffer[idx + 3] * inv_a + src[s_idx + 3] * final_a;
+                                            buffer[idx] =
+                                                buffer[idx] * inv_a + src[s_idx] * final_a;
+                                            buffer[idx + 1] =
+                                                buffer[idx + 1] * inv_a + src[s_idx + 1] * final_a;
+                                            buffer[idx + 2] =
+                                                buffer[idx + 2] * inv_a + src[s_idx + 2] * final_a;
+                                            buffer[idx + 3] =
+                                                buffer[idx + 3] * inv_a + src[s_idx + 3] * final_a;
                                         }
                                     }
                                 }

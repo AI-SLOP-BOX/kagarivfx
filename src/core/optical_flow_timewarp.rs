@@ -1194,7 +1194,7 @@ pub fn estimate_pose_with_backend<B: PoseInferenceBackend>(
     width: u32,
     height: u32,
 ) -> MarkerlessPoseTrack {
-    let Some(first) = frames.first().copied() else {
+    let Some(_first) = frames.first().copied() else {
         return MarkerlessPoseTrack {
             frames: Vec::new(),
             bones: Vec::new(),
@@ -1490,11 +1490,9 @@ pub fn name_and_connect_markerless_pose_track(
                 .unwrap_or_else(|| {
                     pose.frames
                         .first()
-                        .and_then(|frame| {
-                            Some(
-                                (frame.joints[bone[0]][0] - frame.joints[bone[1]][0])
-                                    .hypot(frame.joints[bone[0]][1] - frame.joints[bone[1]][1]),
-                            )
+                        .map(|frame| {
+                            (frame.joints[bone[0]][0] - frame.joints[bone[1]][0])
+                                .hypot(frame.joints[bone[0]][1] - frame.joints[bone[1]][1])
                         })
                         .unwrap_or(0.0)
                 })

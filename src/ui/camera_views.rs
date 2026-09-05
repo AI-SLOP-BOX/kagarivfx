@@ -45,7 +45,7 @@ pub fn draw_camera_views(app: &mut KagariApp, ui: &mut egui::Ui) {
     ui.painter().rect_stroke(
         preview_rect,
         4.0,
-        egui::Stroke::new(1.0, colors::BORDER_MEDIUM),
+        egui::Stroke::new(1.0_f32, colors::BORDER_MEDIUM),
     );
 
     let view_names = ["Active", "Front", "Left", "Top", "Right"];
@@ -68,7 +68,7 @@ pub fn draw_camera_views(app: &mut KagariApp, ui: &mut egui::Ui) {
                     egui::pos2(mid, preview_rect.top()),
                     egui::pos2(mid, preview_rect.bottom()),
                 ],
-                egui::Stroke::new(1.0, colors::BORDER_STRONG),
+                egui::Stroke::new(1.0_f32, colors::BORDER_STRONG),
             );
             let left_center = egui::pos2(
                 preview_rect.left() + preview_rect.width() * 0.25,
@@ -101,7 +101,7 @@ pub fn draw_camera_views(app: &mut KagariApp, ui: &mut egui::Ui) {
                     egui::pos2(preview_rect.left(), mid),
                     egui::pos2(preview_rect.right(), mid),
                 ],
-                egui::Stroke::new(1.0, colors::BORDER_STRONG),
+                egui::Stroke::new(1.0_f32, colors::BORDER_STRONG),
             );
             let top_center = egui::pos2(
                 preview_rect.center().x,
@@ -135,14 +135,14 @@ pub fn draw_camera_views(app: &mut KagariApp, ui: &mut egui::Ui) {
                     egui::pos2(cx, preview_rect.top()),
                     egui::pos2(cx, preview_rect.bottom()),
                 ],
-                egui::Stroke::new(1.0, colors::BORDER_STRONG),
+                egui::Stroke::new(1.0_f32, colors::BORDER_STRONG),
             );
             ui.painter().line_segment(
                 [
                     egui::pos2(preview_rect.left(), cy),
                     egui::pos2(preview_rect.right(), cy),
                 ],
-                egui::Stroke::new(1.0, colors::BORDER_STRONG),
+                egui::Stroke::new(1.0_f32, colors::BORDER_STRONG),
             );
             let positions = [
                 egui::pos2(

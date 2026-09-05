@@ -108,6 +108,7 @@ fn remove_effect_channel_at_frame(layer: &mut Layer, property: &str, frame: u32)
     false
 }
 
+#[allow(dead_code)] // graph-editor interpolation infrastructure — wired in future pass
 fn effect_parameter_channel_interpolation(
     layer: &Layer,
     property: &str,
@@ -150,6 +151,7 @@ fn effect_parameter_channel_interpolation(
     None
 }
 
+#[allow(dead_code)] // graph-editor interpolation infrastructure — wired in future pass
 fn set_effect_channel_interpolation_at_frame(
     layer: &mut Layer,
     property: &str,
@@ -854,7 +856,7 @@ pub fn draw_graph_editor(
             egui::Sense::click_and_drag(),
         );
         ui.painter().rect_filled(rect, 4.0, egui::Color32::from_gray(25));
-        ui.painter().rect_stroke(rect, 4.0, egui::Stroke::new(1.0, egui::Color32::from_gray(50)));
+        ui.painter().rect_stroke(rect, 4.0, egui::Stroke::new(1.0_f32, egui::Color32::from_gray(50)));
 
         let min_val = samples.iter().map(|(_, v)| *v).fold(f32::INFINITY, f32::min);
         let max_val = samples.iter().map(|(_, v)| *v).fold(f32::NEG_INFINITY, f32::max);
@@ -924,7 +926,7 @@ pub fn draw_graph_editor(
         for window in points.windows(2) {
             ui.painter().line_segment(
                 [window[0], window[1]],
-                egui::Stroke::new(2.0, colors::TIMELINE_KEYFRAME),
+                egui::Stroke::new(2.0_f32, colors::TIMELINE_KEYFRAME),
             );
         }
 
@@ -1083,7 +1085,7 @@ pub fn draw_graph_editor(
                 let nsy = rect.bottom() - 4.0 - (speed_pts[next_i] / max_speed) * (rect.height() - 16.0);
                 let p2 = egui::pos2(nsx, nsy);
 
-                ui.painter().line_segment([p1, p2], egui::Stroke::new(1.2, colors::MOTION_PATH));
+                ui.painter().line_segment([p1, p2], egui::Stroke::new(1.2_f32, colors::MOTION_PATH));
             }
 
             // Peak Speed Badge HUD
@@ -1226,8 +1228,8 @@ pub fn draw_graph_editor(
                         let incoming = egui::pos2(key_pos.x - points[0] * 44.0, key_pos.y + points[1] * 24.0);
                         let out_resp = ui.interact(egui::Rect::from_center_size(out, egui::vec2(14.0, 14.0)), egui::Id::new(("effect_bezier_out", &graph_prop, index)), egui::Sense::drag());
                         let in_resp = ui.interact(egui::Rect::from_center_size(incoming, egui::vec2(14.0, 14.0)), egui::Id::new(("effect_bezier_in", &graph_prop, index)), egui::Sense::drag());
-                        ui.painter().line_segment([key_pos, out], egui::Stroke::new(1.0, colors::MOTION_PATH));
-                        ui.painter().line_segment([key_pos, incoming], egui::Stroke::new(1.0, colors::MOTION_PATH));
+                        ui.painter().line_segment([key_pos, out], egui::Stroke::new(1.0_f32, colors::MOTION_PATH));
+                        ui.painter().line_segment([key_pos, incoming], egui::Stroke::new(1.0_f32, colors::MOTION_PATH));
                         ui.painter().circle_filled(out, 3.0, colors::HANDLE_NORMAL);
                         ui.painter().circle_filled(incoming, 3.0, colors::HANDLE_NORMAL);
                         let mut next = points;
@@ -1484,7 +1486,7 @@ pub fn draw_graph_editor(
                 }
                 ui.ctx().data_mut(|d| d.insert_temp(dbl_id, show_popup));
                 if anchor_resp.hovered() {
-                    ui.painter().circle_stroke(pt, 7.0, egui::Stroke::new(1.0, colors::TIMELINE_KEYFRAME));
+                    ui.painter().circle_stroke(pt, 7.0, egui::Stroke::new(1.0_f32, colors::TIMELINE_KEYFRAME));
                 }
 
                 // --- Tangent handles: drag to edit custom bezier control points ---
@@ -1551,8 +1553,8 @@ pub fn draw_graph_editor(
                 } else {
                     colors::MOTION_PATH
                 };
-                ui.painter().line_segment([pt, h_out], egui::Stroke::new(1.2, stroke_color));
-                ui.painter().line_segment([pt, h_in], egui::Stroke::new(1.2, stroke_color));
+                ui.painter().line_segment([pt, h_out], egui::Stroke::new(1.2_f32, stroke_color));
+                ui.painter().line_segment([pt, h_in], egui::Stroke::new(1.2_f32, stroke_color));
 
                 let h_out_color = if h_out_resp.hovered() || h_out_resp.dragged() { colors::HANDLE_NORMAL } else { colors::MOTION_PATH };
                 let h_in_color = if h_in_resp.hovered() || h_in_resp.dragged() { colors::HANDLE_NORMAL } else { colors::MOTION_PATH };
@@ -1606,8 +1608,7 @@ pub fn draw_automation_curve(
             rect.left()
                 + ((time - min_time) / (max_time - min_time)).clamp(0.0, 1.0) * rect.width(),
             rect.bottom()
-                - ((value - min_value) / (max_value - min_value)).clamp(0.0, 1.0)
-                    * rect.height(),
+                - ((value - min_value) / (max_value - min_value)).clamp(0.0, 1.0) * rect.height(),
         )
     };
     let points: Vec<_> = (0..=64)
@@ -1626,7 +1627,7 @@ pub fn draw_automation_curve(
     for segment in points.windows(2) {
         painter.line_segment(
             [segment[0], segment[1]],
-            egui::Stroke::new(2.0, crate::ui::theme::colors::ACCENT_CYAN),
+            egui::Stroke::new(2.0_f32, crate::ui::theme::colors::ACCENT_CYAN),
         );
     }
     for point in &curve.points {
@@ -1639,8 +1640,10 @@ pub fn draw_automation_curve(
     }
     if response.double_clicked() {
         if let Some(pointer) = response.interact_pointer_pos() {
-            let normalized_time = ((pointer.x - rect.left()) / rect.width().max(1.0)).clamp(0.0, 1.0);
-            let normalized_value = ((rect.bottom() - pointer.y) / rect.height().max(1.0)).clamp(0.0, 1.0);
+            let normalized_time =
+                ((pointer.x - rect.left()) / rect.width().max(1.0)).clamp(0.0, 1.0);
+            let normalized_value =
+                ((rect.bottom() - pointer.y) / rect.height().max(1.0)).clamp(0.0, 1.0);
             let time = min_time + normalized_time * (max_time - min_time);
             let value = min_value + normalized_value * (max_value - min_value);
             if curve
@@ -1846,7 +1849,7 @@ pub fn draw_camera_lens_graph(
             let next = point(frame.round() as u32, value);
             ui.painter().line_segment(
                 [previous, next],
-                egui::Stroke::new(2.0, colors::ACCENT_CYAN),
+                egui::Stroke::new(2.0_f32, colors::ACCENT_CYAN),
             );
             previous = next;
         }
@@ -1858,7 +1861,7 @@ pub fn draw_camera_lens_graph(
     let x = rect.left() + current_frame.min(end) as f32 / end as f32 * rect.width();
     ui.painter().line_segment(
         [egui::pos2(x, rect.top()), egui::pos2(x, rect.bottom())],
-        egui::Stroke::new(1.0, colors::HANDLE_HOVER_FILL),
+        egui::Stroke::new(1.0_f32, colors::HANDLE_HOVER_FILL),
     );
     let drag_id = egui::Id::new(("camera_lens_graph_drag", property.as_str()));
     if response.drag_started() {

@@ -671,7 +671,7 @@ pub fn convert_color_space(
 pub enum BitDepth {
     #[default]
     EightBit, // 8bpc (0..255 integer)
-    SixteenBit, // 16bpc Half Float (unclamped HDR)
+    SixteenBit,        // 16bpc Half Float (unclamped HDR)
     ThirtyTwoBitFloat, // 32bpc Full Float (infinite dynamic range, scene-linear)
 }
 

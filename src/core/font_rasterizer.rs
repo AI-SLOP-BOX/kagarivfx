@@ -740,7 +740,9 @@ impl FontRasterizer {
                                     cov[yi * bw + xi] = coverage;
                                 }
                             });
-                            let (char_r, char_g, char_b) = if let Some(fc) = advanced.get(char_idx).and_then(|a| a.fill_color) {
+                            let (char_r, char_g, char_b) = if let Some(fc) =
+                                advanced.get(char_idx).and_then(|a| a.fill_color)
+                            {
                                 (
                                     (fc[0].clamp(0.0, 1.0) * 255.0) as u8,
                                     (fc[1].clamp(0.0, 1.0) * 255.0) as u8,

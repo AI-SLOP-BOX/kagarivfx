@@ -365,7 +365,6 @@ pub fn refine_edge_guided_filter(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::core::mask::MaskPath;
 
     fn square_mask() -> Mask {
         // 12x12 square at origin

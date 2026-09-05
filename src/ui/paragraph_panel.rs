@@ -230,7 +230,7 @@ pub fn draw_paragraph_panel(app: &mut KagariApp, ui: &mut egui::Ui) {
             ui.painter().rect_stroke(
                 swatch_rect,
                 2.0,
-                egui::Stroke::new(1.0, colors::BORDER_MEDIUM),
+                egui::Stroke::new(1.0_f32, colors::BORDER_MEDIUM),
             );
 
             if ui

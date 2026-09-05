@@ -889,7 +889,8 @@ impl eframe::App for KagariApp {
 
         let wa_start = self.playback.work_area_in.unwrap_or(0);
         let wa_end = self
-            .playback.work_area_out
+            .playback
+            .work_area_out
             .unwrap_or(total_frames.saturating_sub(1))
             .min(total_frames.saturating_sub(1));
 
@@ -906,7 +907,7 @@ impl eframe::App for KagariApp {
                     + elapsed * frames_per_sec * direction * speed as f64;
 
                 if self.playback_speed >= 0 {
-                    let frame_range = wa_start..=wa_end;
+                    let _frame_range = wa_start..=wa_end;
                     if raw >= wa_end as f64 {
                         if self.loop_playback {
                             let span = (wa_end - wa_start) as f64;
@@ -948,20 +949,28 @@ impl eframe::App for KagariApp {
                 if self.playback_speed >= 0 {
                     let next = current_frame.saturating_add(speed);
                     current_frame = if next >= wa_end {
-                        if self.loop_playback { wa_start } else {
+                        if self.loop_playback {
+                            wa_start
+                        } else {
                             self.playback.stop_playing();
                             self.motion_sketch_active = false;
                             wa_end
                         }
-                    } else { next };
+                    } else {
+                        next
+                    };
                 } else {
                     current_frame = if current_frame == wa_start {
-                        if self.loop_playback { wa_end.saturating_sub(1) } else {
+                        if self.loop_playback {
+                            wa_end.saturating_sub(1)
+                        } else {
                             self.playback.stop_playing();
                             self.motion_sketch_active = false;
                             wa_start
                         }
-                    } else { current_frame.saturating_sub(speed) };
+                    } else {
+                        current_frame.saturating_sub(speed)
+                    };
                 }
             }
 
@@ -985,7 +994,7 @@ impl eframe::App for KagariApp {
             .fill(crate::ui::theme::colors::BG_DARKEST)
             .inner_margin(egui::Margin::symmetric(8.0, 3.0))
             .stroke(egui::Stroke::new(
-                1.0,
+                1.0_f32,
                 crate::ui::theme::colors::BORDER_SUBTLE,
             ));
 
@@ -1156,7 +1165,11 @@ impl eframe::App for KagariApp {
                                 .color(egui::Color32::from_rgb(255, 230, 0)),
                         );
                         ui.separator();
-                        let dl_status = if cfg!(feature = "gui") { "Available" } else { "N/A" };
+                        let dl_status = if cfg!(feature = "gui") {
+                            "Available"
+                        } else {
+                            "N/A"
+                        };
                         ui.label(
                             egui::RichText::new(format!("Dynamic Link: {}", dl_status))
                                 .small()
@@ -1166,12 +1179,9 @@ impl eframe::App for KagariApp {
                         let mem_usage = {
                             let comp = self.history.current().active_composition();
                             let layer_count = comp.layers.len();
-                            let total_frames = comp.duration_frames;
+                            let _total_frames = comp.duration_frames;
                             let cached = self.frame_cache.cached_count();
-                            format!(
-                                "{} layers | {} frames cached",
-                                layer_count, cached
-                            )
+                            format!("{} layers | {} frames cached", layer_count, cached)
                         };
                         ui.label(
                             egui::RichText::new(format!("RAM: {}", mem_usage))

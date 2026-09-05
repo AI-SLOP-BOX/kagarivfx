@@ -10,11 +10,31 @@ use serde::{Deserialize, Serialize};
 /// Granular operations representing atomic project mutations for collaborative editing.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum ProjectChangeOp {
-    AddLayer { layer_id: String, name: String, layer_type: String },
-    RemoveLayer { layer_id: String },
-    UpdatePosition { layer_id: String, frame: u32, position: [f32; 2], version: u64 },
-    UpdateOpacity { layer_id: String, frame: u32, opacity: f32, version: u64 },
-    AddMarker { frame: u32, comment: String, user_id: String },
+    AddLayer {
+        layer_id: String,
+        name: String,
+        layer_type: String,
+    },
+    RemoveLayer {
+        layer_id: String,
+    },
+    UpdatePosition {
+        layer_id: String,
+        frame: u32,
+        position: [f32; 2],
+        version: u64,
+    },
+    UpdateOpacity {
+        layer_id: String,
+        frame: u32,
+        opacity: f32,
+        version: u64,
+    },
+    AddMarker {
+        frame: u32,
+        comment: String,
+        user_id: String,
+    },
 }
 
 /// A versioned change packet sent across network clients.
@@ -73,8 +93,18 @@ impl TeamSyncEngine {
                 for local_op in &local.operations {
                     match (op, local_op) {
                         (
-                            ProjectChangeOp::UpdatePosition { layer_id: id1, frame: f1, version: v1, .. },
-                            ProjectChangeOp::UpdatePosition { layer_id: id2, frame: f2, version: v2, .. },
+                            ProjectChangeOp::UpdatePosition {
+                                layer_id: id1,
+                                frame: f1,
+                                version: v1,
+                                ..
+                            },
+                            ProjectChangeOp::UpdatePosition {
+                                layer_id: id2,
+                                frame: f2,
+                                version: v2,
+                                ..
+                            },
                         ) if id1 == id2 && f1 == f2 => {
                             if v1 <= v2 && packet.timestamp_ms < local.timestamp_ms {
                                 conflict = true;

@@ -34,12 +34,10 @@ fn main() {
     comp.layers.push(vid);
 
     // Render two frames — video content must differ between them (testsrc animates)
-    let f0 = kagari_vfx::core::software_renderer::render_frame_to_pixels(
-        &comp, 2, 160, 120, 0.0, 0,
-    );
-    let f1 = kagari_vfx::core::software_renderer::render_frame_to_pixels(
-        &comp, 12, 160, 120, 0.0, 0,
-    );
+    let f0 =
+        kagari_vfx::core::software_renderer::render_frame_to_pixels(&comp, 2, 160, 120, 0.0, 0);
+    let f1 =
+        kagari_vfx::core::software_renderer::render_frame_to_pixels(&comp, 12, 160, 120, 0.0, 0);
     assert_eq!(f0.len(), 160 * 120 * 4);
 
     let bright = |px: &[u8]| (0..px.len()).step_by(4).filter(|&i| px[i] > 100).count();

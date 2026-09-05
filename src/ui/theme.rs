@@ -284,42 +284,42 @@ pub fn configure_ae_theme(ctx: &egui::Context) {
 
     // ── Selection ──
     visuals.selection.bg_fill = colors::BG_ACTIVE;
-    visuals.selection.stroke = egui::Stroke::new(1.0, colors::ACCENT_BLUE);
+    visuals.selection.stroke = egui::Stroke::new(1.0_f32, colors::ACCENT_BLUE);
 
     // ── Widget states ──
     // Noninteractive (labels, static text)
-    visuals.widgets.noninteractive.fg_stroke = egui::Stroke::new(1.0, colors::TEXT_PRIMARY);
+    visuals.widgets.noninteractive.fg_stroke = egui::Stroke::new(1.0_f32, colors::TEXT_PRIMARY);
     visuals.widgets.noninteractive.bg_fill = colors::BG_DARKEST;
     visuals.widgets.noninteractive.weak_bg_fill = colors::BG_DARKEST;
-    visuals.widgets.noninteractive.bg_stroke = egui::Stroke::new(1.0, colors::BORDER_SUBTLE);
+    visuals.widgets.noninteractive.bg_stroke = egui::Stroke::new(1.0_f32, colors::BORDER_SUBTLE);
     visuals.widgets.noninteractive.rounding = egui::Rounding::same(2.0);
 
     // Inactive (buttons, sliders at rest)
-    visuals.widgets.inactive.fg_stroke = egui::Stroke::new(1.0, colors::TEXT_PRIMARY);
+    visuals.widgets.inactive.fg_stroke = egui::Stroke::new(1.0_f32, colors::TEXT_PRIMARY);
     visuals.widgets.inactive.bg_fill = colors::BG_MID;
     visuals.widgets.inactive.weak_bg_fill = colors::BG_MID;
-    visuals.widgets.inactive.bg_stroke = egui::Stroke::new(1.0, colors::BORDER_MEDIUM);
+    visuals.widgets.inactive.bg_stroke = egui::Stroke::new(1.0_f32, colors::BORDER_MEDIUM);
     visuals.widgets.inactive.rounding = egui::Rounding::same(3.0);
 
     // Hovered
-    visuals.widgets.hovered.fg_stroke = egui::Stroke::new(1.0, egui::Color32::WHITE);
+    visuals.widgets.hovered.fg_stroke = egui::Stroke::new(1.0_f32, egui::Color32::WHITE);
     visuals.widgets.hovered.bg_fill = colors::BG_HOVER;
     visuals.widgets.hovered.weak_bg_fill = colors::BG_HOVER;
-    visuals.widgets.hovered.bg_stroke = egui::Stroke::new(1.0, colors::BORDER_STRONG);
+    visuals.widgets.hovered.bg_stroke = egui::Stroke::new(1.0_f32, colors::BORDER_STRONG);
     visuals.widgets.hovered.rounding = egui::Rounding::same(3.0);
 
     // Active (pressed)
-    visuals.widgets.active.fg_stroke = egui::Stroke::new(1.0, egui::Color32::WHITE);
+    visuals.widgets.active.fg_stroke = egui::Stroke::new(1.0_f32, egui::Color32::WHITE);
     visuals.widgets.active.bg_fill = colors::BG_PRESSED;
     visuals.widgets.active.weak_bg_fill = colors::BG_PRESSED;
-    visuals.widgets.active.bg_stroke = egui::Stroke::new(1.0, colors::ACCENT_BLUE);
+    visuals.widgets.active.bg_stroke = egui::Stroke::new(1.0_f32, colors::ACCENT_BLUE);
     visuals.widgets.active.rounding = egui::Rounding::same(3.0);
 
     // Open (expanded menus, popups)
-    visuals.widgets.open.fg_stroke = egui::Stroke::new(1.0, egui::Color32::WHITE);
+    visuals.widgets.open.fg_stroke = egui::Stroke::new(1.0_f32, egui::Color32::WHITE);
     visuals.widgets.open.bg_fill = colors::BG_PANEL;
     visuals.widgets.open.weak_bg_fill = colors::BG_PANEL;
-    visuals.widgets.open.bg_stroke = egui::Stroke::new(1.0, colors::BORDER_STRONG);
+    visuals.widgets.open.bg_stroke = egui::Stroke::new(1.0_f32, colors::BORDER_STRONG);
     visuals.widgets.open.rounding = egui::Rounding::same(3.0);
 
     // ── Warning/Error colors ──
@@ -381,7 +381,7 @@ pub fn draw_custom_tab(ui: &mut egui::Ui, selected: bool, title: &str) -> egui::
                 egui::pos2(rect.left(), rect.bottom() - 1.5),
                 egui::pos2(rect.right(), rect.bottom() - 1.5),
             ],
-            egui::Stroke::new(2.0, colors::ACCENT_CYAN),
+            egui::Stroke::new(2.0_f32, colors::ACCENT_CYAN),
         );
     }
     response
@@ -417,7 +417,7 @@ pub fn draw_separator(ui: &mut egui::Ui) {
     let y = rect.min.y + 0.5;
     ui.painter().line_segment(
         [egui::pos2(rect.left(), y), egui::pos2(rect.right(), y)],
-        egui::Stroke::new(1.0, colors::BORDER_SUBTLE),
+        egui::Stroke::new(1.0_f32, colors::BORDER_SUBTLE),
     );
     ui.add_space(1.0);
 }
@@ -436,7 +436,7 @@ pub fn panel_frame() -> egui::Frame {
     egui::Frame::none()
         .fill(colors::BG_DARK)
         .inner_margin(egui::Margin::same(8.0))
-        .stroke(egui::Stroke::new(1.0, colors::BORDER_SUBTLE))
+        .stroke(egui::Stroke::new(1.0_f32, colors::BORDER_SUBTLE))
 }
 
 /// Helper: Create a consistent AE-style side panel frame.
@@ -445,7 +445,7 @@ pub fn side_panel_frame() -> egui::Frame {
     egui::Frame::none()
         .fill(colors::BG_DARKEST)
         .inner_margin(egui::Margin::same(8.0))
-        .stroke(egui::Stroke::new(1.0, colors::BORDER_SUBTLE))
+        .stroke(egui::Stroke::new(1.0_f32, colors::BORDER_SUBTLE))
 }
 
 /// Custom DragValue with AE-style modifier keys:

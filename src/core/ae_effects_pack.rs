@@ -605,11 +605,17 @@ fn boxes_for_gauss(sigma: f32, n: u32) -> [f32; 3] {
     let m = if denom.abs() < 1e-4 {
         0.0
     } else {
-        ((12.0 * sigma * sigma - n * wl * wl - 4.0 * n * wl - 3.0 * n) / denom).round().max(0.0)
+        ((12.0 * sigma * sigma - n * wl * wl - 4.0 * n * wl - 3.0 * n) / denom)
+            .round()
+            .max(0.0)
     };
     let mut out = [0.0f32; 3];
     for (i, slot) in out.iter_mut().enumerate() {
-        *slot = if (i as f32) < m { wl.max(0.0) } else { wu.max(0.0) };
+        *slot = if (i as f32) < m {
+            wl.max(0.0)
+        } else {
+            wu.max(0.0)
+        };
     }
     out
 }

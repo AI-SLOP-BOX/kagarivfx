@@ -21,14 +21,18 @@ pub fn start_comp_export(app: &mut crate::KagariApp, ctx: &egui::Context, comp_n
     // Range mode: 0 = Entire Comp, 1 = Work Area (falls back to Entire when unset)
     let range_mode =
         ctx.data_mut(|d| *d.get_temp_mut_or_insert_with(egui::Id::new("ae_export_range"), || 0u8));
-    let (frame_offset, total_frames) =
-        if range_mode == 1 && (app.playback.work_area_in.is_some() || app.playback.work_area_out.is_some()) {
-            let s = app.playback.work_area_in.unwrap_or(0);
-            let e = app.playback.work_area_out.unwrap_or(comp_total.saturating_sub(1));
-            (s, e.saturating_sub(s).max(1))
-        } else {
-            (0u32, comp_total)
-        };
+    let (frame_offset, total_frames) = if range_mode == 1
+        && (app.playback.work_area_in.is_some() || app.playback.work_area_out.is_some())
+    {
+        let s = app.playback.work_area_in.unwrap_or(0);
+        let e = app
+            .playback
+            .work_area_out
+            .unwrap_or(comp_total.saturating_sub(1));
+        (s, e.saturating_sub(s).max(1))
+    } else {
+        (0u32, comp_total)
+    };
 
     app.export.is_exporting = true;
     app.export.export_progress = 0.0;
@@ -117,7 +121,10 @@ pub fn start_comp_export(app: &mut crate::KagariApp, ctx: &egui::Context, comp_n
                 }
             },
         );
-        log::info!("Spawned PNG sequence export for {}", app.export.export_output_path);
+        log::info!(
+            "Spawned PNG sequence export for {}",
+            app.export.export_output_path
+        );
         return;
     }
 

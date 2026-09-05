@@ -126,7 +126,7 @@ pub fn ae_button(ui: &mut egui::Ui, label: &str) -> egui::Response {
 
     let button = egui::Button::new(text)
         .fill(colors::BG_MID)
-        .stroke(egui::Stroke::new(1.0, colors::BORDER_MEDIUM))
+        .stroke(egui::Stroke::new(1.0_f32, colors::BORDER_MEDIUM))
         .rounding(egui::Rounding::same(3.0))
         .min_size(egui::vec2(60.0, 22.0));
 
@@ -136,7 +136,7 @@ pub fn ae_button(ui: &mut egui::Ui, label: &str) -> egui::Response {
         let rect = response.rect;
         ui.painter().rect_filled(rect, 3.0, colors::BG_HOVER);
         ui.painter()
-            .rect_stroke(rect, 3.0, egui::Stroke::new(1.0, colors::BORDER_STRONG));
+            .rect_stroke(rect, 3.0, egui::Stroke::new(1.0_f32, colors::BORDER_STRONG));
     }
 
     response
@@ -151,7 +151,7 @@ pub fn ae_button_accent(ui: &mut egui::Ui, label: &str) -> egui::Response {
 
     let button = egui::Button::new(text)
         .fill(colors::BG_ACTIVE)
-        .stroke(egui::Stroke::new(1.0, colors::ACCENT_BLUE))
+        .stroke(egui::Stroke::new(1.0_f32, colors::ACCENT_BLUE))
         .rounding(egui::Rounding::same(3.0))
         .min_size(egui::vec2(60.0, 22.0));
 
@@ -208,7 +208,8 @@ pub fn ae_svg_toggle(
     };
     ui.painter().rect_filled(rect, 3.0, bg_color);
     if is_active {
-        ui.painter().rect_stroke(rect, 3.0, egui::Stroke::new(1.0, active_color));
+        ui.painter()
+            .rect_stroke(rect, 3.0, egui::Stroke::new(1.0_f32, active_color));
     }
     let tint = if is_active {
         active_color
@@ -280,7 +281,7 @@ pub fn ae_toggle(ui: &mut egui::Ui, value: &mut bool, label: &str) -> egui::Resp
         };
         ui.painter().rect_filled(rect, 8.0, track_color);
         ui.painter()
-            .rect_stroke(rect, 8.0, egui::Stroke::new(1.0, colors::BORDER_MEDIUM));
+            .rect_stroke(rect, 8.0, egui::Stroke::new(1.0_f32, colors::BORDER_MEDIUM));
 
         // Thumb
         let thumb_x = if *value {
@@ -357,7 +358,7 @@ pub fn ae_separator(ui: &mut egui::Ui) {
     let y = rect.min.y + 0.5;
     ui.painter().line_segment(
         [egui::pos2(rect.left(), y), egui::pos2(rect.right(), y)],
-        egui::Stroke::new(1.0, colors::BORDER_SUBTLE),
+        egui::Stroke::new(1.0_f32, colors::BORDER_SUBTLE),
     );
     ui.add_space(1.0);
 }
@@ -376,7 +377,7 @@ pub fn ae_panel_header(ui: &mut egui::Ui, title: &str) {
             egui::pos2(header_rect.left(), header_rect.bottom()),
             egui::pos2(header_rect.right(), header_rect.bottom()),
         ],
-        egui::Stroke::new(1.0, colors::BORDER_SUBTLE),
+        egui::Stroke::new(1.0_f32, colors::BORDER_SUBTLE),
     );
 
     // Title
@@ -399,7 +400,7 @@ pub fn ae_color_swatch(ui: &mut egui::Ui, color: egui::Color32, size: f32) -> eg
 
     // Outer border
     ui.painter()
-        .rect_stroke(rect, 2.0, egui::Stroke::new(1.0, colors::BORDER_MEDIUM));
+        .rect_stroke(rect, 2.0, egui::Stroke::new(1.0_f32, colors::BORDER_MEDIUM));
 
     // Inner color
     let inner = rect.shrink(1.0);
@@ -430,7 +431,7 @@ pub fn ae_progress_bar(ui: &mut egui::Ui, progress: f32, height: f32) {
 
     // Border
     ui.painter()
-        .rect_stroke(rect, 2.0, egui::Stroke::new(1.0, colors::BORDER_SUBTLE));
+        .rect_stroke(rect, 2.0, egui::Stroke::new(1.0_f32, colors::BORDER_SUBTLE));
 }
 
 /// AE-style text input field

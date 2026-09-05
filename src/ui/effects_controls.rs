@@ -4562,7 +4562,8 @@ fn fs_main(@location(0) uv: vec2<f32>) -> @location(0) vec4<f32> {
             }
 
             // Real-time naga WGSL validation & hot-reload status
-            let status = crate::core::custom_shader_runtime::CustomShaderRegistry::global().validate_wgsl(wgsl_source);
+            let status = crate::core::custom_shader_runtime::CustomShaderRegistry::global()
+                .validate_wgsl(wgsl_source);
             ui.horizontal(|ui| {
                 if status.is_valid {
                     ui.label(
@@ -4571,17 +4572,28 @@ fn fs_main(@location(0) uv: vec2<f32>) -> @location(0) vec4<f32> {
                             .color(colors::ACCENT_GREEN),
                     );
                 } else {
-                    let err_snippet = status.error_message.as_deref().unwrap_or("WGSL Syntax Error");
+                    let err_snippet = status
+                        .error_message
+                        .as_deref()
+                        .unwrap_or("WGSL Syntax Error");
                     let short_err = err_snippet.lines().next().unwrap_or("Syntax Error");
                     ui.label(
                         egui::RichText::new(format!("❌ {}", short_err))
                             .small()
                             .color(colors::ACCENT_RED),
-                    ).on_hover_text(err_snippet);
+                    )
+                    .on_hover_text(err_snippet);
                 }
 
-                if ui.small_button("📁 Load .wgsl File").on_hover_text("Load and hot-reload shader from disk").clicked() {
-                    if let Some(path) = rfd::FileDialog::new().add_filter("WGSL Shader", &["wgsl", "frag"]).pick_file() {
+                if ui
+                    .small_button("📁 Load .wgsl File")
+                    .on_hover_text("Load and hot-reload shader from disk")
+                    .clicked()
+                {
+                    if let Some(path) = rfd::FileDialog::new()
+                        .add_filter("WGSL Shader", &["wgsl", "frag"])
+                        .pick_file()
+                    {
                         if let Ok(content) = std::fs::read_to_string(&path) {
                             *wgsl_source = content;
                             *project_changed = true;

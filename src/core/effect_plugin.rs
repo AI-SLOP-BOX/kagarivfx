@@ -674,7 +674,8 @@ impl RenderEffectPlugin for EnumEffectPlugin {
                 intensity,
             } => {
                 params.crt_enabled = 1;
-                params.crt_scanline_count = (1080.0 / line_spacing.evaluate(frame).max(1.0)).clamp(50.0, 1000.0);
+                params.crt_scanline_count =
+                    (1080.0 / line_spacing.evaluate(frame).max(1.0)).clamp(50.0, 1000.0);
                 params.crt_scanline_intensity = intensity.evaluate(frame).clamp(0.0, 1.0);
             }
             EffectType::FractalNoise {
@@ -739,7 +740,10 @@ impl RenderEffectPlugin for EnumEffectPlugin {
                 params.sim_p1 = strength.evaluate(frame);
                 params.sim_p2 = (frame as f32) * speed.evaluate(frame) * 0.05;
             }
-            EffectType::RainRipples { drop_count, wave_strength } => {
+            EffectType::RainRipples {
+                drop_count,
+                wave_strength,
+            } => {
                 params.sim_enabled = 1;
                 params.sim_type = 7;
                 params.sim_p1 = wave_strength.evaluate(frame);
@@ -811,14 +815,7 @@ pub trait CustomPixelEffectPlugin: Send + Sync {
         "Custom Plugins"
     }
     /// Process RGBA8 pixel buffer in-place on CPU.
-    fn process_pixels(
-        &self,
-        pixels: &mut [u8],
-        width: u32,
-        height: u32,
-        frame: u32,
-        time_sec: f32,
-    );
+    fn process_pixels(&self, pixels: &mut [u8], width: u32, height: u32, frame: u32, time_sec: f32);
 }
 
 /// Global registry for dynamic third-party VFX plugins and custom filters.
@@ -880,7 +877,13 @@ impl CustomPluginRegistry {
         if let Ok(guard) = self.plugins.read() {
             guard
                 .values()
-                .map(|p| (p.id().to_string(), p.name().to_string(), p.category().to_string()))
+                .map(|p| {
+                    (
+                        p.id().to_string(),
+                        p.name().to_string(),
+                        p.category().to_string(),
+                    )
+                })
                 .collect()
         } else {
             vec![]
@@ -900,7 +903,14 @@ mod tests {
         fn name(&self) -> &str {
             "Vendor Invert Colors"
         }
-        fn process_pixels(&self, pixels: &mut [u8], width: u32, height: u32, _frame: u32, _time: f32) {
+        fn process_pixels(
+            &self,
+            pixels: &mut [u8],
+            _width: u32,
+            _height: u32,
+            _frame: u32,
+            _time: f32,
+        ) {
             for chunk in pixels.chunks_exact_mut(4) {
                 chunk[0] = 255 - chunk[0];
                 chunk[1] = 255 - chunk[1];

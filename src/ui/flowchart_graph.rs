@@ -2,7 +2,11 @@ use crate::core::timeline::{Composition, LayerType, TrackMatteMode};
 use crate::ui::theme::colors;
 use eframe::egui;
 
-fn compute_parent_depth(comp: &Composition, layer_idx: usize, visited: &mut std::collections::HashSet<usize>) -> usize {
+fn compute_parent_depth(
+    comp: &Composition,
+    layer_idx: usize,
+    visited: &mut std::collections::HashSet<usize>,
+) -> usize {
     if visited.contains(&layer_idx) || layer_idx >= comp.layers.len() {
         return 0;
     }
@@ -82,15 +86,18 @@ pub fn draw_node_graph_panel(
 
                 // Draw Dark Canvas Grid
                 ui.painter().rect_filled(rect, 4.0, colors::BG_DEEPEST);
-                ui.painter()
-                    .rect_stroke(rect, 4.0, egui::Stroke::new(1.0, colors::BORDER_MEDIUM));
+                ui.painter().rect_stroke(
+                    rect,
+                    4.0,
+                    egui::Stroke::new(1.0_f32, colors::BORDER_MEDIUM),
+                );
 
                 let grid_size = 24.0;
                 let mut gx = rect.left();
                 while gx < rect.right() {
                     ui.painter().line_segment(
                         [egui::pos2(gx, rect.top()), egui::pos2(gx, rect.bottom())],
-                        egui::Stroke::new(0.5, colors::GRID_LINE),
+                        egui::Stroke::new(0.5_f32, colors::GRID_LINE),
                     );
                     gx += grid_size;
                 }
@@ -98,7 +105,7 @@ pub fn draw_node_graph_panel(
                 while gy < rect.bottom() {
                     ui.painter().line_segment(
                         [egui::pos2(rect.left(), gy), egui::pos2(rect.right(), gy)],
-                        egui::Stroke::new(0.5, colors::GRID_LINE),
+                        egui::Stroke::new(0.5_f32, colors::GRID_LINE),
                     );
                     gy += grid_size;
                 }
@@ -146,7 +153,7 @@ pub fn draw_node_graph_panel(
                             for win in wire_pts.windows(2) {
                                 ui.painter().line_segment(
                                     [win[0], win[1]],
-                                    egui::Stroke::new(2.0, colors::ACCENT_BLUE),
+                                    egui::Stroke::new(2.0_f32, colors::ACCENT_BLUE),
                                 );
                             }
                         }
@@ -156,7 +163,8 @@ pub fn draw_node_graph_panel(
                     if layer.track_matte != TrackMatteMode::None && idx > 0 {
                         let matte_idx = idx - 1;
                         let matte_pos = node_positions[matte_idx];
-                        let matte_output = egui::pos2(matte_pos.x + node_w, matte_pos.y + node_h * 0.5);
+                        let matte_output =
+                            egui::pos2(matte_pos.x + node_w, matte_pos.y + node_h * 0.5);
 
                         let ctrl1 = egui::pos2(matte_output.x + 30.0, matte_output.y);
                         let ctrl2 = egui::pos2(child_input.x - 30.0, child_input.y);
@@ -179,7 +187,7 @@ pub fn draw_node_graph_panel(
                         for win in wire_pts.windows(2) {
                             ui.painter().line_segment(
                                 [win[0], win[1]],
-                                egui::Stroke::new(1.5, egui::Color32::from_rgb(245, 158, 11)),
+                                egui::Stroke::new(1.5_f32, egui::Color32::from_rgb(245, 158, 11)),
                             );
                         }
                     }
@@ -188,7 +196,8 @@ pub fn draw_node_graph_panel(
                 // 2. Render Layer Card Nodes
                 for (idx, layer) in comp.layers.iter().enumerate() {
                     let pos = node_positions[idx];
-                    let is_selected = *selected_layer_idx == Some(idx) || selected_layers.contains(&idx);
+                    let is_selected =
+                        *selected_layer_idx == Some(idx) || selected_layers.contains(&idx);
 
                     let node_rect = egui::Rect::from_min_size(pos, egui::vec2(node_w, node_h));
 
@@ -206,7 +215,7 @@ pub fn draw_node_graph_panel(
 
                     ui.painter().rect_filled(node_rect, 4.0, bg_c);
                     ui.painter()
-                        .rect_stroke(node_rect, 4.0, egui::Stroke::new(1.5, stroke_c));
+                        .rect_stroke(node_rect, 4.0, egui::Stroke::new(1.5_f32, stroke_c));
 
                     // Layer Label Color Square
                     let rgb = layer.label.to_rgb();

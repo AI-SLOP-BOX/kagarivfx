@@ -101,9 +101,19 @@ pub fn draw_tracker_panel(app: &mut KagariApp, ui: &mut egui::Ui, current_frame:
                         .selected_text(format!("Tracker {}", active_tk_idx + 1))
                         .show_ui(ui, |ui| {
                             for t_i in 0..tracker_count {
-                                if ui.selectable_value(&mut active_tk_idx, t_i, format!("Tracker {}", t_i + 1)).clicked() {
+                                if ui
+                                    .selectable_value(
+                                        &mut active_tk_idx,
+                                        t_i,
+                                        format!("Tracker {}", t_i + 1),
+                                    )
+                                    .clicked()
+                                {
                                     ui.ctx().data_mut(|d| {
-                                        d.insert_temp(egui::Id::new("ae_active_tracker_pt_idx"), active_tk_idx);
+                                        d.insert_temp(
+                                            egui::Id::new("ae_active_tracker_pt_idx"),
+                                            active_tk_idx,
+                                        );
                                     });
                                 }
                             }

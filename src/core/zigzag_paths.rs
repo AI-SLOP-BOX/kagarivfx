@@ -33,7 +33,11 @@ impl Default for ZigZagParams {
 }
 
 /// Applies Zig Zag displacement to a polyline / polygon path points sequence.
-pub fn apply_zigzag_to_points(points: &[[f32; 2]], params: &ZigZagParams, is_closed: bool) -> Vec<[f32; 2]> {
+pub fn apply_zigzag_to_points(
+    points: &[[f32; 2]],
+    params: &ZigZagParams,
+    is_closed: bool,
+) -> Vec<[f32; 2]> {
     if points.len() < 2 || params.size.abs() < 1e-4 || params.ridges_per_segment == 0 {
         return points.to_vec();
     }
@@ -42,7 +46,11 @@ pub fn apply_zigzag_to_points(points: &[[f32; 2]], params: &ZigZagParams, is_clo
     let num_subdivisions = ridges * 2;
     let mut out = Vec::with_capacity(points.len() * (num_subdivisions + 1));
 
-    let count = if is_closed { points.len() } else { points.len() - 1 };
+    let count = if is_closed {
+        points.len()
+    } else {
+        points.len() - 1
+    };
 
     for i in 0..count {
         let p0 = points[i];

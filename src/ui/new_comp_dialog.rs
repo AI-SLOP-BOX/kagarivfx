@@ -124,7 +124,8 @@ pub fn draw_new_comp_dialog(app: &mut KagariApp, ctx: &egui::Context) {
 
             ui.add_space(8.0);
             let depth_id = egui::Id::new("ae_newcomp_depth");
-            let mut depth_idx = ctx.data_mut(|d| *d.get_temp_mut_or_insert_with(depth_id, || 0usize));
+            let mut depth_idx =
+                ctx.data_mut(|d| *d.get_temp_mut_or_insert_with(depth_id, || 0usize));
             ui.horizontal(|ui| {
                 ui.label("Color Depth:");
                 let label = match depth_idx {
@@ -174,7 +175,10 @@ pub fn draw_new_comp_dialog(app: &mut KagariApp, ctx: &egui::Context) {
                     crate::core::frame_cache::bump_version();
                     app.toasts.info(format!(
                         "Created '{}' — {}×{} @{}fps ({})",
-                        name, draft.2, draft.3, draft.4,
+                        name,
+                        draft.2,
+                        draft.3,
+                        draft.4,
                         match depth_idx {
                             1 => "16bpc",
                             2 => "32bpc Float",

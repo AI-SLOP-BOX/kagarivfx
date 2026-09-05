@@ -133,7 +133,7 @@ pub fn apply_page_turn(src: &[u8], width: u32, height: u32, params: &PageTurnPar
             } else if d <= pi_r {
                 // Cylinder curl arc: angle theta along cylinder
                 let theta = d / r;
-                let z = r * (1.0 - theta.cos());
+                let _z = r * (1.0 - theta.cos());
                 let rolled_dist = r * theta.sin();
 
                 // Map coordinates back
@@ -153,7 +153,7 @@ pub fn apply_page_turn(src: &[u8], width: u32, height: u32, params: &PageTurnPar
                 dst[d_idx..d_idx + 4].copy_from_slice(&pixel);
             } else if d <= 2.0 * pi_r {
                 // Backside of the curled paper
-                let theta = (d - pi_r) / r;
+                let _theta = (d - pi_r) / r;
                 let src_dist = -(d - 2.0 * pi_r);
                 let sx = px + src_dist * nx;
                 let sy = py + src_dist * ny;
@@ -204,7 +204,7 @@ mod tests {
     fn test_page_turn_unfolded_region_preserves_pixels() {
         let w = 32u32;
         let h = 32u32;
-        let mut src = vec![255u8; (w * h * 4) as usize];
+        let src = vec![255u8; (w * h * 4) as usize];
         let params = PageTurnParams {
             fold_position: [64.0, 64.0], // Way outside
             fold_radius: 50.0,

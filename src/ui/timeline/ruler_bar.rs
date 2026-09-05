@@ -94,7 +94,7 @@ pub fn draw_ram_ruler(
                 egui::pos2(bx, bar_rect.top()),
                 egui::pos2(bx, bar_rect.bottom()),
             ],
-            egui::Stroke::new(1.0, colors::ACCENT_YELLOW),
+            egui::Stroke::new(1.0_f32, colors::ACCENT_YELLOW),
         );
     }
 

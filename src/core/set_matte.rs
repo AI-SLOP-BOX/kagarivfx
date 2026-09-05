@@ -145,15 +145,7 @@ mod tests {
         let mut target = vec![255u8; 4];
         let source = vec![255u8; 4];
         let params = SetMatteParams::default();
-        apply_set_matte(
-            &mut target,
-            u32::MAX,
-            u32::MAX,
-            &source,
-            1,
-            1,
-            &params,
-        );
+        apply_set_matte(&mut target, u32::MAX, u32::MAX, &source, 1, 1, &params);
         assert_eq!(target, vec![255u8; 4]);
     }
 

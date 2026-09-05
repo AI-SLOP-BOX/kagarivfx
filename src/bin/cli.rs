@@ -1,6 +1,6 @@
+use clap::{Parser, Subcommand, ValueEnum};
 use kagari_vfx::core::software_renderer::render_frame_to_pixels;
 use kagari_vfx::core::timeline::{Composition, Project};
-use clap::{Parser, Subcommand, ValueEnum};
 
 #[derive(Parser)]
 #[command(name = "kagari")]
@@ -350,8 +350,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             })?;
         }
         Commands::Script { project, file } => {
-            let project_meta = std::fs::metadata(&project)
-                .map_err(|e| std::io::Error::new(e.kind(), format!("cannot read project: {}", e)))?;
+            let project_meta = std::fs::metadata(&project).map_err(|e| {
+                std::io::Error::new(e.kind(), format!("cannot read project: {}", e))
+            })?;
             if project_meta.len() > 50 * 1024 * 1024 {
                 return Err(std::io::Error::new(
                     std::io::ErrorKind::InvalidData,
@@ -359,12 +360,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         "project file too large ({} MB, limit 50 MB)",
                         project_meta.len() / (1024 * 1024)
                     ),
-                ).into());
+                )
+                .into());
             }
             let json = std::fs::read_to_string(&project)?;
             let mut production =
-                kagari_vfx::core::production_document::ProductionDocument::from_json(&json)
-                    .ok();
+                kagari_vfx::core::production_document::ProductionDocument::from_json(&json).ok();
             let mut proj = if let Some(document) = production.as_mut() {
                 document.project().clone()
             } else {
@@ -380,7 +381,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         "script file too large ({} KB, limit 1 MB)",
                         script_meta.len() / 1024
                     ),
-                ).into());
+                )
+                .into());
             }
             let source = std::fs::read_to_string(&file)?;
             let logs = kagari_vfx::automation::run_script(&mut proj, &source)?;
@@ -397,10 +399,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 let parent = std::path::Path::new(&project)
                     .parent()
                     .unwrap_or(std::path::Path::new("."));
-                let tmp = parent.join(format!(
-                    ".kagari_save_{}",
-                    std::process::id()
-                ));
+                let tmp = parent.join(format!(".kagari_save_{}", std::process::id()));
                 std::fs::write(&tmp, &out)?;
                 std::fs::rename(&tmp, &project)?;
             }
@@ -507,9 +506,8 @@ fn cmd_add_sample_binding(
     output_range: (f64, f64),
 ) -> Result<(), Box<dyn std::error::Error>> {
     let json = std::fs::read_to_string(project_path)?;
-    let mut document =
-        kagari_vfx::core::production_document::ProductionDocument::from_json(&json)
-            .map_err(|error| format!("Not a valid production document: {error}"))?;
+    let mut document = kagari_vfx::core::production_document::ProductionDocument::from_json(&json)
+        .map_err(|error| format!("Not a valid production document: {error}"))?;
     document
         .add_sample_automation_binding(source, target, points, input_range, output_range)
         .map_err(std::io::Error::other)?;
@@ -529,9 +527,8 @@ fn cmd_bindings(
     comp_ref: Option<&str>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let json = std::fs::read_to_string(project_path)?;
-    let mut document =
-        kagari_vfx::core::production_document::ProductionDocument::from_json(&json)
-            .map_err(|error| format!("Not a valid production document: {error}"))?;
+    let mut document = kagari_vfx::core::production_document::ProductionDocument::from_json(&json)
+        .map_err(|error| format!("Not a valid production document: {error}"))?;
     let sources = values
         .iter()
         .cloned()
@@ -1002,9 +999,7 @@ fn render_to_gif(
     production: Option<&kagari_vfx::core::production_document::ProductionDocument>,
     composition_index: usize,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    use kagari_vfx::core::ffmpeg_export::{
-        is_ffmpeg_available, start_gif_export, ExportConfig,
-    };
+    use kagari_vfx::core::ffmpeg_export::{is_ffmpeg_available, start_gif_export, ExportConfig};
     use std::sync::{atomic::AtomicBool, Arc};
 
     if !is_ffmpeg_available() {
@@ -1090,10 +1085,22 @@ fn cmd_effects(json_output: bool) {
         ("ColorGradeLUT", "color", "LUT color grading (CPU)"),
         ("ColorSpaceConvert", "color", "Color space transform (CPU)"),
         ("FilmGrain", "noise", "Film grain noise (CPU)"),
-        ("FractalNoise", "noise", "Procedural noise (fBm/turb/ridge) (CPU)"),
+        (
+            "FractalNoise",
+            "noise",
+            "Procedural noise (fBm/turb/ridge) (CPU)",
+        ),
         ("Curves", "color", "Per-channel bezier tone curve (CPU)"),
-        ("DisplacementMap", "distort", "Layer-based displacement warp (CPU)"),
-        ("CompoundBlur", "blur", "Variable blur with intensity map (CPU)"),
+        (
+            "DisplacementMap",
+            "distort",
+            "Layer-based displacement warp (CPU)",
+        ),
+        (
+            "CompoundBlur",
+            "blur",
+            "Variable blur with intensity map (CPU)",
+        ),
         ("Minimax", "matte", "Dilate/erode matte (CPU)"),
         ("ShiftChannels", "color", "RGBA channel swap/remap (CPU)"),
         ("Twirl", "distort", "Twirl distortion (CPU)"),
@@ -1109,7 +1116,11 @@ fn cmd_effects(json_output: bool) {
         ("SimpleChoker", "matte", "Matte choker (CPU)"),
         ("ChromaKey", "keying", "Green screen key (CPU)"),
         ("Spherize", "distort", "Sphere distortion (CPU)"),
-        ("TurbulentDisplace", "distort", "Turbulence displacement (CPU)"),
+        (
+            "TurbulentDisplace",
+            "distort",
+            "Turbulence displacement (CPU)",
+        ),
         ("Colorama", "color", "Color cycle (CPU)"),
     ];
     if json_output {
@@ -1185,9 +1196,8 @@ fn cmd_production_info(
     json_output: bool,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let json = std::fs::read_to_string(project_path)?;
-    let document =
-        kagari_vfx::core::production_document::ProductionDocument::from_json(&json)
-            .map_err(|error| format!("Not a valid production document: {error}"))?;
+    let document = kagari_vfx::core::production_document::ProductionDocument::from_json(&json)
+        .map_err(|error| format!("Not a valid production document: {error}"))?;
     let clock = document.clock();
     if json_output {
         let output = production_info_value(&document);
@@ -1305,8 +1315,7 @@ fn cmd_validate(project_path: &str) -> Result<(), Box<dyn std::error::Error>> {
     {
         use std::collections::{HashMap, HashSet};
         // Collect every composition in the project (top-level + nested sub-comps)
-        let mut all_comps: HashMap<&str, &kagari_vfx::core::timeline::Composition> =
-            HashMap::new();
+        let mut all_comps: HashMap<&str, &kagari_vfx::core::timeline::Composition> = HashMap::new();
         fn collect<'a>(
             comp: &'a kagari_vfx::core::timeline::Composition,
             all: &mut HashMap<&'a str, &'a kagari_vfx::core::timeline::Composition>,
@@ -1781,9 +1790,8 @@ mod tests {
 
     #[test]
     fn production_info_json_schema_exposes_cross_domain_contract() {
-        let mut document = kagari_vfx::core::production_document::ProductionDocument::new(
-            Project::default(),
-        );
+        let mut document =
+            kagari_vfx::core::production_document::ProductionDocument::new(Project::default());
         document.audio.sample_rate = 44_100;
         let value = production_info_value(&document);
         assert_eq!(value["schema_version"], document.schema_version);

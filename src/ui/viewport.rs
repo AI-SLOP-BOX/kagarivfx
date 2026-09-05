@@ -19,7 +19,7 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: u32) {
             let tab_frame = egui::Frame::none()
                 .fill(colors::BG_DARK)
                 .inner_margin(egui::Margin::symmetric(10.0, 4.0))
-                .stroke(egui::Stroke::new(1.0, colors::BORDER_SUBTLE));
+                .stroke(egui::Stroke::new(1.0_f32, colors::BORDER_SUBTLE));
 
             tab_frame.show(ui, |ui| {
                 ui.horizontal(|ui| {
@@ -497,7 +497,7 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: u32) {
             if let Some(start) = app.rect_drag_start {
                 if let Some(current) = viewport_response.interact_pointer_pos() {
                     let r = egui::Rect::from_two_pos(start, current);
-                    ui.painter().rect_stroke(r, 0.0, egui::Stroke::new(1.5, colors::ACCENT_BLUE));
+                    ui.painter().rect_stroke(r, 0.0, egui::Stroke::new(1.5_f32, colors::ACCENT_BLUE));
                     ui.painter().rect_filled(r, 0.0, colors::TIMELINE_SELECTION.linear_multiply(0.15));
                 }
             }
@@ -517,7 +517,7 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: u32) {
                     .show(ctx, |ui| {
                         let hud_frame = egui::Frame::default()
                             .fill(egui::Color32::from_rgba_premultiplied(18, 22, 30, 225))
-                            .stroke(egui::Stroke::new(1.0, colors::BORDER_MEDIUM))
+                            .stroke(egui::Stroke::new(1.0_f32, colors::BORDER_MEDIUM))
                             .inner_margin(8.0);
                         hud_frame.show(ui, |ui: &mut egui::Ui| {
                                 ui.set_min_width(150.0);
@@ -707,7 +707,7 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: u32) {
                     .show(ctx, |ui| {
                         let hud_frame = egui::Frame::default()
                             .fill(egui::Color32::from_rgba_premultiplied(18, 22, 30, 225))
-                            .stroke(egui::Stroke::new(1.0, colors::BORDER_MEDIUM))
+                            .stroke(egui::Stroke::new(1.0_f32, colors::BORDER_MEDIUM))
                             .inner_margin(8.0);
                         hud_frame.show(ui, |ui: &mut egui::Ui| {
                             ui.set_min_width(150.0);
@@ -801,7 +801,7 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: u32) {
                             let bsize = ctx.data_mut(|d| {
                                 d.get_temp::<f32>(egui::Id::new("clone_stamp_size")).unwrap_or(15.0)
                             });
-                            let src_off = src_opt.unwrap_or([0.0, 0.0]);
+                            let _src_off = src_opt.unwrap_or([0.0, 0.0]);
                             let proj = app.history.current_mut().active_composition_mut();
                             if let Some(layer) = proj.layers.get_mut(sel_li) {
                                 layer.paint_strokes.push(crate::core::timeline::PaintStroke {
@@ -848,7 +848,7 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: u32) {
                 for (i, sp) in placed.iter().enumerate() {
                     let hovered = hits.iter().any(|(hi, _)| *hi == i);
                     ui.painter().circle_filled(*sp, if hovered { 6.0 } else { 4.5 }, colors::ACCENT_YELLOW.linear_multiply(0.85));
-                    ui.painter().circle_stroke(*sp, 4.5, egui::Stroke::new(1.2, egui::Color32::WHITE));
+                    ui.painter().circle_stroke(*sp, 4.5, egui::Stroke::new(1.2_f32, egui::Color32::WHITE));
                 }
 
                 let drag_id = egui::Id::new(("puppet_pin_drag", sel_li));
@@ -970,7 +970,7 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: u32) {
                     .show(ctx, |ui| {
                         let hud_frame = egui::Frame::default()
                             .fill(egui::Color32::from_rgba_premultiplied(18, 22, 30, 225))
-                            .stroke(egui::Stroke::new(1.0, colors::BORDER_MEDIUM))
+                            .stroke(egui::Stroke::new(1.0_f32, colors::BORDER_MEDIUM))
                             .inner_margin(8.0);
                         hud_frame.show(ui, |ui: &mut egui::Ui| {
                             ui.set_min_width(170.0);
@@ -1040,7 +1040,7 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: u32) {
                             let cw = comp_ro.width;
                             let ch = comp_ro.height;
                             let pixels = crate::core::software_renderer::render_frame_to_pixels(
-                                &comp_ro, current_frame, cw, ch, 0.0, 0,
+                                comp_ro, current_frame, cw, ch, 0.0, 0,
                             );
                             if !pixels.is_empty() && pixels.len() == (cw * ch * 4) as usize {
                                 let radius = ctx.data_mut(|d| {
@@ -1084,7 +1084,7 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: u32) {
                             egui::pos2(origin_x + p[0] / comp_w * draw_w, origin_y + p[1] / comp_h * draw_h)
                         }).collect();
                         for w in screen_pts.windows(2) {
-                            ui.painter().line_segment([w[0], w[1]], egui::Stroke::new(6.0, stroke_col));
+                            ui.painter().line_segment([w[0], w[1]], egui::Stroke::new(6.0_f32, stroke_col));
                         }
                     }
                 }
@@ -1695,7 +1695,7 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: u32) {
         // ── Pen tool: draw in-progress mask path ──
         if app.active_tool == crate::ui::toolbar::ActiveTool::Pen && !app.pen_points.is_empty() {
             let painter = ui.painter();
-            let pen_stroke = egui::Stroke::new(1.5, crate::ui::theme::colors::ACCENT_CYAN);
+            let pen_stroke = egui::Stroke::new(1.5_f32, crate::ui::theme::colors::ACCENT_CYAN);
             let to_screen = |v: [f32; 2]| {
                 egui::pos2(origin_x + v[0] / comp_w * draw_w, origin_y + v[1] / comp_h * draw_h)
             };
@@ -1709,13 +1709,13 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: u32) {
                 let last = app.pen_points[app.pen_points.len() - 1];
                 painter.line_segment(
                     [to_screen(last), to_screen(first)],
-                    egui::Stroke::new(1.0, crate::ui::theme::colors::ACCENT_CYAN.linear_multiply(0.4)),
+                    egui::Stroke::new(1.0_f32, crate::ui::theme::colors::ACCENT_CYAN.linear_multiply(0.4)),
                 );
             }
             for p in &app.pen_points {
                 let sp = to_screen(*p);
                 painter.circle_filled(sp, 3.5, crate::ui::theme::colors::ACCENT_CYAN);
-                painter.circle_stroke(sp, 3.5, egui::Stroke::new(1.0, egui::Color32::BLACK));
+                painter.circle_stroke(sp, 3.5, egui::Stroke::new(1.0_f32, egui::Color32::BLACK));
             }
             if viewport_response.hovered() {
                 ui.output_mut(|o| o.cursor_icon = egui::CursorIcon::Crosshair);
@@ -1740,7 +1740,7 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: u32) {
                             egui::vec2(sxw * 2.0, syh * 2.0),
                         );
                         let painter = ui.painter();
-                        let box_stroke = egui::Stroke::new(1.0, crate::ui::theme::colors::HANDLE_NORMAL);
+                        let box_stroke = egui::Stroke::new(1.0_f32, crate::ui::theme::colors::HANDLE_NORMAL);
                         // Edges
                         painter.rect_stroke(box_rect, 0.0, box_stroke);
                         // Corner squares (scale handles)
@@ -1749,7 +1749,7 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: u32) {
                             for hy in [box_rect.top(), box_rect.bottom()] {
                                 let hr = egui::Rect::from_center_size(egui::pos2(hx, hy), egui::vec2(7.0, 7.0));
                                 painter.rect_filled(hr, 1.5, handle_fill);
-                                painter.rect_stroke(hr, 1.5, egui::Stroke::new(1.0, egui::Color32::BLACK));
+                                painter.rect_stroke(hr, 1.5, egui::Stroke::new(1.0_f32, egui::Color32::BLACK));
                             }
                         }
                     }
@@ -1985,7 +1985,7 @@ fn draw_inline_text_editor(
         .fixed_pos(area_pos)
         .show(ctx, |ui| {
             let frame_bg = ui.visuals().widgets.noninteractive.bg_fill;
-            let frame_stroke = egui::Stroke::new(1.5, crate::ui::theme::colors::ACCENT_BLUE);
+            let frame_stroke = egui::Stroke::new(1.5_f32, crate::ui::theme::colors::ACCENT_BLUE);
 
             egui::Frame::none()
                 .fill(frame_bg.linear_multiply(0.92))

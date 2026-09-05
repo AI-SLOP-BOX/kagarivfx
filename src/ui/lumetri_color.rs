@@ -82,7 +82,7 @@ fn write_single_f32(
     let Some(idx) = app.selection.selected_layer_idx else {
         return;
     };
-    let cur_frame = app.playback.current_frame;
+    let _cur_frame = app.playback.current_frame;
     app.modify_project(move |p| {
         let comp = p.active_composition_mut();
         let Some(layer) = comp.layers.get_mut(idx) else {
@@ -116,7 +116,11 @@ fn write_wb(app: &mut KagariApp, new_temperature: f32, new_tint: f32) {
         };
         if let Some(e) = layer.effects.iter_mut().find(|e| e.name == WB_EFFECT) {
             e.enabled = true;
-            if let EffectType::WhiteBalance { ref mut temperature, ref mut tint } = e.effect_type {
+            if let EffectType::WhiteBalance {
+                ref mut temperature,
+                ref mut tint,
+            } = e.effect_type
+            {
                 temperature.set_value_at_frame(cur_frame, new_temperature);
                 tint.set_value_at_frame(cur_frame, new_tint);
                 return;
@@ -147,7 +151,12 @@ fn write_hsl(app: &mut KagariApp, new_hue: f32, new_sat: f32, new_light: f32) {
         };
         if let Some(e) = layer.effects.iter_mut().find(|e| e.name == HSL_EFFECT) {
             e.enabled = true;
-            if let EffectType::HslAdjust { ref mut hue_deg, ref mut saturation, ref mut lightness } = e.effect_type {
+            if let EffectType::HslAdjust {
+                ref mut hue_deg,
+                ref mut saturation,
+                ref mut lightness,
+            } = e.effect_type
+            {
                 hue_deg.set_value_at_frame(cur_frame, new_hue);
                 saturation.set_value_at_frame(cur_frame, new_sat);
                 lightness.set_value_at_frame(cur_frame, new_light);
@@ -366,8 +375,11 @@ pub fn draw_lumetri_color(app: &mut KagariApp, ui: &mut egui::Ui) {
         let (h_rect, _) =
             ui.allocate_exact_size(egui::vec2(histo_w, histo_h), egui::Sense::hover());
         ui.painter().rect_filled(h_rect, 2.0, colors::BG_DEEPEST);
-        ui.painter()
-            .rect_stroke(h_rect, 2.0, egui::Stroke::new(1.0, colors::BORDER_MEDIUM));
+        ui.painter().rect_stroke(
+            h_rect,
+            2.0,
+            egui::Stroke::new(1.0_f32, colors::BORDER_MEDIUM),
+        );
 
         let bins = 64;
         let bin_w = histo_w / bins as f32;
@@ -519,7 +531,11 @@ pub fn draw_lumetri_color(app: &mut KagariApp, ui: &mut egui::Ui) {
                     .on_hover_text("Remove the Color Balance effect from the layer")
                     .clicked()
                 {
-                    remove_effect(app, app.selection.selected_layer_idx.unwrap_or(0), CB_EFFECT);
+                    remove_effect(
+                        app,
+                        app.selection.selected_layer_idx.unwrap_or(0),
+                        CB_EFFECT,
+                    );
                 }
             });
         });
@@ -714,7 +730,11 @@ pub fn draw_lumetri_color(app: &mut KagariApp, ui: &mut egui::Ui) {
                 write_vignette(app, vig.0, vig.1, vig.2, vig.3);
             }
             if ui.small_button("Remove Vignette").clicked() {
-                remove_effect(app, app.selection.selected_layer_idx.unwrap_or(0), VIG_EFFECT);
+                remove_effect(
+                    app,
+                    app.selection.selected_layer_idx.unwrap_or(0),
+                    VIG_EFFECT,
+                );
             }
         });
 
@@ -746,7 +766,11 @@ pub fn draw_lumetri_color(app: &mut KagariApp, ui: &mut egui::Ui) {
                 write_wb(app, wb.0, wb.1);
             }
             if ui.small_button("Remove WB").clicked() {
-                remove_effect(app, app.selection.selected_layer_idx.unwrap_or(0), WB_EFFECT);
+                remove_effect(
+                    app,
+                    app.selection.selected_layer_idx.unwrap_or(0),
+                    WB_EFFECT,
+                );
             }
 
             ui.separator();
@@ -767,7 +791,11 @@ pub fn draw_lumetri_color(app: &mut KagariApp, ui: &mut egui::Ui) {
                 });
             }
             if ui.small_button("Remove Vibrance").clicked() {
-                remove_effect(app, app.selection.selected_layer_idx.unwrap_or(0), VIB_EFFECT);
+                remove_effect(
+                    app,
+                    app.selection.selected_layer_idx.unwrap_or(0),
+                    VIB_EFFECT,
+                );
             }
 
             ui.separator();
@@ -802,7 +830,11 @@ pub fn draw_lumetri_color(app: &mut KagariApp, ui: &mut egui::Ui) {
                     write_hsl(app, 0.0, 0.0, 0.0);
                 }
                 if ui.small_button("Remove HSL").clicked() {
-                    remove_effect(app, app.selection.selected_layer_idx.unwrap_or(0), HSL_EFFECT);
+                    remove_effect(
+                        app,
+                        app.selection.selected_layer_idx.unwrap_or(0),
+                        HSL_EFFECT,
+                    );
                 }
             });
 

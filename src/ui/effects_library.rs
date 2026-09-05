@@ -117,7 +117,7 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: &mut u32) {
                             );
                             ui.painter().rect_stroke(
                                 drop_rect.rect, 4.0,
-                                egui::Stroke::new(1.5, colors::TEXT_ACCENT)
+                                egui::Stroke::new(1.5_f32, colors::TEXT_ACCENT)
                             );
                             // Apply on drop
                             let is_hovered = ui.rect_contains_pointer(drop_rect.rect);

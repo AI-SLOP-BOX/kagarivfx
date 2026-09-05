@@ -2,7 +2,6 @@ use crate::core::mask::{point_in_polygon, MaskMode};
 use crate::core::sdf;
 use crate::core::timeline::{
     BlendMode, Composition, Layer, LayerType, Light3D, LightType, ShapeType, TrackMatteMode,
-    TrimPaths,
 };
 use rayon::prelude::*;
 
@@ -456,7 +455,7 @@ fn flatten_collapsed_limited(comp: &Composition, frame: u32, depth: u32) -> Comp
         );
         let prad = prot.to_radians();
         let (pc, ps) = (prad.cos(), prad.sin());
-        let pz = if layer.is_3d {
+        let _pz = if layer.is_3d {
             layer.transform_3d.position.evaluate(frame)[2]
         } else {
             0.0
@@ -1234,9 +1233,7 @@ pub fn rgba_buffer_size(width: u32, height: u32) -> Option<usize> {
 // ─── Shape SDF Rasterization (delegated to sdf.rs) ──────────────────────
 
 use sdf::{
-    rasterize_shape_sdf, rasterize_shape_sdf_with_rotation, resolve_fill_color, rgb_to_hsb,
-    hsb_to_rgb, sample_gradient, sdf_boolean_op, sdf_ellipse, sdf_polygon, sdf_polygon_points,
-    sdf_rectangle, sdf_star, tessellate_bezier_path,
+    hsb_to_rgb, rasterize_shape_sdf, rasterize_shape_sdf_with_rotation, rgb_to_hsb, sdf_boolean_op,
 };
 
 /// Professional CPU-based rasterizer to composite active composition layers

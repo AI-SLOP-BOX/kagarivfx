@@ -72,8 +72,10 @@ pub fn draw_essential_graphics(app: &mut KagariApp, ui: &mut egui::Ui) {
             .on_hover_text("Use current playhead frame as MOGRT thumbnail preview")
             .clicked()
         {
-            app.toasts
-                .info(format!("Poster frame set to frame {}", app.playback.current_frame));
+            app.toasts.info(format!(
+                "Poster frame set to frame {}",
+                app.playback.current_frame
+            ));
         }
 
         if ui

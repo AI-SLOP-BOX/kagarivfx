@@ -138,8 +138,8 @@ mod tests {
 
     #[test]
     fn test_accumulate_motion_blur_buffers() {
-        let mut f0 = vec![100u8; 16];
-        let mut f1 = vec![200u8; 16];
+        let f0 = vec![100u8; 16];
+        let f1 = vec![200u8; 16];
         let mut out = vec![0u8; 16];
 
         accumulate_motion_blur_buffers(&[(&f0, 0.5), (&f1, 0.5)], 2, 2, &mut out);

@@ -103,7 +103,8 @@ pub fn draw_speed_graph_options(app: &mut KagariApp, ui: &mut egui::Ui, current_
                 return;
             };
             let prop = app
-                .selection.selected_property
+                .selection
+                .selected_property
                 .clone()
                 .unwrap_or_else(|| "Position X".into());
             app.modify_project(|p| {
@@ -191,7 +192,8 @@ fn apply_preset_ease(
         return;
     };
     let prop = app
-        .selection.selected_property
+        .selection
+        .selected_property
         .clone()
         .unwrap_or_else(|| "Position X".into());
     let x1 = out_inf / 100.0 * 0.75;

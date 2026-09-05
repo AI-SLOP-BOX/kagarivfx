@@ -561,7 +561,10 @@ pub fn draw_layer_transforms(
                 ui.horizontal(|ui| {
                     ui.label("Light Transmission:");
                     if ui
-                        .add(egui::Slider::new(&mut layer.material.light_transmission, 0.0..=100.0).suffix("%"))
+                        .add(
+                            egui::Slider::new(&mut layer.material.light_transmission, 0.0..=100.0)
+                                .suffix("%"),
+                        )
                         .changed()
                     {
                         *project_changed = true;
@@ -714,7 +717,7 @@ pub fn draw_layer_transforms(
                         ui.painter().rect_stroke(
                             btn.rect,
                             2.0,
-                            egui::Stroke::new(2.0, egui::Color32::WHITE),
+                            egui::Stroke::new(2.0_f32, egui::Color32::WHITE),
                         );
                     }
                 }

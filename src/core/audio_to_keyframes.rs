@@ -7,7 +7,7 @@
 use crate::core::audio_engine::AudioBuffer;
 use crate::core::keyframe::{InterpolationType, Keyframe};
 use crate::core::property::Animatable;
-use crate::core::timeline::{Composition, Effect, EffectType, Layer, LayerType};
+use crate::core::timeline::{Composition, Effect, EffectType, Layer};
 use std::path::Path;
 
 /// Convert audio file samples into an "Audio Amplitude" layer in the composition.
@@ -282,6 +282,7 @@ pub fn generate_beat_markers_from_audio(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::core::timeline::LayerType;
 
     #[test]
     fn test_audio_to_keyframes_generates_three_sliders() {

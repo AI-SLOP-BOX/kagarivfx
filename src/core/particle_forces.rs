@@ -113,9 +113,12 @@ pub fn curl_noise_turbulence(pos: [f32; 2], frequency: f32, amplitude: f32) -> [
     // Numerical gradient of potential field: Psi = sin(px)*cos(py) + cos(px*1.3)*sin(py*1.3)*0.5
     let eps = 0.01f32;
     let psi_up = (px).sin() * (py + eps).cos() + (px * 1.3).cos() * ((py + eps) * 1.3).sin() * 0.5;
-    let psi_down = (px).sin() * (py - eps).cos() + (px * 1.3).cos() * ((py - eps) * 1.3).sin() * 0.5;
-    let psi_right = (px + eps).sin() * (py).cos() + ((px + eps) * 1.3).cos() * (py * 1.3).sin() * 0.5;
-    let psi_left = (px - eps).sin() * (py).cos() + ((px - eps) * 1.3).cos() * (py * 1.3).sin() * 0.5;
+    let psi_down =
+        (px).sin() * (py - eps).cos() + (px * 1.3).cos() * ((py - eps) * 1.3).sin() * 0.5;
+    let psi_right =
+        (px + eps).sin() * (py).cos() + ((px + eps) * 1.3).cos() * (py * 1.3).sin() * 0.5;
+    let psi_left =
+        (px - eps).sin() * (py).cos() + ((px - eps) * 1.3).cos() * (py * 1.3).sin() * 0.5;
 
     let d_psi_dy = (psi_up - psi_down) / (2.0 * eps);
     let d_psi_dx = (psi_right - psi_left) / (2.0 * eps);

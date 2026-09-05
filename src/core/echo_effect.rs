@@ -145,10 +145,16 @@ mod tests {
     fn test_echo_rejects_overflow_and_nonfinite_weight() {
         let original = vec![50u8; 4];
         let mut acc = original.clone();
-        blend_echo_frame(&mut acc, &original, u32::MAX, u32::MAX, f32::NAN, EchoOperator::Add);
+        blend_echo_frame(
+            &mut acc,
+            &original,
+            u32::MAX,
+            u32::MAX,
+            f32::NAN,
+            EchoOperator::Add,
+        );
         assert_eq!(acc, original);
         blend_echo_frame(&mut acc, &original, 1, 1, f32::INFINITY, EchoOperator::Add);
-        assert!(acc.iter().all(|value| *value <= 255));
     }
 
     #[test]

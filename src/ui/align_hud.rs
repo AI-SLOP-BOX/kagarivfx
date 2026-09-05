@@ -147,7 +147,10 @@ pub fn draw_alignment_hud(app: &mut KagariApp, ui: &mut egui::Ui) {
             if n > 1 {
                 let step = comp_w / (n as f32 + 1.0);
                 for (i, layer) in comp_mut.layers.iter_mut().enumerate() {
-                    let pos = layer.transform.position.evaluate(app.playback.current_frame);
+                    let pos = layer
+                        .transform
+                        .position
+                        .evaluate(app.playback.current_frame);
                     layer.transform.position =
                         Animatable::new_constant([step * (i as f32 + 1.0), pos[1]]);
                 }
@@ -168,7 +171,10 @@ pub fn draw_alignment_hud(app: &mut KagariApp, ui: &mut egui::Ui) {
             if n > 1 {
                 let step = comp_h / (n as f32 + 1.0);
                 for (i, layer) in comp_mut.layers.iter_mut().enumerate() {
-                    let pos = layer.transform.position.evaluate(app.playback.current_frame);
+                    let pos = layer
+                        .transform
+                        .position
+                        .evaluate(app.playback.current_frame);
                     layer.transform.position =
                         Animatable::new_constant([pos[0], step * (i as f32 + 1.0)]);
                 }

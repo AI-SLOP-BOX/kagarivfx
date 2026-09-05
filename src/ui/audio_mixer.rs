@@ -255,7 +255,7 @@ pub fn draw_audio_mixer(app: &mut KagariApp, ui: &mut egui::Ui) {
                                     let y = rect.top() + rect.height() * (seg as f32 / 12.0);
                                     ui.painter().line_segment(
                                         [egui::pos2(rect.left(), y), egui::pos2(rect.right(), y)],
-                                        egui::Stroke::new(0.5, colors::BORDER_SUBTLE),
+                                        egui::Stroke::new(0.5_f32, colors::BORDER_SUBTLE),
                                     );
                                 }
 

@@ -2156,12 +2156,12 @@ impl WgpuRenderer {
                     mut layer_type,
                     shape_type,
                     mut color,
-                    mut fill_type_u32,
-                    mut grad_start,
-                    mut grad_end,
-                    mut grad_colors,
-                    mut grad_center,
-                    mut grad_radius,
+                    fill_type_u32,
+                    grad_start,
+                    grad_end,
+                    grad_colors,
+                    grad_center,
+                    grad_radius,
                 ) = match &layer.layer_type {
                     LayerType::Solid { color } => (
                         0u32,
@@ -2489,7 +2489,7 @@ impl WgpuRenderer {
                     grad_color2_a: grad_colors[1][3],
                     grad_center_x: grad_center[0],
                     grad_center_y: grad_center[1],
-                    grad_radius: grad_radius,
+                    grad_radius,
                     _grad_pad: 0.0,
 
                     ls_stroke_width: layer.style.stroke.size,
@@ -2683,9 +2683,11 @@ impl WgpuRenderer {
             // Step 1b: Prepare track matte textures. For each layer with a track
             // matte, render the matte source layer (the one below) to a CPU buffer,
             // extract alpha or luminance, and upload as a GPU texture.
-            let mut matte_bind_groups: Vec<Option<wgpu::BindGroup>> = Vec::with_capacity(active_layers.len());
-            let mut matte_textures_owned: Vec<Option<(wgpu::Texture, wgpu::TextureView)>> = Vec::new();
-            for (i, (layer, &comp_idx)) in active_layers.iter().zip(comp_indices.iter()).enumerate() {
+            let mut matte_bind_groups: Vec<Option<wgpu::BindGroup>> =
+                Vec::with_capacity(active_layers.len());
+            let mut matte_textures_owned: Vec<Option<(wgpu::Texture, wgpu::TextureView)>> =
+                Vec::new();
+            for (layer, &comp_idx) in active_layers.iter().zip(comp_indices.iter()) {
                 if matches!(layer.track_matte, TrackMatteMode::None) {
                     matte_bind_groups.push(None);
                     matte_textures_owned.push(None);
@@ -2705,7 +2707,11 @@ impl WgpuRenderer {
                     continue;
                 }
                 let m_pixels = crate::core::software_renderer::render_single_layer_pixels(
-                    comp, matte_source_idx, frame, width, height,
+                    comp,
+                    matte_source_idx,
+                    frame,
+                    width,
+                    height,
                 );
                 let matte_rgba = match layer.track_matte {
                     TrackMatteMode::AlphaMatte | TrackMatteMode::AlphaMatteInverted => {
@@ -2714,7 +2720,10 @@ impl WgpuRenderer {
                     TrackMatteMode::LumaMatte | TrackMatteMode::LumaMatteInverted => {
                         let mut lum = Vec::with_capacity(m_pixels.len());
                         for chunk in m_pixels.chunks_exact(4) {
-                            let l = (0.2126 * chunk[0] as f32 + 0.7152 * chunk[1] as f32 + 0.0722 * chunk[2] as f32) as u8;
+                            let l = (0.2126 * chunk[0] as f32
+                                + 0.7152 * chunk[1] as f32
+                                + 0.0722 * chunk[2] as f32)
+                                as u8;
                             lum.extend_from_slice(&[l, l, l, chunk[3]]);
                         }
                         lum
@@ -2723,7 +2732,11 @@ impl WgpuRenderer {
                 };
                 let tex = self.device.create_texture(&wgpu::TextureDescriptor {
                     label: Some("Track Matte Texture"),
-                    size: wgpu::Extent3d { width, height, depth_or_array_layers: 1 },
+                    size: wgpu::Extent3d {
+                        width,
+                        height,
+                        depth_or_array_layers: 1,
+                    },
                     mip_level_count: 1,
                     sample_count: 1,
                     dimension: wgpu::TextureDimension::D2,
@@ -2744,14 +2757,24 @@ impl WgpuRenderer {
                         bytes_per_row: Some(width * 8),
                         rows_per_image: Some(height),
                     },
-                    wgpu::Extent3d { width, height, depth_or_array_layers: 1 },
+                    wgpu::Extent3d {
+                        width,
+                        height,
+                        depth_or_array_layers: 1,
+                    },
                 );
                 let view = tex.create_view(&wgpu::TextureViewDescriptor::default());
                 let bg = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
                     layout: &self.matte_bind_group_layout,
                     entries: &[
-                        wgpu::BindGroupEntry { binding: 0, resource: wgpu::BindingResource::TextureView(&view) },
-                        wgpu::BindGroupEntry { binding: 1, resource: wgpu::BindingResource::Sampler(&self.sampler) },
+                        wgpu::BindGroupEntry {
+                            binding: 0,
+                            resource: wgpu::BindingResource::TextureView(&view),
+                        },
+                        wgpu::BindGroupEntry {
+                            binding: 1,
+                            resource: wgpu::BindingResource::Sampler(&self.sampler),
+                        },
                     ],
                     label: Some("Track Matte Bind Group"),
                 });

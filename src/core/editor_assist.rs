@@ -331,7 +331,7 @@ pub fn detect_flash_frames(
             frame
                 .chunks_exact(4)
                 .map(|pixel| {
-                    (pixel[0] as f32 * 0.2126 + pixel[1] as f32 * 0.7152 + pixel[2] as f32 * 0.0722)
+                    pixel[0] as f32 * 0.2126 + pixel[1] as f32 * 0.7152 + pixel[2] as f32 * 0.0722
                 })
                 .sum::<f32>()
                 / (width as f32 * height as f32)

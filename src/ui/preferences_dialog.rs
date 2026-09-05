@@ -60,7 +60,9 @@ pub fn apply_loaded(app: &mut KagariApp) {
 
 fn apply(app: &mut KagariApp, p: &Prefs) {
     app.frame_cache.max_memory_bytes = p.cache_mb * 1024 * 1024;
-    crate::core::frame_cache::disk_cache::set_max_disk_bytes(p.disk_cache_gb as u64 * 1024 * 1024 * 1024);
+    crate::core::frame_cache::disk_cache::set_max_disk_bytes(
+        p.disk_cache_gb as u64 * 1024 * 1024 * 1024,
+    );
     app.history.set_max_history_entries(p.undo_steps);
     app.autosave.set_interval_secs(p.autosave_secs);
     app.audio_preview_enabled = p.audio_preview;

@@ -5,8 +5,6 @@
 
 #![allow(dead_code)]
 
-use crate::core::mask::point_in_polygon;
-
 /// RotoBrush stroke type.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, serde::Serialize, serde::Deserialize)]
 pub enum RotoStrokeType {

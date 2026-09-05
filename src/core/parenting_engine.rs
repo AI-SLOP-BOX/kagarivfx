@@ -66,10 +66,12 @@ mod tests {
         let mut comp = Composition::new("c1".into(), "Comp".into(), 1920, 1080, 30, 100);
 
         let mut p_layer = Layer::new("p".into(), "Parent".into(), LayerType::Null, 100);
-        p_layer.transform.position = crate::core::property::Animatable::new_constant([500.0, 500.0]);
+        p_layer.transform.position =
+            crate::core::property::Animatable::new_constant([500.0, 500.0]);
 
         let mut c_layer = Layer::new("c".into(), "Child".into(), LayerType::Null, 100);
-        c_layer.transform.position = crate::core::property::Animatable::new_constant([600.0, 650.0]);
+        c_layer.transform.position =
+            crate::core::property::Animatable::new_constant([600.0, 650.0]);
 
         comp.add_layer(p_layer); // Index 0
         comp.add_layer(c_layer); // Index 1
@@ -79,11 +81,17 @@ mod tests {
 
         assert_eq!(comp.layers[1].parent_id, Some("p".into()));
         // Local position should become [100.0, 150.0] relative to parent at [500.0, 500.0]
-        assert_eq!(comp.layers[1].transform.position.evaluate(0), [100.0, 150.0]);
+        assert_eq!(
+            comp.layers[1].transform.position.evaluate(0),
+            [100.0, 150.0]
+        );
 
         // Unparent: release child back to world
         set_parent_maintaining_world_transform(&mut comp, 1, None, 0);
         assert_eq!(comp.layers[1].parent_id, None);
-        assert_eq!(comp.layers[1].transform.position.evaluate(0), [600.0, 650.0]);
+        assert_eq!(
+            comp.layers[1].transform.position.evaluate(0),
+            [600.0, 650.0]
+        );
     }
 }

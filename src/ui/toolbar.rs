@@ -26,7 +26,7 @@ pub fn draw(app: &mut crate::KagariApp, ctx: &egui::Context) {
     let frame = egui::Frame::none()
         .fill(colors::BG_DARK)
         .inner_margin(egui::Margin::symmetric(8.0, 4.0))
-        .stroke(egui::Stroke::new(1.0, colors::BORDER_SUBTLE));
+        .stroke(egui::Stroke::new(1.0_f32, colors::BORDER_SUBTLE));
 
     egui::TopBottomPanel::top("ae_toolbar")
         .frame(frame)
@@ -79,7 +79,7 @@ pub fn draw(app: &mut crate::KagariApp, ctx: &egui::Context) {
                     ui.painter().rect_filled(rect, 4.0, fill);
                     if is_selected {
                         ui.painter()
-                            .rect_stroke(rect, 4.0, egui::Stroke::new(1.0, accent));
+                            .rect_stroke(rect, 4.0, egui::Stroke::new(1.0_f32, accent));
                     }
                     // Draw icon centered inside the button rect
                     let icon_rect = rect.shrink(4.0);
@@ -156,7 +156,9 @@ pub fn draw(app: &mut crate::KagariApp, ctx: &egui::Context) {
                     );
                     if resp.changed() {
                         // Automatically switch right tab to Effects panel (tab 0) if typing search query
-                        if !app.ui_tabs.effects_search_query.is_empty() && app.ui_tabs.right_tab_idx != 0 {
+                        if !app.ui_tabs.effects_search_query.is_empty()
+                            && app.ui_tabs.right_tab_idx != 0
+                        {
                             app.ui_tabs.right_tab_idx = 0;
                         }
                     }

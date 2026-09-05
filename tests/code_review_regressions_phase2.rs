@@ -274,19 +274,24 @@ fn bezier_solver_extreme_values_no_nan() {
     use kagari_vfx::core::keyframe::solve_bezier_eased_time;
 
     let extreme_cases = [
-        (0.0, 0.0, 0.0, 1.0, 1.0),       // linear
-        (0.5, 0.25, 0.1, 0.25, 1.0),      // standard ease
-        (0.5, 0.5, 0.2, 0.6, 0.8),        // elastic
-        (0.5, 0.5, 0.3, 0.7, 0.1),        // bounce
-        (0.0, 0.0, 0.0, 0.0, 0.0),        // degenerate
-        (1.0, 1.0, 1.0, 1.0, 1.0),        // degenerate
+        (0.0, 0.0, 0.0, 1.0, 1.0),   // linear
+        (0.5, 0.25, 0.1, 0.25, 1.0), // standard ease
+        (0.5, 0.5, 0.2, 0.6, 0.8),   // elastic
+        (0.5, 0.5, 0.3, 0.7, 0.1),   // bounce
+        (0.0, 0.0, 0.0, 0.0, 0.0),   // degenerate
+        (1.0, 1.0, 1.0, 1.0, 1.0),   // degenerate
     ];
     for (x, x1, y1, x2, y2) in extreme_cases {
         let result = solve_bezier_eased_time(x, x1, y1, x2, y2);
         assert!(
             result.is_finite(),
             "solve_bezier({}, {}, {}, {}, {}) = {}",
-            x, x1, y1, x2, y2, result
+            x,
+            x1,
+            y1,
+            x2,
+            y2,
+            result
         );
         assert!(
             (0.0..=1.0).contains(&result),
@@ -476,7 +481,12 @@ fn shape_boolean_empty_clip_subtract() {
 fn shape_boolean_degenerate_polygons_safe() {
     let line = [[0.0, 0.0], [10.0, 0.0]];
     let point = [[5.0, 5.0]];
-    for op in [BooleanOp::Union, BooleanOp::Intersect, BooleanOp::Subtract, BooleanOp::Exclude] {
+    for op in [
+        BooleanOp::Union,
+        BooleanOp::Intersect,
+        BooleanOp::Subtract,
+        BooleanOp::Exclude,
+    ] {
         let _ = apply_polygon_boolean(&line, &point, op);
         let _ = apply_polygon_boolean(&point, &line, op);
     }
@@ -566,7 +576,7 @@ fn expression_noise_wide_range() {
     for x in [-100.0, -1.0, 0.0, 0.5, 1.0, 100.0, 1000.0] {
         let result: f64 = engine.eval(&format!("noise({:.1})", x)).unwrap();
         assert!(
-            result >= 0.0 && result <= 1.0,
+            (0.0..=1.0).contains(&result),
             "noise({}) = {} out of range",
             x,
             result
@@ -641,11 +651,8 @@ fn animatable_easy_ease_constant_noop() {
 /// Regression: Animatable easy_ease on single keyframe must be a no-op.
 #[test]
 fn animatable_easy_ease_single_kf_noop() {
-    let mut anim = Animatable::new_animated(vec![Keyframe::new(
-        0,
-        42.0f32,
-        InterpolationType::Linear,
-    )]);
+    let mut anim =
+        Animatable::new_animated(vec![Keyframe::new(0, 42.0f32, InterpolationType::Linear)]);
     anim.easy_ease();
     assert!((anim.evaluate(0) - 42.0).abs() < f32::EPSILON);
 }

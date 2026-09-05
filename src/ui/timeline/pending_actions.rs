@@ -78,11 +78,21 @@ fn apply_swap(app: &mut KagariApp, a: usize, b: usize, project_changed: &mut boo
                 idx
             }
         };
-        app.selection.selected_layers = app.selection.selected_layers.iter().map(|i| remap(*i)).collect();
+        app.selection.selected_layers = app
+            .selection
+            .selected_layers
+            .iter()
+            .map(|i| remap(*i))
+            .collect();
         if let Some(sel) = app.selection.selected_layer_idx {
             app.selection.selected_layer_idx = Some(remap(sel));
         }
-        app.selection.expanded_layers = app.selection.expanded_layers.iter().map(|i| remap(*i)).collect();
+        app.selection.expanded_layers = app
+            .selection
+            .expanded_layers
+            .iter()
+            .map(|i| remap(*i))
+            .collect();
         *project_changed = true;
     }
 }
@@ -231,12 +241,7 @@ fn duplicate_layer_at(
     }
 }
 
-fn split_layer_at(
-    app: &mut KagariApp,
-    idx: usize,
-    current_frame: u32,
-    project_changed: &mut bool,
-) {
+fn split_layer_at(app: &mut KagariApp, idx: usize, current_frame: u32, project_changed: &mut bool) {
     let temp_project = app.history.current_mut();
     let layers_len = temp_project.active_composition().layers.len();
     if idx >= layers_len {
@@ -335,8 +340,10 @@ fn duplicate_shortcut_cmd_d(
     current_frame: u32,
     project_changed: &mut bool,
 ) {
-    let is_split = ui.input(|i| i.modifiers.command && i.modifiers.shift && i.key_pressed(egui::Key::D));
-    let is_dup = ui.input(|i| i.modifiers.command && !i.modifiers.shift && i.key_pressed(egui::Key::D));
+    let is_split =
+        ui.input(|i| i.modifiers.command && i.modifiers.shift && i.key_pressed(egui::Key::D));
+    let is_dup =
+        ui.input(|i| i.modifiers.command && !i.modifiers.shift && i.key_pressed(egui::Key::D));
 
     if is_split {
         if let Some(sel_idx) = app.selection.selected_layer_idx {

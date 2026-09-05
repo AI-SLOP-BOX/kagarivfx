@@ -143,7 +143,7 @@ pub fn draw_keyframe_tick(
         painter.circle_stroke(
             egui::pos2(x, y),
             size + 2.0,
-            egui::Stroke::new(1.5, colors::ACCENT_ORANGE),
+            egui::Stroke::new(1.5_f32, colors::ACCENT_ORANGE),
         );
     }
 
@@ -172,7 +172,11 @@ pub fn draw_keyframe_tick(
     if is_selected {
         let sel_rect =
             egui::Rect::from_center_size(egui::pos2(x, y), egui::vec2(size * 2.0, size * 2.0));
-        painter.rect_stroke(sel_rect, 1.5, egui::Stroke::new(1.5, colors::ACCENT_ORANGE));
+        painter.rect_stroke(
+            sel_rect,
+            1.5,
+            egui::Stroke::new(1.5_f32, colors::ACCENT_ORANGE),
+        );
     }
 
     let response = ui.allocate_rect(rect, egui::Sense::click_and_drag());

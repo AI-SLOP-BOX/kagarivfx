@@ -53,7 +53,7 @@ pub fn draw_flowchart_view(app: &mut KagariApp, ui: &mut egui::Ui, comp: &Compos
 
         let painter = ui.painter();
         painter.rect_filled(rect, 4.0, colors::BG_DEEPEST);
-        painter.rect_stroke(rect, 4.0, egui::Stroke::new(1.0, colors::BORDER_MEDIUM));
+        painter.rect_stroke(rect, 4.0, egui::Stroke::new(1.0_f32, colors::BORDER_MEDIUM));
 
         // Grid Background
         let grid_color = colors::GRID_LINE;
@@ -62,7 +62,7 @@ pub fn draw_flowchart_view(app: &mut KagariApp, ui: &mut egui::Ui, comp: &Compos
         while x < rect.right() {
             painter.line_segment(
                 [egui::pos2(x, rect.top()), egui::pos2(x, rect.bottom())],
-                egui::Stroke::new(1.0, grid_color),
+                egui::Stroke::new(1.0_f32, grid_color),
             );
             x += step;
         }
@@ -70,7 +70,7 @@ pub fn draw_flowchart_view(app: &mut KagariApp, ui: &mut egui::Ui, comp: &Compos
         while y < rect.bottom() {
             painter.line_segment(
                 [egui::pos2(rect.left(), y), egui::pos2(rect.right(), y)],
-                egui::Stroke::new(1.0, grid_color),
+                egui::Stroke::new(1.0_f32, grid_color),
             );
             y += step;
         }
@@ -79,7 +79,11 @@ pub fn draw_flowchart_view(app: &mut KagariApp, ui: &mut egui::Ui, comp: &Compos
         let root_pos = egui::pos2(rect.left() + 90.0, rect.center().y);
         let root_rect = egui::Rect::from_center_size(root_pos, egui::vec2(130.0, 44.0));
         painter.rect_filled(root_rect, 6.0, colors::BG_ACTIVE);
-        painter.rect_stroke(root_rect, 6.0, egui::Stroke::new(1.5, egui::Color32::WHITE));
+        painter.rect_stroke(
+            root_rect,
+            6.0,
+            egui::Stroke::new(1.5_f32, egui::Color32::WHITE),
+        );
         painter.text(
             root_pos,
             egui::Align2::CENTER_CENTER,
@@ -110,7 +114,8 @@ pub fn draw_flowchart_view(app: &mut KagariApp, ui: &mut egui::Ui, comp: &Compos
             let npos = egui::pos2(start_x, ny);
             node_positions.push(npos);
 
-            let is_selected = app.selection.selected_layers.contains(&i) || app.selection.selected_layer_idx == Some(i);
+            let is_selected = app.selection.selected_layers.contains(&i)
+                || app.selection.selected_layer_idx == Some(i);
             let node_rect = egui::Rect::from_center_size(npos, egui::vec2(140.0, 36.0));
 
             let base_color = match layer.layer_type {
@@ -131,7 +136,7 @@ pub fn draw_flowchart_view(app: &mut KagariApp, ui: &mut egui::Ui, comp: &Compos
             painter.rect_stroke(
                 node_rect,
                 4.0,
-                egui::Stroke::new(if is_selected { 2.5 } else { 1.0 }, stroke_color),
+                egui::Stroke::new(if is_selected { 2.5_f32 } else { 1.0_f32 }, stroke_color),
             );
 
             let tag = match layer.layer_type {
@@ -183,7 +188,7 @@ pub fn draw_flowchart_view(app: &mut KagariApp, ui: &mut egui::Ui, comp: &Compos
 
             painter.add(egui::Shape::line(
                 curve_pts,
-                egui::Stroke::new(1.2, colors::MOTION_PATH.linear_multiply(140.0 / 255.0)),
+                egui::Stroke::new(1.2_f32, colors::MOTION_PATH.linear_multiply(140.0 / 255.0)),
             ));
 
             // Draw Parent Connection Lines
@@ -193,7 +198,7 @@ pub fn draw_flowchart_view(app: &mut KagariApp, ui: &mut egui::Ui, comp: &Compos
                         let parent_pos = node_positions[p_idx];
                         painter.line_segment(
                             [npos, parent_pos],
-                            egui::Stroke::new(1.8, colors::TIMELINE_KEYFRAME),
+                            egui::Stroke::new(1.8_f32, colors::TIMELINE_KEYFRAME),
                         );
                     }
                 }
@@ -209,7 +214,7 @@ pub fn draw_flowchart_view(app: &mut KagariApp, ui: &mut egui::Ui, comp: &Compos
             if let (Some(&matte_pos), Some(&consumer_pos)) =
                 (node_positions.get(i - 1), node_positions.get(i))
             {
-                let stroke = egui::Stroke::new(1.6, colors::ACCENT_CYAN);
+                let stroke = egui::Stroke::new(1.6_f32, colors::ACCENT_CYAN);
                 for seg in egui::Shape::dashed_line(&[matte_pos, consumer_pos], stroke, 6.0, 5.0) {
                     painter.add(seg);
                 }

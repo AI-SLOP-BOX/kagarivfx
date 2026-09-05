@@ -544,8 +544,10 @@ pub fn apply_wiggle_paths(
         let next_p = points[(i + 1) % n];
 
         // Primary vertex displacement
-        let hash_x = ((seed as f32 * 13.37 + i as f32 * 7.19 + time * 2.0).sin() * 43758.5453).fract();
-        let hash_y = ((seed as f32 * 17.13 + i as f32 * 11.31 + time * 2.0).cos() * 23421.6312).fract();
+        let hash_x =
+            ((seed as f32 * 13.37 + i as f32 * 7.19 + time * 2.0).sin() * 43758.5453).fract();
+        let hash_y =
+            ((seed as f32 * 17.13 + i as f32 * 11.31 + time * 2.0).cos() * 23421.6312).fract();
         let dx = (hash_x - 0.5) * 2.0 * size;
         let dy = (hash_y - 0.5) * 2.0 * size;
 
@@ -559,8 +561,14 @@ pub fn apply_wiggle_paths(
                 let mid_x = p[0] + (next_p[0] - p[0]) * t;
                 let mid_y = p[1] + (next_p[1] - p[1]) * t;
 
-                let sub_hash_x = ((seed as f32 * 19.81 + (i * 10 + s) as f32 * 5.73 + time * 2.5).sin() * 37821.12).fract();
-                let sub_hash_y = ((seed as f32 * 23.47 + (i * 10 + s) as f32 * 9.27 + time * 2.5).cos() * 19482.84).fract();
+                let sub_hash_x = ((seed as f32 * 19.81 + (i * 10 + s) as f32 * 5.73 + time * 2.5)
+                    .sin()
+                    * 37821.12)
+                    .fract();
+                let sub_hash_y = ((seed as f32 * 23.47 + (i * 10 + s) as f32 * 9.27 + time * 2.5)
+                    .cos()
+                    * 19482.84)
+                    .fract();
 
                 let sub_dx = (sub_hash_x - 0.5) * 2.0 * size * if is_smooth { 0.5 } else { 1.0 };
                 let sub_dy = (sub_hash_y - 0.5) * 2.0 * size * if is_smooth { 0.5 } else { 1.0 };
@@ -739,16 +747,7 @@ mod tests {
     #[test]
     fn test_evaluate_shape_repeater_generates_correct_copy_count() {
         let sq = vec![[0.0, 0.0], [10.0, 0.0], [10.0, 10.0], [0.0, 10.0]];
-        let copies = evaluate_shape_repeater(
-            &[sq],
-            3,
-            0.0,
-            [20.0, 0.0],
-            [1.0, 1.0],
-            0.0,
-            1.0,
-            0.5,
-        );
+        let copies = evaluate_shape_repeater(&[sq], 3, 0.0, [20.0, 0.0], [1.0, 1.0], 0.0, 1.0, 0.5);
         assert_eq!(copies.len(), 3);
         assert_eq!(copies[0].1, 1.0);
         assert_eq!(copies[2].1, 0.5);
