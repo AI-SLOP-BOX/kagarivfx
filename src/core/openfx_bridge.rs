@@ -656,7 +656,12 @@ mod tests {
     #[test]
     fn test_discover_finds_bundle_with_platform_binary() {
         let tmp = std::env::temp_dir().join(format!("ofx_scan_{}", std::process::id()));
-        let bin_dir = tmp.join("TestFX.bundle/Contents/MacOS");
+        let platform_dir = if cfg!(target_os = "macos") {
+            "MacOS"
+        } else {
+            "Linux-x86-64"
+        };
+        let bin_dir = tmp.join(format!("TestFX.bundle/Contents/{}", platform_dir));
         std::fs::create_dir_all(&bin_dir).unwrap();
         std::fs::write(bin_dir.join("TestFX.ofx"), b"fake").unwrap();
 
