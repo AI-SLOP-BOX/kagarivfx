@@ -76,7 +76,6 @@ pub fn draw(app: &mut crate::KagariApp, ctx: &egui::Context) {
                     });
                     let rem = before.saturating_sub(temp_proj.assets.len());
                     app.history.commit(temp_proj);
-                    crate::core::frame_cache::bump_version();
                     app.toasts.info(format!("Removed {} unused footage items", rem));
                     ui.close_menu();
                 }
@@ -88,7 +87,6 @@ pub fn draw(app: &mut crate::KagariApp, ctx: &egui::Context) {
                         temp_proj.compositions = vec![keep];
                         temp_proj.active_composition_idx = 0;
                         app.history.commit(temp_proj);
-                        crate::core::frame_cache::bump_version();
                         app.toasts.info("Project reduced to active composition");
                     }
                     ui.close_menu();
@@ -139,7 +137,6 @@ pub fn draw(app: &mut crate::KagariApp, ctx: &egui::Context) {
                                     let n = track.apply_to_comp(p.active_composition_mut(), true);
                                     baked.set(n);
                                 });
-                                crate::core::frame_cache::bump_version();
                                 app.toasts.info(format!(
                                     "Camera track baked: {} keyframes from '{}'",
                                     baked.get(),
@@ -399,7 +396,6 @@ pub fn draw(app: &mut crate::KagariApp, ctx: &egui::Context) {
                                 app.modify_project(|p| {
                                     p.active_composition_mut().layers.push(new_layer);
                                 });
-                                crate::core::frame_cache::bump_version();
                                 app.toasts.info(format!("Auto-traced '{name}' into shape layer"));
                             } else {
                                 app.toasts.error("Layer has no traceable mask or alpha data");
@@ -425,7 +421,6 @@ pub fn draw(app: &mut crate::KagariApp, ctx: &egui::Context) {
                             p.active_composition_idx = p.compositions.len() - 1;
                         }
                     });
-                    crate::core::frame_cache::bump_version();
                     app.toasts.info("Composition duplicated");
                     ui.close_menu();
                 }
@@ -689,7 +684,6 @@ pub fn draw(app: &mut crate::KagariApp, ctx: &egui::Context) {
                                     l.transform.opacity = crate::core::property::Animatable::new_constant(100.0);
                                 }
                             });
-                            crate::core::frame_cache::bump_version();
                             app.toasts.info("All transforms reset");
                             ui.close_menu();
                         }
@@ -706,7 +700,6 @@ pub fn draw(app: &mut crate::KagariApp, ctx: &egui::Context) {
                                     };
                                 }
                             });
-                            crate::core::frame_cache::bump_version();
                             app.toasts.info("Toggled Auto-Orient along Motion Path");
                         }
                         ui.close_menu();
@@ -720,7 +713,6 @@ pub fn draw(app: &mut crate::KagariApp, ctx: &egui::Context) {
                                     l.enable_time_remapping();
                                 }
                             });
-                            crate::core::frame_cache::bump_version();
                             app.toasts.info("Time remapping enabled — edit keyframes in the Graph Editor");
                         } else {
                             app.toasts.info("Select a layer first");
@@ -734,7 +726,6 @@ pub fn draw(app: &mut crate::KagariApp, ctx: &egui::Context) {
                                     l.time_reverse();
                                 }
                             });
-                            crate::core::frame_cache::bump_version();
                             app.toasts.info("Layer time-reversed");
                         } else {
                             app.toasts.info("Select a layer first");
@@ -767,7 +758,6 @@ pub fn draw(app: &mut crate::KagariApp, ctx: &egui::Context) {
                                     l.freeze_at(frame);
                                 }
                             });
-                            crate::core::frame_cache::bump_version();
                             app.toasts.info(format!("Frozen at source frame {}", frame));
                         } else {
                             app.toasts.info("Select a layer first");
@@ -781,7 +771,6 @@ pub fn draw(app: &mut crate::KagariApp, ctx: &egui::Context) {
                                     l.clear_time_remap();
                                 }
                             });
-                            crate::core::frame_cache::bump_version();
                             app.toasts.info("Time remapping removed");
                         } else {
                             app.toasts.info("Select a layer first");
@@ -804,7 +793,6 @@ pub fn draw(app: &mut crate::KagariApp, ctx: &egui::Context) {
                                     };
                                 }
                             });
-                            crate::core::frame_cache::bump_version();
                             app.toasts.info(if already { "Posterize Time removed" } else { "Posterize Time: 12fps stop-motion" });
                         } else {
                             app.toasts.info("Select a layer first");
@@ -819,7 +807,6 @@ pub fn draw(app: &mut crate::KagariApp, ctx: &egui::Context) {
                                     l.time_stretch(2.0);
                                 }
                             });
-                            crate::core::frame_cache::bump_version();
                             app.toasts.info("Layer stretched to ×2 duration");
                         } else {
                             app.toasts.info("Select a layer first");
@@ -833,7 +820,6 @@ pub fn draw(app: &mut crate::KagariApp, ctx: &egui::Context) {
                                     l.time_stretch(0.5);
                                 }
                             });
-                            crate::core::frame_cache::bump_version();
                             app.toasts.info("Layer compressed to ×0.5 duration");
                         } else {
                             app.toasts.info("Select a layer first");
@@ -930,7 +916,6 @@ pub fn draw(app: &mut crate::KagariApp, ctx: &egui::Context) {
                                     shape_layer.transform = layer.transform.clone();
                                     comp.layers.insert(idx + 1, shape_layer);
                                     app.history.commit(temp_proj);
-                                    crate::core::frame_cache::bump_version();
                                     app.toasts.info("Converted Text to Vector Shape Layer");
                                 } else {
                                     app.toasts.error("Selected layer is not a Text layer");
@@ -955,7 +940,6 @@ pub fn draw(app: &mut crate::KagariApp, ctx: &egui::Context) {
                                     );
                                     layer.masks.push(mask);
                                     app.history.commit(temp_proj);
-                                    crate::core::frame_cache::bump_version();
                                     app.toasts.info("Converted Text into Vector Mask");
                                 } else {
                                     app.toasts.error("Selected layer is not a Text layer");
@@ -972,7 +956,6 @@ pub fn draw(app: &mut crate::KagariApp, ctx: &egui::Context) {
                             l.solo = false;
                         }
                     });
-                    crate::core::frame_cache::bump_version();
                     app.toasts.info("All layers un-soloed");
                     ui.close_menu();
                 }
@@ -982,7 +965,6 @@ pub fn draw(app: &mut crate::KagariApp, ctx: &egui::Context) {
                             l.locked = false;
                         }
                     });
-                    crate::core::frame_cache::bump_version();
                     app.toasts.info("All layers unlocked");
                     ui.close_menu();
                 }
@@ -1002,7 +984,6 @@ pub fn draw(app: &mut crate::KagariApp, ctx: &egui::Context) {
                         }
                     });
                     if created {
-                        crate::core::frame_cache::bump_version();
                         app.toasts.info("🔤 Created Shapes from Text layer");
                     } else {
                         app.toasts.warning("Please select a Text layer first");
@@ -1222,7 +1203,6 @@ pub fn draw(app: &mut crate::KagariApp, ctx: &egui::Context) {
                             match crate::core::audio_to_keyframes::convert_audio_to_keyframes(temp_proj.active_composition_mut(), &src) {
                                 Ok(name) => {
                                     app.history.commit(temp_proj);
-                                    crate::core::frame_cache::bump_version();
                                     app.toasts.info(format!("Created '{}' with Left/Right/Both channels", name));
                                 }
                                 Err(e) => app.toasts.error(e),
@@ -1249,7 +1229,6 @@ pub fn draw(app: &mut crate::KagariApp, ctx: &egui::Context) {
                             match crate::core::audio_to_keyframes::convert_multiband_audio_to_keyframes(temp_proj.active_composition_mut(), &src, None) {
                                 Ok(name) => {
                                     app.history.commit(temp_proj);
-                                    crate::core::frame_cache::bump_version();
                                     app.toasts.info(format!("Created '{}' with Master/Bass/Mid/Treble", name));
                                 }
                                 Err(e) => app.toasts.error(e),
@@ -1283,7 +1262,6 @@ pub fn draw(app: &mut crate::KagariApp, ctx: &egui::Context) {
                                         }
                                         *kfs = exp_kfs;
                                         app.history.commit(temp_proj);
-                                        crate::core::frame_cache::bump_version();
                                         app.toasts.info("Converted scale to Exponential Zoom curve");
                                     }
                                 }
@@ -1309,7 +1287,6 @@ pub fn draw(app: &mut crate::KagariApp, ctx: &egui::Context) {
                                 rev_vec2(&mut layer.transform.position, inf, outf);
                                 rev_vec2(&mut layer.transform.scale, inf, outf);
                                 app.history.commit(temp_proj);
-                                crate::core::frame_cache::bump_version();
                                 app.toasts.info("Keyframes time-reversed");
                             }
                         }
@@ -1323,7 +1300,6 @@ pub fn draw(app: &mut crate::KagariApp, ctx: &egui::Context) {
                                     l.easy_ease_transform();
                                 }
                             });
-                            crate::core::frame_cache::bump_version();
                             app.toasts.info("Easy Ease applied to transform keyframes");
                         }
                         ui.close_menu();

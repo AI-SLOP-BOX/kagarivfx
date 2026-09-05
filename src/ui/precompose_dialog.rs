@@ -121,7 +121,6 @@ pub fn draw_precompose_dialog(app: &mut KagariApp, ctx: &egui::Context) {
                             temp_proj.active_composition_idx = temp_proj.compositions.len() - 1;
                         }
                         app.history.commit(temp_proj);
-                        crate::core::frame_cache::bump_version();
                         app.toasts
                             .info(format!("Pre-composed into '{}'", app.precompose_name));
                     }

@@ -183,6 +183,5 @@ pub fn draw_align_panel(app: &mut KagariApp, ui: &mut egui::Ui) {
 
     if project_changed {
         app.history.commit(temp_proj);
-        crate::core::frame_cache::bump_version();
     }
 }

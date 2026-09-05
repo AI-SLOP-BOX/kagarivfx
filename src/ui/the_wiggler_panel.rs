@@ -195,7 +195,6 @@ pub fn draw_the_wiggler_panel(app: &mut KagariApp, ui: &mut egui::Ui) {
         }
 
         app.history.commit(temp_proj);
-        crate::core::frame_cache::bump_version();
         app.toasts
             .info("The Wiggler: Baked procedural wiggle keyframes");
     }

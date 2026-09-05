@@ -302,7 +302,6 @@ pub fn draw_tracker_panel(app: &mut KagariApp, ui: &mut egui::Ui, current_frame:
                         cam_layer.is_3d = true;
                         comp_mut.add_layer(cam_layer);
                         app.history.commit(temp_proj);
-                        crate::core::frame_cache::bump_version();
                         app.toasts.info("3D Camera solved! Created '3D Tracked Camera 1' (Average Error: 0.42 px)");
                     }
                 });
@@ -625,7 +624,6 @@ pub fn draw_tracker_panel(app: &mut KagariApp, ui: &mut egui::Ui, current_frame:
                             };
                             comp.layers[target_idx].effects.push(effect);
                         });
-                        crate::core::frame_cache::bump_version();
                         app.toasts.info(format!("Applied Corner Pin to layer {}", target_idx + 1));
                     }
                     if custom_widgets::ae_button(ui, "🎥 Stabilize Motion").on_hover_text("Cancel camera shake by inverting motion onto target anchor/position").clicked() {
@@ -660,7 +658,6 @@ pub fn draw_tracker_panel(app: &mut KagariApp, ui: &mut egui::Ui, current_frame:
                             comp, idx, 0, null_idx, true, false,
                         );
                     });
-                    crate::core::frame_cache::bump_version();
                     app.toasts
                         .info("Created new Null layer with tracked motion!");
                 }
@@ -702,7 +699,7 @@ pub fn draw_tracker_panel(app: &mut KagariApp, ui: &mut egui::Ui, current_frame:
             ui.add_space(8.0);
             ui.separator();
             ui.label(
-                egui::RichText::new("✨ AI Auto-Trace & Roto Assist")
+                egui::RichText::new("Auto-Trace & Roto Assist")
                     .strong()
                     .color(colors::ACCENT_CYAN),
             );
@@ -854,7 +851,6 @@ pub fn draw_tracker_panel(app: &mut KagariApp, ui: &mut egui::Ui, current_frame:
 
                         comp_mut.layers[idx].masks.push(mask);
                         app.history.commit(temp_proj);
-                        crate::core::frame_cache::bump_version();
                         app.toasts
                             .info(format!("Auto-generated Bezier Mask on {}", layer_name));
                     }

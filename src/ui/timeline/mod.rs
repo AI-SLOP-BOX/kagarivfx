@@ -483,7 +483,7 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: &mut u32, t
 
             // ── Scrollable Layer Rows & Property Tracks ──
             let zoom_span = (total_frames as f32 / app.timeline_zoom.max(0.01)).max(10.0) as u32;
-            let start_frame = current_frame.saturating_sub(zoom_span / 2).min(total_frames.saturating_sub(zoom_span));
+            let start_frame = app.timeline_view_start;
             // Capture effect drag info before closure to avoid borrow conflicts
             let drag_info = app.dragging_effect.clone();
             // Collect pending effect drops to apply after the closure

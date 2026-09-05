@@ -244,6 +244,9 @@ pub struct KagariApp {
     pub project_path: String,
     /// Preserves unified audio/timeline metadata when the GUI opens and saves a project.
     pub production_document: Option<crate::core::production_document::ProductionDocument>,
+    /// Last history generation synced to production_document. Avoids cloning the
+    /// entire Project every frame when nothing has changed.
+    pub doc_sync_generation: u64,
     pub automation_undo: Vec<Vec<crate::core::automation_binding::AutomationBinding>>,
     pub automation_redo: Vec<Vec<crate::core::automation_binding::AutomationBinding>>,
     pub otio_path: String,
@@ -445,6 +448,7 @@ impl Default for KagariApp {
             connected_app: None,
             project_path: "project.json".to_string(),
             production_document: None,
+            doc_sync_generation: 0,
             automation_undo: Vec::new(),
             automation_redo: Vec::new(),
             otio_path: "timeline.otio.json".to_string(),
@@ -594,7 +598,6 @@ impl KagariApp {
         f(&mut next_project);
         self.history.commit(next_project);
         self.autosave.mark_dirty();
-        crate::core::frame_cache::bump_version();
         self.frame_cache.collect_garbage();
     }
 

@@ -98,7 +98,6 @@ pub fn draw_sequence_layers_dialog(app: &mut KagariApp, ctx: &egui::Context) {
                             (cursor as i64 + span.max(1) as i64 - overlap_f as i64).max(0) as u32;
                     }
                     app.history.commit(temp_proj);
-                    crate::core::frame_cache::bump_version();
                     app.toasts.info(format!(
                         "Sequenced {} layers (overlap {}f)",
                         selected.len(),

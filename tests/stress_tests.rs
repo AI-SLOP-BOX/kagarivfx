@@ -2,9 +2,11 @@
 //! These verify the renderer stays bounded in time/memory and never panics
 //! under pathological-but-plausible project sizes.
 
+use kagari_vfx::core::history::ProjectHistory;
 use kagari_vfx::core::keyframe::{InterpolationType, Keyframe};
 use kagari_vfx::core::property::Animatable;
 use kagari_vfx::core::software_renderer::render_frame_to_pixels;
+use kagari_vfx::core::timeline::Project;
 use kagari_vfx::core::timeline::{Composition, Layer, LayerType};
 
 #[test]
@@ -102,5 +104,91 @@ fn stress_wide_expressions_evaluate() {
     assert!(
         pos[0].is_finite(),
         "chained expressions must produce finite values"
+    );
+}
+
+#[test]
+fn stress_timeline_coordinate_consistency() {
+    let mut proj = Project::default();
+    proj.compositions.clear();
+    let mut comp = Composition::new("c".into(), "Stress".into(), 1920, 1080, 30, 300);
+    for i in 0..200 {
+        let mut l = Layer::new(
+            format!("l{}", i),
+            format!("Layer {}", i),
+            LayerType::Null,
+            30,
+        );
+        l.in_frame = (i * 5) as u32;
+        l.out_frame = (i * 5 + 100) as u32;
+        for kf in 0..20 {
+            let frame = (i * 5 + kf * 5) as u32;
+            l.transform.position.add_keyframe(Keyframe {
+                frame,
+                value: [kf as f32 * 10.0, kf as f32 * 5.0],
+                interpolation: InterpolationType::Linear,
+            });
+        }
+        comp.layers.push(l);
+    }
+    proj.compositions.push(comp);
+    let mut history = ProjectHistory::new(proj);
+
+    // Commit some edits first so undo/redo has something to work with
+    for i in 0..10 {
+        let mut p = history.current().clone();
+        p.compositions[0].layers[0].name = format!("edit_{}", i);
+        history.commit(p);
+    }
+    let gen_before = history.generation();
+
+    // Simulate 10 undo/redo cycles — generation must always advance
+    for _ in 0..10 {
+        let _ = history.undo();
+        let _ = history.redo();
+    }
+    let gen_after = history.generation();
+    assert!(
+        gen_after > gen_before,
+        "generation must advance through undo/redo cycles"
+    );
+}
+
+#[test]
+fn stress_large_project_undo_redo_no_corruption() {
+    let mut proj = Project::default();
+    proj.compositions.clear();
+    let mut comp = Composition::new("c".into(), "Big".into(), 1920, 1080, 30, 300);
+    for i in 0..500 {
+        comp.layers.push(Layer::new(
+            format!("l{}", i),
+            format!("L{}", i),
+            LayerType::Null,
+            30,
+        ));
+    }
+    proj.compositions.push(comp);
+    let mut history = ProjectHistory::new(proj);
+
+    // Commit 30 mutations (within the 50-entry history limit)
+    for i in 0..30 {
+        let mut p = history.current().clone();
+        p.compositions[0].layers[0].name = format!("mutated_{}", i);
+        history.commit(p);
+    }
+
+    // Undo all
+    for _ in 0..30 {
+        history.undo();
+    }
+    assert_eq!(history.current().compositions[0].layers[0].name, "L0");
+
+    // Redo all
+    for _ in 0..30 {
+        history.redo();
+    }
+    assert_eq!(
+        history.current().compositions[0].layers[0].name,
+        "mutated_29"
     );
 }

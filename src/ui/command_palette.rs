@@ -235,7 +235,6 @@ pub fn get_all_commands() -> Vec<PaletteCommand> {
                             }
                         }
                     });
-                    crate::core::frame_cache::bump_version();
                 }
             }),
         },
@@ -252,7 +251,6 @@ pub fn get_all_commands() -> Vec<PaletteCommand> {
                         }
                     });
                     if baked_count > 0 {
-                        crate::core::frame_cache::bump_version();
                         app.toasts.info(format!(
                             "Stabilized: {} position keyframes baked",
                             baked_count
@@ -463,7 +461,6 @@ pub fn get_all_commands() -> Vec<PaletteCommand> {
                             app.modify_project(|p| {
                                 baked = track.apply_to_comp(p.active_composition_mut(), true);
                             });
-                            crate::core::frame_cache::bump_version();
                             app.toasts
                                 .info(format!("Camera track baked: {} kfs", baked));
                         }
@@ -920,7 +917,6 @@ pub fn get_all_commands() -> Vec<PaletteCommand> {
                     ) {
                         Ok(name) => {
                             app.history.commit(temp_proj);
-                            crate::core::frame_cache::bump_version();
                             app.toasts
                                 .info(format!("Created '{}' with Master/Bass/Mid/Treble", name));
                         }
@@ -952,7 +948,6 @@ pub fn get_all_commands() -> Vec<PaletteCommand> {
                             comp, idx, 0, null_idx, true, false,
                         );
                     });
-                    crate::core::frame_cache::bump_version();
                     app.toasts
                         .info("Created new Null layer with tracked motion!");
                 }

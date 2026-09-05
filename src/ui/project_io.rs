@@ -60,6 +60,7 @@ pub fn open_project_from_path(app: &mut KagariApp, path: &std::path::Path) -> Re
 
     app.history = crate::core::history::ProjectHistory::new(project);
     app.production_document = production_document;
+    app.doc_sync_generation = 0;
     app.clear_automation_history();
     // Restore the persisted GPU-compute preference (respects adapter availability)
     let gpu_pref = app.history.current().use_gpu_compute;

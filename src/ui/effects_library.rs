@@ -367,7 +367,6 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: &mut u32) {
                 let changed = crate::ui::character_panel::draw_character_panel(app, ui, temp_proj.active_composition_mut(), *current_frame);
                 if changed {
                     app.history.commit(temp_proj);
-                    crate::core::frame_cache::bump_version();
                 }
                 return;
             }
@@ -501,7 +500,7 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: &mut u32) {
 
                 ui.label("Add Effect to Selected Layer:");
                 ui.group(|ui| {
-                    ui.label(egui::RichText::new("AI Motion VFX Auto-Generator").strong().color(colors::ACCENT_CYAN));
+                    ui.label(egui::RichText::new("Motion VFX Presets").strong().color(colors::ACCENT_CYAN));
                     ui.small("Enter prompt to auto-build VFX graph:");
                     ui.horizontal(|ui| {
                         ui.add(egui::TextEdit::singleline(&mut app.ui_tabs.effects_search_query).hint_text("e.g. Cyberpunk Neon Glow"));
@@ -513,7 +512,7 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: &mut u32) {
                                 let len = comp.layers[idx].effects.len();
                                 comp.layers[idx].effects.push(crate::core::timeline::Effect {
                                     id: format!("ai_glow_{}", len),
-                                    name: "AI Cyberpunk Neon".to_string(),
+                                    name: "Cyberpunk Neon".to_string(),
                                     effect_type: crate::core::timeline::EffectType::Glow {
                                         threshold: crate::core::property::Animatable::new_constant(0.2),
                                         radius: crate::core::property::Animatable::new_constant(30.0),
@@ -531,7 +530,7 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: &mut u32) {
                                 let len = comp.layers[idx].effects.len();
                                 comp.layers[idx].effects.push(crate::core::timeline::Effect {
                                     id: format!("ai_burn_{}", len),
-                                    name: "AI Motion Burn".to_string(),
+                                    name: "Motion Burn".to_string(),
                                     effect_type: crate::core::timeline::EffectType::Glow {
                                         threshold: crate::core::property::Animatable::new_constant(0.1),
                                         radius: crate::core::property::Animatable::new_constant(45.0),
@@ -711,7 +710,6 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: &mut u32) {
                     let snapshot = app.history.current().clone();
                     app.history.commit(snapshot);
                 }
-                crate::core::frame_cache::bump_version();
             }
             if let Some(nf) = next_frame {
                 *current_frame = nf;

@@ -20,6 +20,9 @@ pub struct ProjectHistory {
     /// large compositions can each be many MB; without a byte budget, 50 entries
     /// could pin hundreds of MB of RAM.
     approx_bytes: usize,
+    /// Monotonic counter that increments on every commit. UI code can cache the
+    /// last-seen generation to avoid redundant full-project clones.
+    generation: u64,
 }
 
 /// Rough per-entry size estimate: layer count × conservative per-layer footprint.
@@ -101,6 +104,7 @@ impl ProjectHistory {
             current_idx: 0,
             max_history_entries: 50,
             approx_bytes: 0,
+            generation: 0,
         };
         hist.stack.push_back(HistoryEntry {
             project: initial,
@@ -124,6 +128,12 @@ impl ProjectHistory {
         self.approx_bytes
     }
 
+    /// Monotonic generation counter. Increments on every commit.
+    /// UI code should cache this value and only clone the project when it changes.
+    pub fn generation(&self) -> u64 {
+        self.generation
+    }
+
     /// Commit a new project state snapshot with a descriptive action name.
     pub fn commit_action(&mut self, project: Project, action_name: &str) {
         let unchanged = match (
@@ -136,6 +146,7 @@ impl ProjectHistory {
         if unchanged {
             return;
         }
+        self.generation = self.generation.wrapping_add(1);
         self.stack.truncate(self.current_idx + 1);
         self.approx_bytes = self
             .stack
@@ -275,6 +286,7 @@ impl ProjectHistory {
     pub fn undo(&mut self) -> Option<&Project> {
         if self.can_undo() {
             self.current_idx -= 1;
+            self.generation = self.generation.wrapping_add(1);
             frame_cache::bump_version();
             log::info!("Undo success. Frame position index: {}", self.current_idx);
             Some(self.current())
@@ -288,6 +300,7 @@ impl ProjectHistory {
     pub fn redo(&mut self) -> Option<&Project> {
         if self.can_redo() {
             self.current_idx += 1;
+            self.generation = self.generation.wrapping_add(1);
             frame_cache::bump_version();
             log::info!("Redo success. Frame position index: {}", self.current_idx);
             Some(self.current())

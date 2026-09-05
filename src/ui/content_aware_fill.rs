@@ -131,7 +131,6 @@ pub fn draw_content_aware_fill(app: &mut KagariApp, ui: &mut egui::Ui) {
                 );
                 comp_mut.layers.insert(layer_idx, new_layer);
                 app.history.commit(temp_proj);
-                crate::core::frame_cache::bump_version();
                 app.toasts.info(format!(
                     "Synthesized & inserted Fill Layer for frame {}",
                     frame_idx

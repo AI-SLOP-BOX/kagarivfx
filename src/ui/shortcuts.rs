@@ -212,7 +212,6 @@ pub fn handle_global_shortcuts(
                         if let crate::core::property::Animatable::Animated(ref mut kfs) = layer.transform.rotation { for kf in kfs { kf.interpolation = ez; } }
                         if let crate::core::property::Animatable::Animated(ref mut kfs) = layer.transform.opacity { for kf in kfs { kf.interpolation = ez; } }
                         app.history.commit(temp_proj);
-                        crate::core::frame_cache::bump_version();
                     }
                 }
             }
@@ -695,7 +694,6 @@ pub fn handle_global_shortcuts(
                 });
                 if split_done {
                     app.toasts.info(format!("Split layer at frame {}", cur));
-                    crate::core::frame_cache::bump_version();
                 } else {
                     app.toasts.error("Split point must be inside the layer's duration");
                 }
@@ -791,7 +789,6 @@ pub fn handle_global_shortcuts(
                 app.selection.selected_layers.insert(insert_pos);
                 app.selection.selected_layer_idx = Some(insert_pos);
                 app.history.commit(temp_project);
-                crate::core::frame_cache::bump_version();
             }
         }
 
@@ -818,7 +815,6 @@ pub fn handle_global_shortcuts(
                         app.selection.selected_layer_idx = Some(idx + 1);
                     }
                     app.history.commit(proj);
-                    crate::core::frame_cache::bump_version();
                 }
             }
         }
@@ -838,7 +834,6 @@ pub fn handle_global_shortcuts(
                     proj.active_composition_mut().layers.swap(idx, new_idx);
                     app.selection.selected_layer_idx = Some(new_idx);
                     app.history.commit(proj);
-                    crate::core::frame_cache::bump_version();
                 }
             }
         }
@@ -858,7 +853,6 @@ pub fn handle_global_shortcuts(
                     proj.active_composition_mut().layers.swap(idx, new_idx);
                     app.selection.selected_layer_idx = Some(new_idx);
                     app.history.commit(proj);
-                    crate::core::frame_cache::bump_version();
                 }
             }
         }

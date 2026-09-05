@@ -53,7 +53,6 @@ pub fn draw_time_remap_panel(app: &mut KagariApp, ui: &mut egui::Ui) {
                     Keyframe::new(out_frame, dur as f32, InterpolationType::Linear),
                 ]));
                 app.history.commit(temp_proj);
-                crate::core::frame_cache::bump_version();
                 app.toasts
                     .info(format!("Enabled Time Remapping on {}", layer_name));
             }
@@ -71,7 +70,6 @@ pub fn draw_time_remap_panel(app: &mut KagariApp, ui: &mut egui::Ui) {
                     let cur_f = app.playback.current_frame.saturating_sub(in_frame) as f32;
                     comp_mut.layers[idx].time_remap = Some(Animatable::new_constant(cur_f));
                     app.history.commit(temp_proj);
-                    crate::core::frame_cache::bump_version();
                     app.toasts.info(format!(
                         "Froze {} at frame {}",
                         layer_name, app.playback.current_frame
@@ -92,7 +90,6 @@ pub fn draw_time_remap_panel(app: &mut KagariApp, ui: &mut egui::Ui) {
                         Keyframe::new(out_frame, 0.0, InterpolationType::Linear),
                     ]));
                     app.history.commit(temp_proj);
-                    crate::core::frame_cache::bump_version();
                     app.toasts
                         .info(format!("Reversed playback on {}", layer_name));
                 }
@@ -169,7 +166,6 @@ pub fn draw_time_remap_panel(app: &mut KagariApp, ui: &mut egui::Ui) {
                         }
                         comp_mut.layers[idx].time_remap = Some(Animatable::Animated(kfs));
                         app.history.commit(temp_proj);
-                        crate::core::frame_cache::bump_version();
                         app.toasts.info(format!(
                             "Baked {} loop onto {}",
                             if mode == 0 { "cycle" } else { "pingpong" },
@@ -220,7 +216,6 @@ pub fn draw_time_remap_panel(app: &mut KagariApp, ui: &mut egui::Ui) {
                         rescale_track(remap, in_f, factor);
                     }
                     app.history.commit(temp_proj);
-                    crate::core::frame_cache::bump_version();
                     app.toasts.info(format!(
                         "Stretched {} to {:.0}% ({} → {} frames)",
                         layer_name, stretch_factor, span, new_span

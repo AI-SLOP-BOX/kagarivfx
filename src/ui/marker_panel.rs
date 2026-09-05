@@ -23,7 +23,6 @@ pub fn draw_marker_panel(app: &mut KagariApp, ui: &mut egui::Ui, current_frame: 
                     color: [0.0, 0.8, 1.0],
                 });
             app.history.commit(temp_proj);
-            crate::core::frame_cache::bump_version();
             app.toasts
                 .info(format!("Added marker at frame {}", current_frame));
         }
@@ -86,7 +85,6 @@ pub fn draw_marker_panel(app: &mut KagariApp, ui: &mut egui::Ui, current_frame: 
                     if del_idx < comp_mut.markers.len() {
                         comp_mut.markers.remove(del_idx);
                         app.history.commit(temp_proj);
-                        crate::core::frame_cache::bump_version();
                     }
                 }
             }

@@ -7,10 +7,14 @@ use crate::ViewportMode;
 use eframe::egui;
 
 pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: u32) {
-    // History is the editable GUI state; keep the production wrapper current so
-    // preview bindings never evaluate a stale project snapshot.
+    // Only clone the project to the production document when history has actually
+    // changed. The generation counter avoids a full deep clone every frame.
+    let hist_gen = app.history.generation();
     if let Some(document) = app.production_document.as_mut() {
-        document.project = app.history.current().clone();
+        if app.doc_sync_generation != hist_gen {
+            document.project = app.history.current().clone();
+            app.doc_sync_generation = hist_gen;
+        }
     }
     egui::CentralPanel::default().show(ctx, |ui| {
         // ── AE Composition Viewport Tab Bar (TOP) ──────────────────────────────────
@@ -1064,7 +1068,6 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: u32) {
                                             polygon,
                                         ));
                                         app.history.commit(temp_proj);
-                                        crate::core::frame_cache::bump_version();
                                         app.toasts.info(if is_fg { "Roto Brush: Segmented Foreground Matte" } else { "Roto Brush: Segmented Background Matte" });
                                     }
                                 } else {
@@ -2051,7 +2054,6 @@ fn draw_inline_text_editor(
             }
         }
         app.history.commit(temp_proj);
-        crate::core::frame_cache::bump_version();
         app.toasts.info("Source text updated");
     }
 

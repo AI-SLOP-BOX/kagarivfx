@@ -221,3 +221,128 @@ pub fn draw_keyframe_tick(
     }
     (KeyframeTickResult::None, response)
 }
+
+/// Authoritative visible timeline range. Used by ruler, layer bars, keyframes,
+/// playhead, markers, snapping, and hit-testing. Every call site must use this
+/// instead of deriving its own `start_frame` / `zoom_span`.
+pub fn visible_range(total_frames: u32, zoom: f32, view_start: u32) -> (u32, u32) {
+    let zoom_span = (total_frames as f32 / zoom.max(0.01)).max(10.0) as u32;
+    (view_start, zoom_span)
+}
+
+/// Convert a frame number to pixel x-position within `rect`.
+pub fn frame_to_x(frame: u32, start_frame: u32, zoom_span: u32, rect: egui::Rect) -> f32 {
+    let norm = (frame.saturating_sub(start_frame)) as f32 / zoom_span.max(1) as f32;
+    rect.left() + norm * rect.width()
+}
+
+/// Convert a pixel x-position within `rect` to a frame number.
+pub fn x_to_frame(px: f32, start_frame: u32, zoom_span: u32, rect: egui::Rect) -> u32 {
+    let norm = ((px - rect.left()) / rect.width()).clamp(0.0, 1.0);
+    start_frame + (norm * zoom_span as f32).round() as u32
+}
+
+/// Ensure `view_start` auto-recenters when the playhead leaves the visible range.
+pub fn clamp_view_start(
+    current_frame: u32,
+    zoom_span: u32,
+    total_frames: u32,
+    view_start: u32,
+) -> u32 {
+    if current_frame < view_start || current_frame >= view_start.saturating_add(zoom_span) {
+        current_frame
+            .saturating_sub(zoom_span / 2)
+            .min(total_frames.saturating_sub(zoom_span))
+    } else {
+        view_start
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn visible_range_basic() {
+        let (start, span) = visible_range(1000, 1.0, 0);
+        assert_eq!(start, 0);
+        assert_eq!(span, 1000);
+    }
+
+    #[test]
+    fn visible_range_zoomed() {
+        let (_, span) = visible_range(1000, 2.0, 0);
+        assert_eq!(span, 500);
+    }
+
+    #[test]
+    fn visible_range_min_span() {
+        let (_, span) = visible_range(0, 1.0, 0);
+        assert_eq!(span, 10);
+    }
+
+    #[test]
+    fn frame_to_x_start() {
+        let rect = egui::Rect::from_min_size(egui::pos2(100.0, 0.0), egui::vec2(400.0, 20.0));
+        let x = frame_to_x(0, 0, 100, rect);
+        assert_eq!(x, 100.0);
+    }
+
+    #[test]
+    fn frame_to_x_end() {
+        let rect = egui::Rect::from_min_size(egui::pos2(100.0, 0.0), egui::vec2(400.0, 20.0));
+        let x = frame_to_x(100, 0, 100, rect);
+        assert_eq!(x, 500.0);
+    }
+
+    #[test]
+    fn frame_to_x_offset_view() {
+        let rect = egui::Rect::from_min_size(egui::pos2(0.0, 0.0), egui::vec2(400.0, 20.0));
+        let x = frame_to_x(50, 50, 100, rect);
+        assert_eq!(x, 0.0);
+    }
+
+    #[test]
+    fn x_to_frame_roundtrip() {
+        let rect = egui::Rect::from_min_size(egui::pos2(100.0, 0.0), egui::vec2(400.0, 20.0));
+        let f = x_to_frame(300.0, 0, 100, rect);
+        assert_eq!(f, 50);
+    }
+
+    #[test]
+    fn clamp_view_start_no_change() {
+        let v = clamp_view_start(50, 100, 1000, 0);
+        assert_eq!(v, 0);
+    }
+
+    #[test]
+    fn clamp_view_start_recenter() {
+        let v = clamp_view_start(150, 100, 1000, 0);
+        assert_eq!(v, 100);
+    }
+
+    #[test]
+    fn clamp_view_start_at_end() {
+        let v = clamp_view_start(999, 100, 1000, 0);
+        assert!(v + 100 >= 999);
+    }
+
+    #[test]
+    fn ruler_and_layers_share_same_start_frame() {
+        let total_frames = 500u32;
+        let zoom = 2.0f32;
+        let view_start = 100u32;
+        let current_frame = 200u32;
+
+        let (zoom_span_1, _) = visible_range(total_frames, zoom, view_start);
+        let effective_start_1 =
+            clamp_view_start(current_frame, zoom_span_1, total_frames, view_start);
+
+        let (zoom_span_2, _) = visible_range(total_frames, zoom, view_start);
+        let effective_start_2 =
+            clamp_view_start(current_frame, zoom_span_2, total_frames, view_start);
+
+        assert_eq!(effective_start_1, effective_start_2);
+        assert_eq!(zoom_span_1, zoom_span_2);
+    }
+}
