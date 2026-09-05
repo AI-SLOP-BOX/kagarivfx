@@ -3107,7 +3107,9 @@ impl Project {
     /// (e.g. `./`, `./Footage/`, `./Assets/`, `./Media/`) around the saved project file location.
     pub fn resolve_relative_footage_paths(&mut self, project_file_dir: &std::path::Path) -> usize {
         let mut relinked_count = 0usize;
-        let candidate_subdirs = ["", "Footage", "footage", "Assets", "assets", "Media", "media", "audio", "Audio"];
+        let candidate_subdirs = [
+            "", "Footage", "footage", "Assets", "assets", "Media", "media", "audio", "Audio",
+        ];
 
         let find_file = |raw_path: &str| -> Option<String> {
             let p = std::path::Path::new(raw_path);
@@ -3239,27 +3241,28 @@ pub fn sequence_layers(layers: &mut [Layer], overlap_frames: u32, crossfade: boo
         if crossfade && overlap_frames > 0 {
             // Build crossfade opacity keyframes
             let fade = overlap_frames.min(duration / 2);
-            let mut kfs = Vec::new();
-            kfs.push(crate::core::keyframe::Keyframe::new(
-                cur_in,
-                0.0,
-                crate::core::keyframe::InterpolationType::Linear,
-            ));
-            kfs.push(crate::core::keyframe::Keyframe::new(
-                cur_in + fade,
-                100.0,
-                crate::core::keyframe::InterpolationType::Linear,
-            ));
-            kfs.push(crate::core::keyframe::Keyframe::new(
-                layer.out_frame.saturating_sub(fade),
-                100.0,
-                crate::core::keyframe::InterpolationType::Linear,
-            ));
-            kfs.push(crate::core::keyframe::Keyframe::new(
-                layer.out_frame,
-                0.0,
-                crate::core::keyframe::InterpolationType::Linear,
-            ));
+            let kfs = vec![
+                crate::core::keyframe::Keyframe::new(
+                    cur_in,
+                    0.0,
+                    crate::core::keyframe::InterpolationType::Linear,
+                ),
+                crate::core::keyframe::Keyframe::new(
+                    cur_in + fade,
+                    100.0,
+                    crate::core::keyframe::InterpolationType::Linear,
+                ),
+                crate::core::keyframe::Keyframe::new(
+                    layer.out_frame.saturating_sub(fade),
+                    100.0,
+                    crate::core::keyframe::InterpolationType::Linear,
+                ),
+                crate::core::keyframe::Keyframe::new(
+                    layer.out_frame,
+                    0.0,
+                    crate::core::keyframe::InterpolationType::Linear,
+                ),
+            ];
             layer.transform.opacity = Animatable::new_animated(kfs);
         }
 

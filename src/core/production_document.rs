@@ -4,7 +4,7 @@ use crate::core::audio_types::MixerChannel;
 use crate::core::automation_binding::{AutomationBinding, AutomationCurve, ProductionClock};
 use crate::core::keyframe::{InterpolationType, Keyframe};
 use crate::core::property::Animatable;
-use crate::core::timeline::{Composition, EffectType, Layer, LayerType, Project, ProjectItemType};
+use crate::core::timeline::{Composition, EffectType, LayerType, Project, ProjectItemType};
 use crate::core::unified_time::{FrameRate, TempoMap};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
@@ -516,12 +516,14 @@ impl ProductionDocument {
                                 || effect_property.is_none()
                             {
                                 false
-                            } else if let Some(effect) = layer
-                                .effects
-                                .iter_mut()
-                                .find(|effect| Some(effect.id.as_str()) == effect_id)
-                            {
-                                match (&mut effect.effect_type, effect_property.unwrap()) {
+                            } else if let (Some(prop), Some(effect)) = (
+                                effect_property,
+                                layer
+                                    .effects
+                                    .iter_mut()
+                                    .find(|effect| Some(effect.id.as_str()) == effect_id),
+                            ) {
+                                match (&mut effect.effect_type, prop) {
                                     (_, "enabled") => {
                                         effect.enabled = value >= 0.5;
                                         true
@@ -1577,6 +1579,7 @@ fn find_nested_composition<'a>(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::core::timeline::Layer;
 
     #[test]
     fn round_trip_preserves_audio_vfx_contract() {

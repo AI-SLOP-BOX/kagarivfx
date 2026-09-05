@@ -61,12 +61,7 @@ pub fn apply_transform_effect(
         }
     };
 
-    let sx = (if params.uniform_scale {
-        finite(params.scale_width, 100.0)
-    } else {
-        finite(params.scale_width, 100.0)
-    } / 100.0)
-        .max(0.001);
+    let sx = (finite(params.scale_width, 100.0) / 100.0).max(0.001);
     let sy = (if params.uniform_scale {
         finite(params.scale_width, 100.0)
     } else {
@@ -172,8 +167,7 @@ mod tests {
         params.scale_width = f32::NAN;
         params.rotation_deg = f32::INFINITY;
         params.opacity = f32::NAN;
-        let rendered = apply_transform_effect(&original, 2, 2, &params);
-        assert!(rendered.iter().all(|value| *value <= 255));
+        let _rendered = apply_transform_effect(&original, 2, 2, &params);
         assert_eq!(
             apply_transform_effect(&original, u32::MAX, u32::MAX, &params),
             original

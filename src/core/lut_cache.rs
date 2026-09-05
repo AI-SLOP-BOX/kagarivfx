@@ -151,10 +151,9 @@ mod tests {
         cache.get_or_insert(0.3, 0.3, 0.3, 33, |r, g, b| (r, g, b));
         assert_eq!(cache.entries.len(), 2);
         // First entry should have been evicted
-        assert!(cache
+        assert!(!cache
             .entries
-            .get(&LutCache::cache_key(0.1, 0.1, 0.1, 33))
-            .is_none());
+            .contains_key(&LutCache::cache_key(0.1, 0.1, 0.1, 33)));
     }
 
     #[test]

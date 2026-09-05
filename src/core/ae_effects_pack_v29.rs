@@ -9,15 +9,12 @@
 ///   * CC Vignette Advanced — oval/circular falloff with tint & highlight preservation
 ///
 /// All functions are deterministic, panic-free, and bilinear-sampled.
-
 // ────────────────────────── Sampling Helper ──────────────────────────
-
 /// Clamp-to-edge bilinear RGBA sample — delegates to shared `effect_utils`.
 #[inline]
 fn sample_bilinear(src: &[u8], w: u32, h: u32, fx: f32, fy: f32, out: &mut [u8; 4]) {
     crate::core::effect_utils::sample_bilinear_into(src, w, h, fx, fy, out);
 }
-
 // ─────────────────────────── CC Lens ────────────────────────────────
 
 /// Parameters for [`apply_cc_lens`].
@@ -69,7 +66,7 @@ pub fn apply_cc_lens(pixels: &mut [u8], width: u32, height: u32, p: &CcLensParam
                     mapped / norm_dist
                 } else {
                     // Concave / Pinch
-                    let mapped = (1.0 - (1.0 - norm_dist).powf((-conv).max(0.01)));
+                    let mapped = 1.0 - (1.0 - norm_dist).powf((-conv).max(0.01));
                     mapped / norm_dist
                 };
                 let sx = cx + dx * factor;
@@ -214,7 +211,7 @@ pub fn apply_card_wipe(pixels: &mut [u8], width: u32, height: u32, p: &CardWipeP
             let cos_a = angle.cos().max(0.01);
 
             let card_cx = (c as f32 + 0.5) * card_w;
-            let card_cy = (r as f32 + 0.5) * card_h;
+            let _card_cy = (r as f32 + 0.5) * card_h;
 
             let y_start = (r as f32 * card_h).floor() as u32;
             let y_end = (((r + 1) as f32 * card_h).ceil() as u32).min(height);
@@ -525,7 +522,7 @@ mod tests {
         };
         apply_timecode_burn_in(&mut pixels, w, h, &p);
         // Ensure some white pixels exist
-        assert!(pixels.iter().any(|&px| px == 255));
+        assert!(pixels.contains(&255));
     }
 
     #[test]

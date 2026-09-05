@@ -4,13 +4,11 @@
 use kagari_vfx::core::frame_cache::{self, FrameCache, PixelBufferPool};
 use kagari_vfx::core::merkle_frame_cache::MerkleFrameCache;
 use kagari_vfx::core::parallel_render::{ParallelRenderQueue, RenderQueueItem, RenderStats};
-use kagari_vfx::core::tile_cache::{self, TileCache};
-use kagari_vfx::core::timeline::{
-    Composition, Effect, EffectType, Layer, LayerType,
-};
 use kagari_vfx::core::property::Animatable;
 use kagari_vfx::core::software_renderer;
-use std::sync::atomic::{AtomicU32, AtomicBool, Ordering};
+use kagari_vfx::core::tile_cache::{self, TileCache};
+use kagari_vfx::core::timeline::{Composition, Effect, EffectType, Layer, LayerType};
+use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Arc;
 
 fn fx(effect_type: EffectType) -> Effect {
@@ -116,7 +114,11 @@ fn frame_cache_invalidate_all_clears_everything() {
     assert_eq!(cache.cached_count(), 20);
 
     cache.invalidate_all();
-    assert_eq!(cache.cached_count(), 0, "invalidate_all should clear everything");
+    assert_eq!(
+        cache.cached_count(),
+        0,
+        "invalidate_all should clear everything"
+    );
 }
 
 #[test]
@@ -194,22 +196,28 @@ fn tile_cache_version_invalidation() {
     // Capture version at insert time so we can reliably bump past it
     let v_before = tile_cache::current_tile_version();
     cache.insert(0, coord, small_tile);
-    assert!(cache.get(0, coord).is_some(), "Should be found at insert version");
+    assert!(
+        cache.get(0, coord).is_some(),
+        "Should be found at insert version"
+    );
 
     // Bump to a version strictly greater than what was captured
     let target = v_before + 1;
     while tile_cache::current_tile_version() < target {
         tile_cache::bump_tile_version();
     }
-    assert!(cache.get(0, coord).is_none(), "Stale tile should be unreachable");
+    assert!(
+        cache.get(0, coord).is_none(),
+        "Stale tile should be unreachable"
+    );
 }
 
 #[test]
 fn tile_cache_tiles_for_frame_grid_accuracy() {
     let cache = TileCache::new(256, 1024 * 1024);
     let tiles = cache.tiles_for_frame(0, 1920, 1080);
-    let expected_cols = (1920 + 255) / 256; // 8
-    let expected_rows = (1080 + 255) / 256; // 5
+    let expected_cols = 1920_usize.div_ceil(256); // 8
+    let expected_rows = 1080_usize.div_ceil(256); // 5
     assert_eq!(tiles.len(), expected_cols * expected_rows);
 }
 
@@ -347,7 +355,10 @@ fn parallel_render_progress_callback_accuracy() {
     queue.render_all(|_, _| vec![0u8; 4]);
 
     let values = progress_values.lock().unwrap();
-    assert!(!values.is_empty(), "Progress callback should have been called");
+    assert!(
+        !values.is_empty(),
+        "Progress callback should have been called"
+    );
     // Last callback should show completion
     let last = values.last().unwrap();
     assert_eq!(last.0, last.1, "Final progress should show done == total");
@@ -375,6 +386,7 @@ fn render_stats_calculation() {
 fn make_pixels(w: u32, h: u32) -> Vec<u8> {
     let mut p = vec![128u8; (w * h * 4) as usize];
     // Add gradient to avoid trivial zero-input optimization
+    #[allow(clippy::chunks_exact_to_as_chunks)]
     for (i, px) in p.chunks_exact_mut(4).enumerate() {
         px[0] = (i as f32 / (w * h) as f32 * 255.0) as u8;
         px[1] = 128;
@@ -389,69 +401,334 @@ fn all_effect_variants_render_constant_params() {
     let w = 32u32;
     let h = 32u32;
     let effects: Vec<(&str, Vec<Effect>)> = vec![
-        ("GaussianBlur", vec![fx(EffectType::GaussianBlur { blur_radius: c32(3.0) })]),
-        ("ColorTint", vec![fx(EffectType::ColorTint { color: c32a4([1.0, 0.0, 0.0, 1.0]), intensity: c32(50.0) })]),
-        ("DropShadow", vec![fx(EffectType::DropShadow { color: c32a4([0.0, 0.0, 0.0, 1.0]), opacity: c32(75.0), direction: c32(135.0), distance: c32(10.0), softness: c32(5.0) })]),
-        ("ChromaticAberration", vec![fx(EffectType::ChromaticAberration { shift_r: c32(2.0), shift_b: c32(-2.0), edge_falloff: c32(0.5), iris_linked: false })]),
-        ("Vignette", vec![fx(EffectType::Vignette { intensity: c32(50.0), roundness: c32(0.5), feather: c32(50.0), color: c32a4([0.0, 0.0, 0.0, 1.0]) })]),
-        ("Levels", vec![fx(EffectType::Levels { input_black: c32(0.0), input_white: c32(1.0), gamma: c32(1.0), output_black: c32(0.0), output_white: c32(1.0) })]),
-        ("HueSaturation", vec![fx(EffectType::HueSaturation { hue_shift: c32(0.0), saturation: c32(1.0), lightness: c32(0.0) })]),
-        ("Glow", vec![fx(EffectType::Glow { threshold: c32(0.8), radius: c32(10.0), intensity: c32(1.5), color: c32a4([1.0, 1.0, 1.0, 1.0]) })]),
-        ("Twirl", vec![fx(EffectType::Twirl { angle: c32(45.0), radius: c32(50.0) })]),
-        ("Bulge", vec![fx(EffectType::Bulge { amount: c32(0.5), radius: c32(100.0) })]),
-        ("Posterize", vec![fx(EffectType::Posterize { levels: c32(8.0) })]),
-        ("Invert", vec![fx(EffectType::Invert { invert_alpha: false })]),
-        ("Sharpen", vec![fx(EffectType::Sharpen { amount: c32(50.0) })]),
-        ("Threshold", vec![fx(EffectType::Threshold { threshold: c32(128.0) })]),
-        ("MotionBlur", vec![fx(EffectType::MotionBlur { shutter_angle: c32(180.0), samples: 8 })]),
-        ("FilmGrain", vec![fx(EffectType::FilmGrain { intensity: c32(0.3), grain_size: 1.5, color_film: false })]),
-        ("DirectionalBlur", vec![fx(EffectType::DirectionalBlur { angle: c32(45.0), length: c32(10.0) })]),
-        ("RadialBlur", vec![fx(EffectType::RadialBlur { amount: c32(10.0) })]),
-        ("LinearWipe", vec![fx(EffectType::LinearWipe { completion: c32(50.0), angle: c32(0.0) })]),
-        ("Offset", vec![fx(EffectType::Offset { shift_x: c32(10.0), shift_y: c32(10.0) })]),
-        ("SimpleChoker", vec![fx(EffectType::SimpleChoker { choke_amount: c32(2.0) })]),
-        ("TurbulentDisplace", vec![fx(EffectType::TurbulentDisplace { amount: c32(20.0), size: c32(50.0), evolution: c32(0.0), complexity: c32(3.0) })]),
-        ("Minimax", vec![fx(EffectType::Minimax { operation: c32(0.5), radius: c32(3.0) })]),
-        ("ShiftChannels", vec![fx(EffectType::ShiftChannels { take_red: c32(0.0), take_green: c32(1.0), take_blue: c32(2.0), take_alpha: c32(3.0) })]),
-        ("VenetianBlinds", vec![fx(EffectType::VenetianBlinds { completion: c32(50.0), width: c32(10.0) })]),
-        ("Tritone", vec![fx(EffectType::Tritone { shadow_color: Animatable::new_constant([0.0; 3]), mid_color: Animatable::new_constant([0.5; 3]), highlight_color: Animatable::new_constant([1.0; 3]) })]),
-        ("MatteChoker", vec![fx(EffectType::MatteChoker { choke_amount: c32(2.0), gray_level: c32(0.5) })]),
-        ("Vibrance", vec![fx(EffectType::Vibrance { amount: c32(50.0) })]),
-        ("WhiteBalance", vec![fx(EffectType::WhiteBalance { temperature: c32(0.0), tint: c32(0.0) })]),
-        ("HslAdjust", vec![fx(EffectType::HslAdjust { hue_deg: c32(0.0), saturation: c32(1.0), lightness: c32(0.0) })]),
-        ("Vortex", vec![fx(EffectType::Vortex { radius: c32(100.0), angle_deg: c32(45.0) })]),
-        ("HeatDistortion", vec![fx(EffectType::HeatDistortion { strength: c32(10.0), speed: c32(1.0) })]),
-        ("RainRipples", vec![fx(EffectType::RainRipples { drop_count: c32(10.0), wave_strength: c32(0.5) })]),
-        ("Fisheye", vec![fx(EffectType::Fisheye { strength: c32(0.5) })]),
-        ("LensCorrection", vec![fx(EffectType::LensCorrection { k1: c32(0.0), k2: c32(0.0) })]),
-        ("GlitchDisplacement", vec![fx(EffectType::GlitchDisplacement { seed: c32(42.0), amount: c32(10.0) })]),
-        ("CrtScanlines", vec![fx(EffectType::CrtScanlines { line_spacing: c32(4.0), intensity: c32(0.5) })]),
-        ("GlowPro", vec![fx(EffectType::GlowPro { threshold: c32(0.8), radius: c32(10.0), intensity: c32(1.5) })]),
-        ("RadialFastBlur", vec![fx(EffectType::RadialFastBlur { amount: c32(10.0), samples: 8 })]),
-        ("BendIt", vec![fx(EffectType::BendIt { top_offset: c32(0.0), bottom_offset: c32(0.0) })]),
-        ("Tiler", vec![fx(EffectType::Tiler { scale_percent: c32(100.0), mirror: false })]),
+        (
+            "GaussianBlur",
+            vec![fx(EffectType::GaussianBlur {
+                blur_radius: c32(3.0),
+            })],
+        ),
+        (
+            "ColorTint",
+            vec![fx(EffectType::ColorTint {
+                color: c32a4([1.0, 0.0, 0.0, 1.0]),
+                intensity: c32(50.0),
+            })],
+        ),
+        (
+            "DropShadow",
+            vec![fx(EffectType::DropShadow {
+                color: c32a4([0.0, 0.0, 0.0, 1.0]),
+                opacity: c32(75.0),
+                direction: c32(135.0),
+                distance: c32(10.0),
+                softness: c32(5.0),
+            })],
+        ),
+        (
+            "ChromaticAberration",
+            vec![fx(EffectType::ChromaticAberration {
+                shift_r: c32(2.0),
+                shift_b: c32(-2.0),
+                edge_falloff: c32(0.5),
+                iris_linked: false,
+            })],
+        ),
+        (
+            "Vignette",
+            vec![fx(EffectType::Vignette {
+                intensity: c32(50.0),
+                roundness: c32(0.5),
+                feather: c32(50.0),
+                color: c32a4([0.0, 0.0, 0.0, 1.0]),
+            })],
+        ),
+        (
+            "Levels",
+            vec![fx(EffectType::Levels {
+                input_black: c32(0.0),
+                input_white: c32(1.0),
+                gamma: c32(1.0),
+                output_black: c32(0.0),
+                output_white: c32(1.0),
+            })],
+        ),
+        (
+            "HueSaturation",
+            vec![fx(EffectType::HueSaturation {
+                hue_shift: c32(0.0),
+                saturation: c32(1.0),
+                lightness: c32(0.0),
+            })],
+        ),
+        (
+            "Glow",
+            vec![fx(EffectType::Glow {
+                threshold: c32(0.8),
+                radius: c32(10.0),
+                intensity: c32(1.5),
+                color: c32a4([1.0, 1.0, 1.0, 1.0]),
+            })],
+        ),
+        (
+            "Twirl",
+            vec![fx(EffectType::Twirl {
+                angle: c32(45.0),
+                radius: c32(50.0),
+            })],
+        ),
+        (
+            "Bulge",
+            vec![fx(EffectType::Bulge {
+                amount: c32(0.5),
+                radius: c32(100.0),
+            })],
+        ),
+        (
+            "Posterize",
+            vec![fx(EffectType::Posterize { levels: c32(8.0) })],
+        ),
+        (
+            "Invert",
+            vec![fx(EffectType::Invert {
+                invert_alpha: false,
+            })],
+        ),
+        (
+            "Sharpen",
+            vec![fx(EffectType::Sharpen { amount: c32(50.0) })],
+        ),
+        (
+            "Threshold",
+            vec![fx(EffectType::Threshold {
+                threshold: c32(128.0),
+            })],
+        ),
+        (
+            "MotionBlur",
+            vec![fx(EffectType::MotionBlur {
+                shutter_angle: c32(180.0),
+                samples: 8,
+            })],
+        ),
+        (
+            "FilmGrain",
+            vec![fx(EffectType::FilmGrain {
+                intensity: c32(0.3),
+                grain_size: 1.5,
+                color_film: false,
+            })],
+        ),
+        (
+            "DirectionalBlur",
+            vec![fx(EffectType::DirectionalBlur {
+                angle: c32(45.0),
+                length: c32(10.0),
+            })],
+        ),
+        (
+            "RadialBlur",
+            vec![fx(EffectType::RadialBlur { amount: c32(10.0) })],
+        ),
+        (
+            "LinearWipe",
+            vec![fx(EffectType::LinearWipe {
+                completion: c32(50.0),
+                angle: c32(0.0),
+            })],
+        ),
+        (
+            "Offset",
+            vec![fx(EffectType::Offset {
+                shift_x: c32(10.0),
+                shift_y: c32(10.0),
+            })],
+        ),
+        (
+            "SimpleChoker",
+            vec![fx(EffectType::SimpleChoker {
+                choke_amount: c32(2.0),
+            })],
+        ),
+        (
+            "TurbulentDisplace",
+            vec![fx(EffectType::TurbulentDisplace {
+                amount: c32(20.0),
+                size: c32(50.0),
+                evolution: c32(0.0),
+                complexity: c32(3.0),
+            })],
+        ),
+        (
+            "Minimax",
+            vec![fx(EffectType::Minimax {
+                operation: c32(0.5),
+                radius: c32(3.0),
+            })],
+        ),
+        (
+            "ShiftChannels",
+            vec![fx(EffectType::ShiftChannels {
+                take_red: c32(0.0),
+                take_green: c32(1.0),
+                take_blue: c32(2.0),
+                take_alpha: c32(3.0),
+            })],
+        ),
+        (
+            "VenetianBlinds",
+            vec![fx(EffectType::VenetianBlinds {
+                completion: c32(50.0),
+                width: c32(10.0),
+            })],
+        ),
+        (
+            "Tritone",
+            vec![fx(EffectType::Tritone {
+                shadow_color: Animatable::new_constant([0.0; 3]),
+                mid_color: Animatable::new_constant([0.5; 3]),
+                highlight_color: Animatable::new_constant([1.0; 3]),
+            })],
+        ),
+        (
+            "MatteChoker",
+            vec![fx(EffectType::MatteChoker {
+                choke_amount: c32(2.0),
+                gray_level: c32(0.5),
+            })],
+        ),
+        (
+            "Vibrance",
+            vec![fx(EffectType::Vibrance { amount: c32(50.0) })],
+        ),
+        (
+            "WhiteBalance",
+            vec![fx(EffectType::WhiteBalance {
+                temperature: c32(0.0),
+                tint: c32(0.0),
+            })],
+        ),
+        (
+            "HslAdjust",
+            vec![fx(EffectType::HslAdjust {
+                hue_deg: c32(0.0),
+                saturation: c32(1.0),
+                lightness: c32(0.0),
+            })],
+        ),
+        (
+            "Vortex",
+            vec![fx(EffectType::Vortex {
+                radius: c32(100.0),
+                angle_deg: c32(45.0),
+            })],
+        ),
+        (
+            "HeatDistortion",
+            vec![fx(EffectType::HeatDistortion {
+                strength: c32(10.0),
+                speed: c32(1.0),
+            })],
+        ),
+        (
+            "RainRipples",
+            vec![fx(EffectType::RainRipples {
+                drop_count: c32(10.0),
+                wave_strength: c32(0.5),
+            })],
+        ),
+        (
+            "Fisheye",
+            vec![fx(EffectType::Fisheye { strength: c32(0.5) })],
+        ),
+        (
+            "LensCorrection",
+            vec![fx(EffectType::LensCorrection {
+                k1: c32(0.0),
+                k2: c32(0.0),
+            })],
+        ),
+        (
+            "GlitchDisplacement",
+            vec![fx(EffectType::GlitchDisplacement {
+                seed: c32(42.0),
+                amount: c32(10.0),
+            })],
+        ),
+        (
+            "CrtScanlines",
+            vec![fx(EffectType::CrtScanlines {
+                line_spacing: c32(4.0),
+                intensity: c32(0.5),
+            })],
+        ),
+        (
+            "GlowPro",
+            vec![fx(EffectType::GlowPro {
+                threshold: c32(0.8),
+                radius: c32(10.0),
+                intensity: c32(1.5),
+            })],
+        ),
+        (
+            "RadialFastBlur",
+            vec![fx(EffectType::RadialFastBlur {
+                amount: c32(10.0),
+                samples: 8,
+            })],
+        ),
+        (
+            "BendIt",
+            vec![fx(EffectType::BendIt {
+                top_offset: c32(0.0),
+                bottom_offset: c32(0.0),
+            })],
+        ),
+        (
+            "Tiler",
+            vec![fx(EffectType::Tiler {
+                scale_percent: c32(100.0),
+                mirror: false,
+            })],
+        ),
     ];
 
     for (name, effects) in &effects {
         let mut pixels = make_pixels(w, h);
         kagari_vfx::core::cpu_effects::apply_layer_effects(
-            None, None, &mut pixels, w, h, effects, 0, 30,
+            None,
+            None,
+            &mut pixels,
+            w,
+            h,
+            effects,
+            0,
+            30,
         );
-        // Verify all output pixels are in valid range
-        for (i, &p) in pixels.iter().enumerate() {
-            assert!(p <= 255, "{name}: pixel[{i}] = {p} out of range");
-        }
         // Verify buffer size unchanged
-        assert_eq!(pixels.len(), (w * h * 4) as usize, "{name}: wrong buffer size");
+        assert_eq!(
+            pixels.len(),
+            (w * h * 4) as usize,
+            "{name}: wrong buffer size"
+        );
     }
 }
 
 #[test]
 fn all_effects_with_zero_size_buffer_no_panic() {
     let effects = vec![
-        fx(EffectType::GaussianBlur { blur_radius: c32(5.0) }),
-        fx(EffectType::Glow { threshold: c32(0.5), radius: c32(5.0), intensity: c32(1.0), color: c32a4([1.0; 4]) }),
-        fx(EffectType::Twirl { angle: c32(30.0), radius: c32(50.0) }),
+        fx(EffectType::GaussianBlur {
+            blur_radius: c32(5.0),
+        }),
+        fx(EffectType::Glow {
+            threshold: c32(0.5),
+            radius: c32(5.0),
+            intensity: c32(1.0),
+            color: c32a4([1.0; 4]),
+        }),
+        fx(EffectType::Twirl {
+            angle: c32(30.0),
+            radius: c32(50.0),
+        }),
         fx(EffectType::Sharpen { amount: c32(50.0) }),
     ];
     let mut empty = vec![0u8; 0];
@@ -463,11 +740,28 @@ fn all_effects_with_zero_size_buffer_no_panic() {
 #[test]
 fn all_effects_on_1x1_buffer_no_panic() {
     let effects = vec![
-        fx(EffectType::GaussianBlur { blur_radius: c32(999.0) }),
-        fx(EffectType::Glow { threshold: c32(0.0), radius: c32(999.0), intensity: c32(999.0), color: c32a4([1.0; 4]) }),
-        fx(EffectType::Twirl { angle: c32(9999.0), radius: c32(9999.0) }),
-        fx(EffectType::Vignette { intensity: c32(999.0), roundness: c32(999.0), feather: c32(999.0), color: c32a4([1.0; 4]) }),
-        fx(EffectType::Sharpen { amount: c32(9999.0) }),
+        fx(EffectType::GaussianBlur {
+            blur_radius: c32(999.0),
+        }),
+        fx(EffectType::Glow {
+            threshold: c32(0.0),
+            radius: c32(999.0),
+            intensity: c32(999.0),
+            color: c32a4([1.0; 4]),
+        }),
+        fx(EffectType::Twirl {
+            angle: c32(9999.0),
+            radius: c32(9999.0),
+        }),
+        fx(EffectType::Vignette {
+            intensity: c32(999.0),
+            roundness: c32(999.0),
+            feather: c32(999.0),
+            color: c32a4([1.0; 4]),
+        }),
+        fx(EffectType::Sharpen {
+            amount: c32(9999.0),
+        }),
     ];
     let mut tiny = vec![128u8; 4];
     kagari_vfx::core::cpu_effects::apply_layer_effects(
@@ -480,22 +774,45 @@ fn all_effects_idempotent() {
     let w = 16u32;
     let h = 16u32;
     let effects = vec![
-        fx(EffectType::GaussianBlur { blur_radius: c32(3.0) }),
+        fx(EffectType::GaussianBlur {
+            blur_radius: c32(3.0),
+        }),
         fx(EffectType::Sharpen { amount: c32(50.0) }),
-        fx(EffectType::Threshold { threshold: c32(128.0) }),
-        fx(EffectType::Invert { invert_alpha: false }),
+        fx(EffectType::Threshold {
+            threshold: c32(128.0),
+        }),
+        fx(EffectType::Invert {
+            invert_alpha: false,
+        }),
     ];
 
     let mut pixels1 = make_pixels(w, h);
     let mut pixels2 = pixels1.clone();
 
     kagari_vfx::core::cpu_effects::apply_layer_effects(
-        None, None, &mut pixels1, w, h, &effects, 0, 30,
+        None,
+        None,
+        &mut pixels1,
+        w,
+        h,
+        &effects,
+        0,
+        30,
     );
     kagari_vfx::core::cpu_effects::apply_layer_effects(
-        None, None, &mut pixels2, w, h, &effects, 0, 30,
+        None,
+        None,
+        &mut pixels2,
+        w,
+        h,
+        &effects,
+        0,
+        30,
     );
-    assert_eq!(pixels1, pixels2, "Same effects on same input must produce identical output");
+    assert_eq!(
+        pixels1, pixels2,
+        "Same effects on same input must produce identical output"
+    );
 }
 
 #[test]
@@ -504,12 +821,20 @@ fn effect_order_matters() {
     let h = 16u32;
 
     let effects_a = vec![
-        fx(EffectType::Invert { invert_alpha: false }),
-        fx(EffectType::Threshold { threshold: c32(128.0) }),
+        fx(EffectType::Invert {
+            invert_alpha: false,
+        }),
+        fx(EffectType::Threshold {
+            threshold: c32(128.0),
+        }),
     ];
     let effects_b = vec![
-        fx(EffectType::Threshold { threshold: c32(128.0) }),
-        fx(EffectType::Invert { invert_alpha: false }),
+        fx(EffectType::Threshold {
+            threshold: c32(128.0),
+        }),
+        fx(EffectType::Invert {
+            invert_alpha: false,
+        }),
     ];
 
     let mut px_a = make_pixels(w, h);
@@ -542,7 +867,9 @@ fn full_pipeline_render_with_effects() {
         10,
     );
     layer.effects = vec![
-        fx(EffectType::GaussianBlur { blur_radius: c32(3.0) }),
+        fx(EffectType::GaussianBlur {
+            blur_radius: c32(3.0),
+        }),
         fx(EffectType::Vignette {
             intensity: c32(50.0),
             roundness: c32(0.5),
@@ -557,7 +884,6 @@ fn full_pipeline_render_with_effects() {
         let pixels = software_renderer::render_frame_to_pixels(&comp, frame, 64, 64, 0.0, 0);
         assert_eq!(pixels.len(), 64 * 64 * 4, "Frame {frame} wrong size");
         // All pixels must be valid u8
-        assert!(pixels.iter().all(|&p| p <= 255));
     }
 }
 
@@ -569,24 +895,30 @@ fn multi_layer_composite_render() {
     comp.layers.push(Layer::new(
         "red".into(),
         "Red".into(),
-        LayerType::Solid { color: [1.0, 0.0, 0.0, 1.0] },
+        LayerType::Solid {
+            color: [1.0, 0.0, 0.0, 1.0],
+        },
         5,
     ));
     // Green layer (should composite on top)
     comp.layers.push(Layer::new(
         "green".into(),
         "Green".into(),
-        LayerType::Solid { color: [0.0, 1.0, 0.0, 1.0] },
+        LayerType::Solid {
+            color: [0.0, 1.0, 0.0, 1.0],
+        },
         5,
     ));
 
     let pixels = software_renderer::render_frame_to_pixels(&comp, 0, 32, 32, 0.0, 0);
     assert_eq!(pixels.len(), 32 * 32 * 4);
     // All pixels must be valid
-    assert!(pixels.iter().all(|&p| p <= 255));
     // Output should not be empty or all-zero
     let total: u64 = pixels.iter().map(|&p| p as u64).sum();
-    assert!(total > 0, "Multi-layer render should produce non-zero output");
+    assert!(
+        total > 0,
+        "Multi-layer render should produce non-zero output"
+    );
 }
 
 #[test]
@@ -596,7 +928,9 @@ fn blend_mode_composite_render() {
     let bottom = Layer::new(
         "bottom".into(),
         "Bottom".into(),
-        LayerType::Solid { color: [0.5, 0.5, 0.5, 1.0] },
+        LayerType::Solid {
+            color: [0.5, 0.5, 0.5, 1.0],
+        },
         1,
     );
     comp.layers.push(bottom);
@@ -604,7 +938,9 @@ fn blend_mode_composite_render() {
     let mut top = Layer::new(
         "top".into(),
         "Top".into(),
-        LayerType::Solid { color: [0.5, 0.2, 0.2, 1.0] },
+        LayerType::Solid {
+            color: [0.5, 0.2, 0.2, 1.0],
+        },
         1,
     );
     top.blend_mode = kagari_vfx::core::timeline::BlendMode::Add;

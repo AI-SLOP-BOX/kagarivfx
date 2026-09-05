@@ -11,13 +11,11 @@
 /// All functions are deterministic, panic-free, and reuse clamp-to-edge
 /// bilinear sampling semantics consistent with Part 27.
 // ────────────────────────── Sampling Helper ──────────────────────────
-
 /// Clamp-to-edge bilinear RGBA sample — delegates to shared `effect_utils`.
 #[inline]
 fn sample_bilinear(src: &[u8], w: u32, h: u32, fx: f32, fy: f32, out: &mut [u8; 4]) {
     crate::core::effect_utils::sample_bilinear_into(src, w, h, fx, fy, out);
 }
-
 // ─────────────────────────── CC Light Sweep ──────────────────────────
 
 /// Parameters for [`apply_light_sweep`].

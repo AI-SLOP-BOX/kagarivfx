@@ -43,7 +43,9 @@ fn repeated_comp(options: ShapeRepeaterOptions) -> Composition {
 
 fn red_pixel_count(pixels: &[u8]) -> usize {
     pixels
-        .chunks_exact(4)
+        .as_chunks::<4>()
+        .0
+        .iter()
         .filter(|pixel| pixel[0] > 200 && pixel[1] < 40 && pixel[2] < 40)
         .count()
 }
@@ -54,9 +56,11 @@ fn red_at(pixels: &[u8], x: usize, y: usize) -> u8 {
 
 #[test]
 fn repeater_render_contains_separated_copies() {
-    let mut options = ShapeRepeaterOptions::default();
-    options.copies = 3;
-    options.position_offset = [32.0, 0.0];
+    let options = ShapeRepeaterOptions {
+        copies: 3,
+        position_offset: [32.0, 0.0],
+        ..Default::default()
+    };
     let pixels = render_frame_to_pixels(&repeated_comp(options), 0, 128, 64, 0.0, 0);
     assert!(red_pixel_count(&pixels) > 3 * 20);
     assert!(red_at(&pixels, 16, 32) > 200);
@@ -66,9 +70,11 @@ fn repeater_render_contains_separated_copies() {
 
 #[test]
 fn repeater_render_keeps_far_copy_inside_bounds() {
-    let mut options = ShapeRepeaterOptions::default();
-    options.copies = 2;
-    options.position_offset = [96.0, 0.0];
+    let options = ShapeRepeaterOptions {
+        copies: 2,
+        position_offset: [96.0, 0.0],
+        ..Default::default()
+    };
     let pixels = render_frame_to_pixels(&repeated_comp(options), 0, 128, 64, 0.0, 0);
     assert!(red_at(&pixels, 16, 32) > 200);
     assert!(red_at(&pixels, 112, 32) > 200);
@@ -76,30 +82,36 @@ fn repeater_render_keeps_far_copy_inside_bounds() {
 
 #[test]
 fn zero_copy_repeater_does_not_render_shape() {
-    let mut options = ShapeRepeaterOptions::default();
-    options.copies = 0;
+    let options = ShapeRepeaterOptions {
+        copies: 0,
+        ..Default::default()
+    };
     let pixels = render_frame_to_pixels(&repeated_comp(options), 0, 128, 64, 0.0, 0);
     assert_eq!(red_pixel_count(&pixels), 0);
 }
 
 #[test]
 fn rotated_repeater_copy_keeps_diagonal_corners() {
-    let mut options = ShapeRepeaterOptions::default();
-    options.copies = 2;
-    options.position_offset = [48.0, 0.0];
-    options.rotation_offset_deg = 45.0;
+    let options = ShapeRepeaterOptions {
+        copies: 2,
+        position_offset: [48.0, 0.0],
+        rotation_offset_deg: 45.0,
+        ..Default::default()
+    };
     let pixels = render_frame_to_pixels(&repeated_comp(options), 0, 128, 64, 0.0, 0);
     assert!(red_pixel_count(&pixels) > 2 * 20);
 }
 
 #[test]
 fn animated_copy_count_changes_rendered_frame() {
-    let mut options = ShapeRepeaterOptions::default();
-    options.position_offset = [24.0, 0.0];
     let mut copies = Animatable::new_constant(1.0);
     copies.add_keyframe(Keyframe::new(0, 1.0, InterpolationType::Linear));
     copies.add_keyframe(Keyframe::new(10, 4.0, InterpolationType::Linear));
-    options.copies_animation = Some(copies);
+    let options = ShapeRepeaterOptions {
+        position_offset: [24.0, 0.0],
+        copies_animation: Some(copies),
+        ..Default::default()
+    };
 
     let frame0 = render_frame_to_pixels(&repeated_comp(options.clone()), 0, 128, 64, 0.0, 0);
     let frame10 = render_frame_to_pixels(&repeated_comp(options), 10, 128, 64, 0.0, 0);
@@ -207,9 +219,11 @@ fn corner_index(x: usize, y: usize) -> usize {
 
 #[test]
 fn versioned_project_roundtrip_preserves_repeater_render() {
-    let mut options = ShapeRepeaterOptions::default();
-    options.copies = 3;
-    options.position_offset = [28.0, 0.0];
+    let options = ShapeRepeaterOptions {
+        copies: 3,
+        position_offset: [28.0, 0.0],
+        ..Default::default()
+    };
     let project = Project {
         compositions: vec![repeated_comp(options)],
         active_composition_idx: 0,

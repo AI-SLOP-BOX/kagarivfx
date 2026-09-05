@@ -1,13 +1,13 @@
 //! Hardened regression tests — catch structural bugs, layout mismatches,
 //! boundary-value errors, and cross-module inconsistencies.
 
-use kagari_vfx::core::timeline::{
-    BlendMode, Composition, Effect, EffectType, Layer, LayerType, TrackMatteMode,
-};
 use kagari_vfx::core::expression_engine;
 use kagari_vfx::core::keyframe::InterpolationType;
 use kagari_vfx::core::property::Animatable;
 use kagari_vfx::core::software_renderer;
+use kagari_vfx::core::timeline::{
+    BlendMode, Composition, Effect, EffectType, Layer, LayerType, TrackMatteMode,
+};
 
 fn fx(effect_type: EffectType) -> Effect {
     Effect {
@@ -53,14 +53,18 @@ fn make_gradient(w: u32, h: u32) -> Vec<u8> {
 fn effects_boundary_sweep(params: Vec<(&str, Vec<Effect>)>) {
     let w = 32u32;
     let h = 32u32;
-    for (name, effects) in &params {
+    for (_name, effects) in &params {
         let mut pixels = make_gradient(w, h);
         kagari_vfx::core::cpu_effects::apply_layer_effects(
-            None, None, &mut pixels, w, h, effects, 0, 30,
+            None,
+            None,
+            &mut pixels,
+            w,
+            h,
+            effects,
+            0,
+            30,
         );
-        for (i, &p) in pixels.iter().enumerate() {
-            assert!(p <= 255, "{name}: pixel[{i}] = {p} out of range");
-        }
     }
 }
 
@@ -72,9 +76,17 @@ fn effects_boundary_sweep(params: Vec<(&str, Vec<Effect>)>) {
 fn shader_wgsl_parses_and_has_both_entry_points() {
     let source = include_str!("../src/core/shader.wgsl");
     let module = naga::front::wgsl::parse_str(source);
-    assert!(module.is_ok(), "shader.wgsl failed to parse: {:?}", module.err());
+    assert!(
+        module.is_ok(),
+        "shader.wgsl failed to parse: {:?}",
+        module.err()
+    );
     let module = module.unwrap();
-    let names: Vec<&str> = module.entry_points.iter().map(|ep| ep.name.as_str()).collect();
+    let names: Vec<&str> = module
+        .entry_points
+        .iter()
+        .map(|ep| ep.name.as_str())
+        .collect();
     assert!(names.contains(&"vs_main"), "shader.wgsl missing vs_main");
     assert!(names.contains(&"fs_main"), "shader.wgsl missing fs_main");
 }
@@ -105,7 +117,9 @@ fn shader_passes_full_validation() {
         naga::valid::ValidationFlags::all(),
         naga::valid::Capabilities::empty(),
     );
-    let _info = validator.validate(&module).expect("shader.wgsl must pass naga type validation");
+    let _info = validator
+        .validate(&module)
+        .expect("shader.wgsl must pass naga type validation");
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -212,9 +226,7 @@ fn effects_extreme_values_no_panic() {
         ),
         (
             "posterize_zero",
-            vec![fx(EffectType::Posterize {
-                levels: c32(0.0),
-            })],
+            vec![fx(EffectType::Posterize { levels: c32(0.0) })],
         ),
         (
             "threshold_extreme",
@@ -260,9 +272,7 @@ fn effects_extreme_values_no_panic() {
         ),
         (
             "invert",
-            vec![fx(EffectType::Invert {
-                invert_alpha: true,
-            })],
+            vec![fx(EffectType::Invert { invert_alpha: true })],
         ),
         (
             "invert_alpha",
@@ -335,7 +345,14 @@ fn effects_nan_safety() {
     ];
     let mut pixels = vec![128u8; (w * h * 4) as usize];
     kagari_vfx::core::cpu_effects::apply_layer_effects(
-        None, None, &mut pixels, w, h, &effects, 0, 30,
+        None,
+        None,
+        &mut pixels,
+        w,
+        h,
+        &effects,
+        0,
+        30,
     );
     assert_eq!(pixels.len(), (w * h * 4) as usize);
 }
@@ -359,7 +376,14 @@ fn effects_inf_safety() {
     ];
     let mut pixels = vec![128u8; (w * h * 4) as usize];
     kagari_vfx::core::cpu_effects::apply_layer_effects(
-        None, None, &mut pixels, w, h, &effects, 0, 30,
+        None,
+        None,
+        &mut pixels,
+        w,
+        h,
+        &effects,
+        0,
+        30,
     );
     assert_eq!(pixels.len(), (w * h * 4) as usize);
 }
@@ -371,13 +395,27 @@ fn effects_tiny_buffer_boundary() {
     })];
     let mut pixels_1x1 = vec![200u8; 4];
     kagari_vfx::core::cpu_effects::apply_layer_effects(
-        None, None, &mut pixels_1x1, 1, 1, &effects, 0, 30,
+        None,
+        None,
+        &mut pixels_1x1,
+        1,
+        1,
+        &effects,
+        0,
+        30,
     );
     assert_eq!(pixels_1x1.len(), 4);
 
     let mut pixels_2x2 = vec![200u8; 16];
     kagari_vfx::core::cpu_effects::apply_layer_effects(
-        None, None, &mut pixels_2x2, 2, 2, &effects, 0, 30,
+        None,
+        None,
+        &mut pixels_2x2,
+        2,
+        2,
+        &effects,
+        0,
+        30,
     );
     assert_eq!(pixels_2x2.len(), 16);
 
@@ -403,12 +441,17 @@ fn effects_disabled_are_noops() {
             intensity: c32(999.0),
             color: c32a4([1.0, 0.0, 0.0, 1.0]),
         }),
-        fx_disabled(EffectType::Invert {
-            invert_alpha: true,
-        }),
+        fx_disabled(EffectType::Invert { invert_alpha: true }),
     ];
     kagari_vfx::core::cpu_effects::apply_layer_effects(
-        None, None, &mut pixels, w, h, &effects, 0, 30,
+        None,
+        None,
+        &mut pixels,
+        w,
+        h,
+        &effects,
+        0,
+        30,
     );
     assert_eq!(pixels, original);
 }
@@ -422,21 +465,17 @@ fn expression_blocks_dangerous_symbols() {
     let engine = expression_engine::build_engine();
     // These should fail at compile or runtime due to disabled symbols or sandbox restrictions.
     // validate_script only checks syntax, so we also test eval_f32 for runtime blocking.
-    let dangerous_compile_fail = vec![
-        "eval(\"1 + 1\")",
-        "call(\"system\", \"ls\")",
-    ];
+    let dangerous_compile_fail = vec!["eval(\"1 + 1\")", "call(\"system\", \"ls\")"];
     for script in dangerous_compile_fail {
         let result = expression_engine::validate_script(&engine, script);
-        assert!(result.is_err(), "DANGEROUS script NOT blocked at compile: {script}");
+        assert!(
+            result.is_err(),
+            "DANGEROUS script NOT blocked at compile: {script}"
+        );
     }
 
     // These may compile as syntax but must fail or return non-finite at runtime
-    let dangerous_runtime = vec![
-        "to_json(42)",
-        "from_json(\"{}\")",
-        "import(\"foo\")",
-    ];
+    let dangerous_runtime = vec!["to_json(42)", "from_json(\"{}\")", "import(\"foo\")"];
     for script in dangerous_runtime {
         let result = expression_engine::eval_f32(&engine, script, 0.0, 0, 30);
         // Must not produce a finite usable value from a dangerous operation
@@ -472,7 +511,10 @@ fn expression_wiggle_finite_across_frames() {
     for frame in 0..120u32 {
         let script = format!("wiggle({frame}, 10)");
         let result = expression_engine::eval_f32(&engine, &script, 100.0, frame, 30);
-        assert!(result.is_finite(), "wiggle returned {result} at frame {frame}");
+        assert!(
+            result.is_finite(),
+            "wiggle returned {result} at frame {frame}"
+        );
     }
 }
 
@@ -495,7 +537,10 @@ fn expression_loopout_finite() {
     for frame in 0..300u32 {
         let script = "loopOut(\"cycle\", 100)";
         let result = expression_engine::eval_f32(&engine, script, 50.0, frame, 30);
-        assert!(result.is_finite(), "loopOut returned {result} at frame {frame}");
+        assert!(
+            result.is_finite(),
+            "loopOut returned {result} at frame {frame}"
+        );
     }
 }
 
@@ -605,13 +650,11 @@ fn serialization_all_effect_types_roundtrip() {
             amount: c32(0.5),
             radius: c32(100.0),
         }),
-        fx(EffectType::Posterize {
-            levels: c32(8.0),
+        fx(EffectType::Posterize { levels: c32(8.0) }),
+        fx(EffectType::Invert {
+            invert_alpha: false,
         }),
-        fx(EffectType::Invert { invert_alpha: false }),
-        fx(EffectType::Sharpen {
-            amount: c32(50.0),
-        }),
+        fx(EffectType::Sharpen { amount: c32(50.0) }),
         fx(EffectType::Threshold {
             threshold: c32(128.0),
         }),
@@ -957,7 +1000,7 @@ fn all_blend_modes_render_safely() {
             },
             1,
         );
-        layer.blend_mode = mode.clone();
+        layer.blend_mode = mode;
         comp.layers.push(layer);
 
         let p = software_renderer::render_frame_to_pixels(&comp, 0, 16, 16, 0.0, 0);
@@ -991,9 +1034,9 @@ fn all_track_matte_modes_render_safely() {
             LayerType::Solid {
                 color: [1.0, 0.0, 0.0, 1.0],
             },
-        1,
+            1,
         );
-        content.track_matte = mode.clone();
+        content.track_matte = mode;
         comp.layers.push(content);
 
         let p = software_renderer::render_frame_to_pixels(&comp, 0, 16, 16, 0.0, 0);
@@ -1082,19 +1125,10 @@ fn precomp_self_reference_terminates() {
 #[test]
 fn precomp_deep_nesting_terminates() {
     let mut comps: Vec<Composition> = (0..30)
-        .map(|i| {
-            Composition::new(
-                format!("comp_{i}"),
-                format!("Comp {i}"),
-                16,
-                16,
-                30,
-                1,
-            )
-        })
+        .map(|i| Composition::new(format!("comp_{i}"), format!("Comp {i}"), 16, 16, 30, 1))
         .collect();
-    for i in 0..29 {
-        comps[i].layers.push(Layer::new(
+    for (i, comp) in comps.iter_mut().take(29).enumerate() {
+        comp.layers.push(Layer::new(
             format!("ref_{i}"),
             format!("Ref {i}"),
             LayerType::PreComp {

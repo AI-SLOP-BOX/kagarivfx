@@ -129,11 +129,3 @@ pub fn draw_essential_properties(app: &mut KagariApp, ui: &mut egui::Ui) {
         crate::core::frame_cache::bump_version();
     }
 }
-
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn test_essential_panel_creation() {
-        assert!(true);
-    }
-}
