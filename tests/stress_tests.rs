@@ -325,3 +325,145 @@ fn undo_redo_separate_drags_create_separate_entries() {
         "drag2"
     );
 }
+
+#[test]
+fn stress_effect_slider_drag_undo_redo_chain() {
+    use kagari_vfx::core::timeline::{Effect, EffectType};
+
+    let mut project = Project::default();
+    project.compositions.clear();
+    let mut comp = Composition::new("c".into(), "Stress".into(), 100, 100, 10, 10);
+    let mut layer = Layer::new(
+        "l0".into(),
+        "Layer0".into(),
+        LayerType::Solid {
+            color: [1.0, 1.0, 1.0, 1.0],
+        },
+        10,
+    );
+    layer.effects.push(Effect {
+        id: "blur_0".into(),
+        name: "Gaussian Blur".into(),
+        effect_type: EffectType::GaussianBlur {
+            blur_radius: Animatable::new_constant(5.0),
+        },
+        enabled: true,
+    });
+    comp.layers.push(layer);
+    project.compositions.push(comp);
+
+    let mut history = ProjectHistory::new(project.clone());
+
+    // Verify initial state has the effect
+    assert_eq!(history.current().compositions[0].layers[0].effects.len(), 1);
+
+    // Simulate 49 rapid slider drags on blur_radius (50 total entries with initial)
+    for i in 1..=49u32 {
+        let mut post = history.current().clone();
+        {
+            let effect = &mut post.compositions[0].layers[0].effects[0];
+            if let EffectType::GaussianBlur { blur_radius } = &mut effect.effect_type {
+                *blur_radius = Animatable::new_constant(i as f32);
+            }
+        }
+        history.commit_action(post, &format!("Drag {}", i));
+    }
+
+    // Verify final state (49.0 because max_history_entries=50 trims the initial entry)
+    {
+        let effect = &history.current().compositions[0].layers[0].effects[0];
+        if let EffectType::GaussianBlur { blur_radius } = &effect.effect_type {
+            assert_eq!(blur_radius.value_at(0), 49.0);
+        } else {
+            panic!("Expected GaussianBlur");
+        }
+    }
+
+    // Undo all 49 drags (back to initial state)
+    for _ in 0..49 {
+        history.undo();
+    }
+    {
+        let effect = &history.current().compositions[0].layers[0].effects[0];
+        if let EffectType::GaussianBlur { blur_radius } = &effect.effect_type {
+            assert_eq!(blur_radius.value_at(0), 5.0);
+        } else {
+            panic!("Expected GaussianBlur");
+        }
+    }
+
+    // Redo all 49 drags
+    for _ in 0..49 {
+        history.redo();
+    }
+    {
+        let effect = &history.current().compositions[0].layers[0].effects[0];
+        if let EffectType::GaussianBlur { blur_radius } = &effect.effect_type {
+            assert_eq!(blur_radius.value_at(0), 49.0);
+        } else {
+            panic!("Expected GaussianBlur");
+        }
+    }
+}
+
+#[test]
+fn stress_history_generation_monotonic_increment() {
+    let project = Project::default();
+    let mut history = ProjectHistory::new(project.clone());
+
+    let gen0 = history.generation();
+
+    // Commit should increment generation
+    let mut p1 = project.clone();
+    p1.compositions[0].name = "A".into();
+    history.commit_action(p1, "A");
+    assert!(history.generation() > gen0);
+    let gen1 = history.generation();
+
+    // Commit identical state should NOT increment generation
+    let p1_again = history.current().clone();
+    history.commit_action(p1_again, "A again");
+    assert_eq!(history.generation(), gen1);
+
+    // Undo should increment generation
+    history.undo();
+    assert!(history.generation() > gen1);
+    let gen2 = history.generation();
+
+    // Redo should increment generation
+    history.redo();
+    assert!(history.generation() > gen2);
+}
+
+#[test]
+fn stress_parallel_cache_version_isolation() {
+    use kagari_vfx::core::tile_cache::{TileCache, TileCoord};
+    use std::thread;
+
+    // Spawn 8 threads each doing 100 version bumps
+    let handles: Vec<_> = (0..8)
+        .map(|_| {
+            thread::spawn(|| {
+                for _ in 0..100 {
+                    kagari_vfx::core::frame_cache::bump_version();
+                }
+            })
+        })
+        .collect();
+    for h in handles {
+        h.join().unwrap();
+    }
+
+    // All tile caches using with_version should be unaffected by global bumps
+    let mut cache_a = TileCache::with_version(16, 1024, 1);
+    let mut cache_b = TileCache::with_version(16, 1024, 2);
+    let coord = TileCoord { tx: 0, ty: 0 };
+    cache_a.insert(0, coord, vec![1u8; 16]);
+    cache_b.insert(0, coord, vec![2u8; 16]);
+
+    // Both should still find their entries
+    assert!(cache_a.get(0, coord).is_some());
+    assert!(cache_b.get(0, coord).is_some());
+    assert_eq!(cache_a.get(0, coord), Some(&[1u8; 16][..]));
+    assert_eq!(cache_b.get(0, coord), Some(&[2u8; 16][..]));
+}
