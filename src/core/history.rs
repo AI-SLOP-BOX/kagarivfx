@@ -138,12 +138,7 @@ impl ProjectHistory {
     /// index and push the post-edit state as a new entry. This is needed because
     /// `current_mut()` already mutated the stack entry in place, so the normal
     /// `commit_action` comparison would always see equality and no-op.
-    pub fn commit_drag_action(
-        &mut self,
-        pre_edit: Project,
-        post_edit: Project,
-        action_name: &str,
-    ) {
+    pub fn commit_drag_action(&mut self, pre_edit: Project, post_edit: Project, action_name: &str) {
         // Restore the pre-edit state at the current position
         if let Some(entry) = self.stack.get_mut(self.current_idx) {
             entry.project = pre_edit;
@@ -287,8 +282,22 @@ impl ProjectHistory {
             return false;
         }
         self.current_idx = idx;
+        self.generation = self.generation.wrapping_add(1);
         crate::core::frame_cache::bump_version();
         true
+    }
+
+    /// Restore the current project state in-place without creating an undo
+    /// entry. Used by EditorSession::cancel() to revert mutations cleanly.
+    ///
+    /// Bumps frame cache version and increments generation so UI code detects
+    /// the state change.
+    pub fn restore_current_without_history(&mut self, project: Project) {
+        if let Some(entry) = self.stack.get_mut(self.current_idx) {
+            entry.project = project;
+        }
+        self.generation = self.generation.wrapping_add(1);
+        crate::core::frame_cache::bump_version();
     }
 
     pub fn can_undo(&self) -> bool {

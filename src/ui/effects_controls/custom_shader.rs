@@ -1,5 +1,5 @@
-use crate::ui::theme::colors;
 use crate::core::timeline::EffectType;
+use crate::ui::theme::colors;
 use eframe::egui;
 
 pub fn draw(

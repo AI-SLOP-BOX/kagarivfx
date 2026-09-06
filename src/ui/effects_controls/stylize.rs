@@ -1,5 +1,5 @@
-use crate::ui::inspector_property::draw_property_ui;
 use crate::core::timeline::EffectType;
+use crate::ui::inspector_property::draw_property_ui;
 use eframe::egui;
 
 use super::common::draw_prop;

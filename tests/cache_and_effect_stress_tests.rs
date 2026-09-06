@@ -98,10 +98,7 @@ fn frame_cache_stale_entries_invisible_after_version_bump() {
         "Original cache entry should still be valid at its version"
     );
     // New cache uses version 2, its entry is valid
-    assert!(
-        cache2.is_cached(0),
-        "New cache entry should be valid"
-    );
+    assert!(cache2.is_cached(0), "New cache entry should be valid");
 }
 
 #[test]

@@ -226,10 +226,7 @@ fn undo_redo_drag_transaction_semantics() {
 
     // Undo should restore the base state
     history.undo();
-    assert_eq!(
-        history.current().compositions[0].layers[0].name,
-        "base"
-    );
+    assert_eq!(history.current().compositions[0].layers[0].name, "base");
 
     // Redo should restore the drag result
     history.redo();
@@ -299,31 +296,19 @@ fn undo_redo_separate_drags_create_separate_entries() {
 
     // Undo drag 2 -> "drag1"
     history.undo();
-    assert_eq!(
-        history.current().compositions[0].layers[0].name,
-        "drag1"
-    );
+    assert_eq!(history.current().compositions[0].layers[0].name, "drag1");
 
     // Undo drag 1 -> initial
     history.undo();
-    assert_eq!(
-        history.current().compositions[0].layers[0].name,
-        "Layer0"
-    );
+    assert_eq!(history.current().compositions[0].layers[0].name, "Layer0");
 
     // Redo drag 1 -> "drag1"
     history.redo();
-    assert_eq!(
-        history.current().compositions[0].layers[0].name,
-        "drag1"
-    );
+    assert_eq!(history.current().compositions[0].layers[0].name, "drag1");
 
     // Redo drag 2 -> "drag2"
     history.redo();
-    assert_eq!(
-        history.current().compositions[0].layers[0].name,
-        "drag2"
-    );
+    assert_eq!(history.current().compositions[0].layers[0].name, "drag2");
 }
 
 #[test]
