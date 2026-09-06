@@ -525,7 +525,7 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: &mut u32) {
                 ui.label("Add Effect to Selected Layer:");
                 ui.group(|ui| {
                     ui.label(egui::RichText::new("Motion VFX Presets").strong().color(colors::ACCENT_CYAN));
-                    ui.small("Enter prompt to auto-build VFX graph:");
+                    ui.small("Quick-add effect presets:");
                     ui.horizontal(|ui| {
                         ui.add(egui::TextEdit::singleline(&mut app.ui_tabs.effects_search_query).hint_text("e.g. Cyberpunk Neon Glow"));
                     });
