@@ -35,6 +35,7 @@ pub mod custom_shader_runtime;
 pub mod difference_matte;
 pub mod displacement_map;
 pub mod echo_effect;
+pub mod editor;
 pub mod editor_assist;
 pub mod effect_params;
 pub mod effect_plugin;
