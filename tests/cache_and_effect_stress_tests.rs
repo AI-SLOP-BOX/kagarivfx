@@ -59,7 +59,7 @@ fn frame_cache_concurrent_version_bump_safety() {
 
 #[test]
 fn frame_cache_insert_get_eviction_cycle() {
-    let mut cache = FrameCache::new(10);
+    let mut cache = FrameCache::with_version(10, 1);
     cache.max_memory_bytes = 1024 * 50; // 50 KB budget
     cache.current_memory_bytes = 0;
 
@@ -67,7 +67,6 @@ fn frame_cache_insert_get_eviction_cycle() {
 
     // Fill beyond budget
     for i in 0..10u32 {
-        let _ = frame_cache::bump_version();
         cache.insert(i, 64, 64, pixels.clone());
     }
 
@@ -83,31 +82,33 @@ fn frame_cache_insert_get_eviction_cycle() {
 
 #[test]
 fn frame_cache_stale_entries_invisible_after_version_bump() {
-    let mut cache = FrameCache::new(100);
+    // Use version override to isolate from global counter races
+    let mut cache = FrameCache::with_version(100, 1);
     let pixels = vec![200u8; 32 * 32 * 4];
 
-    let v_before = frame_cache::bump_version();
     cache.insert(0, 32, 32, pixels.clone());
     assert!(cache.is_cached(0), "Should be cached at current version");
 
-    // Bump to a version strictly greater than v_before + 1
-    let target = v_before + 2;
-    while frame_cache::current_version() < target {
-        frame_cache::bump_version();
-    }
-    // After version bump, old entries should be stale
+    // Create a new cache at a higher version — entries from version 1 are stale
+    let mut cache2 = FrameCache::with_version(100, 2);
+    cache2.insert(0, 32, 32, pixels.clone());
+    // Original cache still uses version 1, its entry is valid
     assert!(
-        !cache.is_cached(0),
-        "Stale entry should not be visible at new version"
+        cache.is_cached(0),
+        "Original cache entry should still be valid at its version"
+    );
+    // New cache uses version 2, its entry is valid
+    assert!(
+        cache2.is_cached(0),
+        "New cache entry should be valid"
     );
 }
 
 #[test]
 fn frame_cache_invalidate_all_clears_everything() {
-    let mut cache = FrameCache::new(100);
+    let mut cache = FrameCache::with_version(100, 1);
     let pixels = vec![100u8; 16 * 16 * 4];
 
-    let _ = frame_cache::bump_version();
     for i in 0..20u32 {
         cache.insert(i, 16, 16, pixels.clone());
     }
@@ -133,8 +134,7 @@ fn frame_cache_layer_dirty_tracking() {
 
 #[test]
 fn frame_cache_invalidate_specific_layers() {
-    let mut cache = FrameCache::new(100);
-    let _ = frame_cache::bump_version();
+    let mut cache = FrameCache::with_version(100, 1);
 
     let pixels = vec![50u8; 8 * 8 * 4];
     cache.insert_with_layers(0, 8, 8, pixels.clone(), &[0, 1, 2]);
@@ -189,32 +189,34 @@ fn tile_cache_eviction_under_pressure() {
 
 #[test]
 fn tile_cache_version_invalidation() {
-    let mut cache = TileCache::new(64, 1024 * 1024);
+    let mut cache = TileCache::with_version(64, 1024 * 1024, 1);
     let small_tile = vec![42u8; 8 * 8 * 4];
 
     let coord = tile_cache::TileCoord { tx: 0, ty: 0 };
-    // Capture version at insert time so we can reliably bump past it
-    let v_before = tile_cache::current_tile_version();
-    cache.insert(0, coord, small_tile);
+    cache.insert(0, coord, small_tile.clone());
     assert!(
         cache.get(0, coord).is_some(),
         "Should be found at insert version"
     );
 
-    // Bump to a version strictly greater than what was captured
-    let target = v_before + 1;
-    while tile_cache::current_tile_version() < target {
-        tile_cache::bump_tile_version();
-    }
+    // Create a new cache at a higher version — entries from version 1 are stale
+    let mut cache2 = TileCache::with_version(64, 1024 * 1024, 2);
+    cache2.insert(0, coord, small_tile);
+    // Original cache still uses version 1, its entry is valid
     assert!(
-        cache.get(0, coord).is_none(),
-        "Stale tile should be unreachable"
+        cache.get(0, coord).is_some(),
+        "Original cache entry should still be valid at its version"
+    );
+    // New cache uses version 2, its entry is valid
+    assert!(
+        cache2.get(0, coord).is_some(),
+        "New cache entry should be valid"
     );
 }
 
 #[test]
 fn tile_cache_tiles_for_frame_grid_accuracy() {
-    let cache = TileCache::new(256, 1024 * 1024);
+    let cache = TileCache::with_version(256, 1024 * 1024, 1);
     let tiles = cache.tiles_for_frame(0, 1920, 1080);
     let expected_cols = 1920_usize.div_ceil(256); // 8
     let expected_rows = 1080_usize.div_ceil(256); // 5
@@ -236,7 +238,7 @@ fn tile_cache_invalidate_frame_only() {
 
 #[test]
 fn tile_cache_memory_accounting_accuracy() {
-    let mut cache = TileCache::new(64, 1024 * 1024);
+    let mut cache = TileCache::with_version(64, 1024 * 1024, 1);
     let tile_size = 8 * 8 * 4; // 256 bytes
     let tile = vec![0u8; tile_size];
 

@@ -192,3 +192,136 @@ fn stress_large_project_undo_redo_no_corruption() {
         "mutated_29"
     );
 }
+
+#[test]
+fn undo_redo_drag_transaction_semantics() {
+    // Simulates: commit a base state, then a drag-edit, then verify undo/redo
+    let mut proj = Project::default();
+    proj.compositions.clear();
+    let mut comp = Composition::new("c".into(), "Test".into(), 100, 100, 30, 100);
+    comp.layers.push(Layer::new(
+        "l0".into(),
+        "Layer0".into(),
+        LayerType::Null,
+        30,
+    ));
+    proj.compositions.push(comp);
+    let mut history = ProjectHistory::new(proj);
+
+    // Commit base state
+    let mut p = history.current().clone();
+    p.compositions[0].layers[0].name = "base".into();
+    history.commit(p);
+
+    // Simulate a drag: capture pre-edit, mutate, commit_drag_action
+    let pre_edit = history.current().clone();
+    let mut post_edit = pre_edit.clone();
+    post_edit.compositions[0].layers[0].name = "after_drag".into();
+    history.commit_drag_action(pre_edit, post_edit, "Drag Edit");
+
+    assert_eq!(
+        history.current().compositions[0].layers[0].name,
+        "after_drag"
+    );
+
+    // Undo should restore the base state
+    history.undo();
+    assert_eq!(
+        history.current().compositions[0].layers[0].name,
+        "base"
+    );
+
+    // Redo should restore the drag result
+    history.redo();
+    assert_eq!(
+        history.current().compositions[0].layers[0].name,
+        "after_drag"
+    );
+}
+
+#[test]
+fn undo_redo_drag_noop_creates_no_entry() {
+    let mut proj = Project::default();
+    proj.compositions.clear();
+    let mut comp = Composition::new("c".into(), "Test".into(), 100, 100, 30, 100);
+    comp.layers.push(Layer::new(
+        "l0".into(),
+        "Layer0".into(),
+        LayerType::Null,
+        30,
+    ));
+    proj.compositions.push(comp);
+    let mut history = ProjectHistory::new(proj);
+
+    // Commit base
+    let mut p = history.current().clone();
+    p.compositions[0].layers[0].name = "base".into();
+    history.commit(p);
+    let gen_before = history.generation();
+
+    // Drag that produces no change (pre == post)
+    let pre_edit = history.current().clone();
+    let post_edit = pre_edit.clone();
+    history.commit_drag_action(pre_edit, post_edit, "No-op Drag");
+
+    assert_eq!(
+        history.generation(),
+        gen_before,
+        "no-op drag should not create an entry"
+    );
+}
+
+#[test]
+fn undo_redo_separate_drags_create_separate_entries() {
+    let mut proj = Project::default();
+    proj.compositions.clear();
+    let mut comp = Composition::new("c".into(), "Test".into(), 100, 100, 30, 100);
+    comp.layers.push(Layer::new(
+        "l0".into(),
+        "Layer0".into(),
+        LayerType::Null,
+        30,
+    ));
+    proj.compositions.push(comp);
+    let mut history = ProjectHistory::new(proj);
+
+    // Drag 1: "base" -> "drag1"
+    let pre1 = history.current().clone();
+    let mut post1 = pre1.clone();
+    post1.compositions[0].layers[0].name = "drag1".into();
+    history.commit_drag_action(pre1, post1, "Drag 1");
+
+    // Drag 2: "drag1" -> "drag2"
+    let pre2 = history.current().clone();
+    let mut post2 = pre2.clone();
+    post2.compositions[0].layers[0].name = "drag2".into();
+    history.commit_drag_action(pre2, post2, "Drag 2");
+
+    // Undo drag 2 -> "drag1"
+    history.undo();
+    assert_eq!(
+        history.current().compositions[0].layers[0].name,
+        "drag1"
+    );
+
+    // Undo drag 1 -> initial
+    history.undo();
+    assert_eq!(
+        history.current().compositions[0].layers[0].name,
+        "Layer0"
+    );
+
+    // Redo drag 1 -> "drag1"
+    history.redo();
+    assert_eq!(
+        history.current().compositions[0].layers[0].name,
+        "drag1"
+    );
+
+    // Redo drag 2 -> "drag2"
+    history.redo();
+    assert_eq!(
+        history.current().compositions[0].layers[0].name,
+        "drag2"
+    );
+}

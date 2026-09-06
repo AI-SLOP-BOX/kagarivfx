@@ -134,6 +134,24 @@ impl ProjectHistory {
         self.generation
     }
 
+    /// Complete a drag transaction: restore the pre-edit snapshot at the current
+    /// index and push the post-edit state as a new entry. This is needed because
+    /// `current_mut()` already mutated the stack entry in place, so the normal
+    /// `commit_action` comparison would always see equality and no-op.
+    pub fn commit_drag_action(
+        &mut self,
+        pre_edit: Project,
+        post_edit: Project,
+        action_name: &str,
+    ) {
+        // Restore the pre-edit state at the current position
+        if let Some(entry) = self.stack.get_mut(self.current_idx) {
+            entry.project = pre_edit;
+        }
+        // Now use commit_action which will see current() != post_edit and push
+        self.commit_action(post_edit, action_name);
+    }
+
     /// Commit a new project state snapshot with a descriptive action name.
     pub fn commit_action(&mut self, project: Project, action_name: &str) {
         let unchanged = match (

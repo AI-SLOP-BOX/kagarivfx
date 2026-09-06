@@ -76,6 +76,15 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: &mut u32) {
             let mut next_frame = None;
             let mut current_frame_reset = None;
 
+            // Capture pre-edit snapshot BEFORE current_mut() for undo correctness.
+            // current_mut() modifies the live stack entry in place; we need the
+            // original state to create a proper undo entry on commit.
+            let pre_edit_snapshot = if !app.drag_active() {
+                Some(app.history.current().clone())
+            } else {
+                None
+            };
+
             // Access live project mutably without per-frame cloning
             let temp_project = app.history.current_mut();
 
@@ -363,10 +372,25 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: &mut u32) {
             }
 
             if app.ui_tabs.right_tab_idx == 27 {
+                let pre_snapshot = if !app.drag_active() {
+                    Some(app.history.current().clone())
+                } else {
+                    None
+                };
                 let mut temp_proj = app.history.current().clone();
                 let changed = crate::ui::character_panel::draw_character_panel(app, ui, temp_proj.active_composition_mut(), *current_frame);
                 if changed {
-                    app.history.commit(temp_proj);
+                    let is_pointer_down = ui.input(|i| i.pointer.any_down());
+                    if is_pointer_down {
+                        if !app.drag_active() {
+                            if let Some(snapshot) = pre_snapshot {
+                                app.begin_drag_with_snapshot(snapshot, "Character Edit");
+                            }
+                        }
+                    } else if app.drag_active() {
+                        app.commit_drag();
+                    }
+                    crate::core::frame_cache::bump_version();
                 }
                 return;
             }
@@ -412,7 +436,7 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: &mut u32) {
                 let search_q = app.ui_tabs.effects_search_query.to_lowercase();
 
                 // Category assignment by effect name.
-                // NOTE: keep in sync with the preset names in effects_controls.rs.
+                // NOTE: keep in sync with the preset names in effects_controls/presets.rs.
                 fn category_of(name: &str) -> &'static str {
                     if name.contains("Key") || name.contains("Matte") || name.contains("Choker")
                          || name.contains("Choke") || name.contains("Minimax")
@@ -706,10 +730,16 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: &mut u32) {
             // Transactional commit: lazy snapshot push on mouse release (zero clones while idle or dragging)
             if project_changed {
                 let is_pointer_down = ui.input(|i| i.pointer.any_down());
-                if !is_pointer_down {
-                    let snapshot = app.history.current().clone();
-                    app.history.commit(snapshot);
+                if is_pointer_down {
+                    if !app.drag_active() {
+                        if let Some(snapshot) = pre_edit_snapshot {
+                            app.begin_drag_with_snapshot(snapshot, "Effect Controls Edit");
+                        }
+                    }
+                } else if app.drag_active() {
+                    app.commit_drag();
                 }
+                crate::core::frame_cache::bump_version();
             }
             if let Some(nf) = next_frame {
                 *current_frame = nf;

@@ -626,6 +626,7 @@ impl KagariApp {
     pub fn commit_drag(&mut self) {
         if let Some(tx) = self.drag_tx.take() {
             let current = self.history.current().clone();
+            // No-op: pre-edit snapshot equals current state (nothing changed)
             let unchanged = match (
                 serde_json::to_vec(&current),
                 serde_json::to_vec(&tx.snapshot),
@@ -636,8 +637,11 @@ impl KagariApp {
             if unchanged {
                 return;
             }
-            self.history.commit_action(current, tx.label);
-            crate::core::frame_cache::bump_version();
+            // Restore pre-edit state at current index, push post-edit as new entry.
+            // This is needed because current_mut() already mutated the stack entry
+            // in place, so commit_action's comparison would always see equality.
+            self.history
+                .commit_drag_action(tx.snapshot, current, tx.label);
             self.frame_cache.collect_garbage();
         }
     }
