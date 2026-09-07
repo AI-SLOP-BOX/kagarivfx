@@ -940,20 +940,15 @@ pub fn draw_layer_type_specs(
                     let mut new_enabled = remap_enabled;
                     if ui.checkbox(&mut new_enabled, "Time Remap").changed() {
                         if new_enabled && !remap_enabled {
-                            // Initialize remap: linear 0..frame_count mapping
-                            layer.time_remap =
-                                Some(crate::core::property::Animatable::new_animated(vec![
-                                    crate::core::keyframe::Keyframe::new(
-                                        0,
-                                        0.0,
-                                        crate::core::keyframe::InterpolationType::Linear,
-                                    ),
-                                    crate::core::keyframe::Keyframe::new(
-                                        0u32,
-                                        0.0f32,
-                                        crate::core::keyframe::InterpolationType::Linear,
-                                    ),
-                                ]));
+                            use crate::core::keyframe::{InterpolationType, Keyframe};
+                            use crate::core::property::Animatable;
+                            let in_f = layer.in_frame;
+                            let out_f = layer.out_frame;
+                            let linear = InterpolationType::Linear;
+                            layer.time_remap = Some(Animatable::new_animated(vec![
+                                Keyframe::new(in_f, in_f as f32, linear),
+                                Keyframe::new(out_f, out_f as f32, linear),
+                            ]));
                             *project_changed = true;
                         } else if !new_enabled && remap_enabled {
                             layer.time_remap = None;

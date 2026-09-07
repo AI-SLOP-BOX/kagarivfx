@@ -80,7 +80,7 @@ pub fn draw_software_canvas(
             match &l.layer_type {
                 LayerType::Solid { .. } | LayerType::Shape { .. } => {
                     let mut pts_to_draw = None;
-                    for mask in &l.masks {
+                    for mask in l.masks.iter() {
                         if mask.enabled && mask.mode != crate::core::mask::MaskMode::None {
                             let points = mask.path.to_polygon(current_frame, 16);
                             if points.len() >= 3 {
@@ -291,7 +291,7 @@ pub fn draw_software_canvas(
                 _ => {}
             }
 
-            for mask in &l.masks {
+            for (mask_idx, mask) in l.masks.iter().enumerate() {
                 if !mask.enabled {
                     continue;
                 }
@@ -328,10 +328,18 @@ pub fn draw_software_canvas(
                             let mx = origin_x + (pt[0] / comp_w) * draw_w;
                             let my = origin_y + (pt[1] / comp_h) * draw_h;
                             let screen_pt = egui::pos2(mx, my);
+                            // Check if this vertex is in the multi-selection set
+                            let is_multi_selected = app
+                                .mask_selected_vertices
+                                .as_ref()
+                                .map(|s| s.0 == li && s.1 == mask_idx && s.2.contains(&v_idx))
+                                .unwrap_or(false);
                             let v_rect =
                                 egui::Rect::from_center_size(screen_pt, egui::vec2(8.0, 8.0));
                             let is_hovered = ui.rect_contains_pointer(v_rect);
-                            let handle_color = if is_hovered {
+                            let handle_color = if is_multi_selected {
+                                egui::Color32::from_rgb(255, 100, 100) // Red for selected
+                            } else if is_hovered {
                                 egui::Color32::YELLOW
                             } else {
                                 egui::Color32::WHITE
@@ -342,6 +350,44 @@ pub fn draw_software_canvas(
                                 1.0,
                                 egui::Stroke::new(1.2_f32, colors::HANDLE_HOVER_STROKE),
                             );
+                            // Draw Bezier tangent handles if tangents exist
+                            if let Some(tangents) = &mask.path.tangents {
+                                if v_idx < tangents.len() {
+                                    let (t_in, t_out) = tangents[v_idx];
+                                    let handle_stroke = egui::Stroke::new(
+                                        1.0_f32,
+                                        egui::Color32::from_rgba_unmultiplied(100, 200, 255, 180),
+                                    );
+                                    if t_out[0] != 0.0 || t_out[1] != 0.0 {
+                                        let hx = origin_x + ((pt[0] + t_out[0]) / comp_w) * draw_w;
+                                        let hy = origin_y + ((pt[1] + t_out[1]) / comp_h) * draw_h;
+                                        let h_screen = egui::pos2(hx, hy);
+                                        ui.painter()
+                                            .line_segment([screen_pt, h_screen], handle_stroke);
+                                        ui.painter().circle_filled(
+                                            h_screen,
+                                            3.0,
+                                            egui::Color32::from_rgba_unmultiplied(
+                                                100, 200, 255, 220,
+                                            ),
+                                        );
+                                    }
+                                    if t_in[0] != 0.0 || t_in[1] != 0.0 {
+                                        let hx = origin_x + ((pt[0] + t_in[0]) / comp_w) * draw_w;
+                                        let hy = origin_y + ((pt[1] + t_in[1]) / comp_h) * draw_h;
+                                        let h_screen = egui::pos2(hx, hy);
+                                        ui.painter()
+                                            .line_segment([screen_pt, h_screen], handle_stroke);
+                                        ui.painter().circle_filled(
+                                            h_screen,
+                                            3.0,
+                                            egui::Color32::from_rgba_unmultiplied(
+                                                100, 200, 255, 220,
+                                            ),
+                                        );
+                                    }
+                                }
+                            }
                             ui.painter().text(
                                 egui::pos2(screen_pt.x + 8.0, screen_pt.y - 8.0),
                                 egui::Align2::LEFT_BOTTOM,

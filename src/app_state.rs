@@ -310,6 +310,12 @@ pub struct KagariApp {
     /// One-shot request: frame this comp-space bbox (min,max) in the viewport.
     pub viewport_focus_bbox: Option<([f32; 2], [f32; 2])>,
     pub viewport_mask_drag_state: Option<(usize, usize, usize, [f32; 2], eframe::egui::Pos2)>,
+    /// Pen tool Bezier drag: (tangent_out_screen, tangent_in_screen) while click-dragging
+    pub pen_bezier_drag: Option<(eframe::egui::Pos2, eframe::egui::Pos2)>,
+    /// Mask multi-vertex selection: (layer_idx, mask_idx, set of vertex indices)
+    pub mask_selected_vertices: Option<(usize, usize, std::collections::HashSet<usize>)>,
+    /// Mask tangent handle drag: (layer_idx, mask_idx, vertex_idx, is_outgoing, start_handle_pos, start_pointer)
+    pub mask_tangent_drag_state: Option<(usize, usize, usize, bool, [f32; 2], eframe::egui::Pos2)>,
     /// Spatial drag of a position keyframe dot on the motion path:
     /// (layer_idx, keyframe_frame, start_value, start_pointer)
     pub viewport_pos_kf_drag_state: Option<(usize, u32, [f32; 2], eframe::egui::Pos2)>,
@@ -331,6 +337,9 @@ pub struct KagariApp {
     pub inline_text_edit_layer: Option<usize>,
     /// Pen tool: in-progress mask vertices in composition coordinates
     pub pen_points: Vec<[f32; 2]>,
+    /// Pen tool: Bezier tangent handles per point. (tangent_out, tangent_in) relative to vertex.
+    /// Empty or shorter than pen_points means zero tangents (corner point).
+    pub pen_tangents: Vec<([f32; 2], [f32; 2])>,
     /// Motion Sketch: records position keyframes while playing + dragging.
     pub motion_sketch_active: bool,
     /// Motion Sketch recording buffer: (frame, [x, y]) pairs captured during drag.
@@ -484,6 +493,9 @@ impl Default for KagariApp {
             viewport_drag_state: None,
             viewport_focus_bbox: None,
             viewport_mask_drag_state: None,
+            pen_bezier_drag: None,
+            mask_selected_vertices: None,
+            mask_tangent_drag_state: None,
             viewport_pos_kf_drag_state: None,
             viewport_tangent_drag_state: None,
             viewport_linked_tangent: true,
@@ -494,6 +506,7 @@ impl Default for KagariApp {
             rect_drag_start: None,
             inline_text_edit_layer: None,
             pen_points: Vec::new(),
+            pen_tangents: Vec::new(),
             motion_sketch_active: false,
             motion_sketch_recording: vec![],
             export: ExportDomainState {

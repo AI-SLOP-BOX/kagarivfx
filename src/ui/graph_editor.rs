@@ -399,7 +399,9 @@ pub fn draw_graph_editor(
     linked_tangent: &mut bool,
 ) {
     let graph_height = 120.0f32;
+
     ui.group(|ui| {
+        let graph_prop = selected_property.clone().unwrap_or_else(|| "Position X".to_string());
         ui.horizontal(|ui| {
             ui.label(egui::RichText::new("📈 Graph Editor").strong());
             let prop_name = selected_property.clone().unwrap_or_else(|| "Position X".to_string());
@@ -711,20 +713,83 @@ pub fn draw_graph_editor(
                     ui.ctx().data_mut(|d| d.insert_temp(mode_id, 1));
                 }
             });
+
             ui.collapsing("🎯 Keyframe Velocity / Influence", |ui| {
-                let mut in_inf = ui.ctx().data(|d| d.get_temp::<f32>(egui::Id::new("ae_kf_in_inf")).unwrap_or(33.3));
-                let mut out_inf = ui.ctx().data(|d| d.get_temp::<f32>(egui::Id::new("ae_kf_out_inf")).unwrap_or(33.3));
-                let mut in_spd = ui.ctx().data(|d| d.get_temp::<f32>(egui::Id::new("ae_kf_in_spd")).unwrap_or(0.0));
-                let mut out_spd = ui.ctx().data(|d| d.get_temp::<f32>(egui::Id::new("ae_kf_out_spd")).unwrap_or(0.0));
+                // Read current values from the hovered keyframe
+                let hovered_kf_idx: Option<usize> = ui.ctx().data(|d| d.get_temp(egui::Id::new("ae_graph_hovered_kf")));
+                let (mut in_inf, mut out_inf, mut in_spd, mut out_spd) = if let Some(kf_idx) = hovered_kf_idx {
+                    let prop = selected_property.clone().unwrap_or_else(|| "Position X".to_string());
+                    let extract_bezier = |kf: &crate::core::keyframe::InterpolationType| -> (f32, f32, f32, f32) {
+                        match kf {
+                            crate::core::keyframe::InterpolationType::Bezier { outgoing, incoming, .. } => {
+                                (outgoing.influence * 100.0, outgoing.speed, incoming.influence * 100.0, incoming.speed)
+                            }
+                            _ => (33.3, 0.0, 33.3, 0.0),
+                        }
+                    };
+                    let mut read_val = || -> Option<(f32, f32, f32, f32)> {
+                        if prop.starts_with("3D ") {
+                            let kfs = if prop.starts_with("3D Position") { layer.transform_3d.position.keyframes_mut() }
+                                else if prop.starts_with("3D Rotation") { layer.transform_3d.rotation.keyframes_mut() }
+                                else { layer.transform_3d.scale.keyframes_mut() };
+                            kfs.and_then(|kfs| kfs.get(kf_idx)).map(|kf| extract_bezier(&kf.interpolation))
+                        } else if prop.starts_with("fx_") {
+                            None
+                        } else if matches!(prop.as_str(), "Position X" | "Position Y") {
+                            layer.transform.position.keyframes_mut().and_then(|kfs| kfs.get(kf_idx)).map(|kf| extract_bezier(&kf.interpolation))
+                        } else if matches!(prop.as_str(), "Scale X" | "Scale Y") {
+                            layer.transform.scale.keyframes_mut().and_then(|kfs| kfs.get(kf_idx)).map(|kf| extract_bezier(&kf.interpolation))
+                        } else if prop == "Rotation" {
+                            layer.transform.rotation.keyframes_mut().and_then(|kfs| kfs.get(kf_idx)).map(|kf| extract_bezier(&kf.interpolation))
+                        } else if prop == "Opacity" {
+                            layer.transform.opacity.keyframes_mut().and_then(|kfs| kfs.get(kf_idx)).map(|kf| extract_bezier(&kf.interpolation))
+                        } else {
+                            None
+                        }
+                    };
+                    read_val().unwrap_or((33.3, 0.0, 33.3, 0.0))
+                } else {
+                    let in_inf = ui.ctx().data(|d| d.get_temp::<f32>(egui::Id::new("ae_kf_in_inf")).unwrap_or(33.3));
+                    let out_inf = ui.ctx().data(|d| d.get_temp::<f32>(egui::Id::new("ae_kf_out_inf")).unwrap_or(33.3));
+                    let in_spd = ui.ctx().data(|d| d.get_temp::<f32>(egui::Id::new("ae_kf_in_spd")).unwrap_or(0.0));
+                    let out_spd = ui.ctx().data(|d| d.get_temp::<f32>(egui::Id::new("ae_kf_out_spd")).unwrap_or(0.0));
+                    (in_inf, out_inf, in_spd, out_spd)
+                };
+
+                let apply_velocity = |layer: &mut Layer, prop: &str, kf_idx: usize, out_inf: f32, out_spd: f32, in_inf: f32, in_spd: f32, project_changed: &mut bool| {
+                    let cp = crate::core::keyframe::BezierControlPoint { influence: out_inf / 100.0, speed: out_spd };
+                    let ci = crate::core::keyframe::BezierControlPoint { influence: in_inf / 100.0, speed: in_spd };
+                    let custom_bezier = crate::core::keyframe::compute_ae_bezier_control_points(&cp, &ci, 1.0, 1.0, 30.0);
+                    let interp = crate::core::keyframe::InterpolationType::Bezier { outgoing: cp, incoming: ci, custom_bezier: Some(custom_bezier) };
+                    match prop {
+                        "Position X" | "Position Y" => { if let Some(kfs) = layer.transform.position.keyframes_mut() { if let Some(kf) = kfs.get_mut(kf_idx) { kf.interpolation = interp; *project_changed = true; } } }
+                        "Scale X" | "Scale Y" => { if let Some(kfs) = layer.transform.scale.keyframes_mut() { if let Some(kf) = kfs.get_mut(kf_idx) { kf.interpolation = interp; *project_changed = true; } } }
+                        "Rotation" => { if let Some(kfs) = layer.transform.rotation.keyframes_mut() { if let Some(kf) = kfs.get_mut(kf_idx) { kf.interpolation = interp; *project_changed = true; } } }
+                        "Opacity" => { if let Some(kfs) = layer.transform.opacity.keyframes_mut() { if let Some(kf) = kfs.get_mut(kf_idx) { kf.interpolation = interp; *project_changed = true; } } }
+                        _ => {}
+                    }
+                };
 
                 ui.horizontal(|ui| {
                     ui.label("Incoming:");
                     if ui.add(egui::DragValue::new(&mut in_inf).range(0.1..=100.0).speed(0.5).prefix("Inf: ").suffix("%")).changed() {
                         ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("ae_kf_in_inf"), in_inf));
+                        if let Some(kf_idx) = hovered_kf_idx {
+                            let out_inf_val = ui.ctx().data(|d| d.get_temp::<f32>(egui::Id::new("ae_kf_out_inf")).unwrap_or(33.3));
+                            let out_spd_val = ui.ctx().data(|d| d.get_temp::<f32>(egui::Id::new("ae_kf_out_spd")).unwrap_or(0.0));
+                            let in_spd_val = ui.ctx().data(|d| d.get_temp::<f32>(egui::Id::new("ae_kf_in_spd")).unwrap_or(0.0));
+                            apply_velocity(layer, &graph_prop, kf_idx, out_inf_val, out_spd_val, in_inf, in_spd_val, project_changed);
+                        }
                         *project_changed = true;
                     }
                     if ui.add(egui::DragValue::new(&mut in_spd).speed(1.0).prefix("Spd: ").suffix(" px/s")).changed() {
                         ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("ae_kf_in_spd"), in_spd));
+                        if let Some(kf_idx) = hovered_kf_idx {
+                            let out_inf_val = ui.ctx().data(|d| d.get_temp::<f32>(egui::Id::new("ae_kf_out_inf")).unwrap_or(33.3));
+                            let out_spd_val = ui.ctx().data(|d| d.get_temp::<f32>(egui::Id::new("ae_kf_out_spd")).unwrap_or(0.0));
+                            let in_inf_val = ui.ctx().data(|d| d.get_temp::<f32>(egui::Id::new("ae_kf_in_inf")).unwrap_or(33.3));
+                            apply_velocity(layer, &graph_prop, kf_idx, out_inf_val, out_spd_val, in_inf_val, in_spd, project_changed);
+                        }
                         *project_changed = true;
                     }
                 });
@@ -732,10 +797,22 @@ pub fn draw_graph_editor(
                     ui.label("Outgoing:");
                     if ui.add(egui::DragValue::new(&mut out_inf).range(0.1..=100.0).speed(0.5).prefix("Inf: ").suffix("%")).changed() {
                         ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("ae_kf_out_inf"), out_inf));
+                        if let Some(kf_idx) = hovered_kf_idx {
+                            let in_inf_val = ui.ctx().data(|d| d.get_temp::<f32>(egui::Id::new("ae_kf_in_inf")).unwrap_or(33.3));
+                            let in_spd_val = ui.ctx().data(|d| d.get_temp::<f32>(egui::Id::new("ae_kf_in_spd")).unwrap_or(0.0));
+                            let out_spd_val = ui.ctx().data(|d| d.get_temp::<f32>(egui::Id::new("ae_kf_out_spd")).unwrap_or(0.0));
+                            apply_velocity(layer, &graph_prop, kf_idx, out_inf, out_spd_val, in_inf_val, in_spd_val, project_changed);
+                        }
                         *project_changed = true;
                     }
                     if ui.add(egui::DragValue::new(&mut out_spd).speed(1.0).prefix("Spd: ").suffix(" px/s")).changed() {
                         ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("ae_kf_out_spd"), out_spd));
+                        if let Some(kf_idx) = hovered_kf_idx {
+                            let out_inf_val = ui.ctx().data(|d| d.get_temp::<f32>(egui::Id::new("ae_kf_out_inf")).unwrap_or(33.3));
+                            let in_inf_val = ui.ctx().data(|d| d.get_temp::<f32>(egui::Id::new("ae_kf_in_inf")).unwrap_or(33.3));
+                            let in_spd_val = ui.ctx().data(|d| d.get_temp::<f32>(egui::Id::new("ae_kf_in_spd")).unwrap_or(0.0));
+                            apply_velocity(layer, &graph_prop, kf_idx, out_inf_val, out_spd, in_inf_val, in_spd_val, project_changed);
+                        }
                         *project_changed = true;
                     }
                 });
@@ -772,7 +849,6 @@ pub fn draw_graph_editor(
 
         });
 
-        let graph_prop = selected_property.clone().unwrap_or_else(|| "Position X".to_string());
         let total_f = duration_frames.max(1);
 
         // Detect speed graph vs value graph mode (0 = speed graph, 1 = value graph)
@@ -1180,7 +1256,6 @@ pub fn draw_graph_editor(
                 }};
             }
 
-
             let frame_to_x = |f: u32| rect.left() + (f as f32 / total_f as f32) * rect.width();
             let val_to_y = |v: f32| rect.bottom() - 4.0 - ((v - min_val) / val_range) * (rect.height() - 8.0);
 
@@ -1278,6 +1353,9 @@ pub fn draw_graph_editor(
                 // --- Anchor point: drag horizontally to retime, vertically to change value ---
                 let anchor_rect = egui::Rect::from_center_size(pt, egui::vec2(14.0, 14.0));
                 let anchor_resp = ui.interact(anchor_rect, egui::Id::new(("graph_anchor", kf_idx)), egui::Sense::click_and_drag());
+                if anchor_resp.hovered() {
+                    ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("ae_graph_hovered_kf"), *kf_idx));
+                }
                 if anchor_resp.secondary_clicked() {
                     with_keyframes!(layer, graph_prop, kfs => {
                         if *kf_idx < kfs.len() {

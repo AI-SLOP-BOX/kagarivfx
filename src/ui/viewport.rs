@@ -1138,29 +1138,74 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: u32) {
 
                 let comp_state = app.history.current().active_composition();
                 let mut mask_hit: Option<(usize, usize, usize)> = None;
+                let mut mask_tangent_hit: Option<(usize, usize, usize, bool, [f32; 2])> = None;
 
-                // 1. Check if clicking on selected layer's mask vertices
-                if let Some(sel_li) = app.selection.selected_layer_idx {
-                    if sel_li < comp_state.layers.len() {
-                        let l = &comp_state.layers[sel_li];
-                        for (mi, mask) in l.masks.iter().enumerate() {
-                            if mask.enabled {
-                                let verts = mask.path.vertices_at_frame(current_frame);
-                                for (vi, vertex_pt) in verts.iter().enumerate() {
-                                    let vx = vertex_pt[0];
-                                    let vy = vertex_pt[1];
-
-                                    // Calculate viewport screen position
-                                    let screen_x = origin_x + (vx / comp_w) * draw_w;
-                                    let screen_y = origin_y + (vy / comp_h) * draw_h;
-                                    let dist = ((pointer_pos.x - screen_x).powi(2) + (pointer_pos.y - screen_y).powi(2)).sqrt();
-                                    if dist <= 12.0 {
-                                        mask_hit = Some((sel_li, mi, vi));
-                                        break;
+                // 1. Check if clicking on selected layer's mask tangent handles
+                if app.active_tool == crate::ui::toolbar::ActiveTool::Selection {
+                    if let Some(sel_li) = app.selection.selected_layer_idx {
+                        if sel_li < comp_state.layers.len() {
+                            let l = &comp_state.layers[sel_li];
+                            for (mi, mask) in l.masks.iter().enumerate() {
+                                if mask.enabled {
+                                    let verts = mask.path.vertices_at_frame(current_frame);
+                                    if let Some(tangents) = &mask.path.tangents {
+                                        for (vi, vertex_pt) in verts.iter().enumerate() {
+                                            if vi < tangents.len() {
+                                                let (t_in, t_out) = tangents[vi];
+                                                // Check outgoing handle
+                                                if t_out[0] != 0.0 || t_out[1] != 0.0 {
+                                                    let hx = origin_x + ((vertex_pt[0] + t_out[0]) / comp_w) * draw_w;
+                                                    let hy = origin_y + ((vertex_pt[1] + t_out[1]) / comp_h) * draw_h;
+                                                    let dist = ((pointer_pos.x - hx).powi(2) + (pointer_pos.y - hy).powi(2)).sqrt();
+                                                    if dist <= 8.0 {
+                                                        mask_tangent_hit = Some((sel_li, mi, vi, true, t_out));
+                                                        break;
+                                                    }
+                                                }
+                                                // Check incoming handle
+                                                if t_in[0] != 0.0 || t_in[1] != 0.0 {
+                                                    let hx = origin_x + ((vertex_pt[0] + t_in[0]) / comp_w) * draw_w;
+                                                    let hy = origin_y + ((vertex_pt[1] + t_in[1]) / comp_h) * draw_h;
+                                                    let dist = ((pointer_pos.x - hx).powi(2) + (pointer_pos.y - hy).powi(2)).sqrt();
+                                                    if dist <= 8.0 {
+                                                        mask_tangent_hit = Some((sel_li, mi, vi, false, t_in));
+                                                        break;
+                                                    }
+                                                }
+                                            }
+                                        }
                                     }
                                 }
+                                if mask_tangent_hit.is_some() { break; }
                             }
-                            if mask_hit.is_some() { break; }
+                        }
+                    }
+                }
+
+                // 1b. Check if clicking on selected layer's mask vertices (only if no tangent hit)
+                if mask_tangent_hit.is_none() {
+                    if let Some(sel_li) = app.selection.selected_layer_idx {
+                        if sel_li < comp_state.layers.len() {
+                            let l = &comp_state.layers[sel_li];
+                            for (mi, mask) in l.masks.iter().enumerate() {
+                                if mask.enabled {
+                                    let verts = mask.path.vertices_at_frame(current_frame);
+                                    for (vi, vertex_pt) in verts.iter().enumerate() {
+                                        let vx = vertex_pt[0];
+                                        let vy = vertex_pt[1];
+
+                                        // Calculate viewport screen position
+                                        let screen_x = origin_x + (vx / comp_w) * draw_w;
+                                        let screen_y = origin_y + (vy / comp_h) * draw_h;
+                                        let dist = ((pointer_pos.x - screen_x).powi(2) + (pointer_pos.y - screen_y).powi(2)).sqrt();
+                                        if dist <= 12.0 {
+                                            mask_hit = Some((sel_li, mi, vi));
+                                            break;
+                                        }
+                                    }
+                                }
+                                if mask_hit.is_some() { break; }
+                            }
                         }
                     }
                 }
@@ -1237,13 +1282,51 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: u32) {
                         Some((l_idx, kf_frame, kf_start, pointer_pos));
                     app.viewport_drag_state = None;
                     app.viewport_mask_drag_state = None;
+                } else if let Some((l_idx, m_idx, v_idx, is_out, start_handle)) = mask_tangent_hit {
+                    app.mask_tangent_drag_state = Some((l_idx, m_idx, v_idx, is_out, start_handle, pointer_pos));
+                    app.viewport_drag_state = None;
+                    app.viewport_mask_drag_state = None;
                 } else if let Some((l_idx, m_idx, v_idx)) = mask_hit {
+                    let shift_held = ui.input(|i| i.modifiers.shift);
+                    // Multi-vertex selection: Shift+click toggles vertex in selection set
+                    if shift_held {
+                        if let Some(ref mut sel) = app.mask_selected_vertices {
+                            if sel.0 == l_idx && sel.1 == m_idx {
+                                if sel.2.contains(&v_idx) {
+                                    sel.2.remove(&v_idx);
+                                } else {
+                                    sel.2.insert(v_idx);
+                                }
+                            } else {
+                                app.mask_selected_vertices = Some((l_idx, m_idx, vec![v_idx].into_iter().collect()));
+                            }
+                        } else {
+                            app.mask_selected_vertices = Some((l_idx, m_idx, vec![v_idx].into_iter().collect()));
+                        }
+                    } else {
+                        // Check if clicking on already-selected vertex set
+                        let already_selected = app.mask_selected_vertices.as_ref()
+                            .map(|s| s.0 == l_idx && s.1 == m_idx && s.2.contains(&v_idx))
+                            .unwrap_or(false);
+                        if !already_selected {
+                            app.mask_selected_vertices = Some((l_idx, m_idx, vec![v_idx].into_iter().collect()));
+                        }
+                    }
+                    // Store the starting positions of all selected vertices for multi-drag
+                    let _selected_set = app.mask_selected_vertices.as_ref()
+                        .filter(|s| s.0 == l_idx && s.1 == m_idx)
+                        .map(|s| s.2.clone())
+                        .unwrap_or_else(|| vec![v_idx].into_iter().collect());
                     let verts = comp_state.layers[l_idx].masks[m_idx].path.vertices_at_frame(current_frame);
                     let start_vertex_pos = if v_idx < verts.len() { verts[v_idx] } else { [0.0, 0.0] };
                     app.viewport_mask_drag_state = Some((l_idx, m_idx, v_idx, start_vertex_pos, pointer_pos));
                     app.viewport_drag_state = None;
                 } else {
                     app.viewport_mask_drag_state = None;
+                    // Clear mask vertex selection when clicking empty space
+                    if app.active_tool == crate::ui::toolbar::ActiveTool::Selection {
+                        app.mask_selected_vertices = None;
+                    }
 
                     // 1b. Corner handles of the selected layer → scale drag (Selection tool)
                     use crate::ui::toolbar::ActiveTool;
@@ -1410,11 +1493,64 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: u32) {
                         let layer = &mut comp_mut.layers[l_idx];
                         if m_idx < layer.masks.len() {
                             let mask = &mut layer.masks[m_idx];
-                            let new_pos = [
-                                start_vertex_pos[0] + delta_x,
-                                start_vertex_pos[1] + delta_y,
-                            ];
-                            mask.path.set_vertex_at_frame(current_frame, v_idx, new_pos);
+                            // Move all selected vertices if multi-selection is active
+                            let verts_to_move: Vec<usize> = if let Some(ref sel) = app.mask_selected_vertices {
+                                if sel.0 == l_idx && sel.1 == m_idx {
+                                    sel.2.iter().copied().collect()
+                                } else {
+                                    vec![v_idx]
+                                }
+                            } else {
+                                vec![v_idx]
+                            };
+                            for vi in verts_to_move {
+                                let verts = mask.path.vertices_at_frame(current_frame);
+                                if vi < verts.len() {
+                                    let start_pos = verts[vi];
+                                    // For the primary dragged vertex, use the original start position
+                                    // For other selected vertices, calculate offset from their start
+                                    let new_pos = if vi == v_idx {
+                                        [
+                                            start_vertex_pos[0] + delta_x,
+                                            start_vertex_pos[1] + delta_y,
+                                        ]
+                                    } else {
+                                        [
+                                            start_pos[0] + delta_x,
+                                            start_pos[1] + delta_y,
+                                        ]
+                                    };
+                                    mask.path.set_vertex_at_frame(current_frame, vi, new_pos);
+                                }
+                            }
+                        }
+                    }
+                } else if let Some((l_idx, m_idx, v_idx, is_out, start_handle, start_ptr)) = app.mask_tangent_drag_state {
+                    // Drag mask tangent handle
+                    let delta_x = (pointer_pos.x - start_ptr.x) / draw_w * comp_w;
+                    let delta_y = (pointer_pos.y - start_ptr.y) / draw_h * comp_h;
+                    let new_handle = [
+                        start_handle[0] + delta_x,
+                        start_handle[1] + delta_y,
+                    ];
+                    let comp_mut = app.history.current_mut().active_composition_mut();
+                    if l_idx < comp_mut.layers.len() {
+                        let layer = &mut comp_mut.layers[l_idx];
+                        if m_idx < layer.masks.len() {
+                            let mask = &mut layer.masks[m_idx];
+                            let verts = mask.path.vertices_at_frame(current_frame);
+                            if v_idx < verts.len() {
+                                let vertex_pos = verts[v_idx];
+                                // Convert absolute handle position to relative
+                                let rel_handle = [new_handle[0] - vertex_pos[0], new_handle[1] - vertex_pos[1]];
+                                let link = ui.input(|i| i.modifiers.shift);
+                                if is_out {
+                                    mask.path.set_tangents_at_vertex(v_idx, [-rel_handle[0], -rel_handle[1]], rel_handle, link);
+                                } else {
+                                    mask.path.set_tangents_at_vertex(v_idx, rel_handle, [-rel_handle[0], -rel_handle[1]], link);
+                                }
+                                crate::core::frame_cache::bump_version();
+                            }
                         }
                     }
                 } else if let Some((drag_idx, start_scale, start_dist)) = app.viewport_scale_drag {
@@ -1551,15 +1687,42 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: u32) {
             }
 
             // ── Pen tool: click adds mask vertices; Enter/double-click commits ──
+            // ── Click-drag creates Bezier handles (AE standard behavior) ──
             if app.active_tool == crate::ui::toolbar::ActiveTool::Pen {
+                // On drag start, record position for potential Bezier handle creation
+                if viewport_response.drag_started() {
+                    app.pen_bezier_drag = Some((pointer_pos, pointer_pos));
+                }
+                // During drag, update the out-handle position
+                if let Some(ref mut drag) = app.pen_bezier_drag {
+                    if viewport_response.dragged() {
+                        drag.1 = pointer_pos;
+                    }
+                }
+                // On click (not drag), add the vertex
                 if viewport_response.clicked() {
+                    let (tangent_out, tangent_in) = if let Some((start, end)) = app.pen_bezier_drag.take() {
+                        let dx = (end.x - start.x) / draw_w * comp_w;
+                        let dy = (end.y - start.y) / draw_h * comp_h;
+                        let dist = (dx * dx + dy * dy).sqrt();
+                        if dist > 2.0 {
+                            // Click-drag: create symmetric Bezier handles
+                            ([dx, dy], [-dx, -dy])
+                        } else {
+                            ([0.0, 0.0], [0.0, 0.0])
+                        }
+                    } else {
+                        ([0.0, 0.0], [0.0, 0.0])
+                    };
                     app.pen_points.push([comp_px, comp_py]);
+                    app.pen_tangents.push((tangent_out, tangent_in));
                 }
                 let enter = ui.input(|i| i.key_pressed(egui::Key::Enter));
                 let escape = ui.input(|i| i.key_pressed(egui::Key::Escape));
                 if viewport_response.double_clicked() && !app.pen_points.is_empty() {
                     // Double-click pushes a duplicate point — drop it before commit
                     app.pen_points.pop();
+                    app.pen_tangents.pop();
                     pen_commit = true;
                 }
                 if enter && app.pen_points.len() >= 3 {
@@ -1567,6 +1730,7 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: u32) {
                 }
                 if escape {
                     app.pen_points.clear();
+                    app.pen_tangents.clear();
                 }
             }
 
@@ -1649,6 +1813,7 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: u32) {
                 }
                 let was_dragging = app.viewport_drag_state.is_some()
                     || app.viewport_mask_drag_state.is_some()
+                    || app.mask_tangent_drag_state.is_some()
                     || app.viewport_pos_kf_drag_state.is_some()
                     || app.viewport_scale_drag.is_some()
                     || app.viewport_multi_drag.is_some();
@@ -1689,39 +1854,207 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: u32) {
                 }
                 app.viewport_drag_state = None;
                 app.viewport_mask_drag_state = None;
+                app.mask_tangent_drag_state = None;
                 app.viewport_pos_kf_drag_state = None;
                 app.viewport_scale_drag = None;
                 app.viewport_multi_drag = None;
             }
         }
 
-        // ── Pen tool: draw in-progress mask path ──
+        // ── Pen tool: draw in-progress mask path with Bezier curves ──
         if app.active_tool == crate::ui::toolbar::ActiveTool::Pen && !app.pen_points.is_empty() {
             let painter = ui.painter();
             let pen_stroke = egui::Stroke::new(1.5_f32, crate::ui::theme::colors::ACCENT_CYAN);
             let to_screen = |v: [f32; 2]| {
                 egui::pos2(origin_x + v[0] / comp_w * draw_w, origin_y + v[1] / comp_h * draw_h)
             };
-            for pair in app.pen_points.windows(2) {
-                painter.line_segment([to_screen(pair[0]), to_screen(pair[1])], pen_stroke);
+            let has_any_tangents = app.pen_tangents.iter().any(|(o, i)| o[0] != 0.0 || o[1] != 0.0 || i[0] != 0.0 || i[1] != 0.0);
+
+            if has_any_tangents {
+                // Draw cubic Bezier curves between points
+                for seg in app.pen_points.windows(2) {
+                    let i0 = app.pen_points.iter().position(|p| p[0] == seg[0][0] && p[1] == seg[0][1]).unwrap_or(0);
+                    let i1 = app.pen_points.iter().position(|p| p[0] == seg[1][0] && p[1] == seg[1][1]).unwrap_or(0);
+                    let p0 = to_screen(seg[0]);
+                    let p1 = to_screen(seg[1]);
+                    let t_out = app.pen_tangents.get(i0).map(|(o, _)| *o).unwrap_or([0.0, 0.0]);
+                    let t_in = app.pen_tangents.get(i1).map(|(_, i)| *i).unwrap_or([0.0, 0.0]);
+                    let c0 = egui::pos2(p0.x + t_out[0] / comp_w * draw_w, p0.y + t_out[1] / comp_h * draw_h);
+                    let c1 = egui::pos2(p1.x + t_in[0] / comp_w * draw_w, p1.y + t_in[1] / comp_h * draw_h);
+                    // Approximate cubic Bezier with line segments
+                    let steps = 12;
+                    let mut prev = p0;
+                    for s in 1..=steps {
+                        let t = s as f32 / steps as f32;
+                        let t2 = t * t;
+                        let t3 = t2 * t;
+                        let mt = 1.0 - t;
+                        let mt2 = mt * mt;
+                        let mt3 = mt2 * mt;
+                        let x = mt3 * p0.x + 3.0 * mt2 * t * c0.x + 3.0 * mt * t2 * c1.x + t3 * p1.x;
+                        let y = mt3 * p0.y + 3.0 * mt2 * t * c0.y + 3.0 * mt * t2 * c1.y + t3 * p1.y;
+                        let cur = egui::pos2(x, y);
+                        painter.line_segment([prev, cur], pen_stroke);
+                        prev = cur;
+                    }
+                }
+                // Closing segment
+                if app.pen_points.len() >= 3 {
+                    let first = app.pen_points[0];
+                    let last = app.pen_points[app.pen_points.len() - 1];
+                    let p0 = to_screen(last);
+                    let p1 = to_screen(first);
+                    let t_out = app.pen_tangents.last().map(|(o, _)| *o).unwrap_or([0.0, 0.0]);
+                    let t_in = app.pen_tangents.first().map(|(_, i)| *i).unwrap_or([0.0, 0.0]);
+                    let c0 = egui::pos2(p0.x + t_out[0] / comp_w * draw_w, p0.y + t_out[1] / comp_h * draw_h);
+                    let c1 = egui::pos2(p1.x + t_in[0] / comp_w * draw_w, p1.y + t_in[1] / comp_h * draw_h);
+                    let steps = 12;
+                    let mut prev = p0;
+                    for s in 1..=steps {
+                        let t = s as f32 / steps as f32;
+                        let t2 = t * t;
+                        let t3 = t2 * t;
+                        let mt = 1.0 - t;
+                        let mt2 = mt * mt;
+                        let mt3 = mt2 * mt;
+                        let x = mt3 * p0.x + 3.0 * mt2 * t * c0.x + 3.0 * mt * t2 * c1.x + t3 * p1.x;
+                        let y = mt3 * p0.y + 3.0 * mt2 * t * c0.y + 3.0 * mt * t2 * c1.y + t3 * p1.y;
+                        let cur = egui::pos2(x, y);
+                        painter.line_segment([prev, cur], egui::Stroke::new(1.0_f32, crate::ui::theme::colors::ACCENT_CYAN.linear_multiply(0.4)));
+                        prev = cur;
+                    }
+                }
+            } else {
+                // No tangents: draw straight lines (original behavior)
+                for pair in app.pen_points.windows(2) {
+                    painter.line_segment([to_screen(pair[0]), to_screen(pair[1])], pen_stroke);
+                }
+                if app.pen_points.len() >= 3 {
+                    let first = app.pen_points[0];
+                    let last = app.pen_points[app.pen_points.len() - 1];
+                    painter.line_segment(
+                        [to_screen(last), to_screen(first)],
+                        egui::Stroke::new(1.0_f32, crate::ui::theme::colors::ACCENT_CYAN.linear_multiply(0.4)),
+                    );
+                }
             }
-            // Closing segment preview back to the first point
-            if app.pen_points.len() >= 3 {
-                let first = app.pen_points[0];
-                // len >= 3 makes the last index always valid — no unwrap needed.
-                let last = app.pen_points[app.pen_points.len() - 1];
-                painter.line_segment(
-                    [to_screen(last), to_screen(first)],
-                    egui::Stroke::new(1.0_f32, crate::ui::theme::colors::ACCENT_CYAN.linear_multiply(0.4)),
-                );
-            }
-            for p in &app.pen_points {
+
+            // Draw vertex dots
+            for (i, p) in app.pen_points.iter().enumerate() {
                 let sp = to_screen(*p);
                 painter.circle_filled(sp, 3.5, crate::ui::theme::colors::ACCENT_CYAN);
                 painter.circle_stroke(sp, 3.5, egui::Stroke::new(1.0_f32, egui::Color32::BLACK));
+                // Draw tangent handles if they exist
+                if let Some((t_out, t_in)) = app.pen_tangents.get(i) {
+                    if t_out[0] != 0.0 || t_out[1] != 0.0 {
+                        let h_out = egui::pos2(sp.x + t_out[0] / comp_w * draw_w, sp.y + t_out[1] / comp_h * draw_h);
+                        painter.line_segment([sp, h_out], egui::Stroke::new(1.0_f32, crate::ui::theme::colors::ACCENT_CYAN));
+                        painter.circle_filled(h_out, 3.0, crate::ui::theme::colors::ACCENT_CYAN);
+                    }
+                    if t_in[0] != 0.0 || t_in[1] != 0.0 {
+                        let h_in = egui::pos2(sp.x + t_in[0] / comp_w * draw_w, sp.y + t_in[1] / comp_h * draw_h);
+                        painter.line_segment([sp, h_in], egui::Stroke::new(1.0_f32, crate::ui::theme::colors::ACCENT_CYAN));
+                        painter.circle_filled(h_in, 3.0, crate::ui::theme::colors::ACCENT_CYAN);
+                    }
+                }
             }
             if viewport_response.hovered() {
                 ui.output_mut(|o| o.cursor_icon = egui::CursorIcon::Crosshair);
+            }
+        }
+
+        // ── Mask vertex deletion (Delete/Backspace) ──
+        if app.active_tool == crate::ui::toolbar::ActiveTool::Selection {
+            let delete_pressed = ui.input(|i| i.key_pressed(egui::Key::Delete) || i.key_pressed(egui::Key::Backspace));
+            if delete_pressed {
+                if let Some((l_idx, m_idx, ref selected_verts)) = app.mask_selected_vertices.clone() {
+                    if !selected_verts.is_empty() {
+                        let comp_mut = app.history.current_mut().active_composition_mut();
+                        if l_idx < comp_mut.layers.len() {
+                            let layer = &mut comp_mut.layers[l_idx];
+                            if m_idx < layer.masks.len() {
+                                let mask = &mut layer.masks[m_idx];
+                                let mut removed = 0;
+                                // Remove vertices from highest index to lowest to preserve indices
+                                let mut sorted_verts: Vec<usize> = selected_verts.iter().copied().collect();
+                                sorted_verts.sort_unstable_by(|a, b| b.cmp(a));
+                                for vi in sorted_verts {
+                                    if mask.path.remove_vertex_at_frame(vi) {
+                                        removed += 1;
+                                    }
+                                }
+                                if removed > 0 {
+                                    crate::core::frame_cache::bump_version();
+                                    app.toasts.info(format!("Removed {} mask vertex{}", removed, if removed > 1 { "es" } else { "" }));
+                                }
+                            }
+                        }
+                        app.mask_selected_vertices = None;
+                    }
+                }
+            }
+        }
+
+        // ── Mask vertex insertion (Alt+click on edge segment) ──
+        if app.active_tool == crate::ui::toolbar::ActiveTool::Selection {
+            let alt_held = ui.input(|i| i.modifiers.alt);
+            if alt_held && viewport_response.clicked() {
+                if let Some(sel_li) = app.selection.selected_layer_idx {
+                    let comp_state_check = app.history.current().active_composition();
+                    if sel_li < comp_state_check.layers.len() {
+                        let l = &comp_state_check.layers[sel_li];
+                        let ptr_pos_check = viewport_response.interact_pointer_pos().unwrap_or_default();
+                        let comp_px_check = (ptr_pos_check.x - origin_x) / draw_w * comp_w;
+                        let comp_py_check = (ptr_pos_check.y - origin_y) / draw_h * comp_h;
+                        for (mi, mask) in l.masks.iter().enumerate() {
+                            if mask.enabled {
+                                let verts = mask.path.vertices_at_frame(current_frame);
+                                let n = verts.len();
+                                if n >= 3 {
+                                    // Find closest edge segment
+                                    let mut best_dist = f32::MAX;
+                                    let mut best_seg = 0;
+                                    let mut best_t = 0.5;
+                                    let end = if mask.path.is_closed { n } else { n - 1 };
+                                    for seg in 0..end {
+                                        let p0 = verts[seg];
+                                        let p1 = verts[(seg + 1) % n];
+                                        // Project point onto segment
+                                        let dx = p1[0] - p0[0];
+                                        let dy = p1[1] - p0[1];
+                                        let len_sq = dx * dx + dy * dy;
+                                        if len_sq < 0.001 { continue; }
+                                        let t = ((comp_px_check - p0[0]) * dx + (comp_py_check - p0[1]) * dy) / len_sq;
+                                        let t_clamped = t.clamp(0.0, 1.0);
+                                        let proj_x = p0[0] + t_clamped * dx;
+                                        let proj_y = p0[1] + t_clamped * dy;
+                                        let dist = ((comp_px_check - proj_x).powi(2) + (comp_py_check - proj_y).powi(2)).sqrt();
+                                        if dist < best_dist && dist < 20.0 {
+                                            best_dist = dist;
+                                            best_seg = seg;
+                                            best_t = t_clamped;
+                                        }
+                                    }
+                                    if best_dist < 20.0 {
+                                        let comp_mut = app.history.current_mut().active_composition_mut();
+                                        if sel_li < comp_mut.layers.len() {
+                                            let layer = &mut comp_mut.layers[sel_li];
+                                            if mi < layer.masks.len() {
+                                                let mask = &mut layer.masks[mi];
+                                                if let Some(new_idx) = mask.path.insert_vertex_at_frame(current_frame, best_seg, best_t) {
+                                                    crate::core::frame_cache::bump_version();
+                                                    app.mask_selected_vertices = Some((sel_li, mi, vec![new_idx].into_iter().collect()));
+                                                    app.toasts.info(format!("Inserted vertex at index {}", new_idx));
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                                break;
+                            }
+                        }
+                    }
+                }
             }
         }
 
@@ -1900,9 +2233,21 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: u32) {
                 }
             };
             let pts = std::mem::take(&mut app.pen_points);
+            let tangs = std::mem::take(&mut app.pen_tangents);
+            let has_tangents = tangs.iter().any(|(o, i)| o[0] != 0.0 || o[1] != 0.0 || i[0] != 0.0 || i[1] != 0.0);
             let comp_mut = app.history.current_mut().active_composition_mut();
             if let Some(layer) = comp_mut.layers.get_mut(target_layer) {
                 let mask_id = layer.masks.len();
+                let path_tangents = if has_tangents {
+                    // Ensure tangents vector matches vertex count
+                    let mut full_tangs = tangs;
+                    while full_tangs.len() < pts.len() {
+                        full_tangs.push(([0.0, 0.0], [0.0, 0.0]));
+                    }
+                    Some(full_tangs)
+                } else {
+                    None
+                };
                 layer.masks.push(crate::core::mask::Mask {
                     id: format!("pen_mask_{}_{}", layer.id, mask_id),
                     name: format!("Mask {}", mask_id + 1),
@@ -1910,7 +2255,7 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: u32) {
                     mode: crate::core::mask::MaskMode::Add,
                     path: crate::core::mask::MaskPath {
                         vertices: crate::core::property::Animatable::new_constant(pts.clone()),
-                        tangents: None,
+                        tangents: path_tangents,
                         is_closed: true,
                     },
                     feather: crate::core::property::Animatable::new_constant(0.0),
@@ -1924,6 +2269,7 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: u32) {
             app.toasts.info(format!("Pen mask created ({} points)", pts.len()));
         } else if pen_commit {
             app.pen_points.clear();
+            app.pen_tangents.clear();
         }
 
         draw_inline_text_editor(app, ctx, current_frame, origin_x, origin_y, draw_w, draw_h, comp_w, comp_h);

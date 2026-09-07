@@ -707,19 +707,12 @@ pub fn handle_global_shortcuts(
             if let Some(sel_idx) = app.selection.selected_layer_idx {
                 let mut enabled = false;
                 app.modify_project(|p| {
-                    let dur = p.active_composition().duration_frames;
                     let comp = p.active_composition_mut();
                     if let Some(l) = comp.layers.get_mut(sel_idx) {
                         if l.time_remap.is_some() {
-                            l.time_remap = None;
+                            l.clear_time_remap();
                         } else {
-                            // Linear source-time map across the layer's span:
-                            // value = source frame offset relative to in-point.
-                            let span = l.out_frame.saturating_sub(l.in_frame).max(1);
-                            l.time_remap = Some(crate::core::property::Animatable::new_animated(vec![
-                                crate::core::keyframe::Keyframe::new(0, 0.0f32, crate::core::keyframe::InterpolationType::Linear),
-                                crate::core::keyframe::Keyframe::new(dur.max(1), span as f32, crate::core::keyframe::InterpolationType::Linear),
-                            ]));
+                            l.enable_time_remapping();
                             enabled = true;
                         }
                     }
