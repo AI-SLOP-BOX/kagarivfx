@@ -186,7 +186,9 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: &mut u32, t
 
             // ── Responsive Width Calculation ──
             let total_w = ui.available_width();
-            let left_pane_w = (total_w * 0.32).clamp(420.0, 460.0);
+            let left_pane_w = (total_w * 0.32)
+                .clamp(420.0, 460.0)
+                .min((total_w - 180.0).max(0.0));
 
             // ── Work Area (In / Out) Handles Bar ──
             ui.horizontal(|ui| {
@@ -215,7 +217,7 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: &mut u32, t
                     });
                 });
 
-                let avail_w = ui.available_width();
+                let avail_w = ui.available_width().max(0.0);
                 let (ruler_rect, ruler_response) = ui.allocate_exact_size(
                     egui::vec2(avail_w, 26.0),
                     egui::Sense::click_and_drag(),

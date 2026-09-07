@@ -861,36 +861,6 @@ fn draw_effects_presets_tab(
     });
     ui.add_space(4.0);
 
-    ui.horizontal(|ui| {
-        ui.small("Search:");
-        ui.add(
-            egui::TextEdit::singleline(&mut app.ui_tabs.effects_search_query)
-                .hint_text("Search effects..."),
-        );
-    });
-    let q = app.ui_tabs.effects_search_query.to_lowercase();
-
-    let matching: Vec<_> = crate::ui::effects_controls::get_all_effect_presets().iter()
-        .filter(|preset| q.is_empty() || preset.search_key.contains(&q)).collect();
-    egui::ScrollArea::vertical().id_salt("effect_results").max_height(280.0)
-        .show_rows(ui, 24.0, matching.len(), |ui, rows| {
-        for row in rows {
-            let preset = &matching[row];
-            if ui.add_sized([ui.available_width(), 24.0], egui::Button::new(preset.button_label)).clicked()
-            {
-                if let Some(idx) = layer_idx {
-                    let mut session = EditorSession::new(&mut app.history, "Apply Effect");
-                    let comp = session.current_mut().active_composition_mut();
-                    if idx < comp.layers.len() {
-                        let len = comp.layers[idx].effects.len();
-                        comp.layers[idx].effects.push((preset.create_fn)(len));
-                        session.commit();
-                    }
-                }
-            }
-        }
-    });
-
     // Applied effects list
     ui.separator();
     if let Some(idx) = layer_idx {

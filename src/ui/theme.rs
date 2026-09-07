@@ -127,7 +127,7 @@ fn configure_fonts(ctx: &egui::Context) {
                     .families
                     .entry(egui::FontFamily::Proportional)
                     .or_default()
-                    .push("SFPro".to_string());
+                    .insert(0, "SFPro".to_string());
                 loaded_prop = true;
                 break;
             }
