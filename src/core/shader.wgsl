@@ -235,14 +235,10 @@ struct Layer {
 @group(2) @binding(1) var s_diffuse: sampler;
 @group(3) @binding(0) var t_mask: texture_2d<f32>;
 @group(3) @binding(1) var s_mask: sampler;
-
-// Shadow density map (CPU-built, uploaded per frame when shadows active)
-@group(4) @binding(0) var t_shadow: texture_2d<f32>;
-@group(4) @binding(1) var s_shadow: sampler;
-
-// Track matte source texture (the layer ABOVE this one in AE track matte order)
-@group(5) @binding(0) var t_matte: texture_2d<f32>;
-@group(5) @binding(1) var s_matte: sampler;
+@group(3) @binding(2) var t_shadow: texture_2d<f32>;
+@group(3) @binding(3) var s_shadow: sampler;
+@group(3) @binding(4) var t_matte: texture_2d<f32>;
+@group(3) @binding(5) var s_matte: sampler;
 
 struct VertexInput {
     @location(0) position: vec2<f32>,

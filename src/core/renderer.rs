@@ -1101,23 +1101,23 @@ pub struct WgpuRenderer {
     dummy_texture_bind_group: wgpu::BindGroup,
     sampler: wgpu::Sampler,
 
-    // Shared layer-mask resources (group 3)
-    mask_bind_group_layout: wgpu::BindGroupLayout,
-    mask_bind_group: wgpu::BindGroup,
+    // Combined mask+shadow+matte bind group (group 3, bindings 0-5)
+    combined_bind_group_layout: wgpu::BindGroupLayout,
+    combined_bind_group: wgpu::BindGroup,
+    dummy_mask_view: wgpu::TextureView,
+    dummy_shadow_view: wgpu::TextureView,
+    dummy_matte_view: wgpu::TextureView,
+
+    // Shared layer-mask resources
     mask_texture: Option<wgpu::Texture>,
     mask_view: Option<wgpu::TextureView>,
     mask_size: (u32, u32),
 
-    // Shadow density map (group 4): CPU-built, GPU-sampled for preview parity
-    shadow_bind_group_layout: wgpu::BindGroupLayout,
-    shadow_bind_group: wgpu::BindGroup,
+    // Shadow density map: CPU-built, GPU-sampled for preview parity
     shadow_texture: Option<wgpu::Texture>,
+    shadow_view: Option<wgpu::TextureView>,
     shadow_size: (u32, u32),
     shadow_active: bool,
-
-    // Track matte source (group 5): per-layer matte texture binding
-    matte_bind_group_layout: wgpu::BindGroupLayout,
-    matte_bind_group: wgpu::BindGroup,
     /// Content-addressed cache so static masks skip EDT re-raster during
     /// playback of other layers.
     mask_raster_cache: std::cell::RefCell<MaskRasterCache>,
@@ -1253,9 +1253,10 @@ impl WgpuRenderer {
                 label: Some("texture_bind_group_layout"),
             });
 
-        let mask_bind_group_layout =
+        let combined_bind_group_layout =
             device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
                 entries: &[
+                    // mask texture (binding 0)
                     wgpu::BindGroupLayoutEntry {
                         binding: 0,
                         visibility: wgpu::ShaderStages::FRAGMENT,
@@ -1266,14 +1267,51 @@ impl WgpuRenderer {
                         },
                         count: None,
                     },
+                    // mask sampler (binding 1)
                     wgpu::BindGroupLayoutEntry {
                         binding: 1,
                         visibility: wgpu::ShaderStages::FRAGMENT,
                         ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
                         count: None,
                     },
+                    // shadow texture (binding 2)
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 2,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Texture {
+                            multisampled: false,
+                            view_dimension: wgpu::TextureViewDimension::D2,
+                            sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                        },
+                        count: None,
+                    },
+                    // shadow sampler (binding 3)
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 3,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                        count: None,
+                    },
+                    // matte texture (binding 4)
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 4,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Texture {
+                            multisampled: false,
+                            view_dimension: wgpu::TextureViewDimension::D2,
+                            sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                        },
+                        count: None,
+                    },
+                    // matte sampler (binding 5)
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 5,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                        count: None,
+                    },
                 ],
-                label: Some("mask_bind_group_layout"),
+                label: Some("combined_bind_group_layout"),
             });
 
         let globals_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
@@ -1329,44 +1367,6 @@ impl WgpuRenderer {
         let dummy_mask_view =
             dummy_mask_texture.create_view(&wgpu::TextureViewDescriptor::default());
 
-        let mask_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            layout: &mask_bind_group_layout,
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: wgpu::BindingResource::TextureView(&dummy_mask_view),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: wgpu::BindingResource::Sampler(&sampler),
-                },
-            ],
-            label: Some("mask_bind_group"),
-        });
-
-        // Shadow map resources (group 4) — 1x1 transparent until first upload
-        let shadow_bind_group_layout =
-            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                entries: &[
-                    wgpu::BindGroupLayoutEntry {
-                        binding: 0,
-                        visibility: wgpu::ShaderStages::FRAGMENT,
-                        ty: wgpu::BindingType::Texture {
-                            multisampled: false,
-                            view_dimension: wgpu::TextureViewDimension::D2,
-                            sample_type: wgpu::TextureSampleType::Float { filterable: true },
-                        },
-                        count: None,
-                    },
-                    wgpu::BindGroupLayoutEntry {
-                        binding: 1,
-                        visibility: wgpu::ShaderStages::FRAGMENT,
-                        ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
-                        count: None,
-                    },
-                ],
-                label: Some("shadow_bind_group_layout"),
-            });
         let dummy_shadow_texture = device.create_texture(&wgpu::TextureDescriptor {
             label: Some("Dummy Shadow Texture"),
             size: dummy_mask_size,
@@ -1394,44 +1394,7 @@ impl WgpuRenderer {
         );
         let dummy_shadow_view =
             dummy_shadow_texture.create_view(&wgpu::TextureViewDescriptor::default());
-        let shadow_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            layout: &shadow_bind_group_layout,
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: wgpu::BindingResource::TextureView(&dummy_shadow_view),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: wgpu::BindingResource::Sampler(&sampler),
-                },
-            ],
-            label: Some("shadow_bind_group"),
-        });
 
-        // Track matte source resources (group 5) — 1x1 dummy until layer assigned
-        let matte_bind_group_layout =
-            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                entries: &[
-                    wgpu::BindGroupLayoutEntry {
-                        binding: 0,
-                        visibility: wgpu::ShaderStages::FRAGMENT,
-                        ty: wgpu::BindingType::Texture {
-                            multisampled: false,
-                            view_dimension: wgpu::TextureViewDimension::D2,
-                            sample_type: wgpu::TextureSampleType::Float { filterable: true },
-                        },
-                        count: None,
-                    },
-                    wgpu::BindGroupLayoutEntry {
-                        binding: 1,
-                        visibility: wgpu::ShaderStages::FRAGMENT,
-                        ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
-                        count: None,
-                    },
-                ],
-                label: Some("matte_bind_group_layout"),
-            });
         let dummy_matte_texture = device.create_texture(&wgpu::TextureDescriptor {
             label: Some("Dummy Matte Texture"),
             size: dummy_mask_size,
@@ -1459,19 +1422,36 @@ impl WgpuRenderer {
         );
         let dummy_matte_view =
             dummy_matte_texture.create_view(&wgpu::TextureViewDescriptor::default());
-        let matte_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            layout: &matte_bind_group_layout,
+
+        let combined_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            layout: &combined_bind_group_layout,
             entries: &[
                 wgpu::BindGroupEntry {
                     binding: 0,
-                    resource: wgpu::BindingResource::TextureView(&dummy_matte_view),
+                    resource: wgpu::BindingResource::TextureView(&dummy_mask_view),
                 },
                 wgpu::BindGroupEntry {
                     binding: 1,
                     resource: wgpu::BindingResource::Sampler(&sampler),
                 },
+                wgpu::BindGroupEntry {
+                    binding: 2,
+                    resource: wgpu::BindingResource::TextureView(&dummy_shadow_view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 3,
+                    resource: wgpu::BindingResource::Sampler(&sampler),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 4,
+                    resource: wgpu::BindingResource::TextureView(&dummy_matte_view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 5,
+                    resource: wgpu::BindingResource::Sampler(&sampler),
+                },
             ],
-            label: Some("matte_bind_group"),
+            label: Some("combined_bind_group"),
         });
 
         let layer_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
@@ -1553,9 +1533,7 @@ impl WgpuRenderer {
                     &globals_bind_group_layout,
                     &layer_bind_group_layout,
                     &texture_bind_group_layout,
-                    &mask_bind_group_layout,
-                    &shadow_bind_group_layout,
-                    &matte_bind_group_layout,
+                    &combined_bind_group_layout,
                 ],
                 push_constant_ranges: &[],
             });
@@ -1628,19 +1606,19 @@ impl WgpuRenderer {
             texture_bind_group_layout,
             dummy_texture_bind_group,
             sampler,
-            mask_bind_group_layout,
-            mask_bind_group,
+            combined_bind_group_layout,
+            combined_bind_group,
+            dummy_mask_view,
+            dummy_shadow_view,
+            dummy_matte_view,
             mask_texture: None,
             mask_view: None,
             mask_size: (0, 0),
             mask_raster_cache: std::cell::RefCell::new(MaskRasterCache::default()),
-            shadow_bind_group_layout,
-            shadow_bind_group,
             shadow_texture: None,
+            shadow_view: None,
             shadow_size: (0, 0),
             shadow_active: false,
-            matte_bind_group_layout,
-            matte_bind_group,
             target_texture: None,
             target_view: None,
             target_size: (0, 0),
@@ -1656,6 +1634,44 @@ impl WgpuRenderer {
             ram_render_idx: usize::MAX,
             preview_max_width: None,
         }
+    }
+
+    /// Rebuild the combined mask+shadow+matte bind group (group 3) from
+    /// the current mask, shadow, and dummy matte views.
+    fn rebuild_combined_bind_group(&self) -> wgpu::BindGroup {
+        let mask_view = self.mask_view.as_ref().unwrap_or(&self.dummy_mask_view);
+        let shadow_view = self.shadow_view.as_ref().unwrap_or(&self.dummy_shadow_view);
+        let matte_view = &self.dummy_matte_view;
+        self.device.create_bind_group(&wgpu::BindGroupDescriptor {
+            layout: &self.combined_bind_group_layout,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::TextureView(mask_view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::Sampler(&self.sampler),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 2,
+                    resource: wgpu::BindingResource::TextureView(shadow_view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 3,
+                    resource: wgpu::BindingResource::Sampler(&self.sampler),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 4,
+                    resource: wgpu::BindingResource::TextureView(matte_view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 5,
+                    resource: wgpu::BindingResource::Sampler(&self.sampler),
+                },
+            ],
+            label: Some("combined_bind_group"),
+        })
     }
 
     /// Creates/replaces the shared layer-mask texture when its size changed.
@@ -1679,24 +1695,10 @@ impl WgpuRenderer {
             view_formats: &[],
         });
         let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
-        let bind_group = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
-            layout: &self.mask_bind_group_layout,
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: wgpu::BindingResource::TextureView(&view),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: wgpu::BindingResource::Sampler(&self.sampler),
-                },
-            ],
-            label: Some("mask_bind_group_live"),
-        });
         self.mask_texture = Some(texture);
         self.mask_view = Some(view);
-        self.mask_bind_group = bind_group;
         self.mask_size = (width, height);
+        self.combined_bind_group = self.rebuild_combined_bind_group();
     }
 
     /// Prepares/resizes the offscreen target texture if needed.
@@ -2764,19 +2766,37 @@ impl WgpuRenderer {
                     },
                 );
                 let view = tex.create_view(&wgpu::TextureViewDescriptor::default());
+                let mask_view = self.mask_view.as_ref().unwrap_or(&self.dummy_mask_view);
+                let shadow_view = self.shadow_view.as_ref().unwrap_or(&self.dummy_shadow_view);
                 let bg = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
-                    layout: &self.matte_bind_group_layout,
+                    layout: &self.combined_bind_group_layout,
                     entries: &[
                         wgpu::BindGroupEntry {
                             binding: 0,
-                            resource: wgpu::BindingResource::TextureView(&view),
+                            resource: wgpu::BindingResource::TextureView(mask_view),
                         },
                         wgpu::BindGroupEntry {
                             binding: 1,
                             resource: wgpu::BindingResource::Sampler(&self.sampler),
                         },
+                        wgpu::BindGroupEntry {
+                            binding: 2,
+                            resource: wgpu::BindingResource::TextureView(shadow_view),
+                        },
+                        wgpu::BindGroupEntry {
+                            binding: 3,
+                            resource: wgpu::BindingResource::Sampler(&self.sampler),
+                        },
+                        wgpu::BindGroupEntry {
+                            binding: 4,
+                            resource: wgpu::BindingResource::TextureView(&view),
+                        },
+                        wgpu::BindGroupEntry {
+                            binding: 5,
+                            resource: wgpu::BindingResource::Sampler(&self.sampler),
+                        },
                     ],
-                    label: Some("Track Matte Bind Group"),
+                    label: Some("Combined Matte Bind Group"),
                 });
                 matte_textures_owned.push(Some((tex, view)));
                 matte_bind_groups.push(Some(bg));
@@ -2942,14 +2962,12 @@ impl WgpuRenderer {
                             _ => &self.dummy_texture_bind_group,
                         };
                         render_pass.set_bind_group(2, tex_bg, &[]);
-                        render_pass.set_bind_group(3, &self.mask_bind_group, &[]);
-                        render_pass.set_bind_group(4, &self.shadow_bind_group, &[]);
-                        // Track matte: bind the pre-rendered matte texture or fallback to dummy
-                        let matte_bg: &wgpu::BindGroup = match matte_bind_groups.get(i) {
+                        // Combined mask+shadow+matte bind group (group 3)
+                        let combined_bg: &wgpu::BindGroup = match matte_bind_groups.get(i) {
                             Some(Some(bg)) => bg,
-                            _ => &self.matte_bind_group,
+                            _ => &self.combined_bind_group,
                         };
-                        render_pass.set_bind_group(5, matte_bg, &[]);
+                        render_pass.set_bind_group(3, combined_bg, &[]);
 
                         // Draw!
                         render_pass.draw_indexed(0..(INDICES.len() as u32), 0, 0..1);
@@ -3027,23 +3045,10 @@ impl WgpuRenderer {
                 view_formats: &[],
             });
             let view = tex.create_view(&wgpu::TextureViewDescriptor::default());
-            let bg = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
-                layout: &self.shadow_bind_group_layout,
-                entries: &[
-                    wgpu::BindGroupEntry {
-                        binding: 0,
-                        resource: wgpu::BindingResource::TextureView(&view),
-                    },
-                    wgpu::BindGroupEntry {
-                        binding: 1,
-                        resource: wgpu::BindingResource::Sampler(&self.sampler),
-                    },
-                ],
-                label: Some("shadow_bind_group_live"),
-            });
             self.shadow_texture = Some(tex);
+            self.shadow_view = Some(view);
             self.shadow_size = (w, h);
-            self.shadow_bind_group = bg;
+            self.combined_bind_group = self.rebuild_combined_bind_group();
         }
 
         if let Some(tex) = &self.shadow_texture {
