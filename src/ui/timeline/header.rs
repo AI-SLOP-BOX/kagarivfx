@@ -73,7 +73,6 @@ pub fn draw_timeline_header(
         )
         .on_hover_text("Click or Drag to set current frame timecode");
         ui.add_space(8.0);
-        use crate::ui::icons::*;
 
         if ui.small_button("⏮").on_hover_text("Go to First Frame (Home)").clicked() {
             *current_frame = 0;
@@ -96,18 +95,15 @@ pub fn draw_timeline_header(
             *current_frame = total_frames;
         }
 
-        ui.separator();
-        ui.label("Zoom:");
-        // Logarithmic zoom control (0.1 ..= 20.0)
-        let mut zoom_log = (*state.timeline_zoom).max(0.1).log10();
-        ui.add(
-            egui::DragValue::new(&mut zoom_log)
-                .speed(0.02)
-                .range(-1.0..=(20.0f32).log10())
-                .prefix("x"),
-        )
-        .on_hover_text("Timeline zoom (logarithmic, 0.1x - 20.0x)");
-        *state.timeline_zoom = 10f32.powf(zoom_log).clamp(0.1, 20.0);
+    });
+
+    ui.horizontal_wrapped(|ui| {
+        use crate::ui::icons::*;
+        ui.label("Zoom");
+        ui.add(egui::DragValue::new(state.timeline_zoom)
+            .speed(0.05).range(0.1..=20.0).suffix("×"))
+            .on_hover_text("Timeline magnification");
+        ui.menu_button("View", |ui| {
         if ui
             .button("Fit")
             .on_hover_text("Fit Timeline to Work Area (or full duration)")
@@ -164,6 +160,8 @@ pub fn draw_timeline_header(
             state.expanded_layers.clear();
         }
 
+        });
+
         use crate::ui::custom_widgets::ae_svg_toggle;
 
         ae_svg_toggle(
@@ -195,7 +193,7 @@ pub fn draw_timeline_header(
         };
         let depth_btn = ui.add(
             egui::Button::new(
-                egui::RichText::new(format!("💎 {}", comp.bit_depth.label()))
+                egui::RichText::new(comp.bit_depth.label())
                     .small()
                     .strong()
                     .color(depth_badge_color),
@@ -222,7 +220,7 @@ pub fn draw_timeline_header(
                 .desired_width(110.0),
         );
 
-        ui.add_space(15.0);
+        ui.menu_button("Add layer", |ui| {
         if ui.button("+ Solid").clicked() {
             let id = format!("layer_{}", comp.layers.len());
             let name = format!("Solid {}", comp.layers.len());
@@ -380,26 +378,7 @@ pub fn draw_timeline_header(
             comp.add_layer(layer);
             project_changed = true;
         }
-        if ui.button("+ Adjustment Layer").clicked() {
-            let id = format!("layer_{}", comp.layers.len());
-            let name = format!("Adjustment Layer {}", comp.layers.len());
-            let layer = Layer::new_adjustment(id, name, total_frames);
-            comp.add_layer(layer);
-            project_changed = true;
-        }
-
-        ui.add_space(8.0);
-        let add_marker_clicked =
-            ui.button("+ Marker (M)").clicked() || ui.input(|i| i.key_pressed(egui::Key::M));
-        if add_marker_clicked {
-            let marker_idx = comp.markers.len() + 1;
-            comp.markers.push(crate::core::timeline::TimelineMarker {
-                frame: *current_frame,
-                label: format!("Marker {}", marker_idx),
-                color: [1.0, 0.6, 0.1],
-            });
-            project_changed = true;
-        }
+        });
     });
 
     // ── Go to Frame popup ──

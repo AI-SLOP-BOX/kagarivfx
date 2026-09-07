@@ -52,6 +52,10 @@ pub fn init_image_loaders(ctx: &egui::Context) {
 
 /// Render an SVG string directly as an egui Image widget.
 /// SVG bytes are borrowed statically; only the cache URI is allocated per call.
+fn svg_uri(name: &str, svg: &str) -> String {
+    format!("bytes://{name}-{}.svg", egui::Id::new(svg).value())
+}
+
 pub fn render_svg_bytes(
     ui: &mut egui::Ui,
     name: &str,
@@ -61,7 +65,7 @@ pub fn render_svg_bytes(
 ) -> egui::Response {
     ui.add(
         egui::Image::new(egui::ImageSource::Bytes {
-            uri: std::borrow::Cow::Owned(name.to_string()),
+            uri: std::borrow::Cow::Owned(svg_uri(name, svg_str)),
             bytes: egui::load::Bytes::Static(svg_str.as_bytes()),
         })
         .fit_to_exact_size(size)
@@ -175,11 +179,10 @@ pub fn render_svg_at(
     tint: egui::Color32,
     pos: egui::Pos2,
 ) -> egui::Response {
-    ui.allocate_exact_size(size, egui::Sense::hover());
     ui.put(
         egui::Rect::from_min_size(pos, size),
         egui::Image::new(egui::ImageSource::Bytes {
-            uri: std::borrow::Cow::Owned(name),
+            uri: std::borrow::Cow::Owned(svg_uri(&name, svg_str)),
             bytes: egui::load::Bytes::Static(svg_str.as_bytes()),
         })
         .fit_to_exact_size(size)
@@ -204,5 +207,28 @@ pub fn layer_icon(lt: &crate::core::timeline::LayerType) -> &'static str {
         LayerType::PreComp { .. } => p::PACKAGE,
         LayerType::AdjustmentLayer => p::CIRCLE_HALF,
         LayerType::Particle { .. } => p::SPARKLE,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn svg_icons_decode_and_state_variants_do_not_share_cache_entries() {
+        let ctx = egui::Context::default();
+        init_image_loaders(&ctx);
+        let _ = ctx.run(Default::default(), |ctx| {
+            egui::CentralPanel::default().show(ctx, |ui| {
+                render_svg_bytes(ui, "visibility", SVG_EYE_OPEN, egui::vec2(18.0, 18.0), egui::Color32::WHITE);
+                render_svg_bytes(ui, "visibility", SVG_EYE_CLOSED, egui::vec2(18.0, 18.0), egui::Color32::WHITE);
+                render_svg_at(ui, "hand".into(), SVG_TOOL_HAND, egui::vec2(24.0, 24.0), egui::Color32::WHITE, egui::pos2(100.0, 100.0));
+            });
+        });
+        assert_ne!(svg_uri("visibility", SVG_EYE_OPEN), svg_uri("visibility", SVG_EYE_CLOSED));
+        for (name, svg) in [("visibility", SVG_EYE_OPEN), ("visibility", SVG_EYE_CLOSED), ("hand", SVG_TOOL_HAND)] {
+            assert!(matches!(ctx.try_load_image(&svg_uri(name, svg), egui::load::SizeHint::Size(24, 24)),
+                Ok(egui::load::ImagePoll::Ready { .. })));
+        }
     }
 }

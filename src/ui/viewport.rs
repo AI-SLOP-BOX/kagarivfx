@@ -90,6 +90,12 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: u32) {
             if ui.selectable_label(!mode_2d, "3D Camera").clicked() {
                 app.viewport_mode = ViewportMode::Camera3D;
             }
+            ui.menu_button("Overlays", |ui| {
+                ui.checkbox(&mut app.show_handles, "Layer handles");
+                ui.checkbox(&mut app.show_guides, "Safe-area guides");
+                ui.checkbox(&mut app.show_grid, "Grid");
+                ui.checkbox(&mut app.viewport_show_stats, "Preview statistics");
+            });
         });
         ui.separator();
 
@@ -103,15 +109,14 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: u32) {
             for idx in 0..comps_count {
                 let is_active = idx == active_comp_idx;
                 let c_name = app.history.current().compositions[idx].name.clone();
-                let tab_text = format!("🎞 Composition: {} {}", c_name, if is_active { "x" } else { "" });
+                let tab_text = c_name;
                 if ui.selectable_label(is_active, tab_text).clicked() {
                     let mut p = app.history.current().clone();
                     p.active_composition_idx = idx;
                     app.history.commit(p);
                 }
             }
-            ui.separator();
-            ui.small(egui::RichText::new("Composition Flow: Main Comp > Active Layer").color(colors::TEXT_SECONDARY));
+
         });
         ui.separator();
 

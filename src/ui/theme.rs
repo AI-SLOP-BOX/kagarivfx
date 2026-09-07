@@ -7,12 +7,12 @@ pub mod colors {
     use eframe::egui::Color32;
 
     // ── Background Layers (darkest → lightest) ──
-    pub const BG_DEEPEST: Color32 = Color32::from_rgb(18, 18, 18); // Timeline bg
-    pub const BG_DARKEST: Color32 = Color32::from_rgb(23, 23, 23); // Panel bg
-    pub const BG_DARK: Color32 = Color32::from_rgb(30, 30, 30); // Header bg
-    pub const BG_MID: Color32 = Color32::from_rgb(38, 38, 38); // Surface bg
-    pub const BG_PANEL: Color32 = Color32::from_rgb(43, 43, 43); // Elevated surface
-    pub const BG_SURFACE: Color32 = Color32::from_rgb(52, 52, 52); // Input fields
+    pub const BG_DEEPEST: Color32 = Color32::from_rgb(18, 20, 24); // Timeline bg
+    pub const BG_DARKEST: Color32 = Color32::from_rgb(24, 27, 33); // Panel bg
+    pub const BG_DARK: Color32 = Color32::from_rgb(28, 32, 39); // Header bg
+    pub const BG_MID: Color32 = Color32::from_rgb(34, 39, 47); // Surface bg
+    pub const BG_PANEL: Color32 = Color32::from_rgb(40, 46, 55); // Elevated surface
+    pub const BG_SURFACE: Color32 = Color32::from_rgb(44, 51, 61); // Input fields
     pub const BG_ELEVATED: Color32 = Color32::from_rgb(60, 60, 60); // Dropdowns
 
     // ── Interactive States ──
@@ -30,15 +30,15 @@ pub mod colors {
     pub const ACCENT_PURPLE: Color32 = Color32::from_rgb(160, 120, 255); // Expression
 
     // ── Borders (crisp 1px) ──
-    pub const BORDER_SUBTLE: Color32 = Color32::from_rgb(40, 40, 40); // Panel dividers
-    pub const BORDER_MEDIUM: Color32 = Color32::from_rgb(55, 55, 55); // Input borders
+    pub const BORDER_SUBTLE: Color32 = Color32::from_rgb(38, 44, 53); // Panel dividers
+    pub const BORDER_MEDIUM: Color32 = Color32::from_rgb(55, 63, 75); // Input borders
     pub const BORDER_STRONG: Color32 = Color32::from_rgb(75, 75, 75); // Active borders
     pub const BORDER_ACTIVE: Color32 = Color32::from_rgb(0, 163, 255); // Focused input
 
     // ── Typography ──
-    pub const TEXT_PRIMARY: Color32 = Color32::from_rgb(220, 220, 220); // Main text
-    pub const TEXT_SECONDARY: Color32 = Color32::from_rgb(160, 160, 160); // Labels
-    pub const TEXT_MUTED: Color32 = Color32::from_rgb(110, 110, 110); // Disabled
+    pub const TEXT_PRIMARY: Color32 = Color32::from_rgb(225, 230, 238); // Main text
+    pub const TEXT_SECONDARY: Color32 = Color32::from_rgb(164, 175, 191); // Labels
+    pub const TEXT_MUTED: Color32 = Color32::from_rgb(126, 138, 154); // Disabled
     pub const TEXT_ACCENT: Color32 = Color32::from_rgb(0, 180, 255); // Links / values
     pub const TEXT_ON_ACCENT: Color32 = Color32::from_rgb(255, 255, 255); // On blue bg
 
@@ -91,8 +91,8 @@ pub mod layout {
     pub const BOTTOM_TIMELINE_HEIGHT: f32 = 300.0;
     pub const STATUS_BAR_HEIGHT: f32 = 22.0;
 
-    pub const FONT_SIZE_SMALL: f32 = 10.0;
-    pub const FONT_SIZE_BODY: f32 = 11.5;
+    pub const FONT_SIZE_SMALL: f32 = 11.0;
+    pub const FONT_SIZE_BODY: f32 = 12.0;
     pub const FONT_SIZE_HEADING: f32 = 13.0;
     pub const FONT_SIZE_TITLE: f32 = 15.0;
 }
@@ -127,7 +127,7 @@ fn configure_fonts(ctx: &egui::Context) {
                     .families
                     .entry(egui::FontFamily::Proportional)
                     .or_default()
-                    .insert(0, "SFPro".to_string());
+                    .push("SFPro".to_string());
                 loaded_prop = true;
                 break;
             }
@@ -334,8 +334,8 @@ pub fn configure_ae_theme(ctx: &egui::Context) {
     // ── Typography & Spacing ──
     ctx.style_mut(|style| {
         // Tighter spacing for pro density
-        style.spacing.item_spacing = egui::vec2(4.0, 2.0);
-        style.spacing.button_padding = egui::vec2(6.0, 2.0);
+        style.spacing.item_spacing = egui::vec2(6.0, 4.0);
+        style.spacing.button_padding = egui::vec2(8.0, 4.0);
         style.spacing.indent = 14.0;
         style.spacing.scroll.bar_width = 6.0;
         style.spacing.scroll.bar_inner_margin = 2.0;

@@ -260,6 +260,7 @@ pub struct KagariApp {
     pub dragging_layer: Option<usize>,
     pub show_grid: bool,
     pub show_guides: bool,
+    pub viewport_show_stats: bool,
     pub show_handles: bool,
     pub show_comp_settings: bool,
     pub show_shortcuts_dialog: bool,
@@ -467,7 +468,8 @@ impl Default for KagariApp {
             timeline_fit_to_selection: false,
             timeline_fit_all: false,
             show_grid: false,
-            show_guides: true,
+            show_guides: false,
+            viewport_show_stats: false,
             show_handles: true,
             show_comp_settings: false,
             show_shortcuts_dialog: false,
@@ -1008,9 +1010,9 @@ impl eframe::App for KagariApp {
         crate::ui::shortcuts::handle_global_shortcuts(self, ctx, &mut current_frame, total_frames);
         crate::ui::menu::draw(self, ctx);
         crate::ui::toolbar::draw(self, ctx);
+        crate::ui::timeline::draw(self, ctx, &mut current_frame, total_frames);
         crate::ui::inspector::draw(self, ctx, &mut current_frame);
         crate::ui::effects_library::draw(self, ctx, &mut current_frame);
-        crate::ui::timeline::draw(self, ctx, &mut current_frame, total_frames);
 
         let status_frame = egui::Frame::none()
             .fill(crate::ui::theme::colors::BG_DARKEST)

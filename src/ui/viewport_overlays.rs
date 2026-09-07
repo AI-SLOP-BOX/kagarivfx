@@ -273,6 +273,7 @@ pub fn draw_viewport_overlays(
         );
     }
 
+    if app.viewport_show_stats && draw_w >= 520.0 {
     // ── HUD Overlay Badges ──
     let backend_text = if rendered_gpu {
         "[GPU] WGPU Acceleration"
@@ -351,6 +352,8 @@ pub fn draw_viewport_overlays(
         egui::FontId::proportional(11.0),
         backend_color,
     );
+
+    }
 
     // ── CPU-only Feature Notice ──
     // Text Animator, Layer Styles and DOF composite correctly only in
@@ -442,6 +445,7 @@ pub fn draw_viewport_overlays(
     }
 
     // Bottom Left Selection HUD Status
+    if app.viewport_drag_state.is_some() {
     if let Some(s_idx) = app.selection.selected_layer_idx {
         let comp = app.history.current().active_composition();
         if s_idx < comp.layers.len() {
@@ -478,6 +482,8 @@ pub fn draw_viewport_overlays(
                 colors::HUD_STATUS_TEXT,
             );
         }
+    }
+
     }
 
     // ── 3D Axis Transform Gizmo Overlay ──

@@ -5,16 +5,11 @@ use crate::KagariApp;
 use eframe::egui;
 
 pub fn draw(app: &mut KagariApp, ui: &mut egui::Ui) {
-    ui.heading("Project");
-    ui.separator();
 
     // ── Asset Search Filter ──
-    ui.horizontal(|ui| {
-        ui.label("Search:");
-        ui.add(
-            egui::TextEdit::singleline(&mut app.project_search_query).hint_text("Search bin..."),
-        );
-    });
+    ui.add_sized([ui.available_width(), 26.0],
+        egui::TextEdit::singleline(&mut app.project_search_query).hint_text("Search project assets"));
+
     let query = app.project_search_query.to_lowercase();
 
     // Read current state without cloning upfront
@@ -109,7 +104,8 @@ pub fn draw(app: &mut KagariApp, ui: &mut egui::Ui) {
             }
         }
 
-        if custom_widgets::ae_button(ui, "+ New Folder").clicked() {
+        ui.menu_button("More", |ui| {
+        if custom_widgets::ae_button(ui, "New folder").clicked() {
             add_folder_requested = true;
         }
 
@@ -126,6 +122,7 @@ pub fn draw(app: &mut KagariApp, ui: &mut egui::Ui) {
         {
             reduce_project_requested = true;
         }
+        });
     });
 
     ui.add_space(6.0);

@@ -7,14 +7,13 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: &mut u32) {
     let dt = ctx.input(|i| i.stable_dt);
     app.effects_animation.update(dt);
 
-    let animated_width =
-        crate::ui::panel_animation::animate_panel_width(ctx, &app.effects_animation, 350.0)
-            .max(200.0);
+    let max_width = (ctx.screen_rect().width() * 0.28).max(230.0);
 
     egui::SidePanel::right("right_panel")
         .resizable(true)
-        .default_width(240.0)
-        .min_width(animated_width)
+        .default_width(280.0)
+        .min_width(230.0)
+        .max_width(max_width)
         .show(ctx, |ui| {
             const TAB_CATEGORIES: &[(&str, &[(usize, &str)])] = &[
                 (
@@ -73,53 +72,32 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: &mut u32) {
                     ],
                 ),
             ];
-            let active_cat = TAB_CATEGORIES
-                .iter()
-                .position(|(_, tabs)| {
-                    tabs.iter()
-                        .any(|(idx, _)| *idx == app.ui_tabs.right_tab_idx)
-                })
-                .unwrap_or(0);
-            let cat_id = egui::Id::new("right_panel_active_category");
-
-            ui.horizontal_wrapped(|ui| {
-                for (ci, (cat_name, tabs)) in TAB_CATEGORIES.iter().enumerate() {
-                    let mut is_active_cat = ci == active_cat;
-                    let resp = ui.toggle_value(&mut is_active_cat, *cat_name).clicked();
-                    if resp {
-                        ui.ctx().data_mut(|d| d.insert_temp(cat_id, ci));
-                        if let Some((first_idx, _)) = tabs.first() {
-                            if !tabs
-                                .iter()
-                                .any(|(idx, _)| *idx == app.ui_tabs.right_tab_idx)
-                            {
-                                app.ui_tabs.right_tab_idx = *first_idx;
-                            }
+            let active_label = TAB_CATEGORIES.iter().flat_map(|(_, tabs)| tabs.iter())
+                .find(|(index, _)| *index == app.ui_tabs.right_tab_idx)
+                .map(|(_, label)| *label).unwrap_or("Panel");
+            ui.horizontal(|ui| {
+                ui.label(egui::RichText::new(active_label).strong());
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    ui.menu_button("Panels", |ui| {
+                        for (category, tabs) in TAB_CATEGORIES {
+                            ui.menu_button(*category, |ui| {
+                                for (index, label) in *tabs {
+                                    if ui.selectable_value(&mut app.ui_tabs.right_tab_idx, *index, *label).clicked() {
+                                        ui.close_menu();
+                                    }
+                                }
+                            });
                         }
-                    }
-                }
-            });
-            let active_cat = ui
-                .ctx()
-                .data_mut(|d| {
-                    let stored: Option<usize> = d.get_temp(cat_id);
-                    match stored {
-                        Some(c) if c < TAB_CATEGORIES.len() => Some(c),
-                        _ => None,
-                    }
-                })
-                .and(Some(active_cat))
-                .unwrap_or(0);
-
-            egui::ScrollArea::horizontal().show(ui, |ui| {
-                ui.horizontal(|ui| {
-                    for (idx, label) in TAB_CATEGORIES[active_cat].1 {
-                        ui.selectable_value(&mut app.ui_tabs.right_tab_idx, *idx, *label);
-                    }
+                    });
                 });
+            });
+            ui.horizontal(|ui| {
+                ui.selectable_value(&mut app.ui_tabs.right_tab_idx, 0, "Browse effects");
+                ui.selectable_value(&mut app.ui_tabs.right_tab_idx, 30, "Layer controls");
             });
             ui.separator();
 
+            egui::ScrollArea::vertical().id_salt("panel_content").show(ui, |ui| {
             let mut next_frame = None;
             let mut current_frame_reset = None;
 
@@ -230,7 +208,7 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: &mut u32) {
             }
 
             ui.separator();
-            ui.heading("External NLE Link");
+            ui.collapsing("External editor link", |ui| {
             ui.add_space(4.0);
 
             if let Some(app_name) = &app.connected_app {
@@ -296,6 +274,8 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: &mut u32) {
                 }
             });
 
+            });
+
             // Continuous interaction commit: slider drags and other live parameter
             // edits go through the drag transaction API (begin on drag start,
             // commit on drag end). This produces exactly one undo entry per drag
@@ -320,6 +300,7 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: &mut u32) {
             }
 
             crate::ui::effects_controls::draw_particle_emitter_controls(app, ui);
+            });
         });
 }
 
@@ -889,10 +870,13 @@ fn draw_effects_presets_tab(
     });
     let q = app.ui_tabs.effects_search_query.to_lowercase();
 
-    ui.vertical(|ui| {
-        for preset in crate::ui::effects_controls::get_all_effect_presets() {
-            if (q.is_empty() || preset.search_key.contains(&q))
-                && ui.button(preset.button_label).clicked()
+    let matching: Vec<_> = crate::ui::effects_controls::get_all_effect_presets().iter()
+        .filter(|preset| q.is_empty() || preset.search_key.contains(&q)).collect();
+    egui::ScrollArea::vertical().id_salt("effect_results").max_height(280.0)
+        .show_rows(ui, 24.0, matching.len(), |ui, rows| {
+        for row in rows {
+            let preset = &matching[row];
+            if ui.add_sized([ui.available_width(), 24.0], egui::Button::new(preset.button_label)).clicked()
             {
                 if let Some(idx) = layer_idx {
                     let mut session = EditorSession::new(&mut app.history, "Apply Effect");

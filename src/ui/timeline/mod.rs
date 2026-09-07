@@ -186,13 +186,14 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: &mut u32, t
 
             // ── Responsive Width Calculation ──
             let total_w = ui.available_width();
-            let left_pane_w = (total_w * 0.42).clamp(340.0, 640.0);
+            let left_pane_w = (total_w * 0.32).clamp(420.0, 460.0);
 
             // ── Work Area (In / Out) Handles Bar ──
             ui.horizontal(|ui| {
                 ui.allocate_ui(egui::vec2(left_pane_w, 18.0), |ui| {
+                    ui.set_min_width(left_pane_w);
                     ui.horizontal(|ui| {
-                        ui.label(egui::RichText::new("Source Name | Mode | TrkMat | Parent & Link | Switches").small().strong().color(colors::TEXT_SECONDARY));
+                        ui.label(egui::RichText::new("Layers").small().strong().color(colors::TEXT_SECONDARY));
 
                         if ui.selectable_label(app.ui_tabs.global_shy_active, "Shy").on_hover_text("Hide / Show All Marked Shy Layers").clicked() {
                             app.ui_tabs.global_shy_active = !app.ui_tabs.global_shy_active;
@@ -538,6 +539,7 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: &mut u32, t
 
                         ui.horizontal(|ui| {
                             ui.allocate_ui(egui::vec2(left_pane_w, 24.0), |ui| {
+                                ui.set_min_width(left_pane_w);
                                 ui.horizontal(|ui| {
                                     ui.label(egui::RichText::new(format!("{:02}", i + 1)).small().strong().color(colors::TEXT_SECONDARY));
                                     ui.add_space(2.0);
@@ -592,6 +594,9 @@ let type_icon = crate::ui::icons::layer_icon(&layer.layer_type);
                                     }
                                     ui.add_space(2.0);
 
+                                    ui.allocate_ui(egui::vec2(50.0, 24.0), |ui| {
+                                    ui.set_min_width(50.0);
+                                    ui.horizontal(|ui| {
                                     // Layer Stacking Order Reorder Buttons
                                     if i > 0
                                         && ui.small_button("^").on_hover_text("Move Layer Up in Render Stack").clicked() {
@@ -602,6 +607,8 @@ let type_icon = crate::ui::icons::layer_icon(&layer.layer_type);
                                             swap_request = Some((i, i + 1));
                                         }
 
+                                    });
+                                    });
                                     let is_expanded = app.selection.expanded_layers.contains(&i);
                                     let arrow = if is_expanded { "v" } else { ">" };
                                     if ui.selectable_label(is_expanded, arrow).clicked() {
@@ -612,6 +619,7 @@ let type_icon = crate::ui::icons::layer_icon(&layer.layer_type);
                                         }
                                     }
 
+                                    ui.menu_button("Switches", |ui| {
                                     // ── AE Layer Color Label Square Picker ──
                                     let label_rgb = layer.label.to_rgb();
                                     let label_c32 = egui::Color32::from_rgb(
@@ -810,16 +818,10 @@ let type_icon = crate::ui::icons::layer_icon(&layer.layer_type);
                                         project_changed = true;
                                     }
 
+                                    });
                                     let is_selected = app.selection.selected_layers.contains(&i) || app.selection.selected_layer_idx == Some(i);
-                                    let label_rgb = layer.label.to_rgb();
-                                    let text_color = egui::Color32::from_rgb(
-                                        (label_rgb[0] * 255.0) as u8,
-                                        (label_rgb[1] * 255.0) as u8,
-                                        (label_rgb[2] * 255.0) as u8,
-                                    );
-
-                                    ui.style_mut().visuals.override_text_color = Some(text_color);
-                                    let click_resp = ui.selectable_label(is_selected, &layer.name);
+                                    ui.style_mut().visuals.override_text_color = Some(colors::TEXT_PRIMARY);
+                                    let click_resp = ui.add_sized([110.0, 24.0], egui::SelectableLabel::new(is_selected, &layer.name));
 
                                     // ── Pick Whip: clicking a layer in pick mode sets it as parent ──
                                     if click_resp.clicked() && app.pick_whip_mode {
@@ -1115,6 +1117,7 @@ let type_icon = crate::ui::icons::layer_icon(&layer.layer_type);
                                     });
                                     ui.style_mut().visuals.override_text_color = None;
 
+                                    ui.menu_button("Modes", |ui| {
                                     // ── Blend Mode Dropdown ──
                                     let bm_text = format!("{:?}", layer.blend_mode);
                                     egui::ComboBox::from_id_salt(format!("tl_blend_{}", i))
@@ -1206,6 +1209,7 @@ let type_icon = crate::ui::icons::layer_icon(&layer.layer_type);
                                                 }
                                             }
                                         });
+                                    });
                                 });
                             });
 
@@ -1711,7 +1715,7 @@ let type_icon = crate::ui::icons::layer_icon(&layer.layer_type);
                     app.ui_tabs.show_switches_pane = !app.ui_tabs.show_switches_pane;
                 }
                 ui.separator();
-                ui.small(egui::RichText::new("AE Standard Timeline 1:1 Parity Mode").color(colors::TEXT_SECONDARY));
+                ui.small(egui::RichText::new("Double-click a layer to rename · Space to preview").color(colors::TEXT_SECONDARY));
             });
 
             crate::ui::timeline::pending_actions::apply(

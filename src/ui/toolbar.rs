@@ -70,8 +70,8 @@ pub fn draw(app: &mut crate::KagariApp, ctx: &egui::Context) {
                     };
 
                     let (rect, resp) =
-                        ui.allocate_exact_size(egui::vec2(24.0, 24.0), egui::Sense::click());
-                    let fill = if is_selected {
+                        ui.allocate_exact_size(egui::vec2(28.0, 28.0), egui::Sense::click());
+                    let fill = if is_selected || resp.hovered() {
                         colors::BG_HOVER
                     } else {
                         egui::Color32::TRANSPARENT
@@ -118,34 +118,29 @@ pub fn draw(app: &mut crate::KagariApp, ctx: &egui::Context) {
                 ui.separator();
                 ui.add_space(4.0);
 
-                // AE Workspace Layout Switcher Pill Buttons
-                ui.label(
-                    egui::RichText::new("Workspace:")
-                        .small()
-                        .color(colors::TEXT_SECONDARY),
-                );
-                for (name, l_idx, r_idx) in [
-                    ("Default", 0, 0),
-                    ("Learn", 0, 4),
-                    ("Assembly", 0, 2),
-                    ("Editing", 0, 1),
-                    ("Color", 1, 19),
-                    ("Effects", 1, 0),
-                    ("Audio", 0, 7),
-                    ("Libraries", 0, 20),
-                ] {
-                    if custom_widgets::ae_icon_button(ui, name, name).clicked() {
-                        app.ui_tabs.left_tab_idx = l_idx;
-                        app.ui_tabs.right_tab_idx = r_idx;
-                    }
-                }
-
-                ui.add_space(8.0);
-                ui.separator();
-                crate::ui::align_hud::draw_alignment_hud(app, ui);
+                let workspaces = [
+                    ("Default", 0, 0), ("Learn", 0, 4), ("Assembly", 0, 2),
+                    ("Editing", 0, 1), ("Color", 1, 19), ("Effects", 1, 0),
+                    ("Audio", 0, 7), ("Libraries", 0, 20),
+                ];
+                let active = workspaces.iter().find(|(_, left, right)|
+                    *left == app.ui_tabs.left_tab_idx && *right == app.ui_tabs.right_tab_idx)
+                    .map(|(name, _, _)| *name).unwrap_or("Custom");
+                egui::ComboBox::from_id_salt("toolbar_workspace")
+                    .selected_text(active).width(90.0).show_ui(ui, |ui| {
+                        for (name, left, right) in workspaces {
+                            if ui.selectable_label(active == name, name).clicked() {
+                                app.ui_tabs.left_tab_idx = left;
+                                app.ui_tabs.right_tab_idx = right;
+                            }
+                        }
+                    }).response.on_hover_text("Workspace layout");
+                ui.menu_button("Align", |ui| {
+                    crate::ui::align_hud::draw_alignment_hud(app, ui);
+                });
 
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    if custom_widgets::ae_button_accent(ui, "Render Queue (Cmd+M)").clicked() {
+                    if custom_widgets::ae_button_accent(ui, "Export").on_hover_text("Export composition (Cmd+M)").clicked() {
                         app.export.show_export_dialog = true;
                     }
                     ui.add_space(8.0);

@@ -54,14 +54,13 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: &mut u32) {
     let dt = ctx.input(|i| i.stable_dt);
     app.inspector_animation.update(dt);
 
-    let animated_width =
-        crate::ui::panel_animation::animate_panel_width(ctx, &app.inspector_animation, 400.0)
-            .max(200.0);
+    let max_width = (ctx.screen_rect().width() * 0.28).max(210.0);
 
     egui::SidePanel::left("left_panel")
         .resizable(true)
-        .default_width(280.0)
-        .min_width(animated_width)
+        .default_width(260.0)
+        .min_width(210.0)
+        .max_width(max_width)
         .show(ctx, |ui| {
             ui.horizontal(|ui| {
                 if ui
