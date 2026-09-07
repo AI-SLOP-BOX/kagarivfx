@@ -62,6 +62,33 @@ pub fn handle_global_shortcuts(
     // Single-character shortcuts (Space, J, K, P, S, T, R, Delete …) are suppressed.
     let allow_single_key = !text_focused;
 
+    if allow_single_key
+        && app.active_tool == crate::ui::toolbar::ActiveTool::Selection
+        && ctx.input(|i| i.key_pressed(Key::Delete) || i.key_pressed(Key::Backspace))
+        && app.mask_selected_vertices.as_ref().is_some_and(|(_, _, vertices)| !vertices.is_empty())
+    {
+        if let Some((layer_idx, mask_idx, vertices)) = app.mask_selected_vertices.take() {
+            if app.selection.selected_layer_idx == Some(layer_idx) {
+                app.commit_drag();
+                app.modify_project(|project| {
+                    if let Some(mask) = project.active_composition_mut().layers.get_mut(layer_idx)
+                        .filter(|layer| !layer.locked)
+                        .and_then(|layer| layer.masks.get_mut(mask_idx))
+                    {
+                        let mut vertices: Vec<_> = vertices.into_iter().collect();
+                        vertices.sort_unstable_by(|a, b| b.cmp(a));
+                        for vertex in vertices {
+                            mask.path.remove_vertex_at_frame(vertex);
+                        }
+                    }
+                });
+            }
+        }
+        app.viewport_mask_drag_state = None;
+        app.viewport_mask_drag_vertices.clear();
+        return;
+    }
+
     ctx.input(|i| {
         let cmd = i.modifiers.command;
         let shift = i.modifiers.shift;
@@ -1069,6 +1096,40 @@ fn delete_kf_at<T: Clone>(anim: &mut crate::core::property::Animatable<T>, frame
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn delete_mask_vertices_preserves_layers_and_supports_undo_redo() {
+        for key in [Key::Delete, Key::Backspace] {
+            let mut app = KagariApp::default();
+            let mut project = app.history.current().clone();
+            let comp = project.active_composition_mut();
+            comp.layers.clear();
+            let mut layer = crate::core::timeline::Layer::new("layer".into(), "Layer".into(),
+                crate::core::timeline::LayerType::Solid { color: [1.0; 4] }, 60);
+            layer.masks.push(crate::core::mask::Mask::new_rect("mask".into(), "Mask".into(), 0.0, 0.0, 100.0, 100.0));
+            comp.layers.push(layer.clone());
+            layer.id = "other".into();
+            comp.layers.push(layer);
+            app.history = crate::core::history::ProjectHistory::new(project);
+            app.active_tool = crate::ui::toolbar::ActiveTool::Selection;
+            app.selection.selected_layer_idx = Some(0);
+            app.selection.selected_layers.insert(0);
+            app.mask_selected_vertices = Some((0, 0, [1].into_iter().collect()));
+            let ctx = egui::Context::default();
+            let input = egui::RawInput { events: vec![egui::Event::Key {
+                key, physical_key: None, pressed: true, repeat: false, modifiers: egui::Modifiers::NONE,
+            }], ..Default::default() };
+            let _ = ctx.run(input, |ctx| handle_global_shortcuts(&mut app, ctx, &mut 0, 60));
+            let comp = app.history.current().active_composition();
+            assert_eq!(comp.layers.len(), 2);
+            assert_eq!(comp.layers[0].masks[0].path.vertices_at_frame(0).len(), 3);
+            assert_eq!(comp.layers[1].masks[0].path.vertices_at_frame(0).len(), 4);
+            assert!(app.history.undo().is_some());
+            assert_eq!(app.history.current().active_composition().layers[0].masks[0].path.vertices_at_frame(0).len(), 4);
+            assert!(app.history.redo().is_some());
+            assert_eq!(app.history.current().active_composition().layers[0].masks[0].path.vertices_at_frame(0).len(), 3);
+        }
+    }
 
     #[test]
     fn test_format_shortcut_cross_platform() {

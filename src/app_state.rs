@@ -310,6 +310,7 @@ pub struct KagariApp {
     /// One-shot request: frame this comp-space bbox (min,max) in the viewport.
     pub viewport_focus_bbox: Option<([f32; 2], [f32; 2])>,
     pub viewport_mask_drag_state: Option<(usize, usize, usize, [f32; 2], eframe::egui::Pos2)>,
+    pub viewport_mask_drag_vertices: Vec<(usize, [f32; 2])>,
     /// Pen tool Bezier drag: (tangent_out_screen, tangent_in_screen) while click-dragging
     pub pen_bezier_drag: Option<(eframe::egui::Pos2, eframe::egui::Pos2)>,
     /// Mask multi-vertex selection: (layer_idx, mask_idx, set of vertex indices)
@@ -493,6 +494,7 @@ impl Default for KagariApp {
             viewport_drag_state: None,
             viewport_focus_bbox: None,
             viewport_mask_drag_state: None,
+            viewport_mask_drag_vertices: Vec::new(),
             pen_bezier_drag: None,
             mask_selected_vertices: None,
             mask_tangent_drag_state: None,

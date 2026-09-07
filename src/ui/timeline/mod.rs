@@ -37,7 +37,7 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: &mut u32, t
             }
 
             let mut project_changed = false;
-            let pre_edit_snapshot = if !app.drag_active() && ui.input(|i| i.pointer.any_down()) {
+            let pre_edit_snapshot = if !app.drag_active() && (app.show_graph_editor || ui.input(|i| i.pointer.any_down())) {
                 Some(app.history.current().clone())
             } else {
                 None
@@ -145,8 +145,9 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: &mut u32, t
 
                 if let Some(selected_idx) = app.selection.selected_layer_idx {
                     let duration_f = temp_project.active_composition().duration_frames;
+                    let fps = temp_project.active_composition().fps;
                     if let Some(layer) = temp_project.active_composition_mut().layers.get_mut(selected_idx) {
-                        crate::ui::graph_editor::draw_graph_editor(&mut app.selection.selected_property, ui, duration_f, layer, &mut project_changed, &mut app.linked_tangent);
+                        crate::ui::graph_editor::draw_graph_editor(&mut app.selection.selected_property, ui, duration_f, fps, layer, &mut project_changed, &mut app.linked_tangent);
                     }
                     if let Some(curve) = automation_curve.as_mut() {
                         crate::ui::graph_editor::draw_automation_curve(ui, curve, &mut project_changed);
@@ -162,6 +163,16 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: &mut u32, t
                     if let Some(binding) = document.bindings.get_mut(index) {
                         binding.curve = curve;
                     }
+                }
+                if project_changed {
+                    if let Some(snapshot) = pre_edit_snapshot {
+                        app.begin_drag_with_snapshot(snapshot, "Graph Editor Edit");
+                    }
+                    crate::core::frame_cache::bump_version();
+                    app.autosave.mark_dirty();
+                }
+                if !ui.input(|i| i.pointer.any_down()) {
+                    app.commit_drag();
                 }
                 return;
             }

@@ -245,7 +245,9 @@ fn bezier_velocity_control_points_correctly_sized() {
         &outgoing, &incoming, 30.0, 100.0, 30.0,
     );
     assert_eq!(cp.len(), 4);
-    let [x1, y1, x2, y2] = cp;
+    assert_eq!(cp[1], 0.0);
+    assert_eq!(cp[3], 1.0);
+    let [x1, _, x2, _] = cp;
     assert!(
         x1 < x2,
         "Outgoing handle x ({}) should be less than incoming x ({})",

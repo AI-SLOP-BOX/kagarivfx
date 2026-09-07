@@ -6,6 +6,54 @@ use crate::KagariApp;
 use crate::ViewportMode;
 use eframe::egui;
 
+fn pen_path(points: Vec<[f32; 2]>, tangents: Vec<([f32; 2], [f32; 2])>) -> crate::core::mask::MaskPath {
+    let mut path = crate::core::mask::MaskPath::new_closed(points);
+    if tangents.iter().any(|(out, incoming)| *out != [0.0; 2] || *incoming != [0.0; 2]) {
+        let mut tangents: Vec<_> = tangents.into_iter().map(|(out, incoming)| (incoming, out)).collect();
+        tangents.resize(path.vertices_at_frame(0).len(), ([0.0; 2], [0.0; 2]));
+        path.tangents = Some(tangents);
+    }
+    path
+}
+
+fn handle_pen_pointer(app: &mut KagariApp, response: &egui::Response, origin: [f32; 2], scale: [f32; 2]) {
+    let Some(pointer) = response.interact_pointer_pos() else { return };
+    if response.drag_started() {
+        let start = response.ctx.input(|i| i.pointer.press_origin()).unwrap_or(pointer);
+        app.pen_bezier_drag = Some((start, pointer));
+    }
+    if let Some(drag) = app.pen_bezier_drag.as_mut() {
+        drag.1 = pointer;
+    }
+    if response.drag_stopped() {
+        if let Some((start, end)) = app.pen_bezier_drag.take() {
+            let tangent = [(end.x - start.x) * scale[0], (end.y - start.y) * scale[1]];
+            app.pen_points.push([(start.x - origin[0]) * scale[0], (start.y - origin[1]) * scale[1]]);
+            app.pen_tangents.push((tangent, [-tangent[0], -tangent[1]]));
+        }
+    } else if response.clicked() {
+        app.pen_bezier_drag = None;
+        app.pen_points.push([(pointer.x - origin[0]) * scale[0], (pointer.y - origin[1]) * scale[1]]);
+        app.pen_tangents.push(([0.0, 0.0], [0.0, 0.0]));
+    }
+}
+
+fn move_mask_vertices(path: &mut crate::core::mask::MaskPath, frame: u32, starts: &[(usize, [f32; 2])], delta: [f32; 2]) {
+    for &(index, start) in starts {
+        path.set_vertex_at_frame(frame, index, [start[0] + delta[0], start[1] + delta[1]]);
+    }
+}
+
+fn move_mask_tangent(path: &mut crate::core::mask::MaskPath, index: usize, outgoing: bool, handle: [f32; 2], linked: bool) {
+    let (old_in, old_out) = path.tangents.as_ref().and_then(|t| t.get(index)).copied().unwrap_or_default();
+    let opposite = [-handle[0], -handle[1]];
+    if outgoing {
+        path.set_tangents_at_vertex(index, if linked { opposite } else { old_in }, handle, linked);
+    } else {
+        path.set_tangents_at_vertex(index, handle, if linked { opposite } else { old_out }, linked);
+    }
+}
+
 pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: u32) {
     // Only clone the project to the production document when history has actually
     // changed. The generation counter avoids a full deep clone every frame.
@@ -1132,9 +1180,12 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: u32) {
             if viewport_response.drag_started() && app.active_tool == crate::ui::toolbar::ActiveTool::Rectangle {
                 app.rect_drag_start = Some(pointer_pos);
             }
-            if viewport_response.drag_started() && !tool_creates_or_navigates {
-                // ── Transactional Drag: capture pre-drag snapshot ONCE ──
-                app.begin_drag("Viewport Transform");
+            if (viewport_response.drag_started() || viewport_response.clicked())
+                && !tool_creates_or_navigates && !ui.input(|i| i.modifiers.alt)
+            {
+                if viewport_response.drag_started() {
+                    app.begin_drag("Viewport Transform");
+                }
 
                 let comp_state = app.history.current().active_composition();
                 let mut mask_hit: Option<(usize, usize, usize)> = None;
@@ -1313,11 +1364,13 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: u32) {
                         }
                     }
                     // Store the starting positions of all selected vertices for multi-drag
-                    let _selected_set = app.mask_selected_vertices.as_ref()
+                    let selected_set = app.mask_selected_vertices.as_ref()
                         .filter(|s| s.0 == l_idx && s.1 == m_idx)
                         .map(|s| s.2.clone())
                         .unwrap_or_else(|| vec![v_idx].into_iter().collect());
                     let verts = comp_state.layers[l_idx].masks[m_idx].path.vertices_at_frame(current_frame);
+                    app.viewport_mask_drag_vertices = selected_set.iter()
+                        .filter_map(|&vi| verts.get(vi).map(|&pos| (vi, pos))).collect();
                     let start_vertex_pos = if v_idx < verts.len() { verts[v_idx] } else { [0.0, 0.0] };
                     app.viewport_mask_drag_state = Some((l_idx, m_idx, v_idx, start_vertex_pos, pointer_pos));
                     app.viewport_drag_state = None;
@@ -1484,7 +1537,7 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: u32) {
                             }
                         }
                     }
-                } else if let Some((l_idx, m_idx, v_idx, start_vertex_pos, start_ptr)) = app.viewport_mask_drag_state {
+                } else if let Some((l_idx, m_idx, _, _, start_ptr)) = app.viewport_mask_drag_state {
                     let delta_x = (pointer_pos.x - start_ptr.x) / draw_w * comp_w;
                     let delta_y = (pointer_pos.y - start_ptr.y) / draw_h * comp_h;
 
@@ -1494,35 +1547,7 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: u32) {
                         if m_idx < layer.masks.len() {
                             let mask = &mut layer.masks[m_idx];
                             // Move all selected vertices if multi-selection is active
-                            let verts_to_move: Vec<usize> = if let Some(ref sel) = app.mask_selected_vertices {
-                                if sel.0 == l_idx && sel.1 == m_idx {
-                                    sel.2.iter().copied().collect()
-                                } else {
-                                    vec![v_idx]
-                                }
-                            } else {
-                                vec![v_idx]
-                            };
-                            for vi in verts_to_move {
-                                let verts = mask.path.vertices_at_frame(current_frame);
-                                if vi < verts.len() {
-                                    let start_pos = verts[vi];
-                                    // For the primary dragged vertex, use the original start position
-                                    // For other selected vertices, calculate offset from their start
-                                    let new_pos = if vi == v_idx {
-                                        [
-                                            start_vertex_pos[0] + delta_x,
-                                            start_vertex_pos[1] + delta_y,
-                                        ]
-                                    } else {
-                                        [
-                                            start_pos[0] + delta_x,
-                                            start_pos[1] + delta_y,
-                                        ]
-                                    };
-                                    mask.path.set_vertex_at_frame(current_frame, vi, new_pos);
-                                }
-                            }
+                            move_mask_vertices(&mut mask.path, current_frame, &app.viewport_mask_drag_vertices, [delta_x, delta_y]);
                         }
                     }
                 } else if let Some((l_idx, m_idx, v_idx, is_out, start_handle, start_ptr)) = app.mask_tangent_drag_state {
@@ -1540,15 +1565,7 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: u32) {
                             let mask = &mut layer.masks[m_idx];
                             let verts = mask.path.vertices_at_frame(current_frame);
                             if v_idx < verts.len() {
-                                let vertex_pos = verts[v_idx];
-                                // Convert absolute handle position to relative
-                                let rel_handle = [new_handle[0] - vertex_pos[0], new_handle[1] - vertex_pos[1]];
-                                let link = ui.input(|i| i.modifiers.shift);
-                                if is_out {
-                                    mask.path.set_tangents_at_vertex(v_idx, [-rel_handle[0], -rel_handle[1]], rel_handle, link);
-                                } else {
-                                    mask.path.set_tangents_at_vertex(v_idx, rel_handle, [-rel_handle[0], -rel_handle[1]], link);
-                                }
+                                move_mask_tangent(&mut mask.path, v_idx, is_out, new_handle, ui.input(|i| i.modifiers.shift));
                                 crate::core::frame_cache::bump_version();
                             }
                         }
@@ -1689,34 +1706,7 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: u32) {
             // ── Pen tool: click adds mask vertices; Enter/double-click commits ──
             // ── Click-drag creates Bezier handles (AE standard behavior) ──
             if app.active_tool == crate::ui::toolbar::ActiveTool::Pen {
-                // On drag start, record position for potential Bezier handle creation
-                if viewport_response.drag_started() {
-                    app.pen_bezier_drag = Some((pointer_pos, pointer_pos));
-                }
-                // During drag, update the out-handle position
-                if let Some(ref mut drag) = app.pen_bezier_drag {
-                    if viewport_response.dragged() {
-                        drag.1 = pointer_pos;
-                    }
-                }
-                // On click (not drag), add the vertex
-                if viewport_response.clicked() {
-                    let (tangent_out, tangent_in) = if let Some((start, end)) = app.pen_bezier_drag.take() {
-                        let dx = (end.x - start.x) / draw_w * comp_w;
-                        let dy = (end.y - start.y) / draw_h * comp_h;
-                        let dist = (dx * dx + dy * dy).sqrt();
-                        if dist > 2.0 {
-                            // Click-drag: create symmetric Bezier handles
-                            ([dx, dy], [-dx, -dy])
-                        } else {
-                            ([0.0, 0.0], [0.0, 0.0])
-                        }
-                    } else {
-                        ([0.0, 0.0], [0.0, 0.0])
-                    };
-                    app.pen_points.push([comp_px, comp_py]);
-                    app.pen_tangents.push((tangent_out, tangent_in));
-                }
+                handle_pen_pointer(app, &viewport_response, [origin_x, origin_y], [comp_w / draw_w, comp_h / draw_h]);
                 let enter = ui.input(|i| i.key_pressed(egui::Key::Enter));
                 let escape = ui.input(|i| i.key_pressed(egui::Key::Escape));
                 if viewport_response.double_clicked() && !app.pen_points.is_empty() {
@@ -1729,12 +1719,13 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: u32) {
                     pen_commit = true;
                 }
                 if escape {
+                    app.pen_bezier_drag = None;
                     app.pen_points.clear();
                     app.pen_tangents.clear();
                 }
             }
 
-            if viewport_response.drag_stopped() {
+            if viewport_response.drag_stopped() || (viewport_response.clicked() && !tool_creates_or_navigates) {
                 // ── Q tool: click/drag on canvas creates a rectangle shape ──
                 if app.active_tool == crate::ui::toolbar::ActiveTool::Rectangle {
                     // Compute shape dimensions from drag (fallback to 220×160 if no drag)
@@ -1854,6 +1845,7 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: u32) {
                 }
                 app.viewport_drag_state = None;
                 app.viewport_mask_drag_state = None;
+                app.viewport_mask_drag_vertices.clear();
                 app.mask_tangent_drag_state = None;
                 app.viewport_pos_kf_drag_state = None;
                 app.viewport_scale_drag = None;
@@ -1963,38 +1955,6 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: u32) {
             }
         }
 
-        // ── Mask vertex deletion (Delete/Backspace) ──
-        if app.active_tool == crate::ui::toolbar::ActiveTool::Selection {
-            let delete_pressed = ui.input(|i| i.key_pressed(egui::Key::Delete) || i.key_pressed(egui::Key::Backspace));
-            if delete_pressed {
-                if let Some((l_idx, m_idx, ref selected_verts)) = app.mask_selected_vertices.clone() {
-                    if !selected_verts.is_empty() {
-                        let comp_mut = app.history.current_mut().active_composition_mut();
-                        if l_idx < comp_mut.layers.len() {
-                            let layer = &mut comp_mut.layers[l_idx];
-                            if m_idx < layer.masks.len() {
-                                let mask = &mut layer.masks[m_idx];
-                                let mut removed = 0;
-                                // Remove vertices from highest index to lowest to preserve indices
-                                let mut sorted_verts: Vec<usize> = selected_verts.iter().copied().collect();
-                                sorted_verts.sort_unstable_by(|a, b| b.cmp(a));
-                                for vi in sorted_verts {
-                                    if mask.path.remove_vertex_at_frame(vi) {
-                                        removed += 1;
-                                    }
-                                }
-                                if removed > 0 {
-                                    crate::core::frame_cache::bump_version();
-                                    app.toasts.info(format!("Removed {} mask vertex{}", removed, if removed > 1 { "es" } else { "" }));
-                                }
-                            }
-                        }
-                        app.mask_selected_vertices = None;
-                    }
-                }
-            }
-        }
-
         // ── Mask vertex insertion (Alt+click on edge segment) ──
         if app.active_tool == crate::ui::toolbar::ActiveTool::Selection {
             let alt_held = ui.input(|i| i.modifiers.alt);
@@ -2036,13 +1996,15 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: u32) {
                                         }
                                     }
                                     if best_dist < 20.0 {
-                                        let comp_mut = app.history.current_mut().active_composition_mut();
+                                        let mut next_project = app.history.current().clone();
+                                        let comp_mut = next_project.active_composition_mut();
                                         if sel_li < comp_mut.layers.len() {
                                             let layer = &mut comp_mut.layers[sel_li];
                                             if mi < layer.masks.len() {
                                                 let mask = &mut layer.masks[mi];
                                                 if let Some(new_idx) = mask.path.insert_vertex_at_frame(current_frame, best_seg, best_t) {
-                                                    crate::core::frame_cache::bump_version();
+                                                    app.history.commit(next_project);
+                                                    app.autosave.mark_dirty();
                                                     app.mask_selected_vertices = Some((sel_li, mi, vec![new_idx].into_iter().collect()));
                                                     app.toasts.info(format!("Inserted vertex at index {}", new_idx));
                                                 }
@@ -2210,6 +2172,8 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: u32) {
 
         // ── Pen tool commit: turn collected points into a mask on the selected layer ──
         if pen_commit && app.pen_points.len() >= 3 {
+            app.begin_drag("Create Pen Mask");
+            app.pen_bezier_drag = None;
             let target_layer = match app.selection.selected_layer_idx {
                 Some(idx) => idx,
                 None => {
@@ -2234,30 +2198,15 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: u32) {
             };
             let pts = std::mem::take(&mut app.pen_points);
             let tangs = std::mem::take(&mut app.pen_tangents);
-            let has_tangents = tangs.iter().any(|(o, i)| o[0] != 0.0 || o[1] != 0.0 || i[0] != 0.0 || i[1] != 0.0);
             let comp_mut = app.history.current_mut().active_composition_mut();
             if let Some(layer) = comp_mut.layers.get_mut(target_layer) {
                 let mask_id = layer.masks.len();
-                let path_tangents = if has_tangents {
-                    // Ensure tangents vector matches vertex count
-                    let mut full_tangs = tangs;
-                    while full_tangs.len() < pts.len() {
-                        full_tangs.push(([0.0, 0.0], [0.0, 0.0]));
-                    }
-                    Some(full_tangs)
-                } else {
-                    None
-                };
                 layer.masks.push(crate::core::mask::Mask {
                     id: format!("pen_mask_{}_{}", layer.id, mask_id),
                     name: format!("Mask {}", mask_id + 1),
                     enabled: true,
                     mode: crate::core::mask::MaskMode::Add,
-                    path: crate::core::mask::MaskPath {
-                        vertices: crate::core::property::Animatable::new_constant(pts.clone()),
-                        tangents: path_tangents,
-                        is_closed: true,
-                    },
+                    path: pen_path(pts.clone(), tangs),
                     feather: crate::core::property::Animatable::new_constant(0.0),
                     opacity: crate::core::property::Animatable::new_constant(100.0),
                     expansion: crate::core::property::Animatable::new_constant(0.0),
@@ -2266,6 +2215,8 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: u32) {
                 });
             }
             crate::core::frame_cache::bump_version();
+            app.commit_drag();
+            app.autosave.mark_dirty();
             app.toasts.info(format!("Pen mask created ({} points)", pts.len()));
         } else if pen_commit {
             app.pen_points.clear();
@@ -2470,4 +2421,67 @@ fn smooth_path(points: &[(u32, [f32; 2])]) -> Vec<(u32, [f32; 2])> {
         result.push(*last);
     }
     result
+}
+
+#[cfg(test)]
+mod review_regression_tests {
+    use super::*;
+
+    #[test]
+    fn multi_vertex_drag_does_not_accumulate_previous_frames() {
+        let mut path = crate::core::mask::MaskPath::new_rect(100.0, 200.0, 50.0, 60.0);
+        let original = path.vertices_at_frame(0);
+        let starts = [(0, original[0]), (1, original[1])];
+        move_mask_vertices(&mut path, 0, &starts, [10.0, 5.0]);
+        move_mask_vertices(&mut path, 0, &starts, [20.0, 15.0]);
+        let actual = path.vertices_at_frame(0);
+        assert_eq!(actual[0], [120.0, 215.0]);
+        assert_eq!(actual[1], [170.0, 215.0]);
+        assert_eq!(&actual[2..], &original[2..]);
+    }
+
+    #[test]
+    fn tangent_drag_is_relative_and_preserves_unlinked_handle() {
+        let mut path = crate::core::mask::MaskPath::new_rect(100.0, 200.0, 50.0, 60.0);
+        path.set_tangents_at_vertex(0, [-10.0, -5.0], [20.0, 15.0], false);
+        move_mask_tangent(&mut path, 0, true, [25.0, 20.0], false);
+        assert_eq!(path.tangents.as_ref().unwrap()[0], ([-10.0, -5.0], [25.0, 20.0]));
+        move_mask_tangent(&mut path, 0, false, [-15.0, -7.0], false);
+        assert_eq!(path.tangents.as_ref().unwrap()[0], ([-15.0, -7.0], [25.0, 20.0]));
+        move_mask_tangent(&mut path, 0, true, [30.0, 40.0], true);
+        assert_eq!(path.tangents.as_ref().unwrap()[0], ([-30.0, -40.0], [30.0, 40.0]));
+    }
+
+    #[test]
+    fn pen_drag_release_records_start_vertex_and_correct_curve_direction() {
+        let ctx = egui::Context::default();
+        let mut app = KagariApp::default();
+        let start = egui::pos2(100.0, 100.0);
+        let end = egui::pos2(130.0, 120.0);
+        let button = |pos, pressed| egui::Event::PointerButton {
+            pos, button: egui::PointerButton::Primary, pressed, modifiers: egui::Modifiers::NONE,
+        };
+        for events in [
+            vec![],
+            vec![egui::Event::PointerMoved(start), button(start, true)],
+            vec![egui::Event::PointerMoved(end)],
+            vec![button(end, false)],
+        ] {
+            let _ = ctx.run(egui::RawInput {
+                screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(400.0, 400.0))),
+                events, ..Default::default()
+            }, |ctx| {
+                egui::CentralPanel::default().show(ctx, |ui| {
+                    let response = ui.interact(
+                        egui::Rect::from_min_max(egui::pos2(20.0, 20.0), egui::pos2(300.0, 300.0)),
+                        egui::Id::new("pen_test"), egui::Sense::click_and_drag());
+                    handle_pen_pointer(&mut app, &response, [20.0, 20.0], [2.0, 2.0]);
+                });
+            });
+        }
+        assert_eq!(app.pen_points, vec![[160.0, 160.0]]);
+        assert!(app.pen_bezier_drag.is_none());
+        let path = pen_path(app.pen_points, app.pen_tangents);
+        assert_eq!(path.tangents.unwrap()[0], ([-60.0, -40.0], [60.0, 40.0]));
+    }
 }

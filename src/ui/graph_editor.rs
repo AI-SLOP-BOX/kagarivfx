@@ -390,10 +390,62 @@ fn move_effect_scalar_keyframe(
     false
 }
 
+fn track_velocity<T: Clone>(
+    track: &mut crate::core::property::Animatable<T>,
+    index: usize,
+    fps: f32,
+    component: impl Fn(&T) -> f32,
+    replacement: Option<[f32; 4]>,
+) -> Option<[f32; 4]> {
+    use crate::core::keyframe::{BezierControlPoint, InterpolationType, compute_ae_bezier_control_points};
+    let keys = track.keyframes_mut()?;
+    let key = keys.get(index)?;
+    let next = keys.get(index + 1)?;
+    let span = next.frame.checked_sub(key.frame)? as f32;
+    let delta = component(&next.value) - component(&key.value);
+    let values = replacement.unwrap_or(match key.interpolation {
+        InterpolationType::Bezier { incoming, outgoing, .. } =>
+            [incoming.influence * 100.0, outgoing.influence * 100.0, incoming.speed, outgoing.speed],
+        _ => [33.3, 33.3, 0.0, 0.0],
+    });
+    if replacement.is_some() {
+        let incoming = BezierControlPoint { influence: values[0] / 100.0, speed: values[2] };
+        let outgoing = BezierControlPoint { influence: values[1] / 100.0, speed: values[3] };
+        let control = compute_ae_bezier_control_points(&outgoing, &incoming, span, delta, fps);
+        keys[index].interpolation = InterpolationType::Bezier {
+            incoming, outgoing, custom_bezier: Some(control),
+        };
+    }
+    Some(values)
+}
+
+fn layer_velocity(
+    layer: &mut Layer, property: &str, index: usize, fps: f32,
+    replacement: Option<[f32; 4]>,
+) -> Option<[f32; 4]> {
+    let axis = axis_3d(property);
+    match property {
+        "Position X" | "Position Y" =>
+            track_velocity(&mut layer.transform.position, index, fps, |v| v[axis], replacement),
+        "Scale X" | "Scale Y" =>
+            track_velocity(&mut layer.transform.scale, index, fps, |v| v[axis], replacement),
+        "Rotation" => track_velocity(&mut layer.transform.rotation, index, fps, |v| *v, replacement),
+        "Opacity" => track_velocity(&mut layer.transform.opacity, index, fps, |v| *v, replacement),
+        p if p.starts_with("3D Position") =>
+            track_velocity(&mut layer.transform_3d.position, index, fps, |v| v[axis], replacement),
+        p if p.starts_with("3D Rotation") =>
+            track_velocity(&mut layer.transform_3d.rotation, index, fps, |v| v[axis], replacement),
+        p if p.starts_with("3D Scale") =>
+            track_velocity(&mut layer.transform_3d.scale, index, fps, |v| v[axis], replacement),
+        _ => None,
+    }
+}
+
 pub fn draw_graph_editor(
     selected_property: &mut Option<String>,
     ui: &mut egui::Ui,
     duration_frames: u32,
+    fps: u32,
     layer: &mut Layer,
     project_changed: &mut bool,
     linked_tangent: &mut bool,
@@ -715,107 +767,29 @@ pub fn draw_graph_editor(
             });
 
             ui.collapsing("🎯 Keyframe Velocity / Influence", |ui| {
-                // Read current values from the hovered keyframe
-                let hovered_kf_idx: Option<usize> = ui.ctx().data(|d| d.get_temp(egui::Id::new("ae_graph_hovered_kf")));
-                let (mut in_inf, mut out_inf, mut in_spd, mut out_spd) = if let Some(kf_idx) = hovered_kf_idx {
-                    let prop = selected_property.clone().unwrap_or_else(|| "Position X".to_string());
-                    let extract_bezier = |kf: &crate::core::keyframe::InterpolationType| -> (f32, f32, f32, f32) {
-                        match kf {
-                            crate::core::keyframe::InterpolationType::Bezier { outgoing, incoming, .. } => {
-                                (outgoing.influence * 100.0, outgoing.speed, incoming.influence * 100.0, incoming.speed)
-                            }
-                            _ => (33.3, 0.0, 33.3, 0.0),
-                        }
-                    };
-                    let mut read_val = || -> Option<(f32, f32, f32, f32)> {
-                        if prop.starts_with("3D ") {
-                            let kfs = if prop.starts_with("3D Position") { layer.transform_3d.position.keyframes_mut() }
-                                else if prop.starts_with("3D Rotation") { layer.transform_3d.rotation.keyframes_mut() }
-                                else { layer.transform_3d.scale.keyframes_mut() };
-                            kfs.and_then(|kfs| kfs.get(kf_idx)).map(|kf| extract_bezier(&kf.interpolation))
-                        } else if prop.starts_with("fx_") {
-                            None
-                        } else if matches!(prop.as_str(), "Position X" | "Position Y") {
-                            layer.transform.position.keyframes_mut().and_then(|kfs| kfs.get(kf_idx)).map(|kf| extract_bezier(&kf.interpolation))
-                        } else if matches!(prop.as_str(), "Scale X" | "Scale Y") {
-                            layer.transform.scale.keyframes_mut().and_then(|kfs| kfs.get(kf_idx)).map(|kf| extract_bezier(&kf.interpolation))
-                        } else if prop == "Rotation" {
-                            layer.transform.rotation.keyframes_mut().and_then(|kfs| kfs.get(kf_idx)).map(|kf| extract_bezier(&kf.interpolation))
-                        } else if prop == "Opacity" {
-                            layer.transform.opacity.keyframes_mut().and_then(|kfs| kfs.get(kf_idx)).map(|kf| extract_bezier(&kf.interpolation))
-                        } else {
-                            None
-                        }
-                    };
-                    read_val().unwrap_or((33.3, 0.0, 33.3, 0.0))
+                let prop = selected_property.as_deref().unwrap_or("Position X");
+                let target_id = egui::Id::new(("ae_graph_hovered_kf", &layer.id, prop));
+                let index: Option<usize> = ui.ctx().data(|d| d.get_temp(target_id));
+                if let Some((index, mut values)) = index.and_then(|index|
+                    layer_velocity(layer, prop, index, fps as f32, None).map(|values| (index, values)))
+                {
+                    let mut changed = false;
+                    ui.horizontal(|ui| {
+                        ui.label("Incoming:");
+                        changed |= ui.add(egui::DragValue::new(&mut values[0]).range(0.1..=100.0).speed(0.5).prefix("Inf: ").suffix("%")).changed();
+                        changed |= ui.add(egui::DragValue::new(&mut values[2]).speed(1.0).prefix("Spd: ").suffix(" units/s")).changed();
+                    });
+                    ui.horizontal(|ui| {
+                        ui.label("Outgoing:");
+                        changed |= ui.add(egui::DragValue::new(&mut values[1]).range(0.1..=100.0).speed(0.5).prefix("Inf: ").suffix("%")).changed();
+                        changed |= ui.add(egui::DragValue::new(&mut values[3]).speed(1.0).prefix("Spd: ").suffix(" units/s")).changed();
+                    });
+                    if changed {
+                        *project_changed |= layer_velocity(layer, prop, index, fps as f32, Some(values)).is_some();
+                    }
                 } else {
-                    let in_inf = ui.ctx().data(|d| d.get_temp::<f32>(egui::Id::new("ae_kf_in_inf")).unwrap_or(33.3));
-                    let out_inf = ui.ctx().data(|d| d.get_temp::<f32>(egui::Id::new("ae_kf_out_inf")).unwrap_or(33.3));
-                    let in_spd = ui.ctx().data(|d| d.get_temp::<f32>(egui::Id::new("ae_kf_in_spd")).unwrap_or(0.0));
-                    let out_spd = ui.ctx().data(|d| d.get_temp::<f32>(egui::Id::new("ae_kf_out_spd")).unwrap_or(0.0));
-                    (in_inf, out_inf, in_spd, out_spd)
-                };
-
-                let apply_velocity = |layer: &mut Layer, prop: &str, kf_idx: usize, out_inf: f32, out_spd: f32, in_inf: f32, in_spd: f32, project_changed: &mut bool| {
-                    let cp = crate::core::keyframe::BezierControlPoint { influence: out_inf / 100.0, speed: out_spd };
-                    let ci = crate::core::keyframe::BezierControlPoint { influence: in_inf / 100.0, speed: in_spd };
-                    let custom_bezier = crate::core::keyframe::compute_ae_bezier_control_points(&cp, &ci, 1.0, 1.0, 30.0);
-                    let interp = crate::core::keyframe::InterpolationType::Bezier { outgoing: cp, incoming: ci, custom_bezier: Some(custom_bezier) };
-                    match prop {
-                        "Position X" | "Position Y" => { if let Some(kfs) = layer.transform.position.keyframes_mut() { if let Some(kf) = kfs.get_mut(kf_idx) { kf.interpolation = interp; *project_changed = true; } } }
-                        "Scale X" | "Scale Y" => { if let Some(kfs) = layer.transform.scale.keyframes_mut() { if let Some(kf) = kfs.get_mut(kf_idx) { kf.interpolation = interp; *project_changed = true; } } }
-                        "Rotation" => { if let Some(kfs) = layer.transform.rotation.keyframes_mut() { if let Some(kf) = kfs.get_mut(kf_idx) { kf.interpolation = interp; *project_changed = true; } } }
-                        "Opacity" => { if let Some(kfs) = layer.transform.opacity.keyframes_mut() { if let Some(kf) = kfs.get_mut(kf_idx) { kf.interpolation = interp; *project_changed = true; } } }
-                        _ => {}
-                    }
-                };
-
-                ui.horizontal(|ui| {
-                    ui.label("Incoming:");
-                    if ui.add(egui::DragValue::new(&mut in_inf).range(0.1..=100.0).speed(0.5).prefix("Inf: ").suffix("%")).changed() {
-                        ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("ae_kf_in_inf"), in_inf));
-                        if let Some(kf_idx) = hovered_kf_idx {
-                            let out_inf_val = ui.ctx().data(|d| d.get_temp::<f32>(egui::Id::new("ae_kf_out_inf")).unwrap_or(33.3));
-                            let out_spd_val = ui.ctx().data(|d| d.get_temp::<f32>(egui::Id::new("ae_kf_out_spd")).unwrap_or(0.0));
-                            let in_spd_val = ui.ctx().data(|d| d.get_temp::<f32>(egui::Id::new("ae_kf_in_spd")).unwrap_or(0.0));
-                            apply_velocity(layer, &graph_prop, kf_idx, out_inf_val, out_spd_val, in_inf, in_spd_val, project_changed);
-                        }
-                        *project_changed = true;
-                    }
-                    if ui.add(egui::DragValue::new(&mut in_spd).speed(1.0).prefix("Spd: ").suffix(" px/s")).changed() {
-                        ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("ae_kf_in_spd"), in_spd));
-                        if let Some(kf_idx) = hovered_kf_idx {
-                            let out_inf_val = ui.ctx().data(|d| d.get_temp::<f32>(egui::Id::new("ae_kf_out_inf")).unwrap_or(33.3));
-                            let out_spd_val = ui.ctx().data(|d| d.get_temp::<f32>(egui::Id::new("ae_kf_out_spd")).unwrap_or(0.0));
-                            let in_inf_val = ui.ctx().data(|d| d.get_temp::<f32>(egui::Id::new("ae_kf_in_inf")).unwrap_or(33.3));
-                            apply_velocity(layer, &graph_prop, kf_idx, out_inf_val, out_spd_val, in_inf_val, in_spd, project_changed);
-                        }
-                        *project_changed = true;
-                    }
-                });
-                ui.horizontal(|ui| {
-                    ui.label("Outgoing:");
-                    if ui.add(egui::DragValue::new(&mut out_inf).range(0.1..=100.0).speed(0.5).prefix("Inf: ").suffix("%")).changed() {
-                        ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("ae_kf_out_inf"), out_inf));
-                        if let Some(kf_idx) = hovered_kf_idx {
-                            let in_inf_val = ui.ctx().data(|d| d.get_temp::<f32>(egui::Id::new("ae_kf_in_inf")).unwrap_or(33.3));
-                            let in_spd_val = ui.ctx().data(|d| d.get_temp::<f32>(egui::Id::new("ae_kf_in_spd")).unwrap_or(0.0));
-                            let out_spd_val = ui.ctx().data(|d| d.get_temp::<f32>(egui::Id::new("ae_kf_out_spd")).unwrap_or(0.0));
-                            apply_velocity(layer, &graph_prop, kf_idx, out_inf, out_spd_val, in_inf_val, in_spd_val, project_changed);
-                        }
-                        *project_changed = true;
-                    }
-                    if ui.add(egui::DragValue::new(&mut out_spd).speed(1.0).prefix("Spd: ").suffix(" px/s")).changed() {
-                        ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("ae_kf_out_spd"), out_spd));
-                        if let Some(kf_idx) = hovered_kf_idx {
-                            let out_inf_val = ui.ctx().data(|d| d.get_temp::<f32>(egui::Id::new("ae_kf_out_inf")).unwrap_or(33.3));
-                            let in_inf_val = ui.ctx().data(|d| d.get_temp::<f32>(egui::Id::new("ae_kf_in_inf")).unwrap_or(33.3));
-                            let in_spd_val = ui.ctx().data(|d| d.get_temp::<f32>(egui::Id::new("ae_kf_in_spd")).unwrap_or(0.0));
-                            apply_velocity(layer, &graph_prop, kf_idx, out_inf_val, out_spd, in_inf_val, in_spd_val, project_changed);
-                        }
-                        *project_changed = true;
-                    }
-                });
+                    ui.label("Hover a keyframe with a following segment to edit velocity.");
+                }
 
                 ui.separator();
                 ui.horizontal(|ui| {
@@ -1354,7 +1328,7 @@ pub fn draw_graph_editor(
                 let anchor_rect = egui::Rect::from_center_size(pt, egui::vec2(14.0, 14.0));
                 let anchor_resp = ui.interact(anchor_rect, egui::Id::new(("graph_anchor", kf_idx)), egui::Sense::click_and_drag());
                 if anchor_resp.hovered() {
-                    ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("ae_graph_hovered_kf"), *kf_idx));
+                    ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new(("ae_graph_hovered_kf", &layer.id, &graph_prop)), *kf_idx));
                 }
                 if anchor_resp.secondary_clicked() {
                     with_keyframes!(layer, graph_prop, kfs => {
@@ -2117,6 +2091,56 @@ mod tests {
     use super::{axis_3d, remove_camera_key, set_camera_key_ease, set_camera_key_interpolation};
     use crate::core::keyframe::{InterpolationType, Keyframe};
     use crate::core::property::Animatable;
+
+    #[test]
+    fn velocity_preserves_fields_and_uses_segment_units() {
+        use super::track_velocity;
+        let mut track = Animatable::new_animated(vec![
+            Keyframe::new(10, 100.0, InterpolationType::Linear),
+            Keyframe::new(130, 500.0, InterpolationType::Linear),
+        ]);
+        let values = [25.0, 40.0, 50.0, 100.0];
+        track_velocity(&mut track, 0, 60.0, |v| *v, Some(values)).unwrap();
+        assert_eq!(track_velocity(&mut track, 0, 60.0, |v| *v, None), Some(values));
+        let mut edited = values;
+        edited[0] = 30.0;
+        track_velocity(&mut track, 0, 60.0, |v| *v, Some(edited)).unwrap();
+        for (actual, expected) in track_velocity(&mut track, 0, 60.0, |v| *v, None).unwrap().into_iter().zip(edited) {
+            assert!((actual - expected).abs() < 1e-4);
+        }
+        let InterpolationType::Bezier { custom_bezier: Some(cp), .. } = track.keyframes().unwrap()[0].interpolation else { panic!("Expected Bezier"); };
+        for (actual, expected) in cp.into_iter().zip([0.4, 0.2, 0.7, 0.925]) {
+            assert!((actual - expected).abs() < 1e-6);
+        }
+        assert!(track_velocity(&mut track, 1, 60.0, |v| *v, Some(values)).is_none());
+    }
+
+    #[test]
+    fn velocity_updates_each_three_d_track_and_axis() {
+        use super::layer_velocity;
+        use crate::core::timeline::{Layer, LayerType};
+        for property in ["3D Position Z", "3D Rotation Y", "3D Scale X"] {
+            let mut layer = Layer::new("layer".into(), "Layer".into(), LayerType::Solid { color: [1.0; 4] }, 120);
+            let track = Animatable::new_animated(vec![
+                Keyframe::new(0, [0.0; 3], InterpolationType::Linear),
+                Keyframe::new(60, [100.0, 200.0, 400.0], InterpolationType::Linear),
+            ]);
+            layer.transform_3d.position = track.clone();
+            layer.transform_3d.rotation = track.clone();
+            layer.transform_3d.scale = track;
+            let values = [30.0, 40.0, 50.0, 100.0];
+            assert_eq!(layer_velocity(&mut layer, property, 0, 60.0, Some(values)), Some(values));
+            for (actual, expected) in layer_velocity(&mut layer, property, 0, 60.0, None).unwrap().into_iter().zip(values) {
+                assert!((actual - expected).abs() < 1e-4);
+            }
+            let changed = if property.starts_with("3D Position") { &layer.transform_3d.position }
+                else if property.starts_with("3D Rotation") { &layer.transform_3d.rotation }
+                else { &layer.transform_3d.scale };
+            let InterpolationType::Bezier { custom_bezier: Some(cp), .. } = changed.keyframes().unwrap()[0].interpolation else { panic!("Expected Bezier"); };
+            let expected = if property.ends_with('Z') { 0.1 } else if property.ends_with('Y') { 0.2 } else { 0.4 };
+            assert!((cp[1] - expected).abs() < 1e-6);
+        }
+    }
 
     #[test]
     fn three_d_property_axis_selection_is_stable() {

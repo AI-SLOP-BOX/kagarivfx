@@ -698,6 +698,7 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: &mut u32) {
                         &mut selected_prop,
                         ui,
                         comp.duration_frames,
+                        comp.fps,
                         layer,
                         &mut project_changed,
                         &mut app.linked_tangent,
@@ -709,15 +710,14 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: &mut u32) {
                 // down (no-op if already started). The live project is mutated in-place
                 // via current_mut(). commit_drag() pushes one single Undo entry on release.
                 if project_changed {
-                    let is_pointer_down = ui.input(|i| i.pointer.any_down());
-                    if is_pointer_down {
-                        if !app.drag_active() {
-                            app.begin_drag_with_snapshot(pre_edit_snapshot, "Inspector Edit");
-                        }
-                    } else if app.drag_active() {
-                        app.commit_drag();
+                    if !app.drag_active() {
+                        app.begin_drag_with_snapshot(pre_edit_snapshot, "Inspector Edit");
                     }
                     crate::core::frame_cache::bump_version();
+                    app.autosave.mark_dirty();
+                }
+                if !ui.input(|i| i.pointer.any_down()) {
+                    app.commit_drag();
                 }
                 if let Some(nf) = next_frame {
                     *current_frame = nf;
