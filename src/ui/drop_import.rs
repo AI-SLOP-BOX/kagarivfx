@@ -16,10 +16,11 @@ fn insert_layer(app: &mut KagariApp, layer: crate::core::timeline::Layer, label:
     let mut l = layer;
     l.in_frame = l.in_frame.min(comp_dur.saturating_sub(1));
     l.out_frame = comp_dur.max(l.in_frame + 1);
-    let proj = app.history.current_mut();
-    let comp = proj.active_composition_mut();
-    let at = insert_at.min(comp.layers.len());
-    comp.layers.insert(at, l);
+    app.modify_project(|proj| {
+        let comp = proj.active_composition_mut();
+        let at = insert_at.min(comp.layers.len());
+        comp.layers.insert(at, l);
+    });
     crate::core::frame_cache::bump_version();
     app.toasts.info(format!("Imported {}", label));
 }

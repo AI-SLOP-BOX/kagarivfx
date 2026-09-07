@@ -9,13 +9,21 @@ pub fn draw_comp_settings_dialog(app: &mut KagariApp, ctx: &egui::Context) {
     }
 
     let mut open = app.show_comp_settings;
-    egui::Window::new("⚙ Composition Settings (Cmd+K)")
+    let mut temp_proj = app
+        .comp_settings_draft
+        .take()
+        .unwrap_or_else(|| app.history.current().clone());
+    let mut committed = false;
+    let mut cancelled = false;
+    egui::Window::new(format!(
+        "⚙ Composition Settings ({})",
+        crate::ui::shortcuts::format_shortcut("E", true, true, false)
+    ))
         .open(&mut open)
         .resizable(false)
         .collapsible(false)
         .default_width(360.0)
         .show(ctx, |ui| {
-            let mut temp_proj = app.history.current().clone();
             let comp = temp_proj.active_composition_mut();
 
             ui.heading("Basic Composition Settings");
@@ -220,18 +228,20 @@ pub fn draw_comp_settings_dialog(app: &mut KagariApp, ctx: &egui::Context) {
                     }
                 }
 
-                app.history.commit(temp_proj);
+                app.history.commit(temp_proj.clone());
                 crate::core::frame_cache::bump_version();
+                committed = true;
             }
 
             if should_close {
-                app.show_comp_settings = false;
+                cancelled = !should_commit;
             }
-
-
         });
 
-    if !open {
+    if !open || committed || cancelled {
+        app.comp_settings_draft = None;
         app.show_comp_settings = false;
+    } else {
+        app.comp_settings_draft = Some(temp_proj);
     }
 }

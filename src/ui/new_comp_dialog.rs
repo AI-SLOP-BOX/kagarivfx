@@ -20,17 +20,17 @@ pub fn draw_new_comp_dialog(app: &mut KagariApp, ctx: &egui::Context) {
 
     let mut open = true;
     let mut keep_open = true;
+    let draft_id = egui::Id::new("ae_newcomp_draft");
     egui::Window::new("🆕 New Composition")
         .open(&mut open)
         .collapsible(false)
         .resizable(false)
         .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
         .show(ctx, |ui| {
-            let id = egui::Id::new("ae_newcomp_draft");
             // Draft state: (name, preset_idx, w, h, fps, dur)
             let count = app.history.current().compositions.len();
             let mut draft = ctx.data_mut(|d| {
-                d.get_temp::<(String, usize, u32, u32, u32, u32)>(id)
+                d.get_temp::<(String, usize, u32, u32, u32, u32)>(draft_id)
                     .unwrap_or_else(|| {
                         (
                             format!("Composition {}", count + 1),
@@ -83,37 +83,41 @@ pub fn draw_new_comp_dialog(app: &mut KagariApp, ctx: &egui::Context) {
             }
 
             ui.add_space(6.0);
+            let mut fields_changed = false;
             egui::Grid::new("newcomp_fields")
                 .num_columns(2)
                 .spacing([10.0, 4.0])
                 .show(ui, |ui| {
                     ui.label("Width:");
-                    ui.add(
+                    fields_changed |= ui.add(
                         egui::DragValue::new(&mut draft.2)
                             .range(16..=7680)
                             .suffix(" px"),
-                    );
+                    ).changed();
                     ui.label("Height:");
-                    ui.add(
+                    fields_changed |= ui.add(
                         egui::DragValue::new(&mut draft.3)
                             .range(16..=4320)
                             .suffix(" px"),
-                    );
+                    ).changed();
                     ui.end_row();
                     ui.label("Frame Rate:");
-                    ui.add(
+                    fields_changed |= ui.add(
                         egui::DragValue::new(&mut draft.4)
                             .range(1..=120)
                             .suffix(" fps"),
-                    );
+                    ).changed();
                     ui.label("Duration:");
-                    ui.add(
+                    fields_changed |= ui.add(
                         egui::DragValue::new(&mut draft.5)
                             .range(1..=180_000)
                             .suffix(" fr"),
-                    );
+                    ).changed();
                     ui.end_row();
                 });
+            if fields_changed {
+                draft.1 = PRESETS.len() - 1;
+            }
             if draft.1 + 1 < PRESETS.len() {
                 ui.label(
                     egui::RichText::new("Editing fields switches to Custom")
@@ -169,9 +173,10 @@ pub fn draw_new_comp_dialog(app: &mut KagariApp, ctx: &egui::Context) {
                         2 => crate::core::color_science::BitDepth::ThirtyTwoBitFloat,
                         _ => crate::core::color_science::BitDepth::EightBit,
                     };
-                    let proj = app.history.current_mut();
-                    proj.compositions.push(comp);
-                    proj.active_composition_idx = proj.compositions.len() - 1;
+                    app.modify_project(|proj| {
+                        proj.compositions.push(comp);
+                        proj.active_composition_idx = proj.compositions.len() - 1;
+                    });
                     crate::core::frame_cache::bump_version();
                     app.toasts.info(format!(
                         "Created '{}' — {}×{} @{}fps ({})",
@@ -192,8 +197,11 @@ pub fn draw_new_comp_dialog(app: &mut KagariApp, ctx: &egui::Context) {
                 }
             });
 
-            ctx.data_mut(|d| d.insert_temp(id, draft));
+            ctx.data_mut(|d| d.insert_temp(draft_id, draft));
         });
 
     app.show_new_comp_dialog = open && keep_open;
+    if !app.show_new_comp_dialog {
+        ctx.data_mut(|d| d.remove::<(String, usize, u32, u32, u32, u32)>(draft_id));
+    }
 }

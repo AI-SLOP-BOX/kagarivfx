@@ -35,6 +35,81 @@ pub fn format_shortcut(key: &str, cmd: bool, shift: bool, alt: bool) -> String {
     parts.join("+")
 }
 
+#[derive(Clone, Copy)]
+pub enum NewLayerKind {
+    Solid,
+    Text,
+    Null,
+    Adjustment,
+}
+
+pub fn create_new_layer(app: &mut KagariApp, kind: NewLayerKind) {
+    let mut created_idx = None;
+    app.modify_project(|project| {
+        let comp = project.active_composition_mut();
+        let index = comp.layers.len();
+        let mut id_index = index;
+        while comp
+            .layers
+            .iter()
+            .any(|layer| layer.id == format!("layer_{id_index}"))
+        {
+            id_index += 1;
+        }
+        let layer_id = format!("layer_{id_index}");
+        let total_frames = comp.duration_frames;
+        let (name, layer) = match kind {
+            NewLayerKind::Solid => (
+                format!("Solid {index}"),
+                crate::core::timeline::Layer::new(
+                    layer_id.clone(),
+                    format!("Solid {index}"),
+                    crate::core::timeline::LayerType::Solid {
+                        color: [0.2, 0.5, 0.9, 1.0],
+                    },
+                    total_frames,
+                ),
+            ),
+            NewLayerKind::Text => (
+                format!("Text {index}"),
+                crate::core::timeline::Layer::new(
+                    layer_id.clone(),
+                    format!("Text {index}"),
+                    crate::core::timeline::LayerType::new_text(
+                        "Title Text",
+                        72,
+                        [1.0, 1.0, 1.0, 1.0],
+                    ),
+                    total_frames,
+                ),
+            ),
+            NewLayerKind::Null => (
+                format!("Null {index}"),
+                crate::core::timeline::Layer::new_null(
+                    layer_id.clone(),
+                    format!("Null {index}"),
+                    total_frames,
+                ),
+            ),
+            NewLayerKind::Adjustment => (
+                format!("Adjustment Layer {index}"),
+                crate::core::timeline::Layer::new_adjustment(
+                    layer_id,
+                    format!("Adjustment Layer {index}"),
+                    total_frames,
+                ),
+            ),
+        };
+        comp.add_layer(layer);
+        created_idx = Some((index, name));
+    });
+    if let Some((index, name)) = created_idx {
+        app.selection.select_single(index);
+        app.toasts.info(format!("Created {name}"));
+        crate::core::frame_cache::bump_version();
+    }
+}
+
 /// Centralized Keyboard Shortcut Manager for Kagari VFX.
 /// Encapsulates global keybindings: Spacebar playback, frame stepping, keyframe navigation (J/K),
 /// Easy Ease (F9), Undo/Redo, Pre-compose (Cmd+Shift+C), Duplicate/Split (Cmd+D / Cmd+Shift+D),
@@ -117,7 +192,22 @@ pub fn handle_global_shortcuts(
             if i.key_pressed(Key::Q) { app.active_tool = crate::ui::toolbar::ActiveTool::Rectangle; }
             if i.key_pressed(Key::G) { app.active_tool = crate::ui::toolbar::ActiveTool::Pen; }
             if i.key_pressed(Key::C) { app.active_tool = crate::ui::toolbar::ActiveTool::Camera3D; }
-            if cmd && i.key_pressed(Key::P) { app.active_tool = crate::ui::toolbar::ActiveTool::PuppetPin; }
+        }
+        if allow_single_key && cmd && !shift && !i.modifiers.alt && i.key_pressed(Key::P) {
+            app.active_tool = crate::ui::toolbar::ActiveTool::PuppetPin;
+        }
+        // Layer creation shortcuts advertised in the Layer > New menu.
+        if cmd && !shift && !i.modifiers.alt && i.key_pressed(Key::Y) {
+            create_new_layer(app, NewLayerKind::Solid);
+        }
+        if cmd && shift && i.modifiers.alt && i.key_pressed(Key::T) {
+            create_new_layer(app, NewLayerKind::Text);
+        }
+        if cmd && shift && i.modifiers.alt && i.key_pressed(Key::Y) {
+            create_new_layer(app, NewLayerKind::Null);
+        }
+        if cmd && !shift && i.modifiers.alt && i.key_pressed(Key::Y) {
+            create_new_layer(app, NewLayerKind::Adjustment);
         }
         // Cmd+T → Text tool (bare T reveals Opacity, AE parity)
         if cmd && !shift && i.key_pressed(Key::T) {
@@ -614,8 +704,9 @@ pub fn handle_global_shortcuts(
             }
         }
 
-        // Cmd+K → Composition Settings Dialog
-        if cmd && !shift && i.key_pressed(Key::K) {
+        // Cmd+Shift+E → Composition Settings Dialog
+        if cmd && shift && i.key_pressed(Key::E) {
+            app.comp_settings_draft = Some(app.history.current().clone());
             app.show_comp_settings = true;
         }
 

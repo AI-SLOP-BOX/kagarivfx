@@ -16,13 +16,13 @@ pub fn get_all_commands() -> Vec<PaletteCommand> {
             category: "Effects",
             shortcut_hint: "",
             action: Box::new(|app| {
-                let comp = app.history.current_mut().active_composition_mut();
                 if let Some(idx) = app.selection.selected_layer_idx {
-                    if idx < comp.layers.len() {
-                        let len = comp.layers[idx].effects.len();
-                        comp.layers[idx]
-                            .effects
-                            .push(crate::core::timeline::Effect {
+                    let mut added = false;
+                    app.modify_project(|project| {
+                        let comp = project.active_composition_mut();
+                        if idx < comp.layers.len() {
+                            let len = comp.layers[idx].effects.len();
+                            comp.layers[idx].effects.push(crate::core::timeline::Effect {
                                 id: format!("blur_{}", len),
                                 name: "Gaussian Blur".to_string(),
                                 effect_type: crate::core::timeline::EffectType::GaussianBlur {
@@ -32,8 +32,10 @@ pub fn get_all_commands() -> Vec<PaletteCommand> {
                                 },
                                 enabled: true,
                             });
-                        crate::core::frame_cache::bump_version();
-                    }
+                            added = true;
+                        }
+                    });
+                    if added { app.toasts.info("Added Gaussian Blur"); }
                 }
             }),
         },
@@ -98,43 +100,21 @@ pub fn get_all_commands() -> Vec<PaletteCommand> {
             category: "Layer",
             shortcut_hint: "Cmd+Y",
             action: Box::new(|app| {
-                let comp = app.history.current_mut().active_composition_mut();
-                let len = comp.layers.len();
-                let dur = comp.duration_frames;
-                let layer = crate::core::timeline::Layer::new(
-                    format!("solid_{}", len),
-                    format!("Solid Layer {}", len + 1),
-                    crate::core::timeline::LayerType::Solid {
-                        color: [0.2, 0.6, 0.9, 1.0],
-                    },
-                    dur,
+                crate::ui::shortcuts::create_new_layer(
+                    app,
+                    crate::ui::shortcuts::NewLayerKind::Solid,
                 );
-                comp.add_layer(layer);
-                app.selection.selected_layer_idx = Some(len);
-                crate::core::frame_cache::bump_version();
             }),
         },
         PaletteCommand {
             name: "Add Layer: New Text Layer",
             category: "Layer",
-            shortcut_hint: "Cmd+T",
+            shortcut_hint: "Cmd+Alt+Shift+T",
             action: Box::new(|app| {
-                let comp = app.history.current_mut().active_composition_mut();
-                let len = comp.layers.len();
-                let dur = comp.duration_frames;
-                let layer = crate::core::timeline::Layer::new(
-                    format!("text_{}", len),
-                    format!("Text Layer {}", len + 1),
-                    crate::core::timeline::LayerType::new_text(
-                        "New Text",
-                        48,
-                        [1.0, 1.0, 1.0, 1.0],
-                    ),
-                    dur,
+                crate::ui::shortcuts::create_new_layer(
+                    app,
+                    crate::ui::shortcuts::NewLayerKind::Text,
                 );
-                comp.add_layer(layer);
-                app.selection.selected_layer_idx = Some(len);
-                crate::core::frame_cache::bump_version();
             }),
         },
         PaletteCommand {
@@ -142,20 +122,21 @@ pub fn get_all_commands() -> Vec<PaletteCommand> {
             category: "Transform",
             shortcut_hint: "",
             action: Box::new(|app| {
-                let comp = app.history.current_mut().active_composition_mut();
                 if let Some(idx) = app.selection.selected_layer_idx {
-                    if idx < comp.layers.len() {
-                        comp.layers[idx].transform = crate::core::timeline::Transform2D::default();
-                        crate::core::frame_cache::bump_version();
-                    }
+                    app.modify_project(|project| {
+                        if let Some(layer) = project.active_composition_mut().layers.get_mut(idx) {
+                            layer.transform = crate::core::timeline::Transform2D::default();
+                        }
+                    });
                 }
             }),
         },
         PaletteCommand {
             name: "Composition: Settings",
             category: "Composition",
-            shortcut_hint: "Cmd+K",
+            shortcut_hint: "Cmd+Shift+E",
             action: Box::new(|app| {
+                app.comp_settings_draft = Some(app.history.current().clone());
                 app.show_comp_settings = true;
             }),
         },

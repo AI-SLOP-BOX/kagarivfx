@@ -1172,9 +1172,9 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: u32) {
                 }
             }
 
-            // Navigation tools (Hand / Zoom) must not move layers;
-            // creation tools (Rectangle / Pen / Text / Brush / CloneStamp /
-            // Eraser / RotoBrush / PuppetPin) have no viewport handlers yet.
+            // Navigation tools (Hand / Zoom) must not move layers. Creation
+            // tools have dedicated paths below and must stay out of the
+            // generic transform hit-test.
             let tool_creates_or_navigates = !matches!(
                 app.active_tool,
                 crate::ui::toolbar::ActiveTool::Selection

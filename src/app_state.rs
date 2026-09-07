@@ -263,6 +263,10 @@ pub struct KagariApp {
     pub viewport_show_stats: bool,
     pub show_handles: bool,
     pub show_comp_settings: bool,
+    /// Working copy for the composition settings dialog. Keeping this outside
+    /// the immediate-mode draw call lets text and numeric edits survive frames
+    /// until the user presses OK or Cancel.
+    pub comp_settings_draft: Option<Project>,
     pub show_shortcuts_dialog: bool,
     pub show_precompose_dialog: bool,
     pub show_sequence_layers: bool,
@@ -472,6 +476,7 @@ impl Default for KagariApp {
             viewport_show_stats: false,
             show_handles: true,
             show_comp_settings: false,
+            comp_settings_draft: None,
             show_shortcuts_dialog: false,
             show_precompose_dialog: false,
             show_sequence_layers: false,
@@ -1232,8 +1237,11 @@ impl eframe::App for KagariApp {
         crate::ui::export_dialog::draw(self, ctx);
         crate::ui::comp_settings_dialog::draw_comp_settings_dialog(self, ctx);
 
-        let cmd_k_pressed =
-            ctx.input(|i| (i.modifiers.command || i.modifiers.ctrl) && i.key_pressed(egui::Key::K));
+        let cmd_k_pressed = ctx.input(|i| {
+            (i.modifiers.command || i.modifiers.ctrl)
+                && !i.modifiers.shift
+                && i.key_pressed(egui::Key::K)
+        });
         if cmd_k_pressed {
             self.show_command_palette = !self.show_command_palette;
             if self.show_command_palette {

@@ -729,7 +729,17 @@ fn draw_effects_presets_tab(
 
     let layer_idx = app.selection.selected_layer_idx;
 
-    ui.collapsing("Effect Browser (categorized)", |ui| {
+    if layer_idx.is_none() {
+        ui.colored_label(
+            colors::ACCENT_ORANGE,
+            "Select a layer to apply an effect. You can still drag a preset onto the timeline.",
+        );
+    }
+
+    egui::CollapsingHeader::new("Effect Browser (categorized)")
+        .id_salt(("effects_browser", !search_q.is_empty()))
+        .default_open(!search_q.is_empty())
+        .show(ui, |ui| {
         let categories = [
             "Blur & Sharpen",
             "Color Correction",
@@ -753,7 +763,10 @@ fn draw_effects_presets_tab(
             if matching.is_empty() {
                 continue;
             }
-            ui.collapsing(format!("{} ({})", cat, matching.len()), |ui| {
+            egui::CollapsingHeader::new(format!("{} ({})", cat, matching.len()))
+                .id_salt(("effect_category", cat, !search_q.is_empty()))
+                .default_open(!search_q.is_empty())
+                .show(ui, |ui| {
                 for (pi, p) in matching.iter().enumerate() {
                     let preset_idx = presets
                         .iter()
@@ -779,6 +792,8 @@ fn draw_effects_presets_tab(
                                 comp.layers[idx].effects.push(effect);
                                 session.commit();
                             }
+                        } else {
+                            app.toasts.info("Select a layer first, or drag the preset onto the timeline");
                         }
                     }
 
@@ -788,9 +803,9 @@ fn draw_effects_presets_tab(
                     }
                     resp.on_hover_text("Click to apply • Drag to layer in timeline");
                 }
-            });
+                });
         }
-    });
+        });
 
     ui.label("Add Effect to Selected Layer:");
     ui.group(|ui| {
@@ -830,6 +845,8 @@ fn draw_effects_presets_tab(
                             });
                         session.commit();
                     }
+                } else {
+                    app.toasts.info("Select a layer first");
                 }
             }
             if ui.button("Motion Burn").clicked() {
@@ -855,6 +872,8 @@ fn draw_effects_presets_tab(
                             });
                         session.commit();
                     }
+                } else {
+                    app.toasts.info("Select a layer first");
                 }
             }
         });

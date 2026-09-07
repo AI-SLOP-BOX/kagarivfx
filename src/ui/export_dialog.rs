@@ -51,6 +51,7 @@ pub fn start_comp_export(app: &mut crate::KagariApp, ctx: &egui::Context, comp_n
         None
     };
     let codec_idx = app.export_codec_idx;
+    let export_fps = app.export.export_fps.clamp(1, 120);
     let res_scale = ctx.data_mut(|d| {
         *d.get_temp_mut_or_insert_with(egui::Id::new("ae_export_res_scale"), || 1.0f32)
     });
@@ -139,7 +140,7 @@ pub fn start_comp_export(app: &mut crate::KagariApp, ctx: &egui::Context, comp_n
         output_path: output_path.clone(),
         width: render_w,
         height: render_h,
-        fps: comp.fps,
+        fps: export_fps,
         total_frames: total_frames.max(1),
         codec,
     };
@@ -191,28 +192,15 @@ pub fn start_comp_export(app: &mut crate::KagariApp, ctx: &egui::Context, comp_n
             },
         );
     } else {
-        // Fallback async render thread with progress feedback & cancellation support
-        let (tx, rx) = std::sync::mpsc::channel();
-        app.export.export_rx = Some(rx);
-        let thread_cancel = cancel_flag.clone();
-        let duration = total_frames.max(1);
-        std::thread::spawn(move || {
-            for frame in 0..=duration {
-                if thread_cancel.load(std::sync::atomic::Ordering::Relaxed) {
-                    log::info!("Export worker thread canceled cleanly");
-                    return;
-                }
-                for layer in &comp.layers {
-                    let _world_tf = comp.resolve_world_transform(layer, frame);
-                }
-                std::thread::sleep(std::time::Duration::from_millis(4));
-                let prog = frame as f32 / duration as f32;
-                let msg = format!("Rendering frame {} / {}...", frame, duration);
-                let _ = tx.send(ExportEvent::Progress(prog, msg));
-            }
-            let finished_msg = format!("Export complete → Saved to {}", output_path);
-            let _ = tx.send(ExportEvent::Finished(finished_msg));
-        });
+        // A transform-only preview is not an export. Reporting success here
+        // used to leave users with a green toast and no file on disk.
+        app.export.is_exporting = false;
+        app.export.export_status = Some(
+            "Error: FFmpeg is required for video export. Install it and try again.".to_string(),
+        );
+        app.toasts
+            .error("FFmpeg is required for video export. Install it and try again.");
+        return;
     }
 
     log::info!(
@@ -322,8 +310,19 @@ pub fn draw(app: &mut crate::KagariApp, ctx: &egui::Context) {
                                             crate::core::export_presets::ExportFormat::PngSequence => 2,
                                             _ => 0,
                                         };
+                                        app.export_codec_idx = match app.export_format_preset {
+                                            1 => 1,
+                                            2 => 3,
+                                            _ => 0,
+                                        };
                                         app.export.export_fps = preset.fps;
                                         app.export_resolution_scale = if preset.width >= 1920 { 0 } else if preset.width >= 1280 { 1 } else { 2 };
+                                        let preset_scale = match app.export_resolution_scale {
+                                            0 => 1.0,
+                                            1 => 0.5,
+                                            _ => 0.25,
+                                        };
+                                        ctx.data_mut(|d| d.insert_temp(egui::Id::new("ae_export_res_scale"), preset_scale));
                                     }
                                 }
                             });
@@ -341,26 +340,47 @@ pub fn draw(app: &mut crate::KagariApp, ctx: &egui::Context) {
                         _ => "Lottie / Bodymovin (.json)",
                     })
                     .show_ui(ui, |ui| {
-                        ui.selectable_value(&mut app.export_format_preset, 0, "H.264 / MP4 (Standard)");
-                        ui.selectable_value(&mut app.export_format_preset, 1, "Apple ProRes 422 HQ (MOV)");
-                        ui.selectable_value(&mut app.export_format_preset, 2, "PNG Image Sequence");
+                        if ui.selectable_value(&mut app.export_format_preset, 0, "H.264 / MP4 (Standard)").clicked() {
+                            app.export_codec_idx = 0;
+                        }
+                        if ui.selectable_value(&mut app.export_format_preset, 1, "Apple ProRes 422 HQ (MOV)").clicked() {
+                            app.export_codec_idx = 1;
+                        }
+                        if ui.selectable_value(&mut app.export_format_preset, 2, "PNG Image Sequence").clicked() {
+                            app.export_codec_idx = 3;
+                        }
                         ui.selectable_value(&mut app.export_format_preset, 3, "Lottie / Bodymovin (.json)");
                     });
             });
 
             ui.horizontal(|ui| {
                 ui.label("Render Resolution Scale:");
+                let scale_id = egui::Id::new("ae_export_res_scale");
+                let mut scale: f32 = ctx.data_mut(|d| {
+                    *d.get_temp_mut_or_insert_with(scale_id, || match app.export_resolution_scale {
+                        0 => 1.0,
+                        1 => 0.5,
+                        _ => 0.25,
+                    })
+                });
                 egui::ComboBox::from_id_salt("export_scale_combo")
-                    .selected_text(match app.export_resolution_scale {
-                        0 => "100% Full Resolution",
-                        1 => "50% Half Resolution",
+                    .selected_text(match scale {
+                        s if (s - 1.0).abs() < f32::EPSILON => "100% Full Resolution",
+                        s if (s - 0.5).abs() < f32::EPSILON => "50% Half Resolution",
                         _ => "25% Quarter Resolution",
                     })
                     .show_ui(ui, |ui| {
-                        ui.selectable_value(&mut app.export_resolution_scale, 0, "100% Full Resolution");
-                        ui.selectable_value(&mut app.export_resolution_scale, 1, "50% Half Resolution");
-                        ui.selectable_value(&mut app.export_resolution_scale, 2, "25% Quarter Resolution");
+                        if ui.selectable_value(&mut scale, 1.0, "100% Full Resolution").clicked() {
+                            app.export_resolution_scale = 0;
+                        }
+                        if ui.selectable_value(&mut scale, 0.5, "50% Half Resolution").clicked() {
+                            app.export_resolution_scale = 1;
+                        }
+                        if ui.selectable_value(&mut scale, 0.25, "25% Quarter Resolution").clicked() {
+                            app.export_resolution_scale = 2;
+                        }
                     });
+                ctx.data_mut(|d| d.insert_temp(scale_id, scale));
             });
 
             ui.horizontal(|ui| {
@@ -402,6 +422,15 @@ pub fn draw(app: &mut crate::KagariApp, ctx: &egui::Context) {
                 ui.add(egui::ProgressBar::new(app.export.export_progress).show_percentage());
                 if let Some(ref status) = app.export.export_status {
                     ui.weak(status);
+                }
+                if ui.button("Cancel Export").clicked() {
+                    if let Some(flag) = app.export_cancel_flag.take() {
+                        flag.store(true, std::sync::atomic::Ordering::SeqCst);
+                    }
+                    app.export.export_rx = None;
+                    app.export.is_exporting = false;
+                    app.export.export_status = Some("Export cancelled".to_string());
+                    app.toasts.info("Export cancelled");
                 }
             } else {
                 if let Some(ref status) = app.export.export_status {
@@ -453,7 +482,7 @@ pub fn draw(app: &mut crate::KagariApp, ctx: &egui::Context) {
                         4 => 5.0,   // WebP Animation
                         _ => 10.0,   // H.264
                     };
-                    let duration_sec = shown_total as f32 / comp.fps.max(1) as f32;
+                    let duration_sec = shown_total as f32 / app.export.export_fps.max(1) as f32;
                     let est_mb = bitrate_mbps * duration_sec / 8.0;
                     let size_text = if est_mb > 1024.0 {
                         format!("{:.1} GB", est_mb / 1024.0)

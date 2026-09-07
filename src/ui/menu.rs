@@ -107,11 +107,12 @@ pub fn draw(app: &mut crate::KagariApp, ctx: &egui::Context) {
                                     let (cw, ch) = { let cc = app.history.current().active_composition(); (cc.width as f32, cc.height as f32) };
                                     let layers = crate::core::subtitles::cues_to_layers(&cues, cw, ch, 48);
                                     let n = layers.len();
-                                    let proj = app.history.current_mut();
-                                    let comp = proj.active_composition_mut();
-                                    for l in layers {
-                                        comp.add_layer(l);
-                                    }
+                                    app.modify_project(|project| {
+                                        let comp = project.active_composition_mut();
+                                        for l in layers {
+                                            comp.add_layer(l);
+                                        }
+                                    });
                                     crate::core::frame_cache::bump_version();
                                     app.toasts.info(format!("{} caption layers created", n));
                                 }
@@ -326,13 +327,19 @@ pub fn draw(app: &mut crate::KagariApp, ctx: &egui::Context) {
                 ui.separator();
                 if ui.add(egui::Button::new("Duplicate").shortcut_text("Cmd+D")).clicked() {
                     if let Some(sel_idx) = app.selection.selected_layer_idx {
-                        let comp = app.history.current_mut().active_composition_mut();
-                        if sel_idx < comp.layers.len() {
-                            let mut cloned = comp.layers[sel_idx].clone();
-                            let n = comp.layers.len();
-                            cloned.id = format!("{}_copy_{}", cloned.id, n);
-                            cloned.name = format!("{} copy", cloned.name);
-                            comp.layers.insert(sel_idx + 1, cloned);
+                        let mut duplicated = false;
+                        app.modify_project(|project| {
+                            let comp = project.active_composition_mut();
+                            if sel_idx < comp.layers.len() {
+                                let mut cloned = comp.layers[sel_idx].clone();
+                                let n = comp.layers.len();
+                                cloned.id = format!("{}_copy_{}", cloned.id, n);
+                                cloned.name = format!("{} copy", cloned.name);
+                                comp.layers.insert(sel_idx + 1, cloned);
+                                duplicated = true;
+                            }
+                        });
+                        if duplicated {
                             crate::core::frame_cache::bump_version();
                             app.toasts.info("Layer duplicated");
                         }
@@ -424,9 +431,10 @@ pub fn draw(app: &mut crate::KagariApp, ctx: &egui::Context) {
                     app.toasts.info("Composition duplicated");
                     ui.close_menu();
                 }
-                let comp_sc = crate::ui::shortcuts::format_shortcut("K", true, false, false);
+                let comp_sc = crate::ui::shortcuts::format_shortcut("E", true, true, false);
                 let btn = egui::Button::new("Composition Settings...").shortcut_text(comp_sc);
                 if ui.add(btn).clicked() {
+                    app.comp_settings_draft = Some(app.history.current().clone());
                     app.show_comp_settings = true;
                     ui.close_menu();
                 }
@@ -492,43 +500,22 @@ pub fn draw(app: &mut crate::KagariApp, ctx: &egui::Context) {
                 ui.menu_button("New", |ui| {
                     let solid_sc = crate::ui::shortcuts::format_shortcut("Y", true, false, false);
                     if ui.add(egui::Button::new("Solid...").shortcut_text(solid_sc)).clicked() {
-                        let total_frames = app.history.current().active_composition().duration_frames;
-                        let comp_mut = app.history.current_mut().active_composition_mut();
-                        let id = format!("layer_{}", comp_mut.layers.len());
-                        let name = format!("Solid {}", comp_mut.layers.len());
-                        let layer = crate::core::timeline::Layer::new(id, name, crate::core::timeline::LayerType::Solid { color: [0.2, 0.5, 0.9, 1.0] }, total_frames);
-                        comp_mut.add_layer(layer);
-                        crate::core::frame_cache::bump_version();
+                        crate::ui::shortcuts::create_new_layer(app, crate::ui::shortcuts::NewLayerKind::Solid);
                         ui.close_menu();
                     }
-                    if ui.add(egui::Button::new("Text").shortcut_text("Cmd+Alt+Shift+T")).clicked() {
-                        let total_frames = app.history.current().active_composition().duration_frames;
-                        let comp_mut = app.history.current_mut().active_composition_mut();
-                        let id = format!("layer_{}", comp_mut.layers.len());
-                        let name = format!("Text {}", comp_mut.layers.len());
-                        let layer = crate::core::timeline::Layer::new(id, name, crate::core::timeline::LayerType::new_text("Title Text", 72, [1.0, 1.0, 1.0, 1.0]), total_frames);
-                        comp_mut.add_layer(layer);
-                        crate::core::frame_cache::bump_version();
+                    let text_sc = crate::ui::shortcuts::format_shortcut("T", true, true, true);
+                    if ui.add(egui::Button::new("Text").shortcut_text(text_sc)).clicked() {
+                        crate::ui::shortcuts::create_new_layer(app, crate::ui::shortcuts::NewLayerKind::Text);
                         ui.close_menu();
                     }
-                    if ui.add(egui::Button::new("Null Object").shortcut_text("Cmd+Alt+Shift+Y")).clicked() {
-                        let total_frames = app.history.current().active_composition().duration_frames;
-                        let comp_mut = app.history.current_mut().active_composition_mut();
-                        let id = format!("layer_{}", comp_mut.layers.len());
-                        let name = format!("Null {}", comp_mut.layers.len());
-                        let layer = crate::core::timeline::Layer::new_null(id, name, total_frames);
-                        comp_mut.add_layer(layer);
-                        crate::core::frame_cache::bump_version();
+                    let null_sc = crate::ui::shortcuts::format_shortcut("Y", true, true, true);
+                    if ui.add(egui::Button::new("Null Object").shortcut_text(null_sc)).clicked() {
+                        crate::ui::shortcuts::create_new_layer(app, crate::ui::shortcuts::NewLayerKind::Null);
                         ui.close_menu();
                     }
-                    if ui.add(egui::Button::new("Adjustment Layer").shortcut_text("Cmd+Alt+Y")).clicked() {
-                        let total_frames = app.history.current().active_composition().duration_frames;
-                        let comp_mut = app.history.current_mut().active_composition_mut();
-                        let id = format!("layer_{}", comp_mut.layers.len());
-                        let name = format!("Adjustment Layer {}", comp_mut.layers.len());
-                        let layer = crate::core::timeline::Layer::new_adjustment(id, name, total_frames);
-                        comp_mut.add_layer(layer);
-                        crate::core::frame_cache::bump_version();
+                    let adjustment_sc = crate::ui::shortcuts::format_shortcut("Y", true, false, true);
+                    if ui.add(egui::Button::new("Adjustment Layer").shortcut_text(adjustment_sc)).clicked() {
+                        crate::ui::shortcuts::create_new_layer(app, crate::ui::shortcuts::NewLayerKind::Adjustment);
                         ui.close_menu();
                     }
                     if ui.button("Light").on_hover_text("Adds a 3D light to the composition").clicked() {
@@ -541,7 +528,9 @@ pub fn draw(app: &mut crate::KagariApp, ctx: &egui::Context) {
                         light.id = format!("light_{}_{nanos}", n);
                         light.name = format!("Light {}", n + 1);
                         let name = light.name.clone();
-                        app.history.current_mut().active_composition_mut().lights.push(light);
+                        app.modify_project(|project| {
+                            project.active_composition_mut().lights.push(light);
+                        });
                         crate::core::frame_cache::bump_version();
                         app.toasts.info(format!("Added {}", name));
                         ui.close_menu();
@@ -1364,14 +1353,14 @@ pub fn draw(app: &mut crate::KagariApp, ctx: &egui::Context) {
                 let mut gpu_fx = crate::core::compute_pipeline::gpu_effects_enabled();
                 if ui.checkbox(&mut gpu_fx, "GPU Compute Effects (beta)").changed() {
                     crate::core::compute_pipeline::set_gpu_effects_enabled(gpu_fx);
-                    app.history.current_mut().use_gpu_compute = gpu_fx;
+                    app.modify_project(|project| project.use_gpu_compute = gpu_fx);
                     if gpu_fx {
                         match crate::core::compute_pipeline::global() {
                             Some(ctx) => app.toasts.info(format!("GPU compute: {}", ctx.backend_label())),
                             None => {
                                 app.toasts.error("No GPU adapter — staying on CPU");
                                 crate::core::compute_pipeline::set_gpu_effects_enabled(false);
-                                app.history.current_mut().use_gpu_compute = false;
+                                app.modify_project(|project| project.use_gpu_compute = false);
                             }
                         }
                     } else {
@@ -1672,11 +1661,14 @@ pub fn draw(app: &mut crate::KagariApp, ctx: &egui::Context) {
 
 fn apply_effect_by_name(app: &mut crate::KagariApp, effect_name: &str) {
     if let Some(idx) = app.selection.selected_layer_idx {
-        let comp = app.history.current_mut().active_composition_mut();
-        if idx < comp.layers.len() {
-            let layer = &mut comp.layers[idx];
-            let len = layer.effects.len();
-            let effect = match effect_name {
+        let effect_name = effect_name.to_string();
+        let mut added = false;
+        app.modify_project(|project| {
+            let comp = project.active_composition_mut();
+            if idx < comp.layers.len() {
+                let layer = &mut comp.layers[idx];
+                let len = layer.effects.len();
+                let effect = match effect_name.as_str() {
                 "Slider Control" => crate::core::timeline::Effect {
                     id: format!("slider_{}", len),
                     name: "Slider Control".to_string(),
@@ -2156,9 +2148,13 @@ fn apply_effect_by_name(app: &mut crate::KagariApp, effect_name: &str) {
                     },
                     enabled: true,
                 },
-                _ => return,
-            };
-            layer.effects.push(effect);
+                    _ => return,
+                };
+                layer.effects.push(effect);
+                added = true;
+            }
+        });
+        if added {
             crate::core::frame_cache::bump_version();
             app.toasts.info(format!("Added '{}' effect", effect_name));
         }
