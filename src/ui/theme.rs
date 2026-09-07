@@ -115,6 +115,10 @@ fn configure_fonts(ctx: &egui::Context) {
             "/System/Library/Fonts/Menlo.ttc",
             "/System/Library/Fonts/Menlo-Regular.ttc",
         ];
+        let jp_font_paths = [
+            "/System/Library/Fonts/ヒラギノ角ゴシック W3.ttc",
+            "/System/Library/Fonts/STHeiti Light.ttc",
+        ];
 
         // Try to load a proportional font (SF Pro → Helvetica fallback)
         let mut loaded_prop = false;
@@ -154,6 +158,21 @@ fn configure_fonts(ctx: &egui::Context) {
         }
         if !loaded_mono {
             log::info!("Using egui default monospace font (Menlo not found)");
+        }
+
+        // Load Japanese fallback font for CJK glyph support
+        for path in &jp_font_paths {
+            if let Ok(data) = std::fs::read(path) {
+                fonts
+                    .font_data
+                    .insert("JpFont".to_string(), egui::FontData::from_owned(data));
+                fonts
+                    .families
+                    .entry(egui::FontFamily::Proportional)
+                    .or_default()
+                    .push("JpFont".to_string());
+                break;
+            }
         }
     }
 
